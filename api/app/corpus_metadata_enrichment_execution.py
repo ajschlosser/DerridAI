@@ -43,6 +43,7 @@ from .enrichment_ledger import (
     CALL,
     PROPOSED,
 )
+from .metadata_adjudication_cache import suggestions as adjudication_suggestions
 from .metadata_schema import (
     CORE_FIELDS,
     CORE_GROUP,
@@ -253,6 +254,24 @@ CURRENT REVIEWED RECORD TEXT:
             guidance_prompt = format_group_guidance(group_fields, run_guidance, guidance_matches)
             if guidance_prompt:
                 prompt = prompt + "\n\n" + guidance_prompt
+            remembered: dict[str, list[Any]] = {}
+            for field in schema.fields_in(group.key):
+                cached = adjudication_suggestions(
+                    record_id=str(record.get("record_id") or ""),
+                    text=source_text,
+                    field=field.name,
+                    cardinality="list" if field.type == "list" else "single",
+                    schema_version=str(request.get("schema_version") or ""),
+                )
+                values = cached.get("prior_values") if isinstance(cached, dict) else None
+                if isinstance(values, list) and values:
+                    remembered[field.name] = values
+            if remembered:
+                prompt += (
+                    "\n\nREVIEWER MEMORY (advisory suggestions only; do not copy without "
+                    "support in THIS record): "
+                    + json.dumps(remembered, ensure_ascii=False)
+                )
             all_task_specs[group.key] = (
                 group.key,
                 prompt,
@@ -898,4 +917,3 @@ CURRENT REVIEWED RECORD TEXT:
         record["inline_citation"] = inline
         record["full_citation"] = full
         return record
-

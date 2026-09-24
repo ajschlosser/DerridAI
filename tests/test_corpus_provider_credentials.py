@@ -63,3 +63,19 @@ def test_missing_selected_profile_fails_explicitly(monkeypatch):
         assert str(exc) == "The selected LLM provider profile is not available."
     else:
         raise AssertionError("A missing provider profile must not produce a success-shaped request.")
+
+
+def test_direct_provider_configuration_remains_valid_without_a_stored_profile(monkeypatch):
+    """Interactive Corpus Builder actions may authenticate with browser-supplied credentials."""
+    monkeypatch.setattr("app.main.system_store.researcher_profile", lambda profile_id: None)
+    resolved = _resolve_pdf_corpus_provider({
+        "provider_profile_id": "openai-1",
+        "provider": "openai",
+        "model": "browser-model",
+        "base_url": "https://api.openai.com/v1",
+        "api_key": "sk-browser",
+    })
+    assert resolved["provider"] == "openai"
+    assert resolved["model"] == "browser-model"
+    assert resolved["base_url"] == "https://api.openai.com/v1"
+    assert resolved["api_key"] == "sk-browser"

@@ -29,8 +29,7 @@ import CorpusSourceIngest from "./CorpusSourceIngest.vue";
 import CorpusBuildHistoryMenu from "./CorpusBuildHistoryMenu.vue";
 import CorpusQualitySummary from "./CorpusQualitySummary.vue";
 import CorpusRecordSizingSettings from "./CorpusRecordSizingSettings.vue";
-import CorpusRunGuidance, {
-} from "./CorpusRunGuidance.vue";
+import CorpusRunGuidance from "./CorpusRunGuidance.vue";
 import CorpusRecordFocusReview from "./CorpusRecordFocusReview.vue";
 import CorpusReviewQueueTabs from "./CorpusReviewQueueTabs.vue";
 import type { RecordSizingPolicy, ReviewQueue } from "../types/corpus";
@@ -76,10 +75,7 @@ import { useCorpusRunGuidance } from "../composables/useCorpusRunGuidance";
 import AppIcon from "./AppIcon.vue";
 import CorpusActionMenu, { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
 import { recordState, recordIssueKinds } from "../domain/corpusReview";
-import {
-  firstRecordWithSourceWarning,
-  recordHasSourceWarning,
-} from "../domain/sourceQuality";
+import { firstRecordWithSourceWarning, recordHasSourceWarning } from "../domain/sourceQuality";
 import { recurringShortLines } from "../domain/textCleanup";
 import * as runtime from "../runtime/runtime.js";
 
@@ -1360,7 +1356,12 @@ async function refreshProviders() {
           };
         }
         const config = directProfilePayload(profile.id);
-        if (!config) return { ...profile, available: false, availability_error: "Provider configuration is unavailable." };
+        if (!config)
+          return {
+            ...profile,
+            available: false,
+            availability_error: "Provider configuration is unavailable.",
+          };
         const status = await systemApi.llmStatus({
           provider: config.provider,
           base_url: config.base_url,
@@ -1402,7 +1403,9 @@ async function refreshProviders() {
     !providerProfiles.value.some((profile) => profile.id === selectedProviderId.value)
   ) {
     selectedProviderId.value =
-      providerProfiles.value.find((profile) => profile.id === defaultId && profile.available !== false)?.id ||
+      providerProfiles.value.find(
+        (profile) => profile.id === defaultId && profile.available !== false,
+      )?.id ||
       providerProfiles.value.find((profile) => profile.available !== false)?.id ||
       "";
   }
@@ -1717,12 +1720,41 @@ function selectRecord(record: CorpusRecord) {
     editingText.value = Boolean(saved && saved !== String(record.text || ""));
   }
   resolveSourceOnTextSave.value = Boolean(record.source_quality_issues?.length);
+  void loadAdjudicationSuggestions(record);
   const fallback = JSON.stringify(recordMetadata(record), null, 2);
   try {
     metadataDraft.value =
       localStorage.getItem(metadataDraftKey(selectedBuildId.value, record.record_id)) || fallback;
   } catch {
     metadataDraft.value = fallback;
+  }
+
+  async function loadAdjudicationSuggestions(record: CorpusRecord) {
+    const fields = (currentBuild.value?.schema?.fields || []).map((field) => field.name);
+    const results = await Promise.all(
+      fields.map(async (field) => {
+        try {
+          return [
+            field,
+            await pdfCorpusApi.metadataCache(
+              currentBuild.value?.build_id || "",
+              record.record_id,
+              field,
+            ),
+          ] as const;
+        } catch {
+          return null;
+        }
+      }),
+    );
+    for (const item of results) {
+      if (!item) continue;
+      const values = item?.[1]?.suggestions?.prior_values;
+      if (!Array.isArray(values)) continue;
+      for (const value of values) {
+        if (typeof value === "string" && value.trim()) rememberMetadataValues(item[0], value);
+      }
+    }
   }
   void refreshBlocks();
   if (selectedBuildId.value && !sameRecord)
@@ -2805,13 +2837,14 @@ async function requeueCurrentRecord() {
           "No available LLM provider profile is configured.",
         ),
       );
+    const actionPayload = directProfilePayloadWithModel(profileId, llmActionModel.value) || {
+      provider_profile_id: profileId,
+      model: llmActionModel.value || undefined,
+    };
     await pdfCorpusApi.requeueMetadata(
       currentBuild.value.build_id,
       selectedRecord.value.record_id,
-      {
-        provider_profile_id: profileId,
-        model: llmActionModel.value || undefined,
-      },
+      actionPayload,
     );
     await refreshBuild();
     setMessage(
@@ -2924,15 +2957,14 @@ async function resolveMetadataSuggestions(changes: Record<string, unknown>) {
   const viewport = captureReviewViewport();
   busy.value = "metadata-suggestions";
   try {
-    const result = await pdfCorpusApi.patchMetadata(
+    const result = await pdfCorpusApi.metadataDecisionBatch(
       currentBuild.value.build_id,
       selectedRecord.value.record_id,
       changes,
       Number(selectedRecord.value.record_revision || 1),
-      true,
     );
-    const row = isMetadataPatchState(result) ? result.record : result;
-    if (isMetadataPatchState(result)) currentBuild.value = result.build;
+    const row = result.record;
+    currentBuild.value = result.build;
     selectedRecord.value = row;
     const idx = records.value.findIndex((item) => item.record_id === row.record_id);
     if (idx >= 0) records.value.splice(idx, 1, row);
@@ -2996,6 +3028,30 @@ async function resolveMetadataNoValue(field: string) {
   } finally {
     busy.value = "";
     metadataSavingField.value = "";
+  }
+}
+async function clearMetadataSuggestionCache() {
+  if (
+    !window.confirm(
+      i18n.t(
+        "pdf_corpus.clear_metadata_cache_confirm",
+        "Clear remembered metadata suggestions? This will not change reviewed records or their history.",
+      ),
+    )
+  )
+    return;
+  busy.value = "metadata-cache";
+  try {
+    const result = await pdfCorpusApi.clearAllMetadataCache();
+    setMessage(
+      i18n.tf("pdf_corpus.metadata_cache_cleared", "Cleared {count} remembered suggestion(s).", {
+        count: result.cleared,
+      }),
+    );
+  } catch (exc) {
+    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+  } finally {
+    busy.value = "";
   }
 }
 async function runMetadataEnrichment(payload: {
@@ -5288,6 +5344,14 @@ onBeforeUnmount(() => {
                     @source="showMetadataSource"
                     @dirty="handleMetadataDirty"
                   />
+                  <button
+                    type="button"
+                    class="btn small metadata-cache-clear"
+                    :disabled="busy !== ''"
+                    @click="clearMetadataSuggestionCache"
+                  >
+                    {{ i18n.t("pdf_corpus.clear_metadata_cache", "Clear remembered suggestions") }}
+                  </button>
                   <section v-if="currentBuild?.manifest" class="document-metadata-launch">
                     <div>
                       <b>{{
@@ -8383,12 +8447,17 @@ summary:focus-visible {
   container: record/inline-size;
 }
 .record-decision-dock {
-  position: sticky;
-  bottom: 0;
-  z-index: 5;
-  margin-block-start: auto;
+  position: fixed;
+  inset-inline: var(--sidebar) 0;
+  inset-block-end: 0;
+  z-index: 20;
   border-top: 1px solid var(--line);
-  background: var(--card);
+  background: var(--surface-overlay, var(--card));
+  box-shadow: 0 -0.75rem 2rem color-mix(in srgb, var(--text) 12%, transparent);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.review-frame .record-review-pane {
+  padding-bottom: 5.25rem;
 }
 .record-decision-dock .metadata-accept-blocker {
   margin: 0;
@@ -8478,6 +8547,11 @@ summary:focus-visible {
   .record-decision-dock .decision-bar {
     flex-direction: column-reverse;
     align-items: stretch;
+  }
+  @media (max-width: 720px) {
+    .record-decision-dock {
+      inset-inline-start: 0;
+    }
   }
   .decision-actions {
     margin-inline-start: 0;

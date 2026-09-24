@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import UiButton from "./ui/UiButton.vue";
 
@@ -27,6 +27,7 @@ const i18n = useI18nStore();
 const importInput = ref<HTMLInputElement | null>(null);
 const notice = ref("");
 const error = ref("");
+const termBuffers = ref<Record<string, string>>({});
 const populated = computed(
   () =>
     Object.values(props.modelValue).filter(
@@ -52,9 +53,33 @@ function updateTerms(field: string, value: string) {
   update(field, { look_for: terms });
 }
 
-function termText(field: string) {
-  return (props.modelValue[field]?.look_for || []).join("\n");
+function editTerms(field: string, value: string) {
+  termBuffers.value = { ...termBuffers.value, [field]: value };
+  updateTerms(field, value);
 }
+
+function commitTerms(field: string) {
+  const value = termBuffers.value[field];
+  if (value !== undefined) updateTerms(field, value);
+}
+
+function termText(field: string) {
+  return termBuffers.value[field] ?? (props.modelValue[field]?.look_for || []).join("\n");
+}
+
+watch(
+  () => props.modelValue,
+  (value) => {
+    const next = { ...termBuffers.value };
+    for (const field of props.fields) {
+      if (document.activeElement !== document.getElementById(`run-guidance-terms-${field.name}`)) {
+        next[field.name] = (value[field.name]?.look_for || []).join("\n");
+      }
+    }
+    termBuffers.value = next;
+  },
+  { immediate: true, deep: true },
+);
 
 function openImport() {
   importInput.value?.click();
@@ -85,7 +110,10 @@ function normaliseImportedGuidance(payload: unknown): Record<string, RunGuidance
       : payload;
   if (!source || typeof source !== "object" || Array.isArray(source)) {
     throw new Error(
-      i18n.t("pdf_corpus.run_guidance_import_invalid", "That file does not contain field guidance."),
+      i18n.t(
+        "pdf_corpus.run_guidance_import_invalid",
+        "That file does not contain field guidance.",
+      ),
     );
   }
   const fields = new Map(props.fields.map((field) => [field.name, field]));
@@ -99,7 +127,8 @@ function normaliseImportedGuidance(payload: unknown): Record<string, RunGuidance
           .filter((term): term is string => typeof term === "string" && term.trim().length > 0)
           .slice(0, 40)
       : [];
-    if (instructions.trim() || lookFor.length) imported[field] = { instructions, look_for: lookFor };
+    if (instructions.trim() || lookFor.length)
+      imported[field] = { instructions, look_for: lookFor };
   }
   if (!Object.keys(imported).length) {
     throw new Error(
@@ -226,7 +255,8 @@ async function importGuidance(event: Event) {
                 'One name, title, concept, or variant per line',
               )
             "
-            @input="updateTerms(field.name, ($event.target as HTMLTextAreaElement).value)"
+            @input="editTerms(field.name, ($event.target as HTMLTextAreaElement).value)"
+            @blur="commitTerms(field.name)"
           />
           <small>{{
             i18n.t(

@@ -603,6 +603,15 @@ class PdfCorpusMetadataDecision(BaseModel):
     expected_revision: int | None = Field(default=None, ge=1)
 
 
+class PdfCorpusMetadataCacheClear(BaseModel):
+    field: str | None = Field(default=None, min_length=1, max_length=120)
+
+
+class PdfCorpusMetadataDecisionBatch(BaseModel):
+    changes: dict[str, Any] = Field(min_length=1, max_length=60)
+    expected_revision: int | None = Field(default=None, ge=1)
+
+
 class PdfCorpusEvidencePatch(BaseModel):
     field: str = Field(min_length=1, max_length=120)
     block_ids: list[str] = Field(default_factory=list, max_length=500)

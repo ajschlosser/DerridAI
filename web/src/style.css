@@ -742,6 +742,7 @@ tbody tr.row-selected:hover{background:var(--soft)}
 
 @media(min-width:781px){
   .app-shell.sidebar-collapsed { grid-template-columns:64px minmax(0,1fr); }
+  .app-shell.sidebar-collapsed { --sidebar: 64px; }
   .sidebar-collapsed .sidebar { padding-left:8px; padding-right:8px; }
   .sidebar-collapsed .brand { padding-left:5px; padding-right:0; }
   .sidebar-collapsed .logo { width:36px; height:36px; }

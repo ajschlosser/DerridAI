@@ -1200,6 +1200,24 @@ class PdfCorpusRepository:
                     for item in values:
                         if isinstance(item, str) and item.strip() and not is_placeholder(item):
                             metadata_values[field].add(item.strip())
+                deterministic_ingest = record.get("deterministic_ingest")
+                if isinstance(deterministic_ingest, dict):
+                    speakers = deterministic_ingest.get("speakers")
+                    if isinstance(speakers, (list, tuple)):
+                        for speaker in speakers:
+                            if isinstance(speaker, str) and speaker.strip() and not is_placeholder(speaker):
+                                metadata_values.setdefault("speaker", set()).add(speaker.strip())
+                field_status = record.get("metadata_field_status")
+                if isinstance(field_status, dict):
+                    for field, status in field_status.items():
+                        if not isinstance(status, dict):
+                            continue
+                        for candidate_key in ("proposed_value", "llm_value"):
+                            candidate = status.get(candidate_key)
+                            candidates = candidate if isinstance(candidate, (list, tuple)) else [candidate]
+                            for item in candidates:
+                                if isinstance(item, str) and item.strip() and not is_placeholder(item):
+                                    metadata_values.setdefault(field, set()).add(item.strip())
                 topology_index = topology_count
                 topology_count += 1
                 if needs_review is not None and bool(record.get("needs_review")) is not needs_review:

@@ -145,6 +145,28 @@ def test_metadata_issue_summary_and_metadata_queue_are_derived_from_records(tmp_
     assert page["total"]==1 and page["items"][0]["record_id"]=="r2"
 
 
+def test_page_records_exposes_deterministic_and_llm_candidates_as_metadata_values(tmp_path:Path):
+    """Unresolved comboboxes can reuse deterministic names and retained LLM alternatives."""
+    repo=cb.PdfCorpusRepository(tmp_path/"repo")
+    _asset,build=make_build(repo,1)
+    record={
+        "record_id":"r1","record_revision":1,"text":"Passage.","text_length":8,
+        "source_asset_id":"asset-aardvark","source_block_ids":["b1"],
+        "source_spans":[{"block_id":"b1","page":1}],
+        "document_author":"Jacques Derrida",
+        "deterministic_ingest":{"speakers":["Hélène Cixous"]},
+        "metadata_field_status":{
+            "position_holder":{"status":"unresolved","proposed_value":"Édouard Glissant"},
+            "work":{"status":"unresolved","llm_value":"Of Grammatology"},
+        },
+    }
+    repo.save_records(build["build_id"],[record])
+    values=repo.page_records(build["build_id"])["metadata_values"]
+    assert "Hélène Cixous" in values["speaker"]
+    assert "Édouard Glissant" in values["position_holder"]
+    assert "Of Grammatology" in values["work"]
+
+
 def test_accept_reject_and_bulk_disposition_mutate_review_state_reliably(tmp_path:Path):
     """Accept, reject, and bulk-accept-the-rejected update the stored state."""
     repo=cb.PdfCorpusRepository(tmp_path/"repo")
