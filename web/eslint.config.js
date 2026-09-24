@@ -9,7 +9,7 @@ export default ts.config(
   ...ts.configs.recommended,
   ...vue.configs['flat/essential'],
   {
-    files: ['**/*.{js,ts,vue}'],
+    files: ['**/*.{js,mjs,ts,vue}'],
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
     rules: {
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none' }],
@@ -19,6 +19,16 @@ export default ts.config(
     },
   },
   { files: ['**/*.vue'], rules: { 'no-undef': 'off' }, languageOptions: { parserOptions: { parser: ts.parser, extraFileExtensions: ['.vue'] } } },
+  {
+    files: ['tests/**/*.{js,ts}'],
+    // Tests intentionally use broad fixture doubles and Playwright's empty fixture
+    // destructuring. Keep real hygiene rules (unused symbols, undefined names, etc.)
+    // while allowing these test-specific patterns.
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      'no-empty-pattern': 'off',
+    },
+  },
   {
     files: ['src/runtime/runtime.js'],
     // SA-10: the JS bridge intentionally exposes callbacks and legacy helpers;
