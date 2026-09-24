@@ -902,7 +902,9 @@ def run_pdf_corpus_autonomous(build_id: str, body: PdfCorpusRecordRerun):
 @router.post("/api/pdf/corpus-builds/{build_id}/metadata/enrich")
 def rerun_pdf_corpus_metadata_enrichment(build_id: str, body: PdfCorpusRecordRerun) -> dict[str, Any]:
     try:
-        return pdf_corpus_builds.rerun_metadata_enrichment(build_id, _resolve_pdf_corpus_provider(body.model_dump(exclude_none=True)))
+        request = body.model_dump(exclude_none=True)
+        request.update(_resolve_pdf_corpus_provider(request))
+        return pdf_corpus_builds.rerun_metadata_enrichment(build_id, request)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus build not found") from exc
     except ValueError as exc:
@@ -935,4 +937,3 @@ def download_pdf_corpus_publication(publication_id: str) -> FileResponse:
     if not path.exists():
         raise HTTPException(status_code=404, detail="Publication not found")
     return FileResponse(path, media_type="application/x-ndjson", filename=f"{publication_id}.jsonl")
-

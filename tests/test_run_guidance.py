@@ -123,6 +123,62 @@ def test_guidance_is_appended_only_to_its_schema_group_prompt(tmp_path):
     assert "Exact phrase matches in this record: hospitality (1 occurrence(s))" in ideas_prompt
 
 
+def test_schema_nlp_hints_are_validated_and_included_in_group_prompt():
+    schema = ms.MetadataSchema(
+        name="NLP hints",
+        groups=[ms.SchemaGroup(key="discourse", label="Discourse", intro="Read carefully.")],
+        fields=[
+            ms.SchemaField(
+                name="region_author",
+                label="Region author",
+                pos_tags=["PROPN"],
+                ner_tags=["PERSON"],
+            )
+        ],
+    )
+
+    prompt = ms.build_group_prompt(schema, "discourse", base_context="Text: Derrida cites Levinas.")
+
+    assert "POS tags" in prompt
+    assert "PERSON" in prompt
+
+
+def test_required_run_guidance_field_enters_review_queue_when_model_returns_no_value(tmp_path):
+    manager = cb.PdfCorpusBuildManager(tmp_path / "repo")
+    schema = ms.MetadataSchema(
+        name="Required guidance",
+        groups=[ms.SchemaGroup(key="discourse", label="Discourse", intro="Read carefully.")],
+        fields=[ms.SchemaField(name="region_author", label="Region author", group="discourse")],
+    )
+    record = {
+        "record_id": "r1",
+        "text": "No author is established here.",
+        "metadata_field_status": {},
+        "metadata_stage_status": {"discourse": "complete"},
+    }
+    profile = {**cb.CORPUS_PROFILES[cb.PROFILE_VERSION], "review_metadata_fields": schema.review_fields()}
+    result = manager._reconcile_metadata_results(
+        record,
+        profile,
+        [],
+        [("discourse", {"metadata": {}, "field_assessments": {}}, None)],
+        False,
+        request={
+            "run_guidance": {
+                "region_author": {
+                    "required": True,
+                    "default_placeholder": "[not established in source]",
+                }
+            }
+        },
+        schema=schema,
+    )
+
+    assert result["region_author"] == "[not established in source]"
+    assert "region_author" in result["metadata_incomplete_fields"]
+    assert result["metadata_field_status"]["region_author"]["reason_code"] == "required_placeholder"
+
+
 def test_run_guidance_match_diagnostics_do_not_leak_into_published_records():
     record = {
         "record_id": "r1",

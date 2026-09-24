@@ -277,6 +277,20 @@ class MetadataEnrichmentExecutionMixin:
             record["review_reason"] = "Record exceeds this model's metadata context envelope; metadata was inferred from head/tail context and requires review."
 
         human_status = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
+        cached_prefills: dict[str, Any] = {}
+        for field in schema.fields:
+            cached = adjudication_suggestions(
+                record_id=str(record.get("record_id") or ""),
+                text=source_text,
+                field=field.name,
+                cardinality="list" if field.type == "list" else "single",
+                schema_version=str(schema.schema_version or ""),
+            )
+            if isinstance(cached, dict) and cached.get("latest_value") not in (None, "", []):
+                cached_prefills[field.name] = cached["latest_value"]
+                record[field.name] = cached["latest_value"]
+        if cached_prefills:
+            record["metadata_adjudication_prefills"] = cached_prefills
         human_locked_fields = sorted(
             field for field, info in human_status.items()
             if isinstance(info, dict) and str(info.get("status") or "") in {"human_confirmed", "human_override"}
@@ -645,6 +659,36 @@ CURRENT REVIEWED RECORD TEXT:
                 # confirmed review issue or overwrite a human value.
                 if existing_status.get("status") in {"human_confirmed", "human_override"}:
                     continue
+                prefilled = cached_prefills.get(key)
+                if prefilled not in (None, "", []) and value not in (None, "", []) and value != prefilled:
+                    field_status[key] = {
+                        "status": "unresolved",
+                        "method": "human_cache+llm",
+                        "confidence": None,
+                        "value_source": "human_adjudication_cache",
+                        "prefilled_candidate": "human",
+                        "prefilled_value": prefilled,
+                        "llm_value": value,
+                        "llm_confidence": None,
+                        "proposed_value": value,
+                        "reason_code": "human_llm_disagreement",
+                        "reason": "A previously human-confirmed value differs from this run's blind model judgment.",
+                    }
+                    record[key] = prefilled
+                    continue
+                if prefilled not in (None, "", []):
+                    record[key] = prefilled
+                    existing_status = {
+                        **existing_status,
+                        "status": "human_confirmed",
+                        "method": "human_adjudication_cache",
+                        "value_source": "human_adjudication_cache",
+                        "prefilled_value": prefilled,
+                        "llm_value": value,
+                        "llm_checked": True,
+                    }
+                    field_status[key] = existing_status
+                    continue
                 if key in {"region_type", "primary_text"} and existing_status.get("status") == "deterministic":
                     # Structural classifications remain selected. The semantic
                     # reader may corroborate or dispute them, but reviewer-owned
@@ -777,7 +821,7 @@ CURRENT REVIEWED RECORD TEXT:
         # outside REVIEW_METADATA_FIELDS.
         for field in sorted(llm_populated_fields):
             current = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
-            if current.get("status") in {"deterministic", "inherited", "human_confirmed", "human_override"} or current.get("reason_code") == "deterministic_llm_disagreement":
+            if current.get("status") in {"deterministic", "inherited", "human_confirmed", "human_override"} or current.get("reason_code") in {"deterministic_llm_disagreement", "human_llm_disagreement"}:
                 continue
             assessment = field_assessments.get(field) if isinstance(field_assessments.get(field), dict) else {}
             evidence_info = clean_evidence.get(field) if isinstance(clean_evidence.get(field), dict) else {}
@@ -836,11 +880,21 @@ CURRENT REVIEWED RECORD TEXT:
                     or "Model value was populated, but calibrated autofill did not approve automatic verification."
                 ),
             }
-        review_metadata_fields = list(profile.get("review_metadata_fields") or REVIEW_METADATA_FIELDS)
+        # Run guidance is intentionally scoped to this execution, but a required
+        # field must still enter the same review queue as schema review fields.
+        required_guidance_fields = {
+            str(field)
+            for field, item in run_guidance.items()
+            if isinstance(item, dict) and bool(item.get("required"))
+        }
+        review_metadata_fields = list(dict.fromkeys([
+            *(profile.get("review_metadata_fields") or REVIEW_METADATA_FIELDS),
+            *required_guidance_fields,
+        ]))
         for field in review_metadata_fields:
             value = record.get(field)
             current = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
-            if current.get("status") in {"deterministic", "inherited", "human_confirmed", "human_override", "invalid"} or current.get("reason_code") in {"deterministic_llm_disagreement", "low_confidence", "confidence_missing"}:
+            if current.get("status") in {"deterministic", "inherited", "human_confirmed", "human_override", "invalid"} or current.get("reason_code") in {"deterministic_llm_disagreement", "human_llm_disagreement", "low_confidence", "confidence_missing"}:
                 continue
             evidence_info = clean_evidence.get(field) if isinstance(clean_evidence.get(field), dict) else {}
             assessment = field_assessments.get(field) if isinstance(field_assessments.get(field), dict) else {}
@@ -989,7 +1043,15 @@ CURRENT REVIEWED RECORD TEXT:
         else:
             record["metadata_needs_attention"] = False
             record["metadata_attention_reasons"] = []
-        _sync_record_metadata_state(record, profile)
+        state_profile = {
+            **profile,
+            "required_metadata_fields": list(dict.fromkeys([
+                *(profile.get("required_metadata_fields") or []),
+                *required_guidance_fields,
+            ])),
+            "review_metadata_fields": review_metadata_fields,
+        }
+        _sync_record_metadata_state(record, state_profile)
         incomplete_fields = list(record.get("metadata_incomplete_fields") or [])
         review_fields = list(record.get("metadata_review_fields") or [])
         # Optional indexing/quotation failures remain visible but do not make a structurally

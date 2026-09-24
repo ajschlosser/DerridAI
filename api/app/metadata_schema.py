@@ -83,6 +83,9 @@ class SchemaField(BaseModel):
     evidence: bool = False  # the model must cite source blocks for a value
     assess: bool = False  # the model must report its confidence
     review: bool = False  # an unresolved value here keeps a record out of "accepted" until a person decides
+    # Optional linguistic hints used by deterministic suggestions and model prompts.
+    pos_tags: list[str] = Field(default_factory=list, max_length=16)
+    ner_tags: list[str] = Field(default_factory=list, max_length=16)
 
     @field_validator("name")
     @classmethod
@@ -102,6 +105,9 @@ class SchemaField(BaseModel):
         seen = [v.value for v in self.values]
         if len(seen) != len(set(seen)):
             raise ValueError("Allowed values must be different from each other.")
+        for label in [*self.pos_tags, *self.ner_tags]:
+            if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,31}", label):
+                raise ValueError("NLP tags must contain letters, digits, underscores or hyphens.")
         return self
 
 
@@ -255,6 +261,13 @@ def build_group_prompt(
     for field in fields:
         if field.instruction.strip():
             lines.append(f"- {field.name} " + field.instruction.strip().replace("{values}", _values_json(field)))
+        if field.pos_tags:
+            lines.append(f"- {field.name} should prefer values supported by POS tags: {json.dumps(field.pos_tags)}.")
+        if field.ner_tags:
+            lines.append(
+                f"- {field.name} should prefer named entities matching NER tags "
+                f"(IOB2-compatible): {json.dumps(field.ner_tags)}."
+            )
         described = {v.value: v.definition for v in field.values if v.definition}
         if described:
             definitions.append((field.definitions_heading or f"{field.name} values", described))

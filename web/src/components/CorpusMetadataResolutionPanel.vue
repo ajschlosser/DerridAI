@@ -126,6 +126,7 @@ const attentionFields = computed(() =>
       ["unresolved", "invalid"].includes(String(status(field).status || "")),
   ),
 );
+const activeField = computed(() => attentionFields.value[0] || activeFields.value[0] || "");
 const settledFields = computed(() =>
   activeFields.value.filter((field) => !attentionFields.value.includes(field)),
 );
@@ -187,6 +188,16 @@ function options(field: string) {
       if (Array.isArray(candidate)) values.push(...candidate.map(String));
       else if (typeof candidate === "string") values.push(candidate);
     }
+    const nlpTags = schemaFields.value[field]?.ner_tags || [];
+    if (nlpTags.length && /\b(?:PERSON|PER|ORG|GPE|LOC|FAC|WORK_OF_ART|EVENT|PRODUCT)\b/i.test(nlpTags.join(" "))) {
+      // Keep this deterministic and dependency-free: capitalized spans are useful
+      // reviewer candidates even when an optional NLP provider is unavailable.
+      const text = String((props.record as Record<string, unknown>).text || "");
+      for (const match of text.matchAll(/\b[A-ZÀ-ÖØ-Þ][\p{L}'-]*(?:\s+[A-ZÀ-ÖØ-Þ][\p{L}'-]*){0,4}\b/gu)) {
+        const candidate = match[0].trim();
+        if (candidate.length > 1) values.push(candidate);
+      }
+    }
     if (source === "speaker") {
       const deterministic = (props.record as Record<string, unknown>).deterministic_ingest;
       if (deterministic && typeof deterministic === "object") {
@@ -239,6 +250,10 @@ function displayValue(field: string) {
           }}
         </p>
       </div>
+      <p v-if="activeField" class="active-field" role="status">
+        {{ i18n.t("pdf_corpus.active_metadata_field", "Active field") }}:
+        <b>{{ fieldLabel(activeField) || activeField.replaceAll("_", " ") }}</b>
+      </p>
       <span
         class="review-status"
         :data-state="
@@ -309,7 +324,7 @@ function displayValue(field: string) {
           :saved="savedField === field"
           :constraint="constraint(field)"
           :calibrated-acceptance="calibrated(field)"
-          :open="true"
+          :open="field === activeField"
           @save="(value) => emit('resolve', field, value)"
           @no-value="emit('noValue', field)"
           @source="emit('source', field)"
@@ -457,6 +472,17 @@ function displayValue(field: string) {
 }
 .review-status[data-state="attention"] {
   border: 1px solid var(--warning, #a16207);
+}
+.active-field {
+  margin: -4px 0 0;
+  padding: 9px 12px;
+  border-inline-start: 3px solid var(--accent);
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+.active-field b {
+  color: var(--text);
 }
 .enrichment-note {
   margin: 0;

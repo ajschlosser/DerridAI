@@ -5,6 +5,7 @@ export interface SchemaValue { value: string; definition: string }
 export interface SchemaField {
   name: string; label: string; type: SchemaFieldType; group: string; values: SchemaValue[]; strict: boolean;
   instruction: string; definitions_heading: string; evidence: boolean; assess: boolean; review: boolean;
+  pos_tags: string[]; ner_tags: string[];
 }
 export interface SchemaGroup { key: string; label: string; intro: string; fields_heading: string; notes: string[]; trailer: string; footer: string }
 export interface MetadataSchema { format_version: number; schema_version?: string; id: string; name: string; description: string; groups: SchemaGroup[]; fields: SchemaField[] }
@@ -28,5 +29,5 @@ export const metadataSchemasApi = {
 };
 
 export function blankField(group = CORE_GROUP): SchemaField {
-  return { name: "", label: "", type: "text", group, values: [], strict: false, instruction: "", definitions_heading: "", evidence: false, assess: false, review: false };
+  return { name: "", label: "", type: "text", group, values: [], strict: false, instruction: "", definitions_heading: "", evidence: false, assess: false, review: false, pos_tags: [], ner_tags: [] };
 }
