@@ -43,6 +43,7 @@ from .corpus_segmentation import (
     _scholarly_page_range,
 )
 from .enrichment_ledger import ACCEPTED
+from .metadata_adjudication_cache import remember as remember_adjudication
 from .metadata_schema import MetadataSchema
 from .rag import _citation_strings
 
@@ -661,6 +662,13 @@ class ReviewActionsMixin:
         remaining_fields = list(dict.fromkeys([
             str(v) for v in (record.get("metadata_incomplete_fields") or []) + (record.get("metadata_review_fields") or [])
         ]))
+        remember_adjudication(
+            record_id=record_id,
+            text=str(record.get("text") or ""),
+            field=field,
+            value=value,
+            schema_version=str(build.get("schema_version") or ""),
+        )
         return {
             "applied": True,
             "record": record,
@@ -953,4 +961,3 @@ class ReviewActionsMixin:
         records[index:index + 1] = pieces
         self._rewrite_and_validate(build_id, records)
         return {"records": pieces}
-

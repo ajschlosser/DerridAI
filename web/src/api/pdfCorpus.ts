@@ -898,6 +898,38 @@ export const pdfCorpusApi = {
         }),
       },
     ),
+  metadataDecisionBatch: (
+    buildId: string,
+    recordId: string,
+    changes: Record<string, unknown>,
+    expectedRevision?: number,
+  ) =>
+    apiRequest<{
+      applied: boolean;
+      record: CorpusRecord;
+      build: CorpusBuild;
+      changed_fields: string[];
+    }>(
+      `/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/metadata-decisions`,
+      {
+        method: "POST",
+        body: JSON.stringify({ changes, expected_revision: expectedRevision }),
+      },
+    ),
+  metadataCache: (buildId: string, recordId: string, field: string) =>
+    apiRequest<{ suggestions: Record<string, unknown> }>(
+      `/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/metadata-cache?field=${encodeURIComponent(field)}`,
+    ),
+  clearMetadataCache: (buildId: string, recordId: string, field?: string) =>
+    apiRequest<{ cleared: number }>(
+      `/api/pdf/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/metadata-cache`,
+      {
+        method: "DELETE",
+        body: JSON.stringify(field ? { field } : {}),
+      },
+    ),
+  clearAllMetadataCache: () =>
+    apiRequest<{ cleared: number }>("/api/pdf/metadata-cache", { method: "DELETE" }),
   bulkDisposition: (
     buildId: string,
     disposition: "pending" | "accepted" | "rejected",

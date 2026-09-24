@@ -287,7 +287,7 @@ function reset() {
           <span>{{
             i18n.tf("pdf_corpus.manifest_changed_elsewhere", {
                 value:
-                  serverChanged[field.key] || i18n.t("pdf_corpus.manifest_empty_value", "(empty)"),
+                  serverChanged[field.key] || i18n.t("pdf_corpus.manifest_empty_value"),
               })
           }}</span>
           <button

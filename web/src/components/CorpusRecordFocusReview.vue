@@ -1115,6 +1115,10 @@ kbd {
   font-size: 0.8125rem;
 }
 .focus-actions {
+  position: fixed;
+  inset-inline: var(--sidebar) 0;
+  inset-block-end: 0;
+  z-index: 20;
   display: flex;
   justify-content: space-between;
   gap: 12px;
@@ -1122,6 +1126,11 @@ kbd {
   padding: 12px clamp(18px, 3vw, 42px);
   border-top: 1px solid var(--line);
   background: var(--card);
+  box-shadow: 0 -0.75rem 2rem color-mix(in srgb, var(--text) 12%, transparent);
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+}
+.focus-review {
+  padding-bottom: 5.5rem;
 }
 .structural-actions,
 .decision-actions {
@@ -1151,9 +1160,7 @@ kbd {
     border-top: 1px solid var(--line);
   }
   .focus-actions {
-    position: sticky;
-    bottom: 0;
-    z-index: 5;
+    inset-inline-start: 0;
     align-items: stretch;
     flex-direction: column;
     box-shadow: 0 -8px 24px color-mix(in srgb, var(--text) 10%, transparent);

@@ -784,7 +784,7 @@ async function installLanguage() {
       throw new Error(
         i18n.tf("language.provider_unavailable", {
             message:
-              status.error || i18n.t("language.provider_unavailable_short", "provider unavailable"),
+              status.error || i18n.t("language.provider_unavailable_short"),
           }),
       );
     const created = await systemApi.installLanguage({

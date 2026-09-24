@@ -95,7 +95,7 @@ const heading = computed(() => {
           i18n.t("pdf_corpus.enrichment_keep_working")
         }}</small>
         <small v-if="operation.current_record_id">{{
-          i18n.tf("pdf_corpus.enrichment_current_task", { record: operation.current_record_id, task: operation.current_task || i18n.t("pdf_corpus.metadata_enrichment", "metadata") })
+          i18n.tf("pdf_corpus.enrichment_current_task", { record: operation.current_record_id, task: operation.current_task || i18n.t("pdf_corpus.metadata_enrichment") })
         }}</small>
         <small v-if="(operation.active_tasks || []).length > 1">{{
           i18n.tf("pdf_corpus.enrichment_active_tasks", { count: operation.active_tasks?.length || 0 })

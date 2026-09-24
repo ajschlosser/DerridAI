@@ -43,6 +43,13 @@ from .i18n_translation import translate_english_dictionary
 from .jobs import LLMJobManager, LLMToolJobManager, RAGJobManager, UpsertJobManager
 from .llm import TouchupFailure, llm_status, propose_touchup, warmup_model
 from .llm_tools import run_pdf_llm, run_rag_grade
+from .metadata_adjudication_cache import (
+    clear as clear_adjudication_cache,
+)
+from .metadata_adjudication_cache import remember as remember_adjudication
+from .metadata_adjudication_cache import (
+    suggestions as adjudication_suggestions,
+)
 from .metadata_schema import MetadataSchema, SchemaImportError
 from .metadata_schema_store import SchemaLocked, SchemaNotFound, SchemaStore
 from .models import (
@@ -71,7 +78,9 @@ from .models import (
     PdfCorpusBulkMetadataPatch,
     PdfCorpusEvidencePatch,
     PdfCorpusManifestPatch,
+    PdfCorpusMetadataCacheClear,
     PdfCorpusMetadataDecision,
+    PdfCorpusMetadataDecisionBatch,
     PdfCorpusProviderSwitch,
     PdfCorpusPublishRequest,
     PdfCorpusRecordAccept,
@@ -2424,6 +2433,103 @@ def decide_pdf_corpus_record_metadata(build_id: str, record_id: str, body: PdfCo
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/metadata-decisions")
+def decide_pdf_corpus_record_metadata_batch(
+    build_id: str,
+    record_id: str,
+    body: PdfCorpusMetadataDecisionBatch,
+) -> dict[str, Any]:
+    try:
+        pdf_corpus_builds.patch_metadata(
+            build_id, record_id, body.changes, body.expected_revision
+        )
+        build = pdf_corpus_repository.get_build(build_id)
+        records = pdf_corpus_repository.load_records(build_id)
+        record = next(
+            (
+                row
+                for row in records
+                if str(row.get("record_id") or "") == record_id
+            ),
+            None,
+        )
+        if record is None:
+            raise KeyError(record_id)
+        for field, value in body.changes.items():
+            remember_adjudication(
+                record_id=record_id,
+                text=str(record.get("text") or ""),
+                field=field,
+                value=value,
+                schema_version=str(build.get("schema_version") or ""),
+            )
+        return {
+            "applied": True,
+            "record": record,
+            "build": build,
+            "changed_fields": list(body.changes),
+        }
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/api/pdf/corpus-builds/{build_id}/records/{record_id}/metadata-cache")
+def get_pdf_corpus_metadata_cache(build_id: str, record_id: str, field: str) -> dict[str, Any]:
+    try:
+        record = next(
+            (
+                row
+                for row in pdf_corpus_repository.load_records(build_id)
+                if str(row.get("record_id") or "") == record_id
+            ),
+            None,
+        )
+        if record is None:
+            raise KeyError(record_id)
+        build = pdf_corpus_repository.get_build(build_id)
+        cached = adjudication_suggestions(
+            record_id=record_id,
+            text=str(record.get("text") or ""),
+            field=field,
+            cardinality="list" if isinstance(record.get(field), list) else "single",
+            schema_version=str(build.get("schema_version") or ""),
+        )
+        return {"suggestions": cached or {}}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.delete("/api/pdf/corpus-builds/{build_id}/records/{record_id}/metadata-cache")
+def clear_pdf_corpus_metadata_cache(
+    build_id: str,
+    record_id: str,
+    body: PdfCorpusMetadataCacheClear | None = None,
+) -> dict[str, Any]:
+    try:
+        if not any(
+            str(row.get("record_id") or "") == record_id
+            for row in pdf_corpus_repository.load_records(build_id)
+        ):
+            raise KeyError(record_id)
+        return {
+            "cleared": clear_adjudication_cache(
+                record_id=record_id,
+                field=body.field if body else None,
+            )
+        }
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+
+
+@app.delete("/api/pdf/metadata-cache")
+def clear_all_pdf_corpus_metadata_cache() -> dict[str, Any]:
+    return {"cleared": clear_adjudication_cache()}
 
 
 @app.patch("/api/pdf/corpus-builds/{build_id}/records/{record_id}/evidence")
