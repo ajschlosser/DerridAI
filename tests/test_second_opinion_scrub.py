@@ -210,13 +210,16 @@ BUILD_LEVEL = {
 
 
 def test_every_corpus_build_route_has_been_considered_for_second_opinion_leaks():
+    # Corpus Builder now owns these endpoints through its APIRouter. Inventory
+    # that canonical route table directly; the earlier HTTP test verifies the
+    # router is mounted into the assembled FastAPI application.
     seen = {
         (method, route.path)
-        for route in main.app.routes
+        for route in corpus_routes.router.routes
         if getattr(route, "path", "").startswith("/api/pdf/corpus-builds")
         for method in getattr(route, "methods", set()) - {"HEAD", "OPTIONS"}
     }
-    assert len(seen) > 25  # the route table was actually read
+    assert len(seen) > 25  # the Corpus Builder route table was actually read
     unreviewed = sorted(seen - CARRIES_RECORDS - BUILD_LEVEL)
     assert not unreviewed, (
         "New corpus-build route(s) not classified in tests/test_second_opinion_scrub.py: " + ", ".join(f"{m} {p}" for m, p in unreviewed)
