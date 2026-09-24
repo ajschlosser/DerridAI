@@ -323,7 +323,7 @@ def test_editorial_memory_semantic_retrieval_uses_bound_canonical_exemplars():
             return {
                 "asset_id": "asset-1",
                 "schema_id": "derrida",
-                "schema_version": "v7",
+                "metadata_schema_version": "v7",
             }
 
         def load_blocks(self, asset_id):
