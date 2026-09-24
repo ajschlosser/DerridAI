@@ -526,20 +526,24 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
         self, *, field_id: str | None = None, record_id: str | None = None,
         owner: str | None = None, limit: int = 100,
     ) -> list[dict[str, Any]]:
-        clauses = ["1=1"]
-        params: list[Any] = []
-        if field_id:
-            clauses.append("field_id=?"); params.append(str(field_id))
-        if record_id:
-            clauses.append("record_id=?"); params.append(str(record_id))
-        if owner is not None:
-            clauses.append("(visibility='corpus' OR owner=?)"); params.append(str(owner))
-        params.append(max(1, min(1000, int(limit))))
+        field_filter = str(field_id) if field_id else None
+        record_filter = str(record_id) if record_id else None
+        owner_filter = str(owner) if owner is not None else None
         with self._lock, self._connect() as conn:
             rows = conn.execute(
-                "SELECT payload_json FROM metadata_memory_bindings WHERE "
-                + " AND ".join(clauses) + " ORDER BY created_at DESC LIMIT ?",
-                params,
+                """
+                SELECT payload_json
+                FROM metadata_memory_bindings
+                WHERE (? IS NULL OR field_id=?)
+                  AND (? IS NULL OR record_id=?)
+                  AND (? IS NULL OR visibility='corpus' OR owner=?)
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (
+                    field_filter, field_filter, record_filter, record_filter,
+                    owner_filter, owner_filter, max(1, min(1000, int(limit))),
+                ),
             ).fetchall()
         return [value for value in (_json_loads(row["payload_json"], {}) for row in rows) if isinstance(value, dict)]
 
@@ -556,16 +560,17 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
         return item_id
 
     def list_semantic_memory_dirty(self, projection: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
-        clauses = ["status='dirty'"]
-        params: list[Any] = []
-        if projection:
-            clauses.append("projection=?"); params.append(str(projection))
-        params.append(max(1, min(1000, int(limit))))
+        projection_filter = str(projection) if projection else None
         with self._lock, self._connect() as conn:
             rows = conn.execute(
-                "SELECT item_id,projection,record_id,reason,status,created_at,updated_at "
-                "FROM semantic_memory_outbox WHERE " + " AND ".join(clauses) + " ORDER BY created_at LIMIT ?",
-                params,
+                """
+                SELECT item_id,projection,record_id,reason,status,created_at,updated_at
+                FROM semantic_memory_outbox
+                WHERE status='dirty' AND (? IS NULL OR projection=?)
+                ORDER BY created_at
+                LIMIT ?
+                """,
+                (projection_filter, projection_filter, max(1, min(1000, int(limit)))),
             ).fetchall()
         return [dict(row) for row in rows]
 
@@ -616,28 +621,34 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
             conn.commit()
 
     def list_response_memory(self, *, owner: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
-        clauses = ["1=1"]; params: list[Any] = []
-        if owner is not None:
-            clauses.append("(owner IS NULL OR owner=?)"); params.append(str(owner))
-        params.append(max(1, min(1000, int(limit))))
+        owner_filter = str(owner) if owner is not None else None
         with self._lock, self._connect() as conn:
             rows = conn.execute(
-                "SELECT payload_json FROM response_memory WHERE " + " AND ".join(clauses) +
-                " ORDER BY created_at DESC LIMIT ?", params,
+                """
+                SELECT payload_json
+                FROM response_memory
+                WHERE (? IS NULL OR owner IS NULL OR owner=?)
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (owner_filter, owner_filter, max(1, min(1000, int(limit)))),
             ).fetchall()
         return [value for value in (_json_loads(row["payload_json"], {}) for row in rows) if isinstance(value, dict)]
 
     def list_generated_claims(self, *, owner: str | None = None, run_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
-        clauses = ["1=1"]; params: list[Any] = []
-        if owner is not None:
-            clauses.append("(owner IS NULL OR owner=?)"); params.append(str(owner))
-        if run_id is not None:
-            clauses.append("run_id=?"); params.append(str(run_id))
-        params.append(max(1, min(1000, int(limit))))
+        owner_filter = str(owner) if owner is not None else None
+        run_filter = str(run_id) if run_id is not None else None
         with self._lock, self._connect() as conn:
             rows = conn.execute(
-                "SELECT payload_json FROM generated_claims WHERE " + " AND ".join(clauses) +
-                " ORDER BY created_at DESC LIMIT ?", params,
+                """
+                SELECT payload_json
+                FROM generated_claims
+                WHERE (? IS NULL OR owner IS NULL OR owner=?)
+                  AND (? IS NULL OR run_id=?)
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (owner_filter, owner_filter, run_filter, run_filter, max(1, min(1000, int(limit)))),
             ).fetchall()
         return [value for value in (_json_loads(row["payload_json"], {}) for row in rows) if isinstance(value, dict)]
 
@@ -666,13 +677,17 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
             conn.commit()
 
     def list_claim_support_bindings(self, claim_id: str, *, owner: str | None = None) -> list[dict[str, Any]]:
-        clauses = ["claim_id=?"]; params: list[Any] = [str(claim_id)]
-        if owner is not None:
-            clauses.append("(owner IS NULL OR owner=?)"); params.append(str(owner))
+        owner_filter = str(owner) if owner is not None else None
         with self._lock, self._connect() as conn:
             rows = conn.execute(
-                "SELECT payload_json FROM claim_support_bindings WHERE " + " AND ".join(clauses) +
-                " ORDER BY created_at", params,
+                """
+                SELECT payload_json
+                FROM claim_support_bindings
+                WHERE claim_id=?
+                  AND (? IS NULL OR owner IS NULL OR owner=?)
+                ORDER BY created_at
+                """,
+                (str(claim_id), owner_filter, owner_filter),
             ).fetchall()
         return [value for value in (_json_loads(row["payload_json"], {}) for row in rows) if isinstance(value, dict)]
 

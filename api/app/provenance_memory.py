@@ -12,8 +12,9 @@ from __future__ import annotations
 import copy
 import hashlib
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any, Callable, Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -57,11 +58,11 @@ class MetadataMemoryBinding(BaseModel):
     created_at: str = Field(default_factory=_now)
 
     @classmethod
-    def absence(cls, **kwargs: Any) -> "MetadataMemoryBinding":
+    def absence(cls, **kwargs: Any) -> MetadataMemoryBinding:
         return cls(decision_kind="absence", value=None, **kwargs)
 
     @classmethod
-    def correction(cls, *, rejected_value: Any = None, **kwargs: Any) -> "MetadataMemoryBinding":
+    def correction(cls, *, rejected_value: Any = None, **kwargs: Any) -> MetadataMemoryBinding:
         payload = dict(kwargs)
         payload["value"] = {"accepted": payload.get("value"), "rejected": rejected_value}
         return cls(decision_kind="correction", **payload)

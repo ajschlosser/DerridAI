@@ -127,7 +127,7 @@ class EditorialMemoryMixin:
         field_limits: dict[str, int] = {}
         field_min_similarity: dict[str, float] = {}
         enabled_fields: set[str] = set()
-        for field, field_id in field_ids.items():
+        for field, _field_id in field_ids.items():
             item = schema_fields.get(field, {})
             profile = item.get("retrieval_profile") if isinstance(item, dict) else None
             if profile is not None and not bool(profile.get("enabled", True)):
