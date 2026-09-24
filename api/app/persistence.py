@@ -129,6 +129,80 @@ class SQLiteRepositoryBase:
                 );
                 CREATE INDEX IF NOT EXISTS idx_metadata_adjudication_cache_record
                     ON metadata_adjudication_cache(record_id, field, updated_at DESC);
+
+                CREATE TABLE IF NOT EXISTS metadata_memory_bindings (
+                    binding_id TEXT PRIMARY KEY,
+                    record_id TEXT NOT NULL,
+                    record_revision INTEGER,
+                    source_document_id TEXT,
+                    field_id TEXT NOT NULL,
+                    field_name TEXT,
+                    schema_id TEXT,
+                    schema_version TEXT,
+                    decision_kind TEXT NOT NULL,
+                    value_json TEXT,
+                    evidence_json TEXT NOT NULL,
+                    visibility TEXT NOT NULL DEFAULT 'corpus',
+                    owner TEXT,
+                    payload_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_metadata_memory_field
+                    ON metadata_memory_bindings(field_id, created_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_metadata_memory_record
+                    ON metadata_memory_bindings(record_id, field_id, created_at DESC);
+
+                CREATE TABLE IF NOT EXISTS semantic_memory_outbox (
+                    item_id TEXT PRIMARY KEY,
+                    projection TEXT NOT NULL,
+                    record_id TEXT,
+                    reason TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'dirty',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_semantic_memory_outbox_status
+                    ON semantic_memory_outbox(status, created_at);
+
+                CREATE TABLE IF NOT EXISTS generated_claims (
+                    claim_id TEXT PRIMARY KEY,
+                    run_id TEXT,
+                    response_record_id TEXT,
+                    owner TEXT,
+                    claim_text TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_generated_claims_owner
+                    ON generated_claims(owner, created_at DESC);
+
+                CREATE TABLE IF NOT EXISTS response_memory (
+                    response_id TEXT PRIMARY KEY,
+                    owner TEXT,
+                    question TEXT NOT NULL,
+                    answer TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_response_memory_owner
+                    ON response_memory(owner, created_at DESC);
+
+                CREATE TABLE IF NOT EXISTS claim_support_bindings (
+                    support_binding_id TEXT PRIMARY KEY,
+                    claim_id TEXT NOT NULL,
+                    owner TEXT,
+                    record_id TEXT,
+                    record_revision INTEGER,
+                    relation TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_claim_support_claim
+                    ON claim_support_bindings(claim_id, created_at);
                 """
             )
             self._ensure_column(conn, "languages", "content_policy_json", "TEXT")
@@ -411,6 +485,211 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
             )
             conn.commit()
             return int(cursor.rowcount)
+
+    def put_memory_binding(self, payload: dict[str, Any]) -> None:
+        binding_id = str(payload.get("binding_id") or "").strip()
+        record_id = str(payload.get("record_id") or "").strip()
+        field_id = str(payload.get("field_id") or "").strip()
+        if not binding_id or not record_id or not field_id:
+            raise ValueError("Metadata memory binding needs binding_id, record_id, and field_id.")
+        now = _iso_now()
+        value = payload.get("value")
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO metadata_memory_bindings
+                    (binding_id,record_id,record_revision,source_document_id,field_id,field_name,
+                     schema_id,schema_version,decision_kind,value_json,evidence_json,visibility,owner,
+                     payload_json,created_at,updated_at)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(binding_id) DO UPDATE SET
+                    payload_json=excluded.payload_json,
+                    value_json=excluded.value_json,
+                    evidence_json=excluded.evidence_json,
+                    updated_at=excluded.updated_at
+                """,
+                (
+                    binding_id, record_id, payload.get("record_revision"),
+                    payload.get("source_document_id"), field_id, payload.get("field_name"),
+                    payload.get("schema_id"), payload.get("schema_version"),
+                    str(payload.get("decision_kind") or "value"),
+                    _json_dumps(value) if value is not None else None,
+                    _json_dumps(payload.get("evidence") or []),
+                    str(payload.get("visibility") or "corpus"),
+                    payload.get("owner"), _json_dumps(payload),
+                    str(payload.get("created_at") or now), now,
+                ),
+            )
+            conn.commit()
+
+    def list_memory_bindings(
+        self, *, field_id: str | None = None, record_id: str | None = None,
+        owner: str | None = None, limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        field_filter = str(field_id) if field_id else None
+        record_filter = str(record_id) if record_id else None
+        owner_filter = str(owner) if owner is not None else None
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT payload_json
+                FROM metadata_memory_bindings
+                WHERE (? IS NULL OR field_id=?)
+                  AND (? IS NULL OR record_id=?)
+                  AND (? IS NULL OR visibility='corpus' OR owner=?)
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (
+                    field_filter, field_filter, record_filter, record_filter,
+                    owner_filter, owner_filter, max(1, min(1000, int(limit))),
+                ),
+            ).fetchall()
+        return [value for value in (_json_loads(row["payload_json"], {}) for row in rows) if isinstance(value, dict)]
+
+    def mark_semantic_memory_dirty(self, projection: str, *, record_id: str | None = None, reason: str = "changed") -> str:
+        import uuid
+        item_id = str(uuid.uuid4())
+        now = _iso_now()
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                "INSERT INTO semantic_memory_outbox(item_id,projection,record_id,reason,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
+                (item_id, str(projection), record_id, str(reason), "dirty", now, now),
+            )
+            conn.commit()
+        return item_id
+
+    def list_semantic_memory_dirty(self, projection: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+        projection_filter = str(projection) if projection else None
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT item_id,projection,record_id,reason,status,created_at,updated_at
+                FROM semantic_memory_outbox
+                WHERE status='dirty' AND (? IS NULL OR projection=?)
+                ORDER BY created_at
+                LIMIT ?
+                """,
+                (projection_filter, projection_filter, max(1, min(1000, int(limit)))),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def put_generated_claim(self, payload: dict[str, Any]) -> None:
+        claim_id = str(payload.get("claim_id") or "").strip()
+        claim_text = str(payload.get("claim_text") or "").strip()
+        if not claim_id or not claim_text:
+            raise ValueError("A generated claim needs claim_id and claim_text.")
+        now = _iso_now()
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO generated_claims
+                    (claim_id,run_id,response_record_id,owner,claim_text,payload_json,created_at,updated_at)
+                VALUES(?,?,?,?,?,?,?,?)
+                ON CONFLICT(claim_id) DO UPDATE SET
+                    payload_json=excluded.payload_json, updated_at=excluded.updated_at
+                """,
+                (
+                    claim_id, payload.get("run_id"), payload.get("response_record_id"),
+                    payload.get("owner"), claim_text, _json_dumps(payload),
+                    str(payload.get("created_at") or now), now,
+                ),
+            )
+            conn.commit()
+
+    def put_response_memory(self, payload: dict[str, Any]) -> None:
+        response_id = str(payload.get("response_id") or "").strip()
+        question = str(payload.get("question") or "").strip()
+        answer = str(payload.get("answer") or "").strip()
+        if not response_id or not question or not answer:
+            raise ValueError("A response memory item needs response_id, question, and answer.")
+        now = _iso_now()
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO response_memory
+                    (response_id,owner,question,answer,payload_json,created_at,updated_at)
+                VALUES(?,?,?,?,?,?,?)
+                ON CONFLICT(response_id) DO UPDATE SET
+                    payload_json=excluded.payload_json, updated_at=excluded.updated_at
+                """,
+                (
+                    response_id, payload.get("owner"), question, answer,
+                    _json_dumps(payload), str(payload.get("created_at") or now), now,
+                ),
+            )
+            conn.commit()
+
+    def list_response_memory(self, *, owner: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+        owner_filter = str(owner) if owner is not None else None
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT payload_json
+                FROM response_memory
+                WHERE (? IS NULL OR owner IS NULL OR owner=?)
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (owner_filter, owner_filter, max(1, min(1000, int(limit)))),
+            ).fetchall()
+        return [value for value in (_json_loads(row["payload_json"], {}) for row in rows) if isinstance(value, dict)]
+
+    def list_generated_claims(self, *, owner: str | None = None, run_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+        owner_filter = str(owner) if owner is not None else None
+        run_filter = str(run_id) if run_id is not None else None
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT payload_json
+                FROM generated_claims
+                WHERE (? IS NULL OR owner IS NULL OR owner=?)
+                  AND (? IS NULL OR run_id=?)
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (owner_filter, owner_filter, run_filter, run_filter, max(1, min(1000, int(limit)))),
+            ).fetchall()
+        return [value for value in (_json_loads(row["payload_json"], {}) for row in rows) if isinstance(value, dict)]
+
+    def put_claim_support_binding(self, payload: dict[str, Any]) -> None:
+        support_id = str(payload.get("support_binding_id") or "").strip()
+        claim_id = str(payload.get("claim_id") or "").strip()
+        relation = str(payload.get("relation") or "").strip()
+        if not support_id or not claim_id or not relation:
+            raise ValueError("A support binding needs support_binding_id, claim_id, and relation.")
+        now = _iso_now()
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO claim_support_bindings
+                    (support_binding_id,claim_id,owner,record_id,record_revision,relation,payload_json,created_at,updated_at)
+                VALUES(?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(support_binding_id) DO UPDATE SET
+                    payload_json=excluded.payload_json, updated_at=excluded.updated_at
+                """,
+                (
+                    support_id, claim_id, payload.get("owner"), payload.get("record_id"),
+                    payload.get("record_revision"), relation, _json_dumps(payload),
+                    str(payload.get("created_at") or now), now,
+                ),
+            )
+            conn.commit()
+
+    def list_claim_support_bindings(self, claim_id: str, *, owner: str | None = None) -> list[dict[str, Any]]:
+        owner_filter = str(owner) if owner is not None else None
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT payload_json
+                FROM claim_support_bindings
+                WHERE claim_id=?
+                  AND (? IS NULL OR owner IS NULL OR owner=?)
+                ORDER BY created_at
+                """,
+                (str(claim_id), owner_filter, owner_filter),
+            ).fetchall()
+        return [value for value in (_json_loads(row["payload_json"], {}) for row in rows) if isinstance(value, dict)]
 
     def list_languages(self) -> dict[str, dict[str, Any]]:
         with self._lock, self._connect() as conn:

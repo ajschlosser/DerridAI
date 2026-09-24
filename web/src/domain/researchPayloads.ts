@@ -215,5 +215,8 @@ export function normalizedResearchConfig(cfg: Loose = {}) {
     include_works_cited: cfg.include_works_cited !== false,
     auto_grade: Boolean(cfg.auto_grade),
     skip_retrieval: Boolean(cfg.skip_retrieval),
+    use_prior_response_memory: Boolean(cfg.use_prior_response_memory),
+    use_prior_claim_memory: Boolean(cfg.use_prior_claim_memory),
+    memory_profile_id: String(cfg.memory_profile_id || ""),
   };
 }

@@ -367,6 +367,11 @@ class RAGRunRequest(BaseModel):
     include_works_cited: bool = True
     selected_evidence: list[RAGEvidenceSelection] = Field(default_factory=list, max_length=500)
     skip_retrieval: bool = False
+    # These are independent steering channels.  Neither may silently become
+    # current source evidence; canonical re-resolution happens before binding.
+    use_prior_response_memory: bool = False
+    use_prior_claim_memory: bool = False
+    memory_profile_id: str | None = None
     auto_grade: bool = False
     # Auto-grading can use an independent provider/model from answer generation.
     # These execution fields are resolved server-side from the selected profile.

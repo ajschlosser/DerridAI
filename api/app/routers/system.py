@@ -97,3 +97,32 @@ def inspect_metadata_memory(
         language=language,
         query=q,
     )
+
+
+@router.get("/api/system/research-memory")
+def inspect_research_memory(
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=200),
+    run_id: str = Query(default="", max_length=160),
+) -> dict[str, Any]:
+    """Inspect durable Research memory without exposing another user's private runs."""
+
+    user = request_user(request)
+    owner = None if user.role == "admin" else user.username
+    claims = system_store.list_generated_claims(
+        owner=owner,
+        run_id=run_id or None,
+        limit=limit,
+    )
+    bindings: list[dict[str, Any]] = []
+    for claim in claims:
+        claim_id = str(claim.get("claim_id") or "")
+        if claim_id:
+            bindings.extend(
+                system_store.list_claim_support_bindings(claim_id, owner=owner)
+            )
+    return {
+        "responses": system_store.list_response_memory(owner=owner, limit=limit),
+        "claims": claims,
+        "support_bindings": bindings[: max(1, limit * 4)],
+    }

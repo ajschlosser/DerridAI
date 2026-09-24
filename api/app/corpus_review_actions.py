@@ -45,6 +45,7 @@ from .corpus_segmentation import (
 from .enrichment_ledger import ACCEPTED
 from .metadata_adjudication_cache import remember as remember_adjudication
 from .metadata_schema import MetadataSchema
+from .provenance_memory import persist_record_decision
 from .rag import _citation_strings
 
 
@@ -520,6 +521,10 @@ class ReviewActionsMixin:
         _ = self._rewrite_and_validate(build_id, records)
         # Return the record as persisted after authoritative state derivation.
         persisted = next((row for row in self.repo.load_records(build_id) if row.get("record_id") == record_id), target)
+        schema = self._schema_for(build_id)
+        for key, value in changes.items():
+            if key not in skipped:
+                persist_record_decision(record=persisted, schema=schema, field_name=key, value=value)
         _decorate_review_state(persisted)
         _present_for_reviewer(persisted)
         return persisted
@@ -590,6 +595,13 @@ class ReviewActionsMixin:
             raise ValueError("No records matched the bulk metadata selection.")
         self._rewrite_and_validate(build_id, records)
         persisted = self.repo.load_records(build_id)
+        schema = self._schema_for(build_id)
+        by_id = {str(row.get("record_id") or ""): row for row in persisted}
+        for record_id in changed_ids:
+            record = by_id.get(record_id)
+            if record:
+                for key, value in changes.items():
+                    persist_record_decision(record=record, schema=schema, field_name=key, value=value)
         return {"changed": len(changed_ids), "record_ids": changed_ids, "queue_counts": _queue_counts(persisted)}
 
 
@@ -636,6 +648,13 @@ class ReviewActionsMixin:
             _sync_record_metadata_state(target, profile); target["record_revision"] = current_revision + 1
             self._rewrite_and_validate(build_id, records)
             record = next((row for row in self.repo.load_records(build_id) if row.get("record_id") == record_id), target)
+            persist_record_decision(
+                record=record,
+                schema=self._schema_for(build_id),
+                field_name=field,
+                value=None,
+                decision_kind="absence",
+            )
         else:
             record = self.patch_metadata(build_id, record_id, {field: value}, expected_revision)
         records = self.repo.load_records(build_id)
@@ -668,6 +687,8 @@ class ReviewActionsMixin:
             field=field,
             value=value,
             schema_version=str(build.get("schema_version") or ""),
+            decision="absence" if confirm_no_supported_value else "value",
+            field_id=self._schema_for(build_id).field_id(field),
         )
         return {
             "applied": True,

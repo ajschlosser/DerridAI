@@ -94,6 +94,50 @@ class EditorialMemoryMixin:
             or build.get("metadata_schema_version")
             or ""
         )
+        schema_fields = {
+            str(item.get("name") or ""): item
+            for item in schema_payload.get("fields") or []
+            if isinstance(item, dict) and str(item.get("name") or "")
+        }
+        core_field_ids = {
+            "region_type": "core.region_type",
+            "primary_text": "core.primary_text",
+            "discourse_role": "core.discourse_role",
+        }
+        field_ids = {
+            field: str(item.get("field_id") or core_field_ids.get(field) or "")
+            for field, item in schema_fields.items()
+        }
+        field_ids.update(core_field_ids)
+        if not schema_fields:
+            # Older builds did not persist the copied schema. Keep their
+            # field-name contract searchable while assigning a deterministic
+            # compatibility identity to new projections.
+            observed_fields = {
+                str(field)
+                for row in rows
+                for field in (row.get("metadata_field_status") or {})
+                if str(field).strip()
+            }
+            field_ids.update({
+                field: f"legacy.{field}"
+                for field in observed_fields
+                if field not in field_ids
+            })
+        field_limits: dict[str, int] = {}
+        field_min_similarity: dict[str, float] = {}
+        enabled_fields: set[str] = set()
+        for field, _field_id in field_ids.items():
+            item = schema_fields.get(field, {})
+            profile = item.get("retrieval_profile") if isinstance(item, dict) else None
+            if profile is not None and not bool(profile.get("enabled", True)):
+                continue
+            if profile is not None and profile.get("use_for_metadata_enrichment") is False:
+                continue
+            enabled_fields.add(field)
+            if profile is not None:
+                field_limits[field] = int(profile.get("max_items", 2) or 0)
+                field_min_similarity[field] = float(profile.get("min_similarity", 0) or 0)
         source_document_id = str(build.get("source_document_id") or asset_id or "")
 
         counts: dict[str, dict[str, tuple[Any, int]]] = {}
@@ -135,6 +179,7 @@ class EditorialMemoryMixin:
                     schema_id=schema_id,
                     schema_version=schema_version,
                     source_document_id=source_document_id,
+                    field_id=field_ids.get(field, ""),
                 )
                 if exemplar is not None:
                     canonical_exemplars.append(exemplar)
@@ -186,6 +231,7 @@ class EditorialMemoryMixin:
                 schema_id=schema_id,
                 schema_version=schema_version,
                 source_document_id=source_document_id,
+                field_ids=field_ids,
             ):
                 field = str(correction.get("field_name") or "")
                 if field and not _second_opinion_owed(row, field):
@@ -215,14 +261,21 @@ class EditorialMemoryMixin:
         retrieval_telemetry: dict[str, Any] = {}
         progressive_index = getattr(self, "_progressive_metadata_index", None)
         if use_progressive and current_record and canonical_exemplars and progressive_index is not None:
+            retrieval_fields = sorted({
+                str(item.get("field_name") or "")
+                for item in canonical_exemplars
+                if str(item.get("field_name") or "") in (enabled_fields or field_ids)
+            })
             semantic = progressive_index.retrieve(
                 scope_id=build_id,
                 query_text=current_text,
                 exemplars=canonical_exemplars,
-                fields=sorted({str(item.get("field_name") or "") for item in canonical_exemplars if str(item.get("field_name") or "")}),
+                fields=retrieval_fields,
                 schema_id=schema_id,
                 schema_version=schema_version,
                 language=str(current_record.get("language") or ""),
+                field_limits=field_limits or None,
+                field_min_similarity=field_min_similarity or None,
                 exclude_record_id=exclude_record_id,
             )
             if isinstance(semantic, dict):
@@ -289,4 +342,3 @@ class EditorialMemoryMixin:
             build["editorial_memory_reset_at"] = iso_now()
             self.repo.save_build(build)
         return self.editorial_memory(build_id)
-
