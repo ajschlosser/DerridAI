@@ -31,10 +31,9 @@ from app.content_filter import (
 )
 from app.content_policy_generation import generate_content_policy
 from app.job_tools import LLMToolJobManager
-from app.system_store import system_store
 from app.models import LanguageInstallRequest, LLMToolJobCreate
 from app.persistence import SQLiteSystemRepository
-from app.system_store import SystemStore
+from app.system_store import SystemStore, system_store
 
 _READY = {
     "status": "ready",
