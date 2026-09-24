@@ -120,7 +120,14 @@ function pickHistory(item:Record<string,unknown>){emit("history",item);historyOp
           <option value="evidence" :disabled="evidenceCount===0">{{i18n.t('research.preset_evidence')}}</option>
           <option value="custom">{{i18n.t('research.preset_custom')}}</option>
         </select>
-        <small>{{evidenceCount}} {{i18n.t('rag.selected_evidence')}}</small>
+        <small>{{
+          i18n.tf(
+            evidenceCount === 1
+              ? "research.selected_evidence_count_one"
+              : "research.selected_evidence_count_many",
+            { count: evidenceCount },
+          )
+        }}</small>
       </label>
       <label>
         <span>{{i18n.t('research.answer_language')}}</span>
@@ -135,7 +142,7 @@ function pickHistory(item:Record<string,unknown>){emit("history",item);historyOp
 
     <footer class="research-compose-footer">
       <div class="research-run-context-summary">
-        <span><i></i>{{evidenceCount?`${evidenceCount} ${i18n.t('rag.selected_evidence')}`:i18n.t('research.retrieval_ready')}}</span>
+        <span><i></i>{{evidenceCount?i18n.tf(evidenceCount===1?'research.selected_evidence_count_one':'research.selected_evidence_count_many',{count:evidenceCount}):i18n.t('research.retrieval_ready')}}</span>
         <span>{{selectedProfile?.name||selectedProfile?.id||i18n.t('research.no_profile')}}</span>
       </div>
       <span class="action-tooltip-wrap" :data-tooltip="!canRun?disabledReason:''">

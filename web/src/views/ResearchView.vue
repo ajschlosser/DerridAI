@@ -529,14 +529,17 @@ onBeforeUnmount(() => {
                   stores.length === 1
                     ? "research.database_count_one"
                     : "research.database_count_other",
-                  stores.length === 1 ? "{count} database" : "{count} databases",
                   { count: stores.length.toLocaleString(i18n.locale) },
                 )
               }}</span
-            ><span
-              >{{ selectedEvidence.length }}
-              {{ i18n.t("rag.selected_evidence") }}</span
-            >
+            ><span>{{
+              i18n.tf(
+                selectedEvidence.length === 1
+                  ? "research.selected_evidence_count_one"
+                  : "research.selected_evidence_count_many",
+                { count: selectedEvidence.length },
+              )
+            }}</span>
           </div>
         </template>
       </UiPageHeader>

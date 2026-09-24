@@ -81,15 +81,13 @@ onMounted(() => void annotations.load());
               {{ i18n.t("annotations.recent") }}
             </button>
           </div>
-          <span class="note"
-            >{{
-              i18n.tf("annotations.annotation_count", {
-                count: snapshot.total.toLocaleString(i18n.locale),
-              })
-            }}
-            · {{ snapshot.groups.length.toLocaleString(i18n.locale) }}
-            {{ i18n.t("dynamic.works") }}</span
-          >
+          <span class="note">{{
+            i18n.tf("annotations.annotation_count", {
+              count: snapshot.total.toLocaleString(i18n.locale),
+            })
+          }}
+          · {{ snapshot.groups.length.toLocaleString(i18n.locale) }}
+          {{ i18n.t("dynamic.works") }}</span>
         </div>
       </section>
 
@@ -132,7 +130,7 @@ onMounted(() => void annotations.load());
                   })
                 }}
                 · {{ group.records.toLocaleString(i18n.locale) }}
-                {{ i18n.t("dynamic.records") }}</small>
+                {{ i18n.t("dynamic.records") }}</small
               ></span
             ><button
               type="button"
