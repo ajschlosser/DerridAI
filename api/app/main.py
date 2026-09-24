@@ -47,8 +47,6 @@ from .metadata_adjudication_cache import (
 from .metadata_schema import MetadataSchema, SchemaImportError
 from .metadata_schema_store import SchemaLocked, SchemaNotFound, SchemaStore
 from .models import (
-    ChromaConnectionUpdate,
-    ChromaPathUpdate,
     GutenbergImport,
     MetadataSchemaPreview,
     PdfCorpusBoundaryAdjudication,
@@ -289,54 +287,6 @@ app.include_router(llm_router)
 app.include_router(jobs_router)
 app.include_router(stores_router)
 app.include_router(records_router)
-
-
-@app.get("/api/chroma/path")
-def get_chroma_path() -> dict[str, Any]:
-    return store.health()
-
-
-@app.put("/api/chroma/path")
-def set_chroma_path(body: ChromaPathUpdate) -> dict[str, Any]:
-    try:
-        return store.set_path(body.path)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.get("/api/chroma/connection")
-def get_chroma_connection() -> dict[str, Any]:
-    return store.health()
-
-
-@app.post("/api/chroma/connection/probe")
-def probe_chroma_connection(body: ChromaConnectionUpdate) -> dict[str, Any]:
-    try:
-        return store.probe_connection(
-            mode=body.mode,
-            path=body.path,
-            url=body.url,
-            token=body.token,
-            tenant=body.tenant,
-            database=body.database,
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.put("/api/chroma/connection")
-def set_chroma_connection(body: ChromaConnectionUpdate) -> dict[str, Any]:
-    try:
-        return store.set_connection(
-            mode=body.mode,
-            path=body.path,
-            url=body.url,
-            token=body.token,
-            tenant=body.tenant,
-            database=body.database,
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def _background_jobs_active() -> bool:
