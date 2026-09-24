@@ -222,6 +222,8 @@ class Embeddings:
 class ChromaStore:
     _RESPONSE_CACHE_PUBLIC = "_response_cache"
     _RESPONSE_CACHE_STORAGE = "derridai_response_cache"
+    _METADATA_MEMORY_PUBLIC = "_metadata_memory"
+    _METADATA_MEMORY_STORAGE = "derridai_metadata_memory"
     _PROVIDER_KEY = "__derridai_embedding_provider"
     _MODEL_KEY = "__derridai_embedding_model"
     _LANG_KEY = "__derridai_language_codes"
@@ -886,13 +888,17 @@ class ChromaStore:
     def _storage_name(self, name: str) -> str:
         if name == self._RESPONSE_CACHE_PUBLIC:
             return self._RESPONSE_CACHE_STORAGE
+        if name == self._METADATA_MEMORY_PUBLIC:
+            return self._METADATA_MEMORY_STORAGE
         return name
 
     def _public_collection_name(self, collection) -> str:
-        # The response cache has a stable public alias while using a reserved
-        # internal Chroma collection name.
+        # System collections have stable public aliases while using reserved
+        # internal Chroma collection names.
         if collection.name == self._RESPONSE_CACHE_STORAGE:
             return self._RESPONSE_CACHE_PUBLIC
+        if collection.name == self._METADATA_MEMORY_STORAGE:
+            return self._METADATA_MEMORY_PUBLIC
         return collection.name
 
     def _public_store(self, collection) -> dict[str, Any]:
@@ -1053,7 +1059,11 @@ class ChromaStore:
         # user-created names that begin with underscores; this exception is only
         # reachable by the internal response-cache lifecycle.
         name = self._storage_name(requested_name)
-        validation_name = name if requested_name == self._RESPONSE_CACHE_PUBLIC else requested_name
+        validation_name = (
+            name
+            if requested_name in {self._RESPONSE_CACHE_PUBLIC, self._METADATA_MEMORY_PUBLIC}
+            else requested_name
+        )
         if len(validation_name) < 3 or len(validation_name) > 128:
             raise ValueError("Collection names must contain 3 to 128 characters.")
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*[A-Za-z0-9]", validation_name):
@@ -1923,6 +1933,132 @@ class ChromaStore:
                     "derridai_cache_embedding": "deterministic-hash-vector-v1",
                 },
             )
+
+    def ensure_metadata_memory(self) -> dict[str, Any]:
+        """Create or inspect the rebuildable semantic reviewer-memory store."""
+        try:
+            collection = self.client.get_collection(name=self._METADATA_MEMORY_STORAGE)
+            return self._public_store(collection)
+        except Exception as exc:
+            if not self._is_missing_collection_error(exc):
+                raise RuntimeError(f"Could not inspect metadata-memory collection: {exc}") from exc
+            return self.create_store(
+                self._METADATA_MEMORY_PUBLIC,
+                description="Derived semantic suggestions from human-confirmed metadata decisions.",
+                embedding_provider=settings.embedding_provider,
+                embedding_model=None,
+                language_codes=[],
+                collection_role="general",
+                metadata={
+                    "derridai_system_collection": "metadata_memory",
+                    "derridai_derived": True,
+                },
+            )
+
+    def remember_metadata_memory(
+        self,
+        *,
+        record_id: str,
+        text: str,
+        field: str,
+        value: Any,
+        schema_version: str = "",
+        status: str = "human_confirmed",
+    ) -> dict[str, Any]:
+        """Index one confirmed field decision as derived, provenance-bearing memory."""
+        self.ensure_metadata_memory()
+        memory_id = hashlib.sha256(
+            f"{record_id}|{field}|{schema_version}".encode("utf-8")
+        ).hexdigest()
+        payload = {
+            "memory_id": memory_id,
+            "record_id": record_id,
+            "source_record_id": record_id,
+            "field": field,
+            "memory_field": field,
+            "memory_value": json.dumps(value, ensure_ascii=False, sort_keys=True, default=str),
+            "schema_version": schema_version,
+            "status": status,
+            "text": str(text or "")[:12000],
+        }
+        return self.upsert_many(
+            self._METADATA_MEMORY_PUBLIC,
+            [payload],
+            document_field="text",
+            id_field="memory_id",
+        )
+
+    def metadata_memory_suggestions(
+        self,
+        *,
+        text: str,
+        field: str,
+        schema_version: str = "",
+        exclude_record_id: str = "",
+        n_results: int = 4,
+        fetch_k: int = 24,
+    ) -> list[dict[str, Any]]:
+        """Retrieve diverse, confirmed examples for one metadata field."""
+        self.ensure_metadata_memory()
+        candidates = self.mmr_search(
+            self._METADATA_MEMORY_PUBLIC,
+            str(text or "")[:12000],
+            max(1, int(n_results)),
+            where={
+                "$and": [
+                    {"memory_field": field},
+                    {"schema_version": schema_version},
+                ]
+            },
+            fetch_k=max(int(fetch_k), int(n_results)),
+            lambda_mult=0.72,
+        )
+        suggestions: list[dict[str, Any]] = []
+        for candidate in candidates:
+            record = candidate.get("record") if isinstance(candidate.get("record"), dict) else {}
+            if str(record.get("status") or "") not in {"human_confirmed", "human_override"}:
+                continue
+            if exclude_record_id and str(record.get("source_record_id") or "") == exclude_record_id:
+                continue
+            try:
+                value = json.loads(str(record.get("memory_value") or "null"))
+            except json.JSONDecodeError:
+                continue
+            suggestions.append({
+                "value": value,
+                "record_id": str(record.get("source_record_id") or ""),
+                "similarity_distance": candidate.get("distance"),
+                "mmr_score": candidate.get("mmr_score"),
+                "excerpt": re.sub(r"\s+", " ", str(record.get("text") or "")).strip()[:420],
+            })
+        return suggestions
+
+    def clear_metadata_memory(
+        self,
+        *,
+        record_id: str | None = None,
+        field: str | None = None,
+    ) -> int:
+        """Remove derived reviewer-memory entries matching the requested scope."""
+        try:
+            collection = self.client.get_collection(name=self._METADATA_MEMORY_STORAGE)
+        except Exception as exc:
+            if self._is_missing_collection_error(exc):
+                return 0
+            raise RuntimeError(f"Could not open metadata-memory collection: {exc}") from exc
+        where: dict[str, Any] = {}
+        if record_id:
+            where["source_record_id"] = str(record_id)
+        if field:
+            where["memory_field"] = str(field)
+        args: dict[str, Any] = {"include": ["metadatas"]}
+        if where:
+            args["where"] = where
+        payload = collection.get(**args)
+        ids = [str(value) for value in (payload.get("ids") or [])]
+        if ids:
+            collection.delete(ids=ids)
+        return len(ids)
 
     def cache_rag_response(
         self,

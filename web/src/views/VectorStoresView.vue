@@ -144,11 +144,12 @@ async function load(options: {details?: boolean} = {}) {
   try {
     const [nextHealth, stores] = await Promise.all([chromaApi.health(), chromaApi.collections()]);
     syncHealthIntoRuntime(nextHealth);
-    collections.value = stores;
-    if (activeName.value && !stores.some(store => store.name === activeName.value)) activeName.value = "";
-    if (!activeName.value) activeName.value = String(workspace.activeStore || stores[0]?.name || "");
-    if (activeName.value && !stores.some(store => store.name === activeName.value)) activeName.value = stores[0]?.name || "";
-    workspace.stores = stores;
+    const corpusStores = stores.filter(store => !store.metadata?.derridai_system_collection);
+    collections.value = corpusStores;
+    if (activeName.value && !corpusStores.some(store => store.name === activeName.value)) activeName.value = "";
+    if (!activeName.value) activeName.value = String(workspace.activeStore || corpusStores[0]?.name || "");
+    if (activeName.value && !corpusStores.some(store => store.name === activeName.value)) activeName.value = corpusStores[0]?.name || "";
+    workspace.stores = corpusStores;
     persistWorkspace();
     pendingCount.value = runtime.pendingUpsertRows?.().length || 0;
     if (current.value) {
@@ -161,10 +162,10 @@ async function load(options: {details?: boolean} = {}) {
       if (!workspace.storeSearchMode) searchMode.value = ({hybrid: "hybrid", lexical: "lexical", semantic: "similarity"} as Record<string, string>)[current.value.retrieval_mode || ""] || "hybrid";
     }
     if (options.details !== false && current.value && tab.value === "data") await loadData();
-    if (workspace.vectorAutoCreateRequested && !stores.length) {
+    if (workspace.vectorAutoCreateRequested && !corpusStores.length) {
       workspace.vectorAutoCreateRequested = false;
       openCreate();
-    } else if (stores.length) {
+    } else if (corpusStores.length) {
       workspace.vectorAutoCreateRequested = false;
     }
   } catch (exc) {
@@ -361,10 +362,10 @@ onBeforeUnmount(() => {
 
 <template>
   <main class="vue-native-page vector-native-page" :aria-busy="loading" aria-labelledby="vector-page-title">
-    <div v-if="auth.isResearcher" class="vector-page-loading" role="status"><span class="spinner"></span>{{ i18n.t("search.redirect_database") }}</div>
-    <div v-else-if="loading && !collections.length && !error" class="vector-page-loading" role="status"><span class="spinner"></span>{{ i18n.t("vector.loading_stores") }}</div>
+    <div v-if="auth.isResearcher" class="vector-page-loading" role="status"><span class="spinner"></span>{{ i18n.t("search.redirect_database", "Opening corpus search…") }}</div>
+    <div v-else-if="loading && !collections.length && !error" class="vector-page-loading" role="status"><span class="spinner"></span>{{ i18n.t("vector.loading_stores", "Loading Corpus Data…") }}</div>
     <section v-else-if="error" class="vector-page-error">
-      <h1 id="vector-page-title">{{ i18n.t("nav.vector") }}</h1>
+      <h1 id="vector-page-title">{{ i18n.t("nav.vector", "Corpus Data") }}</h1>
       <p>{{ error }}</p>
       <UiButton :label="i18n.t('ui.retry')" @click="load()" />
     </section>

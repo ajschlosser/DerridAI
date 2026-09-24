@@ -78,6 +78,17 @@ export interface SystemDataDatabase {
   size_bytes?: number;
   tables: SystemDataTable[];
 }
+export interface SystemVectorStore {
+  name: string;
+  storage_name?: string;
+  count: number;
+  metadata?: Record<string, unknown>;
+  embedding_provider?: string;
+  embedding_model?: string;
+  collection_role?: string;
+  embedding_dimension?: number;
+  distance_metric?: string;
+}
 
 export const systemApi = {
   researcherProviders: () => apiRequest<{profiles: ProviderProfile[]}>("/api/system/researcher-providers"),
@@ -95,6 +106,8 @@ export const systemApi = {
   updateLanguageContentPolicy: (code: string, payload: Pick<LanguageContentPolicy, "blocked_terms" | "contextual_terms">) => apiRequest<LanguageContentPolicy>(`/api/i18n/languages/${encodeURIComponent(code)}/content-policy`, {method: "PUT", body: JSON.stringify(payload)}),
   generateLanguageContentPolicy: (payload: Record<string, unknown>) => apiRequest<JobSummary>("/api/jobs/llm-tool", {method: "POST", body: JSON.stringify({task: "language_content_policy", language: payload, label: `Languages · ${String(payload.code || "policy")}`, provider_profile_id: String(payload.provider_profile_id || "") || null, max_concurrent_requests: Number(payload.max_concurrent_requests || 1)})}),
   systemData: () => apiRequest<{databases: SystemDataDatabase[]}>("/api/system/data"),
+  systemVectorStores: () => apiRequest<{stores: SystemVectorStore[]}>("/api/system/data/vector-stores"),
+  clearSystemMetadataMemory: () => apiRequest<{deleted: number}>("/api/system/data/vector-stores/metadata-memory", {method: "DELETE"}),
   systemDataRows: (database: string, table: string, limit = 50, offset = 0) => apiRequest<SystemDataTable & { database: string; rows: Array<Record<string, unknown>>; offset: number; limit: number }>(`/api/system/data/${encodeURIComponent(database)}/${encodeURIComponent(table)}?limit=${limit}&offset=${offset}`),
   insertSystemDataRow: (database: string, table: string, values: Record<string, unknown>) => apiRequest<Record<string, unknown>>(`/api/system/data/${encodeURIComponent(database)}/${encodeURIComponent(table)}`, {method: "POST", body: JSON.stringify(values)}),
   updateSystemDataRow: (database: string, table: string, key: Record<string, unknown>, values: Record<string, unknown>) => apiRequest<Record<string, unknown>>(`/api/system/data/${encodeURIComponent(database)}/${encodeURIComponent(table)}`, {method: "PATCH", body: JSON.stringify({key, values})}),

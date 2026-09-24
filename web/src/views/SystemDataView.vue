@@ -3,7 +3,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
-import { systemApi, type SystemDataDatabase, type SystemDataTable } from "../api/system";
+import { systemApi, type SystemDataDatabase, type SystemDataTable, type SystemVectorStore } from "../api/system";
 import * as runtime from "../runtime/runtimeBridge";
 import { useI18nStore } from "../stores/i18n";
 
@@ -23,6 +23,7 @@ const editKey = ref("{}");
 const editingIndex = ref(-1);
 const saving = ref(false);
 const cachePayload = ref<{ total?: number; exists?: boolean; records?: Array<Record<string, unknown>> }>({});
+const vectorStores = ref<SystemVectorStore[]>([]);
 
 const database = computed(() => databases.value.find((item) => item.name === selectedDatabase.value));
 const table = computed(() => database.value?.tables.find((item) => item.name === selectedTable.value));
@@ -83,6 +84,24 @@ async function deleteCacheRecord(record: Record<string, unknown>) {
     } catch (cause) {
       runtime.notifyToast(message(cause), { tone: "danger" });
     }
+
+    async function clearMetadataMemory() {
+      const approved = await runtime.openMessageModal({
+        title: t("runtime.system_clear_memory", "Clear semantic reviewer memory?"),
+        message: t("runtime.system_clear_memory_help", "This removes derived similarity/MMR suggestions. It does not change corpus records or confirmed decisions."),
+        tone: "danger",
+        confirmLabel: t("common.clear", "Clear"),
+        cancelLabel: t("common.cancel", "Cancel"),
+      });
+      if (!approved) return;
+      try {
+        await systemApi.clearSystemMetadataMemory();
+        await load();
+        runtime.notifyToast(t("runtime.system_memory_cleared", "Semantic reviewer memory cleared."));
+      } catch (cause) {
+        runtime.notifyToast(message(cause), { tone: "danger" });
+      }
+    }
   }
 }
 
@@ -101,8 +120,9 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    const [data] = await Promise.all([systemApi.systemData(), loadCache()]);
+    const [data, vectors] = await Promise.all([systemApi.systemData(), systemApi.systemVectorStores(), loadCache()]);
     databases.value = data.databases;
+    vectorStores.value = vectors.stores;
     if (!database.value) selectedDatabase.value = databases.value[0]?.name || "";
     const firstTable = databases.value.find((item) => item.name === selectedDatabase.value)?.tables[0];
     if (!selectedTable.value || !database.value?.tables.some((item) => item.name === selectedTable.value))
@@ -216,6 +236,28 @@ onMounted(() => void load());
           <strong>{{ Number(cachePayload.total || 0).toLocaleString() }}</strong>
           <button class="btn" type="button" @click="router.push('/faq')">{{ t("runtime.help.open_response_library", "Open Response Library") }}</button>
           <button v-if="cachePayload.exists" class="btn danger" type="button" @click="clearCache">{{ t("common.clear", "Clear cache") }}</button>
+        </div>
+      </section>
+      <section class="card" aria-labelledby="vector-stores-title">
+        <div class="table-header">
+          <div>
+            <h2 id="vector-stores-title">{{ t("runtime.system_vector_stores", "Derived vector stores") }}</h2>
+            <p>{{ t("runtime.system_vector_stores_help", "Rebuildable system collections used for response caching and semantic reviewer memory.") }}</p>
+          </div>
+        </div>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>{{ t("runtime.system_store_name", "Store") }}</th><th>{{ t("runtime.system_store_role", "Role") }}</th><th>{{ t("runtime.system_store_count", "Records") }}</th><th>{{ t("runtime.system_store_embedding", "Embedding contract") }}</th></tr></thead>
+            <tbody>
+              <tr v-for="item in vectorStores" :key="item.name">
+                <td><b>{{ item.name }}</b><small v-if="item.storage_name"> · {{ item.storage_name }}</small></td>
+                <td>{{ item.metadata?.derridai_system_collection || item.collection_role || "" }}</td>
+                <td>{{ Number(item.count || 0).toLocaleString() }}</td>
+                <td>{{ item.embedding_provider || "—" }} · {{ item.embedding_model || "—" }} · {{ item.embedding_dimension || "?" }}d · {{ item.distance_metric || "—" }} <button v-if="item.metadata?.derridai_system_collection === 'metadata_memory'" class="btn tiny danger" type="button" @click="clearMetadataMemory">{{ t("runtime.system_clear_memory", "Clear memory") }}</button></td>
+              </tr>
+              <tr v-if="!vectorStores.length"><td colspan="4" class="note">{{ t("runtime.system_no_rows", "No rows are available.") }}</td></tr>
+            </tbody>
+          </table>
         </div>
       </section>
       <section class="card" aria-labelledby="cache-records-title">
