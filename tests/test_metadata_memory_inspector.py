@@ -86,7 +86,7 @@ def progressive_row(*, kind="positive", rejected=""):
             "page_start": 12,
             "page_end": 12,
             "evidence_hash": hashlib.sha256(
-                "For Levinas, responsibility precedes freedom.".encode("utf-8")
+                b"For Levinas, responsibility precedes freedom."
             ).hexdigest(),
             "evidence_block_ids_json": '["b2"]',
         },
