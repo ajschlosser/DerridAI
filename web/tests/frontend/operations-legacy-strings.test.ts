@@ -28,7 +28,7 @@ const base = {
   started_at: "2026-09-20T10:00:05Z",
   finished_at: "2026-09-20T10:01:00Z",
 };
-const JOBS = [
+const JOBS: Array<Record<string, any>> = [
   {
     id: "auto",
     type: "llm",
@@ -109,7 +109,7 @@ describe("Operations legacy strings are translatable", () => {
   it("the decision and result counts are translated, not raw enum text", () => {
     const pairs = operationDetailPairs(JOBS.find((j) => j.id === "auto")!);
     const byName = (name: string) =>
-      pairs.find(([n]: [string]) => n === `⟦operations.fact.${name}⟧`)?.[1];
+      pairs.find(([n]) => n === `⟦operations.fact.${name}⟧`)?.[1];
     expect(byName("decision")).toBe("⟦operations.decision.partially_accepted⟧");
     expect(byName("accepted")).toBe("⟦operations.fact.result_field_counts⟧");
     expect(byName("rejected")).toBe("⟦operations.fact.result_field_counts⟧");
