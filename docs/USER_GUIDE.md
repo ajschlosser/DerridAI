@@ -447,11 +447,12 @@ expanded, individual XML parts to 8 MiB, and expansion ratios to 200:1. Images
 must be single-frame PNG or JPEG, at most 20 million pixels. Extractor contract,
 Python/library versions, and source digest are saved with the asset.
 
-Audio is optional: install FFmpeg (including `ffprobe`) in the API environment
-and configure `OPENAI_API_KEY` for full-file Whisper transcription. The default
-API image does not install FFmpeg or whisperx. Install whisperx and its model
-runtime separately if speaker diarization is required, and configure `HF_TOKEN`
-where the diarization model requires access. Files must be at most 24 MiB and
+Audio is optional: the Docker API image includes FFmpeg (including `ffprobe`);
+local/non-Docker API environments must install FFmpeg separately. Configure
+`OPENAI_API_KEY` for full-file Whisper transcription. `whisperx` and its model
+runtime remain optional and must be installed separately if speaker diarization
+is required; configure `HF_TOKEN` where the diarization model requires access.
+Files must be at most 24 MiB and
 four hours. Unsupported codecs, probe timeouts, failed transcription, empty
 transcripts, and missing/invalid timestamps stop ingestion. Diarization failure
 preserves the transcript with a visible warning and no invented speaker.

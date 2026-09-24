@@ -6,6 +6,8 @@ import UiButton from "./ui/UiButton.vue";
 export interface RunGuidanceEntry {
   instructions: string;
   look_for: string[];
+  required?: boolean;
+  default_placeholder?: string;
 }
 
 export interface RunGuidanceField {
@@ -36,10 +38,25 @@ const populated = computed(
 );
 
 function update(field: string, patch: Partial<RunGuidanceEntry>) {
-  const previous = props.modelValue[field] || { instructions: "", look_for: [] };
+  const previous = props.modelValue[field] || {
+    instructions: "",
+    look_for: [],
+    required: false,
+    default_placeholder: "",
+  };
   emit("update:modelValue", {
     ...props.modelValue,
     [field]: { ...previous, ...patch },
+  });
+}
+
+function setRequired(field: string, required: boolean) {
+  update(field, {
+    required,
+    default_placeholder: required
+      ? props.modelValue[field]?.default_placeholder ||
+        i18n.t("pdf_corpus.run_guidance_default_placeholder", "[not established in source]")
+      : props.modelValue[field]?.default_placeholder || "",
   });
 }
 
@@ -124,8 +141,19 @@ function normaliseImportedGuidance(payload: unknown): Record<string, RunGuidance
           .filter((term): term is string => typeof term === "string" && term.trim().length > 0)
           .slice(0, 40)
       : [];
-    if (instructions.trim() || lookFor.length)
-      imported[field] = { instructions, look_for: lookFor };
+    const required = entry.required === true;
+    const placeholder =
+      typeof entry.default_placeholder === "string" ? entry.default_placeholder.trim() : "";
+    if (instructions.trim() || lookFor.length || required)
+      imported[field] = {
+        instructions,
+        look_for: lookFor,
+        required,
+        default_placeholder:
+          required && !placeholder
+            ? i18n.t("pdf_corpus.run_guidance_default_placeholder", "[not established in source]")
+            : placeholder,
+      };
   }
   if (!Object.keys(imported).length) {
     throw new Error(
@@ -208,6 +236,48 @@ async function importGuidance(event: Event) {
         <small>{{ field.group }}</small>
       </summary>
       <div class="run-guidance-controls">
+        <label class="required-toggle">
+          <input
+            type="checkbox"
+            :checked="modelValue[field.name]?.required === true"
+            :disabled="disabled"
+            @change="
+              setRequired(field.name, ($event.target as HTMLInputElement).checked)
+            "
+          />
+          <span>{{
+            i18n.t("pdf_corpus.run_guidance_require_value", "Require a value for this run")
+          }}</span>
+        </label>
+        <label v-if="modelValue[field.name]?.required" :for="`run-guidance-placeholder-${field.name}`">
+          <span>{{
+            i18n.t("pdf_corpus.run_guidance_placeholder_label", "Fallback placeholder")
+          }}</span>
+          <input
+            :id="`run-guidance-placeholder-${field.name}`"
+            class="control"
+            maxlength="200"
+            :disabled="disabled"
+            :value="modelValue[field.name]?.default_placeholder || ''"
+            :placeholder="
+              i18n.t(
+                'pdf_corpus.run_guidance_placeholder_hint',
+                'For example: [not established in source]',
+              )
+            "
+            @input="
+              update(field.name, {
+                default_placeholder: ($event.target as HTMLInputElement).value,
+              })
+            "
+          />
+          <small>{{
+            i18n.t(
+              "pdf_corpus.run_guidance_placeholder_help",
+              "If the model cannot support a value, this marker stays visible and the field remains in review.",
+            )
+          }}</small>
+        </label>
         <label :for="`run-guidance-instructions-${field.name}`">
           <span>{{
             i18n.t("pdf_corpus.run_guidance_instruction_label")

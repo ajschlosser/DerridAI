@@ -16,8 +16,9 @@ import ProviderProfileSelect from "./ProviderProfileSelect.vue";
 import CorpusBuildProgress from "./CorpusBuildProgress.vue";
 import FieldEvidenceList from "./FieldEvidenceList.vue";
 import DocumentStructureConfigurator from "./DocumentStructureConfigurator.vue";
+import MediaStructureConfigurator from "./MediaStructureConfigurator.vue";
 import SourceTranscriptionDialog from "./SourceTranscriptionDialog.vue";
-import { hasPages, timeLabel } from "../domain/sourceMedia";
+import { timeLabel } from "../domain/sourceMedia";
 import CorpusSourceSummary from "./CorpusSourceSummary.vue";
 import DocumentManifestEditor from "./DocumentManifestEditor.vue";
 import DocumentManifestDialog from "./DocumentManifestDialog.vue";
@@ -762,7 +763,10 @@ const activeBuildProfileId = computed<string>(() => {
 const activeModelLabel = computed<string>(() => String(currentBuild.value?.model || "—"));
 const pageNumber = computed(() => Math.floor(recordOffset.value / pageSize) + 1);
 const pageCount = computed(() => Math.max(1, Math.ceil(recordTotal.value / pageSize)));
-const paginatedSource = computed(() => hasPages(selectedAsset.value?.media_kind));
+// Only PDFs expose physical-to-printed pagination controls. Images, text, and
+// audio use source-specific interpretation panes instead of pretending to have
+// document pages.
+const paginatedSource = computed(() => selectedAsset.value?.media_kind === "pdf");
 const imageSourceUrl = computed(() =>
   selectedAsset.value?.media_kind === "image" && selectedAssetId.value
     ? pdfCorpusApi.assetContentUrl(selectedAssetId.value)
@@ -3653,6 +3657,26 @@ onBeforeUnmount(() => {
           :saving="busy === 'document-layout'"
           @save="saveDocumentLayout"
           @save-page-labels="savePageLabels"
+        />
+      </section>
+      <section
+        v-else-if="selectedAsset"
+        class="setup-phase"
+        aria-labelledby="media-structure-phase-title"
+      >
+        <div class="phase-label">
+          <span class="setup-step">B</span>
+          <div>
+            <h3 id="media-structure-phase-title">
+              {{ i18n.t("pdf_corpus.source_interpretation", "Source interpretation") }}
+            </h3>
+          </div>
+        </div>
+        <MediaStructureConfigurator
+          :media-kind="selectedAsset.media_kind"
+          :filename="selectedAsset.filename"
+          :page-count="selectedAsset.page_count"
+          :block-count="selectedAsset.block_count"
         />
       </section>
 

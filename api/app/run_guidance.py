@@ -51,11 +51,17 @@ def format_group_guidance(
         instructions = str(raw.get("instructions") or "").strip()
         terms = [str(value).strip() for value in raw.get("look_for") or [] if str(value).strip()]
         hits = matches.get(field) or []
-        if not instructions and not terms:
+        if not instructions and not terms and not raw.get("required"):
             continue
         details = [f"Field `{field}`:"]
         if instructions:
             details.append(f"User guidance: {instructions}")
+        if raw.get("required"):
+            placeholder = str(raw.get("default_placeholder") or "").strip()
+            details.append(
+                "REQUIRED FOR THIS RUN: return a supported value when possible."
+                + (f" If no supported value can be established, use the exact fallback placeholder `{placeholder}` and mark the result unresolved." if placeholder else " If no supported value can be established, mark the result unresolved.")
+            )
         if terms:
             details.append(
                 "Values or phrases to look for (not a closed list): " + ", ".join(terms)
@@ -69,7 +75,7 @@ def format_group_guidance(
     if not sections:
         return ""
     return (
-        "RUN-SPECIFIC FIELD GUIDANCE (advisory; it does not change the schema or make a value mandatory).\n"
+        "RUN-SPECIFIC FIELD GUIDANCE. These instructions apply only to this build.\n"
         "Use these cues to inspect the current record. A phrase match is not proof that the field applies: "
         "return a value only when this record's context supports it, and cite source evidence when "
         "the schema requires it. The listed values are examples or search cues, not an exhaustive "

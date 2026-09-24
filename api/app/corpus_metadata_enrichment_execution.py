@@ -839,6 +839,25 @@ CURRENT REVIEWED RECORD TEXT:
                 continue
             evidence_info = clean_evidence.get(field) if isinstance(clean_evidence.get(field), dict) else {}
             assessment = field_assessments.get(field) if isinstance(field_assessments.get(field), dict) else {}
+            guidance_item = run_guidance.get(field) if isinstance(run_guidance.get(field), dict) else {}
+            required_placeholder = str(guidance_item.get("default_placeholder") or "").strip()
+            if bool(guidance_item.get("required")) and value in (None, "", []):
+                if required_placeholder:
+                    record[field] = required_placeholder
+                    field_status[field] = {
+                        "status": "unresolved",
+                        "method": "run_guidance",
+                        "confidence": None,
+                        "auto_populated": True,
+                        "autofilled": False,
+                        "value_source": "run_guidance",
+                        "verification_status": "pending_review",
+                        "proposed_value": None,
+                        "placeholder": True,
+                        "reason_code": "required_placeholder",
+                        "reason": "The run required a value, but the model could not establish one. Replace this placeholder during review.",
+                    }
+                    continue
             assessment_confidence = assessment.get("confidence") if isinstance(assessment.get("confidence"), (int, float)) else None
             evidence_confidence = evidence_info.get("confidence") if isinstance(evidence_info.get("confidence"), (int, float)) else None
             confidence = float(assessment_confidence if assessment_confidence is not None else evidence_confidence) if (assessment_confidence is not None or evidence_confidence is not None) else None

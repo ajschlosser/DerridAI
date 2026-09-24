@@ -508,11 +508,13 @@ class PdfCorpusAutonomy(BaseModel):
 
 
 class PdfCorpusFieldRunGuidance(BaseModel):
-    """A temporary, build-specific hint for one metadata field."""
+    """A temporary, build-specific instruction for one metadata field."""
 
     model_config = ConfigDict(extra="forbid")
     instructions: str = Field(default="", max_length=1200)
     look_for: list[str] = Field(default_factory=list, max_length=40)
+    required: bool = False
+    default_placeholder: str = Field(default="[not established in source]", max_length=200)
 
     @field_validator("instructions", mode="before")
     @classmethod
@@ -540,6 +542,11 @@ class PdfCorpusFieldRunGuidance(BaseModel):
                 terms.append(term)
                 seen.add(term.casefold())
         return terms
+
+    @field_validator("default_placeholder", mode="before")
+    @classmethod
+    def trim_placeholder(cls, value: Any) -> str:
+        return str(value or "").strip()
 
 
 class PdfCorpusBuildCreate(BaseModel):
