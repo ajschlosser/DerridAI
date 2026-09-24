@@ -136,18 +136,18 @@ const backupCounts = computed(() => ({
 }));
 
 function persistKind(kind: "browser" | "readonly" | "link" | "backend") {
-  if (kind === "readonly") return i18n.t("settings.persist.readonly", "Read-only");
-  if (kind === "link") return i18n.t("settings.persist.link", "Managed elsewhere");
-  if (kind === "backend") return i18n.t("settings.persist.backend", "Server operation");
-  return i18n.t("settings.persist.browser", "Saved in this browser");
+  if (kind === "readonly") return i18n.t("settings.persist.readonly");
+  if (kind === "link") return i18n.t("settings.persist.link");
+  if (kind === "backend") return i18n.t("settings.persist.backend");
+  return i18n.t("settings.persist.browser");
 }
 function statusLabel(status: SaveStatus) {
-  if (status === "dirty") return i18n.t("settings.status.unsaved", "Unsaved changes");
-  if (status === "saving") return i18n.t("settings.status.saving", "Saving");
-  if (status === "success") return i18n.t("settings.status.saved_ok", "Save succeeded");
-  if (status === "failed") return i18n.t("settings.status.save_failed", "Save failed");
-  if (status === "readonly") return i18n.t("settings.status.readonly", "Read-only");
-  return i18n.t("settings.status.saved", "Saved");
+  if (status === "dirty") return i18n.t("settings.status.unsaved");
+  if (status === "saving") return i18n.t("settings.status.saving");
+  if (status === "success") return i18n.t("settings.status.saved_ok");
+  if (status === "failed") return i18n.t("settings.status.save_failed");
+  if (status === "readonly") return i18n.t("settings.status.readonly");
+  return i18n.t("settings.status.saved");
 }
 function announce(message: string) { liveMessage.value = message; }
 function mark(group: string, status: SaveStatus) { groupStatus.value = {...groupStatus.value, [group]: status}; }
@@ -159,7 +159,7 @@ async function persistWorkspace() {
 async function saveGroup(group: string, apply: () => void) {
   pageError.value = "";
   mark(group, "saving");
-  announce(i18n.t("settings.status.saving", "Saving"));
+  announce(i18n.t("settings.status.saving"));
   const previousApp = cloneJson(workspace.appConfig);
   const previousRag = cloneJson(workspace.ragConfig);
   const previousAppearance = cloneJson(appearanceSaved.value);
@@ -170,7 +170,7 @@ async function saveGroup(group: string, apply: () => void) {
     apply();
     await persistWorkspace();
     mark(group, "success");
-    announce(i18n.t("settings.status.saved_ok", "Save succeeded"));
+    announce(i18n.t("settings.status.saved_ok"));
     window.setTimeout(() => { if (groupStatus.value[group] === "success") mark(group, "saved"); }, 1600);
   } catch (error) {
     Object.assign(workspace.appConfig, previousApp);
@@ -181,7 +181,7 @@ async function saveGroup(group: string, apply: () => void) {
     ragSaved.value = previousRagSaved;
     mark(group, "failed");
     pageError.value = error instanceof Error ? error.message : String(error);
-    announce(i18n.t("settings.status.save_failed", "Save failed"));
+    announce(i18n.t("settings.status.save_failed"));
   }
 }
 function saveAppearance() {
@@ -216,7 +216,7 @@ function saveRag() {
   ragErrors.value = Object.fromEntries(errors.map(error => [error.field, i18n.t(error.messageKey, error.messageFallback)]));
   if (errors.length) {
     mark("rag", "failed");
-    announce(i18n.t("settings.validation_summary", "Some retrieval defaults could not be saved."));
+    announce(i18n.t("settings.validation_summary"));
     void nextTick(() => document.querySelector<HTMLElement>(".settings-section .ui-field.invalid input, .settings-section .ui-field.invalid select")?.focus());
     return;
   }
@@ -235,7 +235,7 @@ function resetRag() {
 }
 async function setLocale(code: string) {
   await i18n.setLocale(code);
-  announce(i18n.tf("settings.language_changed", "Interface language is now {name}.", {name: i18n.languages.find(item => item.code === code)?.name || code}));
+  announce(i18n.tf("settings.language_changed", {name: i18n.languages.find(item => item.code === code)?.name || code}));
 }
 function goSection(id: SettingsSectionId) {
   section.value = id;
@@ -257,43 +257,43 @@ function providerReady(profile: ProviderProfile) {
 }
 function providerChecked(profile: ProviderProfile) {
   const stamp = workspace.providerStatuses?.[profile.id]?.checked_at;
-  if (!stamp) return i18n.t("settings.not_checked", "Not checked yet");
+  if (!stamp) return i18n.t("settings.not_checked");
   const date = new Date(stamp);
   return Number.isNaN(date.getTime()) ? stamp : date.toLocaleString(i18n.locale);
 }
 async function saveNotifications() {
   workspace.appConfig.desktop_notifications = notificationsOn.value;
   await persistWorkspace();
-  announce(i18n.t("settings.notifications_saved", "Notification preference saved"));
+  announce(i18n.t("settings.notifications_saved"));
 }
 async function requestNotifications() {
   if (typeof Notification === "undefined") {
-    pageError.value = i18n.t("settings.notifications_unsupported", "Desktop notifications are not supported by this browser.");
+    pageError.value = i18n.t("settings.notifications_unsupported");
     return;
   }
   try {
     const permission = await Notification.requestPermission();
     notificationsOn.value = permission === "granted";
     await saveNotifications();
-    announce(permission === "granted" ? i18n.t("settings.notifications_enabled", "Desktop notifications enabled") : i18n.tf("settings.notifications_permission", "Notification permission: {status}", {status: permission}));
+    announce(permission === "granted" ? i18n.t("settings.notifications_enabled") : i18n.tf("settings.notifications_permission", {status: permission}));
   } catch (error) {
     pageError.value = error instanceof Error ? error.message : String(error);
   }
 }
-function resetColumns() { workspace.tableColumns = {}; runtime.persistPrefs(); announce(i18n.t("settings.columns_reset", "Table columns reset")); }
-function expandPanels() { workspace.collapsedPanels = {}; runtime.persistPrefs(); announce(i18n.t("settings.panels_expanded", "All UI panels expanded")); }
+function resetColumns() { workspace.tableColumns = {}; runtime.persistPrefs(); announce(i18n.t("settings.columns_reset")); }
+function expandPanels() { workspace.collapsedPanels = {}; runtime.persistPrefs(); announce(i18n.t("settings.panels_expanded")); }
 function expandSidebar() {
   if (workspace.sidebarCollapsed) runtime.toggleSidebar();
-  announce(i18n.t("settings.sidebar_expanded", "Navigation sidebar expanded"));
+  announce(i18n.t("settings.sidebar_expanded"));
 }
-function clearUpsertSuppressions() { workspace.upsertIgnored = {}; runtime.persistPrefs(); announce(i18n.t("settings.upsert_restored", "Removed upsert-queue items restored")); }
+function clearUpsertSuppressions() { workspace.upsertIgnored = {}; runtime.persistPrefs(); announce(i18n.t("settings.upsert_restored")); }
 function openBackup() {
   confirm.value = {
     kind: "backup",
-    title: i18n.t("settings.backup_confirm_title", "Create full backup?"),
+    title: i18n.t("settings.backup_confirm_title"),
     message: runtime.backupContainsCredentials?.()
-      ? i18n.t("settings.backup_keys_warning", "This full backup can contain provider API keys. Store the ZIP securely. Installed model files are not copied.")
-      : i18n.t("settings.backup_confirm_message", "Create a full backup of this workspace, records, configuration, and vector collections."),
+      ? i18n.t("settings.backup_keys_warning")
+      : i18n.t("settings.backup_confirm_message"),
   };
 }
 function openRestore() { restoreInput.value?.click(); }
@@ -305,15 +305,15 @@ function onRestoreFile(event: Event) {
   restoreFile.value = file;
   confirm.value = {
     kind: "restore",
-    title: i18n.t("settings.restore_confirm_title", "Restore full DerridAI backup?"),
-    message: i18n.t("settings.restore_confirm_message", "This replaces the current browser workspace and every collection in the active Chroma database."),
+    title: i18n.t("settings.restore_confirm_title"),
+    message: i18n.t("settings.restore_confirm_message"),
   };
 }
 function openUpdates() {
-  confirm.value = {kind: "updates", title: i18n.t("settings.clear_updates_title", "Clear all update histories?"), message: i18n.t("settings.clear_updates_message", "This permanently removes local audit histories from loaded records.")};
+  confirm.value = {kind: "updates", title: i18n.t("settings.clear_updates_title"), message: i18n.t("settings.clear_updates_message")};
 }
 function openNuke() {
-  confirm.value = {kind: "nuke", title: i18n.t("config.nuke.confirm_title", "Reset DerridAI to a fresh install?"), message: i18n.t("config.nuke.confirm_message", "This returns DerridAI to a first-run state: users, corpora, PDF builds, vector collections, provider profiles, annotations, jobs, and this browser workspace are deleted. You will create a new administrator account. Installed model files are not deleted.")};
+  confirm.value = {kind: "nuke", title: i18n.t("config.nuke.confirm_title"), message: i18n.t("config.nuke.confirm_message")};
 }
 async function applyConfirm() {
   const kind = confirm.value?.kind;
@@ -337,10 +337,10 @@ async function applyConfirm() {
       return;
     }
     confirm.value = null;
-    announce(i18n.t("settings.action_complete", "Action completed"));
+    announce(i18n.t("settings.action_complete"));
   } catch (error) {
     pageError.value = error instanceof Error ? error.message : String(error);
-    if (kind === "nuke") pageError.value = i18n.tf("config.nuke.failed", "Nuke failed: {error}", {error: pageError.value});
+    if (kind === "nuke") pageError.value = i18n.tf("config.nuke.failed", {error: pageError.value});
   } finally { busy.value = ""; }
 }
 function closeConfirm() {
@@ -360,7 +360,7 @@ onBeforeRouteLeave(() => {
   if (!dirty.value) return true;
   return new Promise<boolean>(resolve => {
     routeGuardResolve.value = resolve;
-    confirm.value = {kind: "leave", title: i18n.t("settings.leave_title", "Discard unsaved settings?"), message: i18n.t("settings.leave_message", "Your unsaved Settings changes will be lost if you leave this page.")};
+    confirm.value = {kind: "leave", title: i18n.t("settings.leave_title"), message: i18n.t("settings.leave_message")};
   });
 });
 watch(appearanceDraft, value => runtime.applyAppearance(normalizeAppearance(value)), {deep: true});
@@ -390,14 +390,11 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
   <main class="vue-native-page settings-page" aria-labelledby="settings-page-title">
     <div class="sr-only" aria-live="polite">{{ liveMessage }}</div>
     <UiPageHeader
-      :kicker="i18n.t('section.system', 'System')"
-      :title="i18n.t('context.config.title', 'Settings')"
+      :kicker="i18n.t('section.system')"
+      :title="i18n.t('context.config.title')"
       title-id="settings-page-title"
       :description="
-        i18n.t(
-          'settings.page_help',
-          'Control workspace appearance, research defaults, and operational tools. Each group saves on its own; leaving with unsaved changes will ask for confirmation.',
-        )
+        i18n.t('settings.page_help')
       "
     >
       <template #actions>
@@ -409,56 +406,56 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
       <SettingsSearch
         v-model="query"
         :results="searchHits"
-        :label="i18n.t('settings.search_label', 'Search settings')"
-        :placeholder="i18n.t('settings.search_placeholder', 'Find a setting')"
+        :label="i18n.t('settings.search_label')"
+        :placeholder="i18n.t('settings.search_placeholder')"
         described-by="settings-search-help"
-        :no-results="i18n.t('settings.search_empty', 'No settings match that search.')"
+        :no-results="i18n.t('settings.search_empty')"
         :result-count="i18n.tf(searchHits.length === 1 ? 'settings.search_count_one' : 'settings.search_count_many', searchHits.length === 1 ? '{count} matching setting' : '{count} matching settings', {count: searchHits.length})"
         @choose="chooseSearch"
       />
-      <p id="settings-search-help" class="note">{{ i18n.t("settings.search_help", "Search uses translated labels. Arrow keys move through matches; Enter opens the section.") }}</p>
-      <UiButton class="settings-contents-toggle" :label="i18n.t('settings.contents', 'Contents')" :pressed="contentsOpen" @click="contentsOpen = !contentsOpen" />
+      <p id="settings-search-help" class="note">{{ i18n.t("settings.search_help") }}</p>
+      <UiButton class="settings-contents-toggle" :label="i18n.t('settings.contents')" :pressed="contentsOpen" @click="contentsOpen = !contentsOpen" />
     </div>
     <div class="settings-layout">
       <aside class="settings-rail" :class="{open: contentsOpen}">
-        <SettingsNav v-model="section" :items="visibleSections" :tablist-label="i18n.t('settings.contents', 'Contents')" @select="goSection" />
+        <SettingsNav v-model="section" :items="visibleSections" :tablist-label="i18n.t('settings.contents')" @select="goSection" />
       </aside>
       <div class="settings-pane">
         <div v-show="section === 'workspace'" id="settings-section-workspace" role="tabpanel" aria-labelledby="settings-nav-workspace">
-          <SettingsSection section-id="workspace" :title="i18n.t('settings.appearance', 'Appearance')" :description="i18n.t('settings.appearance_help', 'Choose the interface color theme for your workspace.')" :persistence="persistKind('browser')" :status="groupStatus.appearance" :status-label="statusLabel(groupStatus.appearance)">
+          <SettingsSection section-id="workspace" :title="i18n.t('settings.appearance')" :description="i18n.t('settings.appearance_help')" :persistence="persistKind('browser')" :status="groupStatus.appearance" :status-label="statusLabel(groupStatus.appearance)">
             <fieldset v-if="canAppearance" class="theme-choice-grid" :disabled="!canAppearance">
-              <legend>{{ i18n.t("settings.color_theme", "Color theme") }}</legend>
+              <legend>{{ i18n.t("settings.color_theme") }}</legend>
               <label v-for="theme in (['green','blue','slate'] as const)" :key="theme" class="theme-choice" :class="{selected: appearanceDraft.ui_color_theme === theme}">
                 <input type="radio" name="settingsTheme" :value="theme" v-model="appearanceDraft.ui_color_theme">
                 <span class="theme-swatch" :class="`theme-swatch-${theme}`" aria-hidden="true"><i></i><i></i><i></i></span>
-                <span><b>{{ i18n.t(`settings.theme_${theme}`, theme) }}</b><small>{{ theme === 'green' ? i18n.t('settings.theme_green_help', 'The original restrained green palette.') : theme === 'blue' ? i18n.t('settings.theme_blue_help', 'The blue palette used in the visual reference.') : i18n.t('settings.theme_slate_help', 'A neutral graphite-blue research palette.') }}</small></span>
+                <span><b>{{ i18n.t(`settings.theme_${theme}`, theme) }}</b><small>{{ theme === 'green' ? i18n.t('settings.theme_green_help') : theme === 'blue' ? i18n.t('settings.theme_blue_help') : i18n.t('settings.theme_slate_help') }}</small></span>
               </label>
             </fieldset>
-            <p v-else class="note">{{ i18n.t("settings.appearance_unavailable", "Your role cannot change workspace appearance.") }}</p>
+            <p v-else class="note">{{ i18n.t("settings.appearance_unavailable") }}</p>
             <div class="config-grid">
-              <UiField :label="i18n.t('settings.color_scheme', 'Color scheme')" :hint="i18n.t('settings.color_scheme_help', 'Light, dark, or follow this device. Stored in this browser.')" :persistence="persistKind('browser')">
+              <UiField :label="i18n.t('settings.color_scheme')" :hint="i18n.t('settings.color_scheme_help')" :persistence="persistKind('browser')">
                 <select id="settings-field-scheme" class="control" v-model="appearanceDraft.ui_color_scheme">
-                  <option value="system">{{ i18n.t("settings.scheme_system", "Match device") }}</option>
-                  <option value="light">{{ i18n.t("settings.scheme_light", "Light") }}</option>
-                  <option value="dark">{{ i18n.t("settings.scheme_dark", "Dark") }}</option>
+                  <option value="system">{{ i18n.t("settings.scheme_system") }}</option>
+                  <option value="light">{{ i18n.t("settings.scheme_light") }}</option>
+                  <option value="dark">{{ i18n.t("settings.scheme_dark") }}</option>
                 </select>
               </UiField>
-              <UiField :label="i18n.t('settings.contrast', 'Contrast')" :hint="i18n.t('settings.contrast_help', 'Increase contrast for borders and muted text in this workspace.')">
+              <UiField :label="i18n.t('settings.contrast')" :hint="i18n.t('settings.contrast_help')">
                 <select id="settings-field-contrast" class="control" v-model="appearanceDraft.ui_contrast">
-                  <option value="system">{{ i18n.t("settings.contrast_system", "Match device") }}</option>
-                  <option value="more">{{ i18n.t("settings.contrast_more", "More contrast") }}</option>
+                  <option value="system">{{ i18n.t("settings.contrast_system") }}</option>
+                  <option value="more">{{ i18n.t("settings.contrast_more") }}</option>
                 </select>
               </UiField>
             </div>
             <template #actions>
-              <UiButton variant="primary" icon="check" :label="i18n.t('settings.save_appearance', 'Save appearance')" :disabled="!canAppearance || groupStatus.appearance === 'saving'" @click="saveAppearance" />
-              <UiButton :label="i18n.t('settings.reset_appearance', 'Reset appearance defaults')" :disabled="!canAppearance" @click="resetAppearance" />
+              <UiButton variant="primary" icon="check" :label="i18n.t('settings.save_appearance')" :disabled="!canAppearance || groupStatus.appearance === 'saving'" @click="saveAppearance" />
+              <UiButton :label="i18n.t('settings.reset_appearance')" :disabled="!canAppearance" @click="resetAppearance" />
             </template>
           </SettingsSection>
           <SettingsSection
             section-id="about"
-            :title="i18n.t('about.title', 'About DerridAI')"
-            :description="i18n.t('about.help', 'Release version of this instance. The git commit is shown for administrators and on the sign-in screen.')"
+            :title="i18n.t('about.title')"
+            :description="i18n.t('about.help')"
             :persistence="persistKind('readonly')"
             status="readonly"
             :status-label="statusLabel('readonly')"
@@ -468,8 +465,8 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
         </div>
 
         <div v-show="section === 'language'" id="settings-section-language" role="tabpanel" aria-labelledby="settings-nav-language">
-          <SettingsSection section-id="language" :title="i18n.t('settings.language_title', 'Language and accessibility')" :description="i18n.t('settings.language_help', 'The interface language applies immediately. Dictionaries are edited on the Languages page.')" :persistence="persistKind('browser')" status="saved" :status-label="statusLabel('saved')">
-            <UiField :label="i18n.t('settings.interface_language', 'Interface language')" :hint="i18n.t('settings.interface_language_help', 'Applies immediately to labels, dates, and numbers in this browser.')">
+          <SettingsSection section-id="language" :title="i18n.t('settings.language_title')" :description="i18n.t('settings.language_help')" :persistence="persistKind('browser')" status="saved" :status-label="statusLabel('saved')">
+            <UiField :label="i18n.t('settings.interface_language')" :hint="i18n.t('settings.interface_language_help')">
               <div class="settings-locale-row">
                 <LanguageFlag :code="i18n.locale" :symbol="localeInfo?.flag" :label="localeInfo?.name" size="small" />
                 <select id="settings-field-locale" class="control" :value="i18n.locale" :disabled="i18n.loading" :aria-busy="i18n.loading" @change="setLocale(($event.target as HTMLSelectElement).value)">
@@ -477,221 +474,221 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                 </select>
               </div>
             </UiField>
-            <p class="note">{{ i18n.t("settings.a11y_note", "Focus indicators stay visible in every theme. Motion is reduced when this device requests it. High-contrast mode uses stronger borders rather than color alone.") }}</p>
+            <p class="note">{{ i18n.t("settings.a11y_note") }}</p>
             <template v-if="isAdmin" #actions>
-              <UiButton icon="language" :label="i18n.t('language.manage', 'Manage languages')" @click="go('/languages')" />
+              <UiButton icon="language" :label="i18n.t('language.manage')" @click="go('/languages')" />
             </template>
           </SettingsSection>
         </div>
 
         <div v-show="section === 'research'" id="settings-section-research" role="tabpanel" aria-labelledby="settings-nav-research">
-          <SettingsSection v-if="isAdmin" section-id="research" :title="i18n.t('settings.research_title', 'Research defaults')" :description="i18n.t('settings.research_help', 'Response language and evidence presentation defaults. Per-run generation still lives on Research.')" :persistence="persistKind('browser')" :status="groupStatus.rag" :status-label="statusLabel(groupStatus.rag)">
-            <UiField :label="i18n.t('settings.rag_response_language', 'Response language')" :hint="i18n.t('settings.rag_response_language_help', 'Guides generated answers. Source language tags on records are unchanged.')">
+          <SettingsSection v-if="isAdmin" section-id="research" :title="i18n.t('settings.research_title')" :description="i18n.t('settings.research_help')" :persistence="persistKind('browser')" :status="groupStatus.rag" :status-label="statusLabel(groupStatus.rag)">
+            <UiField :label="i18n.t('settings.rag_response_language')" :hint="i18n.t('settings.rag_response_language_help')">
               <select id="settings-field-rag-response-language" class="control" v-model="ragDraft.response_language">
-                <option value="auto">{{ i18n.t("settings.lang_auto", "Auto") }}</option>
-                <option value="en">{{ i18n.t("settings.lang_en", "English") }}</option>
-                <option value="fr">{{ i18n.t("settings.lang_fr", "French") }}</option>
+                <option value="auto">{{ i18n.t("settings.lang_auto") }}</option>
+                <option value="en">{{ i18n.t("settings.lang_en") }}</option>
+                <option value="fr">{{ i18n.t("settings.lang_fr") }}</option>
               </select>
             </UiField>
             <template #actions>
-              <UiButton variant="primary" :label="i18n.t('settings.save_research', 'Save research defaults')" @click="saveRag" />
-              <UiButton icon="spark" :label="i18n.t('nav.rag', 'Research')" @click="go('/rag', 'rag')" />
+              <UiButton variant="primary" :label="i18n.t('settings.save_research')" @click="saveRag" />
+              <UiButton icon="spark" :label="i18n.t('nav.rag')" @click="go('/rag', 'rag')" />
             </template>
           </SettingsSection>
-          <SettingsSection v-else section-id="research" :title="i18n.t('settings.researcher_workspace', 'Research workspace')" :description="i18n.t('settings.researcher_workspace_help', 'Researcher accounts use summarized corpus text and do not expose database or source-management controls.')" :persistence="persistKind('readonly')" status="readonly" :status-label="statusLabel('readonly')">
+          <SettingsSection v-else section-id="research" :title="i18n.t('settings.researcher_workspace')" :description="i18n.t('settings.researcher_workspace_help')" :persistence="persistKind('readonly')" status="readonly" :status-label="statusLabel('readonly')">
             <div class="config-actions">
-              <UiButton v-if="auth.can('page.dashboard')" icon="dashboard" :label="i18n.t('nav.home', 'Home')" @click="go('/', 'home')" />
-              <UiButton v-if="auth.can('page.annotations')" icon="record" :label="i18n.t('nav.annotations', 'Annotations')" @click="go('/annotations', 'annotations')" />
-              <UiButton v-if="auth.can('page.research')" icon="spark" :label="i18n.t('nav.rag', 'Research')" @click="go('/rag', 'rag')" />
+              <UiButton v-if="auth.can('page.dashboard')" icon="dashboard" :label="i18n.t('nav.home')" @click="go('/', 'home')" />
+              <UiButton v-if="auth.can('page.annotations')" icon="record" :label="i18n.t('nav.annotations')" @click="go('/annotations', 'annotations')" />
+              <UiButton v-if="auth.can('page.research')" icon="spark" :label="i18n.t('nav.rag')" @click="go('/rag', 'rag')" />
             </div>
-            <p v-if="!auth.can('page.dashboard') && !auth.can('page.annotations') && !auth.can('page.research')" class="note">{{ i18n.t("permissions.no_workspace_shortcuts", "No additional workspace pages are enabled for this role.") }}</p>
+            <p v-if="!auth.can('page.dashboard') && !auth.can('page.annotations') && !auth.can('page.research')" class="note">{{ i18n.t("permissions.no_workspace_shortcuts") }}</p>
           </SettingsSection>
         </div>
 
         <div v-if="isAdmin" v-show="section === 'review'" id="settings-section-review" role="tabpanel" aria-labelledby="settings-nav-review">
-          <SettingsSection section-id="review" :title="i18n.t('settings.review_title', 'Review and AI behavior')" :description="i18n.t('settings.review_help', 'Provider choice, default review preset, and whether LLM review opens interactively or runs as a background job.')" :persistence="persistKind('browser')" :status="groupStatus.review" :status-label="statusLabel(groupStatus.review)">
+          <SettingsSection section-id="review" :title="i18n.t('settings.review_title')" :description="i18n.t('settings.review_help')" :persistence="persistKind('browser')" :status="groupStatus.review" :status-label="statusLabel(groupStatus.review)">
             <div class="config-grid">
-              <UiField :label="i18n.t('settings.default_provider', 'Default provider profile')" :hint="i18n.t('settings.default_provider_help', 'Used when a workflow does not pick a profile itself. Credentials stay on the Providers page.')">
+              <UiField :label="i18n.t('settings.default_provider')" :hint="i18n.t('settings.default_provider_help')">
                 <select id="settings-field-review-provider" class="control" v-model="reviewDraft.default_provider_profile">
-                  <option v-if="!profiles.length" value="">{{ i18n.t("settings.not_configured", "Not configured") }}</option>
-                  <option v-for="profile in profiles" :key="profile.id" :value="profile.id">{{ profile.name || profile.id }} · {{ profile.type === "ollama" ? "Ollama" : i18n.t("settings.openai_compatible", "OpenAI-compatible") }}</option>
+                  <option v-if="!profiles.length" value="">{{ i18n.t("settings.not_configured") }}</option>
+                  <option v-for="profile in profiles" :key="profile.id" :value="profile.id">{{ profile.name || profile.id }} · {{ profile.type === "ollama" ? "Ollama" : i18n.t("settings.openai_compatible") }}</option>
                 </select>
               </UiField>
-              <UiField :label="i18n.t('settings.review_preset', 'Default review preset')">
+              <UiField :label="i18n.t('settings.review_preset')">
                 <select id="settings-field-review-preset" class="control" v-model="reviewDraft.default_review_preset">
-                  <option value="text">{{ i18n.t("settings.preset_text", "OCR / text cleanup") }}</option>
-                  <option value="attribution">{{ i18n.t("settings.preset_attribution", "Attribution") }}</option>
-                  <option value="semantic">{{ i18n.t("settings.preset_semantic", "Semantics") }}</option>
+                  <option value="text">{{ i18n.t("settings.preset_text") }}</option>
+                  <option value="attribution">{{ i18n.t("settings.preset_attribution") }}</option>
+                  <option value="semantic">{{ i18n.t("settings.preset_semantic") }}</option>
                 </select>
               </UiField>
-              <UiField :label="i18n.t('settings.run_mode', 'Default run mode')" :hint="i18n.t('settings.run_mode_help', 'Interactive review stays on screen. Background review is cancellable from Operations.')">
+              <UiField :label="i18n.t('settings.run_mode')" :hint="i18n.t('settings.run_mode_help')">
                 <select id="settings-field-review-mode" class="control" v-model="reviewDraft.default_llm_run_mode">
-                  <option value="foreground">{{ i18n.t("settings.run_foreground", "Interactive foreground") }}</option>
-                  <option value="background">{{ i18n.t("settings.run_background", "Background review") }}</option>
+                  <option value="foreground">{{ i18n.t("settings.run_foreground") }}</option>
+                  <option value="background">{{ i18n.t("settings.run_background") }}</option>
                 </select>
               </UiField>
-              <label class="check-item field-full"><input id="settings-field-rag-auto-grade" type="checkbox" v-model="ragDraft.auto_grade"><span>{{ i18n.t("settings.rag_auto_grade", "Auto-grade the final research response after caching") }}<small>{{ i18n.t("settings.rag_auto_grade_help", "Choose the grading provider on Research. Self-grading is warned there.") }}</small></span></label>
+              <label class="check-item field-full"><input id="settings-field-rag-auto-grade" type="checkbox" v-model="ragDraft.auto_grade"><span>{{ i18n.t("settings.rag_auto_grade") }}<small>{{ i18n.t("settings.rag_auto_grade_help") }}</small></span></label>
             </div>
             <template #actions>
-              <UiButton variant="primary" icon="check" :label="i18n.t('settings.save_review', 'Save review behavior')" @click="saveReview(); if (ragDirty) saveRag()" />
+              <UiButton variant="primary" icon="check" :label="i18n.t('settings.save_review')" @click="saveReview(); if (ragDirty) saveRag()" />
             </template>
           </SettingsSection>
         </div>
 
         <div v-if="isAdmin" v-show="section === 'providers'" id="settings-section-providers" role="tabpanel" aria-labelledby="settings-nav-providers">
-          <SettingsSection section-id="providers" :title="i18n.t('settings.providers_title', 'Providers and models')" :description="i18n.t('settings.providers_help', 'Endpoints, credentials, models, concurrency limits, and warmups are configured on the dedicated Providers page. Secrets are never shown here.')" :persistence="persistKind('link')" status="readonly" :status-label="statusLabel('readonly')">
+          <SettingsSection section-id="providers" :title="i18n.t('settings.providers_title')" :description="i18n.t('settings.providers_help')" :persistence="persistKind('link')" status="readonly" :status-label="statusLabel('readonly')">
             <ul v-if="profiles.length" class="providers-summary">
               <li v-for="profile in profiles" :key="profile.id">
-                <UiHealthChip :available="providerReady(profile)" :label="String(profile.name || profile.id)" :detail="providerReady(profile) ? i18n.t('settings.provider_ready', 'Ready') : i18n.t('settings.provider_not_ready', 'Not ready')" />
-                <span>{{ profile.type === "ollama" ? i18n.t("settings.provider_ollama", "Ollama") : i18n.t("settings.openai_compatible", "OpenAI-compatible") }} · {{ i18n.tf("settings.max_concurrent", "max {count}", {count: Number(profile.max_concurrent_requests ?? 1)}) }} · {{ profile.model || i18n.t("language.model_not_set", "model not set") }}</span>
-                <small>{{ i18n.tf("settings.last_checked", "Last checked: {time}", {time: providerChecked(profile)}) }}</small>
-                <b v-if="profile.id === defaultProfileId">{{ i18n.t("ui.default", "Default") }}</b>
+                <UiHealthChip :available="providerReady(profile)" :label="String(profile.name || profile.id)" :detail="providerReady(profile) ? i18n.t('settings.provider_ready') : i18n.t('settings.provider_not_ready')" />
+                <span>{{ profile.type === "ollama" ? i18n.t("settings.provider_ollama") : i18n.t("settings.openai_compatible") }} · {{ i18n.tf("settings.max_concurrent", {count: Number(profile.max_concurrent_requests ?? 1)}) }} · {{ profile.model || i18n.t("language.model_not_set") }}</span>
+                <small>{{ i18n.tf("settings.last_checked", {time: providerChecked(profile)}) }}</small>
+                <b v-if="profile.id === defaultProfileId">{{ i18n.t("ui.default") }}</b>
               </li>
             </ul>
-            <p v-else class="note">{{ i18n.t("settings.no_providers", "No LLM provider profiles are configured.") }}</p>
+            <p v-else class="note">{{ i18n.t("settings.no_providers") }}</p>
             <template #actions>
-              <UiButton variant="primary" icon="spark" :label="i18n.t('settings.open_providers', 'Open LLM Providers')" @click="go('/providers', 'providers')" />
+              <UiButton variant="primary" icon="spark" :label="i18n.t('settings.open_providers')" @click="go('/providers', 'providers')" />
             </template>
           </SettingsSection>
         </div>
 
         <div v-if="isAdmin" v-show="section === 'retrieval'" id="settings-section-retrieval" role="tabpanel" aria-labelledby="settings-nav-retrieval">
-          <SettingsSection section-id="retrieval" :title="i18n.t('settings.vector_title', 'Vector database defaults')" :description="i18n.t('settings.vector_help', 'New collections default to Ollama embeddings with bge-m3:latest. Changing a collection that already contains records requires a new build.')" :persistence="persistKind('browser')" :status="groupStatus.embedding" :status-label="statusLabel(groupStatus.embedding)">
+          <SettingsSection section-id="retrieval" :title="i18n.t('settings.vector_title')" :description="i18n.t('settings.vector_help')" :persistence="persistKind('browser')" :status="groupStatus.embedding" :status-label="statusLabel(groupStatus.embedding)">
             <div class="config-grid">
-              <UiField :label="i18n.t('settings.embedding_provider', 'Default embedding provider')">
+              <UiField :label="i18n.t('settings.embedding_provider')">
                 <select id="settings-field-embedding-provider" class="control" v-model="embeddingDraft.embedding_provider">
-                  <option value="ollama">{{ i18n.t("settings.provider_ollama", "Ollama") }}</option>
-                  <option value="chroma">{{ i18n.t("vector.provider_chroma", "Chroma default") }}</option>
-                  <option value="precomputed">{{ i18n.t("vector.provider_precomputed", "Precomputed vectors") }}</option>
+                  <option value="ollama">{{ i18n.t("settings.provider_ollama") }}</option>
+                  <option value="chroma">{{ i18n.t("vector.provider_chroma") }}</option>
+                  <option value="precomputed">{{ i18n.t("vector.provider_precomputed") }}</option>
                 </select>
               </UiField>
-              <UiField :label="i18n.t('settings.embedding_model', 'Default embedding model')">
+              <UiField :label="i18n.t('settings.embedding_model')">
                 <input id="settings-field-embedding-model" class="control" v-model="embeddingDraft.embedding_model">
               </UiField>
-              <UiField wide :label="i18n.t('settings.chroma_path', 'Current Chroma path')" :hint="i18n.t('settings.chroma_path_help', 'Reported by the running API. Change the backend on Vector Stores.')" :persistence="persistKind('readonly')">
+              <UiField wide :label="i18n.t('settings.chroma_path')" :hint="i18n.t('settings.chroma_path_help')" :persistence="persistKind('readonly')">
                 <input id="settings-field-chroma-path" class="control" :value="chromaPath" readonly>
               </UiField>
             </div>
             <template #actions>
-              <UiButton variant="primary" :label="i18n.t('settings.save_embedding', 'Save embedding defaults')" @click="saveEmbedding" />
-              <UiButton icon="database" :label="i18n.t('nav.vector', 'Vector Stores')" @click="go('/databases', 'vector')" />
+              <UiButton variant="primary" :label="i18n.t('settings.save_embedding')" @click="saveEmbedding" />
+              <UiButton icon="database" :label="i18n.t('nav.vector')" @click="go('/databases', 'vector')" />
             </template>
           </SettingsSection>
-          <SettingsSection section-id="rag" :title="i18n.t('settings.rag_title', 'RAG pipeline defaults')" :description="i18n.t('settings.rag_help', 'Retrieval, fusion, reranking, and evidence-budget defaults. These values are stored with each run so later audit can reproduce it.')" :persistence="persistKind('browser')" :status="groupStatus.rag" :status-label="statusLabel(groupStatus.rag)">
-            <p v-if="Object.keys(ragErrors).length" class="info error" role="alert">{{ i18n.t("settings.validation_summary", "Some retrieval defaults could not be saved.") }}</p>
+          <SettingsSection section-id="rag" :title="i18n.t('settings.rag_title')" :description="i18n.t('settings.rag_help')" :persistence="persistKind('browser')" :status="groupStatus.rag" :status-label="statusLabel(groupStatus.rag)">
+            <p v-if="Object.keys(ragErrors).length" class="info error" role="alert">{{ i18n.t("settings.validation_summary") }}</p>
             <div class="config-grid">
-              <UiField :label="i18n.t('settings.rag_k', 'Retrieval k')" :hint="i18n.t('settings.rag_k_help', 'How many passages to keep after ranking. Typical scholarly runs use 24–64.')" :error="ragErrors.k">
+              <UiField :label="i18n.t('settings.rag_k')" :hint="i18n.t('settings.rag_k_help')" :error="ragErrors.k">
                 <input id="settings-field-rag-k" class="control" type="number" min="1" max="500" v-model.number="ragDraft.k" :aria-invalid="Boolean(ragErrors.k)">
               </UiField>
-              <UiField :label="i18n.t('settings.rag_top_n', 'Rerank top N')" :hint="i18n.t('settings.rag_top_n_help', 'How many candidates the reranker inspects.')">
+              <UiField :label="i18n.t('settings.rag_top_n')" :hint="i18n.t('settings.rag_top_n_help')">
                 <input id="settings-field-rag-top-n" class="control" type="number" min="1" max="500" v-model.number="ragDraft.rerank_top_n">
               </UiField>
-              <UiField :label="i18n.t('settings.rag_reranker', 'Default reranker')">
+              <UiField :label="i18n.t('settings.rag_reranker')">
                 <select id="settings-field-rag-reranker" class="control" v-model="ragDraft.reranker">
-                  <option value="cross_encoder">{{ i18n.t("settings.reranker_ce", "Cross-encoder") }}</option>
-                  <option value="lexical">{{ i18n.t("settings.reranker_lexical", "Lexical/vector") }}</option>
-                  <option value="none">{{ i18n.t("settings.reranker_none", "None") }}</option>
+                  <option value="cross_encoder">{{ i18n.t("settings.reranker_ce") }}</option>
+                  <option value="lexical">{{ i18n.t("settings.reranker_lexical") }}</option>
+                  <option value="none">{{ i18n.t("settings.reranker_none") }}</option>
                 </select>
               </UiField>
-              <UiField :label="i18n.t('settings.rag_record_chars', 'Max characters per evidence record')" :hint="i18n.t('settings.rag_record_chars_help', 'Caps each passage so the model cannot swallow an entire chapter as one evidence item.')">
+              <UiField :label="i18n.t('settings.rag_record_chars')" :hint="i18n.t('settings.rag_record_chars_help')">
                 <input id="settings-field-rag-record-chars" class="control" type="number" min="500" v-model.number="ragDraft.evidence_record_char_limit">
               </UiField>
-              <UiField :label="i18n.t('settings.rag_total_chars', 'Total evidence characters')" :error="ragErrors.evidence_total_char_limit">
+              <UiField :label="i18n.t('settings.rag_total_chars')" :error="ragErrors.evidence_total_char_limit">
                 <input id="settings-field-rag-total-chars" class="control" type="number" min="5000" v-model.number="ragDraft.evidence_total_char_limit" :aria-invalid="Boolean(ragErrors.evidence_total_char_limit)">
               </UiField>
               <fieldset class="field field-full">
-                <legend>{{ i18n.t("settings.rag_locales", "Document languages") }}</legend>
+                <legend>{{ i18n.t("settings.rag_locales") }}</legend>
                 <div class="language-checks">
-                  <label><input id="settings-field-rag-locale-en" type="checkbox" value="en" :checked="ragDraft.locales.includes('en')" @change="ragDraft.locales = ($event.target as HTMLInputElement).checked ? [...new Set([...ragDraft.locales, 'en'])] : ragDraft.locales.filter(code => code !== 'en')"><span>{{ i18n.t("settings.lang_en", "English") }}</span></label>
-                  <label><input id="settings-field-rag-locale-fr" type="checkbox" value="fr" :checked="ragDraft.locales.includes('fr')" @change="ragDraft.locales = ($event.target as HTMLInputElement).checked ? [...new Set([...ragDraft.locales, 'fr'])] : ragDraft.locales.filter(code => code !== 'fr')"><span>{{ i18n.t("settings.lang_fr", "French") }}</span></label>
+                  <label><input id="settings-field-rag-locale-en" type="checkbox" value="en" :checked="ragDraft.locales.includes('en')" @change="ragDraft.locales = ($event.target as HTMLInputElement).checked ? [...new Set([...ragDraft.locales, 'en'])] : ragDraft.locales.filter(code => code !== 'en')"><span>{{ i18n.t("settings.lang_en") }}</span></label>
+                  <label><input id="settings-field-rag-locale-fr" type="checkbox" value="fr" :checked="ragDraft.locales.includes('fr')" @change="ragDraft.locales = ($event.target as HTMLInputElement).checked ? [...new Set([...ragDraft.locales, 'fr'])] : ragDraft.locales.filter(code => code !== 'fr')"><span>{{ i18n.t("settings.lang_fr") }}</span></label>
                 </div>
                 <p v-if="ragErrors.locales" class="ui-field-error" role="alert">{{ ragErrors.locales }}</p>
               </fieldset>
               <fieldset class="field field-full">
-                <legend>{{ i18n.t("settings.rag_routes", "Retrieval routes") }}</legend>
+                <legend>{{ i18n.t("settings.rag_routes") }}</legend>
                 <div class="language-checks">
-                  <label><input type="checkbox" :checked="ragDraft.search_types.includes('similarity')" @change="ragDraft.search_types = ($event.target as HTMLInputElement).checked ? [...new Set([...ragDraft.search_types, 'similarity' as const])] : ragDraft.search_types.filter(item => item !== 'similarity')"><span>{{ i18n.t("research.similarity", "Similarity") }}</span></label>
-                  <label><input type="checkbox" :checked="ragDraft.search_types.includes('lexical')" @change="ragDraft.search_types = ($event.target as HTMLInputElement).checked ? [...new Set([...ragDraft.search_types, 'lexical' as const])] : ragDraft.search_types.filter(item => item !== 'lexical')"><span>{{ i18n.t("settings.route_lexical", "Lexical (BM25)") }}</span></label>
-                  <label><input type="checkbox" :checked="ragDraft.search_types.includes('mmr')" @change="ragDraft.search_types = ($event.target as HTMLInputElement).checked ? [...new Set([...ragDraft.search_types, 'mmr' as const])] : ragDraft.search_types.filter(item => item !== 'mmr')"><span>{{ i18n.t("settings.route_mmr", "MMR") }}</span></label>
+                  <label><input type="checkbox" :checked="ragDraft.search_types.includes('similarity')" @change="ragDraft.search_types = ($event.target as HTMLInputElement).checked ? [...new Set([...ragDraft.search_types, 'similarity' as const])] : ragDraft.search_types.filter(item => item !== 'similarity')"><span>{{ i18n.t("research.similarity") }}</span></label>
+                  <label><input type="checkbox" :checked="ragDraft.search_types.includes('lexical')" @change="ragDraft.search_types = ($event.target as HTMLInputElement).checked ? [...new Set([...ragDraft.search_types, 'lexical' as const])] : ragDraft.search_types.filter(item => item !== 'lexical')"><span>{{ i18n.t("settings.route_lexical") }}</span></label>
+                  <label><input type="checkbox" :checked="ragDraft.search_types.includes('mmr')" @change="ragDraft.search_types = ($event.target as HTMLInputElement).checked ? [...new Set([...ragDraft.search_types, 'mmr' as const])] : ragDraft.search_types.filter(item => item !== 'mmr')"><span>{{ i18n.t("settings.route_mmr") }}</span></label>
                 </div>
                 <p v-if="ragErrors.search_types" class="ui-field-error" role="alert">{{ ragErrors.search_types }}</p>
               </fieldset>
             </div>
             <details class="settings-advanced" :open="advancedOpen" @toggle="advancedOpen = ($event.target as HTMLDetailsElement).open">
-              <summary>{{ i18n.t("settings.advanced_retrieval", "Advanced retrieval") }}</summary>
+              <summary>{{ i18n.t("settings.advanced_retrieval") }}</summary>
               <div class="config-grid">
-                <UiField :label="i18n.t('settings.rag_fetch_k', 'MMR fetch_k')" :hint="i18n.t('settings.rag_fetch_k_help', 'Candidate pool size before diversity ranking. Must be at least retrieval k.')" :error="ragErrors.fetch_k">
+                <UiField :label="i18n.t('settings.rag_fetch_k')" :hint="i18n.t('settings.rag_fetch_k_help')" :error="ragErrors.fetch_k">
                   <input class="control" type="number" min="1" max="5000" v-model.number="ragDraft.fetch_k" :aria-invalid="Boolean(ragErrors.fetch_k)">
                 </UiField>
-                <UiField :label="i18n.t('settings.rag_lambda', 'MMR lambda')" :hint="i18n.t('settings.rag_lambda_help', '0 favors diversity; 1 favors relevance to the question.')">
+                <UiField :label="i18n.t('settings.rag_lambda')" :hint="i18n.t('settings.rag_lambda_help')">
                   <input class="control" type="number" min="0" max="1" step="0.05" v-model.number="ragDraft.lambda_mult">
                 </UiField>
-                <UiField :label="i18n.t('settings.rag_rrf_k', 'RRF k')" :hint="i18n.t('settings.rag_rrf_k_help', 'Smoothing constant for reciprocal-rank fusion. 60 is a common default.')">
+                <UiField :label="i18n.t('settings.rag_rrf_k')" :hint="i18n.t('settings.rag_rrf_k_help')">
                   <input class="control" type="number" min="1" v-model.number="ragDraft.rrf_k">
                 </UiField>
-                <UiField :label="i18n.t('settings.rag_cross_encoder', 'Cross-encoder model')">
+                <UiField :label="i18n.t('settings.rag_cross_encoder')">
                   <input class="control" v-model="ragDraft.cross_encoder_model">
                 </UiField>
-                <UiField :label="i18n.t('settings.rag_decompose', 'Query-decomposition max tokens')" :hint="i18n.t('settings.rag_decompose_help', 'Upper bound for the optional query-split step before retrieval.')">
+                <UiField :label="i18n.t('settings.rag_decompose')" :hint="i18n.t('settings.rag_decompose_help')">
                   <input class="control" type="number" min="64" v-model.number="ragDraft.query_decomposition_num_predict">
                 </UiField>
               </div>
             </details>
             <template #actions>
-              <UiButton variant="primary" :label="i18n.t('settings.save_rag', 'Save RAG defaults')" @click="saveRag" />
-              <UiButton :label="i18n.t('settings.reset_rag', 'Reset retrieval defaults')" @click="resetRag" />
-              <UiButton icon="spark" :label="i18n.t('nav.rag', 'Research')" @click="go('/rag', 'rag')" />
+              <UiButton variant="primary" :label="i18n.t('settings.save_rag')" @click="saveRag" />
+              <UiButton :label="i18n.t('settings.reset_rag')" @click="resetRag" />
+              <UiButton icon="spark" :label="i18n.t('nav.rag')" @click="go('/rag', 'rag')" />
             </template>
           </SettingsSection>
         </div>
 
         <div v-if="isAdmin" v-show="section === 'security'" id="settings-section-security" role="tabpanel" aria-labelledby="settings-nav-security">
-          <SettingsSection section-id="security" :title="i18n.t('settings.security_title', 'Security, users, and permissions')" :description="i18n.t('settings.security_help', 'Accounts and role capabilities are enforced by the API, not only this page.')" :persistence="persistKind('link')" status="readonly" :status-label="statusLabel('readonly')">
-            <p class="note">{{ i18n.t("roles.users_link_help", "Role capabilities are configured centrally and enforced by both navigation and API permissions.") }}</p>
+          <SettingsSection section-id="security" :title="i18n.t('settings.security_title')" :description="i18n.t('settings.security_help')" :persistence="persistKind('link')" status="readonly" :status-label="statusLabel('readonly')">
+            <p class="note">{{ i18n.t("roles.users_link_help") }}</p>
             <template #actions>
-              <UiButton icon="users" :label="i18n.t('nav.users', 'Users')" @click="go('/users')" />
-              <UiButton icon="roles" :label="i18n.t('nav.roles', 'Roles & permissions')" @click="go('/roles')" />
+              <UiButton icon="users" :label="i18n.t('nav.users')" @click="go('/users')" />
+              <UiButton icon="roles" :label="i18n.t('nav.roles')" @click="go('/roles')" />
             </template>
           </SettingsSection>
         </div>
 
         <div v-if="isAdmin" v-show="section === 'system'" id="settings-section-system" role="tabpanel" aria-labelledby="settings-nav-system">
-          <SettingsSection section-id="backup" :title="i18n.t('settings.backup', 'Backup and restore')" :description="i18n.t('settings.backup_help', 'One portable archive of the browser workspace, loaded records, configuration, the current PDF, and Chroma collections with stored vectors.')" :persistence="persistKind('browser')">
-            <p class="info warn">{{ i18n.t("settings.backup_keys_warning", "This full backup can contain provider API keys. Store the ZIP securely. Installed model files are not copied.") }}</p>
+          <SettingsSection section-id="backup" :title="i18n.t('settings.backup')" :description="i18n.t('settings.backup_help')" :persistence="persistKind('browser')">
+            <p class="info warn">{{ i18n.t("settings.backup_keys_warning") }}</p>
             <p class="backup-summary">
-              <span><b>{{ backupCounts.files.toLocaleString(i18n.locale) }}</b> {{ i18n.t("settings.jsonl_tabs", "JSONL files") }}</span>
-              <span><b>{{ backupCounts.jobs.toLocaleString(i18n.locale) }}</b> {{ i18n.t("settings.active_jobs", "active operations") }}</span>
+              <span><b>{{ backupCounts.files.toLocaleString(i18n.locale) }}</b> {{ i18n.t("settings.jsonl_tabs") }}</span>
+              <span><b>{{ backupCounts.jobs.toLocaleString(i18n.locale) }}</b> {{ i18n.t("settings.active_jobs") }}</span>
             </p>
             <input ref="restoreInput" type="file" accept=".zip,application/zip" hidden @change="onRestoreFile">
             <template #actions>
-              <UiButton variant="primary" icon="download" :label="i18n.t('settings.download_backup', 'Download full backup')" @click="openBackup" />
-              <UiButton icon="upload" :label="i18n.t('settings.restore_backup', 'Load from backup')" @click="openRestore" />
+              <UiButton variant="primary" icon="download" :label="i18n.t('settings.download_backup')" @click="openBackup" />
+              <UiButton icon="upload" :label="i18n.t('settings.restore_backup')" @click="openRestore" />
             </template>
           </SettingsSection>
-          <SettingsSection section-id="viewer" :title="i18n.t('settings.viewer_title', 'Viewer configuration')" :description="i18n.t('settings.viewer_help', 'Reset UI choices or remove audit history without deleting records.')" :persistence="persistKind('browser')">
-            <UiField :label="i18n.t('settings.desktop_notifications', 'Desktop notifications')" :hint="i18n.t('settings.notifications_help', 'Browser permission is required. Notifications are local to this browser.')">
+          <SettingsSection section-id="viewer" :title="i18n.t('settings.viewer_title')" :description="i18n.t('settings.viewer_help')" :persistence="persistKind('browser')">
+            <UiField :label="i18n.t('settings.desktop_notifications')" :hint="i18n.t('settings.notifications_help')">
               <select id="settings-field-notifications" class="control" :value="notificationsOn ? 'on' : 'off'" @change="notificationsOn = ($event.target as HTMLSelectElement).value === 'on'; saveNotifications()">
-                <option value="off">{{ i18n.t("settings.notifications_off", "Off") }}</option>
-                <option value="on">{{ i18n.t("settings.notifications_on", "On when background operations finish") }}</option>
+                <option value="off">{{ i18n.t("settings.notifications_off") }}</option>
+                <option value="on">{{ i18n.t("settings.notifications_on") }}</option>
               </select>
             </UiField>
             <template #actions>
-              <UiButton :label="i18n.t('settings.request_notifications', 'Request notification permission')" @click="requestNotifications" />
-              <UiButton :label="i18n.t('settings.reset_columns', 'Reset table columns')" @click="resetColumns" />
-              <UiButton :label="i18n.t('settings.expand_panels', 'Expand all UI panels')" @click="expandPanels" />
-              <UiButton :label="i18n.t('settings.expand_sidebar', 'Expand navigation sidebar')" @click="expandSidebar" />
-              <UiButton :label="i18n.t('settings.restore_upsert', 'Restore removed upsert-queue items')" @click="clearUpsertSuppressions" />
-              <UiButton variant="danger" icon="history" :label="i18n.t('settings.clear_updates', 'Clear all record updates')" @click="openUpdates" />
-              <UiButton icon="dashboard" :label="i18n.t('nav.home', 'Home')" @click="go('/', 'home')" />
+              <UiButton :label="i18n.t('settings.request_notifications')" @click="requestNotifications" />
+              <UiButton :label="i18n.t('settings.reset_columns')" @click="resetColumns" />
+              <UiButton :label="i18n.t('settings.expand_panels')" @click="expandPanels" />
+              <UiButton :label="i18n.t('settings.expand_sidebar')" @click="expandSidebar" />
+              <UiButton :label="i18n.t('settings.restore_upsert')" @click="clearUpsertSuppressions" />
+              <UiButton variant="danger" icon="history" :label="i18n.t('settings.clear_updates')" @click="openUpdates" />
+              <UiButton icon="dashboard" :label="i18n.t('nav.home')" @click="go('/', 'home')" />
             </template>
           </SettingsSection>
-          <SettingsSection section-id="nuke" :title="i18n.t('config.nuke.title', 'Start from scratch')" :description="i18n.t('config.nuke.help', 'Deletes accounts, corpora, PDF builds, vector collections, provider profiles, annotations, job history, and this browser workspace so the next load is a first-run setup. Installed model files are not deleted.')" :persistence="persistKind('backend')" status="readonly">
-            <p class="info error">{{ i18n.t("config.nuke.irreversible", "This cannot be undone unless you have a full backup.") }}</p>
-            <UiField :label="i18n.t('config.nuke.type_to_enable', 'Type NUKE to enable')" :hint="i18n.t('config.nuke.type_to_enable_help', 'Type NUKE exactly to enable this destructive action.')">
+          <SettingsSection section-id="nuke" :title="i18n.t('config.nuke.title')" :description="i18n.t('config.nuke.help')" :persistence="persistKind('backend')" status="readonly">
+            <p class="info error">{{ i18n.t("config.nuke.irreversible") }}</p>
+            <UiField :label="i18n.t('config.nuke.type_to_enable')" :hint="i18n.t('config.nuke.type_to_enable_help')">
               <input id="settings-field-nuke" class="control" v-model="nukePhrase" autocomplete="off">
             </UiField>
             <template #actions>
-              <UiButton variant="danger" :label="i18n.t('config.nuke.button', 'NUKE DerridAI workspace')" :disabled="nukePhrase !== 'NUKE'" :disabled-reason="i18n.t('config.nuke.type_to_enable_help', 'Type NUKE exactly to enable this destructive action.')" @click="openNuke" />
+              <UiButton variant="danger" :label="i18n.t('config.nuke.button')" :disabled="nukePhrase !== 'NUKE'" :disabled-reason="i18n.t('config.nuke.type_to_enable_help')" @click="openNuke" />
             </template>
           </SettingsSection>
         </div>
@@ -703,16 +700,16 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
       :open="Boolean(confirm)"
       :title="confirm.title"
       :description="confirm.message"
-      :close-label="i18n.t('common.close', 'Close')"
+      :close-label="i18n.t('common.close')"
       size="medium"
       @close="closeConfirm"
     >
       <p>{{ confirm.message }}</p>
       <template #footer>
-        <UiButton :label="i18n.t('common.cancel', 'Cancel')" :disabled="Boolean(busy)" @click="closeConfirm" />
+        <UiButton :label="i18n.t('common.cancel')" :disabled="Boolean(busy)" @click="closeConfirm" />
         <UiButton
           :variant="confirm.kind === 'backup' ? 'primary' : 'danger'"
-          :label="busy ? i18n.t('ui.working', 'Working…') : (confirm.kind === 'nuke' ? i18n.t('config.nuke.confirm_label', 'Delete everything') : i18n.t('common.yes', 'Yes'))"
+          :label="busy ? i18n.t('ui.working') : (confirm.kind === 'nuke' ? i18n.t('config.nuke.confirm_label') : i18n.t('common.yes'))"
           :disabled="Boolean(busy)"
           @click="applyConfirm"
         />

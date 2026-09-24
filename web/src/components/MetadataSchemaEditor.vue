@@ -252,7 +252,7 @@ defineExpose({ select, draft });
               }}
               ·
               {{
-                i18n.tf("schemas.field_count", "{count} fields", { count: item.field_count })
+                i18n.tf("schemas.field_count", { count: item.field_count })
               }}</small
             >
           </button>
@@ -551,7 +551,7 @@ defineExpose({ select, draft });
           <template v-if="preview.answer !== undefined"
             ><h4>
               {{
-                i18n.tf("schemas.answer", "Answer ({seconds} s)", { seconds: preview.seconds ?? 0 })
+                i18n.tf("schemas.answer", { seconds: preview.seconds ?? 0 })
               }}
             </h4>
             <pre class="preview-out" tabindex="0">{{

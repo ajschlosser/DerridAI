@@ -1,0 +1,116 @@
+/* Copyright 2026 Aaron John Schlosser, PhD. */
+import { bindCopy } from "../i18n/bindCopy";
+
+export type Tr = (key: string, fallback?: string) => string;
+export type Trf = (key: string, fallback: string, values?: Record<string, unknown>) => string;
+
+/** User-visible PDF Explorer copy. PdfExplorerSurface owns the UI; this module owns the strings. */
+export function createPdfExplorerCopy(translate: Tr, interpolate: Trf) {
+  const { tr, trf } = bindCopy(translate, interpolate);
+  return {
+    openPdf: tr("pdf.open"),
+    openAnother: tr("pdf.open_another"),
+    opening: tr("pdf.opening"),
+    document: tr("pdf.document"),
+    explorer: tr("pdf.explorer"),
+    openSource: tr("pdf.open_source"),
+    openHelp: tr("pdf.open_help"),
+    emptyHelp: tr("pdf.empty_help"),
+    choosePdf: tr("pdf.choose"),
+    pagesCount: (count: number) => trf("pdf.pages_count", { count }),
+    linkedWorks: tr("pdf.linked_works"),
+    linkedRecords: tr("pdf.linked_records"),
+    onThisPage: tr("pdf.on_this_page"),
+    page: tr("record.page"),
+    go: tr("ui.go"),
+    rotateLeft: tr("pdf.rotate_left"),
+    rotateRight: tr("pdf.rotate_right"),
+    upright: tr("pdf.upright"),
+    rotation: (deg: number) => trf("pdf.rotation_deg", { deg }),
+    rotationAmount: (deg: number) => trf("pdf.rotation_amount", { deg }),
+    fitWidth: tr("pdf.fit_width"),
+    extractPage: tr("pdf.extract_page"),
+    extractingPage: (page: number) => trf("pdf.extracting_page", { page }),
+    moreTextTools: tr("pdf.more_text_tools"),
+    extractAll: tr("pdf.extract_all"),
+    extracting: tr("pdf.extracting"),
+    llmTools: tr("pdf.llm_tools"),
+    llmToolsHelp: tr("pdf.llm_tools_help"),
+    cleanPage: tr("pdf.clean_page"),
+    draftRecord: tr("pdf.draft_record"),
+    matchLink: tr("pdf.match_link"),
+    manageProviders: tr("pdf.manage_providers"),
+    buildRecordSet: tr("pdf.build_record_set"),
+    source: tr("pdf.source"),
+    works: tr("dashboard.works"),
+    noneLinked: tr("pdf.none_linked"),
+    currentPageRecords: tr("pdf.current_page_records"),
+    backTo: (id: string) => trf("pdf.back_to", { id }),
+    recordFallback: tr("pdf.record_fallback"),
+    renderer: tr("pdf.renderer_pdfjs"),
+    fallbackRenderer: tr("pdf.renderer_fallback"),
+    linkedOnPage: (count: number) =>
+      trf("pdf.linked_on_page", { count }),
+    pageText: tr("pdf.page_text"),
+    extractThenClean: tr("pdf.extract_then_clean"),
+    sourceLabel: (source: string) => trf("pdf.extraction_source", { source }),
+    searchPage: tr("pdf.search_page"),
+    emptyExtract: tr("pdf.empty_extract"),
+    recordsOnPage: (page: number) => trf("pdf.records_on_page", { page }),
+    linkedCount: (count: number) => trf("pdf.linked_count", { count }),
+    searchRecord: tr("pdf.search_record"),
+    noMatching: tr("pdf.no_matching_records"),
+    linkPage: (page: number) => trf("pdf.link_page", { page }),
+    copy: tr("ui.copy"),
+    inline: tr("ui.inline"),
+    full: tr("ui.full"),
+    evidence: tr("ui.evidence"),
+    openRecord: tr("record.open"),
+    unlink: tr("pdf.unlink"),
+    unlinkTitle: tr("pdf.unlink_title"),
+    noLinkedYet: tr("pdf.no_linked_yet"),
+    recordsAnywhere: tr("pdf.records_anywhere"),
+    relatedNote: (count: number) =>
+      trf("pdf.related_note",
+        { count },
+      ),
+    filterLinked: tr("pdf.filter_linked"),
+    copyEntire: tr("pdf.copy_entire"),
+    openPdfPage: (page: number) => trf("pdf.open_page", { page }),
+    noFilterMatch: tr("pdf.no_filter_match"),
+    showingFirst: (shown: number, total: number) =>
+      trf("pdf.showing_first",
+        { shown, total },
+      ),
+    recordN: (n: number) => trf("dashboard.record_n", { n }),
+    chooseAutocomplete: tr("pdf.choose_autocomplete"),
+    couldNotOpen: tr("pdf.could_not_open"),
+    pdfJsUnavailable: tr("pdf.extract.pdfjs_unavailable"),
+    jsInitFailed: (error: string) =>
+      trf("pdf.js_init_failed",
+        { error },
+      ),
+    rendering: (page: number) => trf("pdf.rendering", { page }),
+    renderFailed: (page: number, error: string) =>
+      trf("pdf.render_failed", { page, error }),
+    fileGone: tr("pdf.extract.file_gone"),
+    apiUnreachable: (error: string) =>
+      trf("pdf.extract.api_unreachable", { error }),
+    extractHttpFailed: (status: string | number) =>
+      trf("pdf.extract.http_failed", { status }),
+    sourcePdfJsPage: (page: number) =>
+      trf("pdf.extract.source_pdfjs_page", { page }),
+    sourcePyMuPage: (page: number) =>
+      trf("pdf.extract.source_pymu_page", { page }),
+    sourcePdfJsAll: tr("pdf.extract.source_pdfjs_all"),
+    sourcePyMuAll: tr("pdf.extract.source_pymu_all"),
+    noTextLayer: tr("pdf.extract.no_text_layer"),
+    pdfJsFailed: (error: string) => trf("pdf.extract.pdfjs_failed", { error }),
+    needsOcrPage: (page: number) =>
+      trf("pdf.extract.needs_ocr_page",
+        { page },
+      ),
+    needsOcrAll: tr("pdf.extract.needs_ocr_all"),
+    pageMarker: (page: number) => trf("pdf.extract.page_marker", { page }),
+  };
+}

@@ -219,11 +219,11 @@ watch(
       <div class="focus-title-block">
         <nav
           class="focus-breadcrumb"
-          :aria-label="i18n.t('pdf_corpus.focus_navigation', 'Focus review navigation')"
+          :aria-label="i18n.t('pdf_corpus.focus_navigation')"
         >
-          <span>{{ i18n.t("pdf_corpus.corpus_builder", "Corpus Builder") }}</span
+          <span>{{ i18n.t("pdf_corpus.corpus_builder") }}</span
           ><span aria-hidden="true">›</span
-          ><span>{{ i18n.t("pdf_corpus.record_review", "Record review") }}</span
+          ><span>{{ i18n.t("pdf_corpus.record_review") }}</span
           ><span aria-hidden="true">›</span><strong>{{ record.record_id }}</strong>
         </nav>
         <div class="focus-history-controls">
@@ -233,14 +233,14 @@ watch(
             :disabled="!canHistoryBack"
             @click="emit('historyBack')"
           >
-            ← {{ i18n.t("ui.back", "Back") }}</button
+            ← {{ i18n.t("ui.back") }}</button
           ><button
             class="btn small"
             type="button"
             :disabled="!canHistoryForward"
             @click="emit('historyForward')"
           >
-            {{ i18n.t("ui.forward", "Forward") }} →</button
+            {{ i18n.t("ui.forward") }} →</button
           ><span class="focus-nav-divider" aria-hidden="true"></span
           ><button
             class="btn small"
@@ -248,25 +248,25 @@ watch(
             :disabled="!canPreviousRecord"
             @click="emit('previousRecord')"
           >
-            ← {{ i18n.t("pdf_corpus.previous_record", "Previous record") }}</button
+            ← {{ i18n.t("pdf_corpus.previous_record") }}</button
           ><button
             class="btn small"
             type="button"
             :disabled="!canNextRecord"
             @click="emit('nextRecord')"
           >
-            {{ i18n.t("pdf_corpus.next_record", "Next record") }} →
+            {{ i18n.t("pdf_corpus.next_record") }} →
           </button>
         </div>
-        <span class="eyebrow">{{ i18n.t("pdf_corpus.focus_view", "Focus review") }}</span>
+        <span class="eyebrow">{{ i18n.t("pdf_corpus.focus_view") }}</span>
         <h2 :id="`focus-title-${record.record_id}`">{{ record.record_id }}</h2>
         <div class="focus-facts">
           <span
-            ><b>{{ position }}</b> {{ i18n.t("pdf_corpus.records", "records") }}</span
+            ><b>{{ position }}</b> {{ i18n.t("pdf_corpus.records") }}</span
           ><span>{{ record.inline_citation }}</span
           ><span
             >{{ Number(record.text_length || String(record.text || "").length).toLocaleString() }}
-            {{ i18n.t("pdf_corpus.characters", "chars") }}</span
+            {{ i18n.t("pdf_corpus.characters") }}</span
           ><span class="state-pill" :data-state="state">{{
             i18n.t(`pdf_corpus.disposition.${state}`, state)
           }}</span
@@ -275,7 +275,7 @@ watch(
             class="state-pill"
             :data-state="record.text_noise.unusable ? 'rejected' : 'pending'"
             >{{
-              i18n.tf("pdf_corpus.text_noise.score", "{score}% noise", {
+              i18n.tf("pdf_corpus.text_noise.score", {
                 score: Math.round(Number(record.text_noise.score)),
               })
             }}</span
@@ -284,22 +284,22 @@ watch(
       </div>
       <div class="focus-head-actions">
         <details class="focus-shortcuts">
-          <summary :title="i18n.t('record.keyboard_shortcuts', 'Keyboard shortcuts')">?</summary>
+          <summary :title="i18n.t('record.keyboard_shortcuts')">?</summary>
           <div class="focus-shortcuts-popover">
-            <strong>{{ i18n.t("record.keyboard_shortcuts", "Keyboard shortcuts") }}</strong>
+            <strong>{{ i18n.t("record.keyboard_shortcuts") }}</strong>
             <span
               ><kbd>Alt</kbd> + <kbd>←</kbd> / <kbd>→</kbd>
-              {{ i18n.t("record.previous_next", "Previous / next record") }}</span
+              {{ i18n.t("record.previous_next") }}</span
             >
-            <span><kbd>Esc</kbd> {{ i18n.t("ui.close", "Close") }}</span>
+            <span><kbd>Esc</kbd> {{ i18n.t("ui.close") }}</span>
             <span
               ><kbd>Ctrl/Cmd</kbd> + <kbd>S</kbd>
-              {{ i18n.t("pdf_corpus.save_reviewed_text", "Save reviewed text") }}</span
+              {{ i18n.t("pdf_corpus.save_reviewed_text") }}</span
             >
           </div>
         </details>
         <button ref="closeButton" class="btn" type="button" @click="emit('close')">
-          {{ i18n.t("ui.close", "Close") }}
+          {{ i18n.t("ui.close") }}
         </button>
       </div>
     </header>
@@ -308,30 +308,30 @@ watch(
         <div class="focus-record-heading">
           <div>
             <span class="eyebrow">{{
-              i18n.t("pdf_corpus.reviewed_record_text", "Reviewed record text")
+              i18n.t("pdf_corpus.reviewed_record_text")
             }}</span>
             <h3 id="focus-record-heading">
               {{
                 record.text_review_status === "human_corrected"
-                  ? i18n.t("pdf_corpus.human_corrected", "Human corrected")
-                  : i18n.t("pdf_corpus.read_record", "Read the record")
+                  ? i18n.t("pdf_corpus.human_corrected")
+                  : i18n.t("pdf_corpus.read_record")
               }}
             </h3>
           </div>
           <div class="heading-actions">
             <span v-if="unresolved.length" class="unresolved-badge"
               >{{ unresolved.length }}
-              {{ i18n.t("pdf_corpus.unresolved_fields", "unresolved fields") }}</span
+              {{ i18n.t("pdf_corpus.unresolved_fields") }}</span
             ><button
               v-if="record.source_quality_issues?.length"
               class="source-warn-icon"
               type="button"
-              :aria-label="i18n.t('pdf_corpus.source_warning_icon', 'Source extraction warning')"
+              :aria-label="i18n.t('pdf_corpus.source_warning_icon')"
               @click="sourceIssueOpen = true"
             >
               <AppIcon name="warning" /></button
             ><button class="btn" type="button" @click="emit('previewJsonl')" :disabled="busy">
-              {{ i18n.t("pdf_corpus.preview_jsonl", "Preview JSONL") }}</button
+              {{ i18n.t("pdf_corpus.preview_jsonl") }}</button
             ><button
               class="btn"
               type="button"
@@ -340,25 +340,22 @@ watch(
             >
               {{
                 editingText
-                  ? i18n.t("ui.cancel", "Cancel")
-                  : i18n.t("pdf_corpus.edit_text", "Edit text")
+                  ? i18n.t("ui.cancel")
+                  : i18n.t("pdf_corpus.edit_text")
               }}
             </button>
           </div>
         </div>
         <p v-if="record.text_noise?.score != null" class="record-noise-summary" role="status">
           {{
-            i18n.tf("pdf_corpus.text_noise.score", "{score}% noise", {
+            i18n.tf("pdf_corpus.text_noise.score", {
               score: Math.round(Number(record.text_noise.score)),
             })
           }}
           <span v-if="record.text_noise.unusable">
             ·
             {{
-              i18n.t(
-                "pdf_corpus.text_noise.unusable",
-                "This record is above the unusable-noise threshold.",
-              )
+              i18n.t("pdf_corpus.text_noise.unusable")
             }}
           </span>
         </p>
@@ -374,67 +371,58 @@ watch(
           role="status"
         >
           <b>{{
-            i18n.t(
-              "pdf_corpus.llm_touchup_proposal_available",
-              "LLM text touch-up proposal available",
-            )
+            i18n.t("pdf_corpus.llm_touchup_proposal_available")
           }}</b
           ><span>{{
-            i18n.t(
-              "pdf_corpus.llm_touchup_proposal_help",
-              "Review the proposed corrections before saving; the current reviewed text is unchanged.",
-            )
+            i18n.t("pdf_corpus.llm_touchup_proposal_help")
           }}</span
           ><button class="btn small" type="button" :disabled="busy" @click="beginTextEdit(true)">
-            {{ i18n.t("pdf_corpus.review_touchup_proposal", "Review proposal") }}
+            {{ i18n.t("pdf_corpus.review_touchup_proposal") }}
           </button>
         </div>
         <div v-if="editingText" class="focus-text-edit">
           <div class="focus-text-tools">
             <button class="btn" type="button" @click="cleanupOpen = true" :disabled="busy">
-              {{ i18n.t("pdf_corpus.clean_text", "Clean text") }}</button
+              {{ i18n.t("pdf_corpus.clean_text") }}</button
             ><button
               class="btn"
               type="button"
               @click="emit('llmTouchup', textDraft)"
               :disabled="busy"
             >
-              {{ i18n.t("pdf_corpus.llm_touchup", "LLM touch-up") }}
+              {{ i18n.t("pdf_corpus.llm_touchup") }}
             </button>
           </div>
           <textarea
             v-model="textDraft"
             class="focus-text-editor"
-            :aria-label="i18n.t('pdf_corpus.reviewed_record_text', 'Reviewed record text')"
+            :aria-label="i18n.t('pdf_corpus.reviewed_record_text')"
           ></textarea
           ><label v-if="record.source_quality_issues?.length" class="resolve-check"
             ><input v-model="resolveSourceIssues" type="checkbox" /><span>{{
-              i18n.t(
-                "pdf_corpus.resolve_source_with_correction",
-                "Mark this record-level source issue resolved by the reviewed correction",
-              )
+              i18n.t("pdf_corpus.resolve_source_with_correction")
             }}</span></label
           >
           <div class="edit-actions">
             <button class="btn" type="button" @click="editingText = false">
-              {{ i18n.t("ui.cancel", "Cancel") }}</button
+              {{ i18n.t("ui.cancel") }}</button
             ><button
               class="btn primary"
               type="button"
               @click="saveText"
               :disabled="busy || !textDraft.trim()"
             >
-              {{ i18n.t("pdf_corpus.save_reviewed_text", "Save reviewed text") }}
+              {{ i18n.t("pdf_corpus.save_reviewed_text") }}
             </button>
           </div>
         </div>
         <div v-else class="focus-record-text" tabindex="-1">{{ record.text }}</div>
       </article>
-      <aside class="focus-data" :aria-label="i18n.t('pdf_corpus.record_data', 'Record data')">
+      <aside class="focus-data" :aria-label="i18n.t('pdf_corpus.record_data')">
         <div
           class="tabs"
           role="tablist"
-          :aria-label="i18n.t('pdf_corpus.focus_detail_tabs', 'Record detail views')"
+          :aria-label="i18n.t('pdf_corpus.focus_detail_tabs')"
           @keydown="handleTabKeydown"
         >
           <button
@@ -446,7 +434,7 @@ watch(
             aria-controls="focus-panel-metadata"
             @click="tab = 'metadata'"
           >
-            {{ i18n.t("pdf_corpus.metadata_tab", "Metadata") }}</button
+            {{ i18n.t("pdf_corpus.metadata_tab") }}</button
           ><button
             id="focus-tab-evidence"
             type="button"
@@ -456,7 +444,7 @@ watch(
             aria-controls="focus-panel-evidence"
             @click="tab = 'evidence'"
           >
-            {{ i18n.t("pdf_corpus.evidence_tab", "Evidence") }}</button
+            {{ i18n.t("pdf_corpus.evidence_tab") }}</button
           ><button
             id="focus-tab-source"
             type="button"
@@ -466,7 +454,7 @@ watch(
             aria-controls="focus-panel-source"
             @click="tab = 'source'"
           >
-            {{ i18n.t("pdf_corpus.source_tab", "Source") }}
+            {{ i18n.t("pdf_corpus.source_tab") }}
           </button>
         </div>
         <div
@@ -501,14 +489,11 @@ watch(
             aria-labelledby="guidance-match-title"
           >
             <h3 id="guidance-match-title">
-              {{ i18n.t("pdf_corpus.run_guidance_matches", "Run guidance matches") }}
+              {{ i18n.t("pdf_corpus.run_guidance_matches") }}
             </h3>
             <p>
               {{
-                i18n.t(
-                  "pdf_corpus.run_guidance_matches_help",
-                  "Exact phrases from this build’s watch list were found in this record. Treat them as review cues, not verified metadata.",
-                )
+                i18n.t("pdf_corpus.run_guidance_matches_help")
               }}
             </p>
             <ul>
@@ -517,7 +502,7 @@ watch(
                 <span v-for="hit in hits" :key="`${hit.term}-${hit.occurrences}`"
                   >{{ hit.term }} ·
                   {{
-                    i18n.tf("pdf_corpus.run_guidance_occurrences", "{count} match(es)", {
+                    i18n.tf("pdf_corpus.run_guidance_occurrences", {
                       count: hit.occurrences,
                     })
                   }}</span
@@ -533,20 +518,17 @@ watch(
             <p>
               {{
                 info.reason ||
-                i18n.t("pdf_corpus.no_evidence_reason", "No evidence rationale recorded.")
+                i18n.t("pdf_corpus.no_evidence_reason")
               }}
             </p>
             <small>{{
               (info.block_ids || []).join(", ") ||
-              i18n.t("pdf_corpus.no_bound_blocks", "No bound source blocks")
+              i18n.t("pdf_corpus.no_bound_blocks")
             }}</small>
           </article>
           <p v-if="!evidence.length" class="empty-note">
             {{
-              i18n.t(
-                "pdf_corpus.no_field_evidence",
-                "No field-level evidence has been recorded for this proposal.",
-              )
+              i18n.t("pdf_corpus.no_field_evidence")
             }}
           </p>
         </div>
@@ -576,7 +558,7 @@ watch(
           />
           <details class="focus-source-section">
             <summary>
-              {{ i18n.t("pdf_corpus.boundary_second_reader", "Boundary second reader") }}
+              {{ i18n.t("pdf_corpus.boundary_second_reader") }}
             </summary>
             <CorpusBoundaryAdjudication
               :record="record"
@@ -596,14 +578,11 @@ watch(
           </details>
           <details class="focus-source-section">
             <summary>
-              {{ i18n.t("pdf_corpus.extracted_source_text", "Immutable extracted source") }}
+              {{ i18n.t("pdf_corpus.extracted_source_text") }}
             </summary>
             <p class="empty-note">
               {{
-                i18n.t(
-                  "pdf_corpus.extracted_source_text_help",
-                  "The blocks below are immutable extraction provenance; reviewed text corrections never overwrite them.",
-                )
+                i18n.t("pdf_corpus.extracted_source_text_help")
               }}
             </p>
             <article v-for="block in blocks" :key="block.block_id" class="source-row">
@@ -615,15 +594,12 @@ watch(
             </article>
             <p v-if="!blocks.length" class="empty-note">
               {{
-                i18n.t(
-                  "pdf_corpus.source_loading_or_unavailable",
-                  "Source blocks are loading or unavailable.",
-                )
+                i18n.t("pdf_corpus.source_loading_or_unavailable")
               }}
             </p>
           </details>
           <details class="focus-source-section">
-            <summary>{{ i18n.t("pdf_corpus.revision_history", "Revision history") }}</summary>
+            <summary>{{ i18n.t("pdf_corpus.revision_history") }}</summary>
             <CorpusRevisionHistory :record="record" />
           </details>
         </div>
@@ -632,14 +608,8 @@ watch(
     <p v-if="canAccept === false" id="focus-metadata-blocker" class="focus-blocker" role="status">
       {{
         record.source_quality_issues?.length
-          ? i18n.t(
-              "pdf_corpus.resolve_source_before_accept",
-              "Resolve the source extraction issue or reject this record before accepting it.",
-            )
-          : i18n.t(
-              "pdf_corpus.resolve_metadata_before_accept",
-              "Resolve uncertain metadata before accepting this record.",
-            )
+          ? i18n.t("pdf_corpus.resolve_source_before_accept")
+          : i18n.t("pdf_corpus.resolve_metadata_before_accept")
       }}
     </p>
     <footer class="focus-actions">
@@ -650,34 +620,34 @@ watch(
           @click="emit('merge', 'previous')"
           :disabled="busy || !canMergePrevious"
         >
-          {{ i18n.t("pdf_corpus.combine_previous", "Combine with previous record") }}</button
+          {{ i18n.t("pdf_corpus.combine_previous") }}</button
         ><button
           class="btn"
           type="button"
           @click="emit('merge', 'next')"
           :disabled="busy || !canMergeNext"
         >
-          {{ i18n.t("pdf_corpus.combine_next", "Combine with next record") }}</button
+          {{ i18n.t("pdf_corpus.combine_next") }}</button
         ><button
           class="btn"
           type="button"
           @click="sliceOpen = true"
           :disabled="busy || editingText || (!canMergePrevious && !canMergeNext)"
         >
-          {{ i18n.t("pdf_corpus.slice_record", "Slice record") }}</button
+          {{ i18n.t("pdf_corpus.slice_record") }}</button
         ><button class="btn" type="button" @click="emit('undo')" :disabled="busy">
-          {{ i18n.t("pdf_corpus.undo", "Undo") }}</button
+          {{ i18n.t("pdf_corpus.undo") }}</button
         ><button class="btn" type="button" @click="emit('redo')" :disabled="busy">
-          {{ i18n.t("pdf_corpus.redo", "Redo") }}
+          {{ i18n.t("pdf_corpus.redo") }}
         </button>
       </div>
       <div class="decision-actions">
         <button class="btn" type="button" @click="emit('requeueMetadata')" :disabled="busy">
-          {{ i18n.t("pdf_corpus.requeue_metadata", "Send back through current LLM run") }}</button
+          {{ i18n.t("pdf_corpus.requeue_metadata") }}</button
         ><button class="btn" type="button" @click="emit('skip')" :disabled="busy">
-          {{ i18n.t("pdf_corpus.skip", "Skip") }}</button
+          {{ i18n.t("pdf_corpus.skip") }}</button
         ><button class="btn danger" type="button" @click="emit('reject')" :disabled="busy">
-          {{ i18n.t("pdf_corpus.reject_next", "Reject & next") }}</button
+          {{ i18n.t("pdf_corpus.reject_next") }}</button
         ><button
           class="btn primary"
           type="button"
@@ -685,7 +655,7 @@ watch(
           :disabled="busy || canAccept === false"
           :aria-describedby="canAccept === false ? 'focus-metadata-blocker' : undefined"
         >
-          {{ i18n.t("pdf_corpus.accept_next", "Accept & next") }}
+          {{ i18n.t("pdf_corpus.accept_next") }}
         </button>
       </div>
     </footer>

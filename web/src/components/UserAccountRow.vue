@@ -32,7 +32,7 @@ function roleChanged(event: Event) {
 }
 
 function formatLogin(value?: string | null) {
-  if (!value) return i18n.t("users.never", "Never");
+  if (!value) return i18n.t("users.never");
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString(i18n.locale);
 }
@@ -58,18 +58,18 @@ function createdDate(value: string) {
       <span class="user-status-line">
         <UiStatusBadge
           :label="
-            props.user.active ? i18n.t('ui.active', 'Active') : i18n.t('ui.disabled', 'Disabled')
+            props.user.active ? i18n.t('ui.active') : i18n.t('ui.disabled')
           "
           :tone="props.user.active ? 'success' : 'neutral'"
         />
         <span>
-          · {{ i18n.t("ui.created", "created") }} {{ createdDate(props.user.created_at) }}
+          · {{ i18n.t("ui.created") }} {{ createdDate(props.user.created_at) }}
         </span>
       </span>
       <small>
-        {{ i18n.t("users.last_login", "Last login") }}: {{ formatLogin(props.user.last_login) }} ·
+        {{ i18n.t("users.last_login") }}: {{ formatLogin(props.user.last_login) }} ·
         {{ props.user.login_count || 0 }}
-        {{ i18n.t("users.login_count", "Logins") }}
+        {{ i18n.t("users.login_count") }}
       </small>
     </div>
     <select
@@ -77,11 +77,11 @@ function createdDate(value: string) {
       :value="props.user.role"
       :disabled="props.disabled || props.user.id === props.currentUserId"
       :aria-label="
-        i18n.tf('users.role_for', 'Role for {username}', { username: props.user.username })
+        i18n.tf('users.role_for', { username: props.user.username })
       "
       :title="
         props.user.id === props.currentUserId
-          ? i18n.t('ui.current_role_locked', 'Your current role cannot be changed from this row.')
+          ? i18n.t('ui.current_role_locked')
           : undefined
       "
       @change="roleChanged"
@@ -96,19 +96,19 @@ function createdDate(value: string) {
         type="button"
         :disabled="props.disabled"
         :aria-label="
-          i18n.tf('users.reset_password_for', 'Reset password for {username}', {
+          i18n.tf('users.reset_password_for', {
             username: props.user.username,
           })
         "
         @click="emit('resetPassword', props.user)"
       >
-        {{ i18n.t("users.reset_password", "Reset password") }}
+        {{ i18n.t("users.reset_password") }}
       </button>
       <span
         class="action-tooltip-wrap"
         :data-tooltip="
           props.user.id === props.currentUserId
-            ? i18n.t('ui.cannot_disable_self', 'You cannot disable your current account.')
+            ? i18n.t('ui.cannot_disable_self')
             : ''
         "
       >
@@ -125,14 +125,14 @@ function createdDate(value: string) {
           "
           @click="emit('toggleActive', props.user)"
         >
-          {{ props.user.active ? i18n.t("ui.disable", "Disable") : i18n.t("ui.enable", "Enable") }}
+          {{ props.user.active ? i18n.t("ui.disable") : i18n.t("ui.enable") }}
         </button>
       </span>
       <span
         class="action-tooltip-wrap"
         :data-tooltip="
           props.user.id === props.currentUserId
-            ? i18n.t('ui.cannot_delete_self', 'You cannot delete your current account.')
+            ? i18n.t('ui.cannot_delete_self')
             : ''
         "
       >
@@ -141,11 +141,11 @@ function createdDate(value: string) {
           type="button"
           :disabled="props.disabled || props.user.id === props.currentUserId"
           :aria-label="
-            i18n.tf('users.delete_named', 'Delete {username}', { username: props.user.username })
+            i18n.tf('users.delete_named', { username: props.user.username })
           "
           @click="emit('deleteUser', props.user)"
         >
-          {{ i18n.t("users.delete", "Delete") }}
+          {{ i18n.t("users.delete") }}
         </button>
       </span>
     </div>

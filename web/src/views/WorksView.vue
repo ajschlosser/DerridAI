@@ -37,11 +37,11 @@ const showSkeleton = computed(() =>
 const showAddCard = computed(() =>
   Boolean(snapshot.value?.mode === "admin" && revealed.value >= (snapshot.value.works.length || 0)),
 );
-const loadingTitle = computed(() => i18n.t("works.loading", "Loading works"));
+const loadingTitle = computed(() => i18n.t("works.loading"));
 const loadingDetail = computed(() =>
   auth.isResearcher
-    ? i18n.t("works.checking_database", "Checking corpus database…")
-    : i18n.t("works.checking_database", "Checking vector database state…"),
+    ? i18n.t("works.checking_database")
+    : i18n.t("works.checking_database"),
 );
 
 function startReveal() {
@@ -166,26 +166,20 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
         <h1>
           {{
             snapshot.shared
-              ? i18n.t("records.open_shared_workspace", "Open the shared corpus workspace")
-              : i18n.t("records.open_workspace", "Open a corpus workspace")
+              ? i18n.t("records.open_shared_workspace")
+              : i18n.t("records.open_workspace")
           }}
         </h1>
         <p>
           {{
             snapshot.shared
-              ? i18n.t(
-                  "records.shared_workspace_help",
-                  "This link preserves the table state and filters, while JSONL contents remain browser-local. Choose the same JSONL file to restore this shared view.",
-                )
-              : i18n.t(
-                  "records.open_workspace_help",
-                  "Drop one or more JSONL files anywhere on this page, or choose files manually. Each file stays in its own tab and can be edited, compared, searched, exported, or sent to the corpus database.",
-                )
+              ? i18n.t("records.shared_workspace_help")
+              : i18n.t("records.open_workspace_help")
           }}
         </p>
         <button id="choose" type="button" class="btn primary" @click="works.chooseJsonl()">
           <AppIcon name="upload" aria-hidden="true" />{{
-            i18n.t("records.choose_jsonl", "Choose JSONL files")
+            i18n.t("records.choose_jsonl")
           }}
         </button>
       </div>
@@ -194,7 +188,7 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
     <section v-else-if="snapshot?.mode === 'researcher' && !snapshot.available" class="empty">
       <div class="drop">
         <div class="drop-icon"><AppIcon name="database" aria-hidden="true" /></div>
-        <h1>{{ i18n.t("research.no_database", "No corpus database available") }}</h1>
+        <h1>{{ i18n.t("research.no_database") }}</h1>
       </div>
     </section>
 
@@ -239,18 +233,18 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
           <input
             id="worksSearch"
             :value="query"
-            :placeholder="i18n.t('works.filter_title', 'Filter works by title')"
+            :placeholder="i18n.t('works.filter_title')"
             @input="applyQuery(($event.target as HTMLInputElement).value)"
           />
         </div>
         <div class="tools">
           <span class="note"
             >{{ snapshot.works.length.toLocaleString(i18n.locale) }}
-            {{ i18n.t("works.shown", "shown") }} ·
+            {{ i18n.t("works.shown") }} ·
             {{ snapshot.totalWorks.toLocaleString(i18n.locale) }}
-            {{ i18n.t("dynamic.works", "works") }} ·
+            {{ i18n.t("dynamic.works") }} ·
             {{ snapshot.totalRecords.toLocaleString(i18n.locale) }}
-            {{ i18n.t("dynamic.records", "records") }}</span
+            {{ i18n.t("dynamic.records") }}</span
           >
         </div>
       </div>
@@ -258,13 +252,13 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
       <section
         id="worksGrid"
         class="works works-library-grid"
-        :aria-label="i18n.t('nav.works', 'Works')"
+        :aria-label="i18n.t('nav.works')"
       >
         <div v-if="showSkeleton" class="progressive-loading" role="status" aria-live="polite">
           <div class="progressive-loading-head">
             <span class="spinner small-spinner"></span
             ><b>{{
-              i18n.tf("works.loading_cards", "Loading {count} work cards", {
+              i18n.tf("works.loading_cards", {
                 count: snapshot.works.length.toLocaleString(i18n.locale),
               })
             }}</b>
@@ -313,12 +307,9 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
         >
           <span class="work-add-jsonl-icon"><AppIcon name="plus" aria-hidden="true" /></span>
           <span>
-            <b>{{ i18n.t("works.add_jsonl", "Add a JSONL file") }}</b>
+            <b>{{ i18n.t("works.add_jsonl") }}</b>
             <small>{{
-              i18n.t(
-                "works.add_jsonl_help",
-                "Open another corpus source and add its works to this workspace.",
-              )
+              i18n.t("works.add_jsonl_help")
             }}</small>
           </span>
         </button>
@@ -327,14 +318,11 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
 
     <template v-else-if="snapshot?.mode === 'researcher' && snapshot.available">
       <UiPageHeader
-        :kicker="i18n.t('section.corpus', 'Corpus')"
-        :title="i18n.t('nav.works', 'Works')"
+        :kicker="i18n.t('section.corpus')"
+        :title="i18n.t('nav.works')"
         title-id="works-page-title"
         :description="
-          i18n.t(
-            'research.works_menu_help',
-            'Browse works in the selected corpus database. Select a work for an overview, then browse its summarized records.',
-          )
+          i18n.t('research.works_menu_help')
         "
       />
 
@@ -352,7 +340,7 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
           <input
             id="worksSearch"
             :value="query"
-            :placeholder="i18n.t('research.filter_works', 'Filter works by title')"
+            :placeholder="i18n.t('research.filter_works')"
             @input="applyQuery(($event.target as HTMLInputElement).value)"
           />
         </div>
@@ -369,7 +357,7 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
           </select>
           <span class="note"
             >{{ snapshot.works.length.toLocaleString(i18n.locale) }}
-            {{ i18n.t("dynamic.works", "works") }}</span
+            {{ i18n.t("dynamic.works") }}</span
           >
         </div>
       </div>
@@ -391,13 +379,13 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
             <small>{{ work.subtitle }}</small>
             <small
               >{{ work.count.toLocaleString(i18n.locale) }}
-              {{ i18n.t("dynamic.records", "records") }}</small
+              {{ i18n.t("dynamic.records") }}</small
             >
           </span>
           <span class="work-menu-arrow">›</span>
         </button>
         <div v-if="!snapshot.works.length" class="llm-empty">
-          {{ i18n.t("research.no_works", "No works are available.") }}
+          {{ i18n.t("research.no_works") }}
         </div>
       </section>
     </template>

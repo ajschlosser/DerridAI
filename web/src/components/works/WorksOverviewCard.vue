@@ -38,7 +38,7 @@ const i18n = useI18nStore();
         <img
           v-if="props.work.cover"
           :src="props.work.cover"
-          :alt="i18n.tf('works.cover_alt', 'Cover of {work}', { work: props.work.work })"
+          :alt="i18n.tf('works.cover_alt', { work: props.work.work })"
           :loading="props.mode === 'admin' ? 'lazy' : undefined"
         />
         <div v-else class="work-cover-placeholder">
@@ -47,17 +47,17 @@ const i18n = useI18nStore();
       </figure>
       <div class="work-overview-heading">
         <div class="work-overview-identity">
-          <span class="section-label">{{ i18n.t("works.overview", "Work overview") }}</span>
+          <span class="section-label">{{ i18n.t("works.overview") }}</span>
           <h1 id="selected-work-title">{{ props.work.work }}</h1>
           <p v-if="props.mode === 'admin'">
             {{ props.work.count.toLocaleString(i18n.locale) }}
-            {{ i18n.t("dynamic.records", "records") }} ·
+            {{ i18n.t("dynamic.records") }} ·
             {{ props.work.files.length.toLocaleString(i18n.locale) }}
-            {{ i18n.t("works.source_files", "source files") }}
+            {{ i18n.t("works.source_files") }}
           </p>
           <p v-else>
             {{ props.work.count.toLocaleString(i18n.locale) }}
-            {{ i18n.t("dynamic.records", "records") }}
+            {{ i18n.t("dynamic.records") }}
           </p>
         </div>
         <UiStatusBadge
@@ -89,19 +89,16 @@ const i18n = useI18nStore();
       <section
         v-if="props.mode === 'admin'"
         class="work-insights-panel"
-        :aria-label="i18n.t('works.work_insights', 'Work insights')"
+        :aria-label="i18n.t('works.work_insights')"
       >
         <div class="work-insights-heading">
           <div>
-            <span class="section-label">{{ i18n.t("works.work_insights", "Work insights") }}</span>
-            <h2>{{ i18n.t("works.indexed_patterns", "Metadata patterns in this work") }}</h2>
+            <span class="section-label">{{ i18n.t("works.work_insights") }}</span>
+            <h2>{{ i18n.t("works.indexed_patterns") }}</h2>
           </div>
           <p>
             {{
-              i18n.t(
-                "works.work_insights_help",
-                "Counts come from populated metadata on the loaded records, not from the vector index. Empty cards mean this work has no usable values for that field yet.",
-              )
+              i18n.t("works.work_insights_help")
             }}
           </p>
         </div>
@@ -118,12 +115,12 @@ const i18n = useI18nStore();
         <template v-if="props.mode === 'admin'">
           <button id="overviewSearchWork" type="button" class="btn primary" @click="emit('search')">
             <AppIcon name="search" aria-hidden="true" />{{
-              i18n.t("works.search_records", "Search records")
+              i18n.t("works.search_records")
             }}
           </button>
           <button id="overviewEditWork" type="button" class="btn" @click="emit('edit')">
             <AppIcon name="edit" aria-hidden="true" />{{
-              i18n.t("works.edit_metadata", "Edit work metadata")
+              i18n.t("works.edit_metadata")
             }}
           </button>
           <button
@@ -133,7 +130,7 @@ const i18n = useI18nStore();
             @click="emit('populate')"
           >
             <AppIcon name="spark" aria-hidden="true" />{{
-              i18n.t("works.populate_metadata_llm", "Populate metadata with LLM")
+              i18n.t("works.populate_metadata_llm")
             }}
           </button>
           <button
@@ -144,7 +141,7 @@ const i18n = useI18nStore();
             @click="emit('annotations')"
           >
             <AppIcon name="record" aria-hidden="true" />{{
-              i18n.tf("works.view_annotations", "Annotations ({count})", {
+              i18n.tf("works.view_annotations", {
                 count: props.work.annotations.toLocaleString(i18n.locale),
               })
             }}
@@ -153,7 +150,7 @@ const i18n = useI18nStore();
         <template v-else>
           <button id="browseResearchWork" type="button" class="btn primary" @click="emit('browse')">
             <AppIcon name="search" aria-hidden="true" />{{
-              i18n.t("works.browse_records", "Browse records")
+              i18n.t("works.browse_records")
             }}
           </button>
           <button
@@ -164,7 +161,7 @@ const i18n = useI18nStore();
             @click="emit('annotations')"
           >
             <AppIcon name="record" aria-hidden="true" />{{
-              i18n.tf("works.view_annotations", "Annotations ({count})", {
+              i18n.tf("works.view_annotations", {
                 count: props.work.annotations.toLocaleString(i18n.locale),
               })
             }}

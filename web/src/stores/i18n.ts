@@ -1,35 +1,10 @@
 import { ref } from "vue";
 import { defineStore } from "pinia";
 import { systemApi, type LanguageInfo } from "../api/system";
+import { englishDefault, COMMON_KEY_ALIASES } from "../i18n/englishDefault";
 import * as runtime from "../runtime/runtimeBridge";
 
 let languageEventBridgeInstalled = false;
-
-// These labels are deliberately context-free actions or responses.  Older
-// installed dictionaries may still contain their former feature-specific
-// keys, so resolve those first while new dictionaries use the shared key.
-const COMMON_KEY_ALIASES: Record<string, string> = {
-  "runtime.apply": "common.apply",
-  "runtime.cancel": "common.cancel",
-  "pdf_corpus.cancel": "common.cancel",
-  "runtime.clear": "common.clear",
-  "runtime.close": "common.close",
-  "runtime.delete": "common.delete",
-  "users.delete": "common.delete",
-  "runtime.next": "common.next",
-  "runtime.no": "common.no",
-  "runtime.previous": "common.previous",
-  "runtime.yes": "common.yes",
-  "ui.apply": "common.apply",
-  "ui.cancel": "common.cancel",
-  "ui.clear": "common.clear",
-  "ui.close": "common.close",
-  "ui.delete": "common.delete",
-  "ui.next": "common.next",
-  "ui.no": "common.no",
-  "ui.previous": "common.previous",
-  "ui.yes": "common.yes",
-};
 
 export const useI18nStore = defineStore("i18n", () => {
   const locale = ref(localStorage.getItem("derridai-locale") || "en-US");
@@ -45,12 +20,22 @@ export const useI18nStore = defineStore("i18n", () => {
       || baseDictionary.value[key]
       || (commonKey ? baseDictionary.value[commonKey] : undefined)
       || fallback
+      || englishDefault(key)
+      || (commonKey ? englishDefault(commonKey) : "")
       || key;
   }
 
-  function tf(key: string, fallback: string, values: Record<string, string | number> = {}) {
+  function tf(
+    key: string,
+    fallbackOrValues?: string | Record<string, string | number>,
+    values?: Record<string, string | number>,
+  ) {
+    let fallback: string | undefined;
+    let vars = values || {};
+    if (fallbackOrValues && typeof fallbackOrValues === "object") vars = fallbackOrValues;
+    else if (typeof fallbackOrValues === "string") fallback = fallbackOrValues;
     let text = String(t(key, fallback));
-    for (const [name, value] of Object.entries(values)) text = text.replaceAll(`{${name}}`, String(value));
+    for (const [name, value] of Object.entries(vars)) text = text.replaceAll(`{${name}}`, String(value));
     return text;
   }
 

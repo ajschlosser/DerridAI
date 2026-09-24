@@ -7,8 +7,16 @@ import { highlight } from "../domain/recordFormatting";
 import AppIcon from "./AppIcon.vue";
 import { useI18nStore } from "../stores/i18n";
 import { corpusState } from "../state/workspaceState";
+import { createPdfExplorerCopy } from "../domain/pdfExplorerCopy";
 
 const i18n = useI18nStore();
+const copy = computed(() =>
+  createPdfExplorerCopy(
+    (key, fallback) => i18n.t(key, fallback),
+    (key, fallback, values) =>
+      i18n.tf(key, fallback, (values || {}) as Record<string, string | number>),
+  ),
+);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
@@ -83,19 +91,14 @@ const relatedShown = computed(() => related.value.slice(0, 80));
 const highlightedText = computed(() => {
   const highlighted = highlight(pdfText.value || "", searchQuery.value || "");
   if (highlighted) return highlighted;
-  return '<span class="note">Use “Extract current page” or “Extract all text.” If both PDF.js and PyMuPDF find no text, the page likely requires OCR.</span>';
+  return `<span class="note">${copy.value.emptyExtract}</span>`;
 });
 const viewerNoteText = computed(
   () =>
-    `${canRender.value ? "PDF.js renderer" : "Browser fallback"} · ${linked.value.length} linked record${linked.value.length === 1 ? "" : "s"} on this page`,
+    `${canRender.value ? copy.value.renderer : copy.value.fallbackRenderer} · ${copy.value.linkedOnPage(linked.value.length)}`,
 );
-const linkedCountText = computed(
-  () => `${linked.value.length} linked record${linked.value.length === 1 ? "" : "s"}`,
-);
-const relatedCountText = computed(
-  () =>
-    `${allRelated.value.length} record${allRelated.value.length === 1 ? "" : "s"} · jump directly between source pages and records`,
-);
+const linkedCountText = computed(() => copy.value.linkedCount(linked.value.length));
+const relatedCountText = computed(() => copy.value.relatedNote(allRelated.value.length));
 
 // AppIcon's "gear" and "copy" paths have each drifted from domain/html.ts's icon() by small path-data differences,
 // and that drift is already baked into other components' currently-passing baseline snapshots (SearchView,
@@ -205,7 +208,7 @@ async function onFileChange(event: Event) {
     } catch (error: Any) {
       console.error("PDF.js initialization failed", error);
       state.pdf.doc = null;
-      state.pdf.extractError = `PDF.js could not initialize (${error.message}). Rendering and extraction will use fallbacks where possible.`;
+      state.pdf.extractError = copy.value.jsInitFailed(error.message);
     }
     await runtime.persistCurrentPdfAsset();
     runtime.shell();
@@ -213,7 +216,7 @@ async function onFileChange(event: Event) {
   } catch (error: Any) {
     console.error("Could not open PDF", error);
     await runtime.openMessageModal({
-      title: "Could not open PDF",
+      title: copy.value.couldNotOpen,
       message: error.message || String(error),
       tone: "danger",
     });
@@ -361,7 +364,7 @@ function linkCurrentPdf() {
   }
   const item = runtime.lookupRecord(key);
   if (item) runtime.linkPdfPage(item.file, item.index, state.pdf.page);
-  else runtime.toast("Choose a record from the autocomplete list");
+  else runtime.toast(copy.value.chooseAutocomplete);
 }
 
 // Some runtime code (unlinking a record, applying LLM cleanup results) still asks the PDF Explorer to refresh this
@@ -403,37 +406,35 @@ onBeforeUnmount(() => {
       <div class="pdf-document-primary">
         <button class="btn primary" id="openPdf" @click="openPdfPicker">
           <template v-if="openingPdf"
-            ><span class="spinner small-spinner"></span>Opening PDF…</template
+            ><span class="spinner small-spinner"></span>{{ copy.opening }}</template
           ><template v-else
-            ><AppIcon name="pdf" />{{ loaded ? "Open another" : "Open PDF" }}</template
+            ><AppIcon name="pdf" />{{ loaded ? copy.openAnother : copy.openPdf }}</template
           >
         </button>
         <div class="pdf-document-title">
           <template v-if="loaded">
-            <span>PDF document</span>
+            <span>{{ copy.document }}</span>
             <h2>{{ pdfTitle }}</h2>
             <p>
               {{ state.pdf.name }}{{ state.pdf.author ? ` · ${state.pdf.author}` : ""
-              }}{{ state.pdf.doc ? ` · ${state.pdf.doc.numPages} pages` : "" }}
+              }}{{ state.pdf.doc ? ` · ${copy.pagesCount(state.pdf.doc.numPages)}` : "" }}
             </p>
           </template>
           <template v-else>
-            <span>PDF Explorer</span>
-            <h2>Open a source PDF</h2>
-            <p
-              v-text="'Render pages, extract text, connect pages to records, and run LLM-assisted source workflows.'"
-            ></p>
+            <span>{{ copy.explorer }}</span>
+            <h2>{{ copy.openSource }}</h2>
+            <p v-text="copy.openHelp"></p>
           </template>
         </div>
         <div v-if="loaded" class="pdf-document-status">
           <span
-            ><b>{{ relatedWorks.length }}</b> linked works</span
+            ><b>{{ relatedWorks.length }}</b> {{ copy.linkedWorks }}</span
           >
           <span
-            ><b>{{ allRelated.length }}</b> linked records</span
+            ><b>{{ allRelated.length }}</b> {{ copy.linkedRecords }}</span
           >
           <span
-            ><b>{{ linked.length }}</b> on this page</span
+            ><b>{{ linked.length }}</b> {{ copy.onThisPage }}</span
           >
         </div>
       </div>
@@ -448,7 +449,7 @@ onBeforeUnmount(() => {
               v-text="'←'"
             ></button>
             <label
-              ><span>Page</span
+              ><span>{{ copy.page }}</span
               ><input
                 class="control pdf-page-input"
                 id="pdfPageInput"
@@ -460,7 +461,7 @@ onBeforeUnmount(() => {
                 @keydown="onPageInputKeydown"
             /></label>
             <span class="pdf-page-total">/ {{ state.pdf.doc?.numPages || "?" }}</span>
-            <button class="btn small" id="pdfGo" @click="goToPage">Go</button>
+            <button class="btn small" id="pdfGo" @click="goToPage">{{ copy.go }}</button>
             <button
               class="btn small icon-only"
               id="pdfNext"
@@ -474,19 +475,19 @@ onBeforeUnmount(() => {
             <button
               class="btn small icon-only"
               id="pdfRotateLeft"
-              title="Rotate left 90°"
+              :title="copy.rotateLeft"
               @click="rotateLeft"
               v-text="'↶'"
             ></button>
             <button
               class="btn small icon-only"
               id="pdfRotateRight"
-              title="Rotate right 90°"
+              :title="copy.rotateRight"
               @click="rotateRight"
               v-text="'↷'"
             ></button>
             <span class="note">{{
-              state.pdf.rotation ? `${state.pdf.rotation}°` : "upright"
+              state.pdf.rotation ? copy.rotationAmount(state.pdf.rotation) : copy.upright
             }}</span>
           </div>
           <div class="pdf-command-divider"></div>
@@ -495,47 +496,47 @@ onBeforeUnmount(() => {
             id="extractPage"
             :disabled="!extractReady"
             @click="extractPage"
-            v-text="extractingPage ? `Extracting page ${state.pdf.page}…` : 'Extract page text'"
+            v-text="extractingPage ? copy.extractingPage(state.pdf.page) : copy.extractPage"
           ></button>
           <details class="pdf-toolbar-menu">
-            <summary class="btn small">More text tools</summary>
+            <summary class="btn small">{{ copy.moreTextTools }}</summary>
             <div class="pdf-toolbar-menu-popover">
               <button
                 class="btn small"
                 id="extractAll"
                 :disabled="!extractReady"
                 @click="extractAll"
-                v-text="extractingAll ? 'Extracting…' : 'Extract all text'"
+                v-text="extractingAll ? copy.extracting : copy.extractAll"
               ></button>
             </div>
           </details>
           <details class="pdf-toolbar-menu llm-menu">
-            <summary class="btn small soft"><AppIcon name="spark" />LLM tools</summary>
+            <summary class="btn small soft"><AppIcon name="spark" />{{ copy.llmTools }}</summary>
             <div class="pdf-toolbar-menu-popover">
               <div class="pdf-menu-context">
                 <b>{{ runtime.providerDisplayName(pdfProvider) }}</b>
-                <span>Each action lets you choose provider, model, parameters, and run mode.</span>
+                <span>{{ copy.llmToolsHelp }}</span>
               </div>
               <button
                 class="btn small"
                 id="pdfLlmClean"
                 :disabled="!extractReady"
                 @click="openLlmClean"
-                v-text="'Clean current page text'"
+                v-text="copy.cleanPage"
               ></button>
               <button
                 class="btn small"
                 id="pdfLlmDraft"
                 :disabled="!extractReady"
                 @click="openLlmDraft"
-                v-text="'Create draft record'"
+                v-text="copy.draftRecord"
               ></button>
               <button
                 class="btn small"
                 id="pdfLlmLink"
                 :disabled="!state.files.length"
                 @click="openLlmLink"
-                v-text="'Match & link page to record'"
+                v-text="copy.matchLink"
               ></button>
               <button class="btn small" id="pdfProviders" @click="openProviders">
                 <!-- AppIcon's own "gear" path has drifted from this one by a coordinate, and that drift is already
@@ -551,27 +552,25 @@ onBeforeUnmount(() => {
                   aria-hidden="true"
                   v-html="gearIconInner"
                 ></svg
-                >Manage LLM providers</button
-              >
+                >{{ copy.manageProviders }}</button>
             </div>
           </details>
           <button class="btn small primary" id="pdfCorpusBuilder" @click="openCorpusBuilder"
-            ><AppIcon name="spark" />Build record set</button
-          >
+            ><AppIcon name="spark" />{{ copy.buildRecordSet }}</button>
         </div>
         <div class="pdf-context-row">
           <div class="pdf-context-pill">
-            <span>Source</span><b>p. {{ state.pdf.page }}</b>
+            <span>{{ copy.source }}</span><b>p. {{ state.pdf.page }}</b>
           </div>
           <div class="pdf-context-pill">
-            <span>Works</span>
+            <span>{{ copy.works }}</span>
             <b
-              >{{ relatedWorks.slice(0, 2).join(" · ") || "None linked"
+              >{{ relatedWorks.slice(0, 2).join(" · ") || copy.noneLinked
               }}{{ relatedWorks.length > 2 ? ` +${relatedWorks.length - 2}` : "" }}</b
             >
           </div>
           <div class="pdf-context-pill">
-            <span>Current-page records</span><b>{{ linked.length }}</b>
+            <span>{{ copy.currentPageRecords }}</span><b>{{ linked.length }}</b>
           </div>
           <button
             v-if="selectedRelated()"
@@ -579,7 +578,7 @@ onBeforeUnmount(() => {
             id="returnToSelectedRecord"
             @click="returnToSelectedRecord"
           >
-            <AppIcon name="record" />Back to {{ selected?.record_id || "record" }}
+            <AppIcon name="record" />{{ copy.backTo(selected?.record_id || copy.recordFallback) }}
           </button>
         </div>
       </template>
@@ -588,11 +587,11 @@ onBeforeUnmount(() => {
       <article class="card pdf-viewer-card">
         <div class="cardhead pdf-viewer-head">
           <div>
-            <b>Page {{ state.pdf.page }}</b>
+            <b>{{ copy.page }} {{ state.pdf.page }}</b>
             <div class="note" v-text="viewerNoteText"></div>
           </div>
           <span class="pdf-view-badge">{{
-            state.pdf.rotation ? `${state.pdf.rotation}° rotation` : "Fit width"
+            state.pdf.rotation ? copy.rotation(state.pdf.rotation) : copy.fitWidth
           }}</span>
         </div>
         <div v-if="canRender" class="pdf-canvas-wrap">
@@ -611,12 +610,12 @@ onBeforeUnmount(() => {
         <article class="card pdf-text-card">
           <div class="cardhead">
             <div>
-              <b>Page text</b>
+              <b>{{ copy.pageText }}</b>
               <div class="note">
                 {{
                   state.pdf.extractionSource
-                    ? `Source: ${state.pdf.extractionSource}`
-                    : "Extract the current page, then optionally clean it with an LLM."
+                    ? copy.sourceLabel(state.pdf.extractionSource)
+                    : copy.extractThenClean
                 }}
               </div>
             </div>
@@ -624,7 +623,7 @@ onBeforeUnmount(() => {
               <input
                 id="pdfSearch"
                 :value.attr="searchQuery"
-                placeholder="Search page text"
+                :placeholder="copy.searchPage"
                 @input="setSearchQuery(($event.target as HTMLInputElement).value)"
               />
             </div>
@@ -637,7 +636,7 @@ onBeforeUnmount(() => {
         <article class="card panel pdf-current-links">
           <div class="toolbar compact-toolbar">
             <div>
-              <b>Records on page {{ state.pdf.page }}</b>
+              <b>{{ copy.recordsOnPage(state.pdf.page) }}</b>
               <div class="note" v-text="linkedCountText"></div>
             </div>
           </div>
@@ -648,7 +647,7 @@ onBeforeUnmount(() => {
                 id="pdfRecordSearch"
                 ref="recordSearchEl"
                 autocomplete="off"
-                placeholder="Search record ID, work, or source file"
+                :placeholder="copy.searchRecord"
                 :value.attr="recordSearchInput"
                 @focus="onRecordSearchFocus"
                 @input="onRecordSearchInput"
@@ -674,7 +673,7 @@ onBeforeUnmount(() => {
                       <span>{{ option.label }}</span>
                     </button>
                   </template>
-                  <div v-else class="autocomplete-empty">No matching records</div>
+                  <div v-else class="autocomplete-empty">{{ copy.noMatching }}</div>
                 </template>
               </div>
             </div>
@@ -684,7 +683,7 @@ onBeforeUnmount(() => {
               :disabled="!hasRecordOptions"
               @click="linkCurrentPdf"
             >
-              <AppIcon name="plus" />Link page {{ state.pdf.page }}
+              <AppIcon name="plus" />{{ copy.linkPage(state.pdf.page) }}
             </button>
           </div>
           <div class="pdf-linked-list">
@@ -700,7 +699,7 @@ onBeforeUnmount(() => {
                   :data-linked-index="index"
                   @click="openLinkedRecord(file.id, index)"
                 >
-                  <b>{{ record.record_id || `Record ${index + 1}` }}</b>
+                  <b>{{ record.record_id || copy.recordN(index + 1) }}</b>
                   <span
                     >{{ record.work || file.name }} ·
                     {{ record.inline_citation || runtime.pages(record) }}</span
@@ -718,21 +717,21 @@ onBeforeUnmount(() => {
                       aria-hidden="true"
                       v-html="copyIconInner"
                     ></svg
-                    >Copy</button
+                    >{{ copy.copy }}</button
                   >
                   <button
                     class="btn small"
                     :data-cite-row-key="runtime.reviewKey(file, index)"
                     data-cite-kind="inline"
-                    :title="i18n.t('ui.copy_inline', 'Copy inline citation')"
-                    v-text="'Inline'"
+                    :title="i18n.t('ui.copy_inline')"
+                    v-text="copy.inline"
                   ></button>
                   <button
                     class="btn small"
                     :data-cite-row-key="runtime.reviewKey(file, index)"
                     data-cite-kind="full"
-                    :title="i18n.t('ui.copy_full', 'Copy full citation')"
-                    v-text="'Full'"
+                    :title="i18n.t('ui.copy_full')"
+                    v-text="copy.full"
                   ></button>
                   <button
                     class="btn small"
@@ -740,28 +739,27 @@ onBeforeUnmount(() => {
                     :data-toggle-workspace-evidence="runtime.reviewKey(file, index)"
                     :title="
                       runtime.evidenceIsSelected(evidenceKey(file.id, index))
-                        ? i18n.t('ui.remove_evidence', 'Remove from evidence')
-                        : i18n.t('ui.add_evidence', 'Add to evidence')
+                        ? i18n.t('ui.remove_evidence')
+                        : i18n.t('ui.add_evidence')
                     "
                   >
                     <AppIcon
                       :name="
                         runtime.evidenceIsSelected(evidenceKey(file.id, index)) ? 'check' : 'plus'
                       "
-                      />Evidence</button
-                  >
+                      />{{ copy.evidence }}</button>
                   <button
                     class="btn small"
                     :data-linked-open-file="file.id"
                     :data-linked-open-index="index"
                     @click="openLinkedRecord(file.id, index)"
-                    ><AppIcon name="record" />Open record</button
+                    ><AppIcon name="record" />{{ copy.openRecord }}</button
                   >
                   <button
                     class="btn small danger unlink-pdf-link"
                     :data-unlink-file="file.id"
                     :data-unlink-index="index"
-                    title="Unlink record from PDF"
+                    :title="copy.unlinkTitle"
                     @click="unlinkRecord(file.id, index)"
                     ><svg
                       viewBox="0 0 24 24"
@@ -773,18 +771,17 @@ onBeforeUnmount(() => {
                       aria-hidden="true"
                       v-html="closeIconInner"
                     ></svg
-                    >Unlink</button
-                  >
+                    >{{ copy.unlink }}</button>
                 </div>
               </div>
             </template>
-            <div v-else class="note">No records linked to this page yet.</div>
+            <div v-else class="note">{{ copy.noLinkedYet }}</div>
           </div>
         </article>
         <article class="card panel pdf-related-records">
           <div class="toolbar compact-toolbar">
             <div>
-              <b>Records linked anywhere in this PDF</b>
+              <b>{{ copy.recordsAnywhere }}</b>
               <div class="note" v-text="relatedCountText"></div>
             </div>
           </div>
@@ -792,7 +789,7 @@ onBeforeUnmount(() => {
             <input
               id="pdfRelatedSearch"
               :value.attr="relatedSearchQuery"
-              placeholder="Filter linked records"
+              :placeholder="copy.filterLinked"
               @input="setRelatedSearchQuery(($event.target as HTMLInputElement).value)"
             />
           </div>
@@ -809,7 +806,7 @@ onBeforeUnmount(() => {
                   :data-related-record-index="index"
                   @click="openLinkedRecord(file.id, index)"
                 >
-                  <b>{{ record.record_id || `Record ${index + 1}` }}</b>
+                  <b>{{ record.record_id || copy.recordN(index + 1) }}</b>
                   <span>{{ record.work || file.name }}</span>
                   <small>{{ fullCitation(record) || file.name }}</small>
                 </button>
@@ -817,7 +814,7 @@ onBeforeUnmount(() => {
                   <button
                     class="copy-record-mini"
                     :data-copy-row-key="runtime.reviewKey(file, index)"
-                    title="Copy entire record"
+                    :title="copy.copyEntire"
                   >
                     <svg
                       viewBox="0 0 24 24"
@@ -834,14 +831,14 @@ onBeforeUnmount(() => {
                     class="copy-record-mini"
                     :data-cite-row-key="runtime.reviewKey(file, index)"
                     data-cite-kind="inline"
-                    :title="i18n.t('ui.copy_inline', 'Copy inline citation')"
+                    :title="i18n.t('ui.copy_inline')"
                     v-text="'I'"
                   ></button>
                   <button
                     class="copy-record-mini"
                     :data-cite-row-key="runtime.reviewKey(file, index)"
                     data-cite-kind="full"
-                    :title="i18n.t('ui.copy_full', 'Copy full citation')"
+                    :title="i18n.t('ui.copy_full')"
                     v-text="'F'"
                   ></button>
                   <button
@@ -850,8 +847,8 @@ onBeforeUnmount(() => {
                     :data-toggle-workspace-evidence="runtime.reviewKey(file, index)"
                     :title="
                       runtime.evidenceIsSelected(evidenceKey(file.id, index))
-                        ? i18n.t('ui.remove_evidence', 'Remove from evidence')
-                        : i18n.t('ui.add_evidence', 'Add to evidence')
+                        ? i18n.t('ui.remove_evidence')
+                        : i18n.t('ui.add_evidence')
                     "
                     v-text="runtime.evidenceIsSelected(evidenceKey(file.id, index)) ? '✓' : '+'"
                   ></button>
@@ -861,18 +858,17 @@ onBeforeUnmount(() => {
                     class="pdf-page-chip"
                     :class="{ active: Number(page) === Number(state.pdf.page) }"
                     :data-related-page="page"
-                    :title="`Open PDF page ${page}`"
+                    :title="copy.openPdfPage(page)"
                     @click="setPage(page)"
                     v-text="`p. ${page}`"
                   ></button>
                 </div>
               </div>
             </template>
-            <div v-else class="note">No linked records match this filter.</div>
+            <div v-else class="note">{{ copy.noFilterMatch }}</div>
           </div>
           <div v-if="related.length > 80" class="note" style="padding-top: 8px">
-            Showing first 80 of {{ related.length }} matches. Narrow the filter to see a specific
-            record.
+            {{ copy.showingFirst(80, related.length) }}
           </div>
         </article>
       </aside>
@@ -880,14 +876,10 @@ onBeforeUnmount(() => {
     <section v-else class="empty">
       <div class="drop">
         <div class="drop-icon"><AppIcon name="pdf" /></div>
-        <h1>PDF Explorer</h1>
-        <p
-          v-text="
-            'Open a PDF to render pages, read its embedded title metadata, extract text, and move directly between linked PDF pages and corpus records.'
-          "
-        ></p>
+        <h1>{{ copy.explorer }}</h1>
+        <p v-text="copy.emptyHelp"></p>
         <button class="btn primary" id="openPdf2" @click="openPdfPicker"
-          ><AppIcon name="pdf" />Choose PDF</button
+          ><AppIcon name="pdf" />{{ copy.choosePdf }}</button
         >
       </div>
     </section>

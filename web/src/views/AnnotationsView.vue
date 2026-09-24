@@ -11,8 +11,8 @@ const annotations = useAnnotationsWorkspace();
 const { snapshot, loading, error, removing } = annotations;
 const emptyMessage = computed(() =>
   snapshot.value?.total
-    ? i18n.t("annotations.empty", "No annotations match the current search.")
-    : i18n.t("annotations.none_yet", "No annotations yet."),
+    ? i18n.t("annotations.empty")
+    : i18n.t("annotations.none_yet"),
 );
 
 watch(
@@ -25,25 +25,22 @@ onMounted(() => void annotations.load());
 <template>
   <main class="annotations-page" aria-labelledby="annotations-page-title" :aria-busy="loading">
     <UiPageHeader
-      :kicker="i18n.t('section.corpus', 'Corpus')"
-      :title="i18n.t('nav.annotations', 'Annotations')"
+      :kicker="i18n.t('section.corpus')"
+      :title="i18n.t('nav.annotations')"
       title-id="annotations-page-title"
       :description="
-        i18n.t(
-          'annotations.page_help',
-          'Review annotations across the corpus. The default view groups discussion by work; switch to Recent for a chronological stream.',
-        )
+        i18n.t('annotations.page_help')
       "
     />
 
     <section v-if="loading" class="card annotations-state" role="status">
-      {{ i18n.t("ui.loading", "Loading…") }}
+      {{ i18n.t("ui.loading") }}
     </section>
     <section v-else-if="error" class="card annotations-state" role="alert">
-      <strong>{{ i18n.t("annotations.open_failed", "Could not load annotations") }}</strong>
+      <strong>{{ i18n.t("annotations.open_failed") }}</strong>
       <p>{{ error }}</p>
       <button type="button" class="btn" @click="annotations.load(true)">
-        {{ i18n.t("ui.retry", "Retry") }}
+        {{ i18n.t("ui.retry") }}
       </button>
     </section>
     <template v-else-if="snapshot">
@@ -51,19 +48,13 @@ onMounted(() => void annotations.load());
         <div class="annotations-toolbar">
           <label class="search">
             <span class="sr-only">{{
-              i18n.t(
-                "annotations.search_placeholder",
-                "Search annotations, tags, quotes, records, or works…",
-              )
+              i18n.t("annotations.search_placeholder")
             }}</span>
             <input
               type="search"
               :value="snapshot.query"
               :placeholder="
-                i18n.t(
-                  'annotations.search_placeholder',
-                  'Search annotations, tags, quotes, records, or works…',
-                )
+                i18n.t('annotations.search_placeholder')
               "
               @input="annotations.setQuery(($event.target as HTMLInputElement).value)"
             />
@@ -77,7 +68,7 @@ onMounted(() => void annotations.load());
               :aria-selected="snapshot.view === 'works'"
               @click="annotations.setView('works')"
             >
-              {{ i18n.t("annotations.by_work", "By work") }}
+              {{ i18n.t("annotations.by_work") }}
             </button>
             <button
               type="button"
@@ -87,24 +78,25 @@ onMounted(() => void annotations.load());
               :aria-selected="snapshot.view === 'recent'"
               @click="annotations.setView('recent')"
             >
-              {{ i18n.t("annotations.recent", "Recent") }}
+              {{ i18n.t("annotations.recent") }}
             </button>
           </div>
-          <span class="note"
-            >{{ snapshot.total.toLocaleString(i18n.locale) }}
-            {{ i18n.t("annotations.annotation_count", "annotations") }} ·
-            {{ snapshot.groups.length.toLocaleString(i18n.locale) }}
-            {{ i18n.t("dynamic.works", "works") }}</span
-          >
+          <span class="note">{{
+            i18n.tf("annotations.annotation_count", {
+              count: snapshot.total.toLocaleString(i18n.locale),
+            })
+          }}
+          · {{ snapshot.groups.length.toLocaleString(i18n.locale) }}
+          {{ i18n.t("dynamic.works") }}</span>
         </div>
       </section>
 
       <section v-if="snapshot.view === 'recent'" class="card annotations-recent-card">
         <div class="cardhead">
           <div>
-            <b>{{ i18n.t("annotations.recent_annotations", "Recent annotations") }}</b>
+            <b>{{ i18n.t("annotations.recent_annotations") }}</b>
             <div class="note">
-              {{ i18n.t("annotations.recent_help", "Newest annotations across all loaded works.") }}
+              {{ i18n.t("annotations.recent_help") }}
             </div>
           </div>
         </div>
@@ -132,17 +124,20 @@ onMounted(() => void annotations.load());
             <span
               ><b>{{ group.work }}</b
               ><small
-                >{{ group.annotations.length.toLocaleString(i18n.locale) }}
-                {{ i18n.t("annotations.annotation_count", "annotations") }} ·
-                {{ group.records.toLocaleString(i18n.locale) }}
-                {{ i18n.t("dynamic.records", "records") }}</small
+                >{{
+                  i18n.tf("annotations.annotation_count", {
+                    count: group.annotations.length.toLocaleString(i18n.locale),
+                  })
+                }}
+                · {{ group.records.toLocaleString(i18n.locale) }}
+                {{ i18n.t("dynamic.records") }}</small
               ></span
             ><button
               type="button"
               class="btn tiny"
               @click.prevent="annotations.openWork(group.work)"
             >
-              {{ i18n.t("works.open_overview", "Open work overview") }}
+              {{ i18n.t("works.open_overview") }}
             </button>
           </summary>
           <div class="annotation-feed">

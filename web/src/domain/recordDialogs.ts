@@ -1,6 +1,15 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
 import { esc, icon } from "./html";
+import {
+  bulkFieldEditorHtml,
+  chromaRecordEditorHtml,
+  mergeDialogHtml,
+  ocrCleanupDialogHtml,
+  recordEditorHtml,
+  recordHistoryDialogHtml,
+} from "./recordDialogMarkup";
+import { createRecordDialogCopy } from "./recordDialogCopy";
 
 // The dialogs for editing, merging, subsetting and cleaning records and for the upsert queue, drawn as HTML strings. Moved
 // verbatim from the legacy runtime; the runtime's state object and helpers are passed in as dependencies.
@@ -56,6 +65,7 @@ type Helper =
   | "showAppModal"
   | "toast"
   | "tr"
+  | "trf"
   | "uid"
   | "upsertRows";
 type Deps = { state: Loose; fileTimers: Map<string, ReturnType<typeof setTimeout>> } & Record<
@@ -66,7 +76,8 @@ type Deps = { state: Loose; fileTimers: Map<string, ReturnType<typeof setTimeout
 /** The groups of fields the record editor shows, in order. */
 const EDITOR_GROUPS = [
   {
-    name: "Source",
+    key: "record.group_source",
+    fallback: "Source",
     fields: [
       "record_id",
       "work",
@@ -84,7 +95,8 @@ const EDITOR_GROUPS = [
     ],
   },
   {
-    name: "Discourse",
+    key: "record.group_discourse",
+    fallback: "Discourse",
     fields: [
       "speaker",
       "position_holder",
@@ -97,7 +109,8 @@ const EDITOR_GROUPS = [
     ],
   },
   {
-    name: "Quotation provenance",
+    key: "record.group_quotation",
+    fallback: "Quotation provenance",
     fields: [
       "is_direct_quote",
       "quoted_speaker",
@@ -109,9 +122,10 @@ const EDITOR_GROUPS = [
       "quotation_chain",
     ],
   },
-  { name: "Indexing", fields: ["topics", "concepts", "persons", "works_referenced"] },
+  { key: "record.group_indexing", fallback: "Indexing", fields: ["topics", "concepts", "persons", "works_referenced"] },
   {
-    name: "Quality / review",
+    key: "record.group_quality",
+    fallback: "Quality & review",
     fields: [
       "attribution_confidence",
       "semantic_classification_confidence",
@@ -121,11 +135,12 @@ const EDITOR_GROUPS = [
     ],
   },
   {
-    name: "Language / translation",
+    key: "record.group_language",
+    fallback: "Language & translation",
     fields: ["document_language", "original_language", "document_is_translation", "translator"],
   },
-  { name: "Citation", fields: ["inline_citation", "full_citation"] },
-  { name: "Text", fields: ["text", "text_length"] },
+  { key: "record.group_citation", fallback: "Citation", fields: ["inline_citation", "full_citation"] },
+  { key: "record.group_text", fallback: "Text", fields: ["text", "text_length"] },
 ];
 
 export function createRecordDialogs(deps: Deps) {
@@ -176,16 +191,18 @@ export function createRecordDialogs(deps: Deps) {
     showAppModal,
     toast,
     tr,
+    trf,
     uid,
     upsertRows,
   } = deps;
+  const copy = createRecordDialogCopy(tr, trf);
   // The legacy code queries the page freely; untyped, as it was written.
   const document: Any = globalThis.document;
   function openMergeDialog() {
-    if (state.files.length < 2) return toast("Open at least two JSONL files to merge");
+    if (state.files.length < 2) return toast(copy.mergeNeedTwo);
     const dialog = document.createElement("dialog");
     dialog.className = "merge-dialog";
-    dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">Merge JSONL tabs</h2><div class="dialog-subtitle">Choose any subset. The selected source tabs will be replaced in the workspace by the merged tab.</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div><div class="db"><div class="merge-actions"><button class="btn small" id="mergeSelectAll">Select all</button><button class="btn small" id="mergeSelectNone">Clear</button></div><div class="merge-file-list">${state.files.map((file: Any) => `<label class="merge-file-item"><input type="checkbox" data-merge-file="${file.id}" checked><span><b>${esc(file.name)}</b><small>${file.records.length.toLocaleString()} records</small></span></label>`).join("")}</div><div class="field"><label>Merged file name</label><input class="control" id="mergeName" value="derridai-merged.jsonl"></div><label class="check-item"><input type="checkbox" id="mergeDownload"><span>Download merged JSONL immediately</span></label><div class="info">Unselected tabs remain unchanged. Selected tabs are removed from the workspace after the merge is created; their underlying source files on disk are not deleted.</div></div><div class="da"><button class="btn" data-close>Cancel</button><button class="btn primary" id="mergeCreate">Merge and replace selected tabs</button></div>`;
+    dialog.innerHTML = mergeDialogHtml(state.files, { tr, trf });
     document.body.appendChild(dialog);
     showAppModal(dialog);
     const close = () => {
@@ -202,7 +219,7 @@ export function createRecordDialogs(deps: Deps) {
         (x) => x.dataset.mergeFile,
       );
       const files = state.files.filter((file: Any) => ids.includes(file.id));
-      if (!files.length) return toast("Select at least one file");
+      if (!files.length) return toast(copy.selectFile);
       const firstIndex = Math.min(...files.map((file: Any) => state.files.indexOf(file)));
       const name = (
         dialog.querySelector("#mergeName").value.trim() || "derridai-merged.jsonl"
@@ -264,13 +281,11 @@ export function createRecordDialogs(deps: Deps) {
       persistPrefs();
       close();
       navigateTo("list", { fileId: merged.id });
-      toast(
-        `Merged and replaced ${files.length} tabs · ${records.length.toLocaleString()} records`,
-      );
+      toast(copy.merged(files.length, records.length.toLocaleString()));
     };
   }
-  function openBulkFieldEditor({ rows = null, title = "Bulk edit one field" } = {}) {
-    if (!state.files.length) return toast("Load JSONL records first");
+  function openBulkFieldEditor({ rows = null, title = copy.bulkEditTitle } = {}) {
+    if (!state.files.length) return toast(copy.loadFirst);
     const dialog = document.createElement("dialog");
     dialog.className = "bulk-field-dialog";
     const fields = recordFields().filter(
@@ -281,14 +296,21 @@ export function createRecordDialogs(deps: Deps) {
     const currentWork = selectedRecord()?.work || "";
     const fixedRows: Any = Array.isArray(rows) ? rows : null;
     const defaultScope = fixedRows ? "fixed" : selectedCount ? "selected" : "active";
-    dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">${esc(title)}</h2><div class="dialog-subtitle">Apply one field value consistently across a selected record set. Every actual change is audited.</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
-  <div class="db bulk-field-body">
-    ${fixedRows ? `<div class="info">${fixedRows.length.toLocaleString()} records are in this operation.</div>` : `<div class="field"><label>Target records</label><select class="control" id="bulkFieldScope"><option value="selected" ${defaultScope === "selected" ? "selected" : ""} ${selectedCount ? "" : "disabled"}>Selected records (${selectedCount.toLocaleString()})</option><option value="active" ${defaultScope === "active" ? "selected" : ""}>Active JSONL (${activeCount.toLocaleString()})</option>${currentWork ? `<option value="work">Current work: ${esc(currentWork)}</option>` : ""}<option value="all">All loaded records (${allRows().length.toLocaleString()})</option></select></div>`}
-    <div class="field"><label>Field</label><select class="control" id="bulkFieldName">${fields.map((field: Any) => `<option value="${esc(field)}">${esc(label(field))} · ${esc(field)}</option>`).join("")}</select></div>
-    <div class="field"><label>New value</label><textarea id="bulkFieldValue" spellcheck="false" placeholder="Enter the new value. Arrays/objects use JSON. Enter __NULL__ for null."></textarea><div class="note" id="bulkFieldHint"></div></div>
-    <label class="check-item"><input type="checkbox" id="bulkFieldOnlyDifferent" checked><span>Only modify records whose value actually differs</span></label>
-  </div>
-  <div class="da"><button class="btn" data-close>Cancel</button><button class="btn primary" id="applyBulkField">${icon("check")}Apply field update</button></div>`;
+    dialog.innerHTML = bulkFieldEditorHtml(
+      {
+        title,
+        fixedRows,
+        defaultScope,
+        selectedCount,
+        activeCount,
+        currentWork,
+        allCount: allRows().length,
+        fieldOptions: fields
+          .map((field: Any) => `<option value="${esc(field)}">${esc(label(field))} · ${esc(field)}</option>`)
+          .join(""),
+      },
+      { tr, trf },
+    );
     document.body.appendChild(dialog);
     showAppModal(dialog);
     const close = () => {
@@ -305,8 +327,11 @@ export function createRecordDialogs(deps: Deps) {
       const target = currentRows();
       const rawValues = target.slice(0, 300).map((row: Any) => row.record?.[field]);
       const values = [...new Set(rawValues.map((value: Any) => JSON.stringify(value)))];
-      dialog.querySelector("#bulkFieldHint").textContent =
-        `${target.length.toLocaleString()} target records · ${values.length} distinct current value${values.length === 1 ? "" : "s"}${values.length > 8 ? " (sampled)" : ""}`;
+      dialog.querySelector("#bulkFieldHint").textContent = trf("records.bulk.hint", {
+          targets: target.length.toLocaleString(),
+          values: values.length,
+          sampled: values.length > 8 ? tr("records.bulk.sampled", " (sampled)") : "",
+        });
       const input = dialog.querySelector("#bulkFieldValue");
       if (values.length === 1 && (lastHintField !== field || !input.value.trim())) {
         const only = rawValues[0];
@@ -325,7 +350,7 @@ export function createRecordDialogs(deps: Deps) {
 
     dialog.querySelector("#applyBulkField").onclick = async () => {
       const target = currentRows();
-      if (!target.length) return toast("No records are in the selected scope");
+      if (!target.length) return toast(copy.noScope);
       const field = dialog.querySelector("#bulkFieldName").value;
       let value;
       try {
@@ -334,13 +359,13 @@ export function createRecordDialogs(deps: Deps) {
         return toast(error.message);
       }
       const changing = target.filter((row: Any) => !sameValue(row.record?.[field], value));
-      if (!changing.length) return toast("Every target record already has that value");
+      if (!changing.length) return toast(copy.alreadyValue);
       if (
         !(await openMessageModal({
-          title: "Apply bulk field update?",
-          message: `Set ${field} on ${changing.length.toLocaleString()} record${changing.length === 1 ? "" : "s"}?`,
-          confirmLabel: "Apply update",
-          cancelLabel: "Cancel",
+          title: copy.bulkTitle,
+          message: copy.bulkMessage(field, changing.length.toLocaleString()),
+          confirmLabel: copy.bulkConfirm,
+          cancelLabel: tr("common.cancel"),
         }))
       )
         return;
@@ -362,16 +387,29 @@ export function createRecordDialogs(deps: Deps) {
       shell();
       renderView();
       toast(
-        `Updated ${field} on ${changing.length.toLocaleString()} records · ${fieldChanges.toLocaleString()} audited changes`,
+        copy.bulkUpdated(
+          field,
+          changing.length.toLocaleString(),
+          fieldChanges.toLocaleString(),
+        ),
       );
     };
   }
   function openOcrCleanupDialog() {
-    if (!state.files.length) return toast("Load JSONL records first");
+    if (!state.files.length) return toast(copy.loadFirst);
     const dialog = document.createElement("dialog");
     const selected = selectedReviewItems();
     const active = activeFile();
-    dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">Clean OCR Artifacts</h2><div class="dialog-subtitle">Conservative ligature, zero-width character, and broken line-hyphen cleanup. No paraphrasing.</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div><div class="db ocr-clean-options"><button class="scope-card" data-scope="active" ${active ? "" : "disabled"}><b>Active JSONL tab</b><span>${active ? `${active.records.length.toLocaleString()} records · ${esc(active.name)}` : "No active tab"}</span></button><button class="scope-card" data-scope="selected" ${selected.length ? "" : "disabled"}><b>Selected records</b><span>${selected.length.toLocaleString()} currently selected</span></button><button class="scope-card" data-scope="review"><b>Needs-review records</b><span>${needsReviewItems().length.toLocaleString()} flagged records</span></button><button class="scope-card" data-scope="all"><b>All loaded records</b><span>${allRows().length.toLocaleString()} records across ${state.files.length} tabs</span></button></div><div class="da"><button class="btn" data-close>Cancel</button></div>`;
+    dialog.innerHTML = ocrCleanupDialogHtml(
+      {
+        active,
+        selectedCount: selected.length,
+        reviewCount: needsReviewItems().length,
+        allCount: allRows().length,
+        fileCount: state.files.length,
+      },
+      { tr, trf },
+    );
     document.body.appendChild(dialog);
     showAppModal(dialog);
     const close = () => {
@@ -402,14 +440,14 @@ export function createRecordDialogs(deps: Deps) {
               index: item.index,
             }));
           else rows = allRows();
-          if (!rows.length) return toast("No records in that scope");
+          if (!rows.length) return toast(copy.noScopeOcr);
           close();
           if (
             await openMessageModal({
-              title: "Run OCR cleanup?",
-              message: `Run conservative OCR cleanup on ${rows.length.toLocaleString()} records?`,
-              confirmLabel: "Run cleanup",
-              cancelLabel: "Cancel",
+              title: copy.ocrTitle,
+              message: copy.ocrMessage(rows.length.toLocaleString()),
+              confirmLabel: copy.ocrConfirm,
+              cancelLabel: tr("common.cancel"),
             })
           )
             cleanRows(rows);
@@ -429,15 +467,18 @@ export function createRecordDialogs(deps: Deps) {
       if (!fields.length) continue;
       fields.forEach((k: Any) => used.add(k));
       groups.push(
-        `<section class="editor-section"><h3>${esc(group.name)}</h3><div class="editor-grid">${fields.map((k: Any) => fieldEditor(k, r[k])).join("")}</div></section>`,
+        `<section class="editor-section"><h3>${esc(tr(group.key, group.fallback))}</h3><div class="editor-grid">${fields.map((k: Any) => fieldEditor(k, r[k])).join("")}</div></section>`,
       );
     }
     const other = Object.keys(r).filter((k) => !used.has(k) && k !== "updates");
     if (other.length)
       groups.push(
-        `<section class="editor-section"><h3>Other fields</h3><div class="editor-grid">${other.map((k) => fieldEditor(k, r[k])).join("")}</div></section>`,
+        `<section class="editor-section"><h3>${esc(tr("record.group_other"))}</h3><div class="editor-grid">${other.map((k) => fieldEditor(k, r[k])).join("")}</div></section>`,
       );
-    dialog.innerHTML = `<form><div class="dh"><div><h2 class="dialog-title">Edit record</h2><div class="dialog-subtitle">${esc(r.record_id || "")} · ${esc(r.work || f.name)}</div></div><button class="btn icon-only" type="button" data-close>${icon("close")}</button></div><div class="db editor-body">${groups.join("")}</div><div class="da"><div class="llm-footer-note">Changes stay local until you export or upsert them.</div><button class="btn" type="button" data-close>Cancel</button><button class="btn primary">${icon("check")}Save changes</button></div></form>`;
+    dialog.innerHTML = recordEditorHtml(
+      { subtitle: `${r.record_id || ""} · ${r.work || f.name}`, groups: groups.join("") },
+      tr,
+    );
     document.body.appendChild(dialog);
     showAppModal(dialog);
     dialog.querySelectorAll("[data-close]").forEach(
@@ -456,7 +497,7 @@ export function createRecordDialogs(deps: Deps) {
           .forEach((el: Any) => (next[el.dataset.key] = parseEditor(el)));
       } catch (error: Any) {
         openMessageModal({
-          title: "Could not save record",
+          title: copy.saveFailed,
           message: error.message,
           tone: "danger",
         });
@@ -472,13 +513,13 @@ export function createRecordDialogs(deps: Deps) {
       shell();
       renderView();
       count
-        ? toast(`Saved ${count} tracked change${count === 1 ? "" : "s"}`, { tone: "success" })
-        : toast("No changes to save");
+        ? toast(copy.saved(count), { tone: "success" })
+        : toast(copy.noChanges);
     };
   }
   function openStoreRecordEditor(record: Any) {
     const chromaId = record._chroma_id;
-    if (!chromaId) return toast(tr("record.no_storage_id", "This Chroma record has no storage ID"));
+    if (!chromaId) return toast(tr("record.no_storage_id"));
     const dialog = document.createElement("dialog");
     const editable = Object.keys(record).filter(
       (k) =>
@@ -487,7 +528,14 @@ export function createRecordDialogs(deps: Deps) {
         k !== "_updates_count" &&
         !k.startsWith("_researcher_"),
     );
-    dialog.innerHTML = `<form><div class="dh"><div><h2 class="dialog-title">Edit Chroma record</h2><div class="dialog-subtitle">${esc(chromaId)} · ${esc(state.activeStore)}</div></div><button class="btn icon-only" type="button" data-close>${icon("close")}</button></div><div class="db editor-body"><div class="info">Saving updates this record in place under the same Chroma ID and regenerates its embedding when the configured embedding provider allows it.</div><section class="editor-section"><h3>Record</h3><div class="editor-grid">${editable.map((k) => fieldEditor(k, record[k])).join("")}</div></section></div><div class="da"><button class="btn" type="button" data-close>Cancel</button><button class="btn primary">${icon("check")}Save to Chroma</button></div></form>`;
+    dialog.innerHTML = chromaRecordEditorHtml(
+      {
+        chromaId,
+        store: state.activeStore,
+        fields: editable.map((k) => fieldEditor(k, record[k])).join(""),
+      },
+      tr,
+    );
     document.body.appendChild(dialog);
     showAppModal(dialog);
     const close = () => {
@@ -507,7 +555,7 @@ export function createRecordDialogs(deps: Deps) {
         });
       } catch (error: Any) {
         openMessageModal({
-          title: "Could not parse edited record",
+          title: copy.parseFailed,
           message: error.message,
           tone: "danger",
         });
@@ -540,10 +588,10 @@ export function createRecordDialogs(deps: Deps) {
         );
         state.storeWorksStore = "";
         close();
-        toast("Chroma record updated", { tone: "success" });
+        toast(copy.chromaUpdated, { tone: "success" });
         renderView();
       } catch (error: Any) {
-        toast(`Chroma update failed: ${error.message}`, { tone: "danger" });
+        toast(copy.chromaFailed(error.message), { tone: "danger" });
       }
     };
   }
@@ -551,7 +599,7 @@ export function createRecordDialogs(deps: Deps) {
     const record = file?.records?.[index];
     if (!record) return;
     let versions = recordHistoryVersions(record);
-    if (versions.length <= 1) return toast("This record has no update history");
+    if (versions.length <= 1) return toast(copy.noHistory);
     let cursor = versions.length - 1;
     const dialog = document.createElement("dialog");
     dialog.className = "record-history-dialog";
@@ -568,18 +616,35 @@ export function createRecordDialogs(deps: Deps) {
       const currentIndex = versions.length - 1;
       const isCurrent = cursor === currentIndex;
       const text = String(version.record.text || "");
-      dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">Record history</h2><div class="dialog-subtitle">${esc(file.records[index]?.record_id || `Record ${index + 1}`)} · ${versions.length - 1} saved change set${versions.length - 1 === 1 ? "" : "s"}</div></div><button class="btn icon-only" data-close title="${esc(tr("ui.close", "Close"))}" aria-label="${esc(tr("ui.close", "Close"))}">${icon("close")}</button></div>
-      <div class="db record-history-body">
-        <div class="history-version-nav">
-          <button class="btn" id="historyOlder" ${cursor <= 0 ? `disabled data-disabled-reason="Already at the original record."` : ""}>← Older</button>
-          <div class="history-version-position"><b>${esc(version.label)}${isCurrent ? " · Current" : ""}</b><span>${version.timestamp ? esc(formatTimestamp(version.timestamp)) : "Before tracked edits"}${version.source ? ` · ${esc(version.source)}` : ""}${version.model ? ` · ${esc(version.model)}` : ""}</span></div>
-          <button class="btn" id="historyNewer" ${cursor >= currentIndex ? `disabled data-disabled-reason="Already at the newest version."` : ""}>Newer →</button>
-        </div>
-        <div class="history-version-summary"><span><b>${changed.length}</b> field${changed.length === 1 ? "" : "s"} changed in this version</span><span><b>${text.trim() ? text.trim().split(/\s+/).length : 0}</b> words</span><span><b>${text.length.toLocaleString()}</b> characters</span></div>
-        ${changed.length ? `<div class="history-version-diffs">${changed.map((field: Any) => `<details class="history-version-diff"><summary><b>${esc(label(field))}</b><span>changed</span></summary><div class="history-diff-values"><div><small>Previous</small><pre>${esc(jsonPretty(previous?.record?.[field]))}</pre></div><div><small>This version</small><pre>${esc(jsonPretty(version.record?.[field]))}</pre></div></div></details>`).join("")}</div>` : `<div class="info">This is the reconstructed original state before tracked updates.</div>`}
-        <details class="history-record-preview"><summary>Preview this version</summary><div class="history-preview-meta"><b>${esc(version.record.work || "Untitled work")}</b><span>${esc(version.record.document_author || "")} · ${esc(version.record.year || "")}</span></div><div class="history-preview-text">${esc(text.slice(0, 5000))}${text.length > 5000 ? "…" : ""}</div></details>
-      </div>
-      <div class="da record-history-actions"><button class="btn danger secondary-danger" id="historyClear">Delete audit history…</button><span class="dialog-action-spacer"></span><button class="btn" data-close>Close</button><button class="btn" id="historyUndoAll" ${cursor === 0 && isCurrent ? "disabled" : ""}>Restore original</button><button class="btn primary" id="historyRestore" ${isCurrent ? `disabled data-disabled-reason="This is already the current version."` : ""}>Restore this version</button></div>`;
+      const diffs = changed
+        .map(
+          (field: Any) =>
+            `<details class="history-version-diff"><summary><b>${esc(label(field))}</b><span>${esc(tr("records.history.changed"))}</span></summary><div class="history-diff-values"><div><small>${esc(tr("records.history.previous"))}</small><pre>${esc(jsonPretty(previous?.record?.[field]))}</pre></div><div><small>${esc(tr("records.history.this_version"))}</small><pre>${esc(jsonPretty(version.record?.[field]))}</pre></div></div></details>`,
+        )
+        .join("");
+      dialog.innerHTML = recordHistoryDialogHtml(
+        {
+          recordId:
+            file.records[index]?.record_id ||
+            trf("dashboard.record_n", { n: index + 1 }),
+          changeSets: versions.length - 1,
+          olderDisabled: cursor <= 0,
+          newerDisabled: cursor >= currentIndex,
+          versionLabel: version.label,
+          isCurrent,
+          versionMeta: `${version.timestamp ? formatTimestamp(version.timestamp) : tr("records.history.before_edits")}${version.source ? ` · ${version.source}` : ""}${version.model ? ` · ${version.model}` : ""}`,
+          changed,
+          words: text.trim() ? text.trim().split(/\s+/).length : 0,
+          chars: text.length.toLocaleString(),
+          diffs,
+          work: version.record.work || tr("records.history.untitled"),
+          authorYear: `${version.record.document_author || ""} · ${version.record.year || ""}`,
+          preview: `${text.slice(0, 5000)}${text.length > 5000 ? "…" : ""}`,
+          restoreOriginalDisabled: cursor === 0 && isCurrent,
+          restoreDisabled: isCurrent,
+        },
+        { tr, trf },
+      );
       dialog.querySelectorAll("[data-close]").forEach((button: Any) => (button.onclick = close));
       dialog.querySelector("#historyOlder").onclick = () => {
         cursor--;
@@ -592,41 +657,40 @@ export function createRecordDialogs(deps: Deps) {
       dialog.querySelector("#historyRestore").onclick = async () => {
         if (isCurrent) return;
         const count = restoreRecordHistoryVersion(file, index, version);
-        if (!count) return toast("No record fields needed restoring");
+        if (!count) return toast(copy.nothingToRestore);
         versions = recordHistoryVersions(file.records[index]);
         cursor = versions.length - 1;
         shell();
         renderView();
         render();
-        toast(`Restored ${count} field${count === 1 ? "" : "s"} from ${version.label}`);
+        toast(copy.restoredFields(count, version.label));
       };
       dialog.querySelector("#historyUndoAll").onclick = async () => {
         const original = versions[0];
         if (
           !(await openMessageModal({
-            title: "Restore original record?",
-            message:
-              "Restore every field to its state before the tracked update history? The restoration itself will be recorded, so you can move forward again later.",
-            confirmLabel: "Restore original",
-            cancelLabel: "Cancel",
+            title: copy.restoreOriginalTitle,
+            message: copy.restoreOriginalMessage,
+            confirmLabel: copy.restoreOriginalConfirm,
+            cancelLabel: tr("common.cancel"),
           }))
         )
           return;
         const count = restoreRecordHistoryVersion(file, index, original);
-        if (!count) return toast("The record already matches its original tracked state");
+        if (!count) return toast(copy.alreadyOriginal);
         versions = recordHistoryVersions(file.records[index]);
         cursor = versions.length - 1;
         shell();
         renderView();
         render();
-        toast(`Restored original record state · ${count} fields changed`);
+        toast(copy.restoredOriginal(count));
       };
       dialog.querySelector("#historyClear").onclick = async () => {
         if (!(await clearRecordUpdates(file, index))) return;
         close();
         shell();
         renderView();
-        toast("Record update history cleared");
+        toast(copy.historyCleared);
       };
       decorateDisabledControls(dialog);
     };
@@ -637,11 +701,11 @@ export function createRecordDialogs(deps: Deps) {
   async function openUpsertQueue() {
     if (!hasCorpusDb())
       return openMessageModal({
-        title: "Vector database required",
+        title: copy.vectorRequired,
         message: dbUnavailableReason(),
         confirmLabel: "OK",
       });
-    if (!state.activeStore) return toast("Select a Chroma collection first");
+    if (!state.activeStore) return toast(copy.selectCollection);
     if (allRows().length) await refreshPresenceForRows(allRows());
     const _rows = pendingUpsertRows();
     const dialog = document.createElement("dialog");
@@ -649,9 +713,9 @@ export function createRecordDialogs(deps: Deps) {
 
     const render = () => {
       const currentRows = pendingUpsertRows();
-      dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">${esc(tr("vector.unsynced_changes", "Unsynced local changes"))}</h2><div class="dialog-subtitle">${esc(state.activeStore)} · ${currentRows.length} ${esc(tr("dynamic.records", "records"))}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
+      dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">${esc(tr("vector.unsynced_changes"))}</h2><div class="dialog-subtitle">${esc(state.activeStore)} · ${currentRows.length} ${esc(tr("dynamic.records"))}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
     <div class="db">
-      <div class="queue-explainer"><b>${esc(tr("vector.unsynced_changes_what", "What is this list?"))}</b><p>${esc(tr("vector.unsynced_changes_help", "These are browser-workspace records that changed since their last confirmed sync, plus records DerridAI has confirmed are missing from the selected collection. Removing an item suppresses only its current version; a later change queues it again."))}</p></div><div class="queue-bulk-actions">${currentRows.length ? `<button class="btn small" id="queueSelectAll">${esc(tr("ui.select_all", "Select all"))}</button><button class="btn small" id="queueSelectNone">${esc(tr("ui.clear_selection", "Clear selection"))}</button>` : ""}</div>
+      <div class="queue-explainer"><b>${esc(tr("vector.unsynced_changes_what"))}</b><p>${esc(tr("vector.unsynced_changes_help"))}</p></div><div class="queue-bulk-actions">${currentRows.length ? `<button class="btn small" id="queueSelectAll">${esc(tr("ui.select_all"))}</button><button class="btn small" id="queueSelectNone">${esc(tr("ui.clear_selection"))}</button>` : ""}</div>
       <div class="upsert-queue-list">${
         currentRows
           .map((row: Any) => {
@@ -661,16 +725,16 @@ export function createRecordDialogs(deps: Deps) {
             return `<section class="upsert-queue-card">
           <div class="upsert-queue-head">
             <label class="upsert-queue-item"><input type="checkbox" data-upsert-key="${esc(key)}" checked><span><b>${esc(row.record.record_id || `Record ${row.index + 1}`)}</b><small>${esc(row.record.work || row.file.name)} · ${esc(row.file.name)}</small></span><span class="db-status ${info.kind}"><i></i>${esc(info.label)}</span></label>
-            <div class="tools"><button class="btn small" data-review-queue="${esc(key)}">Review ${changes.length} change${changes.length === 1 ? "" : "s"}</button><button class="btn small danger" data-remove-queue="${esc(key)}">Remove from queue</button></div>
+            <div class="tools"><button class="btn small" data-review-queue="${esc(key)}">${esc(trf("records.upsert.review_n", { count: changes.length }))}</button><button class="btn small danger" data-remove-queue="${esc(key)}">${esc(tr("records.upsert.remove"))}</button></div>
           </div>
-          <div class="queue-change-list hidden" data-queue-changes="${esc(key)}">${changes.map((change: Any) => `<div class="queue-change-row"><b>${esc(label(change.field_name || "field"))}</b><span>${esc(change.source || "manual")}${change.timestamp ? ` · ${esc(formatTimestamp(change.timestamp))}` : ""}</span><details><summary>Values</summary><div class="queue-change-values"><pre>${esc(jsonPretty(change.old_value))}</pre><span>→</span><pre>${esc(jsonPretty(change.new_value))}</pre></div></details></div>`).join("")}</div>
+          <div class="queue-change-list hidden" data-queue-changes="${esc(key)}">${changes.map((change: Any) => `<div class="queue-change-row"><b>${esc(label(change.field_name || "field"))}</b><span>${esc(change.source || tr("jobs.preview.manual"))}${change.timestamp ? ` · ${esc(formatTimestamp(change.timestamp))}` : ""}</span><details><summary>${esc(tr("records.upsert.values"))}</summary><div class="queue-change-values"><pre>${esc(jsonPretty(change.old_value))}</pre><span>→</span><pre>${esc(jsonPretty(change.new_value))}</pre></div></details></div>`).join("")}</div>
         </section>`;
           })
           .join("") ||
-        `<div class="llm-empty">${esc(tr("vector.no_unsynced_changes", "No confirmed unsynced local changes."))}</div>`
+        `<div class="llm-empty">${esc(tr("vector.no_unsynced_changes"))}</div>`
       }</div>
     </div>
-    <div class="da"><button class="btn" data-close>Close</button>${currentRows.length ? `<button class="btn primary" id="upsertQueued">${icon("database")}${esc(tr("vector.sync_selected", "Sync selected"))}</button>` : ""}</div>`;
+      <div class="da"><button class="btn" data-close>${esc(tr("common.close"))}</button>${currentRows.length ? `<button class="btn primary" id="upsertQueued">${icon("database")}${esc(tr("vector.sync_selected"))}</button>` : ""}</div>`;
 
       const close = () => {
         dialog.close();
@@ -716,7 +780,7 @@ export function createRecordDialogs(deps: Deps) {
         const chosen = currentRows.filter((row: Any) =>
           selected.has(localRecordKey(row.file, row.index)),
         );
-        if (!chosen.length) return toast("Select at least one queued record");
+        if (!chosen.length) return toast(copy.selectQueued);
         close();
         await upsertRows(chosen, "queued records");
         shell();

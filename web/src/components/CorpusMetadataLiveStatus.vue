@@ -14,7 +14,7 @@ const running=computed(()=>Number(props.build.metadata_tasks_running||0));
 const queued=computed(()=>Number(props.build.metadata_tasks_queued||Math.max(0,total.value-complete.value-failed.value-skipped.value-running.value)));
 const active=computed(()=>Array.isArray(props.build.metadata_active_tasks)?props.build.metadata_active_tasks:[]);
 const settled=computed(()=>complete.value+failed.value+skipped.value);
-const lastProgress=computed(()=>props.build.metadata_last_progress_at?new Date(props.build.metadata_last_progress_at).toLocaleTimeString():i18n.t("pdf_corpus.not_yet","not yet"));
+const lastProgress=computed(()=>props.build.metadata_last_progress_at?new Date(props.build.metadata_last_progress_at).toLocaleTimeString():i18n.t("pdf_corpus.not_yet"));
 function elapsedSince(value?:string|null):number{if(!value)return 0;const ms=Date.now()-new Date(value).getTime();return Number.isFinite(ms)&&ms>0?ms:0}
 function formatDuration(ms:number):string{const totalSeconds=Math.max(0,Math.round(ms/1000));const minutes=Math.floor(totalSeconds/60);const seconds=totalSeconds%60;return minutes?`${minutes}m ${String(seconds).padStart(2,"0")}s`:`${seconds}s`}
 const elapsed=computed(()=>formatDuration(elapsedSince(props.build.metadata_started_at)));
@@ -41,25 +41,25 @@ function taskLabel(task:string){return i18n.t(`pdf_corpus.metadata_task.${task}`
     <div class="status-main">
       <div class="status-title-row">
         <div>
-          <span class="eyebrow">{{i18n.t('pdf_corpus.metadata_enrichment','Metadata enrichment')}}</span>
-          <h2>{{stalled?i18n.t('pdf_corpus.metadata_stalled_title','Metadata progress may be stalled'):i18n.t('pdf_corpus.metadata_live_title','Automatic metadata is running')}}</h2>
+          <span class="eyebrow">{{i18n.t('pdf_corpus.metadata_enrichment')}}</span>
+          <h2>{{stalled?i18n.t('pdf_corpus.metadata_stalled_title'):i18n.t('pdf_corpus.metadata_live_title')}}</h2>
         </div>
-        <strong class="status-count">{{settled}} / {{total}} <small>{{i18n.t('pdf_corpus.metadata_tasks_unit','tasks')}}</small></strong>
+        <strong class="status-count">{{settled}} / {{total}} <small>{{i18n.t('pdf_corpus.metadata_tasks_unit')}}</small></strong>
       </div>
-      <p>{{i18n.tf('pdf_corpus.metadata_live_summary','{complete} complete · {running} active · {queued} queued · {failed} need review',{complete,running,queued,failed:failed+skipped})}}</p>
-      <p class="status-secondary">{{i18n.t('pdf_corpus.elapsed','Elapsed')}}: {{elapsed}}<template v-if="eta"> · {{i18n.t('pdf_corpus.eta','ETA')}}: ~{{eta}}</template> · {{i18n.t('pdf_corpus.last_progress','Last settled task')}}: {{lastProgress}} · {{i18n.t('pdf_corpus.concurrency','Concurrency')}}: {{build.metadata_concurrency||1}}</p>
-      <p class="saved-indicator">✓ {{i18n.t('pdf_corpus.resume_safe','Resume-safe')}} · {{i18n.t('pdf_corpus.saved_checkpoint','checkpoint saved')}} {{lastProgress}}</p>
-      <div class="progress-track" :aria-label="i18n.t('pdf_corpus.metadata_task_progress','Metadata task progress')" :aria-valuenow="settled" :aria-valuemin="0" :aria-valuemax="Math.max(1,total)" role="progressbar"><span :style="{width:`${total?Math.min(100,(settled/total)*100):0}%`}"></span></div>
+      <p>{{i18n.tf('pdf_corpus.metadata_live_summary', {complete,running,queued,failed:failed+skipped})}}</p>
+      <p class="status-secondary">{{i18n.t('pdf_corpus.elapsed')}}: {{elapsed}}<template v-if="eta"> · {{i18n.t('pdf_corpus.eta')}}: ~{{eta}}</template> · {{i18n.t('pdf_corpus.last_progress')}}: {{lastProgress}} · {{i18n.t('pdf_corpus.concurrency')}}: {{build.metadata_concurrency||1}}</p>
+      <p class="saved-indicator">✓ {{i18n.t('pdf_corpus.resume_safe')}} · {{i18n.t('pdf_corpus.saved_checkpoint')}} {{lastProgress}}</p>
+      <div class="progress-track" :aria-label="i18n.t('pdf_corpus.metadata_task_progress')" :aria-valuenow="settled" :aria-valuemin="0" :aria-valuemax="Math.max(1,total)" role="progressbar"><span :style="{width:`${total?Math.min(100,(settled/total)*100):0}%`}"></span></div>
     </div>
 
-    <div v-if="active.length" class="active-tasks" :aria-label="i18n.t('pdf_corpus.active_metadata_tasks','Active metadata tasks')">
-      <b>{{i18n.t('pdf_corpus.active_now','Active now')}}</b>
+    <div v-if="active.length" class="active-tasks" :aria-label="i18n.t('pdf_corpus.active_metadata_tasks')">
+      <b>{{i18n.t('pdf_corpus.active_now')}}</b>
       <ul><li v-for="item in active.slice(0,6)" :key="`${item.record_id}-${item.task}`"><span>{{item.record_id}}</span><strong>{{taskLabel(String(item.task||''))}}<small v-if="activeElapsed(item.started_at)"> · {{activeElapsed(item.started_at)}}</small></strong></li></ul>
     </div>
 
     <div class="status-actions">
-      <button type="button" class="btn" :disabled="disabled||Boolean(build.metadata_settle_requested)" @click="emit('settle')">{{build.metadata_settle_requested?i18n.t('pdf_corpus.settle_requested','Settling remaining tasks…'):i18n.t('pdf_corpus.continue_unresolved','Continue with unresolved metadata')}}</button>
-      <button type="button" class="btn" :disabled="disabled" @click="emit('cancel')">{{i18n.t('pdf_corpus.cancel_build','Cancel build')}}</button>
+      <button type="button" class="btn" :disabled="disabled||Boolean(build.metadata_settle_requested)" @click="emit('settle')">{{build.metadata_settle_requested?i18n.t('pdf_corpus.settle_requested'):i18n.t('pdf_corpus.continue_unresolved')}}</button>
+      <button type="button" class="btn" :disabled="disabled" @click="emit('cancel')">{{i18n.t('pdf_corpus.cancel_build')}}</button>
     </div>
   </section>
 </template>

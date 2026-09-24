@@ -75,7 +75,7 @@ function mediaKind(kind?: string) {
 }
 
 function unset() {
-  return i18n.t("pdf_corpus.metadata_unset", "Not detected");
+  return i18n.t("pdf_corpus.metadata_unset");
 }
 
 function formatDate(value?: string | null) {
@@ -102,16 +102,12 @@ function onFile(event: Event) {
 }
 
 function importLabel(hit: GutenbergHit) {
-  return i18n.tf(
-    "pdf_corpus.import_gutenberg_hit",
-    "Load {title} by {author} · #{id} · {language}",
-    {
+  return i18n.tf("pdf_corpus.import_gutenberg_hit", {
       title: hit.title,
       author: hit.author || unset(),
       id: hit.etext_id,
       language: hit.language,
-    },
-  );
+    });
 }
 </script>
 
@@ -119,7 +115,7 @@ function importLabel(hit: GutenbergHit) {
   <div class="source-ingest" :aria-busy="busy ? 'true' : undefined">
     <div class="source-setup-grid">
       <label for="pdf-corpus-source">
-        <span>{{ i18n.t("pdf_corpus.source_asset", "Source asset") }}</span>
+        <span>{{ i18n.t("pdf_corpus.source_asset") }}</span>
         <select
           id="pdf-corpus-source"
           class="control"
@@ -128,17 +124,17 @@ function importLabel(hit: GutenbergHit) {
           @change="emit('update:assetId', ($event.target as HTMLSelectElement).value)"
         >
           <option value="">
-            {{ i18n.t("pdf_corpus.choose_persisted_pdf", "Choose a saved source…") }}
+            {{ i18n.t("pdf_corpus.choose_persisted_pdf") }}
           </option>
           <option v-for="asset in assets" :key="asset.asset_id" :value="asset.asset_id">
             {{ asset.filename }} · {{ asset.block_count }}
-            {{ i18n.t("pdf_corpus.blocks", "blocks") }}
+            {{ i18n.t("pdf_corpus.blocks") }}
           </option>
         </select>
       </label>
       <div class="ingest-actions">
         <label for="source-format"
-          ><span>{{ i18n.t("pdf_corpus.media_kind", "Source type") }}</span>
+          ><span>{{ i18n.t("pdf_corpus.media_kind") }}</span>
           <select id="source-format" v-model="chosenKind" class="control" :disabled="disabled"
             :aria-describedby="chosenKind === 'audio' ? 'source-format-help' : undefined">
             <option v-for="(_, kind) in formats" :key="kind" :value="kind">
@@ -148,19 +144,13 @@ function importLabel(hit: GutenbergHit) {
         </label>
         <p v-if="chosenKind === 'audio'" id="source-format-help">
           {{
-            i18n.t(
-              "pdf_corpus.audio_help",
-              "Transcribe audio into timed speaker spans. Corrections create revisions; the source transcript is preserved.",
-            )
+            i18n.t("pdf_corpus.audio_help")
           }}
         </p>
         <fieldset v-if="hasPages(chosenKind)" class="illegibility-field" :disabled="disabled">
-          <legend>{{ i18n.t("pdf_corpus.source_illegibility", "OCR strategy") }}</legend>
+          <legend>{{ i18n.t("pdf_corpus.source_illegibility") }}</legend>
           <small id="source-illegibility-help">{{
-            i18n.t(
-              "pdf_corpus.source_illegibility_help",
-              "Choose this before selecting a source. The setting controls how aggressively pages are sent through OCR.",
-            )
+            i18n.t("pdf_corpus.source_illegibility_help")
           }}</small>
           <label>
             <input
@@ -170,7 +160,7 @@ function importLabel(hit: GutenbergHit) {
               :checked="ocrStrategy === 'embedded'"
               @change="onOcrStrategy('embedded')"
             />
-            {{ i18n.t("pdf_corpus.source_ocr_embedded", "Use embedded text when available") }}
+            {{ i18n.t("pdf_corpus.source_ocr_embedded") }}
           </label>
           <label>
             <input
@@ -180,7 +170,7 @@ function importLabel(hit: GutenbergHit) {
               :checked="ocrStrategy === 'difficult'"
               @change="onOcrStrategy('difficult')"
             />
-            {{ i18n.t("pdf_corpus.source_ocr_difficult", "Prefer OCR for difficult scans") }}
+            {{ i18n.t("pdf_corpus.source_ocr_difficult") }}
           </label>
           <label>
             <input
@@ -190,7 +180,7 @@ function importLabel(hit: GutenbergHit) {
               :checked="ocrStrategy === 'always'"
               @change="onOcrStrategy('always')"
             />
-            {{ i18n.t("pdf_corpus.source_ocr_always", "Always OCR") }}
+            {{ i18n.t("pdf_corpus.source_ocr_always") }}
           </label>
         </fieldset>
         <div class="source-actions">
@@ -201,7 +191,7 @@ function importLabel(hit: GutenbergHit) {
             :disabled="disabled"
             @click="emit('useCurrent')"
           >
-            {{ i18n.t("pdf_corpus.use_current_pdf", "Use current Explorer PDF") }}
+            {{ i18n.t("pdf_corpus.use_current_pdf") }}
           </button>
           <button
             type="button"
@@ -211,8 +201,8 @@ function importLabel(hit: GutenbergHit) {
           >
             {{
               busy === "upload"
-                ? i18n.t("pdf_corpus.extracting", "Extracting…")
-                : i18n.t("pdf_corpus.choose_pdf", "Choose source file")
+                ? i18n.t("pdf_corpus.extracting")
+                : i18n.t("pdf_corpus.choose_pdf")
             }}
           </button>
           <input
@@ -222,7 +212,7 @@ function importLabel(hit: GutenbergHit) {
             tabindex="-1"
             type="file"
             :accept="formats[chosenKind]"
-            :aria-label="i18n.t('pdf_corpus.choose_pdf', 'Choose source file')"
+            :aria-label="i18n.t('pdf_corpus.choose_pdf')"
             @change="onFile"
           />
         </div>
@@ -232,31 +222,31 @@ function importLabel(hit: GutenbergHit) {
     <div class="alternate-sources">
       <form class="url-source" @submit.prevent="emit('loadUrl')">
         <label for="pdf-corpus-source-url">
-          <span>{{ i18n.t("pdf_corpus.source_url", "Source URL") }}</span>
+          <span>{{ i18n.t("pdf_corpus.source_url") }}</span>
           <input
             id="pdf-corpus-source-url"
             class="control"
             type="url"
             inputmode="url"
             :value="sourceUrl"
-            :placeholder="i18n.t('pdf_corpus.url_placeholder', 'https://')"
+            :placeholder="i18n.t('pdf_corpus.url_placeholder')"
             :disabled="disabled"
             @input="emit('update:sourceUrl', ($event.target as HTMLInputElement).value)"
           />
         </label>
         <button type="submit" class="btn" :disabled="disabled || !sourceUrl.trim()">
-          {{ i18n.t("pdf_corpus.load_url", "Load URL") }}
+          {{ i18n.t("pdf_corpus.load_url") }}
         </button>
       </form>
       <form class="gutenberg-source" @submit.prevent="emit('searchGutenberg')">
         <label for="pdf-corpus-gutenberg">
-          <span>{{ i18n.t("pdf_corpus.gutenberg_search", "Search Project Gutenberg") }}</span>
+          <span>{{ i18n.t("pdf_corpus.gutenberg_search") }}</span>
           <input
             id="pdf-corpus-gutenberg"
             class="control"
             type="search"
             :value="gutenbergQuery"
-            :placeholder="i18n.t('pdf_corpus.gutenberg_query', 'Title or author')"
+            :placeholder="i18n.t('pdf_corpus.gutenberg_query')"
             :disabled="disabled"
             @input="emit('update:gutenbergQuery', ($event.target as HTMLInputElement).value)"
           />
@@ -264,15 +254,15 @@ function importLabel(hit: GutenbergHit) {
         <button type="submit" class="btn" :disabled="disabled || !gutenbergQuery.trim()">
           {{
             busy === "gutenberg"
-              ? i18n.t("pdf_corpus.extracting", "Extracting…")
-              : i18n.t("pdf_corpus.gutenberg_search", "Search Project Gutenberg")
+              ? i18n.t("pdf_corpus.extracting")
+              : i18n.t("pdf_corpus.gutenberg_search")
           }}
         </button>
       </form>
       <ul
         v-if="hits.length"
         class="gutenberg-hits"
-        :aria-label="i18n.t('pdf_corpus.gutenberg_results', 'Project Gutenberg results')"
+        :aria-label="i18n.t('pdf_corpus.gutenberg_results')"
       >
         <li v-for="hit in hits" :key="hit.etext_id">
           <button
@@ -291,19 +281,19 @@ function importLabel(hit: GutenbergHit) {
 
     <dl v-if="selectedAsset" class="source-facts">
       <div v-if="selectedAsset.media_kind">
-        <dt>{{ i18n.t("pdf_corpus.media_kind", "Source type") }}</dt>
+        <dt>{{ i18n.t("pdf_corpus.media_kind") }}</dt>
         <dd>{{ mediaKind(selectedAsset.media_kind) }}</dd>
       </div>
       <div v-if="hasPages(selectedAsset.media_kind)">
-        <dt>{{ i18n.t("pdf_corpus.pages", "pages") }}</dt>
+        <dt>{{ i18n.t("pdf_corpus.pages") }}</dt>
         <dd>{{ selectedAsset.page_count }}</dd>
       </div>
       <div>
-        <dt>{{ i18n.t("pdf_corpus.blocks", "blocks") }}</dt>
+        <dt>{{ i18n.t("pdf_corpus.blocks") }}</dt>
         <dd>{{ selectedAsset.block_count }}</dd>
       </div>
       <div v-if="hasPages(selectedAsset.media_kind)">
-        <dt>{{ i18n.t("pdf_corpus.ocr_pages", "OCR page(s)") }}</dt>
+        <dt>{{ i18n.t("pdf_corpus.ocr_pages") }}</dt>
         <dd>{{ selectedAsset.ocr_pages }}</dd>
       </div>
       <div>
@@ -311,11 +301,11 @@ function importLabel(hit: GutenbergHit) {
         <dd>{{ selectedAsset.sha256.slice(0, 16) }}…</dd>
       </div>
       <div>
-        <dt>{{ i18n.t("pdf_corpus.loaded", "Loaded") }}</dt>
+        <dt>{{ i18n.t("pdf_corpus.loaded") }}</dt>
         <dd>{{ formatDate(selectedAsset.created_at) }}</dd>
       </div>
       <div v-if="selectedAsset.deterministic_checked_at">
-        <dt>{{ i18n.t("pdf_corpus.deterministic_check", "Deterministic check") }}</dt>
+        <dt>{{ i18n.t("pdf_corpus.deterministic_check") }}</dt>
         <dd>
           {{ selectedAsset.initial_metadata?.title || unset() }} ·
           {{ selectedAsset.initial_metadata?.document_author || unset() }} ·

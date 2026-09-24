@@ -111,6 +111,22 @@ describe("record presenters", () => {
     expect(presenters.workInsightMetrics([row], "W")).toMatchSnapshot();
     expect(presenters.workInsightsPanelHtml([row], "W")).toMatchSnapshot();
   });
+  it("localizes empty dashboard pie charts at render time", () => {
+    const french = createRecordPresenters({
+      tr: (key: string, fallback = "") =>
+        key === "dashboard.no_data_yet" ? "aucune donnée pour le moment" : fallback,
+      trf,
+      pages: (record: { page_start?: unknown }) => `p${record?.page_start ?? "-"}`,
+      recordDbStatus: () => ({ kind: "absent", label: "L", title: "T" }),
+      label: (key: string) => `L(${key})`,
+      display: (value: unknown) => (value == null || value === "" ? "—" : String(value)),
+      allAnnotations: () => [],
+      compareSearchIndex: () => [],
+    } as never) as Record<string, (...args: unknown[]) => unknown>;
+    const html = String(french.dashboardMetricBody({ type: "pie", title: "Share", values: [] }));
+    expect(html).toContain("aucune donnée pour le moment");
+    expect(html).not.toContain("no data yet");
+  });
   it("searches compare options", () => {
     expect(presenters.searchRecordOptions("alpha")).toMatchSnapshot();
     expect(presenters.searchRecordOptions("")).toHaveLength(2);

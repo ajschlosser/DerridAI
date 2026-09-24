@@ -29,6 +29,16 @@ describe("roles domain", () => {
     expect(grouped[0]?.items).toHaveLength(2);
     expect(matchesCapabilityFilter({id: "rag.run", label: "Run RAG", description: "Start jobs."}, "rag")).toBe(true);
     expect(matchesCapabilityFilter({id: "rag.run", label: "Run RAG", description: "Start jobs."}, "dashboard")).toBe(false);
+    expect(
+      matchesCapabilityFilter(
+        {
+          id: "page.dashboard",
+          label: "Dashboard",
+          description: "Open the dashboard and researcher-safe overview widgets.",
+        },
+        "research",
+      ),
+    ).toBe(false);
     expect(categorySlug("Appearance & settings")).toBe("appearance_settings");
   });
 });

@@ -38,7 +38,7 @@ const work = computed(() =>
   String(
     record.value.work ||
       record.value.document_title ||
-      i18n.t("record.untitled", "Untitled record"),
+      i18n.t("record.untitled"),
   ),
 );
 const author = computed(() => String(record.value.document_author || ""));
@@ -48,7 +48,7 @@ const year = computed<string | number | null>(() => {
 });
 const positionLabel = computed(() =>
   snapshot.value.total && snapshot.value.current_index != null
-    ? i18n.tf("record.position_of", "{current} of {total}", {
+    ? i18n.tf("record.position_of", {
         current: snapshot.value.current_index + 1,
         total: snapshot.value.total,
       })
@@ -58,15 +58,15 @@ const badges = computed(() => {
   const out: Array<{ text: string; tone?: string }> = [];
   if (record.value.region_type) out.push({ text: String(record.value.region_type) });
   if (record.value.primary_text === false)
-    out.push({ text: i18n.t("record.secondary_text", "Secondary text") });
+    out.push({ text: i18n.t("record.secondary_text") });
   else if (record.value.primary_text === true)
-    out.push({ text: i18n.t("record.primary_text", "Primary text") });
+    out.push({ text: i18n.t("record.primary_text") });
   if (record.value.document_is_translation)
-    out.push({ text: i18n.t("record.translation", "Translation") });
+    out.push({ text: i18n.t("record.translation") });
   if (record.value.needs_review)
-    out.push({ text: i18n.t("record.needs_review", "Needs review"), tone: "warn" });
+    out.push({ text: i18n.t("record.needs_review"), tone: "warn" });
   if (snapshot.value.mode === "database")
-    out.push({ text: i18n.t("record.database_record", "Database record") });
+    out.push({ text: i18n.t("record.database_record") });
   else if (snapshot.value.file_name) out.push({ text: String(snapshot.value.file_name) });
   return out;
 });
@@ -231,26 +231,26 @@ onBeforeUnmount(() => {
 <template>
   <main class="record-workspace-page" :aria-busy="loading">
     <div v-if="loading" class="record-workspace-loading">
-      <span></span><strong>{{ i18n.t("record.loading", "Loading record…") }}</strong>
+      <span></span><strong>{{ i18n.t("record.loading") }}</strong>
     </div>
     <section v-else-if="error" class="record-workspace-empty">
-      <h1>{{ i18n.t("record.load_failed", "Could not load record") }}</h1>
+      <h1>{{ i18n.t("record.load_failed") }}</h1>
       <p>{{ error }}</p>
-      <button type="button" @click="load">{{ i18n.t("ui.retry", "Retry") }}</button>
+      <button type="button" @click="load">{{ i18n.t("ui.retry") }}</button>
     </section>
     <section v-else-if="!snapshot.available" class="record-workspace-empty">
-      <h1>{{ i18n.t("record.no_record_selected", "No record selected") }}</h1>
+      <h1>{{ i18n.t("record.no_record_selected") }}</h1>
       <p>
         {{
           snapshot.reason ||
-          i18n.t("record.no_record_help", "Choose a record from Search, Works, or Records.")
+          i18n.t("record.no_record_help")
         }}
       </p>
       <div>
         <button type="button" @click="runtime.navigateRecordWorkspace('global')">
-          {{ i18n.t("nav.search", "Search") }}</button
+          {{ i18n.t("nav.search") }}</button
         ><button type="button" @click="runtime.navigateRecordWorkspace('works')">
-          {{ i18n.t("nav.works", "Works") }}
+          {{ i18n.t("nav.works") }}
         </button>
       </div>
     </section>
@@ -289,7 +289,7 @@ onBeforeUnmount(() => {
         @pdf="action('pdf_explorer')"
       />
 
-      <div class="record-context-strip" :aria-label="i18n.t('record.status', 'Record status')">
+      <div class="record-context-strip" :aria-label="i18n.t('record.status')">
         <span
           v-for="badge in badges"
           :key="badge.text"
@@ -303,7 +303,7 @@ onBeforeUnmount(() => {
           class="record-context-link"
           @click="runtime.navigateRecordWorkspace('global')"
         >
-          {{ i18n.t("record.collection", "Collection") }}: {{ snapshot.collection }}
+          {{ i18n.t("record.collection") }}: {{ snapshot.collection }}
         </button>
         <span class="record-context-spacer"></span>
         <button
@@ -314,8 +314,8 @@ onBeforeUnmount(() => {
         >
           {{
             inspectorCollapsed
-              ? i18n.t("record.show_inspector", "Show inspector")
-              : i18n.t("record.hide_inspector", "Hide inspector")
+              ? i18n.t("record.show_inspector")
+              : i18n.t("record.hide_inspector")
           }}
         </button>
       </div>
@@ -342,7 +342,7 @@ onBeforeUnmount(() => {
           role="separator"
           tabindex="0"
           aria-orientation="vertical"
-          :aria-label="i18n.t('record.resize_inspector', 'Resize record inspector')"
+          :aria-label="i18n.t('record.resize_inspector')"
           aria-valuemin="310"
           aria-valuemax="440"
           :aria-valuenow="Math.round(inspectorWidth)"
@@ -381,14 +381,14 @@ onBeforeUnmount(() => {
         <form method="dialog" @submit.prevent="saveAnnotation">
           <header>
             <div>
-              <p>{{ i18n.t("annotations.record_notes", "Annotations") }}</p>
+              <p>{{ i18n.t("annotations.record_notes") }}</p>
               <h2 id="recordAnnotationTitle">
-                {{ i18n.t("annotations.add_note_tags", "Add note / tags") }}
+                {{ i18n.t("annotations.add_note_tags") }}
               </h2>
             </div>
             <button
               type="button"
-              :aria-label="i18n.t('ui.close', 'Close')"
+              :aria-label="i18n.t('ui.close')"
               @click="closeAnnotation"
             >
               ×
@@ -397,21 +397,21 @@ onBeforeUnmount(() => {
           <div class="record-annotation-form">
             <blockquote v-if="annotationQuote">{{ annotationQuote }}</blockquote>
             <label
-              ><span>{{ i18n.t("annotations.note", "Note") }}</span
+              ><span>{{ i18n.t("annotations.note") }}</span
               ><textarea
                 id="recordAnnotationNote"
                 v-model="annotationNote"
                 rows="5"
                 :placeholder="
-                  i18n.t('annotations.note_placeholder', 'Add a note about this selection…')
+                  i18n.t('annotations.note_placeholder')
                 "
               ></textarea>
             </label>
             <label
-              ><span>{{ i18n.t("annotations.tags", "Tags") }}</span
+              ><span>{{ i18n.t("annotations.tags") }}</span
               ><input
                 v-model="annotationTags"
-                :placeholder="i18n.t('annotations.tags_placeholder', 'Comma-separated tags')"
+                :placeholder="i18n.t('annotations.tags_placeholder')"
             /></label>
             <p v-if="annotationError" class="record-annotation-error" role="alert">
               {{ annotationError }}
@@ -419,9 +419,9 @@ onBeforeUnmount(() => {
           </div>
           <footer>
             <button type="button" @click="closeAnnotation">
-              {{ i18n.t("ui.cancel", "Cancel") }}</button
+              {{ i18n.t("ui.cancel") }}</button
             ><button type="submit" class="primary">
-              {{ i18n.t("annotations.save", "Save annotation") }}
+              {{ i18n.t("annotations.save") }}
             </button>
           </footer>
         </form>

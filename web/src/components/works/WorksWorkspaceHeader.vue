@@ -35,21 +35,18 @@ const i18n = useI18nStore();
 <template>
   <header class="works-workspace-header" aria-labelledby="works-page-title">
     <div class="works-header-copy">
-      <span class="section-label">{{ i18n.t("works.workspace_kicker", "Corpus library") }}</span>
-      <h1 id="works-page-title">{{ i18n.t("nav.works", "Works") }}</h1>
+      <span class="section-label">{{ i18n.t("works.workspace_kicker") }}</span>
+      <h1 id="works-page-title">{{ i18n.t("nav.works") }}</h1>
       <p>
         {{
-          i18n.t(
-            "works.workspace_help",
-            "Review bibliographic coverage, inspect metadata consistency, and sync loaded records to the selected corpus database.",
-          )
+          i18n.t("works.workspace_help")
         }}
       </p>
     </div>
 
     <div
       class="works-header-actions"
-      :aria-label="i18n.t('works.workspace_actions', 'Works actions')"
+      :aria-label="i18n.t('works.workspace_actions')"
     >
       <button
         id="chooseWorksJsonl"
@@ -61,12 +58,12 @@ const i18n = useI18nStore();
         @click="emit('chooseJsonl')"
       >
         <AppIcon name="upload" aria-hidden="true" />{{
-          i18n.t("records.choose_jsonl", "Choose JSONL files")
+          i18n.t("records.choose_jsonl")
         }}
       </button>
       <button id="separateWorks" type="button" class="btn small" @click="emit('separate')">
         <AppIcon name="filter" aria-hidden="true" />{{
-          i18n.t("works.separate_jsonl", "Separate works")
+          i18n.t("works.separate_jsonl")
         }}
       </button>
       <button
@@ -79,7 +76,7 @@ const i18n = useI18nStore();
         @click="emit('populateAll')"
       >
         <AppIcon name="spark" aria-hidden="true" />{{
-          i18n.t("works.populate_all_metadata", "Populate all metadata with LLM")
+          i18n.t("works.populate_all_metadata")
         }}
       </button>
       <button
@@ -92,31 +89,31 @@ const i18n = useI18nStore();
         @click="emit('syncAll')"
       >
         <AppIcon name="database" aria-hidden="true" />{{
-          i18n.t("works.sync_all", "Sync all works")
+          i18n.t("works.sync_all")
         }}
       </button>
     </div>
 
     <dl
       class="works-header-metrics"
-      :aria-label="i18n.t('works.workspace_summary', 'Works summary')"
+      :aria-label="i18n.t('works.workspace_summary')"
     >
       <div>
-        <dt>{{ i18n.t("dynamic.works", "works") }}</dt>
+        <dt>{{ i18n.t("dynamic.works") }}</dt>
         <dd>{{ props.totalWorks.toLocaleString(i18n.locale) }}</dd>
       </div>
       <div>
-        <dt>{{ i18n.t("dynamic.records", "records") }}</dt>
+        <dt>{{ i18n.t("dynamic.records") }}</dt>
         <dd>{{ props.totalRecords.toLocaleString(i18n.locale) }}</dd>
       </div>
       <div>
-        <dt>{{ i18n.t("works.source_files", "source files") }}</dt>
+        <dt>{{ i18n.t("works.source_files") }}</dt>
         <dd>{{ props.sourceFileCount.toLocaleString(i18n.locale) }}</dd>
       </div>
     </dl>
 
     <label class="works-sync-target">
-      <span>{{ i18n.t("works.sync_target", "Sync target") }}</span>
+      <span>{{ i18n.t("works.sync_target") }}</span>
       <select
         id="worksStore"
         class="control compact-select"
@@ -133,7 +130,7 @@ const i18n = useI18nStore();
       </select>
       <small>{{
         props.activeStore
-          ? `${props.activeStoreCount.toLocaleString(i18n.locale)} ${i18n.t("dynamic.records", "records")}`
+          ? `${props.activeStoreCount.toLocaleString(i18n.locale)} ${i18n.t("dynamic.records")}`
           : props.dbUnavailableReason
       }}</small>
     </label>

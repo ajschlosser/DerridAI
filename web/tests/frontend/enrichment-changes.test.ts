@@ -19,7 +19,7 @@ describe("changes made by enrichment",()=>{
   beforeEach(()=>setActivePinia(createPinia()));
   it("shows authoritative candidates with provenance outside the action",()=>{
     const text=mountWith(record()).text();
-    expect(text).toContain("cities of refuge");expect(text).toContain("hospitality");expect(text).toContain("qwen3.5:4b");expect(text).toContain("pass 2");expect(text).toContain("91%");
+    expect(text).toContain("cities of refuge");expect(text).toContain("hospitality");expect(text).toContain("qwen3.5:4b");expect(text).toContain("Pass 2");expect(text).toContain("91%");
     expect(text).not.toContain("Use qwen3.5:4b");
   });
   it("restores, keeps, or uses a candidate with compact buttons",async()=>{
@@ -31,7 +31,7 @@ describe("changes made by enrichment",()=>{
   });
   it("prefers metadata_disputes over stale history from an earlier pass",()=>{
     const wrapper=mountWith(record({metadata_enrichment_history:[{run_id:"r1",pass:1,outcome:"disputed",disputes:[{field:"target",existing:"cities of refuge",proposed:"hospitality"}]}],metadata_disputes:[{field:"target",existing:"cities of refuge",proposed:"cosmopolitanism",candidates:[{value:"cities of refuge",source:"current"},{value:"hospitality",source:"llm",model:"m1",pass:1},{value:"cosmopolitanism",source:"llm",model:"m2",pass:2}]}]}));
-    expect(wrapper.text()).toContain("cosmopolitanism");expect(wrapper.text()).toContain("m2");expect(wrapper.text()).toContain("pass 2");
+    expect(wrapper.text()).toContain("cosmopolitanism");expect(wrapper.text()).toContain("m2");expect(wrapper.text()).toContain("Pass 2");
   });
   it("shows protected suggestions and agreement without requiring review",()=>{
     const wrapper=mountWith(record({

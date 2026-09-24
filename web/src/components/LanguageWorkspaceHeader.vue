@@ -24,38 +24,35 @@ defineExpose({ focusInstall: () => installButton.value?.focus() });
 <template>
   <UiPageHeader
     class="language-workspace-header"
-    :kicker="`${i18n.t('section.system', 'System')} · ${i18n.t('language.workspace_kicker', 'Localization studio')}`"
-    :title="props.title || i18n.t('language.page_title', 'Languages & internationalization')"
+    :kicker="`${i18n.t('section.system')} · ${i18n.t('language.workspace_kicker')}`"
+    :title="props.title || i18n.t('language.page_title')"
     title-id="language-page-title"
     :description="
       props.description ||
-      i18n.t(
-        'language.page_description_modern',
-        'Manage interface locales from one bilingual translation workspace. English is the canonical source; installed locales stay editable and auditable.',
-      )
+      i18n.t('language.page_description_modern')
     "
-    :actions-label="i18n.t('language.page_actions', 'Language actions')"
+    :actions-label="i18n.t('language.page_actions')"
   >
     <template #actions>
       <div
         class="language-workspace-stats"
-        :aria-label="i18n.t('language.localization_summary', 'Localization summary')"
+        :aria-label="i18n.t('language.localization_summary')"
       >
         <span
           ><b>{{ props.languageCount }}</b
-          >{{ i18n.t("language.locales", "Locales") }}</span
+          >{{ i18n.t("language.locales") }}</span
         >
         <span
           ><b>{{ props.keyCount.toLocaleString(i18n.locale) }}</b
-          >{{ i18n.t("language.source_strings", "English strings") }}</span
+          >{{ i18n.t("language.source_strings") }}</span
         >
         <span v-if="props.policyPendingCount"
           ><b>{{ props.policyPendingCount }}</b
-          >{{ i18n.t("language.content_policy_needed", "Policy needed") }}</span
+          >{{ i18n.t("language.content_policy_needed") }}</span
         >
       </div>
       <button ref="installButton" type="button" class="btn primary" @click="emit('install')">
-        <AppIcon name="plus" />{{ i18n.t("language.install", "Install language") }}
+        <AppIcon name="plus" />{{ i18n.t("language.install") }}
       </button>
     </template>
   </UiPageHeader>

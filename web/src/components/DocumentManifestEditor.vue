@@ -48,78 +48,66 @@ type GroupDef = { key: string; title: string; description: string; fields: Field
 const groups = computed<GroupDef[]>(() => [
   {
     key: "identity",
-    title: i18n.t("pdf_corpus.manifest_identity_group", "Work identity"),
-    description: i18n.t(
-      "pdf_corpus.manifest_identity_help",
-      "Identify the work and the people responsible for this edition.",
-    ),
+    title: i18n.t("pdf_corpus.manifest_identity_group"),
+    description: i18n.t("pdf_corpus.manifest_identity_help"),
     fields: [
-      { key: "title", label: i18n.t("pdf_corpus.manifest_title", "Title") },
-      { key: "short_title", label: i18n.t("pdf_corpus.manifest_short_title", "Short title") },
+      { key: "title", label: i18n.t("pdf_corpus.manifest_title") },
+      { key: "short_title", label: i18n.t("pdf_corpus.manifest_short_title") },
       {
         key: "original_title",
-        label: i18n.t("pdf_corpus.manifest_original_title", "Original title"),
+        label: i18n.t("pdf_corpus.manifest_original_title"),
       },
-      { key: "document_author", label: i18n.t("pdf_corpus.manifest_author", "Document author") },
-      { key: "translator", label: i18n.t("pdf_corpus.manifest_translator", "Translator") },
-      { key: "document_type", label: i18n.t("pdf_corpus.manifest_type", "Document type") },
+      { key: "document_author", label: i18n.t("pdf_corpus.manifest_author") },
+      { key: "translator", label: i18n.t("pdf_corpus.manifest_translator") },
+      { key: "document_type", label: i18n.t("pdf_corpus.manifest_type") },
     ],
   },
   {
     key: "publication",
-    title: i18n.t("pdf_corpus.manifest_publication_group", "Publication"),
-    description: i18n.t(
-      "pdf_corpus.manifest_publication_help",
-      "Edition-level bibliographic details used by inherited record metadata and citations.",
-    ),
+    title: i18n.t("pdf_corpus.manifest_publication_group"),
+    description: i18n.t("pdf_corpus.manifest_publication_help"),
     fields: [
-      { key: "publisher", label: i18n.t("pdf_corpus.manifest_publisher", "Publisher") },
-      { key: "publication_place", label: i18n.t("pdf_corpus.manifest_place", "Publication place") },
+      { key: "publisher", label: i18n.t("pdf_corpus.manifest_publisher") },
+      { key: "publication_place", label: i18n.t("pdf_corpus.manifest_place") },
       {
         key: "publication_year",
-        label: i18n.t("pdf_corpus.manifest_year", "Publication year"),
+        label: i18n.t("pdf_corpus.manifest_year"),
         type: "number",
       },
-      { key: "edition", label: i18n.t("pdf_corpus.manifest_edition", "Edition") },
-      { key: "isbn", label: i18n.t("pdf_corpus.manifest_isbn", "ISBN") },
+      { key: "edition", label: i18n.t("pdf_corpus.manifest_edition") },
+      { key: "isbn", label: i18n.t("pdf_corpus.manifest_isbn") },
     ],
   },
   {
     key: "language",
-    title: i18n.t("pdf_corpus.manifest_language_group", "Language and translation"),
-    description: i18n.t(
-      "pdf_corpus.manifest_language_help",
-      "Language facts inform citation, translation, and corpus metadata.",
-    ),
+    title: i18n.t("pdf_corpus.manifest_language_group"),
+    description: i18n.t("pdf_corpus.manifest_language_help"),
     fields: [
-      { key: "language", label: i18n.t("pdf_corpus.manifest_language", "Document language") },
+      { key: "language", label: i18n.t("pdf_corpus.manifest_language") },
       {
         key: "original_language",
-        label: i18n.t("pdf_corpus.manifest_original_language", "Original language"),
+        label: i18n.t("pdf_corpus.manifest_original_language"),
       },
     ],
   },
   {
     key: "structure",
-    title: i18n.t("pdf_corpus.manifest_structure_group", "Document structure"),
-    description: i18n.t(
-      "pdf_corpus.manifest_structure_help",
-      "Physical PDF page bounds help distinguish main text from front and back matter.",
-    ),
+    title: i18n.t("pdf_corpus.manifest_structure_group"),
+    description: i18n.t("pdf_corpus.manifest_structure_help"),
     fields: [
       {
         key: "main_text_start_page",
-        label: i18n.t("pdf_corpus.manifest_main_start", "Main text starts on physical PDF page"),
+        label: i18n.t("pdf_corpus.manifest_main_start"),
         type: "number",
       },
       {
         key: "main_text_end_page",
-        label: i18n.t("pdf_corpus.manifest_main_end", "Main text ends on physical PDF page"),
+        label: i18n.t("pdf_corpus.manifest_main_end"),
         type: "number",
       },
       {
         key: "notes",
-        label: i18n.t("pdf_corpus.manifest_notes", "Source-supported notes"),
+        label: i18n.t("pdf_corpus.manifest_notes"),
         type: "textarea",
         wide: true,
       },
@@ -225,35 +213,29 @@ function reset() {
 <template>
   <form
     class="manifest-editor"
-    :aria-label="i18n.t('pdf_corpus.document_manifest', 'Document manifest')"
+    :aria-label="i18n.t('pdf_corpus.document_manifest')"
     @submit.prevent="save"
   >
     <section class="manifest-impact" aria-labelledby="manifest-impact-title">
       <div>
         <span class="eyebrow">{{
-          i18n.t("pdf_corpus.document_defaults", "Document defaults")
+          i18n.t("pdf_corpus.document_defaults")
         }}</span>
         <h3 id="manifest-impact-title">
-          {{ i18n.t("pdf_corpus.document_defaults_title", "One edit, inherited consistently") }}
+          {{ i18n.t("pdf_corpus.document_defaults_title") }}
         </h3>
         <p>
           {{
-            i18n.t(
-              "pdf_corpus.manifest_help",
-              "These values are inherited deterministically by records. Saving regenerates inherited metadata and citations while preserving explicit record overrides.",
-            )
+            i18n.t("pdf_corpus.manifest_help")
           }}
         </p>
       </div>
       <div class="manifest-impact-side">
         <UiButton
-          :label="i18n.t('pdf_corpus.reanalyze_document', 'Analyse the document again')"
+          :label="i18n.t('pdf_corpus.reanalyze_document')"
           :disabled="props.disabled"
           :title="
-            i18n.t(
-              'pdf_corpus.reanalyze_document_help',
-              'Ask the model for the document details again. Only fields that are still empty are filled; nothing you entered is changed.',
-            )
+            i18n.t('pdf_corpus.reanalyze_document_help')
           "
           @click="emit('reanalyze')"
         />
@@ -261,11 +243,7 @@ function reset() {
           v-if="props.affectedRecords > 0"
           tone="info"
           :label="
-            i18n.tf(
-              'pdf_corpus.document_defaults_records',
-              '{count} records inherit document defaults',
-              { count: props.affectedRecords },
-            )
+            i18n.tf('pdf_corpus.document_defaults_records', { count: props.affectedRecords })
           "
           :show-dot="false"
         />
@@ -307,14 +285,10 @@ function reset() {
           role="status"
         >
           <span>{{
-            i18n.tf(
-              "pdf_corpus.manifest_changed_elsewhere",
-              "This value changed elsewhere to “{value}”. Your edit is kept.",
-              {
+            i18n.tf("pdf_corpus.manifest_changed_elsewhere", {
                 value:
-                  serverChanged[field.key] || i18n.t("pdf_corpus.manifest_empty_value", "(empty)"),
-              },
-            )
+                  serverChanged[field.key] || i18n.t("pdf_corpus.manifest_empty_value"),
+              })
           }}</span>
           <button
             type="button"
@@ -322,7 +296,7 @@ function reset() {
             :disabled="props.disabled"
             @click="useServerValue(field.key)"
           >
-            {{ i18n.t("pdf_corpus.manifest_use_server_value", "Use that value") }}
+            {{ i18n.t("pdf_corpus.manifest_use_server_value") }}
           </button>
         </p>
         <div
@@ -331,11 +305,7 @@ function reset() {
           role="note"
         >
           <b>{{
-            i18n.tf(
-              "pdf_corpus.manifest_start_inferred",
-              "Suggested automatically ({percent}% confident). Check the clues:",
-              { percent: Math.round(startInference.confidence * 100) },
-            )
+            i18n.tf("pdf_corpus.manifest_start_inferred", { percent: Math.round(startInference.confidence * 100) })
           }}</b>
           <ul>
             <li v-for="clue in startInference.clues" :key="clue.kind">{{ clue.detail }}</li>
@@ -344,12 +314,12 @@ function reset() {
       </UiField>
       <UiField
         v-if="group.key === 'language'"
-        :label="i18n.t('pdf_corpus.manifest_translation', 'Translation status')"
+        :label="i18n.t('pdf_corpus.manifest_translation')"
       >
         <select v-model="translationDraft" class="control" :disabled="props.disabled">
-          <option value="">{{ i18n.t("pdf_corpus.manifest_unknown", "Unknown") }}</option>
-          <option value="yes">{{ i18n.t("ui.yes", "Yes") }}</option>
-          <option value="no">{{ i18n.t("ui.no", "No") }}</option>
+          <option value="">{{ i18n.t("pdf_corpus.manifest_unknown") }}</option>
+          <option value="yes">{{ i18n.t("ui.yes") }}</option>
+          <option value="no">{{ i18n.t("ui.no") }}</option>
         </select>
       </UiField>
     </MetadataFormSection>
@@ -358,29 +328,25 @@ function reset() {
       sticky
       :summary="
         dirty
-          ? i18n.tf('pdf_corpus.manifest_changes_count', '{count} unsaved change(s)', {
+          ? i18n.tf('pdf_corpus.manifest_changes_count', {
               count: changedCount,
             })
-          : i18n.t('pdf_corpus.manifest_no_changes', 'No unsaved changes')
+          : i18n.t('pdf_corpus.manifest_no_changes')
       "
       :detail="
         dirty && props.affectedRecords
-          ? i18n.tf(
-              'pdf_corpus.manifest_propagation_preview',
-              'Saving updates inherited values for up to {count} records and reopens the records whose inherited values change; explicit record overrides remain unchanged.',
-              { count: props.affectedRecords },
-            )
+          ? i18n.tf('pdf_corpus.manifest_propagation_preview', { count: props.affectedRecords })
           : ''
       "
     >
       <UiButton
-        :label="i18n.t('ui.reset', 'Reset')"
+        :label="i18n.t('ui.reset')"
         :disabled="props.disabled || !dirty"
         @click="reset"
       /><UiButton
         type="submit"
         variant="primary"
-        :label="i18n.t('pdf_corpus.save_manifest_changes', 'Save document changes')"
+        :label="i18n.t('pdf_corpus.save_manifest_changes')"
         :disabled="props.disabled || !dirty"
       />
     </MetadataFormFooter>

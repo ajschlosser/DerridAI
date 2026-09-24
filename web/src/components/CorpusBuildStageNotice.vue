@@ -5,10 +5,10 @@ const i18n=useI18nStore();
 </script>
 <template>
   <section class="build-stage-active" role="status" aria-live="polite">
-    <span class="eyebrow">{{i18n.t('pdf_corpus.building_records','Building records')}}</span>
-    <h3>{{i18n.t('pdf_corpus.building_records_title','Corpus construction is in progress')}}</h3>
-    <p>{{i18n.t('pdf_corpus.building_records_help','DerridAI is analyzing document structure and semantic boundaries. The review workspace will appear automatically when reviewable records are persisted.')}}</p>
-    <small v-if="stage">{{i18n.t('pdf_corpus.current_stage','Current stage')}}: {{stage}}</small>
+    <span class="eyebrow">{{i18n.t('pdf_corpus.building_records')}}</span>
+    <h3>{{i18n.t('pdf_corpus.building_records_title')}}</h3>
+    <p>{{i18n.t('pdf_corpus.building_records_help')}}</p>
+    <small v-if="stage">{{i18n.t('pdf_corpus.current_stage')}}: {{stage}}</small>
   </section>
 </template>
 <style scoped>

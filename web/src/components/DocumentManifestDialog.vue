@@ -11,9 +11,9 @@ const i18n=useI18nStore();
 <template>
   <UiDialog
     size="large"
-    :title="i18n.t('pdf_corpus.edit_document_metadata','Edit document metadata')"
-    :description="i18n.t('pdf_corpus.document_metadata_dialog_help','Edit document-level defaults once. Records inherit these values unless they have an explicit human override.')"
-    :close-label="i18n.t('ui.close','Close')"
+    :title="i18n.t('pdf_corpus.edit_document_metadata')"
+    :description="i18n.t('pdf_corpus.document_metadata_dialog_help')"
+    :close-label="i18n.t('ui.close')"
     @close="emit('close')"
   >
     <DocumentManifestEditor

@@ -148,15 +148,15 @@ function selectFromText() {
   markDirty();
 }
 function display(value: unknown) {
-  if (value === true) return i18n.t("ui.yes", "Yes");
-  if (value === false) return i18n.t("ui.no", "No");
+  if (value === true) return i18n.t("ui.yes");
+  if (value === false) return i18n.t("ui.no");
   if (Array.isArray(value)) return value.join(", ") || "—";
   return value === null || value === undefined || value === "" ? "—" : String(value);
 }
 const confidenceLabel = computed(() =>
   confidence.value === null
-    ? i18n.t("pdf_corpus.confidence_not_reported", "Confidence not reported")
-    : i18n.tf("pdf_corpus.confidence_percent", "Confidence: {percent}%", {
+    ? i18n.t("pdf_corpus.confidence_not_reported")
+    : i18n.tf("pdf_corpus.confidence_percent", {
         percent: Math.round(confidence.value * 100),
       }),
 );
@@ -186,7 +186,7 @@ const autoResolved = computed(
       </div>
       <div class="field-actions">
         <button type="button" class="link-button" @click="emit('source')">
-          {{ i18n.t("pdf_corpus.view_evidence", "View evidence") }}</button
+          {{ i18n.t("pdf_corpus.view_evidence") }}</button
         ><button
           type="button"
           class="btn small"
@@ -196,40 +196,30 @@ const autoResolved = computed(
             if (!editing) emit('dirty', false);
           "
         >
-          {{ editing ? i18n.t("ui.done", "Done") : i18n.t("ui.edit", "Edit") }}
+          {{ editing ? i18n.t("ui.done") : i18n.t("ui.edit") }}
         </button>
       </div>
     </div>
     <p v-if="status?.recheck" class="blind-note" role="status">
       {{
-        i18n.t(
-          "pdf_corpus.recheck_prompt",
-          "Quality check: enter your value again without looking back. Your earlier answer is shown after you save.",
-        )
+        i18n.t("pdf_corpus.recheck_prompt")
       }}
     </p>
     <p v-else-if="recheck" class="blind-note" role="status">
       {{
         recheck.agreed
-          ? i18n.t("pdf_corpus.recheck_same", "You gave the same answer as before.")
-          : i18n.tf(
-              "pdf_corpus.recheck_changed",
-              "Your earlier answer was: {value}. The new one is kept.",
-              { value: display(recheck.first) },
-            )
+          ? i18n.t("pdf_corpus.recheck_same")
+          : i18n.tf("pdf_corpus.recheck_changed", { value: display(recheck.first) })
       }}
     </p>
     <p v-if="status?.blind" class="blind-note" role="status">
       {{
-        i18n.t(
-          "pdf_corpus.blind_review",
-          "Blind review: choose your own value first. The model’s suggestion is shown once you save.",
-        )
+        i18n.t("pdf_corpus.blind_review")
       }}
     </p>
     <p v-else-if="hasValue(revealed)" class="blind-note" role="status">
       {{
-        i18n.tf("pdf_corpus.blind_revealed", "The model had suggested: {value}", {
+        i18n.tf("pdf_corpus.blind_revealed", {
           value: display(revealed),
         })
       }}
@@ -242,16 +232,16 @@ const autoResolved = computed(
         role="status"
       >
         <b>{{
-          i18n.t("pdf_corpus.metadata_disagreement", "Deterministic and LLM suggestions disagree")
+          i18n.t("pdf_corpus.metadata_disagreement")
         }}</b
         ><span>{{
-          i18n.tf("pdf_corpus.deterministic_value", "Deterministic: {value}", {
+          i18n.tf("pdf_corpus.deterministic_value", {
             value: String(status?.deterministic_value ?? "—"),
           })
         }}</span
         ><span
           >{{
-            i18n.tf("pdf_corpus.llm_value", "LLM: {value}", {
+            i18n.tf("pdf_corpus.llm_value", {
               value: String(status?.llm_value ?? value ?? "—"),
             })
           }}<template v-if="typeof status?.llm_confidence === 'number'">
@@ -262,7 +252,7 @@ const autoResolved = computed(
       </div>
       <p v-else-if="status?.reason" class="field-reason">{{ status.reason }}</p>
       <div v-if="constraint" class="constraint" role="status">
-        <b>{{ i18n.t("pdf_corpus.deterministic_suggestion", "Deterministic rule") }}</b
+        <b>{{ i18n.t("pdf_corpus.deterministic_suggestion") }}</b
         ><span>{{ constraint.reason }}</span>
       </div>
       <div class="value-control">
@@ -274,7 +264,7 @@ const autoResolved = computed(
           @change="markDirty"
         >
           <option value="" disabled>
-            {{ i18n.t("pdf_corpus.choose_value", "Choose a value…") }}
+            {{ i18n.t("pdf_corpus.choose_value") }}
           </option>
           <option v-for="option in options || []" :key="option" :value="option">
             {{ i18n.t(`record.enum.${field}.${option}`, option.replaceAll("_", " ")) }}
@@ -289,7 +279,7 @@ const autoResolved = computed(
               :name="`${field}-value`"
               :value="true"
               @change="markDirty"
-            /><span>{{ i18n.t("ui.yes", "Yes") }}</span></label
+            /><span>{{ i18n.t("ui.yes") }}</span></label
           ><label
             ><input
               v-model="draft"
@@ -297,7 +287,7 @@ const autoResolved = computed(
               :name="`${field}-value`"
               :value="false"
               @change="markDirty"
-            /><span>{{ i18n.t("ui.no", "No") }}</span></label
+            /><span>{{ i18n.t("ui.no") }}</span></label
           >
         </fieldset>
         <UiCombobox
@@ -350,12 +340,12 @@ const autoResolved = computed(
         >
           {{
             saving
-              ? i18n.t("pdf_corpus.saving_decision", "Saving…")
-              : i18n.t("pdf_corpus.save_field_value", "Save value")
+              ? i18n.t("pdf_corpus.saving_decision")
+              : i18n.t("pdf_corpus.save_field_value")
           }}
         </button>
         <button type="button" class="btn" :disabled="busy" @click="emit('noValue')">
-          {{ i18n.t("pdf_corpus.confirm_no_value", "No supported value") }}
+          {{ i18n.t("pdf_corpus.confirm_no_value") }}
         </button>
         <button
           v-if="control === 'combobox' || control === 'multi-combobox' || control === 'text'"
@@ -364,7 +354,7 @@ const autoResolved = computed(
           :disabled="busy"
           @click="selectFromText"
         >
-          {{ i18n.t("pdf_corpus.select_from_text", "Select from text") }}
+          {{ i18n.t("pdf_corpus.select_from_text") }}
         </button>
       </div>
       <p
@@ -372,55 +362,38 @@ const autoResolved = computed(
         class="selection-help"
       >
         {{
-          i18n.t(
-            "pdf_corpus.select_from_text_help",
-            "Highlight text in the record, then choose Select from text. String fields are replaced; list fields append the selection.",
-          )
+          i18n.t("pdf_corpus.select_from_text_help")
         }}
       </p>
       <div class="field-meta">
         <span v-if="isLlm && hasValue(resolvedValue)" class="proposal">{{
           autoResolved
-            ? i18n.t("pdf_corpus.llm_value_auto_resolved", "LLM value populated and auto-resolved")
-            : i18n.t(
-                "pdf_corpus.llm_suggestion_prefilled",
-                "LLM value populated — verify before saving",
-              )
+            ? i18n.t("pdf_corpus.llm_value_auto_resolved")
+            : i18n.t("pdf_corpus.llm_suggestion_prefilled")
         }}</span>
         <span v-if="status?.llm_assessed === true || status?.llm_checked === true">{{
-          i18n.t("pdf_corpus.llm_field_assessed", "LLM assessed this field")
+          i18n.t("pdf_corpus.llm_field_assessed")
         }}</span>
         <span v-else-if="status?.llm_value_returned === true">{{
-          i18n.t(
-            "pdf_corpus.llm_value_without_assessment",
-            "LLM returned a value without a field assessment",
-          )
+          i18n.t("pdf_corpus.llm_value_without_assessment")
         }}</span>
         <span v-else-if="status?.llm_checked === false && status?.llm_skip_reason">{{
-          i18n.tf("pdf_corpus.llm_field_not_checked", "LLM not assessed: {reason}", {
+          i18n.tf("pdf_corpus.llm_field_not_checked", {
             reason: String(status?.llm_skip_reason),
           })
         }}</span>
         <span v-if="status?.raw_llm_value && status?.raw_llm_value !== resolvedValue">{{
-          i18n.tf(
-            "pdf_corpus.llm_value_normalized",
-            "LLM returned “{raw}”; normalized to “{value}”.",
-            { raw: String(status?.raw_llm_value), value: String(resolvedValue) },
-          )
+          i18n.tf("pdf_corpus.llm_value_normalized", { raw: String(status?.raw_llm_value), value: String(resolvedValue) })
         }}</span>
         <span>{{ confidenceLabel }}</span>
         <span v-if="calibratedAcceptance && calibratedAcceptance.reviewed >= 3">{{
-          i18n.tf(
-            "pdf_corpus.calibrated_acceptance",
-            "Historically accepted {percent}% of the time ({count} reviews)",
-            {
+          i18n.tf("pdf_corpus.calibrated_acceptance", {
               percent: Math.round(calibratedAcceptance.acceptanceRate * 100),
               count: calibratedAcceptance.reviewed,
-            },
-          )
+            })
         }}</span>
         <span v-if="saved" class="saved" role="status">{{
-          i18n.t("pdf_corpus.decision_saved_editable", "Saved — you can keep editing this value")
+          i18n.t("pdf_corpus.decision_saved_editable")
         }}</span>
       </div>
     </div>

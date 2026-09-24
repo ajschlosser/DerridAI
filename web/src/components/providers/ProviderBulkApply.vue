@@ -58,14 +58,14 @@ function apply() {
 <template>
   <section class="provider-bulk" aria-labelledby="provider-bulk-title">
     <div>
-      <p class="eyebrow">{{ i18n.t("providers.bulk_apply", "Bulk values") }}</p>
-      <h2 id="provider-bulk-title">{{ i18n.t("providers.bulk_apply_title", "Set fields across profiles") }}</h2>
-      <p>{{ i18n.t("providers.bulk_apply_help", "Enter only the values you want to copy. Empty fields are left unchanged. Type-specific fields skip profiles that do not use them.") }}</p>
+      <p class="eyebrow">{{ i18n.t("providers.bulk_apply") }}</p>
+      <h2 id="provider-bulk-title">{{ i18n.t("providers.bulk_apply_title") }}</h2>
+      <p>{{ i18n.t("providers.bulk_apply_help") }}</p>
     </div>
     <fieldset class="provider-bulk-target">
-      <legend>{{ i18n.t("providers.bulk_target", "Apply to") }}</legend>
-      <label><input v-model="target" type="radio" value="all" /> {{ i18n.t("providers.apply_to_all", "Every profile") }}</label>
-      <label><input v-model="target" type="radio" value="selected" /> {{ i18n.t("providers.apply_to_selected", "Selected profiles") }}</label>
+      <legend>{{ i18n.t("providers.bulk_target") }}</legend>
+      <label><input v-model="target" type="radio" value="all" /> {{ i18n.t("providers.apply_to_all") }}</label>
+      <label><input v-model="target" type="radio" value="selected" /> {{ i18n.t("providers.apply_to_selected") }}</label>
     </fieldset>
     <div v-if="target === 'selected'" class="provider-bulk-pick">
       <label v-for="profile in profiles" :key="profile.id">
@@ -77,7 +77,7 @@ function apply() {
       <label v-for="field in PROVIDER_BULK_FIELDS" :key="field.key" class="field">
         <span>{{ i18n.t(fieldLabels[field.key]?.[0] || `providers.${field.key}`, fieldLabels[field.key]?.[1] || field.key) }}</span>
         <select v-if="field.input === 'select'" class="control" :value="values[field.key] || ''" @change="values[field.key] = ($event.target as HTMLSelectElement).value">
-          <option value="">{{ i18n.t("providers.leave_unchanged", "Leave unchanged") }}</option>
+          <option value="">{{ i18n.t("providers.leave_unchanged") }}</option>
           <option v-for="option in field.options" :key="option.value" :value="option.value">{{ option.label }}</option>
         </select>
         <input
@@ -87,14 +87,14 @@ function apply() {
           :min="field.min"
           :max="field.max"
           :step="field.step"
-          :placeholder="i18n.t('providers.leave_unchanged', 'Leave unchanged')"
+          :placeholder="i18n.t('providers.leave_unchanged')"
           :value="values[field.key] || ''"
           @input="values[field.key] = ($event.target as HTMLInputElement).value"
         />
       </label>
     </div>
     <button type="button" class="btn primary" :disabled="!Object.keys(parsedValues).length || (target === 'selected' && !selected.size)" @click="apply">
-      {{ i18n.t("providers.apply_values", "Apply values") }}
+      {{ i18n.t("providers.apply_values") }}
     </button>
   </section>
 </template>

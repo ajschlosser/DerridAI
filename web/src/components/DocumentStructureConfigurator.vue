@@ -111,15 +111,12 @@ function save() {
     <header>
       <div>
         <span class="eyebrow">{{
-          i18n.t("pdf_corpus.document_structure", "Document structure & pagination")
+          i18n.t("pdf_corpus.document_structure")
         }}</span>
         <h3 id="document-structure-title">{{ asset.filename }}</h3>
         <p>
           {{
-            i18n.t(
-              "pdf_corpus.document_structure_help",
-              "Describe physical page layout and a few reliable anchors. DerridAI derives printed-page labels, structural regions, and thread hints deterministically before asking an LLM to interpret records.",
-            )
+            i18n.t("pdf_corpus.document_structure_help")
           }}
         </p>
       </div>
@@ -133,10 +130,10 @@ function save() {
             :disabled="current <= 1"
             @click="setPage(current - 1)"
           >
-            ← {{ i18n.t("ui.previous", "Previous") }}</button
+            ← {{ i18n.t("ui.previous") }}</button
           ><label
             ><span class="sr-only">{{
-              i18n.t("pdf_corpus.physical_pdf_page", "Physical PDF page")
+              i18n.t("pdf_corpus.physical_pdf_page")
             }}</span
             ><input
               class="control compact"
@@ -152,7 +149,7 @@ function save() {
             :disabled="current >= asset.page_count"
             @click="setPage(current + 1)"
           >
-            {{ i18n.t("ui.next", "Next") }} →
+            {{ i18n.t("ui.next") }} →
           </button>
         </div>
         <PdfEvidenceViewer
@@ -165,7 +162,7 @@ function save() {
         <div
           v-if="draft.page_layout === 'two_up'"
           class="two-up-preview"
-          :aria-label="i18n.t('pdf_corpus.two_up_logical_preview', 'Two-up logical page preview')"
+          :aria-label="i18n.t('pdf_corpus.two_up_logical_preview')"
         >
           <span
             v-for="item in logicalPreview.length
@@ -178,53 +175,53 @@ function save() {
             ><b>{{ i18n.t(`pdf_corpus.${item.slot}_page`, item.slot) }}</b
             ><small>{{
               item.printed_page_label
-                ? i18n.tf("pdf_corpus.printed_page_value", "printed p. {page}", {
+                ? i18n.tf("pdf_corpus.printed_page_value", {
                     page: item.printed_page_label,
                   })
-                : i18n.t("pdf_corpus.not_mapped_yet", "not mapped yet")
+                : i18n.t("pdf_corpus.not_mapped_yet")
             }}</small></span
           >
         </div>
         <div class="current-page-actions">
           <button class="btn" type="button" @click="draft.main_text_pdf_start = current">
             {{
-              i18n.t("pdf_corpus.set_current_main_start", "Set current as main-text start")
+              i18n.t("pdf_corpus.set_current_main_start")
             }}</button
           ><button class="btn" type="button" @click="draft.bibliography_pdf_start = current">
-            {{ i18n.t("pdf_corpus.set_current_bibliography", "Set current as bibliography start") }}
+            {{ i18n.t("pdf_corpus.set_current_bibliography") }}
           </button>
         </div>
       </section>
       <section class="rules">
         <fieldset>
-          <legend>{{ i18n.t("pdf_corpus.page_layout", "Page layout") }}</legend>
+          <legend>{{ i18n.t("pdf_corpus.page_layout") }}</legend>
           <label class="radio-row"
             ><input v-model="draft.page_layout" type="radio" value="single" />
             <span>{{
-              i18n.t("pdf_corpus.single_page_layout", "1 printed page per PDF page")
+              i18n.t("pdf_corpus.single_page_layout")
             }}</span></label
           ><label class="radio-row"
             ><input v-model="draft.page_layout" type="radio" value="two_up" />
             <span>{{
-              i18n.t("pdf_corpus.two_up_layout", "2 printed pages per PDF page")
+              i18n.t("pdf_corpus.two_up_layout")
             }}</span></label
           ><label v-if="draft.page_layout === 'two_up'"
-            ><span>{{ i18n.t("pdf_corpus.reading_order", "Reading order") }}</span
+            ><span>{{ i18n.t("pdf_corpus.reading_order") }}</span
             ><select v-model="draft.reading_order" class="control">
               <option value="left_to_right">
-                {{ i18n.t("pdf_corpus.left_to_right", "Left → right") }}
+                {{ i18n.t("pdf_corpus.left_to_right") }}
               </option>
               <option value="right_to_left">
-                {{ i18n.t("pdf_corpus.right_to_left", "Right → left") }}
+                {{ i18n.t("pdf_corpus.right_to_left") }}
               </option>
             </select></label
           >
         </fieldset>
         <fieldset>
-          <legend>{{ i18n.t("pdf_corpus.structural_anchors", "Structural anchors") }}</legend>
+          <legend>{{ i18n.t("pdf_corpus.structural_anchors") }}</legend>
           <label
             ><span>{{
-              i18n.t("pdf_corpus.main_text_starts_pdf", "First main-text page appears on PDF page")
+              i18n.t("pdf_corpus.main_text_starts_pdf")
             }}</span>
             <div class="anchor">
               <input
@@ -238,17 +235,13 @@ function save() {
                 type="button"
                 @click="draft.main_text_pdf_start = current"
               >
-                {{ i18n.t("pdf_corpus.use_current_page", "Use current") }}
+                {{ i18n.t("pdf_corpus.use_current_page") }}
               </button>
             </div></label
           >
           <div v-if="showClues && inference" class="start-clues" role="note">
             <b>{{
-              i18n.tf(
-                "pdf_corpus.manifest_start_inferred",
-                "Suggested automatically ({percent}% confident). Check the clues:",
-                { percent: Math.round(inference.confidence * 100) },
-              )
+              i18n.tf("pdf_corpus.manifest_start_inferred", { percent: Math.round(inference.confidence * 100) })
             }}</b>
             <ul>
               <li v-for="clue in inference.clues" :key="clue.kind">{{ clue.detail }}</li>
@@ -256,10 +249,7 @@ function save() {
           </div>
           <label
             ><span>{{
-              i18n.t(
-                "pdf_corpus.first_printed_page_number",
-                "Printed page number at main-text start",
-              )
+              i18n.t("pdf_corpus.first_printed_page_number")
             }}</span
             ><input
               v-model.number="draft.main_text_printed_start"
@@ -267,14 +257,14 @@ function save() {
               type="number"
               min="1" /></label
           ><label v-if="draft.page_layout === 'two_up'"
-            ><span>{{ i18n.t("pdf_corpus.main_text_slot", "Main text begins on") }}</span
+            ><span>{{ i18n.t("pdf_corpus.main_text_slot") }}</span
             ><select v-model="draft.main_text_slot" class="control">
-              <option value="left">{{ i18n.t("pdf_corpus.left_page", "Left page") }}</option>
-              <option value="right">{{ i18n.t("pdf_corpus.right_page", "Right page") }}</option>
+              <option value="left">{{ i18n.t("pdf_corpus.left_page") }}</option>
+              <option value="right">{{ i18n.t("pdf_corpus.right_page") }}</option>
             </select></label
           ><label
             ><span>{{
-              i18n.t("pdf_corpus.bibliography_starts_pdf", "Bibliography begins on PDF page")
+              i18n.t("pdf_corpus.bibliography_starts_pdf")
             }}</span>
             <div class="anchor">
               <input
@@ -288,37 +278,37 @@ function save() {
                 type="button"
                 @click="draft.bibliography_pdf_start = current"
               >
-                {{ i18n.t("pdf_corpus.use_current_page", "Use current") }}
+                {{ i18n.t("pdf_corpus.use_current_page") }}
               </button>
             </div></label
           >
         </fieldset>
         <fieldset>
-          <legend>{{ i18n.t("pdf_corpus.page_threads", "Page threads") }}</legend>
+          <legend>{{ i18n.t("pdf_corpus.page_threads") }}</legend>
           <label
-            ><span>{{ i18n.t("pdf_corpus.thread_pattern", "Thread pattern") }}</span
+            ><span>{{ i18n.t("pdf_corpus.thread_pattern") }}</span
             ><select v-model="draft.thread_mode" class="control">
               <option value="continuous">
-                {{ i18n.t("pdf_corpus.thread_continuous", "Single continuous sequence") }}
+                {{ i18n.t("pdf_corpus.thread_continuous") }}
               </option>
               <option value="odd_even">
-                {{ i18n.t("pdf_corpus.thread_odd_even", "Odd PDF pages = A; even = B") }}
+                {{ i18n.t("pdf_corpus.thread_odd_even") }}
               </option>
               <option value="even_odd">
-                {{ i18n.t("pdf_corpus.thread_even_odd", "Even PDF pages = A; odd = B") }}
+                {{ i18n.t("pdf_corpus.thread_even_odd") }}
               </option>
               <option value="left_right" :disabled="draft.page_layout !== 'two_up'">
-                {{ i18n.t("pdf_corpus.thread_left_right", "Left logical pages = A; right = B") }}
+                {{ i18n.t("pdf_corpus.thread_left_right") }}
               </option>
               <option value="right_left" :disabled="draft.page_layout !== 'two_up'">
-                {{ i18n.t("pdf_corpus.thread_right_left", "Right logical pages = A; left = B") }}
+                {{ i18n.t("pdf_corpus.thread_right_left") }}
               </option>
             </select></label
           >
           <div v-if="draft.thread_mode !== 'continuous'" class="thread-languages">
             <label
               ><span>{{
-                i18n.t("pdf_corpus.thread_a_language", "Thread A language (optional)")
+                i18n.t("pdf_corpus.thread_a_language")
               }}</span
               ><input
                 v-model="draft.thread_a_language"
@@ -326,7 +316,7 @@ function save() {
                 placeholder="en_us" /></label
             ><label
               ><span>{{
-                i18n.t("pdf_corpus.thread_b_language", "Thread B language (optional)")
+                i18n.t("pdf_corpus.thread_b_language")
               }}</span
               ><input v-model="draft.thread_b_language" class="control" placeholder="fr_fr"
             /></label>
@@ -336,34 +326,23 @@ function save() {
     </div>
     <section class="mapping-summary">
       <div>
-        <b>{{ i18n.t("pdf_corpus.generated_mapping", "Generated page mapping") }}</b
+        <b>{{ i18n.t("pdf_corpus.generated_mapping") }}</b
         ><span>{{
-          i18n.tf(
-            "pdf_corpus.mapping_summary",
-            "{mapped} of {total} PDF pages mapped · {exceptions} exception(s)",
-            { mapped: mappedCount, total: asset.page_count, exceptions: exceptionCount },
-          )
+          i18n.tf("pdf_corpus.mapping_summary", { mapped: mappedCount, total: asset.page_count, exceptions: exceptionCount })
         }}</span
         ><small>{{
-          i18n.tf(
-            "pdf_corpus.deterministic_structure_summary",
-            "Deterministic signals: {methods} extraction method(s), {regions} region type(s), {threads} page thread(s).",
-            {
+          i18n.tf("pdf_corpus.deterministic_structure_summary", {
               methods: extractionSummary.methods.length,
               regions: extractionSummary.regions.length,
               threads: extractionSummary.threads,
-            },
-          )
+            })
         }}</small>
       </div>
       <details class="exceptions">
-        <summary class="btn">{{ i18n.t("pdf_corpus.review_mapping", "Review mapping") }}</summary>
+        <summary class="btn">{{ i18n.t("pdf_corpus.review_mapping") }}</summary>
         <p>
           {{
-            i18n.t(
-              "pdf_corpus.mapping_exceptions_help",
-              "Use per-page overrides only for exceptions. Deterministic rules remain the default mapping source.",
-            )
+            i18n.t("pdf_corpus.mapping_exceptions_help")
           }}
         </p>
         <PdfPageLabelEditor
@@ -381,10 +360,10 @@ function save() {
           aria-live="polite"
           >{{
             saving
-              ? i18n.t("ui.saving", "Saving…")
+              ? i18n.t("ui.saving")
               : dirty
-                ? i18n.t("pdf_corpus.unsaved_structure", "Unsaved changes")
-                : i18n.t("pdf_corpus.structure_saved_state", "Saved")
+                ? i18n.t("pdf_corpus.unsaved_structure")
+                : i18n.t("pdf_corpus.structure_saved_state")
           }}</span
         ><button
           class="btn primary"
@@ -394,8 +373,8 @@ function save() {
         >
           {{
             saving
-              ? i18n.t("ui.saving", "Saving…")
-              : i18n.t("pdf_corpus.save_document_structure", "Save document structure")
+              ? i18n.t("ui.saving")
+              : i18n.t("pdf_corpus.save_document_structure")
           }}
         </button>
       </div>

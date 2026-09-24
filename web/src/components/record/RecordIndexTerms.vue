@@ -55,29 +55,29 @@ function remove(index: number) {
           v-if="props.editable"
           type="button"
           class="record-index-remove"
-          :aria-label="i18n.tf('record.remove_term', 'Remove {value}', { value })"
+          :aria-label="i18n.tf('record.remove_term', { value })"
           @click="remove(index)"
         >
           ×
         </button>
       </span>
       <span v-if="!props.values.length" class="record-index-empty">{{
-        i18n.t("ui.none", "None")
+        i18n.t("ui.none")
       }}</span>
     </div>
     <div v-if="props.editable" class="record-index-add">
       <label
         ><span class="sr-only">{{
-          i18n.tf("record.add_term", "Add {label}", { label: props.title })
+          i18n.tf("record.add_term", { label: props.title })
         }}</span
         ><input
           v-model="draft"
           :placeholder="
-            i18n.tf('record.add_term', 'Add {label}', { label: props.title.toLocaleLowerCase() })
+            i18n.tf('record.add_term', { label: props.title.toLocaleLowerCase() })
           "
           @keydown.enter.prevent="add" /></label
       ><button type="button" :disabled="!draft.trim()" @click="add">
-        {{ i18n.t("ui.add", "Add") }}
+        {{ i18n.t("ui.add") }}
       </button>
     </div>
   </section>

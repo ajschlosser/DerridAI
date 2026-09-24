@@ -56,7 +56,7 @@ function onCardClick(event: MouseEvent) {
             />
           </div>
           <div class="note">
-            {{ props.work.authors.join(", ") || i18n.t("works.unknown_author", "Unknown author")
+            {{ props.work.authors.join(", ") || i18n.t("works.unknown_author")
             }}<template v-if="props.work.year_label"> · {{ props.work.year_label }}</template>
           </div>
           <div class="work-card-biblio">
@@ -72,7 +72,7 @@ function onCardClick(event: MouseEvent) {
             </span>
             <span v-else-if="props.work.publisher.value">{{ props.work.publisher.value }}</span>
             <span v-if="props.work.translator.mixed">
-              {{ i18n.t("works.translated_by", "Translated by") }}
+              {{ i18n.t("works.translated_by") }}
               <MixedValueInspect
                 compact
                 :field="'translator'"
@@ -82,7 +82,7 @@ function onCardClick(event: MouseEvent) {
               />
             </span>
             <span v-else-if="props.work.translator.value"
-              >{{ i18n.t("works.translated_by", "Translated by") }}
+              >{{ i18n.t("works.translated_by") }}
               {{ props.work.translator.value }}</span
             >
           </div>
@@ -97,11 +97,11 @@ function onCardClick(event: MouseEvent) {
             :title="props.canSync ? undefined : props.syncDisabledReason"
             @click.stop="emit('sync')"
           >
-            <AppIcon name="database" aria-hidden="true" />{{ i18n.t("works.sync", "Sync") }}
+            <AppIcon name="database" aria-hidden="true" />{{ i18n.t("works.sync") }}
           </button>
           <details class="work-action-menu" @click.stop>
-            <summary class="btn small" :title="i18n.t('ui.more_actions', 'More actions')">
-              {{ i18n.t("ui.actions", "Actions") }}
+            <summary class="btn small" :title="i18n.t('ui.more_actions')">
+              {{ i18n.t("ui.actions") }}
             </summary>
             <div class="work-action-popover">
               <button
@@ -111,7 +111,7 @@ function onCardClick(event: MouseEvent) {
                 @click.stop="emit('populate')"
               >
                 <AppIcon name="spark" aria-hidden="true" />{{
-                  i18n.t("works.populate_metadata_llm", "Populate metadata with LLM")
+                  i18n.t("works.populate_metadata_llm")
                 }}
               </button>
               <button
@@ -121,7 +121,7 @@ function onCardClick(event: MouseEvent) {
                 @click.stop="emit('edit')"
               >
                 <AppIcon name="edit" aria-hidden="true" />{{
-                  i18n.t("works.edit_metadata", "Edit metadata")
+                  i18n.t("works.edit_metadata")
                 }}
               </button>
               <template v-if="props.work.review">
@@ -132,7 +132,7 @@ function onCardClick(event: MouseEvent) {
                   @click.stop="emit('review')"
                 >
                   <AppIcon name="spark" aria-hidden="true" />{{
-                    i18n.tf("works.review_flagged", "Review flagged ({count})", {
+                    i18n.tf("works.review_flagged", {
                       count: props.work.review,
                     })
                   }}
@@ -144,7 +144,7 @@ function onCardClick(event: MouseEvent) {
                   @click.stop="emit('improve')"
                 >
                   <AppIcon name="spark" aria-hidden="true" />{{
-                    i18n.t("works.auto_improve", "Auto-improve flagged")
+                    i18n.t("works.auto_improve")
                   }}
                 </button>
               </template>
@@ -155,7 +155,7 @@ function onCardClick(event: MouseEvent) {
                 @click.stop="emit('remove')"
               >
                 <AppIcon name="close" aria-hidden="true" />{{
-                  i18n.t("works.remove_entire", "Remove entire work")
+                  i18n.t("works.remove_entire")
                 }}
               </button>
             </div>
@@ -168,7 +168,7 @@ function onCardClick(event: MouseEvent) {
           class="stat work-stat-link"
           :data-work-records="props.work.work"
           :aria-label="
-            i18n.tf('works.open_records_for_work', 'Open {count} records for {work}', {
+            i18n.tf('works.open_records_for_work', {
               count: props.work.count,
               work: props.work.work,
             })
@@ -176,7 +176,7 @@ function onCardClick(event: MouseEvent) {
           @click.stop="emit('records')"
         >
           <strong>{{ props.work.count }}</strong
-          ><span>{{ i18n.t("dynamic.records", "records") }}</span>
+          ><span>{{ i18n.t("dynamic.records") }}</span>
         </button>
         <button
           type="button"
@@ -184,20 +184,16 @@ function onCardClick(event: MouseEvent) {
           :data-work-review="props.work.work"
           :disabled="!props.work.review"
           :aria-label="
-            i18n.tf(
-              'works.open_review_records_for_work',
-              'Open {count} records needing review for {work}',
-              { count: props.work.review, work: props.work.work },
-            )
+            i18n.tf('works.open_review_records_for_work', { count: props.work.review, work: props.work.work })
           "
           @click.stop="emit('flagged')"
         >
           <strong>{{ props.work.review }}</strong
-          ><span>{{ i18n.t("works.need_review", "need review") }}</span>
+          ><span>{{ i18n.t("works.need_review") }}</span>
         </button>
         <div class="stat">
           <strong>{{ props.work.files.length }}</strong
-          ><span>{{ i18n.t("works.files", "files") }}</span>
+          ><span>{{ i18n.t("works.files") }}</span>
         </div>
       </div>
     </div>

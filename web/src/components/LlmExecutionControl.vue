@@ -56,22 +56,19 @@ watch(
   <section
     class="llm-execution"
     role="group"
-    :aria-label="i18n.t('pdf_corpus.llm_execution', 'LLM execution')"
+    :aria-label="i18n.t('pdf_corpus.llm_execution')"
   >
     <div class="llm-notice">
       <div>
-        <b>{{ i18n.t("pdf_corpus.llm_will_be_used", "This action uses an LLM") }}</b
+        <b>{{ i18n.t("pdf_corpus.llm_will_be_used") }}</b
         ><small>{{
           task ||
-          i18n.t(
-            "pdf_corpus.llm_choose_profile_help",
-            "Choose the provider profile that should perform this action.",
-          )
+          i18n.t("pdf_corpus.llm_choose_profile_help")
         }}</small>
       </div>
     </div>
     <label
-      ><span>{{ i18n.t("pdf_corpus.provider_profile", "Provider profile") }}</span
+      ><span>{{ i18n.t("pdf_corpus.provider_profile") }}</span
       ><select
         class="control"
         :value="modelValue"
@@ -79,14 +76,14 @@ watch(
         @change="emit('update:modelValue', ($event.target as HTMLSelectElement).value)"
       >
         <option value="" disabled>
-          {{ i18n.t("pdf_corpus.choose_provider_profile", "Choose a provider profile…") }}
+          {{ i18n.t("pdf_corpus.choose_provider_profile") }}
         </option>
         <option v-for="profile in profiles" :key="profile.id" :value="profile.id">
           {{ profile.name || profile.id }}
         </option>
       </select></label
     ><label v-if="selected"
-      ><span>{{ i18n.t("pdf_corpus.model_for_action", "Model for this operation") }}</span
+      ><span>{{ i18n.t("pdf_corpus.model_for_action") }}</span
       ><input
         class="control"
         :value="effectiveModel"
@@ -94,26 +91,19 @@ watch(
         :disabled="disabled"
         :placeholder="
           loadingModels
-            ? i18n.t('pdf_corpus.loading_models', 'Loading models…')
-            : i18n.t('pdf_corpus.custom_model_allowed', 'Choose or type a model ID')
+            ? i18n.t('pdf_corpus.loading_models')
+            : i18n.t('pdf_corpus.custom_model_allowed')
         "
         @input="emit('update:modelOverride', ($event.target as HTMLInputElement).value)"
       /><datalist :id="`llm-models-${selected.id}`">
         <option v-for="model in models" :key="model" :value="model" /></datalist
       ><small>{{
-        i18n.t(
-          "pdf_corpus.model_override_help",
-          "Model discovery is optional. You can type a model ID even when the provider does not expose a model list.",
-        )
+        i18n.t("pdf_corpus.model_override_help")
       }}</small></label
     ><small v-if="modelError" class="model-error" role="status">{{ modelError }}</small>
     <p v-if="concurrencyRisk && selected?.type === 'ollama'" class="capacity-warning" role="status">
       {{
-        i18n.tf(
-          "pdf_corpus.ollama_concurrency_warning",
-          "This Ollama endpoint is already at or above its configured concurrency limit ({active}/{limit}). Starting another LLM action may slow or compete with metadata enrichment.",
-          { active: activeRequests ?? concurrencyLimit ?? 1, limit: concurrencyLimit ?? 1 },
-        )
+        i18n.tf("pdf_corpus.ollama_concurrency_warning", { active: activeRequests ?? concurrencyLimit ?? 1, limit: concurrencyLimit ?? 1 })
       }}
     </p>
   </section>

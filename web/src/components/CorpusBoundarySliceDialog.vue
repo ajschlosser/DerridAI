@@ -61,17 +61,14 @@ watch(
   <UiDialog
     :open="true"
     size="xlarge"
-    :title="i18n.t('pdf_corpus.slice_record', 'Slice record')"
+    :title="i18n.t('pdf_corpus.slice_record')"
     :description="
-      i18n.t(
-        'pdf_corpus.slice_record_help',
-        'Place the caret where this record should begin or end, then move the misplaced text to the neighboring record. Both records remain in review and the operation can be undone.',
-      )
+      i18n.t('pdf_corpus.slice_record_help')
     "
-    :close-label="i18n.t('ui.close', 'Close')"
+    :close-label="i18n.t('ui.close')"
     @close="emit('close')"
     ><label class="slice-label"
-      ><span>{{ i18n.t("pdf_corpus.slice_point", "Slice point") }}</span
+      ><span>{{ i18n.t("pdf_corpus.slice_point") }}</span
       ><textarea
         ref="textarea"
         :value="text"
@@ -83,15 +80,12 @@ watch(
     </label>
     <p id="slice-instructions" class="instructions">
       {{
-        i18n.t(
-          "pdf_corpus.slice_point_help",
-          "Click between characters to choose the boundary. The preview below shows what would move.",
-        )
+        i18n.t("pdf_corpus.slice_point_help")
       }}
     </p>
     <div class="preview-grid">
       <article>
-        <b>{{ i18n.t("pdf_corpus.before_slice", "Before slice") }}</b>
+        <b>{{ i18n.t("pdf_corpus.before_slice") }}</b>
         <p>{{ before || "—" }}</p>
       </article>
       <article v-if="keepEnd !== null">
@@ -99,7 +93,7 @@ watch(
         <p>{{ selected || "—" }}</p>
       </article>
       <article>
-        <b>{{ i18n.t("pdf_corpus.after_slice", "After slice") }}</b>
+        <b>{{ i18n.t("pdf_corpus.after_slice") }}</b>
         <p>{{ after || "—" }}</p>
       </article>
     </div>
@@ -113,7 +107,7 @@ watch(
           @click="apply('new')"
         >
           {{
-            i18n.t("pdf_corpus.create_record_from_selection", "Create record from selection")
+            i18n.t("pdf_corpus.create_record_from_selection")
           }}</button
         ><button
           v-if="keepEnd !== null"
@@ -132,7 +126,7 @@ watch(
         >
           ←
           {{
-            i18n.t("pdf_corpus.move_before_previous", "Move before slice to previous record")
+            i18n.t("pdf_corpus.move_before_previous")
           }}</button
         ><button
           v-if="keepEnd === null"
@@ -141,7 +135,7 @@ watch(
           :disabled="busy || !canNext || !before || !after"
           @click="apply('next')"
         >
-          {{ i18n.t("pdf_corpus.move_after_next", "Move after slice to next record") }} →
+          {{ i18n.t("pdf_corpus.move_after_next") }} →
         </button>
       </div></template
     ></UiDialog

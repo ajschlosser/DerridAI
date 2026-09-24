@@ -62,13 +62,13 @@ export function researchStageLabel(stage: unknown, t: Translate, locale = "en-US
     failed: ["research.stage_failed", "Research failed"],
   };
   const match = labels[canonical];
-  if (match) return t(match[0], match[1]);
+  if (match) return t(match[0]);
   // English may safely retain a server-provided stage name. For French and any
   // other localized UI, avoid leaking an untranslated English implementation
   // label into the workspace.
   return locale === "en-US" && String(stage || "").trim()
     ? String(stage)
-    : t("research.pipeline_stage", "Pipeline stage");
+    : t("research.pipeline_stage");
 }
 
 export function researchJobDetail(job: ResearchJob, t: Translate, locale = "en-US"): string {

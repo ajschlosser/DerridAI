@@ -20,14 +20,14 @@ const items = computed<UiMenuItem[]>(() =>
   })),
 );
 const triggerLabel = computed(() =>
-  i18n.tf("ui.language_current", "Interface language, {language}", { language: currentName.value }),
+  i18n.tf("ui.language_current", { language: currentName.value }),
 );
 </script>
 <template>
   <UiMenu
     :label="currentName"
     :aria-label="triggerLabel"
-    :menu-label="i18n.t('ui.language_menu', 'Interface language')"
+    :menu-label="i18n.t('ui.language_menu')"
     :items="items"
     icon="language"
     placement="bottom"

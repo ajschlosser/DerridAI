@@ -48,14 +48,14 @@ const groupedNav=computed(()=>{
   // Never draw a partial menu: the Vue-side admin items below are appended to the runtime's
   // list, so show nothing until that list exists.
   if(!shell.navReady)return [];
-  const groups=shell.groupedNav.map(group=>({section:i18n.t(`section.${group.section.toLowerCase()}`,group.section),items:group.items.filter(item=>canNav(item.id)).map(item=>({...item,label:item.id==="home"?i18n.t("nav.home","Home"):(auth.isResearcher&&item.id==="vector"?i18n.t("research.corpus_search",item.label):i18n.t(`nav.${item.id}`,item.label))}))}));
+  const groups=shell.groupedNav.map(group=>({section:i18n.t(`section.${group.section.toLowerCase()}`,group.section),items:group.items.filter(item=>canNav(item.id)).map(item=>({...item,label:item.id==="home"?i18n.t("nav.home"):(auth.isResearcher&&item.id==="vector"?i18n.t("research.corpus_search",item.label):i18n.t(`nav.${item.id}`,item.label))}))}));
   if(auth.isAdmin){
-    const systemLabel=i18n.t("section.system","System");
+    const systemLabel=i18n.t("section.system");
     let system=groups.find(group=>group.section===systemLabel);
     if(!system){system={section:systemLabel,items:[]};groups.push(system)}
-    if(auth.can("page.users"))system.items.push({id:"users",label:i18n.t("nav.users","Users"),icon:"users",section:"System"} as ShellNavItem);
-    if(auth.can("page.roles"))system.items.push({id:"roles",label:i18n.t("nav.roles","Roles & permissions"),icon:"roles",section:"System"} as ShellNavItem);
-    if(auth.can("page.languages"))system.items.push({id:"languages",label:i18n.t("language.manage","Manage languages"),icon:"language",section:"System"} as ShellNavItem);
+    if(auth.can("page.users"))system.items.push({id:"users",label:i18n.t("nav.users"),icon:"users",section:"System"} as ShellNavItem);
+    if(auth.can("page.roles"))system.items.push({id:"roles",label:i18n.t("nav.roles"),icon:"roles",section:"System"} as ShellNavItem);
+    if(auth.can("page.languages"))system.items.push({id:"languages",label:i18n.t("language.manage"),icon:"language",section:"System"} as ShellNavItem);
   }
   return groups;
 });
@@ -68,16 +68,16 @@ const primaryNav=computed(()=>{
 const utilityNav=computed(()=>{const ids=new Set(primaryNav.value.map(item=>item.id));return flatNav.value.filter(item=>!ids.has(item.id))});
 const primaryNavItems=computed<SidebarNavEntry[]>(()=>{
   const items:SidebarNavEntry[]=primaryNav.value.map(item=>({id:item.id,label:item.label,icon:item.icon,active:isNavActive(item),disabledReason:item.disabledReason}));
-  if(auth.isAdmin)items.push({id:"operations",label:i18n.t("ui.operations","Operations"),icon:"history",active:operationsActive.value});
+  if(auth.isAdmin)items.push({id:"operations",label:i18n.t("ui.operations"),icon:"history",active:operationsActive.value});
   return items;
 });
 const utilityNavItems=computed<SidebarNavEntry[]>(()=>utilityNav.value.map(item=>({id:item.id,label:item.label,icon:item.icon,active:isNavActive(item),disabledReason:item.disabledReason})));
-const breadcrumbTitle=computed(()=>route.name==="users"?i18n.t("nav.users","Users"):route.name==="roles"?i18n.t("nav.roles","Roles & permissions"):route.name==="languages"?i18n.t("language.manage","Manage languages"):route.name==="config"?i18n.t("nav.config","Settings"):route.name==="compare"?i18n.t("nav.compare","Compare"):route.name==="list"?i18n.t("nav.records","Records"):route.name==="works"?i18n.t("nav.works","Works"):s.value.context.title||i18n.t("nav.home","Home"));
-const breadcrumbMeta=computed(()=>route.name==="config"?i18n.t("settings.page_help_short","Workspace, research defaults, and operations"):route.name==="compare"?i18n.t("context.compare.meta","Inspect field and text differences"):route.name==="list"?i18n.t("context.list.meta","Open a JSONL file"):["users","roles","languages"].includes(String(route.name||""))?"":s.value.context.meta);
+const breadcrumbTitle=computed(()=>route.name==="users"?i18n.t("nav.users"):route.name==="roles"?i18n.t("nav.roles"):route.name==="languages"?i18n.t("language.manage"):route.name==="config"?i18n.t("nav.config"):route.name==="compare"?i18n.t("nav.compare"):route.name==="list"?i18n.t("nav.records"):route.name==="works"?i18n.t("nav.works"):s.value.context.title||i18n.t("nav.home"));
+const breadcrumbMeta=computed(()=>route.name==="config"?i18n.t("settings.page_help_short"):route.name==="compare"?i18n.t("context.compare.meta"):route.name==="list"?i18n.t("context.list.meta"):["users","roles","languages"].includes(String(route.name||""))?"":s.value.context.meta);
 const canBreadcrumbBack=computed(()=>Boolean(nativeBackPath.value)||s.value.canGoBack);
 const canBreadcrumbForward=computed(()=>Boolean(nativeForwardPath.value)||s.value.canGoForward);
-const breadcrumbBackLabel=computed(()=>nativeBackPath.value?i18n.t("ui.back","Back"):s.value.backLabel);
-const breadcrumbForwardLabel=computed(()=>nativeForwardPath.value?i18n.t("ui.forward","Forward"):s.value.forwardLabel);
+const breadcrumbBackLabel=computed(()=>nativeBackPath.value?i18n.t("ui.back"):s.value.backLabel);
+const breadcrumbForwardLabel=computed(()=>nativeForwardPath.value?i18n.t("ui.forward"):s.value.forwardLabel);
 
 function onImport(files:FileList){if(auth.isAdmin)runtime.triggerImport(files)}
 function onFiles(event:Event){
@@ -189,7 +189,7 @@ async function handleAuthExpired(){
   try{
     runtime.pauseRuntime();
     runtimeStarted.value=false;
-    auth.expireSession(i18n.t("auth.session_expired","Your session expired. Sign in again."));
+    auth.expireSession(i18n.t("auth.session_expired"));
     if(router.currentRoute.value.path!=="/")await router.replace("/");
   }finally{
     // Keep one microtask between a burst of 401 responses and accepting a new
@@ -217,10 +217,10 @@ watch(()=>auth.user?.id,(id)=>{
 </script>
 
 <template>
-  <div v-if="!auth.initialized" class="auth-loading">{{ i18n.t("ui.loading_derridai","Loading DerridAI…") }}</div>
+  <div v-if="!auth.initialized" class="auth-loading">{{ i18n.t("ui.loading_derridai") }}</div>
   <AuthScreen v-else-if="!auth.user" />
   <div v-else class="app-shell app-shell-modern" :class="{'sidebar-collapsed':s.sidebarCollapsed}">
-    <a class="skip-link" href="#appContent">{{ i18n.t("ui.skip_to_content","Skip to main content") }}</a>
+    <a class="skip-link" href="#appContent">{{ i18n.t("ui.skip_to_content") }}</a>
     <aside class="sidebar shell-sidebar">
       <SidebarBrand :collapsed="s.sidebarCollapsed" @navigate-home="navigate('home')" @toggle="runtime.toggleSidebar()" />
       <SidebarPrimaryNav :items="primaryNavItems" @navigate="navigate" />
@@ -239,8 +239,8 @@ watch(()=>auth.user?.id,(id)=>{
     </aside>
 
     <section class="workspace shell-workspace">
-      <header class="topbar shell-topbar"><CommandSearch ref="commandSearch" v-model="topSearch" :placeholder="i18n.t('ui.global_search_placeholder','Search the corpus, works, concepts, or annotations…')" @submit="submitTopSearch"/><div class="shell-top-actions"><input id="fileInput" type="file" accept=".jsonl,.ndjson,.json" multiple hidden @change="onFiles"/><TopbarChrome :is-admin="auth.isAdmin" :can-faq="auth.can('page.faq')" :can-settings="auth.can('page.settings')" :username="auth.user.username" :role="auth.user.role" :role-name="auth.user.role_name" :languages="i18n.languages" :locale="i18n.locale" :locale-loading="i18n.loading" @navigate="navigate" @logout="logout" @locale="i18n.setLocale($event)" /></div></header>
-      <nav class="vue-breadcrumb shell-breadcrumb" :aria-label="i18n.t('ui.navigation_history','Navigation history')"><div class="breadcrumb-nav"><button class="breadcrumb-nav-button" type="button" :disabled="!canBreadcrumbBack" :title="breadcrumbBackLabel" @click="goBreadcrumbBack" :aria-label="i18n.t('ui.back','Back')"><span aria-hidden="true">←</span><span class="breadcrumb-button-label">{{i18n.t('ui.back','Back')}}</span></button><button class="breadcrumb-nav-button" type="button" :disabled="!canBreadcrumbForward" :title="breadcrumbForwardLabel" @click="goBreadcrumbForward" :aria-label="i18n.t('ui.forward','Forward')"><span class="breadcrumb-button-label">{{i18n.t('ui.forward','Forward')}}</span><span aria-hidden="true">→</span></button></div><div class="vue-breadcrumb-path"><span>DerridAI</span><b aria-hidden="true">›</b><strong>{{breadcrumbTitle}}</strong><span v-if="breadcrumbMeta" class="shell-breadcrumb-meta">{{breadcrumbMeta}}</span></div></nav>
+      <header class="topbar shell-topbar"><CommandSearch ref="commandSearch" v-model="topSearch" :placeholder="i18n.t('ui.global_search_placeholder')" @submit="submitTopSearch"/><div class="shell-top-actions"><input id="fileInput" type="file" accept=".jsonl,.ndjson,.json" multiple hidden @change="onFiles"/><TopbarChrome :is-admin="auth.isAdmin" :can-faq="auth.can('page.faq')" :can-settings="auth.can('page.settings')" :username="auth.user.username" :role="auth.user.role" :role-name="auth.user.role_name" :languages="i18n.languages" :locale="i18n.locale" :locale-loading="i18n.loading" @navigate="navigate" @logout="logout" @locale="i18n.setLocale($event)" /></div></header>
+      <nav class="vue-breadcrumb shell-breadcrumb" :aria-label="i18n.t('ui.navigation_history')"><div class="breadcrumb-nav"><button class="breadcrumb-nav-button" type="button" :disabled="!canBreadcrumbBack" :title="breadcrumbBackLabel" @click="goBreadcrumbBack" :aria-label="i18n.t('ui.back')"><span aria-hidden="true">←</span><span class="breadcrumb-button-label">{{i18n.t('ui.back')}}</span></button><button class="breadcrumb-nav-button" type="button" :disabled="!canBreadcrumbForward" :title="breadcrumbForwardLabel" @click="goBreadcrumbForward" :aria-label="i18n.t('ui.forward')"><span class="breadcrumb-button-label">{{i18n.t('ui.forward')}}</span><span aria-hidden="true">→</span></button></div><div class="vue-breadcrumb-path"><span>DerridAI</span><b aria-hidden="true">›</b><strong>{{breadcrumbTitle}}</strong><span v-if="breadcrumbMeta" class="shell-breadcrumb-meta">{{breadcrumbMeta}}</span></div></nav>
       <div id="appContent" class="app-content-region" tabindex="-1"><RouterView/></div>
     </section>
   </div>

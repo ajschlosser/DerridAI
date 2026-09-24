@@ -1,6 +1,6 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
-type Tr = (key: string, fallback: string) => string;
-type Trf = (key: string, fallback: string, values: Record<string, unknown>) => string;
+import type { Tr, Trf } from "../i18n/bindCopy";
+import { bindCopy } from "../i18n/bindCopy";
 
 const FALLBACKS = {
   minutes: ["{count} minute ago", "{count} minutes ago"],
@@ -17,13 +17,16 @@ export function relativeTimeLabel(
   nowMs: number,
   { tr, trf, locale }: { tr: Tr; trf: Trf; locale?: string },
 ): string {
+  const copy = bindCopy(tr, trf);
+  const translate = copy.tr;
+  const interpolate = copy.trf;
   const date = new Date((value as string | number | Date) || 0);
-  if (!Number.isFinite(date.getTime())) return tr("time.recently", "Recently");
+  if (!Number.isFinite(date.getTime())) return translate("time.recently");
   const seconds = Math.max(0, Math.round((nowMs - date.getTime()) / 1000));
-  if (seconds < 60) return tr("time.just_now", "just now");
+  if (seconds < 60) return translate("time.just_now");
   const count = (unit: keyof typeof FALLBACKS, n: number) => {
     const one = n === 1;
-    return trf(`time.${unit}_ago_${one ? "one" : "other"}`, FALLBACKS[unit][one ? 0 : 1], {
+    return interpolate(`time.${unit}_ago_${one ? "one" : "other"}`, FALLBACKS[unit][one ? 0 : 1], {
       count: n.toLocaleString(locale || undefined),
     });
   };

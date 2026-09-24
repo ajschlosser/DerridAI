@@ -71,10 +71,7 @@ watch(
   (value) => {
     draft.value = String(value || "");
     if (value)
-      operationMessage.value = i18n.t(
-        "pdf_corpus.llm_touchup_ready",
-        "Touch-up proposal ready for review.",
-      );
+      operationMessage.value = i18n.t("pdf_corpus.llm_touchup_ready");
   },
   { immediate: true },
 );
@@ -88,19 +85,13 @@ watch(
   () => props.busy,
   (value) => {
     if (value)
-      operationMessage.value = i18n.t(
-        "pdf_corpus.llm_touchup_contacting",
-        "Contacting the selected LLM and generating a proposal…",
-      );
+      operationMessage.value = i18n.t("pdf_corpus.llm_touchup_contacting");
   },
 );
 function run() {
   if (!props.providerProfileId) return;
   draft.value = "";
-  operationMessage.value = i18n.t(
-    "pdf_corpus.llm_touchup_contacting",
-    "Contacting the selected LLM and generating a proposal…",
-  );
+  operationMessage.value = i18n.t("pdf_corpus.llm_touchup_contacting");
   emit("run", instructions.value, props.providerProfileId, String(props.modelOverride || ""));
 }
 </script>
@@ -108,14 +99,11 @@ function run() {
   <UiDialog
     :open="open"
     size="xlarge"
-    :title="i18n.t('pdf_corpus.llm_touchup_title', 'LLM touch-up')"
+    :title="i18n.t('pdf_corpus.llm_touchup_title')"
     :description="
-      i18n.tf(
-        'pdf_corpus.llm_touchup_help',
-        'Use an LLM to conservatively correct formatting, punctuation, OCR artifacts, and extraction errata without paraphrasing the text.',
-      )
+      i18n.tf('pdf_corpus.llm_touchup_help')
     "
-    :close-label="i18n.t('ui.close', 'Close')"
+    :close-label="i18n.t('ui.close')"
     @close="emit('close')"
     ><LlmExecutionControl
       :model-value="providerProfileId"
@@ -123,10 +111,7 @@ function run() {
       :profiles="profiles"
       :disabled="busy"
       :task="
-        i18n.t(
-          'pdf_corpus.llm_touchup_provider_help',
-          'The selected profile will propose a text correction. Nothing is applied until you approve it.',
-        )
+        i18n.t('pdf_corpus.llm_touchup_provider_help')
       "
       :concurrency-risk="concurrencyRisk"
       :active-requests="activeRequests"
@@ -136,29 +121,23 @@ function run() {
     <details class="built-in-policy">
       <summary>
         {{
-          i18n.t("pdf_corpus.touchup_builtin_policy", "What the LLM is already instructed to do")
+          i18n.t("pdf_corpus.touchup_builtin_policy")
         }}
       </summary>
       <p>
         {{
-          i18n.t(
-            "pdf_corpus.touchup_builtin_policy_help",
-            "Preserve wording and meaning; do not paraphrase, summarize, translate, or add content; correct only clear OCR, spacing, punctuation, line-wrap, duplicated header/footer/page-number, and extraction artifacts; preserve verse, quotations, footnotes, and deliberate oddities; leave uncertain text unchanged.",
-          )
+          i18n.t("pdf_corpus.touchup_builtin_policy_help")
         }}
       </p>
     </details>
     <div class="touchup-controls">
       <label
-        ><span>{{ i18n.t("pdf_corpus.llm_touchup_instruction", "Optional instruction") }}</span
+        ><span>{{ i18n.t("pdf_corpus.llm_touchup_instruction") }}</span
         ><input
           v-model="instructions"
           class="control"
           :placeholder="
-            i18n.t(
-              'pdf_corpus.llm_touchup_instruction_placeholder',
-              'For example: preserve this passage as verse',
-            )
+            i18n.t('pdf_corpus.llm_touchup_instruction_placeholder')
           "
           aria-describedby="touchup-instruction-help" /></label
       ><UiButton
@@ -166,96 +145,82 @@ function run() {
         :disabled="busy || !providerProfileId"
         :label="
           busy
-            ? i18n.t('pdf_corpus.llm_touchup_running', 'Running touch-up…')
-            : i18n.t('pdf_corpus.run_llm_touchup', 'Run LLM touch-up')
+            ? i18n.t('pdf_corpus.llm_touchup_running')
+            : i18n.t('pdf_corpus.run_llm_touchup')
         "
         @click="run"
       />
     </div>
     <p id="touchup-instruction-help" v-if="redundant" class="redundant-warning" role="status">
       {{
-        i18n.t(
-          "pdf_corpus.touchup_redundant_instruction",
-          "This instruction substantially repeats the built-in touch-up policy. You can leave it blank unless you need a passage-specific exception or emphasis.",
-        )
+        i18n.t("pdf_corpus.touchup_redundant_instruction")
       }}
     </p>
     <p v-if="error" class="operation-error" role="alert">{{ error }}</p>
     <p v-else-if="noChange" class="operation-status" aria-live="polite">
       {{
-        i18n.t(
-          "pdf_corpus.llm_touchup_no_change",
-          "The LLM returned the source text unchanged. No review or apply action is needed.",
-        )
+        i18n.t("pdf_corpus.llm_touchup_no_change")
       }}
     </p>
     <p v-else-if="operationMessage" class="operation-status" aria-live="polite">
       {{ operationMessage }}
     </p>
     <p v-if="model" class="model-note">
-      {{ i18n.tf("pdf_corpus.llm_touchup_model", "Proposal generated by {model}", { model }) }}
+      {{ i18n.tf("pdf_corpus.llm_touchup_model", { model }) }}
     </p>
     <p v-if="provider || proposalId || runId" class="model-note proposal-context">
       {{
-        i18n.tf(
-          "pdf_corpus.llm_touchup_context",
-          "Provider: {provider} · Proposal: {proposal} · Run: {run}",
-          {
+        i18n.tf("pdf_corpus.llm_touchup_context", {
             provider: provider || "—",
             proposal: proposalId || "—",
             run: runId || "—",
-          },
-        )
+          })
       }}
       <span v-if="proposalCreatedAt">
         ·
         {{
-          i18n.tf("pdf_corpus.llm_touchup_created", "Created {at}", { at: proposalCreatedAt })
+          i18n.tf("pdf_corpus.llm_touchup_created", { at: proposalCreatedAt })
         }}</span
       >
     </p>
     <div v-if="proposedText && !noChange" class="touchup-grid">
       <section>
-        <h3>{{ i18n.t("pdf_corpus.cleanup_before", "Before") }}</h3>
+        <h3>{{ i18n.t("pdf_corpus.cleanup_before") }}</h3>
         <pre>{{ sourceText }}</pre>
       </section>
       <section>
-        <h3>{{ i18n.t("pdf_corpus.llm_touchup_proposed", "LLM proposal") }}</h3>
+        <h3>{{ i18n.t("pdf_corpus.llm_touchup_proposed") }}</h3>
         <div v-if="textDiff" class="touchup-diff" aria-live="polite">
           <div class="touchup-diff-label">
-            {{ i18n.t("pdf_corpus.llm_touchup_diff_preview", "Highlighted changes") }}
+            {{ i18n.t("pdf_corpus.llm_touchup_diff_preview") }}
           </div>
           <div class="touchup-diff-columns">
             <pre class="change-diff current-diff" v-html="textDiff.left"></pre>
             <pre class="change-diff proposed-diff" v-html="textDiff.right"></pre>
           </div>
         </div>
-        <textarea v-model="draft" :aria-label="i18n.t('pdf_corpus.llm_touchup_proposed', 'LLM proposal')"></textarea>
+        <textarea v-model="draft" :aria-label="i18n.t('pdf_corpus.llm_touchup_proposed')"></textarea>
       </section>
     </div>
     <p v-if="diffSummary" class="touchup-change-summary" role="status">
       {{
-        i18n.tf(
-          "pdf_corpus.llm_touchup_change_summary",
-          "This proposal removes {removed} words and adds {added} words ({before} before, {after} after). Removed text is marked in red; added text is marked in green.",
-          {
+        i18n.tf("pdf_corpus.llm_touchup_change_summary", {
             removed: diffSummary.removed,
             added: diffSummary.added,
             before: diffSummary.before,
             after: diffSummary.after,
-          },
-        )
+          })
       }}
     </p>
     <div v-if="!noChange && (changes?.length || warnings?.length)" class="touchup-notes">
       <section v-if="changes?.length">
-        <h3>{{ i18n.t("pdf_corpus.llm_touchup_changes", "Reported changes") }}</h3>
+        <h3>{{ i18n.t("pdf_corpus.llm_touchup_changes") }}</h3>
         <ul>
           <li v-for="item in changes" :key="item">{{ item }}</li>
         </ul>
       </section>
       <section v-if="warnings?.length">
-        <h3>{{ i18n.t("pdf_corpus.llm_touchup_warnings", "Warnings") }}</h3>
+        <h3>{{ i18n.t("pdf_corpus.llm_touchup_warnings") }}</h3>
         <ul>
           <li v-for="item in warnings" :key="item">{{ item }}</li>
         </ul>
@@ -263,21 +228,18 @@ function run() {
     </div>
     <template #footer
       ><span class="footer-note">{{
-        i18n.t(
-          "pdf_corpus.llm_touchup_source_preserved",
-          "Applying the proposal changes reviewed text only. The immutable extracted source remains preserved.",
-        )
+        i18n.t("pdf_corpus.llm_touchup_source_preserved")
       }}</span>
       <div>
-        <UiButton :label="i18n.t('ui.cancel', 'Cancel')" @click="emit('close')" /><UiButton
+        <UiButton :label="i18n.t('ui.cancel')" @click="emit('close')" /><UiButton
           v-if="proposalStatus === 'pending_review' && proposalId"
-          :label="i18n.t('pdf_corpus.dismiss_llm_touchup', 'Dismiss proposal')"
+          :label="i18n.t('pdf_corpus.dismiss_llm_touchup')"
           @click="emit('dismiss')"
         /><UiButton
           v-if="proposedText && !noChange"
           variant="primary"
           :disabled="!draft.trim() || busy"
-          :label="i18n.t('pdf_corpus.apply_llm_touchup', 'Apply proposal to draft')"
+          :label="i18n.t('pdf_corpus.apply_llm_touchup')"
           @click="emit('apply', draft)"
         /></div></template
   ></UiDialog>

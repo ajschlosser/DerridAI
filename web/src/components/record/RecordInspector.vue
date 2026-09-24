@@ -36,12 +36,12 @@ const layout = ref<InspectorLayout>(loadInspectorLayout());
 const layoutEditor = ref<{ open: () => void } | null>(null);
 const record = computed(() => props.snapshot.record || {});
 const tabs = computed(() => [
-  ["overview", i18n.t("record.tab_overview", "Overview")],
-  ["provenance", i18n.t("record.tab_provenance", "Provenance")],
-  ["indexing", i18n.t("record.tab_indexing", "Indexing")],
-  ["pdf", i18n.t("record.tab_pdf", "PDFs")],
-  ["annotations", i18n.t("record.tab_annotations", "Annotations")],
-  ["history", i18n.t("record.tab_history", "History")],
+  ["overview", i18n.t("record.tab_overview")],
+  ["provenance", i18n.t("record.tab_provenance")],
+  ["indexing", i18n.t("record.tab_indexing")],
+  ["pdf", i18n.t("record.tab_pdf")],
+  ["annotations", i18n.t("record.tab_annotations")],
+  ["history", i18n.t("record.tab_history")],
 ]);
 const overviewSections = computed(() => groupInspectorRows(layout.value.overview));
 const indexingFields = computed(() =>
@@ -60,11 +60,11 @@ function resetLayout() {
   saveInspectorLayout(next);
 }
 function headingText(label: string) {
-  if (label === "Record context") return i18n.t("record.record_context", "Record context");
-  if (label === "Quotation provenance") return i18n.t("record.quotation_provenance", "Quotation provenance");
-  if (label === "Attribution") return i18n.t("record.attribution", "Attribution");
-  if (label === "Discourse") return i18n.t("record.discourse", "Discourse");
-  if (label === "Research index") return i18n.t("record.indexing_kicker", "Research index");
+  if (label === "Record context") return i18n.t("record.record_context");
+  if (label === "Quotation provenance") return i18n.t("record.quotation_provenance");
+  if (label === "Attribution") return i18n.t("record.attribution");
+  if (label === "Discourse") return i18n.t("record.discourse");
+  if (label === "Research index") return i18n.t("record.indexing_kicker");
   return label;
 }
 const pageSpan = computed(() => {
@@ -79,12 +79,12 @@ function present(value: unknown) {
   if (value === null || value === undefined || value === "") return "—";
   if (Array.isArray(value)) return value.length ? value.join(", ") : "—";
   if (typeof value === "boolean")
-    return value ? i18n.t("runtime.yes", "Yes") : i18n.t("runtime.no", "No");
+    return value ? i18n.t("runtime.yes") : i18n.t("runtime.no");
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }
 function fieldLabel(key: string) {
-  if (key === "__pages") return i18n.t("record.page", "Page");
+  if (key === "__pages") return i18n.t("record.page");
   return i18n.t(
     `field.${key}`,
     key.replaceAll("_", " ").replace(/\b\w/g, (m) => m.toUpperCase()),
@@ -142,11 +142,11 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
 }
 </script>
 <template>
-  <aside class="record-inspector" :aria-label="i18n.t('record.inspector', 'Record inspector')">
+  <aside class="record-inspector" :aria-label="i18n.t('record.inspector')">
     <nav
       class="record-inspector-tabs"
       role="tablist"
-      :aria-label="i18n.t('record.inspector_sections', 'Record inspector sections')"
+      :aria-label="i18n.t('record.inspector_sections')"
     >
       <button
         v-for="(item, index) in tabs"
@@ -179,10 +179,10 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
         :aria-labelledby="tabId('overview')"
       >
         <div class="inspector-section-head">
-          <p>{{ i18n.t("record.record_context", "Record context") }}</p>
-          <h2>{{ i18n.t("record.overview", "Overview") }}</h2>
+          <p>{{ i18n.t("record.record_context") }}</p>
+          <h2>{{ i18n.t("record.overview") }}</h2>
           <button type="button" class="btn tiny record-layout-button" @click="layoutEditor?.open()">
-            {{ i18n.t("record.configure_fields", "Configure fields") }}
+            {{ i18n.t("record.configure_fields") }}
           </button>
         </div>
         <section v-for="(section, index) in overviewSections" :key="`${section.heading || 'fields'}-${index}`" class="inspector-field-group">
@@ -205,13 +205,13 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
           </dl>
         </section>
         <section class="citation-preview">
-          <h3>{{ i18n.t("record.citations", "Citations") }}</h3>
+          <h3>{{ i18n.t("record.citations") }}</h3>
           <div>
-            <small>{{ i18n.t("record.inline_citation", "Inline citation") }}</small>
+            <small>{{ i18n.t("record.inline_citation") }}</small>
             <p>{{ snapshot.inline_citation || "—" }}</p>
           </div>
           <div>
-            <small>{{ i18n.t("record.full_citation", "Full citation") }}</small>
+            <small>{{ i18n.t("record.full_citation") }}</small>
             <p>{{ snapshot.full_citation || "—" }}</p>
           </div>
         </section>
@@ -233,10 +233,10 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
         :aria-labelledby="tabId('indexing')"
       >
         <div class="inspector-section-head">
-          <p>{{ i18n.t("record.indexing_kicker", "Research index") }}</p>
-          <h2>{{ i18n.t("record.indexing", "Indexing") }}</h2>
+          <p>{{ i18n.t("record.indexing_kicker") }}</p>
+          <h2>{{ i18n.t("record.indexing") }}</h2>
           <button type="button" class="btn tiny record-layout-button" @click="layoutEditor?.open()">
-            {{ i18n.t("record.configure_fields", "Configure fields") }}
+            {{ i18n.t("record.configure_fields") }}
           </button>
         </div>
         <RecordIndexTerms

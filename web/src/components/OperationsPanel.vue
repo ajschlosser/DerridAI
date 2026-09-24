@@ -63,7 +63,7 @@ async function commitPending() {
     await current.commit();
   } catch (error) {
     announce(
-      i18n.tf("operations.panel.removal_failed", "Could not remove: {error}", {
+      i18n.tf("operations.panel.removal_failed", {
         error: error instanceof Error ? error.message : String(error),
       }),
     );
@@ -76,7 +76,7 @@ function queueRemoval(message: string, ids: string[], commit: () => Promise<void
   }, props.undoMs);
   pending.value = { message, timer, ids, commit };
   announce(
-    `${message} ${i18n.t("operations.panel.undo_hint", "Undo is available for a few seconds.")}`,
+    `${message} ${i18n.t("operations.panel.undo_hint")}`,
   );
 }
 function undo() {
@@ -84,14 +84,14 @@ function undo() {
   if (!current) return;
   window.clearTimeout(current.timer);
   pending.value = null;
-  announce(i18n.t("operations.panel.restored", "Restored."));
+  announce(i18n.t("operations.panel.restored"));
   void nextTick(() => root.value?.querySelector<HTMLElement>("[data-primary]")?.focus());
 }
 function removeOne(id: string) {
   const view = views.value.find((item) => item.id === id);
   if (!view) return;
   queueRemoval(
-    i18n.tf("operations.panel.removed", "Removed {name}.", { name: view.label }),
+    i18n.tf("operations.panel.removed", { name: view.label }),
     [id],
     () => props.bridge.remove(id),
   );
@@ -100,7 +100,7 @@ function clearFinished() {
   const ids = views.value.filter((view) => !isActive(view)).map((view) => view.id);
   if (!ids.length) return;
   queueRemoval(
-    i18n.tf("operations.panel.cleared", "Cleared {count} finished operation(s).", {
+    i18n.tf("operations.panel.cleared", {
       count: ids.length,
     }),
     ids,
@@ -187,7 +187,7 @@ function flushOnLeave() {
 
 async function refresh() {
   await props.bridge.refresh();
-  announce(i18n.t("operations.panel.announce_updated", "Operations updated."));
+  announce(i18n.t("operations.panel.announce_updated"));
 }
 
 // ---- derived lists --------------------------------------------------------------------------
@@ -232,20 +232,17 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
     <header class="ops-head">
       <div class="ops-head-copy">
         <h2 id="ops-heading" ref="heading" tabindex="-1" class="ops-h2">
-          {{ i18n.t("operations.background", "Background operations") }}
+          {{ i18n.t("operations.background") }}
         </h2>
         <p class="ops-lede">
           {{
-            i18n.t(
-              "operations.shared_queue",
-              "LLM, RAG, PDF corpus builds, and Chroma upserts share this queue",
-            )
+            i18n.t("operations.shared_queue")
           }}
         </p>
       </div>
       <div class="ops-head-actions">
         <button type="button" class="ops-btn" id="refreshJobs" @click="refresh">
-          <AppIcon name="refresh" />{{ i18n.t("ui.refresh", "Refresh") }}
+          <AppIcon name="refresh" />{{ i18n.t("ui.refresh") }}
         </button>
         <button
           type="button"
@@ -254,7 +251,7 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
           :disabled="!canClear"
           @click="clearFinished"
         >
-          {{ i18n.t("operations.panel.clear_finished", "Clear finished") }}
+          {{ i18n.t("operations.panel.clear_finished") }}
         </button>
       </div>
     </header>
@@ -262,7 +259,7 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
     <div
       class="ops-filters"
       role="group"
-      :aria-label="i18n.t('operations.panel.filter_label', 'Show operations')"
+      :aria-label="i18n.t('operations.panel.filter_label')"
     >
       <button
         v-for="[id, key, fallback] in FILTERS"
@@ -280,29 +277,26 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
     <div v-if="pending" class="ops-undo" role="group" :aria-label="pending.message">
       <span>{{ pending.message }}</span>
       <button type="button" class="ops-btn is-primary" @click="undo">
-        {{ i18n.t("operations.panel.undo", "Undo") }}
+        {{ i18n.t("operations.panel.undo") }}
       </button>
     </div>
 
     <div v-if="empty" class="ops-empty">
       <span class="ops-empty-art" aria-hidden="true"><AppIcon name="history" /></span>
-      <h3>{{ i18n.t("operations.panel.empty_title", "Nothing in flight") }}</h3>
+      <h3>{{ i18n.t("operations.panel.empty_title") }}</h3>
       <p>
         {{
-          i18n.t(
-            "operations.panel.empty_body",
-            "Start a corpus build, install a language, or run a research question, and it will show up here.",
-          )
+          i18n.t("operations.panel.empty_body")
         }}
       </p>
     </div>
     <p v-else-if="filterEmpty" class="ops-empty-inline">
-      {{ i18n.t("operations.panel.empty_filtered", "No operations match this filter.") }}
+      {{ i18n.t("operations.panel.empty_filtered") }}
     </p>
 
     <section v-if="sections.attention.length" class="ops-section" aria-labelledby="ops-h-attention">
       <h3 id="ops-h-attention" class="ops-h3">
-        {{ i18n.t("operations.panel.section_attention", "Needs attention") }}
+        {{ i18n.t("operations.panel.section_attention") }}
         <span class="ops-count">{{ sections.attention.length }}</span>
       </h3>
       <TransitionGroup tag="ul" name="ops-row" class="ops-list">
@@ -322,7 +316,7 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
 
     <section v-if="sections.active.length" class="ops-section" aria-labelledby="ops-h-active">
       <h3 id="ops-h-active" class="ops-h3">
-        {{ i18n.t("operations.panel.section_active", "In progress") }}
+        {{ i18n.t("operations.panel.section_active") }}
         <span class="ops-count">{{ sections.active.length }}</span>
       </h3>
       <TransitionGroup tag="ul" name="ops-row" class="ops-list">
@@ -342,7 +336,7 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
 
     <section v-if="sections.history.length" class="ops-section" aria-labelledby="ops-h-history">
       <h3 id="ops-h-history" class="ops-h3">
-        {{ i18n.t("operations.panel.section_history", "History") }}
+        {{ i18n.t("operations.panel.section_history") }}
         <span class="ops-count">{{ sections.history.length }}</span>
       </h3>
       <div v-for="group in historyGroups" :key="group.key" class="ops-day">
@@ -370,8 +364,8 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
       >
         {{
           showAllHistory
-            ? i18n.t("operations.panel.show_fewer", "Show fewer")
-            : i18n.tf("operations.panel.show_all_history", "Show all {count}", {
+            ? i18n.t("operations.panel.show_fewer")
+            : i18n.tf("operations.panel.show_all_history", {
                 count: sections.history.length,
               })
         }}

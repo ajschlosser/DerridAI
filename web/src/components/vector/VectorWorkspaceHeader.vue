@@ -16,39 +16,36 @@ const i18n = useI18nStore();
 <template>
   <UiPageHeader
     class="vector-workspace-header"
-    :kicker="i18n.t('section.storage', 'Storage')"
-    :title="i18n.t('nav.vector', 'Vector Stores')"
+    :kicker="i18n.t('section.storage')"
+    :title="i18n.t('nav.vector')"
     :description="
-      i18n.t(
-        'vector.page_help',
-        'Create, sync, browse, search, and export persistent Chroma collections used by DerridAI.',
-      )
+      i18n.t('vector.page_help')
     "
     title-id="vector-page-title"
-    :actions-label="i18n.t('vector.manage_collections', 'Manage collections')"
+    :actions-label="i18n.t('vector.manage_collections')"
   >
     <template #actions>
       <div class="vector-workspace-actions">
         <span v-if="props.collectionCount" class="badge">
           {{ Number(props.collectionCount).toLocaleString(i18n.locale) }}
-          {{ i18n.t("vector.collections", "collections") }}
+          {{ i18n.t("vector.collections") }}
         </span>
         <UiHealthChip
           :available="Boolean(props.health?.available)"
           :label="
             props.health?.available
-              ? props.health.identity || i18n.t('vector.health_ready', 'Chroma ready')
-              : i18n.t('vector.health_unavailable', 'Chroma unavailable')
+              ? props.health.identity || i18n.t('vector.health_ready')
+              : i18n.t('vector.health_unavailable')
           "
           :detail="props.health?.error || ''"
         />
         <UiButton
-          :label="i18n.t('vector.open_connection', 'Connection settings')"
+          :label="i18n.t('vector.open_connection')"
           icon="gear"
           @click="emit('connection')"
         />
         <UiButton
-          :label="i18n.t('vector.new_collection_short', 'New')"
+          :label="i18n.t('vector.new_collection_short')"
           icon="plus"
           variant="primary"
           @click="emit('create')"

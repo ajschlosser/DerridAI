@@ -54,7 +54,7 @@ const answerBlocks = computed<AnswerBlock[]>(() => {
     if (!block) continue;
     const cited = block.match(/^\*\*Works Cited\*\*\s*(.*)$/is);
     if (cited) {
-      output.push({ kind: "heading", text: i18n.t("research.works_cited", "Works Cited") });
+      output.push({ kind: "heading", text: i18n.t("research.works_cited") });
       if (cited[1]?.trim()) output.push(...parseBodyBlock(cited[1]));
       continue;
     }
@@ -87,11 +87,11 @@ const runDetail = computed(() =>
 );
 const statusLabel = computed(() => {
   if (!props.job) return "";
-  if (props.job.status === "completed") return i18n.t("research.complete", "Complete");
-  if (props.job.status === "failed") return i18n.t("research.failed", "Failed");
-  if (props.job.status === "cancelled") return i18n.t("research.cancelled", "Cancelled");
-  if (props.job.status === "queued") return i18n.t("research.queued", "Queued");
-  return i18n.t("research.running", "Running");
+  if (props.job.status === "completed") return i18n.t("research.complete");
+  if (props.job.status === "failed") return i18n.t("research.failed");
+  if (props.job.status === "cancelled") return i18n.t("research.cancelled");
+  if (props.job.status === "queued") return i18n.t("research.queued");
+  return i18n.t("research.running");
 });
 </script>
 
@@ -100,8 +100,8 @@ const statusLabel = computed(() => {
     <template v-if="result?.answer">
       <header class="research-answer-heading">
         <div>
-          <span class="research-answer-kicker">{{ i18n.t("research.answer", "Answer") }}</span>
-          <h2>{{ result.prompt || job?.prompt || i18n.t("research.answer", "Answer") }}</h2>
+          <span class="research-answer-kicker">{{ i18n.t("research.answer") }}</span>
+          <h2>{{ result.prompt || job?.prompt || i18n.t("research.answer") }}</h2>
           <p>
             {{ result.provider || job?.provider }} · {{ result.model || job?.model
             }}<template v-if="result.elapsed_seconds">
@@ -111,13 +111,13 @@ const statusLabel = computed(() => {
         </div>
         <div class="research-answer-actions">
           <button class="btn" type="button" @click="emit('copy')">
-            <AppIcon name="copy" />{{ i18n.t("research.copy_answer", "Copy answer") }}
+            <AppIcon name="copy" />{{ i18n.t("research.copy_answer") }}
           </button>
           <button v-if="canGrade" class="btn" type="button" @click="emit('grade')">
-            <AppIcon name="spark" />{{ i18n.t("research.grade", "Analyze & grade") }}
+            <AppIcon name="spark" />{{ i18n.t("research.grade") }}
           </button>
           <button class="btn" type="button" @click="emit('details')">
-            <AppIcon name="history" />{{ i18n.t("research.run_details", "Run details") }}
+            <AppIcon name="history" />{{ i18n.t("research.run_details") }}
           </button>
         </div>
       </header>
@@ -134,7 +134,7 @@ const statusLabel = computed(() => {
                   v-if="segment.evidenceIndex != null"
                   class="research-inline-citation"
                   type="button"
-                  :aria-label="`${i18n.t('research.inspect_evidence', 'Inspect evidence for')} ${segment.text}`"
+                  :aria-label="`${i18n.t('research.inspect_evidence')} ${segment.text}`"
                   @click="emit('evidence', segment.evidenceIndex)"
                 >
                   {{ segment.text }}</button
@@ -149,7 +149,7 @@ const statusLabel = computed(() => {
                   v-if="segment.evidenceIndex != null"
                   class="research-inline-citation"
                   type="button"
-                  :aria-label="`${i18n.t('research.inspect_evidence', 'Inspect evidence for')} ${segment.text}`"
+                  :aria-label="`${i18n.t('research.inspect_evidence')} ${segment.text}`"
                   @click="emit('evidence', segment.evidenceIndex)"
                 >
                   {{ segment.text }}</button
@@ -165,7 +165,7 @@ const statusLabel = computed(() => {
                 v-if="segment.evidenceIndex != null"
                 class="research-inline-citation"
                 type="button"
-                :aria-label="`${i18n.t('research.inspect_evidence', 'Inspect evidence for')} ${segment.text}`"
+                :aria-label="`${i18n.t('research.inspect_evidence')} ${segment.text}`"
                 @click="emit('evidence', segment.evidenceIndex)"
               >
                 {{ segment.text }}</button
@@ -177,13 +177,13 @@ const statusLabel = computed(() => {
       <footer class="research-answer-footer">
         <span
           >{{ result.evidence?.length || 0 }}
-          {{ i18n.t("research.evidence_records", "evidence records") }}</span
+          {{ i18n.t("research.evidence_records") }}</span
         >
         <span v-if="result.response_cache?.record_id">{{
-          i18n.t("research.cached", "Cached")
+          i18n.t("research.cached")
         }}</span>
         <button class="research-text-action" type="button" @click="emit('rerun')">
-          {{ i18n.t("research.rerun", "Re-run with these parameters") }}
+          {{ i18n.t("research.rerun") }}
         </button>
       </footer>
     </template>
@@ -194,26 +194,23 @@ const statusLabel = computed(() => {
         <div>
           <span class="research-answer-kicker">{{ statusLabel }}</span>
           <h2>
-            {{ job.prompt || i18n.t("research.research_in_progress", "Research in progress") }}
+            {{ job.prompt || i18n.t("research.research_in_progress") }}
           </h2>
           <p>{{ runDetail }}</p>
         </div>
       </div>
       <div v-if="job.status === 'failed'" class="research-answer-warning danger" role="alert">
-        {{ job.fatal_error || i18n.t("research.run_failed", "The Research run failed.") }}
+        {{ job.fatal_error || i18n.t("research.run_failed") }}
       </div>
     </template>
 
     <template v-else>
       <div class="research-answer-empty">
         <div aria-hidden="true">∴</div>
-        <h2>{{ i18n.t("research.answer_waiting", "Your research answer will appear here") }}</h2>
+        <h2>{{ i18n.t("research.answer_waiting") }}</h2>
         <p>
           {{
-            i18n.t(
-              "research.answer_waiting_help",
-              "Ask a question above. The answer stays in the workspace with its evidence rather than opening in a modal.",
-            )
+            i18n.t("research.answer_waiting_help")
           }}
         </p>
       </div>

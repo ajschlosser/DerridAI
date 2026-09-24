@@ -309,38 +309,30 @@ export function createDbPresenceUpsert(deps: Deps) {
   async function upsertRows(rows: Any, labelText = "records", { largeSyncConfirmed = false } = {}) {
     if (!hasCorpusDb())
       return openMessageModal({
-        title: "Vector database required",
+        title: tr("records.toast.vector_required"),
         message: dbUnavailableReason(),
-        confirmLabel: "OK",
+        confirmLabel: tr("ui.ok"),
       });
-    if (!state.activeStore) return toast("Select a Chroma collection first");
-    if (!rows.length) return toast("No records selected for upsert");
+    if (!state.activeStore) return toast(tr("records.toast.select_collection"));
+    if (!rows.length) return toast(tr("runtime.toast.no_upsert_rows"));
     const activeUpsert = state.jobs.find(
       (job: Any) =>
         job.type === "upsert" && ["queued", "running", "cancelling"].includes(job.status),
     );
     if (activeUpsert)
       return openMessageModal({
-        title: tr("operations.vector_sync_active_title", "A vector sync is already active"),
-        message: trf(
-          "operations.vector_sync_active_help",
-          "{label} must finish or be cancelled before another collection build starts.",
-          { label: activeUpsert.label || activeUpsert.store_name || "The current sync" },
-        ),
-        confirmLabel: "OK",
+        title: tr("operations.vector_sync_active_title"),
+        message: trf("operations.vector_sync_active_help", { label: activeUpsert.label || activeUpsert.store_name || "The current sync" }),
+        confirmLabel: tr("ui.ok"),
       });
     const store = state.activeStore;
     await refreshPresenceForRows(rows, { force: true });
     if (rows.length > 500 && !largeSyncConfirmed) {
       const approved = await openMessageModal({
-        title: tr("operations.large_sync_background_title", "Build collection in the background?"),
-        message: trf(
-          "operations.large_sync_background_help",
-          "{count} records will be prepared once, then DerridAI will build and validate the collection as a background operation. You may continue working in this tab while the build runs.",
-          { count: rows.length.toLocaleString() },
-        ),
-        confirmLabel: tr("operations.start_background_build", "Start background build"),
-        cancelLabel: tr("ui.cancel", "Cancel"),
+        title: tr("operations.large_sync_background_title"),
+        message: trf("operations.large_sync_background_help", { count: rows.length.toLocaleString() }),
+        confirmLabel: tr("operations.start_background_build"),
+        cancelLabel: tr("ui.cancel"),
       });
       if (!approved) return false;
     }
@@ -384,11 +376,7 @@ export function createDbPresenceUpsert(deps: Deps) {
       syncJobProgressToasts();
       startJobPolling();
       toast(
-        trf(
-          "operations.vector_build_queued",
-          "Queued {count} records for background build of {store}",
-          { count: rows.length.toLocaleString(), store },
-        ),
+        trf("operations.vector_build_queued", { count: rows.length.toLocaleString(), store }),
         { tone: "success" },
       );
       notifyVectorStoresChanged();

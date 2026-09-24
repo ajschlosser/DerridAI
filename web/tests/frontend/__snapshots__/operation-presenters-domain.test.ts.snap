@@ -102,7 +102,7 @@ exports[`operation presenters > builds the Operations panel view model for each 
       "value": "0",
     },
     {
-      "name": "Unresolved regions",
+      "name": "boundary decision(s) to review",
       "value": "0",
     },
   ],

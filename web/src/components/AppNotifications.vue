@@ -13,7 +13,7 @@ const i18n = useI18nStore();
       <span>{{ item.message }}</span>
       <button
         type="button"
-        :aria-label="i18n.t('ui.dismiss_notification', 'Dismiss notification')"
+        :aria-label="i18n.t('ui.dismiss_notification')"
         @click="dismiss(item.id)"
       >
         ×

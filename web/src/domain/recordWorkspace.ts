@@ -7,6 +7,8 @@ import { fullCitation, inlineCitation, mlaPageSpan } from "./citations";
 import { compactRecordHistory, pdfLinks, recordPayload } from "./recordPayloads";
 import { countOccurrences } from "./recordQuery";
 import { cloneAuditValue } from "./recordValues";
+import { bindCopy } from "../i18n/bindCopy";
+import { englishDefault } from "../i18n/englishDefault";
 
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Parameters of these legacy functions were never typed; they keep the shape their callers give them. */
@@ -99,13 +101,18 @@ export function createRecordWorkspace(deps: Deps) {
     toast,
     toggleDbEvidence,
     toggleWorkspaceEvidence,
-    tr,
     uid,
     unlinkAllPdfLinks,
     unlinkPdfLink,
     upsertRows,
     workspaceEvidenceKey,
   } = deps;
+  const { tr } = bindCopy(deps.tr, (key, fallback, values = {}) =>
+    Object.entries(values).reduce(
+      (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
+      fallback || englishDefault(key) || key,
+    ),
+  );
   function recordWorkspaceRecord(record: Any) {
     const out = recordPayload(record, { includeChromaId: true });
     delete out.updates;
@@ -160,7 +167,7 @@ export function createRecordWorkspace(deps: Deps) {
         return {
           available: false,
           mode: "database",
-          reason: tr("research.no_records", "No records available"),
+          reason: tr("research.no_records"),
         };
       const id = String(record._chroma_id || record.record_id || state.researcherRecordId || "");
       const list = researcherDbRecords();
@@ -224,7 +231,7 @@ export function createRecordWorkspace(deps: Deps) {
       return {
         available: false,
         mode: "workspace",
-        reason: tr("record.no_record_selected", "No record selected."),
+        reason: tr("record.no_record_selected"),
       };
     const pointer = { kind: "workspace", fileId: file.id, index };
     if (JSON.stringify(state.lastViewedRecord) !== JSON.stringify(pointer)) {
@@ -364,7 +371,7 @@ export function createRecordWorkspace(deps: Deps) {
       );
       return true;
     } catch (error) {
-      toast(`${tr("record.copy_failed", "Could not copy citation")}: ${(error as Error).message}`, {
+      toast(`${tr("record.copy_failed")}: ${(error as Error).message}`, {
         tone: "danger",
       });
       return false;
@@ -374,19 +381,19 @@ export function createRecordWorkspace(deps: Deps) {
     if (isResearcher()) {
       const record = await researcherCurrentRecord();
       if (!record) return false;
-      await copyJsonToClipboard(recordWorkspaceRecord(record), tr("record.record_json", "record"));
+      await copyJsonToClipboard(recordWorkspaceRecord(record), tr("record.record_json"));
       return true;
     }
     const record = selectedRecord();
     if (!record) return false;
-    await copyJsonToClipboard(recordWorkspaceRecord(record), tr("record.record_json", "record"));
+    await copyJsonToClipboard(recordWorkspaceRecord(record), tr("record.record_json"));
     return true;
   }
   async function saveCurrentRecordChanges(changes = {}) {
     if (isResearcher() || !canUse("editLocalRecords"))
-      throw new Error(tr("permissions.record_edit_denied", "Your role cannot edit local records."));
+      throw new Error(tr("permissions.record_edit_denied"));
     const file = activeFile();
-    if (!file) throw new Error(tr("record.no_record_selected", "No record selected."));
+    if (!file) throw new Error(tr("record.no_record_selected"));
     const index = selectedIndex(file);
     const safe: Loose = {};
     for (const [field, value] of Object.entries(changes || {})) {
@@ -394,22 +401,22 @@ export function createRecordWorkspace(deps: Deps) {
     }
     const count = applyRecordChanges(file, index, safe, { source: "record_workspace" });
     shell();
-    if (count) toast(tr("record.saved", "Record changes saved"), { tone: "success" });
-    else toast(tr("record.no_changes", "No record fields changed"), { tone: "info" });
+    if (count) toast(tr("record.saved"), { tone: "success" });
+    else toast(tr("record.no_changes"), { tone: "info" });
     return getRecordWorkspaceSnapshot();
   }
   async function addCurrentRecordAnnotation(payload: Loose = {}) {
     if (!hasCapability("annotations.write"))
-      throw new Error(tr("permissions.annotations_denied", "Your role cannot create annotations."));
+      throw new Error(tr("permissions.annotations_denied"));
     const field = String(payload.field || "text"),
       quote = String(payload.quote || "").trim(),
       note = String(payload.note || "").trim(),
       tags = Array.isArray(payload.tags) ? payload.tags.map(String).filter(Boolean) : [];
     if (!quote && !note && !tags.length)
-      throw new Error(tr("annotations.empty", "Add a quotation, note, or tag first."));
+      throw new Error(tr("annotations.empty"));
     if (isResearcher()) {
       const record = await researcherCurrentRecord();
-      if (!record) throw new Error(tr("record.no_record_selected", "No record selected."));
+      if (!record) throw new Error(tr("record.no_record_selected"));
       await api("/api/annotations", {
         method: "POST",
         body: JSON.stringify({
@@ -426,11 +433,11 @@ export function createRecordWorkspace(deps: Deps) {
       });
       state.annotationsFetchedAt = 0;
       await refreshServerAnnotations(true);
-      toast(tr("annotations.saved", "Record annotation saved"), { tone: "success" });
+      toast(tr("annotations.saved"), { tone: "success" });
       return getRecordWorkspaceSnapshot();
     }
     const file = activeFile();
-    if (!file) throw new Error(tr("record.no_record_selected", "No record selected."));
+    if (!file) throw new Error(tr("record.no_record_selected"));
     const index = selectedIndex(file),
       record = file.records[index];
     const shared = await api("/api/annotations", {
@@ -464,14 +471,14 @@ export function createRecordWorkspace(deps: Deps) {
     state.annotationsFetchedAt = 0;
     await refreshServerAnnotations(true);
     shell();
-    toast(tr("annotations.saved", "Record annotation saved"), { tone: "success" });
+    toast(tr("annotations.saved"), { tone: "success" });
     return getRecordWorkspaceSnapshot();
   }
   async function removeCurrentRecordAnnotation(annotationId: Any) {
     if (isResearcher() || !canUse("editLocalRecords"))
-      throw new Error(tr("permissions.record_edit_denied", "Your role cannot edit local records."));
+      throw new Error(tr("permissions.record_edit_denied"));
     const file = activeFile();
-    if (!file) throw new Error(tr("record.no_record_selected", "No record selected."));
+    if (!file) throw new Error(tr("record.no_record_selected"));
     const index = selectedIndex(file),
       record = file.records[index];
     const annotations = Array.isArray(record.annotations)
@@ -491,14 +498,14 @@ export function createRecordWorkspace(deps: Deps) {
     annotations.splice(at, 1);
     applyRecordChanges(file, index, { annotations }, { source: "annotation" });
     shell();
-    toast(tr("annotations.removed", "Record annotation removed"), { tone: "success" });
+    toast(tr("annotations.removed"), { tone: "success" });
     return getRecordWorkspaceSnapshot();
   }
   async function currentRecordPrimaryAction(action: Any, payload: Loose = {}) {
     if (action === "upsert") {
       if (isResearcher() || !canUse("manageCorpus"))
         throw new Error(
-          tr("permissions.corpus_denied", "Your role cannot manage corpus databases."),
+          tr("permissions.corpus_denied"),
         );
       const file = activeFile();
       if (!file) return false;
@@ -511,7 +518,7 @@ export function createRecordWorkspace(deps: Deps) {
     if (action === "llm") {
       if (isResearcher() || !canUse("editLocalRecords"))
         throw new Error(
-          tr("permissions.record_edit_denied", "Your role cannot edit local records."),
+          tr("permissions.record_edit_denied"),
         );
       const file = activeFile();
       if (!file) return false;
@@ -522,7 +529,7 @@ export function createRecordWorkspace(deps: Deps) {
     if (action === "ocr") {
       if (isResearcher() || !canUse("editLocalRecords"))
         throw new Error(
-          tr("permissions.record_edit_denied", "Your role cannot edit local records."),
+          tr("permissions.record_edit_denied"),
         );
       const file = activeFile();
       if (!file) return false;
@@ -532,7 +539,7 @@ export function createRecordWorkspace(deps: Deps) {
     if (action === "history") {
       if (isResearcher() || !canUse("editLocalRecords"))
         throw new Error(
-          tr("permissions.record_edit_denied", "Your role cannot edit local records."),
+          tr("permissions.record_edit_denied"),
         );
       const file = activeFile();
       if (!file) return false;
@@ -541,7 +548,7 @@ export function createRecordWorkspace(deps: Deps) {
     }
     if (action === "open_pdf") {
       if (!canAccessPage("pdf"))
-        throw new Error(tr("permissions.pdf_denied", "Your role cannot open PDF Explorer."));
+        throw new Error(tr("permissions.pdf_denied"));
       const snapshot: Loose = await getRecordWorkspaceSnapshot();
       const link = snapshot?.pdf_links?.[Number(payload.index) || 0];
       if (!link) return false;
@@ -560,7 +567,7 @@ export function createRecordWorkspace(deps: Deps) {
     }
     if (action === "pdf_explorer") {
       if (!canAccessPage("pdf"))
-        throw new Error(tr("permissions.pdf_denied", "Your role cannot open PDF Explorer."));
+        throw new Error(tr("permissions.pdf_denied"));
       openPdfExplorerWorkspace();
       return true;
     }

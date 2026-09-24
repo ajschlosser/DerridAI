@@ -18,8 +18,8 @@ const busy = ref(false);
 const error = ref("");
 const title = computed(() =>
   auth.bootstrapRequired
-    ? i18n.t("auth.create_first_admin", "Create the first administrator")
-    : i18n.t("auth.sign_in_title", "Sign in to DerridAI"),
+    ? i18n.t("auth.create_first_admin")
+    : i18n.t("auth.sign_in_title"),
 );
 const currentLocaleInfo = computed(() =>
   i18n.languages.find((language) => language.code === i18n.locale),
@@ -31,16 +31,12 @@ function lockoutMessage(exc: unknown) {
   const seconds = Number(detail?.retry_after_seconds);
   const minutes =
     Number.isFinite(seconds) && seconds > 0 ? Math.max(1, Math.ceil(seconds / 60)) : 5;
-  return i18n.tf(
-    "auth.locked_out",
-    "Too many failed sign-in attempts. Try again in {minutes} minute(s).",
-    { minutes },
-  );
+  return i18n.tf("auth.locked_out", { minutes });
 }
 async function submit() {
   error.value = "";
   if (auth.bootstrapRequired && password.value !== confirmPassword.value) {
-    error.value = i18n.t("auth.passwords_no_match", "Passwords do not match.");
+    error.value = i18n.t("auth.passwords_no_match");
     return;
   }
   busy.value = true;
@@ -62,7 +58,7 @@ async function submit() {
         <div class="auth-brand-lockup">
           <BrandMark :size="78" />
           <div>
-            <strong>DerridAI</strong><span>{{ i18n.t("ui.corpus_viewer", "Corpus Viewer") }}</span>
+            <strong>DerridAI</strong><span>{{ i18n.t("ui.corpus_viewer") }}</span>
           </div>
         </div>
         <div class="auth-language-switcher">
@@ -72,7 +68,7 @@ async function submit() {
             :label="currentLocaleInfo?.name"
             size="small"
           /><select
-            :aria-label="i18n.t('dashboard.interface_language', 'Interface language')"
+            :aria-label="i18n.t('dashboard.interface_language')"
             :value="i18n.locale"
             @change="i18n.setLocale(($event.target as HTMLSelectElement).value)"
           >
@@ -86,19 +82,16 @@ async function submit() {
         <p>
           {{
             auth.bootstrapRequired
-              ? i18n.t("auth.first_run", "First-run setup")
-              : i18n.t("auth.required", "Authentication required")
+              ? i18n.t("auth.first_run")
+              : i18n.t("auth.required")
           }}
         </p>
         <h1>{{ title }}</h1>
         <span v-if="auth.bootstrapRequired">{{
-          i18n.t(
-            "auth.first_admin_help",
-            "The first account is an administrator. Additional admin and researcher accounts can be created afterward.",
-          )
+          i18n.t("auth.first_admin_help")
         }}</span
         ><span v-else>{{
-          i18n.t("auth.assigned_account", "Use your assigned DerridAI account.")
+          i18n.t("auth.assigned_account")
         }}</span>
       </div>
       <div v-if="auth.error" class="auth-error auth-connect-error" role="alert">
@@ -106,7 +99,7 @@ async function submit() {
       </div>
       <form class="auth-form" @submit.prevent="submit">
         <label
-          >{{ i18n.t("auth.username", "Username")
+          >{{ i18n.t("auth.username")
           }}<input
             v-model="username"
             class="control"
@@ -114,7 +107,7 @@ async function submit() {
             required
             minlength="2" /></label
         ><label
-          >{{ i18n.t("auth.password", "Password")
+          >{{ i18n.t("auth.password")
           }}<input
             v-model="password"
             class="control"
@@ -123,7 +116,7 @@ async function submit() {
             required
             :minlength="auth.bootstrapRequired ? 6 : 1" /></label
         ><label v-if="auth.bootstrapRequired"
-          >{{ i18n.t("auth.confirm_password", "Confirm password")
+          >{{ i18n.t("auth.confirm_password")
           }}<input
             v-model="confirmPassword"
             class="control"
@@ -136,19 +129,16 @@ async function submit() {
         <button class="btn primary auth-submit" :disabled="busy">
           {{
             busy
-              ? i18n.t("auth.working", "Working…")
+              ? i18n.t("auth.working")
               : auth.bootstrapRequired
-                ? i18n.t("auth.create_admin", "Create administrator")
-                : i18n.t("auth.sign_in", "Sign in")
+                ? i18n.t("auth.create_admin")
+                : i18n.t("auth.sign_in")
           }}
         </button>
       </form>
       <div v-if="auth.bootstrapRequired" class="auth-note">
         {{
-          i18n.t(
-            "auth.password_note",
-            "Passwords must contain at least 6 characters. No default administrator credentials are created.",
-          )
+          i18n.t("auth.password_note")
         }}
       </div>
     </main>

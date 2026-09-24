@@ -17,11 +17,11 @@ const i18n = useI18nStore();
     class="mixed-value-inspect"
     :class="{compact: props.compact}"
     :data-inspect-mixed-field="props.field"
-    :aria-label="i18n.tf('works.inspect_mixed_aria', 'Inspect {count} unique values for {field}', {count: props.count, field: props.fieldLabel})"
+    :aria-label="i18n.tf('works.inspect_mixed_aria', {count: props.count, field: props.fieldLabel})"
     @click.stop="emit('inspect', props.field)"
   >
-    <span>{{ i18n.t("works.mixed", "Mixed") }}</span>
+    <span>{{ i18n.t("works.mixed") }}</span>
     <b>{{ props.count }}</b>
-    <small>{{ i18n.t("works.unique_values", "values") }}</small>
+    <small>{{ i18n.t("works.unique_values") }}</small>
   </button>
 </template>

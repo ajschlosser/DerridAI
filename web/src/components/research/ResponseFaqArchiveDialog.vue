@@ -80,21 +80,18 @@ function choose(record: ResponseFaqRecord) {
     <div class="response-archive-shell">
       <header class="response-archive-head">
         <div>
-          <span class="section-label">{{ i18n.t("faq.library_kicker", "Library") }}</span>
-          <h2 id="responseArchiveTitle">{{ i18n.t("faq.library_title", "Saved questions") }}</h2>
+          <span class="section-label">{{ i18n.t("faq.library_kicker") }}</span>
+          <h2 id="responseArchiveTitle">{{ i18n.t("faq.library_title") }}</h2>
           <p>
             {{
-              i18n.t(
-                "faq.archive_help",
-                "Scan or search saved questions, then open one to revisit its answer and evidence.",
-              )
+              i18n.t("faq.archive_help")
             }}
           </p>
         </div>
         <button
           type="button"
           class="response-archive-close"
-          :aria-label="i18n.t('ui.close', 'Close')"
+          :aria-label="i18n.t('ui.close')"
           @click="requestClose"
         >
           ×
@@ -103,14 +100,14 @@ function choose(record: ResponseFaqRecord) {
 
       <div class="response-archive-toolbar">
         <label class="response-archive-search">
-          <span class="sr-only">{{ i18n.t("faq.search_label", "Search saved questions") }}</span>
+          <span class="sr-only">{{ i18n.t("faq.search_label") }}</span>
           <AppIcon name="search" aria-hidden="true" />
           <input
             ref="searchInput"
             :value="search"
             type="search"
             autocomplete="off"
-            :placeholder="i18n.t('faq.search_placeholder', 'Search question text…')"
+            :placeholder="i18n.t('faq.search_placeholder')"
             @input="onSearchInput"
           />
           <span v-if="loading" class="spinner" aria-hidden="true"></span>
@@ -121,23 +118,23 @@ function choose(record: ResponseFaqRecord) {
           :disabled="loading"
           @click="emit('refresh')"
         >
-          <AppIcon name="refresh" />{{ i18n.t("ui.refresh", "Refresh") }}
+          <AppIcon name="refresh" />{{ i18n.t("ui.refresh") }}
         </button>
       </div>
 
       <div class="response-archive-index-head">
         <div>
-          <strong>{{ i18n.t("faq.questions_label", "Questions") }}</strong
+          <strong>{{ i18n.t("faq.questions_label") }}</strong
           ><span>{{
-            i18n.t("faq.questions_help", "Select a question to open its saved answer.")
+            i18n.t("faq.questions_help")
           }}</span>
         </div>
         <div class="response-archive-count" aria-live="polite">
           <strong>{{ (search ? count : total).toLocaleString(i18n.locale) }}</strong
           ><span>{{
             search
-              ? i18n.t("faq.question_matches", "matching questions")
-              : i18n.t("faq.saved_questions", "saved questions")
+              ? i18n.t("faq.question_matches")
+              : i18n.t("faq.saved_questions")
           }}</span>
         </div>
       </div>
@@ -149,10 +146,10 @@ function choose(record: ResponseFaqRecord) {
           role="status"
         >
           <AppIcon name="search" />
-          <strong>{{ i18n.t("faq.no_matches", "No saved questions match this search") }}</strong>
-          <p>{{ i18n.t("faq.no_matches_help", "Try broader wording or clear the search.") }}</p>
+          <strong>{{ i18n.t("faq.no_matches") }}</strong>
+          <p>{{ i18n.t("faq.no_matches_help") }}</p>
           <button type="button" @click="emit('search', '')">
-            {{ i18n.t("ui.clear", "Clear") }}
+            {{ i18n.t("ui.clear") }}
           </button>
         </div>
         <ResponseFaqList
@@ -166,11 +163,11 @@ function choose(record: ResponseFaqRecord) {
 
       <footer v-if="records.length" class="response-archive-footer">
         <button type="button" :disabled="page <= 1 || loading" @click="emit('page', -1)">
-          ← {{ i18n.t("ui.previous", "Previous") }}
+          ← {{ i18n.t("ui.previous") }}
         </button>
-        <span>{{ i18n.tf("faq.page_of", "Page {page} of {pages}", { page, pages }) }}</span>
+        <span>{{ i18n.tf("faq.page_of", { page, pages }) }}</span>
         <button type="button" :disabled="page >= pages || loading" @click="emit('page', 1)">
-          {{ i18n.t("ui.next", "Next") }} →
+          {{ i18n.t("ui.next") }} →
         </button>
       </footer>
     </div>

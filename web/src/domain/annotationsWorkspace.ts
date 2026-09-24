@@ -183,21 +183,21 @@ export function createAnnotationsWorkspace(deps: Deps) {
       id: String(
         annotation.id || `${item.file?.id || "annotation"}-${item.index}-${item.annotationIndex}`,
       ),
-      record_id: String(item.record?.record_id || tr("nav.record", "Record")),
+      record_id: String(item.record?.record_id || tr("nav.record")),
       work: item.work,
       field: annotation.field
         ? label(annotation.field)
-        : tr("annotations.record_note", "Record note"),
+        : tr("annotations.record_note"),
       quote: String(annotation.quote || ""),
       note: String(annotation.note || ""),
       tags: Array.isArray(annotation.tags) ? annotation.tags.map(String) : [],
       author: String(
         annotation.initiated_by ||
           annotation.author ||
-          tr("annotations.unknown_author", "Unknown author"),
+          tr("annotations.unknown_author"),
       ),
       source: item.server
-        ? annotation.store || tr("annotations.shared", "Shared annotation")
+        ? annotation.store || tr("annotations.shared")
         : String(item.file?.name || ""),
       created_at: annotation.created_at || null,
       server: Boolean(item.server),
@@ -275,7 +275,7 @@ export function createAnnotationsWorkspace(deps: Deps) {
     }
     state.annotationsFetchedAt = 0;
     await refreshServerAnnotations(true);
-    notifyToast(tr("annotations.removed", "Annotation removed."), { tone: "success" });
+    notifyToast(tr("annotations.removed"), { tone: "success" });
   }
   return {
     serverAnnotationItems,

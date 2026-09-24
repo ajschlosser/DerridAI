@@ -31,13 +31,13 @@ const steps=computed(()=>{
 </script>
 
 <template>
-  <nav class="workflow" :aria-label="i18n.t('pdf_corpus.workflow.label','Corpus build workflow')">
+  <nav class="workflow" :aria-label="i18n.t('pdf_corpus.workflow.label')">
     <ol>
       <li v-for="step in steps" :key="step.number" :data-state="step.state" :aria-current="step.state==='current'?'step':undefined">
         <span class="marker" aria-hidden="true">{{step.state==='complete'?'✓':step.number}}</span>
         <span class="step-copy">
           <b>{{step.label}}</b>
-          <small>{{step.state==='complete'?i18n.t('pdf_corpus.workflow.complete','Complete'):step.state==='current'?i18n.t('pdf_corpus.workflow.current','Current'):i18n.t('pdf_corpus.workflow.upcoming','Upcoming')}}</small>
+          <small>{{step.state==='complete'?i18n.t('pdf_corpus.workflow.complete'):step.state==='current'?i18n.t('pdf_corpus.workflow.current'):i18n.t('pdf_corpus.workflow.upcoming')}}</small>
         </span>
       </li>
     </ol>

@@ -67,18 +67,18 @@ function describedBy(id: string) {
 
 <template>
   <div class="permission-matrix">
-    <p v-if="!groups.length" class="permission-empty" role="status">{{ i18n.t("roles.filter_empty", "No permissions match this search.") }}</p>
+    <p v-if="!groups.length" class="permission-empty" role="status">{{ i18n.t("roles.filter_empty") }}</p>
     <fieldset v-for="group in groups" :key="group.category" class="permission-group">
       <legend class="permission-legend">
         <span class="permission-legend-copy">
           <span>{{ i18n.t(categoryLabelKey(group.category), group.category) }}</span>
-          <span class="permission-legend-count">{{ i18n.tf("roles.category_count", "{enabled} of {total}", {enabled: enabledCount(group.items), total: group.items.length}) }}</span>
+          <span class="permission-legend-count">{{ i18n.tf("roles.category_count", {enabled: enabledCount(group.items), total: group.items.length}) }}</span>
         </span>
         <UiButton
           v-if="!disabled && configurableIds(group.items).length"
           size="small"
           variant="ghost"
-          :label="groupComplete(group.items) ? i18n.tf('roles.category_none', 'Clear all in {category}', {category: i18n.t(categoryLabelKey(group.category), group.category)}) : i18n.tf('roles.category_all', 'Enable all in {category}', {category: i18n.t(categoryLabelKey(group.category), group.category)})"
+          :label="groupComplete(group.items) ? i18n.tf('roles.category_none', {category: i18n.t(categoryLabelKey(group.category), group.category)}) : i18n.tf('roles.category_all', {category: i18n.t(categoryLabelKey(group.category), group.category)})"
           @click="toggleGroup(group.items)"
         />
       </legend>
@@ -100,13 +100,13 @@ function describedBy(id: string) {
             <b>{{ i18n.t(capabilityLabelKey(capability.id), capability.label) }}</b>
             <UiStatusBadge
               v-if="!capability.configurable"
-              :label="i18n.t('roles.admin_only', 'Administrator only')"
+              :label="i18n.t('roles.admin_only')"
               tone="warning"
-              :help="i18n.t('roles.admin_locked_help', 'Administrator access is fixed to full application control so administrative access cannot be accidentally removed.')"
+              :help="i18n.t('roles.admin_locked_help')"
             />
           </span>
           <small :id="describedBy(capability.id)">{{ i18n.t(capabilityHelpKey(capability.id), capability.description) }}</small>
-          <code :title="i18n.t('roles.permission_id', 'Capability id')">{{ capability.id }}</code>
+          <code :title="i18n.t('roles.permission_id')">{{ capability.id }}</code>
         </span>
       </label>
     </fieldset>

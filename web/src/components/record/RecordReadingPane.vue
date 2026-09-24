@@ -219,31 +219,31 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onGlobalKeydown));
         <p>
           {{
             props.summaryMode
-              ? i18n.t("record.researcher_summary", "Researcher summary")
-              : i18n.t("record.extracted_text", "Extracted text")
+              ? i18n.t("record.researcher_summary")
+              : i18n.t("record.extracted_text")
           }}
         </p>
         <span
-          >{{ props.wordCount.toLocaleString(i18n.locale) }} {{ i18n.t("record.words", "words") }} ·
+          >{{ props.wordCount.toLocaleString(i18n.locale) }} {{ i18n.t("record.words") }} ·
           {{ props.characterCount.toLocaleString(i18n.locale) }}
-          {{ i18n.t("record.characters", "characters")
+          {{ i18n.t("record.characters")
           }}<template v-if="search">
-            · {{ matchCount }} {{ i18n.t("record.matches", "matches") }}</template
+            · {{ matchCount }} {{ i18n.t("record.matches") }}</template
           ></span
         >
       </div>
       <div class="record-reading-controls">
         <label class="record-reading-search"
-          ><span class="sr-only">{{ i18n.t("record.find_text", "Find in record text") }}</span
+          ><span class="sr-only">{{ i18n.t("record.find_text") }}</span
           ><AppIcon name="search" /><input
             :value="search"
-            :placeholder="i18n.t('record.find_text', 'Find in record text')"
-            :aria-label="i18n.t('record.find_text', 'Find in record text')"
+            :placeholder="i18n.t('record.find_text')"
+            :aria-label="i18n.t('record.find_text')"
             @input="onFind(($event.target as HTMLInputElement).value)"
           /><button
             v-if="search"
             type="button"
-            :aria-label="i18n.t('record.clear_find', 'Clear find query')"
+            :aria-label="i18n.t('record.clear_find')"
             @click="clearFind"
           >
             ×
@@ -257,8 +257,8 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onGlobalKeydown));
         >
           {{
             focusMode
-              ? i18n.t("record.exit_focus", "Exit focus")
-              : i18n.t("record.focus_mode", "Focus mode")
+              ? i18n.t("record.exit_focus")
+              : i18n.t("record.focus_mode")
           }}
         </button>
       </div>
@@ -266,7 +266,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onGlobalKeydown));
     <div
       class="record-reading-text"
       tabindex="0"
-      :aria-label="i18n.t('record.text', 'Record text')"
+      :aria-label="i18n.t('record.text')"
     >
       <template v-for="(segment, index) in segments" :key="index">
         <mark
@@ -301,16 +301,16 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onGlobalKeydown));
         class="record-selection-popover"
         :style="selectionStyle"
         role="toolbar"
-        :aria-label="i18n.t('record.selection_actions', 'Selected text actions')"
+        :aria-label="i18n.t('record.selection_actions')"
       >
         <span>{{
           selectedQuote.length > 42 ? selectedQuote.slice(0, 42) + "…" : selectedQuote
         }}</span>
         <button type="button" @click="copySelection">
-          <AppIcon name="copy" />{{ i18n.t("ui.copy", "Copy") }}
+          <AppIcon name="copy" />{{ i18n.t("ui.copy") }}
         </button>
         <button v-if="props.canAnnotate" type="button" class="primary" @click="annotate">
-          <AppIcon name="plus" />{{ i18n.t("annotations.add_note_tags", "Add note / tags") }}
+          <AppIcon name="plus" />{{ i18n.t("annotations.add_note_tags") }}
         </button>
       </div>
       <aside
@@ -323,15 +323,15 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onGlobalKeydown));
         <div class="record-annotation-tooltip-head">
           <AppIcon name="edit" /><strong>{{
             tooltipAnnotations.length === 1
-              ? i18n.t("annotations.annotation", "Annotation")
-              : i18n.tf("annotations.annotation_count", "{count} annotations", {
+              ? i18n.t("annotations.annotation")
+              : i18n.tf("annotations.annotation_count", {
                   count: tooltipAnnotations.length,
                 })
           }}</strong>
         </div>
         <article v-for="annotation in tooltipAnnotations" :key="annotation.id">
           <p v-if="annotation.note">{{ annotation.note }}</p>
-          <p v-else class="annotation-no-note">{{ i18n.t("annotations.no_note", "No note") }}</p>
+          <p v-else class="annotation-no-note">{{ i18n.t("annotations.no_note") }}</p>
           <div v-if="annotation.tags?.length" class="annotation-tooltip-tags">
             <span v-for="tag in annotation.tags" :key="tag">{{ tag }}</span>
           </div>

@@ -9,4 +9,4 @@ const options:["compact"|"roomy"|"cards",string][]=[
   ["cards","search.layout_cards"],
 ];
 </script>
-<template><div class="search-layout-switcher" role="group" :aria-label="props.label||i18n.t('search.result_layout','Result layout')"><button v-for="[value,key] in options" :key="value" type="button" class="btn tiny" :class="{active:props.modelValue===value}" :aria-pressed="props.modelValue===value" @click="emit('update:modelValue',value)">{{i18n.t(key,value==='compact'?'Compact table':value==='roomy'?'Comfortable table':'Cards')}}</button></div></template>
+<template><div class="search-layout-switcher" role="group" :aria-label="props.label||i18n.t('search.result_layout')"><button v-for="[value,key] in options" :key="value" type="button" class="btn tiny" :class="{active:props.modelValue===value}" :aria-pressed="props.modelValue===value" @click="emit('update:modelValue',value)">{{i18n.t(key)}}</button></div></template>

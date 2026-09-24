@@ -100,7 +100,7 @@ function exportGuidance() {
   link.click();
   URL.revokeObjectURL(url);
   error.value = "";
-  notice.value = i18n.t("pdf_corpus.run_guidance_exported", "Field guidance exported.");
+  notice.value = i18n.t("pdf_corpus.run_guidance_exported");
 }
 
 function normaliseImportedGuidance(payload: unknown): Record<string, RunGuidanceEntry> {
@@ -110,10 +110,7 @@ function normaliseImportedGuidance(payload: unknown): Record<string, RunGuidance
       : payload;
   if (!source || typeof source !== "object" || Array.isArray(source)) {
     throw new Error(
-      i18n.t(
-        "pdf_corpus.run_guidance_import_invalid",
-        "That file does not contain field guidance.",
-      ),
+      i18n.t("pdf_corpus.run_guidance_import_invalid"),
     );
   }
   const fields = new Map(props.fields.map((field) => [field.name, field]));
@@ -132,7 +129,7 @@ function normaliseImportedGuidance(payload: unknown): Record<string, RunGuidance
   }
   if (!Object.keys(imported).length) {
     throw new Error(
-      i18n.t("pdf_corpus.run_guidance_import_no_fields", "No current schema fields were found."),
+      i18n.t("pdf_corpus.run_guidance_import_no_fields"),
     );
   }
   return imported;
@@ -147,7 +144,7 @@ async function importGuidance(event: Event) {
     const imported = normaliseImportedGuidance(JSON.parse(await file.text()));
     emit("update:modelValue", { ...props.modelValue, ...imported });
     error.value = "";
-    notice.value = i18n.t("pdf_corpus.run_guidance_imported", "Field guidance imported.");
+    notice.value = i18n.t("pdf_corpus.run_guidance_imported");
   } catch (exc) {
     notice.value = "";
     error.value = exc instanceof Error ? exc.message : String(exc);
@@ -158,44 +155,38 @@ async function importGuidance(event: Event) {
 <template>
   <section
     class="run-guidance"
-    :aria-label="i18n.t('pdf_corpus.run_guidance_title', 'Run-specific field guidance')"
+    :aria-label="i18n.t('pdf_corpus.run_guidance_title')"
     aria-describedby="run-guidance-help"
   >
     <p id="run-guidance-help" class="run-guidance-help">
       {{
-        i18n.t(
-          "pdf_corpus.run_guidance_help",
-          "Add temporary instructions or names and phrases to look for. These guide this build without changing the schema or restricting other valid values.",
-        )
+        i18n.t("pdf_corpus.run_guidance_help")
       }}
     </p>
     <p class="run-guidance-count" aria-live="polite">
       {{
-        i18n.tf("pdf_corpus.run_guidance_count", "{count} field(s) with guidance", {
+        i18n.tf("pdf_corpus.run_guidance_count", {
           count: populated,
         })
       }}
     </p>
     <p class="run-guidance-file-help">
       {{
-        i18n.t(
-          "pdf_corpus.run_guidance_file_help",
-          "JSON files only. Import merges matching fields into the current draft.",
-        )
+        i18n.t("pdf_corpus.run_guidance_file_help")
       }}
     </p>
     <div class="run-guidance-actions">
       <UiButton
         size="small"
         icon="download"
-        :label="i18n.t('pdf_corpus.run_guidance_export', 'Export guidance')"
+        :label="i18n.t('pdf_corpus.run_guidance_export')"
         :disabled="disabled"
         @click="exportGuidance"
       />
       <UiButton
         size="small"
         icon="upload"
-        :label="i18n.t('pdf_corpus.run_guidance_import', 'Import guidance')"
+        :label="i18n.t('pdf_corpus.run_guidance_import')"
         :disabled="disabled"
         @click="openImport"
       />
@@ -204,7 +195,7 @@ async function importGuidance(event: Event) {
         type="file"
         accept="application/json,.json"
         class="sr-only"
-        :aria-label="i18n.t('pdf_corpus.run_guidance_import', 'Import guidance')"
+        :aria-label="i18n.t('pdf_corpus.run_guidance_import')"
         :disabled="disabled"
         @change="importGuidance"
       />
@@ -219,7 +210,7 @@ async function importGuidance(event: Event) {
       <div class="run-guidance-controls">
         <label :for="`run-guidance-instructions-${field.name}`">
           <span>{{
-            i18n.t("pdf_corpus.run_guidance_instruction_label", "Instructions for this field")
+            i18n.t("pdf_corpus.run_guidance_instruction_label")
           }}</span>
           <textarea
             :id="`run-guidance-instructions-${field.name}`"
@@ -229,10 +220,7 @@ async function importGuidance(event: Event) {
             :disabled="disabled"
             :value="modelValue[field.name]?.instructions || ''"
             :placeholder="
-              i18n.t(
-                'pdf_corpus.run_guidance_instruction_placeholder',
-                'What should the model pay attention to for this field?',
-              )
+              i18n.t('pdf_corpus.run_guidance_instruction_placeholder')
             "
             @input="
               update(field.name, { instructions: ($event.target as HTMLTextAreaElement).value })
@@ -241,7 +229,7 @@ async function importGuidance(event: Event) {
         </label>
         <label :for="`run-guidance-terms-${field.name}`">
           <span>{{
-            i18n.t("pdf_corpus.run_guidance_terms_label", "Names or phrases to look for")
+            i18n.t("pdf_corpus.run_guidance_terms_label")
           }}</span>
           <textarea
             :id="`run-guidance-terms-${field.name}`"
@@ -250,19 +238,13 @@ async function importGuidance(event: Event) {
             :disabled="disabled"
             :value="termText(field.name)"
             :placeholder="
-              i18n.t(
-                'pdf_corpus.run_guidance_terms_placeholder',
-                'One name, title, concept, or variant per line',
-              )
+              i18n.t('pdf_corpus.run_guidance_terms_placeholder')
             "
             @input="editTerms(field.name, ($event.target as HTMLTextAreaElement).value)"
             @blur="commitTerms(field.name)"
           />
           <small>{{
-            i18n.t(
-              "pdf_corpus.run_guidance_terms_help",
-              "Matches are cues to inspect, not proof or an exhaustive allowed-value list.",
-            )
+            i18n.t("pdf_corpus.run_guidance_terms_help")
           }}</small>
         </label>
       </div>

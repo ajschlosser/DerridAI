@@ -80,11 +80,11 @@ const verificationKind = computed(() => {
 });
 const verificationLabel = computed(() =>
   verificationKind.value === "pending_review"
-    ? i18n.t("pdf_corpus.verification.pending", "Needs review")
+    ? i18n.t("pdf_corpus.verification.pending")
     : verificationKind.value === "auto_resolved"
-      ? i18n.t("pdf_corpus.verification.auto", "Auto-resolved")
+      ? i18n.t("pdf_corpus.verification.auto")
       : verificationKind.value === "human_confirmed"
-        ? i18n.t("pdf_corpus.verification.human", "Human confirmed")
+        ? i18n.t("pdf_corpus.verification.human")
         : "",
 );
 </script>
@@ -95,23 +95,14 @@ const verificationLabel = computed(() =>
       :label="verificationLabel"
       :help="
         verificationKind === 'auto_resolved'
-          ? i18n.t(
-              'pdf_corpus.verification_help.auto',
-              'Calibrated autofill approved this value without requiring a field-level human decision.',
-            )
-          : i18n.t(
-              'pdf_corpus.verification_help.pending',
-              'The model value is visible but still requires a human decision.',
-            )
+          ? i18n.t('pdf_corpus.verification_help.auto')
+          : i18n.t('pdf_corpus.verification_help.pending')
       "
       :tone="verificationKind === 'auto_resolved' ? 'success' : 'warning'" /><UiStatusBadge
       v-if="audit && sourceKind === 'llm'"
-      :label="i18n.t('pdf_corpus.ownership.spot_check', 'Spot check')"
+      :label="i18n.t('pdf_corpus.ownership.spot_check')"
       :help="
-        i18n.t(
-          'pdf_corpus.ownership_help.spot_check',
-          'This value was filled in automatically and was picked at random for a quick check. Confirm or correct it.',
-        )
+        i18n.t('pdf_corpus.ownership_help.spot_check')
       "
       tone="warning"
   /></span>

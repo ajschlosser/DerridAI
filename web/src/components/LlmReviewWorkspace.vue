@@ -46,11 +46,11 @@ const profile = computed(() => info.value?.profiles.find(item => item.id === pro
 const selectedCount = computed(() => selection.value.length);
 const proposedCount = computed(() => Object.values(results.value).reduce((count, result) => count + Object.keys(result.proposal?.changes || {}).length, 0));
 const approvedCount = computed(() => Object.values(approvals.value).reduce((count, fields) => count + fields.length, 0));
-const title = computed(() => mode.value === "auto" ? i18n.t("operations.job.auto", "Auto-improve") : i18n.t("llm.review_workspace", "LLM Review Workspace"));
+const title = computed(() => mode.value === "auto" ? i18n.t("operations.job.auto") : i18n.t("llm.review_workspace"));
 const canRun = computed(() => selectedCount.value > 0 && Boolean(model.value.trim() || profile.value?.model || status.value?.configured_model));
 const statusLabel = computed(() => {
-  if (!status.value) return i18n.t("llm.checking_provider", "Checking provider…");
-  return status.value.available ? i18n.t("llm.provider_ready", "Provider ready") : i18n.t("llm.provider_unavailable", "Provider unavailable");
+  if (!status.value) return i18n.t("llm.checking_provider");
+  return status.value.available ? i18n.t("llm.provider_ready") : i18n.t("llm.provider_unavailable");
 });
 
 function reset(next: { items: TouchupItem[]; initialMode: string }) {
@@ -106,9 +106,9 @@ function setChecked(item: TouchupItem, field: string, value: boolean) {
 }
 async function run() {
   if (running.value || !canRun.value) return;
-  if (selection.value.includes("text") && selection.value.length > 1) { error.value = i18n.t("llm.text_review_separate", "Text review must run separately from metadata."); return; }
+  if (selection.value.includes("text") && selection.value.length > 1) { error.value = i18n.t("llm.text_review_separate"); return; }
   const config = touchupRuntime.touchupRequestConfig(profileId.value, model.value.trim(), selection.value);
-  if (!config?.model) { error.value = i18n.t("llm.model_required", "No model selected."); return; }
+  if (!config?.model) { error.value = i18n.t("llm.model_required"); return; }
   error.value = "";
   if (mode.value !== "foreground") {
     running.value = true;
@@ -150,51 +150,51 @@ watch(profileId, () => { if (open.value && !status.value) void refreshStatus(); 
 </script>
 
 <template>
-  <UiDialog :open="open" size="xlarge" :title="title" :description="i18n.tf('llm.review_workspace_summary','{count} record(s) · review proposals before applying changes.',{count:items.length})" :close-label="i18n.t('ui.close','Close')" @close="close">
+  <UiDialog :open="open" size="xlarge" :title="title" :description="i18n.tf('llm.review_workspace_summary', {count:items.length})" :close-label="i18n.t('ui.close')" @close="close">
     <div class="workspace-grid">
       <aside class="workspace-config">
         <section class="workspace-section">
-          <h3>{{ i18n.t("llm.run_mode", "Run mode") }}</h3>
+          <h3>{{ i18n.t("llm.run_mode") }}</h3>
           <select class="control" :value="mode" @change="setMode(($event.target as HTMLSelectElement).value)">
-            <option value="foreground">{{ i18n.t("llm.interactive_foreground", "Interactive foreground") }}</option>
-            <option value="background">{{ i18n.t("llm.background_review", "Background review") }}</option>
-            <option value="auto">{{ i18n.t("operations.job.auto", "Background Auto-improve") }}</option>
+            <option value="foreground">{{ i18n.t("llm.interactive_foreground") }}</option>
+            <option value="background">{{ i18n.t("llm.background_review") }}</option>
+            <option value="auto">{{ i18n.t("operations.job.auto") }}</option>
           </select>
         </section>
         <section class="workspace-section">
-          <h3>{{ i18n.t("llm.provider_profile", "Provider profile") }}</h3>
+          <h3>{{ i18n.t("llm.provider_profile") }}</h3>
           <select class="control" :value="profileId" @change="setProfile(($event.target as HTMLSelectElement).value)">
             <option v-for="item in info.profiles" :key="item.id" :value="item.id">{{ item.name || item.id }}</option>
           </select>
           <p class="workspace-status" :data-state="status?.available ? 'ready' : status ? 'error' : 'pending'">{{ statusLabel }}</p>
         </section>
         <section class="workspace-section">
-          <h3>{{ i18n.t("llm.review_preset", "Review preset") }}</h3>
-          <div class="preset-row"><UiButton size="small" :label="i18n.t('llm.attribution','Attribution')" @click="choosePreset('attribution')"/><UiButton size="small" :label="i18n.t('llm.semantics','Semantics')" @click="choosePreset('semantic')"/><UiButton size="small" :label="i18n.t('llm.ocr_text','OCR / text')" @click="choosePreset('text')"/></div>
+          <h3>{{ i18n.t("llm.review_preset") }}</h3>
+          <div class="preset-row"><UiButton size="small" :label="i18n.t('llm.attribution')" @click="choosePreset('attribution')"/><UiButton size="small" :label="i18n.t('llm.semantics')" @click="choosePreset('semantic')"/><UiButton size="small" :label="i18n.t('llm.ocr_text')" @click="choosePreset('text')"/></div>
         </section>
         <section class="workspace-section">
-          <h3>{{ i18n.t("llm.allowed_fields", "Allowed fields") }}</h3>
-          <div class="field-actions"><UiButton size="small" :label="i18n.t('llm.select_metadata','Select metadata')" @click="selection = info.availableFields.filter(field => field !== 'text').slice(0, 12)"/><UiButton size="small" :label="i18n.t('ui.clear','Clear')" @click="selection = []"/><span>{{ selectedCount }}</span></div>
-          <div v-for="group in info.groups" :key="group.name" class="field-group" v-show="group.fields.some(field => info.availableFields.includes(field))"><h4>{{ group.name }}</h4><label v-for="field in group.fields" v-show="info.availableFields.includes(field)" :key="field" class="check-item"><input type="checkbox" :checked="selection.includes(field)" @change="toggleField(field, ($event.target as HTMLInputElement).checked)"><span>{{ info.fieldLabels[field] || field }}</span><small v-if="info.highRiskFields.includes(field)">{{ i18n.t('llm.verify','verify') }}</small></label></div>
+          <h3>{{ i18n.t("llm.allowed_fields") }}</h3>
+          <div class="field-actions"><UiButton size="small" :label="i18n.t('llm.select_metadata')" @click="selection = info.availableFields.filter(field => field !== 'text').slice(0, 12)"/><UiButton size="small" :label="i18n.t('ui.clear')" @click="selection = []"/><span>{{ selectedCount }}</span></div>
+          <div v-for="group in info.groups" :key="group.name" class="field-group" v-show="group.fields.some(field => info.availableFields.includes(field))"><h4>{{ group.name }}</h4><label v-for="field in group.fields" v-show="info.availableFields.includes(field)" :key="field" class="check-item"><input type="checkbox" :checked="selection.includes(field)" @change="toggleField(field, ($event.target as HTMLInputElement).checked)"><span>{{ info.fieldLabels[field] || field }}</span><small v-if="info.highRiskFields.includes(field)">{{ i18n.t('llm.verify') }}</small></label></div>
         </section>
-        <section class="workspace-section"><h3>{{ i18n.t("llm.model", "Model") }}</h3><input v-model="model" class="control" :placeholder="i18n.t('llm.model_name','Model name')"><label class="instruction-field"><span>{{ i18n.t("llm.additional_instructions", "Additional instructions") }}</span><textarea v-model="instructions" :placeholder="i18n.t('llm.instructions_optional','Optional instructions applied to every record in this batch.')"></textarea></label></section>
+        <section class="workspace-section"><h3>{{ i18n.t("llm.model") }}</h3><input v-model="model" class="control" :placeholder="i18n.t('llm.model_name')"><label class="instruction-field"><span>{{ i18n.t("llm.additional_instructions") }}</span><textarea v-model="instructions" :placeholder="i18n.t('llm.instructions_optional')"></textarea></label></section>
       </aside>
       <section class="workspace-results" aria-live="polite">
-        <div v-if="running && mode === 'auto'" class="auto-improve-running"><div class="spinner"></div><h3>{{ i18n.t('llm.auto_progress','Auto-improve pass in progress') }}</h3><p>{{ Object.keys(results).length }} / {{ items.length }} {{ i18n.t('llm.records_reviewed','records reviewed') }}</p><div class="batch-progress-bar"><i :style="{width: `${Math.round(Object.keys(results).length / Math.max(items.length, 1) * 100)}%`}"/></div></div>
+        <div v-if="running && mode === 'auto'" class="auto-improve-running"><div class="spinner"></div><h3>{{ i18n.t('llm.auto_progress') }}</h3><p>{{ Object.keys(results).length }} / {{ items.length }} {{ i18n.t('llm.records_reviewed') }}</p><div class="batch-progress-bar"><i :style="{width: `${Math.round(Object.keys(results).length / Math.max(items.length, 1) * 100)}%`}"/></div></div>
         <template v-else>
-          <header class="queue-header"><div><b>{{ running ? i18n.t('llm.review_in_progress','Review in progress') : mode === 'auto' ? i18n.t('llm.auto_results','Auto-improve results') : i18n.t('llm.review_queue','Review queue') }}</b><span>{{ Object.keys(results).length }} / {{ items.length }} · {{ proposedCount }} {{ i18n.t('llm.proposed_changes','proposed changes') }}</span></div><div class="queue-tools"><UiButton size="small" :label="i18n.t('llm.expand_all','Expand all')" @click="expanded = items.map(item => item.key)"/><UiButton size="small" :label="i18n.t('llm.collapse_all','Collapse all')" @click="expanded = []"/><UiButton v-if="proposedCount" size="small" :label="i18n.t('llm.select_all_changes','Select all changes')" @click="selectAllChanges"/><UiButton v-if="proposedCount" size="small" :label="i18n.t('llm.select_none','Select none')" @click="clearChanges"/></div></header>
+          <header class="queue-header"><div><b>{{ running ? i18n.t('llm.review_in_progress') : mode === 'auto' ? i18n.t('llm.auto_results') : i18n.t('llm.review_queue') }}</b><span>{{ Object.keys(results).length }} / {{ items.length }} · {{ proposedCount }} {{ i18n.t('llm.proposed_changes') }}</span></div><div class="queue-tools"><UiButton size="small" :label="i18n.t('llm.expand_all')" @click="expanded = items.map(item => item.key)"/><UiButton size="small" :label="i18n.t('llm.collapse_all')" @click="expanded = []"/><UiButton v-if="proposedCount" size="small" :label="i18n.t('llm.select_all_changes')" @click="selectAllChanges"/><UiButton v-if="proposedCount" size="small" :label="i18n.t('llm.select_none')" @click="clearChanges"/></div></header>
           <section v-for="(item, index) in items" :key="item.key" class="queue-card" :class="{active: running && activeIndex === index, error: results[item.key]?.error}">
-            <button type="button" class="queue-summary" @click="toggleExpanded(item.key)"><span class="queue-index">{{ index + 1 }}</span><span><b>{{ displayValue(item.record.record_id) || `Record ${index + 1}` }}</b><small>{{ displayValue(item.record.work) || item.file.name }} · {{ displayValue(item.record.page_start) || '?' }}</small></span><span class="queue-status">{{ results[item.key]?.error ? i18n.t('llm.failed','Failed') : results[item.key] ? `${Object.keys(proposalFor(item.key).changes || {}).length} ${i18n.t('llm.changes','changes')}` : running && activeIndex === index ? i18n.t('llm.reviewing','Reviewing') : i18n.t('llm.queued','Queued') }}</span><span aria-hidden="true">{{ isExpanded(item.key) ? '▾' : '▸' }}</span></button>
+            <button type="button" class="queue-summary" @click="toggleExpanded(item.key)"><span class="queue-index">{{ index + 1 }}</span><span><b>{{ displayValue(item.record.record_id) || `Record ${index + 1}` }}</b><small>{{ displayValue(item.record.work) || item.file.name }} · {{ displayValue(item.record.page_start) || '?' }}</small></span><span class="queue-status">{{ results[item.key]?.error ? i18n.t('llm.failed') : results[item.key] ? `${Object.keys(proposalFor(item.key).changes || {}).length} ${i18n.t('llm.changes')}` : running && activeIndex === index ? i18n.t('llm.reviewing') : i18n.t('llm.queued') }}</span><span aria-hidden="true">{{ isExpanded(item.key) ? '▾' : '▸' }}</span></button>
             <div v-if="isExpanded(item.key)" class="queue-body">
-              <div v-if="!results[item.key]" class="empty-result">{{ running && activeIndex === index ? i18n.t('llm.waiting_model','Waiting for model…') : i18n.t('llm.waiting_queue','Waiting in queue.') }}</div>
+              <div v-if="!results[item.key]" class="empty-result">{{ running && activeIndex === index ? i18n.t('llm.waiting_model') : i18n.t('llm.waiting_queue') }}</div>
               <div v-else-if="results[item.key].error" class="llm-error" role="alert">{{ errorMessage(item.key) }}</div>
-              <template v-else><div class="record-actions"><UiButton size="small" :label="i18n.t('llm.select_record_changes','Select record changes')" @click="approvals[item.key] = fieldsFor(results[item.key])"/><UiButton size="small" :label="i18n.t('llm.clear_record','Clear record')" @click="approvals[item.key] = []"/></div><article v-for="field in fieldsFor(results[item.key])" :key="field" class="proposal"><header><label><input type="checkbox" :checked="checked(item, field)" @change="setChecked(item, field, ($event.target as HTMLInputElement).checked)"> {{ info.fieldLabels[field] || field }}</label><small v-if="info.highRiskFields.includes(field)">{{ i18n.t('llm.verify','verify carefully') }}</small></header><div class="proposal-grid"><div><b>{{ i18n.t('llm.current','Current') }}</b><pre>{{ pretty(item.record[field]) }}</pre></div><div><b>{{ i18n.t('llm.proposed','Proposed') }}</b><pre>{{ pretty(proposalFor(item.key).changes?.[field]) }}</pre></div></div><p>{{ proposalFor(item.key).rationale?.[field] || i18n.t('llm.no_rationale','No rationale supplied.') }}</p></article></template>
+              <template v-else><div class="record-actions"><UiButton size="small" :label="i18n.t('llm.select_record_changes')" @click="approvals[item.key] = fieldsFor(results[item.key])"/><UiButton size="small" :label="i18n.t('llm.clear_record')" @click="approvals[item.key] = []"/></div><article v-for="field in fieldsFor(results[item.key])" :key="field" class="proposal"><header><label><input type="checkbox" :checked="checked(item, field)" @change="setChecked(item, field, ($event.target as HTMLInputElement).checked)"> {{ info.fieldLabels[field] || field }}</label><small v-if="info.highRiskFields.includes(field)">{{ i18n.t('llm.verify') }}</small></header><div class="proposal-grid"><div><b>{{ i18n.t('llm.current') }}</b><pre>{{ pretty(item.record[field]) }}</pre></div><div><b>{{ i18n.t('llm.proposed') }}</b><pre>{{ pretty(proposalFor(item.key).changes?.[field]) }}</pre></div></div><p>{{ proposalFor(item.key).rationale?.[field] || i18n.t('llm.no_rationale') }}</p></article></template>
             </div>
           </section>
         </template>
       </section>
     </div>
-    <template #footer><span class="footer-note">{{ error || (running ? i18n.t('llm.review_running','Review is running. Completed records remain inspectable.') : `${approvedCount} ${i18n.t('llm.selected_changes','selected changes')}`) }}</span><div class="footer-actions"><UiButton :label="i18n.t('ui.close','Close')" @click="close"/><UiButton v-if="!running && Object.keys(results).length" :label="i18n.t('llm.review_again','Review again')" @click="reviewAgain"/><UiButton v-if="!running && proposedCount" variant="soft" :label="i18n.t('llm.accept_all','Accept all changes')" @click="apply(true)"/><UiButton v-if="!running && Object.keys(results).length" variant="primary" :disabled="!canRun" :label="i18n.t('llm.apply_selected','Apply selected')" @click="apply(false)"/><UiButton v-if="!running && !Object.keys(results).length" variant="primary" :disabled="!canRun" :label="mode === 'auto' ? i18n.t('operations.job.auto','Auto-improve') : i18n.t('llm.run_review','Run review')" @click="run"/></div></template>
+    <template #footer><span class="footer-note">{{ error || (running ? i18n.t('llm.review_running') : `${approvedCount} ${i18n.t('llm.selected_changes')}`) }}</span><div class="footer-actions"><UiButton :label="i18n.t('ui.close')" @click="close"/><UiButton v-if="!running && Object.keys(results).length" :label="i18n.t('llm.review_again')" @click="reviewAgain"/><UiButton v-if="!running && proposedCount" variant="soft" :label="i18n.t('llm.accept_all')" @click="apply(true)"/><UiButton v-if="!running && Object.keys(results).length" variant="primary" :disabled="!canRun" :label="i18n.t('llm.apply_selected')" @click="apply(false)"/><UiButton v-if="!running && !Object.keys(results).length" variant="primary" :disabled="!canRun" :label="mode === 'auto' ? i18n.t('operations.job.auto') : i18n.t('llm.run_review')" @click="run"/></div></template>
   </UiDialog>
 </template>
 

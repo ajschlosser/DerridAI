@@ -13,18 +13,15 @@ const percent = (value: number) => `${Math.round(value)}%`;
 
 <template>
   <fieldset class="text-noise" :disabled="disabled">
-    <legend>{{ i18n.t("pdf_corpus.text_noise.title", "Source illegibility") }}</legend>
+    <legend>{{ i18n.t("pdf_corpus.text_noise.title") }}</legend>
     <p>
       {{
-        i18n.t(
-          "pdf_corpus.text_noise.help",
-          "Records whose text no longer looks like words in a writing system, or whose scan is too pixelated, count toward the 10% unusable-source warning and skip metadata enrichment until repaired.",
-        )
+        i18n.t("pdf_corpus.text_noise.help")
       }}
     </p>
     <label class="noise-field" :for="`${id}-threshold`">
       <span>{{
-        i18n.tf("pdf_corpus.text_noise.threshold", "Count as unusable at {percent} noise or higher", {
+        i18n.tf("pdf_corpus.text_noise.threshold", {
           percent: percent(threshold),
         })
       }}</span>
@@ -42,10 +39,7 @@ const percent = (value: number) => `${Math.round(value)}%`;
         @input="emit('update:threshold', Number(($event.target as HTMLInputElement).value))"
       />
       <small>{{
-        i18n.t(
-          "pdf_corpus.text_noise.threshold_help",
-          "0 treats only perfectly clean text as usable. 100 almost never flags a record. The default (45) catches OCR soup without punishing bilingual pages or names.",
-        )
+        i18n.t("pdf_corpus.text_noise.threshold_help")
       }}</small>
     </label>
     <label class="noise-check">
@@ -55,12 +49,9 @@ const percent = (value: number) => `${Math.round(value)}%`;
         @change="emit('update:llmAssist', ($event.target as HTMLInputElement).checked)"
       />
       <span>
-        <b>{{ i18n.t("pdf_corpus.text_noise.llm", "Ask the model to second-read mid-range noise") }}</b>
+        <b>{{ i18n.t("pdf_corpus.text_noise.llm") }}</b>
         <small>{{
-          i18n.t(
-            "pdf_corpus.text_noise.llm_help",
-            "Optional. The model may only raise the deterministic score. Clean text and already-illegible records are skipped.",
-          )
+          i18n.t("pdf_corpus.text_noise.llm_help")
         }}</small>
       </span>
     </label>

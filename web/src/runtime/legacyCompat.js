@@ -1,5 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
+import { englishDefault } from "../i18n/englishDefault";
+
 const UI_COLOR_THEMES = new Set(["green", "blue", "slate"]);
 const UI_COLOR_SCHEMES = new Set(["system", "light", "dark"]);
 const UI_CONTRAST_PREFS = new Set(["system", "more"]);
@@ -99,10 +101,20 @@ export function setTranslationDictionary(state, locale, dictionary = {}, base = 
 }
 
 export function tr(state, key, fallback = "") {
-  return state.translations?.dictionary?.[key] ?? state.translations?.base?.[key] ?? fallback ?? key;
+  return (
+    state.translations?.dictionary?.[key] ||
+    state.translations?.base?.[key] ||
+    fallback ||
+    englishDefault(key) ||
+    key
+  );
 }
 
 export function trf(state, key, fallback, values = {}) {
+  if (fallback && typeof fallback === "object") {
+    values = fallback;
+    fallback = "";
+  }
   let text = String(tr(state, key, fallback));
   for (const [name, value] of Object.entries(values)) text = text.replaceAll(`{${name}}`, String(value));
   return text;

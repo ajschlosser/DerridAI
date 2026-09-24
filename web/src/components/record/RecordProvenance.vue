@@ -7,14 +7,14 @@ const emit = defineEmits<{ search: [field: string, value: string] }>();
 const i18n = useI18nStore();
 const nodes = computed(() =>
   [
-    { key: "speaker", label: i18n.t("field.speaker", "Speaker"), value: props.record.speaker },
+    { key: "speaker", label: i18n.t("field.speaker"), value: props.record.speaker },
     {
       key: "position_holder",
-      label: i18n.t("field.position_holder", "Position holder"),
+      label: i18n.t("field.position_holder"),
       value: props.record.position_holder,
     },
-    { key: "stance", label: i18n.t("field.stance", "Stance"), value: props.record.stance },
-    { key: "target", label: i18n.t("field.target", "Target"), value: props.record.target },
+    { key: "stance", label: i18n.t("field.stance"), value: props.record.stance },
+    { key: "target", label: i18n.t("field.target"), value: props.record.target },
   ].filter(
     (item) => item.value !== undefined && item.value !== null && String(item.value).trim() !== "",
   ),
@@ -39,14 +39,14 @@ const supporting = computed(() => {
   <section class="provenance-map" aria-labelledby="provenanceHeading">
     <header class="provenance-head">
       <div>
-        <p>{{ i18n.t("record.provenance_kicker", "Attribution structure") }}</p>
-        <h2 id="provenanceHeading">{{ i18n.t("record.provenance", "Provenance") }}</h2>
+        <p>{{ i18n.t("record.provenance_kicker") }}</p>
+        <h2 id="provenanceHeading">{{ i18n.t("record.provenance") }}</h2>
       </div>
       <span
         v-if="nodes.length"
         class="provenance-count"
         :aria-label="
-          i18n.tf('record.provenance_fields', '{count} attribution fields', { count: nodes.length })
+          i18n.tf('record.provenance_fields', { count: nodes.length })
         "
         >{{ nodes.length }}</span
       >
@@ -54,17 +54,14 @@ const supporting = computed(() => {
 
     <p class="provenance-help">
       {{
-        i18n.t(
-          "record.provenance_help",
-          "A structured attribution view showing who speaks, whose position is represented, the stance taken, and its target.",
-        )
+        i18n.t("record.provenance_help")
       }}
     </p>
 
     <ol
       v-if="nodes.length"
       class="provenance-path"
-      :aria-label="i18n.t('record.attribution_path', 'Attribution path')"
+      :aria-label="i18n.t('record.attribution_path')"
     >
       <li v-for="(node, index) in nodes" :key="node.key">
         <span class="provenance-step" aria-hidden="true">{{ index + 1 }}</span>
@@ -76,10 +73,7 @@ const supporting = computed(() => {
     </ol>
     <p v-else class="provenance-empty">
       {{
-        i18n.t(
-          "record.provenance_empty",
-          "No structured attribution fields are recorded for this passage.",
-        )
+        i18n.t("record.provenance_empty")
       }}
     </p>
 

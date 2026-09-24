@@ -44,12 +44,12 @@ const i18n = useI18nStore();
 const ready = computed(() => Boolean(props.sourceFilename && props.canStart && props.contextSafe));
 const modeLabel = computed(() =>
   props.enrichmentMode === "deep"
-    ? i18n.t("pdf_corpus.enrichment_deep", "Deep scholarly enrichment")
-    : i18n.t("pdf_corpus.enrichment_fast", "Fast corpus build"),
+    ? i18n.t("pdf_corpus.enrichment_deep")
+    : i18n.t("pdf_corpus.enrichment_fast"),
 );
 const sizing = computed(() =>
   props.targetChars
-    ? i18n.tf("pdf_corpus.readiness.sizing", "{target} ± {tolerance} characters", {
+    ? i18n.tf("pdf_corpus.readiness.sizing", {
         target: props.targetChars.toLocaleString(),
         tolerance: props.toleranceChars.toLocaleString(),
       })
@@ -66,75 +66,68 @@ const sizing = computed(() =>
   >
     <div class="readiness-copy">
       <div class="readiness-heading">
-        <span class="eyebrow">{{ i18n.t("pdf_corpus.readiness.eyebrow", "Build summary") }}</span>
+        <span class="eyebrow">{{ i18n.t("pdf_corpus.readiness.eyebrow") }}</span>
         <h3 id="build-readiness-title">
           {{
             ready
-              ? i18n.t("pdf_corpus.readiness.ready", "Ready to build")
-              : i18n.t("pdf_corpus.readiness.not_ready", "Complete setup to build")
+              ? i18n.t("pdf_corpus.readiness.ready")
+              : i18n.t("pdf_corpus.readiness.not_ready")
           }}
         </h3>
       </div>
       <dl>
         <div>
-          <dt>{{ i18n.t("pdf_corpus.readiness.source", "Source") }}</dt>
+          <dt>{{ i18n.t("pdf_corpus.readiness.source") }}</dt>
           <dd>
             {{
               sourceFilename ||
-              i18n.t("pdf_corpus.choose_source_prompt", "Choose a source to continue.")
+              i18n.t("pdf_corpus.choose_source_prompt")
             }}<small v-if="sourceFilename"
               ><template v-if="hasPages(mediaKind)"
-                >{{ pageCount }} {{ i18n.t("pdf_corpus.pages", "pages") }} ·
+                >{{ pageCount }} {{ i18n.t("pdf_corpus.pages") }} ·
               </template>
-              {{ blockCount }} {{ i18n.t("pdf_corpus.blocks", "blocks") }}</small
+              {{ blockCount }} {{ i18n.t("pdf_corpus.blocks") }}</small
             >
           </dd>
         </div>
         <div v-if="hasPages(mediaKind)">
-          <dt>{{ i18n.t("pdf_corpus.readiness.structure", "Structure") }}</dt>
+          <dt>{{ i18n.t("pdf_corpus.readiness.structure") }}</dt>
           <dd>
             {{
               structureSummary ||
-              i18n.t(
-                "pdf_corpus.readiness.structure_unset",
-                "Automatic defaults; review recommended",
-              )
+              i18n.t("pdf_corpus.readiness.structure_unset")
             }}
           </dd>
         </div>
         <div>
-          <dt>{{ i18n.t("pdf_corpus.readiness.enrichment", "Enrichment") }}</dt>
+          <dt>{{ i18n.t("pdf_corpus.readiness.enrichment") }}</dt>
           <dd>{{ modeLabel }}</dd>
         </div>
         <div>
-          <dt>{{ i18n.t("pdf_corpus.readiness.llm", "LLM") }}</dt>
+          <dt>{{ i18n.t("pdf_corpus.readiness.llm") }}</dt>
           <dd>
-            {{ providerLabel || i18n.t("pdf_corpus.provider_default", "Provider default")
+            {{ providerLabel || i18n.t("pdf_corpus.provider_default")
             }}<small v-if="modelLabel">{{ modelLabel }}</small>
           </dd>
         </div>
         <div>
-          <dt>{{ i18n.t("pdf_corpus.readiness.record_size", "Record target") }}</dt>
+          <dt>{{ i18n.t("pdf_corpus.readiness.record_size") }}</dt>
           <dd>{{ sizing }}</dd>
         </div>
       </dl>
       <div v-if="!contextSafe" class="readiness-alert" role="alert">
-        {{ i18n.t("pdf_corpus.context_unsafe", "Context budget is too small") }}
+        {{ i18n.t("pdf_corpus.context_unsafe") }}
       </div>
       <ul
         v-if="warnings.length"
         class="readiness-warnings"
-        :aria-label="i18n.t('pdf_corpus.readiness.warnings', 'Setup notes')"
+        :aria-label="i18n.t('pdf_corpus.readiness.warnings')"
       >
         <li v-for="warning in warnings" :key="warning">{{ warning }}</li>
       </ul>
       <p v-if="activeBuildCount" class="capacity-note">
         {{
-          i18n.tf(
-            "pdf_corpus.active_build_capacity",
-            "{count} active build(s). Starting another build is independent and uses the selected provider profile capacity.",
-            { count: activeBuildCount },
-          )
+          i18n.tf("pdf_corpus.active_build_capacity", { count: activeBuildCount })
         }}
       </p>
     </div>
@@ -146,7 +139,7 @@ const sizing = computed(() =>
     >
       {{
         busy
-          ? i18n.t("pdf_corpus.starting", "Starting…")
+          ? i18n.t("pdf_corpus.starting")
           : i18n.t(
               activeBuildCount ? "pdf_corpus.start_another_build" : "pdf_corpus.build_records",
               activeBuildCount ? "Start another build" : "Build record set",

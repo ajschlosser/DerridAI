@@ -31,7 +31,7 @@ const shown = computed(() => {
   const needle = query.value.trim().toLocaleLowerCase();
   return usable.value.filter(model => String(model.name).toLocaleLowerCase().includes(needle));
 });
-const detail = (model: DiscoveredModel) => [model.parameter_size, model.quantization_level].filter(Boolean).join(" · ") || i18n.t("providers.model_no_details", "No size reported");
+const detail = (model: DiscoveredModel) => [model.parameter_size, model.quantization_level].filter(Boolean).join(" · ") || i18n.t("providers.model_no_details");
 function openList() {
   query.value = "";
   open.value = true;
@@ -47,28 +47,28 @@ function choose(name: string) {
 
 <template>
   <div class="provider-model-field">
-    <label class="field-label" :for="inputId">{{ i18n.t("providers.model", "Model") }}</label>
+    <label class="field-label" :for="inputId">{{ i18n.t("providers.model") }}</label>
     <div class="picker-row">
       <input :id="inputId" ref="input" class="control" :value="modelValue" :list="datalistId" :disabled="disabled" :placeholder="placeholder" autocomplete="off" @input="emit('update:modelValue', ($event.target as HTMLInputElement).value)">
       <datalist :id="datalistId"><option v-for="model in usable" :key="model.name" :value="model.name"></option></datalist>
-      <UiButton :label="usable.length ? i18n.tf('providers.view_models_count', 'View models ({count})', { count: usable.length }) : i18n.t('providers.view_models', 'View models')" :disabled="busy" @click="openList" />
+      <UiButton :label="usable.length ? i18n.tf('providers.view_models_count', { count: usable.length }) : i18n.t('providers.view_models')" :disabled="busy" @click="openList" />
     </div>
-    <UiDialog v-if="open" size="medium" :title="i18n.t('providers.available_models', 'Available models')" :description="i18n.tf('providers.models_discovered', '{name} · {count} discovered', { name: profileName, count: usable.length })" :close-label="i18n.t('ui.close', 'Close')" @close="open = false">
+    <UiDialog v-if="open" size="medium" :title="i18n.t('providers.available_models')" :description="i18n.tf('providers.models_discovered', { name: profileName, count: usable.length })" :close-label="i18n.t('ui.close')" @close="open = false">
       <div class="model-search">
-        <label :for="`${inputId}-search`">{{ i18n.t("providers.filter_models", "Filter models") }}</label>
+        <label :for="`${inputId}-search`">{{ i18n.t("providers.filter_models") }}</label>
         <input :id="`${inputId}-search`" v-model="query" class="control" type="search" autocomplete="off" autofocus>
-        <p class="model-count" role="status" aria-live="polite">{{ i18n.tf("providers.models_match", "{count} models match", { count: shown.length }) }}</p>
+        <p class="model-count" role="status" aria-live="polite">{{ i18n.tf("providers.models_match", { count: shown.length }) }}</p>
       </div>
-      <p v-if="busy" class="model-empty" role="status">{{ i18n.t("providers.discovering", "Asking the endpoint for its models…") }}</p>
-      <ul v-else-if="shown.length" class="model-list" :aria-label="i18n.t('providers.available_models', 'Available models')">
+      <p v-if="busy" class="model-empty" role="status">{{ i18n.t("providers.discovering") }}</p>
+      <ul v-else-if="shown.length" class="model-list" :aria-label="i18n.t('providers.available_models')">
         <li v-for="model in shown" :key="model.name">
           <button type="button" class="model-row" :aria-current="model.name === modelValue ? 'true' : undefined" @click="choose(String(model.name))">
             <span class="model-row-main"><b>{{ model.name }}</b><small>{{ detail(model) }}</small></span>
-            <span class="model-row-use">{{ model.name === modelValue ? i18n.t("providers.model_in_use", "In use") : i18n.t("providers.use_model", "Use model") }}</span>
+            <span class="model-row-use">{{ model.name === modelValue ? i18n.t("providers.model_in_use") : i18n.t("providers.use_model") }}</span>
           </button>
         </li>
       </ul>
-      <p v-else class="model-empty">{{ i18n.t("providers.no_models_match", "No models match this filter.") }}</p>
+      <p v-else class="model-empty">{{ i18n.t("providers.no_models_match") }}</p>
     </UiDialog>
   </div>
 </template>

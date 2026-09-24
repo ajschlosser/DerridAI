@@ -6,14 +6,14 @@ const emit=defineEmits<{focus:[]} >();const i18n=useI18nStore();
 </script>
 <template>
 <section class="review-session" aria-labelledby="review-session-title">
-  <div class="review-identity"><span class="eyebrow">{{i18n.t('pdf_corpus.review_mode','Record review')}}</span><b id="review-session-title">{{props.sourceFilename}}</b><small>{{props.model||i18n.t('pdf_corpus.provider_default','Provider default')}}<template v-if="props.buildId"> · {{props.buildId}}</template></small></div>
+  <div class="review-identity"><span class="eyebrow">{{i18n.t('pdf_corpus.review_mode')}}</span><b id="review-session-title">{{props.sourceFilename}}</b><small>{{props.model||i18n.t('pdf_corpus.provider_default')}}<template v-if="props.buildId"> · {{props.buildId}}</template></small></div>
   <dl class="review-stats">
-    <div><dd>{{props.accepted}}</dd><dt>{{i18n.t('pdf_corpus.accepted_label','accepted')}}</dt></div>
-    <div><dd>{{props.reviewable}}</dd><dt>{{i18n.t('pdf_corpus.queue_ready','Reviewable')}}</dt></div>
-    <div><dd>{{props.remaining}}</dd><dt>{{i18n.t('pdf_corpus.remaining','remaining')}}</dt></div>
-    <div><dd>{{props.issues}}</dd><dt>{{i18n.t('pdf_corpus.need_attention','need attention')}}</dt></div>
+    <div><dd>{{props.accepted}}</dd><dt>{{i18n.t('pdf_corpus.accepted_label')}}</dt></div>
+    <div><dd>{{props.reviewable}}</dd><dt>{{i18n.t('pdf_corpus.queue_ready')}}</dt></div>
+    <div><dd>{{props.remaining}}</dd><dt>{{i18n.t('pdf_corpus.remaining')}}</dt></div>
+    <div><dd>{{props.issues}}</dd><dt>{{i18n.t('pdf_corpus.need_attention')}}</dt></div>
   </dl>
-  <UiButton size="small" :label="i18n.t('pdf_corpus.focus_view','Focus view')" :disabled="props.focusDisabled" @click="emit('focus')"/>
+  <UiButton size="small" :label="i18n.t('pdf_corpus.focus_view')" :disabled="props.focusDisabled" @click="emit('focus')"/>
 </section>
 </template>
 <style scoped>

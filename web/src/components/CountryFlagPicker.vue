@@ -43,7 +43,7 @@ const options = computed(() => {
 });
 const selectedName = computed(() => {
   const match = COUNTRY_CODES.find(code => flagFromCountry(code) === props.modelValue);
-  return match ? countryName(match) : i18n.t("language.no_country_flag", "No country flag");
+  return match ? countryName(match) : i18n.t("language.no_country_flag");
 });
 
 function updatePopoverPosition() {
@@ -124,7 +124,7 @@ onBeforeUnmount(detachFloatingListeners);
       @keydown.esc.stop.prevent="close(true)"
     >
       <span class="flag-picker-symbol" aria-hidden="true">{{ props.modelValue || "🌐" }}</span>
-      <span class="flag-picker-copy"><b>{{ selectedName }}</b><small>{{ i18n.t("language.choose_flag", "Choose a country flag") }}</small></span>
+      <span class="flag-picker-copy"><b>{{ selectedName }}</b><small>{{ i18n.t("language.choose_flag") }}</small></span>
       <span class="flag-picker-chevron" aria-hidden="true">⌄</span>
     </button>
     <small v-if="props.help" :id="helpId" class="flag-picker-help">{{ props.help }}</small>
@@ -138,7 +138,7 @@ onBeforeUnmount(detachFloatingListeners);
         :style="popoverStyle"
         role="dialog"
         aria-modal="false"
-        :aria-label="i18n.t('language.flag_library','Country flag library')"
+        :aria-label="i18n.t('language.flag_library')"
         @keydown.esc.stop.prevent="close(true)"
       >
         <div class="flag-picker-toolbar">
@@ -147,16 +147,16 @@ onBeforeUnmount(detachFloatingListeners);
             v-model="query"
             class="control"
             type="search"
-            :placeholder="i18n.t('language.search_flags','Search countries…')"
-            :aria-label="i18n.t('language.search_flags','Search countries…')"
+            :placeholder="i18n.t('language.search_flags')"
+            :aria-label="i18n.t('language.search_flags')"
           >
-          <button type="button" class="flag-picker-close" :aria-label="i18n.t('ui.close','Close')" @click="close(true)">×</button>
+          <button type="button" class="flag-picker-close" :aria-label="i18n.t('ui.close')" @click="close(true)">×</button>
         </div>
         <div class="flag-picker-quick">
-          <button type="button" :aria-pressed="props.modelValue === '🌐'" @click="choose('🌐')"><span aria-hidden="true">🌐</span>{{ i18n.t("language.no_country_flag", "No country flag") }}</button>
-          <button v-if="suggestedRegion" type="button" @click="chooseSuggested"><span aria-hidden="true">{{ flagFromCountry(suggestedRegion) }}</span>{{ i18n.t("language.use_locale_region", "Use locale region") }}</button>
+          <button type="button" :aria-pressed="props.modelValue === '🌐'" @click="choose('🌐')"><span aria-hidden="true">🌐</span>{{ i18n.t("language.no_country_flag") }}</button>
+          <button v-if="suggestedRegion" type="button" @click="chooseSuggested"><span aria-hidden="true">{{ flagFromCountry(suggestedRegion) }}</span>{{ i18n.t("language.use_locale_region") }}</button>
         </div>
-        <div class="flag-picker-grid" role="group" :aria-label="i18n.t('language.flag_library','Country flag library')">
+        <div class="flag-picker-grid" role="group" :aria-label="i18n.t('language.flag_library')">
           <button
             v-for="item in options"
             :key="item.code"
@@ -170,7 +170,7 @@ onBeforeUnmount(detachFloatingListeners);
             <small>{{ item.code }}</small>
           </button>
         </div>
-        <p v-if="!options.length" class="flag-picker-empty">{{ i18n.t("language.no_flag_matches", "No countries match this search.") }}</p>
+        <p v-if="!options.length" class="flag-picker-empty">{{ i18n.t("language.no_flag_matches") }}</p>
       </section>
     </teleport>
   </div>

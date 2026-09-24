@@ -146,8 +146,8 @@ export function createOperationDock(deps: Deps) {
       toggle.setAttribute(
         "aria-label",
         state.operationToastsMinimized
-          ? tr("operations.expand", "Show operations")
-          : tr("operations.collapse", "Hide operations"),
+          ? tr("operations.expand")
+          : tr("operations.collapse"),
       );
     }
     applyOperationStackPosition(stack);
@@ -307,15 +307,15 @@ export function createOperationDock(deps: Deps) {
   function progressStack() {
     let stack = document.querySelector("#operationProgressStack");
     if (!stack) {
-      const dragHelp = tr("operations.drag_help", "Drag anywhere · double-click to recenter");
-      const title = tr("operations.title", "Operations");
+      const dragHelp = tr("operations.drag_help");
+      const title = tr("operations.title");
       stack = document.createElement("aside");
       stack.id = "operationProgressStack";
       stack.className = `operation-progress-stack${state.operationToastsMinimized ? " minimized" : ""}`;
       stack.dataset.surface = state.operationToastsMinimized ? "glass" : "overlay";
       stack.setAttribute("role", "complementary");
       stack.setAttribute("aria-label", title);
-      stack.innerHTML = `<div class="operation-stack-toolbar" data-operation-drag tabindex="0" role="group" aria-label="${esc(dragHelp)}" title="${esc(dragHelp)}"><span class="operation-drag-grip" aria-hidden="true"></span><button type="button" class="operation-dock-toggle" id="operationStackToggle" aria-expanded="${state.operationToastsMinimized ? "false" : "true"}" aria-controls="operationStackItems" aria-label="${esc(state.operationToastsMinimized ? tr("operations.expand", "Show operations") : tr("operations.collapse", "Hide operations"))}"><span class="operation-dock-dot" aria-hidden="true"></span><span class="operation-dock-copy"><b class="operation-dock-title">${esc(title)}</b><span id="operationStackCount"></span></span><span class="operation-dock-chevron" aria-hidden="true"></span></button><button type="button" class="btn tiny operation-dock-clear" id="operationStackClearFinished" hidden>${esc(tr("operations.clear_finished", "Clear finished"))}</button></div><div id="operationStackLive" class="sr-only" aria-live="polite"></div><div id="operationStackItems" class="operation-stack-items"></div>`;
+      stack.innerHTML = `<div class="operation-stack-toolbar" data-operation-drag tabindex="0" role="group" aria-label="${esc(dragHelp)}" title="${esc(dragHelp)}"><span class="operation-drag-grip" aria-hidden="true"></span><button type="button" class="operation-dock-toggle" id="operationStackToggle" aria-expanded="${state.operationToastsMinimized ? "false" : "true"}" aria-controls="operationStackItems" aria-label="${esc(state.operationToastsMinimized ? tr("operations.expand") : tr("operations.collapse"))}"><span class="operation-dock-dot" aria-hidden="true"></span><span class="operation-dock-copy"><b class="operation-dock-title">${esc(title)}</b><span id="operationStackCount"></span></span><span class="operation-dock-chevron" aria-hidden="true"></span></button><button type="button" class="btn tiny operation-dock-clear" id="operationStackClearFinished" hidden>${esc(tr("operations.clear_finished"))}</button></div><div id="operationStackLive" class="sr-only" aria-live="polite"></div><div id="operationStackItems" class="operation-stack-items"></div>`;
       document.body.appendChild(stack);
       wireOperationStackDrag(stack);
       applyOperationStackPosition(stack);
@@ -364,7 +364,7 @@ export function createOperationDock(deps: Deps) {
     if (label) {
       label.textContent = trf(summary.key, summary.fallback, summary.values);
       // When there is nothing more specific to say, the summary falls back to the dock's own title; do not say it twice.
-      label.hidden = label.textContent === tr("operations.title", "Operations");
+      label.hidden = label.textContent === tr("operations.title");
     }
     stack.dataset.tone = summary.tone;
     if (summary.percent == null) stack.style.removeProperty("--operation-dock-progress");
@@ -381,8 +381,8 @@ export function createOperationDock(deps: Deps) {
       toggle.setAttribute(
         "aria-label",
         state.operationToastsMinimized
-          ? tr("operations.expand", "Show operations")
-          : tr("operations.collapse", "Hide operations"),
+          ? tr("operations.expand")
+          : tr("operations.collapse"),
       );
     }
   }
@@ -424,7 +424,7 @@ export function createOperationDock(deps: Deps) {
       const button = document.createElement("button");
       button.className = "btn tiny";
       button.dataset.dismissOperation = id;
-      button.textContent = tr("ui.dismiss", "Dismiss");
+      button.textContent = tr("ui.dismiss");
       button.onclick = () => {
         panel.remove();
         delete state.operationProgress[id];
@@ -461,16 +461,13 @@ export function createOperationDock(deps: Deps) {
       job.status === "cancelling" || job.cancel_requested
         ? cancellationDetail
         : job.status === "failed"
-          ? trf("operations.failed_help", "Failed · {detail}", {
+          ? trf("operations.failed_help", {
               detail: String(job.fatal_error || job.stage_detail || "Operation failed"),
             })
           : job.status === "completed"
-            ? tr("operations.completed_help", "Completed · open the result or dismiss")
+            ? tr("operations.completed_help")
             : job.status === "cancelled"
-              ? tr(
-                  "operations.cancelled_help",
-                  "Cancelled · partial results may still be available",
-                )
+              ? tr("operations.cancelled_help")
               : job.type === "rag"
                 ? `${job.stage_detail || job.stage || "Running RAG pipeline"}`
                 : job.type === "upsert"
@@ -489,10 +486,10 @@ export function createOperationDock(deps: Deps) {
       (job.type === "pdf_corpus" && ["completed", "blocked"].includes(job.status));
     const resultActionLabel =
       job.type === "pdf_corpus"
-        ? tr("pdf_corpus.open_build", "Open corpus build")
+        ? tr("pdf_corpus.open_build")
         : job.type === "llm_tool" && (job.tool === "rag_grade" || job.mode === "rag_grade")
-          ? tr("operations.view_grade", "View grade")
-          : tr("operations.open_result", "Open result");
+          ? tr("operations.view_grade")
+          : tr("operations.open_result");
     const statusLabel = tr(`operations.status.${job.status}`, job.status);
     const provider = jobProviderSummary(job);
     const pending = Number(job.pending_result_count || 0);
@@ -500,11 +497,11 @@ export function createOperationDock(deps: Deps) {
     if (active) {
       if (job.cancel_requested || job.status === "cancelling")
         actions.push(
-          `<span class="cancel-pending">${esc(tr("operations.cancelling", "Cancelling…"))}</span>`,
+          `<span class="cancel-pending">${esc(tr("operations.cancelling"))}</span>`,
         );
       else
         actions.push(
-          `<button type="button" class="btn tiny danger" data-toast-cancel-job="${job.id}">${esc(tr("ui.cancel", "Cancel"))}</button>`,
+          `<button type="button" class="btn tiny danger" data-toast-cancel-job="${job.id}">${esc(tr("ui.cancel"))}</button>`,
         );
     } else {
       if (canOpenResult)
@@ -513,14 +510,14 @@ export function createOperationDock(deps: Deps) {
         );
       if (job.type === "llm" && pending > 0)
         actions.push(
-          `<button type="button" class="btn tiny primary" data-toast-review-results="${job.id}">${esc(trf("operations.review_available", "Review {count} available", { count: pending }))}</button>`,
+          `<button type="button" class="btn tiny primary" data-toast-review-results="${job.id}">${esc(trf("operations.review_available", { count: pending }))}</button>`,
         );
       actions.push(
-        `<button type="button" class="btn tiny" data-toast-dismiss-job="${job.id}">${esc(tr("ui.dismiss", "Dismiss"))}</button>`,
+        `<button type="button" class="btn tiny" data-toast-dismiss-job="${job.id}">${esc(tr("ui.dismiss"))}</button>`,
       );
     }
     actions.push(
-      `<button type="button" class="btn tiny" data-toast-open-details="${job.id}">${esc(tr("operations.open_details", "Full details"))}</button>`,
+      `<button type="button" class="btn tiny" data-toast-open-details="${job.id}">${esc(tr("operations.open_details"))}</button>`,
     );
     panel.innerHTML = `<div class="operation-progress-head"><div><b>${esc(jobLabel(job))}</b>${provider ? `<small class="operation-progress-provider">${esc(provider)}</small>` : ""}</div><span class="operation-status-badge" data-tone="${esc(tone)}"><span class="operation-status-dot" aria-hidden="true"></span>${esc(statusLabel)}</span></div><div class="operation-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="${esc(jobProgressText(job, "of"))}"><i style="width:${pct}%"></i></div><div class="operation-progress-detail">${detailHtml}</div><div class="operation-toast-actions">${actions.join("")}${active ? '<div class="spinner small-spinner"></div>' : ""}</div>`;
     panel
