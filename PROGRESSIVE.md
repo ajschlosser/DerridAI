@@ -625,7 +625,7 @@ The initial backend slice is implemented on `feature/progressive-enhancement`:
 
 Empirical quality/latency benchmarking across real corpora and models remains an evaluation activity rather than a prerequisite for the initial implementation. The current semantic index is deliberately build-scoped; a cross-build exemplar catalogue requires an authoritative resolver for source build/record/revision/evidence identity before it should be enabled. The UX/audit expansion in Phase 6 remains intentionally deferred until the backend contract has been exercised in production-like runs.
 
-Validation note: focused regression tests have been added, but this branch has not yet received a complete CI run. Do not treat the presence of tests as evidence that the full suite is green.
+Validation note (PR #145, quality-gates run #503): backend Ruff, mypy, Python syntax, the full backend regression suite, frontend lint, frontend typecheck, frontend unit/component tests, the production build, and the Storybook build have passed on the reconciled branch. The long composed UI/opacity/WCAG E2E phase was still running when this status was recorded; do not describe the complete workflow as green until that final phase succeeds.
 
 
 ### Phase 0 - Baseline and contracts
