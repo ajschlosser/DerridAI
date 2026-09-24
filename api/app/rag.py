@@ -16,6 +16,7 @@ from .chroma_store import ChromaStore
 from .config import settings
 from .models import OllamaTouchupOptions, RAGRunRequest
 from .record_types import EvidenceItem, QueryDecomposition, RetrievalCandidate
+from .system_store import system_store
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,14 @@ You are DerridAI, an evidence-grounded scholarly research assistant.
 {response_language}
 </RESPONSE LANGUAGE>
 
+<PRIOR_RESEARCH_MEMORY>
+{prior_response_memory}
+</PRIOR_RESEARCH_MEMORY>
+
+<PRIOR_CLAIM_PROVENANCE>
+{prior_claim_memory}
+</PRIOR_CLAIM_PROVENANCE>
+
 <EVIDENCE>
 {context}
 </EVIDENCE>
@@ -71,6 +80,8 @@ Guidelines:
 - Preserve speaker, quoted_speaker, quoted_author, quoted_work, position_holder, stance, target, discourse_role, and proposition_status.
 - Distinguish Derrida's own claims from positions he quotes, describes, reconstructs, endorses, questions, or criticizes.
 - Use the supplied EVIDENCE as the sole basis for substantive claims.
+- Prior memory is advisory workflow context, not current evidence. Never cite it
+  or repeat an unsupported claim from it.
 - Do not flatten quotation provenance.
 - Preserve modality and negation.
 - If evidence is insufficient, say so rather than inventing support.
@@ -831,12 +842,59 @@ def _scope_rag_candidates(
     return scoped
 
 
+def _memory_guidance(
+    query: str,
+    request: RAGRunRequest,
+    owner: str | None,
+) -> tuple[str, str, dict[str, Any]]:
+    """Select advisory memory without promoting it into the evidence packet."""
+    words = {word.casefold() for word in re.findall(r"\w{4,}", query)}
+
+    def relevance(item: dict[str, Any], text_key: str) -> int:
+        return len(words & {
+            word.casefold()
+            for word in re.findall(r"\w{4,}", str(item.get(text_key) or ""))
+        })
+
+    responses = []
+    claims = []
+    if request.use_prior_response_memory:
+        responses = sorted(
+            system_store.list_response_memory(owner=owner, limit=50),
+            key=lambda item: relevance(item, "question"),
+            reverse=True,
+        )[:5]
+    if request.use_prior_claim_memory:
+        claims = sorted(
+            system_store.list_generated_claims(owner=owner, limit=100),
+            key=lambda item: relevance(item, "claim_text"),
+            reverse=True,
+        )[:8]
+    response_text = "\n".join(
+        f"[prior-response:{item.get('response_id')}] {str(item.get('question') or '').strip()}\n"
+        f"Advisory answer: {str(item.get('answer') or '').strip()[:2400]}"
+        for item in responses
+    )
+    claim_text = "\n".join(
+        f"[prior-claim:{item.get('claim_id')}] {str(item.get('claim_text') or '').strip()}"
+        for item in claims
+    )
+    return response_text, claim_text, {
+        "response_count": len(responses),
+        "claim_count": len(claims),
+        "response_ids": [str(item.get("response_id") or "") for item in responses],
+        "claim_ids": [str(item.get("claim_id") or "") for item in claims],
+        "owner_scope": owner,
+    }
+
+
 def run_rag_pipeline(
     request: RAGRunRequest,
     store: ChromaStore,
     *,
     progress: Callable[[str, int, int, str], None] | None = None,
     cancelled: Callable[[], bool] | None = None,
+    owner: str | None = None,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     stages: list[dict[str, Any]] = []
@@ -922,6 +980,9 @@ def run_rag_pipeline(
     })
     update("query_metadata", 1, 1, "Query decomposition complete")
     check_cancel()
+    prior_response_memory, prior_claim_memory, memory_detail = _memory_guidance(
+        query_metadata["prompt_query"], request, owner
+    )
 
     selected_candidates = _selected_evidence_candidates(request, store)
     if request.skip_retrieval and not selected_candidates:
@@ -1221,6 +1282,8 @@ def run_rag_pipeline(
         prompt_query=query_metadata["prompt_query"],
         prompt_instructions=query_metadata["prompt_instructions"],
         response_language=("French" if query_metadata.get("response_language") == "fr" else "English"),
+        prior_response_memory=prior_response_memory or "(none selected)",
+        prior_claim_memory=prior_claim_memory or "(none selected)",
         context=retrieval_context,
     )
     raw_answer = chat_complete(
@@ -1305,4 +1368,5 @@ def run_rag_pipeline(
             "evidence_total_char_limit": request.evidence_total_char_limit,
             "evidence_sufficiency": {"passed": True, "issues": []},
         },
+        "memory": memory_detail,
     }

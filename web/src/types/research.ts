@@ -125,6 +125,9 @@ export type ResearchConfig = {
   auto_grade_provider_profile_id: string;
   provider_profile_id: string;
   skip_retrieval: boolean;
+  use_prior_response_memory: boolean;
+  use_prior_claim_memory: boolean;
+  memory_profile_id: string;
   prompt: string;
   instructions: string;
   history?: Array<Record<string, unknown>>;
@@ -154,11 +157,11 @@ export type ResponseFaqRecord = {
   updated_at?: string;
   evidence_count?: number;
   evidence?: ResearchResultEvidence[];
-  retrieval?: Record<string,unknown>;
-  query_metadata?: Record<string,unknown>;
-  rag_request?: Record<string,unknown>;
-  grade?: Record<string,unknown>;
-  grades?: Array<Record<string,unknown>>;
+  retrieval?: Record<string, unknown>;
+  query_metadata?: Record<string, unknown>;
+  rag_request?: Record<string, unknown>;
+  grade?: Record<string, unknown>;
+  grades?: Array<Record<string, unknown>>;
   warnings?: string[];
   elapsed_seconds?: number;
 };

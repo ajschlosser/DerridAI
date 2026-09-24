@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import re
 import threading
 import time
 import uuid
@@ -20,6 +21,13 @@ from .llm_tools import run_rag_grade
 from .models import RAGGradeRequest, RAGRunRequest
 from .persistence import job_repository
 from .rag import run_rag_pipeline
+
+
+def _optional_int(value: Any) -> int | None:
+    try:
+        return int(value) if value is not None and str(value).strip() else None
+    except (TypeError, ValueError):
+        return None
 
 
 class RAGJobManager(PersistentJobStateMixin):
@@ -179,6 +187,87 @@ class RAGJobManager(PersistentJobStateMixin):
             self._threads[job_id] = thread
         thread.start()
         return self.get(job_id)
+
+    @staticmethod
+    def _persist_response_provenance(
+        result: dict[str, Any],
+        *,
+        run_id: str,
+        response_record_id: str,
+        owner: str | None,
+    ) -> dict[str, list[dict[str, Any]]]:
+        """Persist only citation-marked sentences as conservatively derived claims."""
+        from .provenance_memory import (
+            GeneratedClaim,
+            SupportBinding,
+            persist_generated_claim,
+            persist_support_binding,
+        )
+
+        answer = str(result.get("answer") or "")
+        evidence_by_id = {
+            str(item.get("evidence_id") or ""): item
+            for item in result.get("evidence") or []
+            if isinstance(item, dict) and item.get("evidence_id")
+        }
+        claims: list[dict[str, Any]] = []
+        bindings: list[dict[str, Any]] = []
+        for match in re.finditer(r"(?P<sentence>[^.!?]+(?:[.!?]|$))", answer):
+            sentence = match.group("sentence").strip()
+            marker_groups = re.findall(r"\[\[(E\d+(?:\s*,\s*E\d+)*)\]\]", sentence)
+            if not marker_groups:
+                continue
+            claim = persist_generated_claim(GeneratedClaim(
+                run_id=run_id,
+                response_record_id=response_record_id or None,
+                owner=owner,
+                claim_text=re.sub(r"\s*\[\[[^\]]+\]\]", "", sentence).strip(),
+                answer_start=match.start(),
+                answer_end=match.end(),
+            ))
+            claims.append(claim.model_dump(mode="json"))
+            for marker_group in marker_groups:
+                for evidence_id in re.findall(r"E\d+", marker_group):
+                    item = evidence_by_id.get(evidence_id) or {}
+                    record = item.get("record") if isinstance(item.get("record"), dict) else {}
+                    if not record.get("record_id"):
+                        continue
+                    source_document_id = str(record.get("source_document_id") or "").strip()
+                    source_spans = []
+                    if source_document_id:
+                        from .provenance_memory import EvidenceSpan
+
+                        for span in record.get("source_spans") or []:
+                            if not isinstance(span, dict):
+                                continue
+                            unit_ids = list(span.get("source_unit_ids") or [])
+                            if span.get("block_id"):
+                                unit_ids.append(span["block_id"])
+                            source_spans.append(EvidenceSpan(
+                                source_document_id=source_document_id,
+                                source_unit_ids=list(dict.fromkeys(str(value) for value in unit_ids if str(value).strip())),
+                                physical_page_start=_optional_int(span.get("pdf_page") or span.get("page")),
+                                physical_page_end=_optional_int(span.get("pdf_page") or span.get("page")),
+                                printed_page_start=span.get("printed_page_label"),
+                                printed_page_end=span.get("printed_page_label"),
+                                character_start=_optional_int(span.get("char_start") or span.get("start")),
+                                character_end=_optional_int(span.get("char_end") or span.get("end")),
+                            ))
+                    binding = persist_support_binding(SupportBinding(
+                        claim_id=claim.claim_id,
+                        owner=owner,
+                        record_id=str(record["record_id"]),
+                        record_revision=int(record.get("record_revision") or 1),
+                        source_document_id=source_document_id or None,
+                        source_spans=source_spans,
+                        relation="supports",
+                        citation={
+                            "inline": item.get("inline_citation"),
+                            "full": item.get("full_citation"),
+                        },
+                    ))
+                    bindings.append(binding.model_dump(mode="json"))
+        return {"claims": claims, "support_bindings": bindings}
 
     def _acquire_ollama_slot(self, job_id: str) -> bool:
         with self._ollama_condition:
@@ -383,6 +472,7 @@ class RAGJobManager(PersistentJobStateMixin):
                     self._store,
                     progress=progress,
                     cancelled=cancelled,
+                    owner=str(self._jobs[job_id].get("owner") or "") or None,
                 )
                 cache_info = None
                 cache_error = None
@@ -417,6 +507,42 @@ class RAGJobManager(PersistentJobStateMixin):
                             1,
                             1,
                             f"Response cache write failed: {cache_error}",
+                        )
+
+                    # Durable Research memory is independent of the
+                    # rebuildable response-cache projection.
+                    response_id = str((cache_info or {}).get("record_id") or job_id)
+                    try:
+                        from .system_store import system_store
+                        system_store.put_response_memory({
+                            "response_id": response_id,
+                            "owner": str(self._jobs[job_id].get("owner") or "") or None,
+                            "question": str(result.get("prompt") or body.prompt),
+                            "answer": str(result.get("answer") or ""),
+                            "evidence": list(result.get("evidence") or []),
+                            "provider": result.get("provider"),
+                            "model": result.get("model"),
+                            "created_at": iso_now(),
+                        })
+                        system_store.mark_semantic_memory_dirty(
+                            "response_memory",
+                            reason="completed_research_response",
+                        )
+                    except Exception as memory_error:
+                        result.setdefault("warnings", []).append(
+                            f"Response memory persistence failed: {memory_error}"
+                        )
+                    try:
+                        provenance = self._persist_response_provenance(
+                            result,
+                            run_id=job_id,
+                            response_record_id=response_id,
+                            owner=str(self._jobs[job_id].get("owner") or "") or None,
+                        )
+                        result["claim_provenance"] = provenance
+                    except Exception as provenance_error:
+                        result.setdefault("warnings", []).append(
+                            f"Claim provenance persistence failed: {provenance_error}"
                         )
 
                 auto_grade_result = None
@@ -746,4 +872,3 @@ class RAGJobManager(PersistentJobStateMixin):
         elif "events" in out:
             out["events"] = list(out.get("events") or [])[-12:]
         return out
-

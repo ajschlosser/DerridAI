@@ -589,6 +589,7 @@ def decide_pdf_corpus_record_metadata_batch(
                 field=field,
                 value=value,
                 schema_version=str(build.get("schema_version") or ""),
+                field_id=pdf_corpus_builds._schema_for(build_id).field_id(field),
             )
         return {
             "applied": True,
@@ -935,4 +936,3 @@ def download_pdf_corpus_publication(publication_id: str) -> FileResponse:
     if not path.exists():
         raise HTTPException(status_code=404, detail="Publication not found")
     return FileResponse(path, media_type="application/x-ndjson", filename=f"{publication_id}.jsonl")
-

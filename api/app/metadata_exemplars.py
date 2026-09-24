@@ -136,6 +136,7 @@ def build_metadata_exemplar(
     schema_id: str = "",
     schema_version: str = "",
     source_document_id: str = "",
+    field_id: str = "",
     context_block_radius: int = DEFAULT_CONTEXT_BLOCK_RADIUS,
 ) -> dict[str, Any] | None:
     """Derive one trusted, evidence-bound positive metadata exemplar.
@@ -205,6 +206,7 @@ def build_metadata_exemplar(
         "record_id": record_id,
         "record_revision": record_revision,
         "field": field,
+        "field_id": str(field_id or ""),
         "value": value,
         "evidence_hash": evidence_hash,
         "schema_id": schema_id,
@@ -231,6 +233,7 @@ def build_metadata_exemplar(
         "record_revision": record_revision,
         "source_document_id": effective_source_document_id,
         "field_name": field,
+        "field_id": str(field_id or ""),
         "field_value": value,
         "assertion_status": str(status.get("status") or ""),
         "assertion_method": str(status.get("method") or ""),
@@ -266,6 +269,7 @@ def build_correction_exemplars(
     schema_id: str = "",
     schema_version: str = "",
     source_document_id: str = "",
+    field_ids: dict[str, str] | None = None,
     context_block_radius: int = DEFAULT_CONTEXT_BLOCK_RADIUS,
 ) -> list[dict[str, Any]]:
     """Derive hard-negative exemplars from model values a human corrected.
@@ -293,6 +297,7 @@ def build_correction_exemplars(
             schema_id=schema_id,
             schema_version=schema_version,
             source_document_id=source_document_id,
+            field_id=str((field_ids or {}).get(field) or ""),
             context_block_radius=context_block_radius,
         )
         if base is None:

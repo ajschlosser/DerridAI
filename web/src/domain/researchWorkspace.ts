@@ -189,6 +189,9 @@ export function createResearchWorkspace(deps: Deps) {
       "auto_grade_provider_profile_id",
       "provider_profile_id",
       "skip_retrieval",
+      "use_prior_response_memory",
+      "use_prior_claim_memory",
+      "memory_profile_id",
       "prompt",
       "instructions",
     ]);
@@ -200,10 +203,7 @@ export function createResearchWorkspace(deps: Deps) {
     return researchConfigForUi();
   }
   function removeResearchEvidence(key: Any) {
-    if (!hasCapability("evidence.select"))
-      throw new Error(
-        tr("permissions.evidence_denied"),
-      );
+    if (!hasCapability("evidence.select")) throw new Error(tr("permissions.evidence_denied"));
     setEvidence(String(key || ""), null, false);
     if (!selectedEvidenceEntries().length) state.ragConfig.skip_retrieval = false;
     persistPrefs();
@@ -212,10 +212,7 @@ export function createResearchWorkspace(deps: Deps) {
       .filter((item: Any) => item !== null);
   }
   function clearResearchEvidence() {
-    if (!hasCapability("evidence.select"))
-      throw new Error(
-        tr("permissions.evidence_denied"),
-      );
+    if (!hasCapability("evidence.select")) throw new Error(tr("permissions.evidence_denied"));
     clearSelectedEvidence();
     state.ragConfig.skip_retrieval = false;
     persistPrefs();
@@ -276,8 +273,7 @@ export function createResearchWorkspace(deps: Deps) {
     return cloneAuditValue(cfg?.ollama || {});
   }
   async function startResearchRun(input: Loose = {}) {
-    if (!hasCapability("rag.run"))
-      throw new Error(tr("permissions.rag_denied"));
+    if (!hasCapability("rag.run")) throw new Error(tr("permissions.rag_denied"));
     const cfg: Loose = normalizedResearchConfig(updateResearchConfig(input.config || {}) as Loose);
     updateResearchConfig({
       k: cfg.k,
@@ -379,6 +375,9 @@ export function createResearchWorkspace(deps: Deps) {
         source_collection: cfg.source_collection || "",
         selected_evidence: selectedPayload,
         skip_retrieval: skipRetrieval,
+        use_prior_response_memory: Boolean(cfg.use_prior_response_memory),
+        use_prior_claim_memory: Boolean(cfg.use_prior_claim_memory),
+        memory_profile_id: cfg.memory_profile_id || null,
         locales: cfg.locales,
         search_types: cfg.search_types,
         k: cfg.k,
@@ -478,6 +477,9 @@ export function createResearchWorkspace(deps: Deps) {
       "auto_grade_provider_profile_id",
       "provider_profile_id",
       "skip_retrieval",
+      "use_prior_response_memory",
+      "use_prior_claim_memory",
+      "memory_profile_id",
     ];
     const patch = Object.fromEntries(
       keys.filter((key) => request[key] !== undefined).map((key) => [key, request[key]]),
@@ -487,8 +489,7 @@ export function createResearchWorkspace(deps: Deps) {
     return updateResearchConfig(patch);
   }
   async function getResponseFaqPage({ limit = 50, offset = 0, query = "" } = {}) {
-    if (!canAccessPage("faq"))
-      throw new Error(tr("permissions.faq_denied"));
+    if (!canAccessPage("faq")) throw new Error(tr("permissions.faq_denied"));
     const params = new URLSearchParams({
       limit: String(Math.max(1, Math.min(1000, Number(limit) || 50))),
       offset: String(Math.max(0, Number(offset) || 0)),

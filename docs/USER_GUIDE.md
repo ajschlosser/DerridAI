@@ -497,6 +497,7 @@ The LLM returns each metadata field (or `null` when unsupported) together with a
 - When embedded PDF metadata contains an author, the builder carries it forward as a deterministic, reviewable document-author assertion. It is not silently treated as an LLM inference.
 - **Clean all Record text before enrichment** is deterministic preprocessing. **Use LLM to touch-up text as part of enrichment** creates a conservative, reviewable proposal for extraction errata, diacritics, formatting, quotations, and line breaks. The proposal does not change authoritative reviewed text until a person reviews and saves it.
 - Metadata schemas are defined at **System → Metadata schemas** (administrators only). Corpus Builder step 5 still chooses which schema a build copies and can open the editor in a dialog. Schemas are semantic-versioned independently of the application and corpus contracts. New schemas start at `1.0.0`; unchanged saves retain their version; adding fields increments the minor version, removing fields increments the major version, and changing existing definitions increments the patch version.
+- Each schema field has a stable identity separate from its display name. A deliberate rename can retain that identity, so reviewed precedents continue to belong to the same semantic field. Field-level **Memory & retrieval** settings control whether reviewed values, corrections, and confirmed absence may guide later enrichment, and bound the number and similarity of advisory precedents.
 - **Run-specific field guidance** is configured beside schema selection and is saved only with that build. For any field, add an instruction and/or names, titles, concepts, or variants to look for. Exact phrase matches are shown as review cues and passed to the corresponding field group's LLM task; they do not change the schema, restrict the allowed values, or count as evidence that the value applies. The model must still use this record's context and bind evidence where the schema requires it.
 
 Records enriched before this behavior existed are not changed automatically. **Retry metadata** skips completed metadata families by design, so it will not repopulate them. To repopulate an affected record, use **Run metadata enrichment again** (or **Rerun** on a family) and choose **Discourse / attribution**; this clears only LLM-owned values in that family and keeps reviewer-owned, deterministic, and inherited values. Rebuilding also works.
@@ -612,6 +613,8 @@ Per run:
 - total evidence-character budget
 - citation binding
 - Works Cited
+- prior-response memory (optional advisory guidance)
+- prior-claim provenance memory (optional advisory guidance)
 
 Default cross encoder:
 
@@ -652,12 +655,15 @@ FreeLLM/OpenAI-compatible includes model routing, model-kind filtering, output t
 - citations
 - load evidence into a new JSONL file
 - cached-response identifier
+- generated claims with explicit evidence-marker support bindings when the answer contains `[[E0]]`-style markers. These bindings are re-resolved against the canonical Record revision before they are treated as current; prior answers and claims never become current source evidence.
 - **Re-run with parameters**, which repopulates RAG Research with the original run configuration so it can be modified before launch
 - **Analyze & grade**, which asks the selected LLM provider to evaluate query relevance, source binding, claim traceability, attribution/source discrimination, claim/evidence fidelity, conceptual precision, coverage, interpretive usefulness, and overall quality
 
 ### Response Library
 
 Every successfully completed RAG answer is written to the logical `_response_cache` Chroma collection as an eighth pipeline stage. The cache uses deterministic local vectors so writing a completed answer does not depend on Ollama or another embedding service being online.
+
+Research memory is stored separately from that deterministic response cache. Prior responses are owner-scoped advisory context, and prior claim memory is owner-scoped provenance that points back to canonical records and revisions. Both controls are independent and off by default; enabling either does not add the remembered text to the current evidence packet or permit it to supply a citation.
 
 The **Response Library** page provides:
 

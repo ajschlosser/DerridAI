@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import uuid
 from typing import Annotated, Any, ClassVar, Literal
 
 from pydantic import (
@@ -59,6 +60,26 @@ MAX_FIELDS = 60
 MAX_GROUPS = 6
 
 FieldType = Literal["text", "number", "boolean", "choice", "list"]
+RetrievalScope = Literal["same_schema", "same_field", "all_reviewed"]
+
+
+class RetrievalProfile(BaseModel):
+    """Declarative policy for which reviewed memory may guide a field.
+
+    This is configuration, not a retrieval result.  Scores, ranks, and
+    provider-specific diagnostics therefore never become part of a schema.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool = True
+    scope: RetrievalScope = "same_field"
+    max_items: int = Field(default=6, ge=0, le=50)
+    min_similarity: float = Field(default=0.0, ge=0.0, le=1.0)
+    include_corrections: bool = True
+    include_confirmed_absence: bool = True
+    use_for_metadata_enrichment: bool = True
+    use_for_response_memory: bool = False
+    use_for_claim_memory: bool = False
 
 
 class SchemaValue(BaseModel):
@@ -69,7 +90,9 @@ class SchemaValue(BaseModel):
 
 class SchemaField(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    field_id: str = ""
     name: str
+    semantic_compatibility_id: str | None = Field(default=None, max_length=120)
     label: str = Field(min_length=1, max_length=80)
     type: FieldType = "text"
     group: str = "discourse"
@@ -83,6 +106,29 @@ class SchemaField(BaseModel):
     evidence: bool = False  # the model must cite source blocks for a value
     assess: bool = False  # the model must report its confidence
     review: bool = False  # an unresolved value here keeps a record out of "accepted" until a person decides
+    retrieval_profile: RetrievalProfile | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _identity_defaults(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        result = dict(value)
+        name = str(result.get("name") or "").strip()
+        if not str(result.get("field_id") or "").strip() and name:
+            # Deterministic migration for format-v1 schemas.  A deliberate
+            # rename can retain identity by sending the previous field_id.
+            result["field_id"] = f"field-{uuid.uuid5(uuid.NAMESPACE_URL, 'derridai:field:' + name)}"
+        return result
+
+    @field_validator("field_id")
+    @classmethod
+    def _field_id(cls, value: str) -> str:
+        if not value:
+            raise ValueError("A field needs a stable field_id.")
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_.:-]{1,119}", value):
+            raise ValueError("field_id must be a stable identifier.")
+        return value
 
     @field_validator("name")
     @classmethod
@@ -117,6 +163,7 @@ class SchemaGroup(BaseModel):
     trailer: str = Field(default="", max_length=4000)
     # May use {fields} (this group's field names) and {assessed_fields} (the ones the model reports confidence for).
     footer: str = Field(default="", max_length=4000)
+    retrieval_profile: RetrievalProfile | None = None
 
     @field_validator("key")
     @classmethod
@@ -153,6 +200,9 @@ class MetadataSchema(BaseModel):
         names = [f.name for f in self.fields]
         if len(names) != len(set(names)):
             raise ValueError("Field names must be different from each other.")
+        ids = [f.field_id for f in self.fields]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Field identities must be different from each other.")
         for field in self.fields:
             if field.group not in keys:
                 raise ValueError(f"Field '{field.name}' is in a group ('{field.group}') the schema does not have.")
@@ -167,6 +217,30 @@ class MetadataSchema(BaseModel):
 
     def field_names(self) -> list[str]:
         return list(CORE_FIELDS) + [f.name for f in self.fields]
+
+    def field_id(self, name: str) -> str:
+        """Return the stable identity used by memory bindings and migrations."""
+        if name in CORE_FIELDS:
+            return f"core.{name}"
+        field = next((item for item in self.fields if item.name == name), None)
+        if field is None:
+            raise KeyError(name)
+        return field.field_id
+
+    def field_identity_map(self) -> dict[str, str]:
+        return {name: self.field_id(name) for name in self.field_names()}
+
+    def retrieval_profile_for(self, name: str) -> RetrievalProfile:
+        """Resolve field policy, falling back to its group and then defaults."""
+        if name in CORE_FIELDS:
+            group = self.group(CORE_GROUP)
+            return group.retrieval_profile or RetrievalProfile()
+        field = next((item for item in self.fields if item.name == name), None)
+        if field is None:
+            raise KeyError(name)
+        if field.retrieval_profile is not None:
+            return field.retrieval_profile
+        return self.group(field.group).retrieval_profile or RetrievalProfile()
 
     def family_fields(self) -> dict[str, set[str]]:
         """Group key to its field names; the core sits in its group. Same shape as METADATA_FAMILY_FIELDS."""
@@ -212,8 +286,16 @@ def import_schema(payload: Any) -> MetadataSchema:
         schema = MetadataSchema.model_validate({**payload["schema"], "id": ""})
     except ValidationError as exc:
         raise SchemaImportError("The schema is not valid: " + "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors()[:5])) from exc
-    if payload.get("sha256") and payload["sha256"] != schema.content_hash():
-        raise SchemaImportError("The file's contents do not match its checksum: it was edited or damaged after it was exported.")
+    if payload.get("sha256"):
+        current_hash = schema.content_hash()
+        # Format version 1 predates stable field IDs and retrieval profiles.
+        # Accept the exact legacy body hash while migrating it in memory.
+        raw_body = {key: value for key, value in payload["schema"].items() if key != "id"}
+        legacy_hash = hashlib.sha256(
+            json.dumps(raw_body, sort_keys=True, ensure_ascii=False).encode("utf-8")
+        ).hexdigest()[:16]
+        if payload["sha256"] not in {current_hash, legacy_hash}:
+            raise SchemaImportError("The file's contents do not match its checksum: it was edited or damaged after it was exported.")
     return schema
 
 
