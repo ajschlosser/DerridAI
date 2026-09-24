@@ -57,7 +57,7 @@ from ..models import (
     PdfSourceUrlImport,
 )
 from ..pdf_tools import extract_pdf_text
-from ..routers.jobs import _profile_generation_options
+from ..provider_profile_options import profile_generation_options
 from ..source_media import (
     fetch_source_url,
     load_gutenberg_etext,
@@ -281,7 +281,7 @@ def _resolve_pdf_corpus_provider(payload: dict[str, Any]) -> dict[str, Any]:
     if profile_id:
         profile = system_store.researcher_profile(profile_id)
         if profile is not None:
-            profile_generation = _profile_generation_options(profile) or {}
+            profile_generation = profile_generation_options(profile) or {}
             profile_generation.update({key: value for key, value in generation_override.items() if value is not None})
             resolved.update({
                 "provider": profile.get("type") or resolved.get("provider") or "ollama",
@@ -304,7 +304,7 @@ def _resolve_pdf_corpus_provider(payload: dict[str, Any]) -> dict[str, Any]:
                 "model": supplied.get("model") or review_profile.get("model"),
                 "base_url": _supplied_secret(supplied.get("base_url")) or review_profile.get("base_url"),
                 "api_key": _supplied_secret(supplied.get("api_key")) or review_profile.get("api_key"),
-                "generation": _profile_generation_options(review_profile) or supplied.get("generation") or None,
+                "generation": profile_generation_options(review_profile) or supplied.get("generation") or None,
                 "provider_profile_id": review_profile_id,
             }
         elif isinstance(direct_review, dict) and direct_review.get("provider"):
