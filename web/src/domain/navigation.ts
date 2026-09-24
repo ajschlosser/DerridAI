@@ -36,7 +36,7 @@ export const viewPathMap: Record<string, string> = {
   vector: "/databases",
   rag: "/rag",
   faq: "/faq",
-  responsecache: "/response-cache",
+  responsecache: "/system-data",
   providers: "/providers",
   schemas: "/schemas",
   config: "/settings",

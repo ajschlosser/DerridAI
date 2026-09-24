@@ -16,8 +16,9 @@ import ProviderProfileSelect from "./ProviderProfileSelect.vue";
 import CorpusBuildProgress from "./CorpusBuildProgress.vue";
 import FieldEvidenceList from "./FieldEvidenceList.vue";
 import DocumentStructureConfigurator from "./DocumentStructureConfigurator.vue";
+import MediaStructureConfigurator from "./MediaStructureConfigurator.vue";
 import SourceTranscriptionDialog from "./SourceTranscriptionDialog.vue";
-import { hasPages, timeLabel } from "../domain/sourceMedia";
+import { timeLabel } from "../domain/sourceMedia";
 import CorpusSourceSummary from "./CorpusSourceSummary.vue";
 import DocumentManifestEditor from "./DocumentManifestEditor.vue";
 import DocumentManifestDialog from "./DocumentManifestDialog.vue";
@@ -762,7 +763,10 @@ const activeBuildProfileId = computed<string>(() => {
 const activeModelLabel = computed<string>(() => String(currentBuild.value?.model || "—"));
 const pageNumber = computed(() => Math.floor(recordOffset.value / pageSize) + 1);
 const pageCount = computed(() => Math.max(1, Math.ceil(recordTotal.value / pageSize)));
-const paginatedSource = computed(() => hasPages(selectedAsset.value?.media_kind));
+// Only PDFs expose physical-to-printed pagination controls. Images, text, and
+// audio use source-specific interpretation panes instead of pretending to have
+// document pages.
+const paginatedSource = computed(() => selectedAsset.value?.media_kind === "pdf");
 const imageSourceUrl = computed(() =>
   selectedAsset.value?.media_kind === "image" && selectedAssetId.value
     ? pdfCorpusApi.assetContentUrl(selectedAssetId.value)
@@ -1302,6 +1306,24 @@ async function switchBuildProvider(profileId: string, modelOverride = "") {
 
 async function refreshProviders() {
   const runtimeProfiles = (runtime.getProviderProfilesForUi?.() || []) as ProviderProfile[];
+  const defaultId = String(runtime.getDefaultProviderProfileId?.() || "");
+  const publishProfiles = (profiles: ProviderProfile[]) => {
+    providerProfiles.value = profiles;
+    if (
+      !selectedProviderId.value ||
+      !profiles.some((profile) => profile.id === selectedProviderId.value)
+    ) {
+      selectedProviderId.value =
+        profiles.find((profile) => profile.id === defaultId)?.id || profiles[0]?.id || "";
+    }
+    if (
+      !llmActionProviderId.value ||
+      !profiles.some((profile) => profile.id === llmActionProviderId.value)
+    ) {
+      llmActionProviderId.value = selectedProviderId.value;
+    }
+  };
+  publishProfiles(runtimeProfiles);
   let serverProfiles: ProviderProfile[] = [];
   try {
     serverProfiles = (await systemApi.researcherProviders()).profiles || [];
@@ -1316,6 +1338,9 @@ async function refreshProviders() {
   for (const profile of serverProfiles) merged.set(profile.id, profile);
   for (const profile of runtimeProfiles) merged.set(profile.id, profile);
   const mergedProfiles = Array.from(merged.values());
+  // Publish the configured profiles before probing availability. Provider
+  // pickers must be usable while network status checks are still running.
+  publishProfiles(mergedProfiles);
   const availability = await Promise.all(
     mergedProfiles.map(async (profile) => {
       try {
@@ -1364,7 +1389,6 @@ async function refreshProviders() {
     }),
   );
   providerProfiles.value = availability;
-  const defaultId = String(runtime.getDefaultProviderProfileId?.() || "");
   const activeBuildProfile = String(
     (currentBuild.value?.request as Record<string, unknown> | undefined)?.provider_profile_id || "",
   );
@@ -1405,8 +1429,16 @@ async function refreshBuilds() {
   const requested = String(route.query.build || "");
   if (requested && builds.value.some((build) => build.build_id === requested))
     selectedBuildId.value = requested;
-  else if (!selectedBuildId.value && builds.value[0])
+  else if (
+    (!selectedBuildId.value ||
+      !builds.value.some((build) => build.build_id === selectedBuildId.value)) &&
+    builds.value[0]
+  )
     selectedBuildId.value = builds.value[0].build_id;
+  else if (!builds.value.length) {
+    selectedBuildId.value = "";
+    currentBuild.value = null;
+  }
 }
 function syncBuildInRail(build: CorpusBuild) {
   const index = builds.value.findIndex((item) => item.build_id === build.build_id);
@@ -2047,6 +2079,13 @@ async function openAllReviewQueue() {
   await refreshRecords(true);
   await nextTick();
   recordListEl.value?.focus({ preventScroll: true });
+}
+function openEnrichmentFromFinish() {
+  // Finish actions always mean all records; never inherit a hidden table selection.
+  selectedReviewIds.value = new Set();
+  llmActionProviderId.value =
+    llmActionProviderId.value || selectedProviderId.value || providerProfiles.value[0]?.id || "";
+  metadataEnrichmentOpen.value = true;
 }
 async function openSourceIssueQueue() {
   reviewQueue.value = "source";
@@ -3655,6 +3694,26 @@ onBeforeUnmount(() => {
           @save-page-labels="savePageLabels"
         />
       </section>
+      <section
+        v-else-if="selectedAsset"
+        class="setup-phase"
+        aria-labelledby="media-structure-phase-title"
+      >
+        <div class="phase-label">
+          <span class="setup-step">B</span>
+          <div>
+            <h3 id="media-structure-phase-title">
+              {{ i18n.t("pdf_corpus.source_interpretation", "Source interpretation") }}
+            </h3>
+          </div>
+        </div>
+        <MediaStructureConfigurator
+          :media-kind="selectedAsset.media_kind"
+          :filename="selectedAsset.filename"
+          :page-count="selectedAsset.page_count"
+          :block-count="selectedAsset.block_count"
+        />
+      </section>
 
       <details class="setup-section setup-disclosure" open>
         <summary>
@@ -4023,9 +4082,9 @@ onBeforeUnmount(() => {
       </div>
     </details>
 
-    <div class="builder-workspace" :class="{ 'review-mode': showReviewWorkspace && !finishPhase }">
+    <div class="builder-workspace" :class="{ 'review-mode': showReviewWorkspace }">
       <aside
-        v-if="!showReviewWorkspace || finishPhase"
+        v-if="!showReviewWorkspace"
         class="build-rail"
         :aria-label="i18n.t('pdf_corpus.builds')"
       >
@@ -4074,7 +4133,7 @@ onBeforeUnmount(() => {
           class="build-summary"
           :aria-labelledby="'pdf-corpus-current-build'"
         >
-          <div v-if="!showReviewWorkspace || finishPhase" class="summary-top">
+          <div v-if="!showReviewWorkspace" class="summary-top">
             <div>
               <span class="eyebrow">{{ currentBuild.profile_id }}</span>
               <h2 id="pdf-corpus-current-build">{{ currentBuild.source_filename }}</h2>
@@ -4102,11 +4161,11 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <CorpusBuildLifecycleCard
-            v-if="!showReviewWorkspace || finishPhase"
+            v-if="!showReviewWorkspace"
             :build="currentBuild"
           />
           <CorpusQualitySummary
-            v-if="!awaitingManifestReview && (!showReviewWorkspace || finishPhase)"
+            v-if="!awaitingManifestReview && !showReviewWorkspace"
             :build="currentBuild"
           />
 
@@ -4115,7 +4174,7 @@ onBeforeUnmount(() => {
             :stage="currentBuild.stage"
           />
           <CorpusFinishWorkspace
-            v-if="!awaitingManifestReview && finishPhase"
+            v-if="!awaitingManifestReview && finishPhase && !showReviewWorkspace"
             :build="currentBuild"
             :busy="busy !== ''"
             @retry-metadata="retryIncompleteMetadata"
@@ -4126,10 +4185,7 @@ onBeforeUnmount(() => {
             @restore-rejected="restoreAllRejected"
             @start-new="startNewBuildSetup"
             @edit-document-metadata="documentMetadataOpen = true"
-            @rerun-enrichment="
-              llmActionProviderId = selectedProviderId || providerProfiles[0]?.id || '';
-              metadataEnrichmentOpen = true;
-            "
+            @rerun-enrichment="openEnrichmentFromFinish"
             @publish="publish({ download: false })"
           />
           <CorpusMetadataIssues
@@ -4145,10 +4201,10 @@ onBeforeUnmount(() => {
             @review="reviewMetadataRecord"
           />
           <CorpusBuildTimeline
-            v-if="!awaitingManifestReview && (!showReviewWorkspace || finishPhase)"
+            v-if="!awaitingManifestReview && (            !showReviewWorkspace)"
             :build="currentBuild"
           />
-          <details v-if="!showReviewWorkspace || finishPhase" class="technical-details">
+          <details v-if="!showReviewWorkspace" class="technical-details">
             <summary>
               {{ i18n.t("pdf_corpus.technical_details") }}
             </summary>
@@ -4254,7 +4310,7 @@ onBeforeUnmount(() => {
             </div>
           </section>
           <section
-            v-if="segmentationNeedsReview && (!showReviewWorkspace || finishPhase)"
+            v-if="segmentationNeedsReview && !showReviewWorkspace"
             class="segmentation-blocked segmentation-review-localized"
             role="status"
             aria-labelledby="segmentation-review-title"
@@ -4303,7 +4359,7 @@ onBeforeUnmount(() => {
             v-if="
               currentBuild.manifest &&
               Object.keys(currentBuild.manifest).length &&
-              (!showReviewWorkspace || finishPhase)
+              !showReviewWorkspace
             "
             class="manifest-details"
             :open="awaitingManifestReview"
@@ -4321,7 +4377,7 @@ onBeforeUnmount(() => {
               @reanalyze="reanalyzeDocument"
             />
           </details>
-          <div v-if="!showReviewWorkspace || finishPhase" class="provenance-strip">
+          <div v-if="!showReviewWorkspace" class="provenance-strip">
             <span>SHA {{ currentBuild.source_sha256?.slice(0, 12) }}…</span
             ><span>{{
               currentBuild.model ||
@@ -4359,7 +4415,7 @@ onBeforeUnmount(() => {
             :disabled="busy !== ''"
             @stop="cancelBuild"
             @run-another="
-              llmActionProviderId = selectedProviderId || providerProfiles[0]?.id || '';
+              llmActionProviderId = llmActionProviderId || selectedProviderId || providerProfiles[0]?.id || '';
               metadataEnrichmentOpen = true;
             "
           />
@@ -5175,7 +5231,7 @@ onBeforeUnmount(() => {
                           i18n.t('pdf_corpus.metadata_enrichment_again_help')
                         "
                         @click="
-                          llmActionProviderId = selectedProviderId || providerProfiles[0]?.id || '';
+                          llmActionProviderId = llmActionProviderId || selectedProviderId || providerProfiles[0]?.id || '';
                           metadataEnrichmentOpen = true;
                         "
                         :disabled="busy !== ''"

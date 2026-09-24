@@ -16,8 +16,8 @@ const i18n = useI18nStore();
 <template>
   <UiPageHeader
     class="vector-workspace-header"
-    :kicker="i18n.t('section.storage')"
-    :title="i18n.t('nav.vector')"
+    :kicker="i18n.t('section.storage', 'Storage')"
+    :title="i18n.t('nav.vector', 'Corpus Data')"
     :description="
       i18n.t('vector.page_help')
     "

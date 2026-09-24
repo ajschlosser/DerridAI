@@ -45,6 +45,23 @@ def test_group_prompt_receives_only_its_own_guidance_and_never_calls_matches_pro
     assert "hospitality" not in prompt
 
 
+def test_required_guidance_has_a_reviewable_fallback_placeholder():
+    prompt = format_group_guidance(
+        ["mood"],
+        {
+            "mood": {
+                "required": True,
+                "default_placeholder": "[not established in source]",
+            }
+        },
+        {},
+    )
+
+    assert "REQUIRED FOR THIS RUN" in prompt
+    assert "[not established in source]" in prompt
+    assert "mark the result unresolved" in prompt
+
+
 def test_build_request_bounds_and_deduplicates_guidance_terms():
     request = PdfCorpusBuildCreate(
         asset_id="asset",

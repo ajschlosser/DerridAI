@@ -32,7 +32,7 @@ const moreToolsOpen=ref(storedMoreTools()??false);
 const nativeBackPath=ref<string|null>(null);
 const nativeForwardPath=ref<string|null>(null);
 const s=computed(()=>shell.snapshot);
-const pageCapability: Record<string,string> = {home:"page.dashboard",list:"page.records",record:"page.record",works:"page.works",global:"page.search",annotations:"page.annotations",pdf:"page.pdf",compare:"page.compare",vector:"page.vector",rag:"page.research",faq:"page.faq",responsecache:"page.response_cache",metadatamemory:"page.response_cache",providers:"page.providers",schemas:"page.schemas",config:"page.settings",users:"page.users",languages:"page.languages",roles:"page.roles"};
+const pageCapability: Record<string,string> = {home:"page.dashboard",list:"page.records",record:"page.record",works:"page.works",global:"page.search",annotations:"page.annotations",pdf:"page.pdf",compare:"page.compare",vector:"page.vector",rag:"page.research",faq:"page.faq",responsecache:"page.response_cache",systemdata:"page.response_cache",metadatamemory:"page.response_cache",providers:"page.providers",schemas:"page.schemas",config:"page.settings",users:"page.users",languages:"page.languages",roles:"page.roles"};
 function canNav(id:string){const capability=pageCapability[id];return !capability||auth.can(capability)}
 try{
   const saved=localStorage.getItem("derridai.ui.theme")||"green";

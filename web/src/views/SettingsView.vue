@@ -570,8 +570,8 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
               </UiField>
             </div>
             <template #actions>
-              <UiButton variant="primary" :label="i18n.t('settings.save_embedding')" @click="saveEmbedding" />
-              <UiButton icon="database" :label="i18n.t('nav.vector')" @click="go('/databases', 'vector')" />
+              <UiButton variant="primary" :label="i18n.t('settings.save_embedding', 'Save embedding defaults')" @click="saveEmbedding" />
+              <UiButton icon="database" :label="i18n.t('nav.vector', 'Corpus Data')" @click="go('/databases', 'vector')" />
             </template>
           </SettingsSection>
           <SettingsSection section-id="rag" :title="i18n.t('settings.rag_title')" :description="i18n.t('settings.rag_help')" :persistence="persistKind('browser')" :status="groupStatus.rag" :status-label="statusLabel(groupStatus.rag)">

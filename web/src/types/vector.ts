@@ -32,6 +32,7 @@ export interface VectorCollection {
   name: string;
   storage_name?: string;
   count: number;
+  metadata?: Record<string, unknown>;
   description?: string;
   embedding_provider?: string;
   embedding_model?: string | null;

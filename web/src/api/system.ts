@@ -57,6 +57,71 @@ export interface LanguageTranslationReport {
   key_count?: number;
 }
 export interface LanguageDictionary extends LanguageInfo { dictionary: Record<string, string>; translation_report?: LanguageTranslationReport }
+export interface SystemDataColumn {
+  name: string;
+  type?: string;
+  nullable?: boolean;
+  default?: unknown;
+  primary_key?: number;
+  sensitive?: boolean;
+}
+export interface SystemDataTable {
+  name: string;
+  columns: SystemDataColumn[];
+  row_count: number;
+  writable?: boolean;
+}
+export interface SystemDataDatabase {
+  name: string;
+  backend: string;
+  path?: string;
+  size_bytes?: number;
+  tables: SystemDataTable[];
+}
+
+export interface SystemMetadataExemplar {
+  exemplar_id: string;
+  scope_id: string;
+  record_id: string;
+  record_revision?: number | null;
+  source_document_id?: string;
+  field_name: string;
+  field_value: unknown;
+  kind: string;
+  assertion_status?: string;
+  schema_id?: string;
+  schema_version?: string;
+  language?: string;
+  region_type?: string;
+  evidence_hash?: string;
+  evidence_block_ids?: string[];
+  context_text?: string;
+}
+export interface SystemMetadataExemplarFacets {
+  fields: string[];
+  kinds: string[];
+  languages: string[];
+  scopes: string[];
+  schemas: string[];
+}
+export interface SystemMetadataExemplarPage {
+  exists: boolean;
+  count: number;
+  limit: number;
+  offset: number;
+  rows: SystemMetadataExemplar[];
+  facets: SystemMetadataExemplarFacets;
+}
+export interface SystemMetadataExemplarFilters {
+  limit?: number;
+  offset?: number;
+  field?: string;
+  kind?: string;
+  language?: string;
+  scope_id?: string;
+  schema_id?: string;
+  record_id?: string;
+}
 
 export const systemApi = {
   researcherProviders: () => apiRequest<{profiles: ProviderProfile[]}>("/api/system/researcher-providers"),
@@ -73,4 +138,20 @@ export const systemApi = {
   languageContentPolicy: (code: string) => apiRequest<LanguageContentPolicy>(`/api/i18n/languages/${encodeURIComponent(code)}/content-policy`),
   updateLanguageContentPolicy: (code: string, payload: Pick<LanguageContentPolicy, "blocked_terms" | "contextual_terms">) => apiRequest<LanguageContentPolicy>(`/api/i18n/languages/${encodeURIComponent(code)}/content-policy`, {method: "PUT", body: JSON.stringify(payload)}),
   generateLanguageContentPolicy: (payload: Record<string, unknown>) => apiRequest<JobSummary>("/api/jobs/llm-tool", {method: "POST", body: JSON.stringify({task: "language_content_policy", language: payload, label: `Languages · ${String(payload.code || "policy")}`, provider_profile_id: String(payload.provider_profile_id || "") || null, max_concurrent_requests: Number(payload.max_concurrent_requests || 1)})}),
+  systemData: () => apiRequest<{databases: SystemDataDatabase[]}>("/api/system/data"),
+  systemMetadataExemplars: (filters: SystemMetadataExemplarFilters = {}) => {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters)) {
+      if (value === undefined || value === null || String(value).trim() === "") continue;
+      query.set(key, String(value));
+    }
+    const queryString = query.toString();
+    const suffix = queryString ? `?${queryString}` : "";
+    return apiRequest<SystemMetadataExemplarPage>(`/api/system/data/metadata-exemplars${suffix}`);
+  },
+  systemDataRows: (database: string, table: string, limit = 50, offset = 0) => apiRequest<SystemDataTable & { database: string; rows: Array<Record<string, unknown>>; offset: number; limit: number }>(`/api/system/data/${encodeURIComponent(database)}/${encodeURIComponent(table)}?limit=${limit}&offset=${offset}`),
+  insertSystemDataRow: (database: string, table: string, values: Record<string, unknown>) => apiRequest<Record<string, unknown>>(`/api/system/data/${encodeURIComponent(database)}/${encodeURIComponent(table)}`, {method: "POST", body: JSON.stringify(values)}),
+  updateSystemDataRow: (database: string, table: string, key: Record<string, unknown>, values: Record<string, unknown>) => apiRequest<Record<string, unknown>>(`/api/system/data/${encodeURIComponent(database)}/${encodeURIComponent(table)}`, {method: "PATCH", body: JSON.stringify({key, values})}),
+  deleteSystemDataRow: (database: string, table: string, key: Record<string, unknown>) => apiRequest<Record<string, unknown>>(`/api/system/data/${encodeURIComponent(database)}/${encodeURIComponent(table)}`, {method: "DELETE", body: JSON.stringify({key})}),
+  deleteSystemResponseCacheRecord: (recordId: string) => apiRequest<Record<string, unknown>>(`/api/system/data/response-cache-records/${encodeURIComponent(recordId)}`, {method: "DELETE"}),
 };

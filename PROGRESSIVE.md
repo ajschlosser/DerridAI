@@ -1,9 +1,9 @@
 # Progressive Metadata Enhancement
 
-Status: active implementation log and working specification  
-Initial backend implementation: merged in PR #149 on 2026-09-24  
-Current follow-up branch: `feature/metadata-memory-inspector`  
-Current follow-up base: `master` at `335f3048b3d4c65226d4aa4033808f40dd222c30` (after PR #151)
+Status: active implementation specification and audit log  
+Foundation: progressive backend slice merged in PR #149  
+Current integration: PR #145 (`ajschlosser-solid-goggles`), rebased onto current `master` at `335f3048b3d4c65226d4aa4033808f40dd222c30`  
+Current focus: System Data inspection, PR #145 reconciliation, and validation without exposing vector storage as product semantics.
 
 ## 1. Purpose
 
@@ -567,7 +567,31 @@ Performance tests should set a generous but explicit ceiling for retrieval overh
 
 ## 17. Compatibility with concurrent work
 
-Open PR #145 ("Improve corpus enrichment, system data, and source-aware metadata") overlaps this area through its System Data page and semantic reviewer memory.
+### PR #145 System Data reconciliation
+
+PR #145 introduces a first-class **System Data** administration surface. Progressive Metadata Enhancement uses that surface for inspection rather than exposing its derived storage as a normal research corpus.
+
+The integration contract is now:
+
+- `/api/system/data/metadata-exemplars` is the read-only administrative inspection API;
+- the System Data page presents **Metadata exemplars** as domain data, not as a vector-store browser;
+- visible exemplar fields include metadata field/value, positive/correction kind, authority status, source record/revision/build, schema/version, language/region, evidence block IDs/hash, and the bounded evidence-context window;
+- filters and pagination operate on those semantic/audit fields;
+- embeddings, vector dimensions, Chroma IDs, similarity internals, and collection-storage names are intentionally not part of the ordinary System Data UX;
+- `derridai_metadata_exemplars` remains a rebuildable implementation projection whose authoritative source is reviewed corpus metadata plus evidence;
+- absence of the derived projection is represented as an empty/not-yet-built System Data state rather than an application error.
+
+PR #145 also introduced an earlier `derridai_metadata_memory` semantic reviewer-memory path. That path is superseded by the evidence-bound exemplar architecture and must not coexist as a second semantic learning system. The PR #145 branch has therefore been reconciled so:
+
+- the exact-value SQLite adjudication cache remains useful for deterministic same-record suggestions;
+- semantic reviewer examples are supplied only through the progressive evidence-bound exemplar pipeline;
+- the older Chroma metadata-memory indexing/retrieval hooks are removed;
+- the obsolete semantic-memory clear endpoint/UI action is removed;
+- System Data inspects the progressive exemplar projection instead.
+
+This preserves one semantic precedent model and one provenance contract.
+
+At branch creation, open PR #145 ("Improve corpus enrichment, system data, and source-aware metadata") overlaps the same general area and describes "semantic reviewer memory".
 
 The compatibility rule is now explicit: **metadata memory is the product/domain abstraction; a vector collection is only one derived storage adapter.**
 
@@ -623,10 +647,7 @@ The initial backend slice merged to `master` in PR #149. The current follow-up b
 
 Empirical quality/latency benchmarking across real corpora and models remains an evaluation activity rather than a prerequisite for the initial implementation. The current semantic index is deliberately build-scoped; a cross-build exemplar catalogue requires an authoritative resolver for source build/record/revision/evidence identity before it should be enabled.
 
-Validation history:
-
-- PR #149 passed backend lint, mypy, backend regression tests, frontend lint, frontend typecheck/unit/build/Storybook gates before merge; its long composed UI/WCAG job was still running at the moment of merge.
-- The metadata-memory inspector follow-up includes focused backend and frontend regression tests but still requires its own full CI run before merge.
+Validation note (PR #145, quality-gates run #503): backend Ruff, mypy, Python syntax, the full backend regression suite, frontend lint, frontend typecheck, frontend unit/component tests, the production build, and the Storybook build have passed on the reconciled branch. The long composed UI/opacity/WCAG E2E phase was still running when this status was recorded; do not describe the complete workflow as green until that final phase succeeds.
 
 
 ### Phase 0 - Baseline and contracts
@@ -682,26 +703,23 @@ Validation history:
 
 ### Phase 6 - UX/audit surface
 
-Status: **in progress; first inspection slice implemented on `feature/metadata-memory-inspector`.**
+Status: **partially implemented through PR #145 System Data**.
 
 Implemented:
 
-- first-class System → Metadata memory page rather than exposing the internal collection under Vector Stores;
-- source record/revision, field/value, authority, correction/negative precedent, schema/build/language scope, evidence block IDs/text and indexed context;
-- evidence-bound versus context-only memory distinction;
-- stale/unresolvable source indication;
-- evidence-hash mismatch indication;
-- field/type/build/language/search filters and pagination;
-- English/French strings and accessible semantic table/form structure;
-- backend-neutral API that PR #145's System Data page can consume or link to.
+- System Data now exposes a read-only Metadata Exemplars inspector rather than a research-corpus/vector-store surface;
+- show exemplar source record/revision/build, field/value, authority state, schema/language/region, evidence block IDs/hash, and bounded context;
+- field/kind/language/build/schema/record filtering and pagination;
+- explicitly hide vector implementation details from the normal administrative UX;
+- English and French copy;
+- focused backend and frontend regression tests.
 
-Still to do after production-like use:
+Remaining:
 
-- show retrieval/run linkage ("why this exemplar was supplied to this enrichment call");
-- add ledger drill-down from exemplar ID to individual enrichment runs;
-- expose similarity/MMR only in run-specific diagnostics, clearly separated from confidence;
-- complete WCAG 2.2 AA manual/automated coverage for the new page in CI;
-- decide whether System Data embeds this view or links to it after PR #145 is reconciled.
+- add a direct navigation path from an exemplar to the corresponding Corpus Builder review/evidence surface once that route can preserve build/record context reliably;
+- show retrieval-use history (which enrichment run consumed an exemplar and why it was selected) rather than only the exemplar projection itself;
+- distinguish retrieval/MMR score from model confidence wherever retrieval-use history is shown;
+- run representative WCAG 2.2 AA, forced-colors, dark-mode, long-string, and mobile interaction checks on the inspector.
 
 ## 19. Initial acceptance criteria
 

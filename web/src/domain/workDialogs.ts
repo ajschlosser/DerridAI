@@ -1,6 +1,12 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
 import { esc, icon } from "./html";
+import {
+  canonicalWorkSourceType,
+  representativeWorkMetadata,
+  workMetadataSourceGroups,
+  workSourceType,
+} from "./workMetadata";
 
 // The dialogs for a work's metadata and for removing or separating works, drawn as HTML strings. Moved verbatim from the
 // legacy runtime; the runtime's state object and helpers are passed in as dependencies.
@@ -104,7 +110,6 @@ export function createWorkDialogs(deps: Deps) {
     recordStores,
     refreshStores,
     renderView,
-    representativeWorkMetadata,
     shell,
     showAppModal,
     startJobPolling,
@@ -233,20 +238,38 @@ export function createWorkDialogs(deps: Deps) {
       return toast(
         tr("works.no_work_metadata_rows"),
       );
+    const sourceScopes = works.flatMap((item: Any) =>
+      workMetadataSourceGroups(item).map((scope) => ({ ...scope, work: item.work })),
+    );
+    const sourceTypeLabel = (sourceType: string) =>
+      tr(
+        `works.source_type_${canonicalWorkSourceType(sourceType)}`,
+        canonicalWorkSourceType(sourceType).replace(/_/g, " "),
+      );
+    const sourceScopeCounts = new Map<string, number>();
+    for (const scope of sourceScopes) {
+      sourceScopeCounts.set(scope.sourceType, (sourceScopeCounts.get(scope.sourceType) || 0) + 1);
+    }
+    const sourceScopeSummary = [...sourceScopeCounts]
+      .map(([sourceType, count]) => `${count} ${sourceTypeLabel(sourceType)}`)
+      .join(" · ");
     const profiles = providerProfiles();
     const selectedId = state.appConfig.default_provider_profile || profiles[0]?.id || "";
     const dialog = document.createElement("dialog");
     dialog.className = "workflow-dialog work-metadata-llm-dialog";
-    const sample = works
+    const sample = sourceScopes
       .slice(0, 6)
-      .map((item: Any) => `<span>${esc(item.work)}</span>`)
+      .map(
+        (scope: Any) =>
+          `<span>${esc(scope.work)} · ${esc(sourceTypeLabel(scope.sourceType))}</span>`,
+      )
       .join("");
-    dialog.innerHTML = `<div class="workflow-dialog-header"><div class="workflow-heading"><span class="workflow-icon">${icon("spark")}</span><div><p>${esc(tr("works.metadata_workflow_kicker"))}</p><h2>${esc(tr("works.populate_metadata_llm"))}</h2><span>${esc(tr("works.populate_metadata_help"))}</span></div></div><button class="icon-btn workflow-close" data-close title="${esc(tr("ui.close"))}">×</button></div>
-    <ol class="workflow-steps"><li class="active"><span>1</span><b>${esc(tr("works.step_scope"))}</b></li><li class="active"><span>2</span><b>${esc(tr("works.step_provider"))}</b></li><li><span>3</span><b>${esc(tr("works.step_review"))}</b></li></ol>
-    <div class="workflow-form"><section class="workflow-section"><div class="workflow-section-copy"><b>${esc(tr("works.lookup_scope"))}</b><span>${esc(trf("works.lookup_scope_help", { count: works.length.toLocaleString() }))}</span></div><div class="work-metadata-scope"><strong>${works.length.toLocaleString()} ${esc(tr("dynamic.works"))}</strong><div class="work-metadata-sample">${sample}${works.length > 6 ? `<span>+${works.length - 6}</span>` : ""}</div><small>${esc(tr("works.metadata_fields_help"))}</small></div></section>
-    <section class="workflow-section"><div class="workflow-section-copy"><b>${esc(tr("works.provider_profile"))}</b><span>${esc(tr("works.provider_profile_help"))}</span></div><div class="workflow-provider-area">${workflowProviderSelectHtml(selectedId)}<button type="button" class="btn small" id="manageWorkProviders">${esc(tr("language.manage_providers"))}</button></div></section>
-    <section class="workflow-review-strip"><span class="workflow-summary-icon">${icon("history")}</span><span><b>${esc(tr("works.background_operation"))}</b><small>${esc(tr("works.background_operation_help"))}</small></span><span><b>${esc(tr("works.catalog_source"))}</b><small>${esc(tr("works.catalog_source_names"))}</small></span></section></div>
-    <div class="workflow-actions"><button class="btn" data-close>${esc(tr("ui.cancel"))}</button><button class="btn primary" id="startWorkMetadata" ${profiles.length ? "" : `disabled data-disabled-reason="${esc(tr("works.no_provider_profiles_help"))}"`}>${icon("spark")}${esc(tr("works.start_metadata_lookup"))}</button></div>`;
+    dialog.innerHTML = `<div class="workflow-dialog-header"><div class="workflow-heading"><span class="workflow-icon">${icon("spark")}</span><div><p>${esc(tr("works.metadata_workflow_kicker", "Source-aware metadata enrichment"))}</p><h2>${esc(tr("works.populate_metadata_llm", "Populate metadata with LLM"))}</h2><span>${esc(tr("works.populate_metadata_help", "DerridAI partitions mixed works by source type, uses appropriate public metadata sources, asks the selected LLM to identify reliable matches, then returns proposed metadata changes for review. Nothing is applied automatically."))}</span></div></div><button class="icon-btn workflow-close" data-close title="${esc(tr("ui.close", "Close"))}">×</button></div>
+    <ol class="workflow-steps"><li class="active"><span>1</span><b>${esc(tr("works.step_scope", "Works"))}</b></li><li class="active"><span>2</span><b>${esc(tr("works.step_provider", "Provider profile"))}</b></li><li><span>3</span><b>${esc(tr("works.step_review", "Review proposals"))}</b></li></ol>
+    <div class="workflow-form"><section class="workflow-section"><div class="workflow-section-copy"><b>${esc(tr("works.lookup_scope", "Lookup scope"))}</b><span>${esc(trf("works.lookup_scope_help", "Retrieve metadata for {count} source group(s).", { count: sourceScopes.length.toLocaleString() }))}</span></div><div class="work-metadata-scope"><strong>${esc(sourceScopeSummary)}</strong><div class="work-metadata-sample">${sample}${sourceScopes.length > 6 ? `<span>+${sourceScopes.length - 6}</span>` : ""}</div><small>${esc(tr("works.metadata_fields_help", "Only fields applicable to each source type are proposed. Source-derived metadata is preserved, and every change remains subject to review."))}</small></div></section>
+    <section class="workflow-section"><div class="workflow-section-copy"><b>${esc(tr("works.provider_profile", "Provider profile"))}</b><span>${esc(tr("works.provider_profile_help", "Uses the same configured provider profiles as RAG, PDF tools, and LLM review."))}</span></div><div class="workflow-provider-area">${workflowProviderSelectHtml(selectedId)}<button type="button" class="btn small" id="manageWorkProviders">${esc(tr("language.manage_providers", "Manage provider profiles"))}</button></div></section>
+    <section class="workflow-review-strip"><span class="workflow-summary-icon">${icon("history")}</span><span><b>${esc(tr("works.background_operation", "Background operation"))}</b><small>${esc(tr("works.background_operation_help", "You can leave the Works page. Open the completed operation to review and apply proposed changes."))}</small></span><span><b>${esc(tr("works.catalog_source", "Catalogue source"))}</b><small>Open Library · Google Books · Crossref</small></span></section></div>
+    <div class="workflow-actions"><button class="btn" data-close>${esc(tr("ui.cancel", "Cancel"))}</button><button class="btn primary" id="startWorkMetadata" ${profiles.length ? "" : `disabled data-disabled-reason="${esc(tr("works.no_provider_profiles_help", "Create an LLM provider profile before populating work metadata."))}"`}>${icon("spark")}${esc(tr("works.start_metadata_lookup", "Start background lookup"))}</button></div>`;
     document.body.appendChild(dialog);
     showAppModal(dialog);
     decorateDisabledControls(dialog);
@@ -280,9 +303,14 @@ export function createWorkDialogs(deps: Deps) {
         return toast(
           tr("works.provider_model_required"),
         );
-      const payload = works.map((item: Any) => ({
-        work: item.work,
-        current_metadata: representativeWorkMetadata(item.rows),
+      const payload = sourceScopes.map((scope: Any) => ({
+        work: scope.work,
+        source_type_scope: scope.sourceType,
+        current_metadata: {
+          ...representativeWorkMetadata(scope.rows),
+          source_type: scope.sourceType,
+          source_types: [scope.sourceType],
+        },
       }));
       const button = dialog.querySelector("#startWorkMetadata");
       button.disabled = true;
@@ -293,10 +321,10 @@ export function createWorkDialogs(deps: Deps) {
           body: JSON.stringify({
             task: "work_metadata",
             label:
-              works.length === 1
-                ? `${tr("works.populate_metadata_llm")} · ${works[0].work}`
-                : trf("works.populate_all_metadata_label", {
-                    count: works.length,
+              sourceScopes.length === 1
+                ? `${tr("works.populate_metadata_llm", "Populate metadata with LLM")} · ${sourceScopes[0].work}`
+                : trf("works.populate_all_metadata_label", "Populate metadata · {count} works", {
+                    count: sourceScopes.length,
                   }),
             provider_profile_id: profile.id,
             max_concurrent_requests: config.max_concurrent_requests,
@@ -316,9 +344,13 @@ export function createWorkDialogs(deps: Deps) {
         startJobPolling();
         close();
         toast(
-          trf("works.metadata_lookup_started", {
-            count: works.length,
-          }),
+          trf(
+            "works.metadata_lookup_started",
+            "Metadata lookup started for {count} source group(s).",
+            {
+              count: sourceScopes.length,
+            },
+          ),
         );
         if (state.view === "home")
           window.dispatchEvent(new CustomEvent("derridai:dashboard-refresh"));
@@ -340,11 +372,19 @@ export function createWorkDialogs(deps: Deps) {
     for (const proposal of proposals) {
       const item = map.get(String(proposal.work || ""));
       if (!item) continue;
-      const current = representativeWorkMetadata(item.rows);
+      const scopedRows = proposal.source_type_scope
+        ? item.rows.filter(
+            (row: Any) =>
+              workSourceType(row) === canonicalWorkSourceType(proposal.source_type_scope),
+          )
+        : item.rows;
+      if (!scopedRows.length) continue;
+      const scopedItem = { ...item, rows: scopedRows, count: scopedRows.length };
+      const current = representativeWorkMetadata(scopedRows);
       for (const [field, proposed] of Object.entries(proposal.changes || {}))
         flattened.push({
           proposal,
-          item,
+          item: scopedItem,
           field,
           current: current[field],
           proposed,
@@ -393,9 +433,10 @@ export function createWorkDialogs(deps: Deps) {
           const entry = flattened[index];
           const control = dialog.querySelector(`[data-work-proposal-value="${index}"]`);
           const value = parseProposedMetadataValue(control.value, entry.proposed);
-          if (!grouped.has(entry.item.work))
-            grouped.set(entry.item.work, { item: entry.item, changes: {}, rationale: {} });
-          const group = grouped.get(entry.item.work);
+          const groupKey = `${entry.item.work}::${entry.proposal.source_type_scope || "unknown"}`;
+          if (!grouped.has(groupKey))
+            grouped.set(groupKey, { item: entry.item, changes: {}, rationale: {} });
+          const group = grouped.get(groupKey);
           group.changes[entry.field] = value;
           group.rationale[entry.field] = entry.rationale;
         }

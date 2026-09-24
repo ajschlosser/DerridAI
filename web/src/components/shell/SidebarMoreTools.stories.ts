@@ -7,7 +7,7 @@ import type { SidebarNavEntry } from "./sidebarNav";
 const items: SidebarNavEntry[] = [
   {id: "list", label: "Records", icon: "list", active: false},
   {id: "pdf", label: "Corpus Builder", icon: "pdf", active: false},
-  {id: "vector", label: "Vector Stores", icon: "database", active: false},
+  {id: "vector", label: "Corpus Data", icon: "database", active: false},
 ];
 
 const meta = {

@@ -16,7 +16,7 @@ const collection = {
   last_synced_at: "2026-09-19T12:00:00.000Z",
   source_label: "browser workspace",
 };
-const meta = {title: "Vector Stores/Collection Hero", component: VectorCollectionHero, args: {collection, pendingCount: 12}} satisfies Meta<typeof VectorCollectionHero>;
+const meta = {title: "Corpus Data/Collection Hero", component: VectorCollectionHero, args: {collection, pendingCount: 12}} satisfies Meta<typeof VectorCollectionHero>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const ProtectedWithPending: Story = {};

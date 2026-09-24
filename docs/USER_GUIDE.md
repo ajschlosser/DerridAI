@@ -308,6 +308,14 @@ Supported/common fields include:
 - full citation
 - additional detected `document_*`, `publication_*`, and canonical work metadata fields
 
+**Populate metadata with LLM** and **Populate all metadata with LLM** are source-aware. A work containing multiple
+source types is partitioned before lookup so book records are not matched as though they were audio, image, video, or
+web records. Books use Open Library, Google Books, and Crossref; journal articles, chapters, and theses use scholarly
+metadata services such as Crossref and OpenAlex; webpages use declared page metadata; and unsupported media types retain
+their source-derived metadata rather than being sent to a book catalogue. Only fields applicable to the source type are
+proposed. The selected provider profile chooses the LLM used for candidate matching, and every proposal remains
+reviewable before it is copied across the scoped records.
+
 Mixed values are visibly identified. Array/object values are edited as JSON. Every applied field change is recorded in each associated record's `updates` history with `source: "work_metadata"`.
 
 Because the affected record fingerprints change, records previously synchronized to Chroma become `Pending` until the next upsert.
@@ -447,11 +455,12 @@ expanded, individual XML parts to 8 MiB, and expansion ratios to 200:1. Images
 must be single-frame PNG or JPEG, at most 20 million pixels. Extractor contract,
 Python/library versions, and source digest are saved with the asset.
 
-Audio is optional: install FFmpeg (including `ffprobe`) in the API environment
-and configure `OPENAI_API_KEY` for full-file Whisper transcription. The default
-API image does not install FFmpeg or whisperx. Install whisperx and its model
-runtime separately if speaker diarization is required, and configure `HF_TOKEN`
-where the diarization model requires access. Files must be at most 24 MiB and
+Audio is optional: the Docker API image includes FFmpeg (including `ffprobe`);
+local/non-Docker API environments must install FFmpeg separately. Configure
+`OPENAI_API_KEY` for full-file Whisper transcription. `whisperx` and its model
+runtime remain optional and must be installed separately if speaker diarization
+is required; configure `HF_TOKEN` where the diarization model requires access.
+Files must be at most 24 MiB and
 four hours. Unsupported codecs, probe timeouts, failed transcription, empty
 transcripts, and missing/invalid timestamps stop ingestion. Diarization failure
 preserves the transcript with a visible warning and no invented speaker.
@@ -473,6 +482,12 @@ The LLM returns each metadata field (or `null` when unsupported) together with a
 - Deterministic values (for example reviewer-defined document structure) stay selected; the LLM check either corroborates them or records a disagreement for review.
 - If the model reports more than the threshold in confidence for a speaker, position holder, target, stance, or proposition status but returns **no value**, the field is marked unresolved with reason `no_value_returned` rather than shown as an inference. Use **No supported value** to confirm a genuine absence.
 - Reviewer-confirmed values are never overwritten by later enrichment.
+- Confirmed metadata decisions are also stored in a rebuildable, derived semantic
+  reviewer-memory collection. Later enrichment may retrieve diverse similar
+  examples with similarity/MMR, filtered by field and schema version, as
+  advisory prompt context. The current Record's evidence remains authoritative;
+  semantic memory never auto-applies a value or replaces the exact text-hash
+  cache.
 - After a pass finishes, **Run another pass** is available in the review workspace immediately. You do not need to accept every record first. The next pass is given what the last pass inferred (working conventions on this build) and any reviewer decisions already made.
 - Enrichment is persisted record by record, not only at the end. The live operation reports the selected provider, model, pass, and processed-record count; a later run can target all records, an accepted/pending scope, or an explicit subset.
 - Each record keeps activity telemetry for human opens and saves, LLM reviews, enrichment passes, and the last provider/model that touched it. This is audit information, not a replacement for field-level provenance.
@@ -770,7 +785,18 @@ Backups are blocked while background operations are active so the archive is int
 
 **Load from backup** validates the manifest and ZIP member paths before making changes. The API first creates a logical rollback snapshot of the current Chroma database; if Chroma restoration fails, the current vector database is restored from that rollback. After a successful server restore, the browser IndexedDB workspace and current PDF are replaced and the UI reloads.
 
-The logical FAQ collection is exposed as `_response_cache` in DerridAI. Chroma itself does not permit collection names beginning with `_`, so its physical collection name is `derridai_response_cache` and carries system metadata identifying it as the response cache.
+**System Data** is the administrative surface for the response cache,
+progressive metadata exemplars, and durable application databases. Metadata
+exemplars are read-only, evidence-bound precedents derived from reviewed corpus
+metadata; the inspector shows field/value, review authority, source
+record/revision/build, schema/language, evidence block IDs/hash, and the bounded
+evidence-context window. Their current storage/index technology is an
+implementation detail and is not presented as a research corpus.
+
+The database browser exposes tables and rows through a backend-neutral contract;
+SQLite is the current adapter, not a UI-level requirement. Sensitive credentials,
+password material, and session tokens are redacted or protected from mutation.
+The former **Response Cache** route remains available as a compatibility alias.
 
 Full backups can contain credentials. Treat them as sensitive files.
 
