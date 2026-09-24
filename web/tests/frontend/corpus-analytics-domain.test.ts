@@ -133,7 +133,7 @@ describe("corpus analytics", () => {
     let builds = 0;
     const a = createCorpusAnalytics({
       allRows: () => [],
-      memoCorpus: (key, builder) => {
+      memoCorpus: (_key: string, builder: () => unknown) => {
         builds++;
         return builder();
       },
