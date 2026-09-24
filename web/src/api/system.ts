@@ -145,7 +145,8 @@ export const systemApi = {
       if (value === undefined || value === null || String(value).trim() === "") continue;
       query.set(key, String(value));
     }
-    const suffix = query.size ? `?${query.toString()}` : "";
+    const queryString = query.toString();
+    const suffix = queryString ? `?${queryString}` : "";
     return apiRequest<SystemMetadataExemplarPage>(`/api/system/data/metadata-exemplars${suffix}`);
   },
   systemDataRows: (database: string, table: string, limit = 50, offset = 0) => apiRequest<SystemDataTable & { database: string; rows: Array<Record<string, unknown>>; offset: number; limit: number }>(`/api/system/data/${encodeURIComponent(database)}/${encodeURIComponent(table)}?limit=${limit}&offset=${offset}`),
