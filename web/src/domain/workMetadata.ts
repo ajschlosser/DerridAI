@@ -40,11 +40,15 @@ export function canonicalWorkSourceType(value: unknown): string {
     .toLowerCase()
     .replace(/[- ]/g, "_");
   if (!normalized) return "unknown";
-  return SOURCE_TYPE_ALIASES[normalized] || (CANONICAL_SOURCE_TYPES.has(normalized) ? normalized : "unknown");
+  return (
+    SOURCE_TYPE_ALIASES[normalized] ||
+    (CANONICAL_SOURCE_TYPES.has(normalized) ? normalized : "unknown")
+  );
 }
 
 export function workSourceType(row: Loose): string {
-  const declared = row?.record?.source_type || row?.record?.document_type || row?.record?.media_kind;
+  const declared =
+    row?.record?.source_type || row?.record?.document_type || row?.record?.media_kind;
   if (declared) return canonicalWorkSourceType(declared);
   const mediaType = String(row?.record?.media_type || "").toLowerCase();
   if (mediaType.startsWith("audio/")) return "audio";
@@ -58,7 +62,9 @@ export function workSourceType(row: Loose): string {
   return "book";
 }
 
-export function workMetadataSourceGroups(item: Loose): Array<{ sourceType: string; rows: Loose[] }> {
+export function workMetadataSourceGroups(
+  item: Loose,
+): Array<{ sourceType: string; rows: Loose[] }> {
   const groups = new Map<string, Loose[]>();
   for (const row of item?.rows || []) {
     const sourceType = workSourceType(row);
