@@ -6,6 +6,27 @@ class being split into focused modules). It exists so another agent (Codex, Copi
 the current one stops. **Delete this file when both efforts are finished** -- git log and `docs/notes/` are the
 permanent record; keep only what a fresh session needs to pick up work safely.
 
+## API route decomposition
+
+Status: started from current `master` without changing HTTP paths or response contracts.
+
+The first slice moves authentication/users/roles, annotations, and i18n out of
+`api/app/main.py` into `api/app/routers/`. Shared request guards live in
+`api/app/dependencies.py`; the annotation router resolves the configured
+`ChromaStore` from `request.app.state`, so route modules do not import the
+application composition root. `main.py` remains responsible for constructing
+the FastAPI app and long-lived services, registering middleware, attaching
+application state, and including routers. This reduced `main.py` from roughly
+3,238 lines to roughly 2,833 lines in the first pass.
+
+Do not move the Corpus Builder/System/metadata-schema route families until the
+currently open work touching those areas is reconciled. After that, continue by
+domain: system/provider routes, jobs/RAG/LLM routes, admin backup/restore,
+source acquisition/PDF assets, corpus builds and metadata schemas, then
+vector-store/record/search routes. Keep routers independently importable; shared
+request/service access belongs in dependencies rather than imports from
+`main.py`.
+
 ## Corpus Builder generic media
 
 Status: rebuilt on current `master`.
