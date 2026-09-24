@@ -30,7 +30,6 @@ from starlette.background import BackgroundTask
 from .auth import SESSION_COOKIE, AuthUser, auth_store, role_has_capability
 from .chroma_store import ChromaStore
 from .config import APP_VERSION, app_version_label, settings
-from .content_filter import enforce_researcher_text
 from .corpus_builder import CORPUS_PROFILES, pdf_corpus_builds, pdf_corpus_repository
 from .corpus_review_state import _queue_counts
 from .corpus_reviewer_helpers import _present_for_reviewer
