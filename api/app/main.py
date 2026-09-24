@@ -93,6 +93,7 @@ from .routers import (
     auth_router,
     i18n_router,
     llm_router,
+    records_router,
     stores_router,
     system_router,
 )
@@ -273,6 +274,7 @@ app.include_router(i18n_router)
 app.include_router(system_router)
 app.include_router(llm_router)
 app.include_router(stores_router)
+app.include_router(records_router)
 
 llm_jobs = LLMJobManager(max_workers=64)
 llm_tool_jobs = LLMToolJobManager(store)
