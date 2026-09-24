@@ -3,13 +3,14 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import cast
 
 from fastapi import HTTPException, Request
 
 from .auth import AuthUser
 from .chroma_store import ChromaStore
-from .jobs import RAGJobManager
+from .jobs import LLMJobManager, LLMToolJobManager, RAGJobManager, UpsertJobManager
 
 
 def request_user(request: Request) -> AuthUser:
@@ -41,9 +42,24 @@ def get_store(request: Request) -> ChromaStore:
     return cast(ChromaStore, store)
 
 
+@dataclass(frozen=True, slots=True)
+class JobManagers:
+    """Long-lived background job managers owned by the FastAPI application."""
+
+    llm: LLMJobManager
+    llm_tools: LLMToolJobManager
+    rag: RAGJobManager
+    upsert: UpsertJobManager
+
+
+def get_job_managers(request: Request) -> JobManagers:
+    """Resolve the application-owned background job managers."""
+    managers = getattr(request.app.state, "job_managers", None)
+    if managers is None:
+        raise RuntimeError("Application job managers are not initialized.")
+    return cast(JobManagers, managers)
+
+
 def get_rag_jobs(request: Request) -> RAGJobManager:
-    """Resolve the application-owned RAG job manager."""
-    manager = getattr(request.app.state, "rag_jobs", None)
-    if manager is None:
-        raise RuntimeError("Application RAG job manager is not initialized.")
-    return cast(RAGJobManager, manager)
+    """Resolve the RAG manager for routes that need only that service."""
+    return get_job_managers(request).rag
