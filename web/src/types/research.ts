@@ -125,6 +125,9 @@ export type ResearchConfig = {
   auto_grade_provider_profile_id: string;
   provider_profile_id: string;
   skip_retrieval: boolean;
+  use_prior_response_memory: boolean;
+  use_prior_claim_memory: boolean;
+  memory_profile_id: string;
   prompt: string;
   instructions: string;
   history?: Array<Record<string, unknown>>;

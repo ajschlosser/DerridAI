@@ -105,8 +105,9 @@ class SchemaStore:
         new = proposed.model_dump(mode="json", exclude={"id", "schema_version"})
         if old == new:
             return previous.schema_version
-        old_fields = {field.name for field in previous.fields}
-        new_fields = {field.name for field in proposed.fields}
+        # A deliberate rename that retains field_id is a compatible edit.
+        old_fields = {field.field_id for field in previous.fields}
+        new_fields = {field.field_id for field in proposed.fields}
         major, minor, patch = (int(value) for value in previous.schema_version.split("."))
         if old_fields - new_fields:
             return f"{major + 1}.0.0"

@@ -40,7 +40,11 @@ const dirty = computed(() => JSON.stringify(draft.value) !== savedHash.value);
 const t = (key: string, fallback: string) => i18n.t(`schemas.${key}`, fallback);
 
 function load(schema: MetadataSchema, fresh = false) {
-  draft.value = JSON.parse(JSON.stringify(schema));
+  const next = JSON.parse(JSON.stringify(schema)) as MetadataSchema;
+  for (const field of next.fields) {
+    field.retrieval_profile ||= blankField().retrieval_profile;
+  }
+  draft.value = next;
   savedHash.value = JSON.stringify(draft.value);
   isNew.value = fresh;
   error.value = "";
@@ -411,6 +415,13 @@ defineExpose({ select, draft });
                   <option v-for="key in groupKeys" :key="key" :value="key">{{ key }}</option>
                 </select></label
               >
+              <fieldset class="schema-field schema-memory">
+                <legend>{{ t("memory", "Memory & retrieval") }}</legend>
+                <label class="check"><input v-model="item.field.retrieval_profile.enabled" type="checkbox" /><span>{{ t("memory_enabled", "Use reviewed precedents") }}</span></label>
+                <label class="check"><input v-model="item.field.retrieval_profile.include_corrections" type="checkbox" /><span>{{ t("memory_corrections", "Include corrections") }}</span></label>
+                <label class="check"><input v-model="item.field.retrieval_profile.include_confirmed_absence" type="checkbox" /><span>{{ t("memory_absence", "Include confirmed absence") }}</span></label>
+                <label><span>{{ t("memory_limit", "Maximum precedents") }}</span><input v-model.number="item.field.retrieval_profile.max_items" class="control" type="number" min="0" max="50" /></label>
+              </fieldset>
             </div>
             <label class="schema-field"
               ><span>{{ t("instruction", "What the model should look for") }}</span

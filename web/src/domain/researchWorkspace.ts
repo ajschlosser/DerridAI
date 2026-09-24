@@ -189,6 +189,9 @@ export function createResearchWorkspace(deps: Deps) {
       "auto_grade_provider_profile_id",
       "provider_profile_id",
       "skip_retrieval",
+      "use_prior_response_memory",
+      "use_prior_claim_memory",
+      "memory_profile_id",
       "prompt",
       "instructions",
     ]);
@@ -379,6 +382,9 @@ export function createResearchWorkspace(deps: Deps) {
         source_collection: cfg.source_collection || "",
         selected_evidence: selectedPayload,
         skip_retrieval: skipRetrieval,
+        use_prior_response_memory: Boolean(cfg.use_prior_response_memory),
+        use_prior_claim_memory: Boolean(cfg.use_prior_claim_memory),
+        memory_profile_id: cfg.memory_profile_id || null,
         locales: cfg.locales,
         search_types: cfg.search_types,
         k: cfg.k,
@@ -478,6 +484,9 @@ export function createResearchWorkspace(deps: Deps) {
       "auto_grade_provider_profile_id",
       "provider_profile_id",
       "skip_retrieval",
+      "use_prior_response_memory",
+      "use_prior_claim_memory",
+      "memory_profile_id",
     ];
     const patch = Object.fromEntries(
       keys.filter((key) => request[key] !== undefined).map((key) => [key, request[key]]),

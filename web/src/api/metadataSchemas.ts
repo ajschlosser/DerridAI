@@ -1,12 +1,18 @@
 import { apiRequest } from "./http";
 
 export type SchemaFieldType = "text" | "number" | "boolean" | "choice" | "list";
+export interface RetrievalProfile {
+  enabled: boolean; scope: "same_schema" | "same_field" | "all_reviewed"; max_items: number;
+  min_similarity: number; include_corrections: boolean; include_confirmed_absence: boolean;
+  use_for_metadata_enrichment: boolean; use_for_response_memory: boolean; use_for_claim_memory: boolean;
+}
 export interface SchemaValue { value: string; definition: string }
 export interface SchemaField {
-  name: string; label: string; type: SchemaFieldType; group: string; values: SchemaValue[]; strict: boolean;
+  field_id: string; name: string; semantic_compatibility_id?: string | null; label: string; type: SchemaFieldType; group: string; values: SchemaValue[]; strict: boolean;
   instruction: string; definitions_heading: string; evidence: boolean; assess: boolean; review: boolean;
+  retrieval_profile: RetrievalProfile;
 }
-export interface SchemaGroup { key: string; label: string; intro: string; fields_heading: string; notes: string[]; trailer: string; footer: string }
+export interface SchemaGroup { key: string; label: string; intro: string; fields_heading: string; notes: string[]; trailer: string; footer: string; retrieval_profile?: RetrievalProfile | null }
 export interface MetadataSchema { format_version: number; schema_version?: string; id: string; name: string; description: string; groups: SchemaGroup[]; fields: SchemaField[] }
 export interface SchemaSummary { id: string; name: string; description: string; schema_version?: string; builtin: boolean; field_count: number; groups: string[]; hash: string }
 export interface SchemaPreview { prompt: string; answer_schema: unknown; ran: boolean; answer?: unknown; seconds?: number }
@@ -28,5 +34,5 @@ export const metadataSchemasApi = {
 };
 
 export function blankField(group = CORE_GROUP): SchemaField {
-  return { name: "", label: "", type: "text", group, values: [], strict: false, instruction: "", definitions_heading: "", evidence: false, assess: false, review: false };
+  return { field_id: "", name: "", label: "", type: "text", group, values: [], strict: false, instruction: "", definitions_heading: "", evidence: false, assess: false, review: false, retrieval_profile: { enabled: true, scope: "same_field", max_items: 6, min_similarity: 0, include_corrections: true, include_confirmed_absence: true, use_for_metadata_enrichment: true, use_for_response_memory: false, use_for_claim_memory: false } };
 }

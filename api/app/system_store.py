@@ -142,6 +142,46 @@ class SystemStore:
         with self._lock:
             return self.repository.clear_adjudication_cache(record_id=record_id, field=field)
 
+    def put_memory_binding(self, payload: dict[str, Any]) -> None:
+        with self._lock:
+            self.repository.put_memory_binding(payload)
+
+    def list_memory_bindings(self, **filters: Any) -> list[dict[str, Any]]:
+        with self._lock:
+            return self.repository.list_memory_bindings(**filters)
+
+    def mark_semantic_memory_dirty(self, projection: str, **kwargs: Any) -> str:
+        with self._lock:
+            return self.repository.mark_semantic_memory_dirty(projection, **kwargs)
+
+    def list_semantic_memory_dirty(self, projection: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+        with self._lock:
+            return self.repository.list_semantic_memory_dirty(projection, limit)
+
+    def put_generated_claim(self, payload: dict[str, Any]) -> None:
+        with self._lock:
+            self.repository.put_generated_claim(payload)
+
+    def list_generated_claims(self, **filters: Any) -> list[dict[str, Any]]:
+        with self._lock:
+            return self.repository.list_generated_claims(**filters)
+
+    def put_response_memory(self, payload: dict[str, Any]) -> None:
+        with self._lock:
+            self.repository.put_response_memory(payload)
+
+    def list_response_memory(self, **filters: Any) -> list[dict[str, Any]]:
+        with self._lock:
+            return self.repository.list_response_memory(**filters)
+
+    def put_claim_support_binding(self, payload: dict[str, Any]) -> None:
+        with self._lock:
+            self.repository.put_claim_support_binding(payload)
+
+    def list_claim_support_bindings(self, claim_id: str, *, owner: str | None = None) -> list[dict[str, Any]]:
+        with self._lock:
+            return self.repository.list_claim_support_bindings(claim_id, owner=owner)
+
     def researcher_profiles(self, *, include_secrets: bool = False) -> list[dict[str, Any]]:
         with self._lock:
             profiles = copy.deepcopy(self.repository.list_provider_profiles())

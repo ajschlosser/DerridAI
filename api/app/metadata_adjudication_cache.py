@@ -36,7 +36,11 @@ def remember(
     field: str,
     value: Any,
     schema_version: str = "",
+    decision: str = "value",
+    field_id: str | None = None,
 ) -> None:
+    if decision not in {"value", "absence", "correction"}:
+        raise ValueError("Unsupported adjudication decision.")
     cardinality = "list" if isinstance(value, list) else "single"
     key, digest = cache_key(
         record_id=record_id,
@@ -48,6 +52,8 @@ def remember(
     prior = system_store.get_adjudication_cache(key) or {}
     prior_values = list(prior.get("prior_values") or [])
     values = value if cardinality == "list" else [value]
+    if decision == "absence":
+        values = []
     for item in values:
         if item is None:
             continue
@@ -59,6 +65,8 @@ def remember(
         "prior_values": prior_values[-50:],
         "cardinality": cardinality,
         "schema_version": schema_version,
+        "decision": decision,
+        "field_id": field_id or field,
     }
     system_store.put_adjudication_cache(
         key, record_id, field, cardinality, digest, payload

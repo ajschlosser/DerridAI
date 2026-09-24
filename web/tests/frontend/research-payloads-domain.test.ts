@@ -56,6 +56,9 @@ describe("research payloads", () => {
       response_language: "auto",
       bind_citations: false,
       include_works_cited: true,
+      use_prior_response_memory: false,
+      use_prior_claim_memory: false,
+      memory_profile_id: "",
       fetch_k: 500,
       lambda_mult: 0.7,
     });

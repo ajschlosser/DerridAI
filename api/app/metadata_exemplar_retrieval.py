@@ -57,6 +57,7 @@ def _projection(exemplar: dict[str, Any], scope_id: str) -> dict[str, Any]:
         "record_id": str(exemplar.get("record_id") or ""),
         "record_revision": exemplar.get("record_revision"),
         "source_document_id": str(exemplar.get("source_document_id") or ""),
+        "field_id": str(exemplar.get("field_id") or ""),
         "field_name": str(exemplar.get("field_name") or ""),
         "field_value_json": _json_value(exemplar.get("field_value")),
         "rejected_value_json": _json_value(exemplar.get("rejected_value")) if exemplar.get("rejected_value") is not None else "",
@@ -107,6 +108,14 @@ def _cosine(a: Any, b: Any) -> float:
     na = math.sqrt(sum(float(x) * float(x) for x in left))
     nb = math.sqrt(sum(float(y) * float(y) for y in right))
     return dot / (na * nb) if na and nb else 0.0
+
+
+def _distance_similarity(value: Any) -> float:
+    try:
+        distance = max(0.0, float(value))
+    except (TypeError, ValueError):
+        return 0.0
+    return 1.0 / (1.0 + distance)
 
 
 def _mmr(
@@ -385,6 +394,7 @@ class ChromaMetadataExemplarIndex:
         schema_version: str = "",
         language: str = "",
         field_limits: dict[str, int] | None = None,
+        field_min_similarity: dict[str, float] | None = None,
         packet_char_budget: int = DEFAULT_PACKET_CHAR_BUDGET,
         fetch_k: int = DEFAULT_FETCH_K,
         exclude_record_id: str = "",
@@ -474,6 +484,10 @@ class ChromaMetadataExemplarIndex:
                         not exclude_record_id
                         or str(canonical[row["id"]].get("record_id") or "")
                         != str(exclude_record_id)
+                    )
+                    and (
+                        _distance_similarity(row.get("distance"))
+                        >= max(0.0, min(1.0, float((field_min_similarity or {}).get(field, 0.0))))
                     )
                 ]
                 return field, _mmr(candidates, limit), len(candidates)

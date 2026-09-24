@@ -40,6 +40,9 @@ function sync(){
     evidence_record_char_limit:props.config.evidence_record_char_limit,evidence_total_char_limit:props.config.evidence_total_char_limit,
     bind_citations:props.config.bind_citations,include_works_cited:props.config.include_works_cited,auto_grade:props.config.auto_grade,
     auto_grade_provider_profile_id:props.config.auto_grade_provider_profile_id,
+    use_prior_response_memory:props.config.use_prior_response_memory,
+    use_prior_claim_memory:props.config.use_prior_claim_memory,
+    memory_profile_id:props.config.memory_profile_id,
   };
   generationDraft.value={...props.generation};
   modelDraft.value=props.model||"";
@@ -54,7 +57,7 @@ function toggleList(key:"locales"|"search_types",value:string,checked:boolean){
 function resetSection(section:SettingsSection){
   const source=props.config;
   if(section==="retrieval")Object.assign(draft.value,{locales:[...(source.locales||[])],search_types:[...(source.search_types||[])],k:source.k,fetch_k:source.fetch_k,lambda_mult:source.lambda_mult,rrf_k:source.rrf_k,rerank_top_n:source.rerank_top_n,reranker:source.reranker,cross_encoder_model:source.cross_encoder_model,query_decomposition:source.query_decomposition,query_decomposition_num_predict:source.query_decomposition_num_predict});
-  else if(section==="evidence")Object.assign(draft.value,{evidence_record_char_limit:source.evidence_record_char_limit,evidence_total_char_limit:source.evidence_total_char_limit,bind_citations:source.bind_citations,include_works_cited:source.include_works_cited,auto_grade:source.auto_grade,auto_grade_provider_profile_id:source.auto_grade_provider_profile_id});
+  else if(section==="evidence")Object.assign(draft.value,{evidence_record_char_limit:source.evidence_record_char_limit,evidence_total_char_limit:source.evidence_total_char_limit,bind_citations:source.bind_citations,include_works_cited:source.include_works_cited,auto_grade:source.auto_grade,auto_grade_provider_profile_id:source.auto_grade_provider_profile_id,use_prior_response_memory:source.use_prior_response_memory,use_prior_claim_memory:source.use_prior_claim_memory,memory_profile_id:source.memory_profile_id});
   else{generationDraft.value={...props.generation};modelDraft.value=props.model||"";const raw=props.generation.extra_options;extraOptions.value=typeof raw==="string"?raw:JSON.stringify(raw||{},null,2)}
 }
 function apply(){
@@ -152,6 +155,8 @@ defineExpose({open,close});
                 <div class="research-settings-stack">
                   <label class="research-toggle-setting"><input v-model="draft.bind_citations" type="checkbox"><span><b>{{i18n.t('research.bind_citations')}}</b><small>{{i18n.t('research.bind_citations_help')}}</small></span></label>
                   <label class="research-toggle-setting"><input v-model="draft.include_works_cited" type="checkbox"><span><b>{{i18n.t('research.include_works_cited')}}</b><small>{{i18n.t('research.works_cited_help')}}</small></span></label>
+                  <label class="research-toggle-setting"><input v-model="draft.use_prior_response_memory" type="checkbox"><span><b>{{i18n.t('research.use_prior_response_memory')}}</b><small>{{i18n.t('research.use_prior_response_memory_help')}}</small></span></label>
+                  <label class="research-toggle-setting"><input v-model="draft.use_prior_claim_memory" type="checkbox"><span><b>{{i18n.t('research.use_prior_claim_memory')}}</b><small>{{i18n.t('research.use_prior_claim_memory_help')}}</small></span></label>
                 </div>
               </fieldset>
               <fieldset class="research-settings-card">
