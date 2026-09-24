@@ -19,7 +19,10 @@ sys.modules.setdefault("chromadb", types.SimpleNamespace())
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "api"))
 
 from app import route_policy  # noqa: E402
-from app.route_policy import is_public_language_route, non_admin_route_allowed  # noqa: E402
+from app.route_policy import (  # noqa: E402
+    is_public_language_route,
+    non_admin_route_allowed,
+)
 from app.routers import health as health_routes  # noqa: E402
 
 
