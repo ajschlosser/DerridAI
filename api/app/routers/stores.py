@@ -11,7 +11,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from ..chroma_store import ChromaStore, StoreAlreadyExistsError
 from ..config import settings
 from ..content_filter import enforce_researcher_text
-from ..dependencies import get_store, request_user, require_admin
+from ..dependencies import get_store as store_dependency
+from ..dependencies import request_user, require_admin
 from ..models import (
     BulkUpsert,
     DeriveLanguageStoresRequest,
@@ -54,7 +55,7 @@ def _stamp_record_activity(record: dict[str, Any], username: str) -> dict[str, A
 
 
 @router.get("/api/stores")
-def list_stores(store: ChromaStore = Depends(get_store)) -> dict[str, Any]:
+def list_stores(store: ChromaStore = Depends(store_dependency)) -> dict[str, Any]:
     try:
         return {"stores": store.list_stores()}
     except Exception as exc:
@@ -64,7 +65,7 @@ def list_stores(store: ChromaStore = Depends(get_store)) -> dict[str, Any]:
 @router.post("/api/stores")
 def create_store(
     body: StoreCreate,
-    store: ChromaStore = Depends(get_store),
+    store: ChromaStore = Depends(store_dependency),
 ) -> dict[str, Any]:
     try:
         return store.create_store(
@@ -91,7 +92,7 @@ def create_store(
 @router.post("/api/stores/preflight/embedding")
 def preflight_embedding(
     body: EmbeddingPreflightRequest,
-    store: ChromaStore = Depends(get_store),
+    store: ChromaStore = Depends(store_dependency),
 ) -> dict[str, Any]:
     try:
         return store.preflight_embedding(
@@ -105,9 +106,9 @@ def preflight_embedding(
 
 
 @router.get("/api/stores/{store_name}")
-def get_store_metadata(
+def get_store(
     store_name: str,
-    store: ChromaStore = Depends(get_store),
+    store: ChromaStore = Depends(store_dependency),
 ) -> dict[str, Any]:
     try:
         return store.get_store(store_name)
@@ -119,7 +120,7 @@ def get_store_metadata(
 def update_store_embedding(
     store_name: str,
     body: StoreEmbeddingUpdate,
-    store: ChromaStore = Depends(get_store),
+    store: ChromaStore = Depends(store_dependency),
 ) -> dict[str, Any]:
     try:
         return store.set_embedding(
@@ -135,7 +136,7 @@ def update_store_embedding(
 def update_store_languages(
     store_name: str,
     body: StoreLanguageUpdate,
-    store: ChromaStore = Depends(get_store),
+    store: ChromaStore = Depends(store_dependency),
 ) -> dict[str, Any]:
     try:
         return store.set_language_tags(
@@ -151,7 +152,7 @@ def update_store_languages(
 def update_store_protection(
     store_name: str,
     body: StoreProtectionUpdate,
-    store: ChromaStore = Depends(get_store),
+    store: ChromaStore = Depends(store_dependency),
 ) -> dict[str, Any]:
     try:
         return store.set_protection(store_name, body.protected)
@@ -163,7 +164,7 @@ def update_store_protection(
 def derive_language_stores(
     store_name: str,
     body: DeriveLanguageStoresRequest,
-    store: ChromaStore = Depends(get_store),
+    store: ChromaStore = Depends(store_dependency),
 ) -> dict[str, Any]:
     try:
         return store.derive_language_stores(
@@ -180,7 +181,7 @@ def derive_language_stores(
 def delete_store(
     store_name: str,
     force: bool = Query(default=False),
-    store: ChromaStore = Depends(get_store),
+    store: ChromaStore = Depends(store_dependency),
 ) -> dict[str, Any]:
     try:
         store.delete_store(store_name, force=force)
@@ -195,7 +196,7 @@ def delete_store(
 def delete_store_work(
     store_name: str,
     work: str,
-    store: ChromaStore = Depends(get_store),
+    store: ChromaStore = Depends(store_dependency),
 ) -> dict[str, Any]:
     try:
         return store.delete_work_with_language_sync(store_name, work)
@@ -208,7 +209,7 @@ def get_response_cache_records(
     limit: int = Query(default=50, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
     query: str | None = Query(default=None),
-    store: ChromaStore = Depends(get_store),
+    store: ChromaStore = Depends(store_dependency),
 ) -> dict[str, Any]:
     try:
         return store.get_response_cache_records(
@@ -231,7 +232,7 @@ def get_records(
     sort_dir: str = Query(default="asc"),
     filters: str | None = Query(default=None),
     include_updates: bool = Query(default=False),
-    store: ChromaStore = Depends(get_store),
+    store: ChromaStore = Depends(store_dependency),
 ) -> dict[str, Any]:
     try:
         user = request_user(request)
@@ -275,7 +276,7 @@ def get_records(
 @router.get("/api/stores/{store_name}/works")
 def list_store_works(
     store_name: str,
-    store: ChromaStore = Depends(get_store),
+    store: ChromaStore = Depends(store_dependency),
 ) -> dict[str, Any]:
     try:
         return {
@@ -290,7 +291,7 @@ def list_store_works(
 def record_status(
     store_name: str,
     body: RecordStatusRequest,
-    store: ChromaStore = Depends(get_store),
+    store: ChromaStore = Depends(store_dependency),
 ) -> dict[str, Any]:
     try:
         return {"existing_ids": store.existing_ids(store_name, body.ids)}
@@ -302,7 +303,7 @@ def record_status(
 def store_drift(
     store_name: str,
     body: StoreDriftRequest,
-    store: ChromaStore = Depends(get_store),
+    store: ChromaStore = Depends(store_dependency),
 ) -> dict[str, Any]:
     try:
         return store.drift_report(
@@ -317,7 +318,7 @@ def store_drift(
 def export_store(
     store_name: str,
     work: str | None = Query(default=None),
-    store: ChromaStore = Depends(get_store),
+    store: ChromaStore = Depends(store_dependency),
 ) -> dict[str, Any]:
     try:
         return {
@@ -335,7 +336,7 @@ def get_record(
     chroma_id: str,
     request: Request,
     include_updates: bool = Query(default=False),
-    store: ChromaStore = Depends(get_store),
+    store: ChromaStore = Depends(store_dependency),
 ) -> dict[str, Any]:
     try:
         user = request_user(request)
@@ -364,7 +365,7 @@ def create_record(
     store_name: str,
     body: RecordUpsert,
     request: Request,
-    store: ChromaStore = Depends(get_store),
+    store: ChromaStore = Depends(store_dependency),
 ) -> dict[str, Any]:
     try:
         user = require_admin(request)
@@ -390,7 +391,7 @@ def patch_record(
     chroma_id: str,
     body: StoredRecordPatch,
     request: Request,
-    store: ChromaStore = Depends(get_store),
+    store: ChromaStore = Depends(store_dependency),
 ) -> dict[str, Any]:
     try:
         user = require_admin(request)
@@ -428,7 +429,7 @@ def patch_record(
 def delete_record(
     store_name: str,
     chroma_id: str,
-    store: ChromaStore = Depends(get_store),
+    store: ChromaStore = Depends(store_dependency),
 ) -> dict[str, Any]:
     try:
         return store.delete_record_with_language_sync(store_name, chroma_id)
@@ -441,7 +442,7 @@ def bulk_upsert(
     store_name: str,
     body: BulkUpsert,
     request: Request,
-    store: ChromaStore = Depends(get_store),
+    store: ChromaStore = Depends(store_dependency),
 ) -> dict[str, Any]:
     try:
         user = require_admin(request)
@@ -501,7 +502,7 @@ def search(
     store_name: str,
     body: SearchRequest,
     request: Request,
-    store: ChromaStore = Depends(get_store),
+    store: ChromaStore = Depends(store_dependency),
 ) -> dict[str, Any]:
     try:
         user = request_user(request)
