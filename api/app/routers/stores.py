@@ -11,8 +11,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from ..chroma_store import ChromaStore, StoreAlreadyExistsError
 from ..config import settings
 from ..content_filter import enforce_researcher_text
-from ..dependencies import get_store as store_dependency
-from ..dependencies import request_user, require_admin
+from ..dependencies import (
+    get_store as store_dependency,
+    request_user,
+    require_admin,
+)
 from ..models import (
     BulkUpsert,
     DeriveLanguageStoresRequest,
