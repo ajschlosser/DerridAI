@@ -10,6 +10,7 @@ from app.routers import (
     auth_router,
     i18n_router,
     llm_router,
+    records_router,
     stores_router,
     system_router,
 )
@@ -95,6 +96,11 @@ def test_store_router_preserves_existing_http_contract():
         ("DELETE", "/api/stores/{store_name}"),
         ("DELETE", "/api/stores/{store_name}/works/{work:path}"),
         ("GET", "/api/response-cache/records"),
+    }
+
+
+def test_record_router_preserves_existing_http_contract():
+    assert _routes(records_router) == {
         ("GET", "/api/stores/{store_name}/records"),
         ("GET", "/api/stores/{store_name}/works"),
         ("POST", "/api/stores/{store_name}/records/status"),
