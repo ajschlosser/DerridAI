@@ -70,7 +70,7 @@ class MetadataEnrichmentExecutionMixin:
         def _adaptive_family_should_skip(self, build_id: str | None, family: str, request: dict[str, Any]) -> tuple[bool, str]: ...
         def _append_warning(self, build_id: str, message: str) -> None: ...
         def _chat_json(self, request: dict[str, Any], prompt: str, *, response_model: type[BaseModel], max_tokens: int = ..., schema_name: str = ..., attempts: int = ..., build_id: str = ...) -> dict[str, Any]: ...
-        def _editorial_memory(self, build_id: str, current_record: dict[str, Any] | None = None, *, exclude_record_id: str = "", use_global: bool = True) -> dict[str, Any]: ...
+        def _editorial_memory(self, build_id: str, current_record: dict[str, Any] | None = None, *, exclude_record_id: str = "", use_global: bool = True, use_progressive: bool = True) -> dict[str, Any]: ...
         def _increment_metric(self, build_id: str, key: str, amount: int = 1) -> None: ...
         def _latest_runtime_request(self, build_id: str, fallback: dict[str, Any]) -> dict[str, Any]: ...
         def _note_suspension(self, model: str, field: str, suspended: bool, reviews: int, accepted: int, build_id: str, run_id: str) -> None: ...
@@ -116,21 +116,84 @@ class MetadataEnrichmentExecutionMixin:
         off = experiment.disabled(request)
         _apply_manifest_metadata(record, manifest)
         apply_metadata_constraints(record)
-        editorial_memory = self._editorial_memory(build_id, record, exclude_record_id=str(record.get("record_id") or ""), use_global="cross_build_learning" not in off) if build_id else {"conventions": {}, "examples": {}}
+        editorial_memory = self._editorial_memory(
+            build_id,
+            record,
+            exclude_record_id=str(record.get("record_id") or ""),
+            use_global="cross_build_learning" not in off,
+            use_progressive=(
+                "progressive_metadata_rag" not in off
+                and "reviewer_conventions" not in off
+            ),
+        ) if build_id else {"conventions": {}, "examples": {}}
         if "reviewer_conventions" in off:
             editorial_memory = {**editorial_memory, "conventions": {}, "examples": {}}
         if "rejection_memory" in off:
             editorial_memory = {**editorial_memory, "pass_learning": None}
         editorial_context = editorial_memory.get("conventions", {}) if isinstance(editorial_memory, dict) else {}
         editorial_examples = editorial_memory.get("examples", {}) if isinstance(editorial_memory, dict) else {}
+        example_count = sum(
+            len(values)
+            for values in editorial_examples.values()
+            if isinstance(values, list)
+        )
+        example_token_estimate = int(
+            editorial_memory.get("example_token_estimate") or 0
+        ) if isinstance(editorial_memory, dict) else 0
+        progressive_retrieval = (
+            editorial_memory.get("progressive_retrieval")
+            if isinstance(editorial_memory, dict)
+            and isinstance(editorial_memory.get("progressive_retrieval"), dict)
+            else {}
+        )
         record["editorial_memory_used"] = {
             "convention_fields": sorted(editorial_context.keys()),
             "example_record_ids": sorted({str(item.get("record_id") or "") for values in editorial_examples.values() if isinstance(values, list) for item in values if isinstance(item, dict) and item.get("record_id")}),
+            "example_exemplar_ids": sorted({str(item.get("exemplar_id") or "") for values in editorial_examples.values() if isinstance(values, list) for item in values if isinstance(item, dict) and item.get("exemplar_id")}),
+            "example_count": example_count,
+            "packet_token_estimate": example_token_estimate,
+            "progressive_retrieval": {
+                key: progressive_retrieval[key]
+                for key in (
+                    "query_ms",
+                    "search_ms",
+                    "select_ms",
+                    "sync_ms",
+                    "total_ms",
+                    "examples_considered",
+                    "examples_used",
+                    "packet_chars",
+                    "fields_served",
+                    "fallback_reason",
+                )
+                if key in progressive_retrieval
+            },
         }
-        if build_id:
-            example_count = sum(len(values) for values in editorial_examples.values() if isinstance(values, list))
-            if example_count:
-                self._increment_metric(build_id, "editorial_examples_used", example_count)
+        if build_id and progressive_retrieval:
+            numeric_metrics = {
+                "metadata_rag_query_ms": progressive_retrieval.get("query_ms"),
+                "metadata_rag_search_ms": progressive_retrieval.get("search_ms"),
+                "metadata_rag_select_ms": progressive_retrieval.get("select_ms"),
+                "metadata_rag_sync_ms": progressive_retrieval.get("sync_ms"),
+                "metadata_rag_total_ms": progressive_retrieval.get("total_ms"),
+                "metadata_rag_examples_considered": progressive_retrieval.get("examples_considered"),
+            }
+            for metric, value in numeric_metrics.items():
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    self._increment_metric(build_id, metric, int(value))
+            fields_served = progressive_retrieval.get("fields_served")
+            if isinstance(fields_served, list):
+                self._increment_metric(build_id, "metadata_rag_fields_served", len(fields_served))
+            if progressive_retrieval.get("fallback_reason"):
+                self._increment_metric(build_id, "metadata_rag_fallbacks", 1)
+        if build_id and example_count:
+            self._increment_metric(build_id, "editorial_examples_used", example_count)
+            self._increment_metric(build_id, "metadata_rag_examples_used", example_count)
+            self._increment_metric(
+                build_id,
+                "metadata_rag_packet_tokens",
+                example_token_estimate,
+            )
         schema = self._schema_for(build_id)
         profile = {**CORPUS_PROFILES.get(profile_id, CORPUS_PROFILES[PROFILE_VERSION]), "review_metadata_fields": schema.review_fields()}
         required_metadata_fields = list(profile.get("required_metadata_fields") or [])
@@ -218,9 +281,21 @@ class MetadataEnrichmentExecutionMixin:
             field for field, info in human_status.items()
             if isinstance(info, dict) and str(info.get("status") or "") in {"human_confirmed", "human_override"}
         )
-        base_context = f"""Document manifest: {json.dumps(manifest, ensure_ascii=False)}
+        def base_context_for(group_fields: list[str]) -> str:
+            # Each LLM family receives only precedents for fields it can actually
+            # return. This preserves the global exemplar budget while avoiding
+            # repeated prompt-prefill cost from unrelated metadata families.
+            relevant_examples = {
+                field: editorial_examples[field]
+                for field in group_fields
+                if field in editorial_examples
+                and isinstance(editorial_examples.get(field), list)
+                and editorial_examples[field]
+            }
+            return f"""Document manifest: {json.dumps(manifest, ensure_ascii=False)}
 Build-local editorial conventions confirmed on at least two other records (advisory context only; do not copy unless supported here): {json.dumps(editorial_context, ensure_ascii=False)}
-Relevant human-confirmed examples retrieved from this build (few-shot guidance only; source evidence in THIS record remains authoritative): {json.dumps(editorial_examples, ensure_ascii=False)}
+Relevant human-confirmed examples for fields in THIS metadata family (few-shot guidance only; source evidence in THIS record remains authoritative): {json.dumps(relevant_examples, ensure_ascii=False)}
+If a retrieved example has kind="correction", its value is the human-supported classification and rejected_value is a known prior model mistake. Treat rejected_value as a negative precedent only; never copy or prefer it because it appears in the example.
 How earlier enrichment in this build went (advisory only; evidence in THIS record remains authoritative). Includes reviewer accepted/rejected counts when present, plus values the previous pass inferred on two or more other records (working conventions, not confirmed). Do not copy these; use them only when THIS record's evidence supports the same reading: {json.dumps(pass_learning or {}, ensure_ascii=False)}
 Human-owned fields on this record (authoritative; DO NOT propose replacements): {json.dumps({field: record.get(field) for field in human_locked_fields}, ensure_ascii=False)}
 Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor_context, ensure_ascii=False)}
@@ -247,7 +322,7 @@ CURRENT REVIEWED RECORD TEXT:
             prompt = build_group_prompt(
                 schema,
                 group.key,
-                base_context=base_context,
+                base_context=base_context_for(group_fields),
                 allowed_region_types=allowed_region_types,
                 allowed_discourse_roles=allowed_discourse_roles,
             )
