@@ -51,6 +51,7 @@ CAPABILITY_CATALOG: dict[str, dict[str, str | bool]] = {
     "page.faq": {"category": "Pages", "label": "Response Library", "description": "Open the complete saved-response library workspace.", "researcher_default": False},
     "page.response_cache": {"category": "Pages", "label": "Response cache", "description": "Browse and manage the RAG response cache.", "researcher_default": False},
     "page.providers": {"category": "Pages", "label": "LLM profiles", "description": "Configure LLM provider profiles.", "researcher_default": False},
+    "page.schemas": {"category": "Pages", "label": "Metadata schemas", "description": "Define record fields, allowed values, and model instructions.", "researcher_default": False},
     "page.users": {"category": "Pages", "label": "Users", "description": "Manage user accounts.", "researcher_default": False},
     "page.languages": {"category": "Pages", "label": "Languages", "description": "Manage translation dictionaries.", "researcher_default": False},
     "page.roles": {"category": "Pages", "label": "Roles & permissions", "description": "Configure role permissions.", "researcher_default": False},
@@ -79,7 +80,7 @@ DEFAULT_RESEARCHER_CAPABILITIES = frozenset(
 
 ADMIN_ONLY_CAPABILITIES = frozenset({
     "page.records", "page.pdf", "page.faq", "page.response_cache",
-    "page.providers", "page.users", "page.languages", "page.roles",
+    "page.providers", "page.schemas", "page.users", "page.languages", "page.roles",
     "corpus.manage", "records.edit", "i18n.manage", "providers.manage",
     "users.manage", "roles.manage",
 })

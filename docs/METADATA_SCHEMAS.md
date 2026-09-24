@@ -27,7 +27,7 @@ Export writes one JSON file: `{"derridai_metadata_schema": 1, "sha256": …, "sc
 ## Using it
 
 - **Choose one for a build:** step 5 of the build setup ("Metadata schema"). The build keeps its own copy.
-- **Edit schemas:** "Manage schemas…" in that step opens the editor: saved schemas, groups and their instructions, fields (type, allowed values with definitions, what the model should look for, evidence, confidence, review), duplicate, delete, export and import.
+- **Edit schemas:** administrators use **System → Metadata schemas**. "Manage schemas…" in Corpus Builder opens the same editor in a dialog, with a link to that page. The editor lists saved schemas, groups and their instructions, fields (type, allowed values with definitions, what the model should look for, evidence, confidence, review), duplicate, delete, export and import. Researcher accounts cannot open the page or change schemas.
 - **Try one:** the editor's "Try it on a passage" shows the prompt a group produces, or runs it on a passage with a model. A real build adds the document details, editorial memory and neighbouring records to that prompt.
 
 ## What follows the schema

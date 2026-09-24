@@ -38,6 +38,7 @@ export const viewPathMap: Record<string, string> = {
   faq: "/faq",
   responsecache: "/response-cache",
   providers: "/providers",
+  schemas: "/schemas",
   config: "/settings",
 };
 export const pathViewMap: Record<string, string> = Object.fromEntries(

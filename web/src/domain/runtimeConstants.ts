@@ -79,6 +79,7 @@ export const viewConfig = [
   { id: "faq", label: "Response Library", icon: "books", section: "Research" },
   { id: "responsecache", label: "Response Cache", icon: "database", section: "Research" },
   { id: "providers", label: "LLM Providers", icon: "spark", section: "System" },
+  { id: "schemas", label: "Metadata schemas", icon: "list", section: "System" },
   { id: "config", label: "Settings", icon: "gear", section: "System" },
 ];
 

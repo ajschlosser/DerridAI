@@ -2225,12 +2225,14 @@ def _schema_errors(exc: Exception) -> HTTPException:
 
 
 @app.get("/api/pdf/metadata-schemas")
-def list_metadata_schemas():
+def list_metadata_schemas(request: Request):
+    _require_admin(request)
     return {"items": metadata_schemas.list()}
 
 
 @app.post("/api/pdf/metadata-schemas/import")
-def import_metadata_schema(payload: dict[str, Any]):
+def import_metadata_schema(request: Request, payload: dict[str, Any]):
+    _require_admin(request)
     try:
         return metadata_schemas.import_(payload).model_dump(mode="json")
     except (SchemaImportError, SchemaLocked, ValueError) as exc:
@@ -2238,7 +2240,8 @@ def import_metadata_schema(payload: dict[str, Any]):
 
 
 @app.post("/api/pdf/metadata-schemas")
-def create_metadata_schema(body: MetadataSchema):
+def create_metadata_schema(request: Request, body: MetadataSchema):
+    _require_admin(request)
     try:
         return metadata_schemas.save(body).model_dump(mode="json")
     except (SchemaLocked, ValueError) as exc:
@@ -2246,7 +2249,8 @@ def create_metadata_schema(body: MetadataSchema):
 
 
 @app.post("/api/pdf/metadata-schemas/preview")
-def preview_metadata_schema_group(body: MetadataSchemaPreview):
+def preview_metadata_schema_group(request: Request, body: MetadataSchemaPreview):
+    _require_admin(request)
     try:
         payload = body.model_dump(exclude_none=True, by_alias=False)
         for key in ("schema_", "group", "text", "run"):
@@ -2255,14 +2259,15 @@ def preview_metadata_schema_group(body: MetadataSchemaPreview):
             profiles = system_store.researcher_profiles(include_secrets=True)
             if profiles:
                 payload["provider_profile_id"] = profiles[0].get("id")
-        request = _resolve_pdf_corpus_provider(payload) if body.run else {}
-        return pdf_corpus_builds.preview_schema_group(body.schema_, body.group, body.text, request, body.run)
+        request_payload = _resolve_pdf_corpus_provider(payload) if body.run else {}
+        return pdf_corpus_builds.preview_schema_group(body.schema_, body.group, body.text, request_payload, body.run)
     except (ValueError, TouchupFailure) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.get("/api/pdf/metadata-schemas/{schema_id}")
-def get_metadata_schema(schema_id: str):
+def get_metadata_schema(request: Request, schema_id: str):
+    _require_admin(request)
     try:
         return metadata_schemas.get(schema_id).model_dump(mode="json")
     except SchemaNotFound as exc:
@@ -2270,7 +2275,8 @@ def get_metadata_schema(schema_id: str):
 
 
 @app.get("/api/pdf/metadata-schemas/{schema_id}/export")
-def export_metadata_schema(schema_id: str):
+def export_metadata_schema(request: Request, schema_id: str):
+    _require_admin(request)
     try:
         return JSONResponse(metadata_schemas.export(schema_id), headers={"Content-Disposition": f'attachment; filename="{schema_id}.derridai-schema.json"'})
     except SchemaNotFound as exc:
@@ -2278,7 +2284,8 @@ def export_metadata_schema(schema_id: str):
 
 
 @app.put("/api/pdf/metadata-schemas/{schema_id}")
-def update_metadata_schema(schema_id: str, body: MetadataSchema):
+def update_metadata_schema(request: Request, schema_id: str, body: MetadataSchema):
+    _require_admin(request)
     try:
         return metadata_schemas.save(body, schema_id).model_dump(mode="json")
     except (SchemaNotFound, SchemaLocked, ValueError) as exc:
@@ -2286,7 +2293,8 @@ def update_metadata_schema(schema_id: str, body: MetadataSchema):
 
 
 @app.delete("/api/pdf/metadata-schemas/{schema_id}")
-def delete_metadata_schema(schema_id: str):
+def delete_metadata_schema(request: Request, schema_id: str):
+    _require_admin(request)
     try:
         metadata_schemas.delete(schema_id)
         return {"deleted": schema_id}

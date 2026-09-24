@@ -31,6 +31,7 @@ describe("legacy HTML helpers", () => {
       "faq",
       "responsecache",
       "providers",
+      "schemas",
       "config",
     ]);
     expect(TABLE_DEFAULTS.list).toEqual([
