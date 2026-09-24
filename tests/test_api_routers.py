@@ -9,6 +9,7 @@ from app.routers import (
     annotations_router,
     auth_router,
     i18n_router,
+    jobs_router,
     llm_router,
     records_router,
     stores_router,
@@ -83,8 +84,31 @@ def test_system_and_llm_routers_preserve_existing_http_contract():
     }
 
 
+
+def test_jobs_router_preserves_existing_http_contract():
+    assert _routes(jobs_router) == {
+        ("POST", "/api/jobs/llm"),
+        ("GET", "/api/jobs/rag/concurrency"),
+        ("PUT", "/api/jobs/rag/concurrency"),
+        ("POST", "/api/jobs/{job_id}/llm-results/resolve"),
+        ("POST", "/api/jobs/{job_id}/llm-results/reject"),
+        ("POST", "/api/jobs/llm-tool"),
+        ("POST", "/api/jobs/rag"),
+        ("POST", "/api/jobs/upsert"),
+        ("GET", "/api/jobs"),
+        ("GET", "/api/jobs/{job_id}"),
+        ("POST", "/api/jobs/{job_id}/cancel"),
+        ("DELETE", "/api/jobs/{job_id}"),
+        ("DELETE", "/api/jobs"),
+    }
+
 def test_store_router_preserves_existing_http_contract():
     assert _routes(stores_router) == {
+        ("GET", "/api/chroma/path"),
+        ("PUT", "/api/chroma/path"),
+        ("GET", "/api/chroma/connection"),
+        ("POST", "/api/chroma/connection/probe"),
+        ("PUT", "/api/chroma/connection"),
         ("GET", "/api/stores"),
         ("POST", "/api/stores"),
         ("POST", "/api/stores/preflight/embedding"),
