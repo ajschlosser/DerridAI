@@ -27,16 +27,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.background import BackgroundTask
 
-from .auth import SESSION_COOKIE, AuthUser, auth_store, role_has_capability
+from .auth import SESSION_COOKIE, auth_store, role_has_capability
 from .chroma_store import StoreAlreadyExistsError
 from .config import APP_GIT_COMMIT, APP_VERSION, app_version_label, settings
-from .content_filter import (
-    enforce_researcher_text,
-)
+from .content_filter import enforce_researcher_text
 from .corpus_builder import CORPUS_PROFILES, pdf_corpus_builds, pdf_corpus_repository
 from .corpus_review_state import _queue_counts
 from .corpus_reviewer_helpers import _present_for_reviewer
-from .llm import TouchupFailure, llm_status, propose_touchup
+from .http_auth import require_admin as _require_admin
+from .http_auth import request_user as _request_user
+from .llm import TouchupFailure, propose_touchup
 from .metadata_adjudication_cache import (
     clear as clear_adjudication_cache,
 )
@@ -98,22 +98,20 @@ from .researcher_view import (
     summarize_record,
 )
 from .reviewer_context import current_reviewer, reviewer_id
+from .routers.annotations import router as annotations_router
+from .routers.auth import router as auth_router
+from .routers.health import health, router as health_router  # noqa: F401
+from .routers.i18n import router as i18n_router
+from .routers.jobs import _profile_generation_options, router as jobs_router
+from .routers.llm import router as llm_router
+from .routers.system import router as system_router
+from .services import llm_jobs, llm_tool_jobs, rag_jobs, store, upsert_jobs
 from .source_media import (
     fetch_source_url,
     load_gutenberg_etext,
     search_project_gutenberg,
 )
 from .system_store import system_store
-from .http_auth import require_admin as _require_admin
-from .http_auth import request_user as _request_user
-from .routers.annotations import router as annotations_router
-from .routers.auth import router as auth_router
-from .routers.health import health, router as health_router
-from .routers.i18n import router as i18n_router
-from .routers.jobs import _profile_generation_options, router as jobs_router
-from .routers.llm import router as llm_router
-from .routers.system import router as system_router
-from .services import llm_jobs, llm_tool_jobs, rag_jobs, store, upsert_jobs
 
 logger = logging.getLogger(__name__)
 
