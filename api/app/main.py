@@ -29,7 +29,7 @@ from starlette.background import BackgroundTask
 
 from .auth import SESSION_COOKIE, AuthUser, auth_store, role_has_capability
 from .chroma_store import ChromaStore, StoreAlreadyExistsError
-from .config import APP_GIT_COMMIT, APP_VERSION, app_version_label, settings
+from .config import APP_VERSION, app_version_label, settings
 from .content_filter import enforce_researcher_text
 from .corpus_builder import CORPUS_PROFILES, pdf_corpus_builds, pdf_corpus_repository
 from .corpus_review_state import _queue_counts
@@ -39,8 +39,7 @@ from .dependencies import (
     require_admin as _require_admin,
 )
 from .jobs import LLMJobManager, LLMToolJobManager, RAGJobManager, UpsertJobManager
-from .llm import TouchupFailure, llm_status, propose_touchup, warmup_model
-from .llm_tools import run_pdf_llm, run_rag_grade
+from .llm import TouchupFailure
 from .metadata_adjudication_cache import (
     clear as clear_adjudication_cache,
 )
@@ -60,9 +59,7 @@ from .models import (
     LLMJobCreate,
     LLMJobRejectRequest,
     LLMResultResolutionRequest,
-    LLMStatusRequest,
     LLMToolJobCreate,
-    LLMWarmupRequest,
     MetadataSchemaPreview,
     PdfCorpusBoundaryAdjudication,
     PdfCorpusBuildCreate,
@@ -88,16 +85,12 @@ from .models import (
     PdfCorpusTextTouchupProposalStatus,
     PdfCorpusTextTouchupRequest,
     PdfDocumentLayoutPatch,
-    PdfLlmRequest,
     PdfPageLabelsPatch,
     PdfSourceUrlImport,
     RAGConcurrencyUpdate,
-    RAGGradeRequest,
     RAGRunRequest,
     RecordStatusRequest,
     RecordUpsert,
-    ResearcherProviderProfilesUpdate,
-    ResearcherProviderStatusRequest,
     SearchRequest,
     StoreCreate,
     StoredRecordPatch,
@@ -105,8 +98,6 @@ from .models import (
     StoreEmbeddingUpdate,
     StoreLanguageUpdate,
     StoreProtectionUpdate,
-    TouchupRequest,
-    TouchupResponse,
     UpsertJobCreate,
 )
 from .pdf_tools import extract_pdf_text
@@ -116,7 +107,13 @@ from .researcher_view import (
     summarize_record,
 )
 from .reviewer_context import current_reviewer, reviewer_id
-from .routers import annotations_router, auth_router, i18n_router
+from .routers import (
+    annotations_router,
+    auth_router,
+    i18n_router,
+    llm_router,
+    system_router,
+)
 from .source_media import (
     fetch_source_url,
     load_gutenberg_etext,
@@ -312,195 +309,18 @@ app.state.store = store
 app.include_router(auth_router)
 app.include_router(annotations_router)
 app.include_router(i18n_router)
+app.include_router(system_router)
+app.include_router(llm_router)
 
 llm_jobs = LLMJobManager(max_workers=64)
 llm_tool_jobs = LLMToolJobManager(store)
 rag_jobs = RAGJobManager(store, ollama_max_concurrent=settings.rag_ollama_max_concurrent)
+app.state.rag_jobs = rag_jobs
+
 # Chroma writes and embedding-model calls are relatively heavy.  Serializing
 # upsert jobs prevents two large work syncs from competing for CPU/RAM/VRAM and
 # making the entire UI appear frozen; additional sync requests remain queued.
 upsert_jobs = UpsertJobManager(store, max_workers=1)
-
-
-@app.get("/api/system/researcher-providers")
-def researcher_provider_profiles(request: Request) -> dict[str, Any]:
-    user = _request_user(request)
-    profiles = system_store.researcher_profiles()
-    if user.role != "admin":
-        profiles = [{k: v for k, v in profile.items() if k not in {"base_url", "has_api_key", "api_key"}} for profile in profiles]
-    return {"profiles": profiles}
-
-
-@app.put("/api/system/researcher-providers")
-def update_researcher_provider_profiles(body: ResearcherProviderProfilesUpdate, request: Request) -> dict[str, Any]:
-    _require_admin(request)
-    return {"profiles": system_store.set_researcher_profiles(body.profiles)}
-
-
-@app.get("/api/system/storage")
-def system_storage_info(request: Request) -> dict[str, Any]:
-    """Describe the durable server-owned metadata store for administrators."""
-    _require_admin(request)
-    return system_store.storage_info()
-
-
-@app.post("/api/system/researcher-providers/status")
-def researcher_provider_status(body: ResearcherProviderStatusRequest, request: Request) -> dict[str, Any]:
-    _require_admin(request)
-    stored = system_store.researcher_profile(body.id) if body.id else None
-    api_key = body.api_key or (stored or {}).get("api_key")
-    return llm_status(body.type, base_url=body.base_url or (stored or {}).get("base_url"), api_key=api_key)
-
-
-@app.post("/api/system/researcher-providers/availability")
-def researcher_provider_availability(
-    body: ResearcherProviderStatusRequest, request: Request
-) -> dict[str, Any]:
-    _request_user(request)
-    stored = system_store.researcher_profile(body.id) if body.id else None
-    if not stored:
-        return {"available": False, "model_available": False, "error": "Provider profile was not found."}
-    status = llm_status(
-        str(stored.get("type") or body.type),
-        base_url=str(stored.get("base_url") or "") or None,
-        api_key=str(stored.get("api_key") or "") or None,
-    )
-    configured_model = str(stored.get("model") or "").strip()
-    models = {str(item.get("name") or "") for item in status.get("models") or [] if isinstance(item, dict)}
-    model_available = bool(configured_model) and configured_model in models
-    return {
-        "available": bool(status.get("available")),
-        "model_available": model_available,
-        "configured_model": configured_model,
-        "models": status.get("models") or [],
-        "error": status.get("error"),
-    }
-
-
-@app.get("/api/live")
-def live() -> dict[str, Any]:
-    return {"ok": True, "version": APP_VERSION, "git_commit": APP_GIT_COMMIT or None}
-
-
-@app.get("/api/health")
-def health(request: Request) -> dict[str, Any]:
-    chroma = store.health()
-    if _request_user(request).role != "admin":
-        # Researchers need availability and collection counts to load the
-        # workspace. Paths, endpoints, tenant/database names, error details,
-        # provider configuration, and internal generation defaults are admin
-        # diagnostics and should stay server-side.
-        public_chroma = {
-            key: chroma.get(key)
-            for key in ("available", "mode", "heartbeat_ok", "collection_count")
-            if key in chroma
-        }
-        return {
-            "ok": True,
-            "version": APP_VERSION,
-            "git_commit": APP_GIT_COMMIT or None,
-            "chroma": public_chroma,
-        }
-    ollama = llm_status("ollama")
-    return {
-        "ok": True,
-        "version": APP_VERSION,
-        "git_commit": APP_GIT_COMMIT or None,
-        "chroma": chroma,
-        "chroma_path": settings.chroma_path,
-        "chroma_mode": chroma.get("mode") or settings.chroma_mode,
-        "embedding_provider": settings.embedding_provider,
-        "ollama": ollama,
-        "ollama_model": settings.ollama_model,
-        "ollama_embed_model": settings.ollama_embed_model,
-        "openai_compat_base_url": settings.openai_compat_base_url,
-        "openai_compat_model": settings.openai_compat_model,
-        "rag_concurrency": rag_jobs.concurrency_status(),
-        "rag_defaults": {
-            "k": settings.rag_default_k,
-            "fetch_k": settings.rag_default_fetch_k,
-            "rerank_top_n": settings.rag_default_rerank_top_n,
-            "lambda_mult": settings.rag_default_lambda_mult,
-            "rrf_k": settings.rag_default_rrf_k,
-            "query_decomposition_num_predict": settings.rag_default_query_num_predict,
-            "evidence_record_char_limit": settings.rag_default_record_char_limit,
-            "evidence_total_char_limit": settings.rag_default_total_char_limit,
-            "cross_encoder_model": settings.rag_cross_encoder_model,
-        },
-        "llm_defaults": {
-            "num_ctx": 16384,
-            "metadata_num_predict": settings.llm_metadata_num_predict,
-            "text_num_predict": settings.llm_text_num_predict,
-            "temperature": 0.0,
-            "top_k": 0,
-            "top_p": 1.0,
-            "repeat_penalty": 1.1,
-            "think": False,
-            "keep_alive": settings.ollama_keep_alive,
-            "max_fields": settings.llm_max_fields,
-        },
-    }
-
-
-@app.get("/api/config")
-def config(request: Request) -> dict[str, Any]:
-    _require_admin(request)
-    return {
-        "version": APP_VERSION,
-        "git_commit": APP_GIT_COMMIT or None,
-        "defaults": {
-            "embedding_provider": settings.embedding_provider,
-            "embedding_model": settings.ollama_embed_model,
-            "chat_provider": "ollama",
-            "chat_model": settings.ollama_model,
-            "ollama_base_url": settings.ollama_base_url,
-            "openai_base_url": settings.openai_compat_base_url,
-            "openai_model": settings.openai_compat_model,
-        },
-        "chroma": store.health(),
-    }
-
-
-@app.get("/api/llm/status")
-def llm_status_endpoint(
-    provider: str = Query(default="ollama"),
-    base_url: str | None = Query(default=None),
-    api_key: str | None = Query(default=None),
-) -> dict[str, Any]:
-    provider = provider.strip().lower()
-    if provider not in {"ollama", "openai"}:
-        raise HTTPException(status_code=400, detail="provider must be ollama or openai")
-    return llm_status(
-        provider,
-        base_url=base_url,
-        api_key=api_key,
-    )
-
-
-@app.post("/api/llm/status")
-def llm_status_post(body: LLMStatusRequest) -> dict[str, Any]:
-    return llm_status(
-        body.provider,
-        base_url=body.base_url,
-        api_key=body.api_key,
-    )
-
-
-@app.post("/api/llm/warmup")
-def llm_warmup(body: LLMWarmupRequest) -> dict[str, Any]:
-    try:
-        return warmup_model(
-            provider=body.provider,
-            model=body.model,
-            base_url=body.base_url,
-            api_key=body.api_key,
-            num_ctx=body.num_ctx,
-        )
-    except TouchupFailure as exc:
-        detail = {"message": exc.message}
-        if exc.diagnostic:
-            detail["diagnostic"] = exc.diagnostic
-        raise HTTPException(status_code=exc.status_code, detail=detail) from exc
 
 
 @app.post("/api/jobs/llm")
@@ -511,28 +331,6 @@ def create_llm_job(body: LLMJobCreate, request: Request) -> dict[str, Any]:
         for item in body.items:
             item.record.pop("updates", None)
         return llm_jobs.create(body, owner=_request_user(request).username)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.post("/api/rag/grade")
-def grade_rag_response(body: RAGGradeRequest) -> dict[str, Any]:
-    try:
-        for evidence in body.evidence:
-            record = evidence.get("record") if isinstance(evidence, dict) else None
-            if isinstance(record, dict):
-                record.pop("updates", None)
-        return run_rag_grade(body, store)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"RAG grading failed: {exc}") from exc
-
-
-@app.post("/api/pdf/llm")
-def pdf_llm(body: PdfLlmRequest) -> dict[str, Any]:
-    try:
-        return run_pdf_llm(body)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -2796,37 +2594,3 @@ def search(store_name: str, body: SearchRequest, request: Request) -> dict[str, 
         return result
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.post("/api/llm/touchup", response_model=TouchupResponse)
-def llm_touchup(body: TouchupRequest) -> TouchupResponse:
-    try:
-        return TouchupResponse.model_validate(
-            propose_touchup(
-                body.record,
-                body.fields,
-                body.instructions,
-                body.model,
-                body.ollama,
-                provider=body.provider,
-                base_url=body.base_url,
-                api_key=body.api_key,
-            )
-        )
-    except TouchupFailure as exc:
-        detail: dict[str, str] = {"message": exc.message}
-        if exc.diagnostic:
-            detail["diagnostic"] = exc.diagnostic
-        raise HTTPException(
-            status_code=exc.status_code,
-            detail=detail,
-        ) from exc
-    except Exception as exc:
-        logger.exception("Unexpected LLM touch-up failure")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "message": "Unexpected LLM touch-up failure.",
-                "diagnostic": str(exc),
-            },
-        ) from exc
