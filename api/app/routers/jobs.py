@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -22,86 +21,11 @@ from ..models import (
     RAGRunRequest,
     UpsertJobCreate,
 )
+from ..provider_profiles import profile_generation_options
 from ..researcher_view import sanitize_rag_job
 from ..system_store import system_store
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
-
-_PROFILE_GENERATION_INT_KEYS = {
-    "num_ctx",
-    "num_predict",
-    "top_k",
-    "seed",
-    "mirostat",
-}
-_PROFILE_GENERATION_FLOAT_KEYS = {
-    "temperature",
-    "top_p",
-    "min_p",
-    "repeat_penalty",
-    "mirostat_eta",
-    "mirostat_tau",
-}
-
-
-def _profile_generation_options(profile: dict[str, object]) -> dict[str, object]:
-    """Normalize persisted provider controls before constructing a RAG request.
-
-    Provider profiles predate the current typed request models, so some optional
-    values may still be stored as strings. Researcher runs are rebuilt entirely
-    from server-owned profiles at this trust boundary; malformed optional values
-    are ignored rather than allowing browser overrides back into the request.
-    """
-    result: dict[str, object] = {}
-
-    for key in _PROFILE_GENERATION_INT_KEYS:
-        value = profile.get(key)
-        if value in (None, ""):
-            continue
-        try:
-            result[key] = int(float(str(value).strip()))
-        except (TypeError, ValueError):
-            continue
-
-    for key in _PROFILE_GENERATION_FLOAT_KEYS:
-        value = profile.get(key)
-        if value in (None, ""):
-            continue
-        try:
-            result[key] = float(str(value).strip())
-        except (TypeError, ValueError):
-            continue
-
-    think = profile.get("think")
-    if think not in (None, ""):
-        if isinstance(think, bool):
-            result["think"] = think
-        else:
-            normalized = str(think).strip().lower()
-            if normalized in {"true", "1", "yes", "on"}:
-                result["think"] = True
-            elif normalized in {"false", "0", "no", "off"}:
-                result["think"] = False
-            elif normalized in {"low", "medium", "high"}:
-                result["think"] = normalized
-
-    keep_alive = profile.get("keep_alive")
-    if keep_alive not in (None, ""):
-        result["keep_alive"] = str(keep_alive).strip()
-
-    extra_options = profile.get("extra_options")
-    if isinstance(extra_options, dict):
-        result["extra_options"] = extra_options
-    elif isinstance(extra_options, str) and extra_options.strip():
-        try:
-            parsed = json.loads(extra_options)
-        except (TypeError, ValueError, json.JSONDecodeError):
-            parsed = None
-        if isinstance(parsed, dict):
-            result["extra_options"] = parsed
-
-    return result
-
 
 def _job_manager_for(job_id: str, managers: JobManagers) -> Any:
     """Resolve a retained job ID across all operation managers."""
@@ -281,7 +205,7 @@ def create_rag_job(
                             int(profile.get("max_concurrent_requests") or 1),
                         ),
                     ),
-                    "generation": _profile_generation_options(profile) or None,
+                    "generation": profile_generation_options(profile) or None,
                 }
             )
 
@@ -305,7 +229,7 @@ def create_rag_job(
                         "auto_grade_api_key": grade_profile.get("api_key"),
                         "auto_grade_provider_profile_id": grade_profile_id,
                         "auto_grade_generation": (
-                            _profile_generation_options(grade_profile) or None
+                            profile_generation_options(grade_profile) or None
                         ),
                     }
                 )
