@@ -457,7 +457,7 @@ const researchWithEvidence = async (page: Page) => {
     .first()
     .click();
   await page.waitForTimeout(900);
-  await page.getByRole("button", { name: "Add to evidence" }).first().click();
+  await page.getByRole("button", { name: "Add evidence" }).first().click();
   await page.waitForTimeout(400);
   await page
     .locator("nav, aside")
@@ -1023,7 +1023,7 @@ const scenarios: Scenario[] = [
     nav: "Record View",
     load: true,
     steps: async (page) => {
-      await page.getByRole("button", { name: "Add to evidence" }).first().click();
+      await page.getByRole("button", { name: "Add evidence" }).first().click();
       await page.waitForTimeout(700);
     },
   },
