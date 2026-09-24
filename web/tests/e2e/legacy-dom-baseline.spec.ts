@@ -457,7 +457,7 @@ const researchWithEvidence = async (page: Page) => {
     .first()
     .click();
   await page.waitForTimeout(900);
-  await page.getByRole("button", { name: "Add evidence" }).first().click();
+  await page.getByRole("button", { name: "Add to evidence" }).first().click();
   await page.waitForTimeout(400);
   await page
     .locator("nav, aside")
@@ -898,7 +898,7 @@ const scenarios: Scenario[] = [
     load: true,
     steps: async (page) => {
       await page.getByRole("button", { name: /^Sort:/ }).click();
-      await page.getByRole("menuitemradio", { name: "Page Start" }).click();
+      await page.getByRole("menuitemradio", { name: "Page start" }).click();
       await page.waitForTimeout(900);
     },
   },
@@ -1023,7 +1023,7 @@ const scenarios: Scenario[] = [
     nav: "Record View",
     load: true,
     steps: async (page) => {
-      await page.getByRole("button", { name: "Add evidence" }).first().click();
+      await page.getByRole("button", { name: "Add to evidence" }).first().click();
       await page.waitForTimeout(700);
     },
   },
@@ -1161,7 +1161,7 @@ const scenarios: Scenario[] = [
   { name: "styles-works-light", nav: "Works", load: true, styles: true },
   { name: "styles-compare-light", nav: "Compare", load: true, styles: true },
   { name: "styles-providers-light", nav: "LLM Providers", styles: true },
-  { name: "styles-users-light", nav: "Users", styles: true },
+  { name: "styles-users-light", nav: "Users & roles", styles: true },
   { name: "styles-roles-light", nav: "Roles & permissions", styles: true },
   { name: "styles-languages-light", nav: "Manage languages", styles: true },
   { name: "styles-settings-light", nav: "Settings", styles: true },
@@ -1197,7 +1197,7 @@ const scenarios: Scenario[] = [
   },
   {
     name: "styles-users-narrow",
-    nav: "Users",
+    nav: "Users & roles",
     styles: true,
     viewport: { width: 390, height: 844 },
   },
@@ -1413,7 +1413,7 @@ const scenarios: Scenario[] = [
     fixtures: { "/api/response-cache/records": FAQ_PAGE },
     steps: async (page) => {
       await page
-        .getByRole("button", { name: /Browse saved research/ })
+        .getByRole("button", { name: /Find a question/ })
         .first()
         .click();
       await expect(page.locator("dialog[open], [role=dialog]").last()).toBeVisible();

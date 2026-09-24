@@ -121,7 +121,7 @@ export const scenarios: Scenario[] = [
     ready: (p) => p.getByRole("dialog"),
     steps: async (p) => {
       await p
-        .getByRole("button", { name: /Browse saved research/ })
+        .getByRole("button", { name: /Find a question/ })
         .first()
         .click();
     },
@@ -201,7 +201,7 @@ export const scenarios: Scenario[] = [
     id: "users-default",
     path: "/users",
     role: "admin",
-    ready: (p) => p.getByRole("heading", { name: "Users" }),
+    ready: (p) => p.getByRole("heading", { name: "Users & roles" }),
   },
   // Record (a researcher reads a record from the database)
   {
