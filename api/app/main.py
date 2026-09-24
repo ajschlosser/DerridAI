@@ -45,6 +45,7 @@ from .metadata_adjudication_cache import (
 )
 from .metadata_schema import MetadataSchema, SchemaImportError
 from .metadata_schema_store import SchemaLocked, SchemaNotFound, SchemaStore
+from .provider_profiles import profile_generation_options as _profile_generation_options
 from .models import (
     MetadataSchemaPreview,
     PdfCorpusBoundaryAdjudication,
