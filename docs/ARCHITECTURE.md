@@ -20,7 +20,7 @@ This describes the code as it exists in 0.62.19. For feature behavior see the [U
 | `persistence.py`, `system_store.py` | SQLite repositories for provider profiles, annotations, languages, and the `jobs` table; locale dictionary store. |
 | `chroma_store.py` | ChromaDB access: collections, language mirrors, hybrid search, and the response cache (public name `_response_cache`, stored as `derridai_response_cache`). Distinguishes an absent cache collection from storage errors. Embedded `PersistentClient` or HTTP `HttpClient` (`chroma_connection.py`). |
 | `rag.py` | Retrieval, reranking (cross-encoder with lexical fallback that reports a warning), generation, evidence assembly. |
-| `jobs.py` | In-memory job managers for LLM review, RAG, LLM tools/translation, and Chroma upserts, mirrored to the `jobs` table. |
+| `jobs.py`, `job_state.py`, `job_llm.py`, `job_rag.py`, `job_tools.py`, `job_upsert.py` | Compatibility exports plus focused background-job managers for LLM review, RAG, LLM tools/translation, and Chroma upserts. Shared durable checkpoint/error behavior lives in `job_state.py`; job state is mirrored to the SQLite `jobs` table. |
 | `llm.py`, `llm_tools.py`, `i18n_translation.py`, `content_policy_generation.py`, `bibliography.py` | Provider calls, tool workflows (catalog lookup, grading), locale translation, researcher text-policy generation, bibliographic helpers. |
 | `corpus_builder.py` | PDF → records pipeline: `PdfCorpusRepository` (file persistence) and `PdfCorpusBuildManager` (stages, checkpoints, enrichment, review mutation). |
 | `corpus_metadata.py` | Pure metadata vocabularies, normalization, and human/LLM ownership rules. |
