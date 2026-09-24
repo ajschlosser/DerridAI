@@ -15,12 +15,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
 
-from app.main import _resolve_pdf_corpus_provider  # noqa: E402
+from app.routers.corpus import _resolve_pdf_corpus_provider  # noqa: E402
 
 
 def _stored(monkeypatch, **profile):
     monkeypatch.setattr(
-        "app.main.system_store.researcher_profile",
+        "app.routers.corpus.system_store.researcher_profile",
         lambda profile_id: {"id": profile_id, "type": "openai", "model": "stored-model", **profile},
     )
 
@@ -56,7 +56,7 @@ def test_a_blank_request_key_uses_the_key_stored_with_the_profile(monkeypatch):
 
 
 def test_missing_selected_profile_fails_explicitly(monkeypatch):
-    monkeypatch.setattr("app.main.system_store.researcher_profile", lambda profile_id: None)
+    monkeypatch.setattr("app.routers.corpus.system_store.researcher_profile", lambda profile_id: None)
     try:
         _resolve_pdf_corpus_provider({"provider_profile_id": "removed-profile"})
     except ValueError as exc:
@@ -67,7 +67,7 @@ def test_missing_selected_profile_fails_explicitly(monkeypatch):
 
 def test_direct_provider_configuration_remains_valid_without_a_stored_profile(monkeypatch):
     """Interactive Corpus Builder actions may authenticate with browser-supplied credentials."""
-    monkeypatch.setattr("app.main.system_store.researcher_profile", lambda profile_id: None)
+    monkeypatch.setattr("app.routers.corpus.system_store.researcher_profile", lambda profile_id: None)
     resolved = _resolve_pdf_corpus_provider({
         "provider_profile_id": "openai-1",
         "provider": "openai",
