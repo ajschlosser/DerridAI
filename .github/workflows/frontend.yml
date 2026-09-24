@@ -86,8 +86,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: mypy.ini
       - name: Install mypy only
         run: pip install mypy==2.3.1
       - run: mypy
@@ -123,8 +121,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: api/requirements.txt
       - name: Install backend test dependencies without optional reranker
         run: |
           grep -vE '^sentence-transformers' api/requirements.txt > /tmp/derridai-test-requirements.txt
