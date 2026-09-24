@@ -3,14 +3,18 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 
+from ..corpus_builder import pdf_corpus_repository
 from ..http_auth import request_user, require_admin
 from ..llm import llm_status
+from ..metadata_memory import MetadataMemoryService
 from ..models import ResearcherProviderProfilesUpdate, ResearcherProviderStatusRequest
+from ..services import store
 from ..system_store import system_store
 
 router = APIRouter(tags=["system"])
+metadata_memory = MetadataMemoryService(store, pdf_corpus_repository)
 
 
 @router.get("/api/system/researcher-providers")
@@ -67,3 +71,29 @@ def researcher_provider_availability(
         "error": status.get("error"),
     }
 
+
+
+@router.get("/api/system/metadata-memory")
+@router.get("/api/system/data/metadata-memory")
+def inspect_metadata_memory(
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    field: str = Query(default="", max_length=120),
+    kind: str = Query(default="", max_length=40),
+    build_id: str = Query(default="", max_length=160),
+    language: str = Query(default="", max_length=40),
+    q: str = Query(default="", max_length=300),
+) -> dict[str, Any]:
+    """Inspect learned metadata precedents as scholarly memory, not vector rows."""
+
+    require_admin(request)
+    return metadata_memory.list_entries(
+        limit=limit,
+        offset=offset,
+        field=field,
+        kind=kind,
+        build_id=build_id,
+        language=language,
+        query=q,
+    )

@@ -33,7 +33,7 @@ def _matches_where(row, where):
 
 class FakeCollection:
     def __init__(self):
-        self.metadata = {"derridai_exemplar_schema": 2}
+        self.metadata = {"derridai_exemplar_schema": 3}
         self.rows = {
             "stale": {
                 "scope_id": "build-1",

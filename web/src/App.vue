@@ -32,7 +32,7 @@ const moreToolsOpen=ref(storedMoreTools()??false);
 const nativeBackPath=ref<string|null>(null);
 const nativeForwardPath=ref<string|null>(null);
 const s=computed(()=>shell.snapshot);
-const pageCapability: Record<string,string> = {home:"page.dashboard",list:"page.records",record:"page.record",works:"page.works",global:"page.search",annotations:"page.annotations",pdf:"page.pdf",compare:"page.compare",vector:"page.vector",rag:"page.research",faq:"page.faq",responsecache:"page.response_cache",providers:"page.providers",schemas:"page.schemas",config:"page.settings",users:"page.users",languages:"page.languages",roles:"page.roles"};
+const pageCapability: Record<string,string> = {home:"page.dashboard",list:"page.records",record:"page.record",works:"page.works",global:"page.search",annotations:"page.annotations",pdf:"page.pdf",compare:"page.compare",vector:"page.vector",rag:"page.research",faq:"page.faq",responsecache:"page.response_cache",metadatamemory:"page.response_cache",providers:"page.providers",schemas:"page.schemas",config:"page.settings",users:"page.users",languages:"page.languages",roles:"page.roles"};
 function canNav(id:string){const capability=pageCapability[id];return !capability||auth.can(capability)}
 try{
   const saved=localStorage.getItem("derridai.ui.theme")||"green";
@@ -53,6 +53,7 @@ const groupedNav=computed(()=>{
     const systemLabel=i18n.t("section.system");
     let system=groups.find(group=>group.section===systemLabel);
     if(!system){system={section:systemLabel,items:[]};groups.push(system)}
+    if(auth.can("page.response_cache"))system.items.push({id:"metadatamemory",label:i18n.t("nav.metadatamemory"),icon:"spark",section:"System"} as ShellNavItem);
     if(auth.can("page.users"))system.items.push({id:"users",label:i18n.t("nav.users"),icon:"users",section:"System"} as ShellNavItem);
     if(auth.can("page.roles"))system.items.push({id:"roles",label:i18n.t("nav.roles"),icon:"roles",section:"System"} as ShellNavItem);
     if(auth.can("page.languages"))system.items.push({id:"languages",label:i18n.t("language.manage"),icon:"language",section:"System"} as ShellNavItem);
@@ -72,8 +73,8 @@ const primaryNavItems=computed<SidebarNavEntry[]>(()=>{
   return items;
 });
 const utilityNavItems=computed<SidebarNavEntry[]>(()=>utilityNav.value.map(item=>({id:item.id,label:item.label,icon:item.icon,active:isNavActive(item),disabledReason:item.disabledReason})));
-const breadcrumbTitle=computed(()=>route.name==="users"?i18n.t("nav.users"):route.name==="roles"?i18n.t("nav.roles"):route.name==="languages"?i18n.t("language.manage"):route.name==="config"?i18n.t("nav.config"):route.name==="compare"?i18n.t("nav.compare"):route.name==="list"?i18n.t("nav.records"):route.name==="works"?i18n.t("nav.works"):s.value.context.title||i18n.t("nav.home"));
-const breadcrumbMeta=computed(()=>route.name==="config"?i18n.t("settings.page_help_short"):route.name==="compare"?i18n.t("context.compare.meta"):route.name==="list"?i18n.t("context.list.meta"):["users","roles","languages"].includes(String(route.name||""))?"":s.value.context.meta);
+const breadcrumbTitle=computed(()=>route.name==="metadatamemory"?i18n.t("metadata_memory.title"):route.name==="users"?i18n.t("nav.users"):route.name==="roles"?i18n.t("nav.roles"):route.name==="languages"?i18n.t("language.manage"):route.name==="config"?i18n.t("nav.config"):route.name==="compare"?i18n.t("nav.compare"):route.name==="list"?i18n.t("nav.records"):route.name==="works"?i18n.t("nav.works"):s.value.context.title||i18n.t("nav.home"));
+const breadcrumbMeta=computed(()=>route.name==="metadatamemory"?i18n.t("metadata_memory.help"):route.name==="config"?i18n.t("settings.page_help_short"):route.name==="compare"?i18n.t("context.compare.meta"):route.name==="list"?i18n.t("context.list.meta"):["users","roles","languages"].includes(String(route.name||""))?"":s.value.context.meta);
 const canBreadcrumbBack=computed(()=>Boolean(nativeBackPath.value)||s.value.canGoBack);
 const canBreadcrumbForward=computed(()=>Boolean(nativeForwardPath.value)||s.value.canGoForward);
 const breadcrumbBackLabel=computed(()=>nativeBackPath.value?i18n.t("ui.back"):s.value.backLabel);
@@ -131,6 +132,7 @@ function navigate(view:string){
   // refreshes the authoritative store list before deciding whether a redirect is
   // needed. This avoids a false “create a database” redirect immediately after
   // a collection is created or restored.
+  if(view==="metadatamemory"){navigateNative("/metadata-memory");return}
   if(view==="users"){navigateNative("/users");return}
   if(view==="languages"){navigateNative("/languages");return}
   if(view==="roles"){navigateNative("/roles");return}
@@ -138,7 +140,7 @@ function navigate(view:string){
   nativeBackPath.value=null;nativeForwardPath.value=null;
   runtime.navigateView(view)
 }
-function isNavActive(item:ShellNavItem){if(operationsActive.value&&item.id==="home")return false;if(item.id==="users")return route.name==="users";if(item.id==="roles")return route.name==="roles";if(item.id==="languages")return route.name==="languages";return !["users","roles","languages"].includes(String(route.name||""))&&s.value.view===item.id}
+function isNavActive(item:ShellNavItem){if(operationsActive.value&&item.id==="home")return false;if(item.id==="metadatamemory")return route.name==="metadatamemory";if(item.id==="users")return route.name==="users";if(item.id==="roles")return route.name==="roles";if(item.id==="languages")return route.name==="languages";return !["metadatamemory","users","roles","languages"].includes(String(route.name||""))&&s.value.view===item.id}
 function submitTopSearch(){const query=topSearch.value.trim();if(!query)return;runtime.state.globalSearch=query;runtime.state.storeQuery=query;runtime.state.globalPage=1;runtime.state.storeSearchResults=[];runtime.state.globalSearchMode="traditional";runtime.navigateView("global")}
 function onMoreToolsToggle(open:boolean){
   // A programmatic change already matches the model; only a user toggle differs from it.
