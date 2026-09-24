@@ -32,6 +32,7 @@ jobs:
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      contract: ${{ steps.filter.outputs.contract }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -46,19 +47,34 @@ jobs:
           if [ "$EVENT_NAME" = "workflow_dispatch" ] || [ -z "$BASE_SHA" ] || [[ "$BASE_SHA" =~ ^0+$ ]]; then
             echo "backend=true" >> "$GITHUB_OUTPUT"
             echo "frontend=true" >> "$GITHUB_OUTPUT"
+            echo "contract=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           backend=false
           frontend=false
+          contract=false
           while IFS= read -r path; do
             case "$path" in
               .github/workflows/frontend.yml|scripts/*)
                 backend=true
                 frontend=true
+                contract=true
                 ;;
-              api/*|tests/*|ruff.toml|mypy.ini)
+              api/*)
                 backend=true
+                contract=true
+                ;;
+              tests/test_frontend_api_contract.py|pytest.ini)
+                backend=true
+                contract=true
+                ;;
+              tests/*|ruff.toml|mypy.ini)
+                backend=true
+                ;;
+              web/src/api/*)
+                frontend=true
+                contract=true
                 ;;
               web/*)
                 frontend=true
@@ -68,6 +84,7 @@ jobs:
 
           echo "backend=$backend" >> "$GITHUB_OUTPUT"
           echo "frontend=$frontend" >> "$GITHUB_OUTPUT"
+          echo "contract=$contract" >> "$GITHUB_OUTPUT"
 
   backend-lint:
     needs: changes
@@ -79,7 +96,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install ruff==0.16.8
-      - run: ruff check api/app tests
+      - run: ruff check api/app tests scripts/check_frontend_api_contract.py
 
   backend-types:
     needs: changes
@@ -115,11 +132,6 @@ jobs:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
-    env:
-      CHROMA_DATA_ROOT: /tmp/derridai-data
-      CHROMA_PATH: /tmp/derridai-data/chroma
-      AUTH_DB_PATH: /tmp/derridai-data/.home/derridai-auth.sqlite3
-      SYSTEM_DB_PATH: /tmp/derridai-data/.home/derridai-system.sqlite3
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -128,11 +140,27 @@ jobs:
       - name: Install backend test dependencies without optional reranker
         run: |
           grep -vE '^sentence-transformers' api/requirements.txt > /tmp/derridai-test-requirements.txt
-          pip install -r /tmp/derridai-test-requirements.txt pytest
+          pip install -r /tmp/derridai-test-requirements.txt "pytest>=9,<10" "pytest-xdist>=3.8,<4"
       - name: Python syntax
         run: python -m compileall -q api/app
       - name: Backend and release regression tests
-        run: pytest -q
+        run: pytest -q -n auto --dist=worksteal -m "not contract"
+
+  api-contract:
+    needs: changes
+    if: needs.changes.outputs.contract == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install API contract dependencies
+        run: |
+          grep -vE '^sentence-transformers' api/requirements.txt > /tmp/derridai-contract-requirements.txt
+          pip install -r /tmp/derridai-contract-requirements.txt "pytest>=9,<10"
+      - name: Frontend / FastAPI contract
+        run: pytest -q -m contract tests/test_frontend_api_contract.py
 
   frontend-static:
     needs: changes
@@ -151,8 +179,10 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: Install frontend dependencies
         run: npm ci --no-audit --no-fund
-      - name: Typecheck
+      - name: Typecheck application
         run: npm run typecheck
+      - name: Typecheck tests and test configuration
+        run: npm run typecheck:tests
       - name: Unit/component tests
         run: npm run test:unit
       - name: Production build
@@ -273,6 +303,7 @@ jobs:
     if: always()
     needs:
       - changes
+      - api-contract
       - frontend-lint
       - frontend-static
       - frontend-legacy
@@ -283,14 +314,21 @@ jobs:
       - name: Verify frontend gates
         env:
           FRONTEND_CHANGED: ${{ needs.changes.outputs.frontend }}
+          CONTRACT_CHANGED: ${{ needs.changes.outputs.contract }}
+          CONTRACT_RESULT: ${{ needs.api-contract.result }}
           LINT_RESULT: ${{ needs.frontend-lint.result }}
           STATIC_RESULT: ${{ needs.frontend-static.result }}
           LEGACY_RESULT: ${{ needs.frontend-legacy.result }}
           E2E_RESULT: ${{ needs.frontend-e2e.result }}
           A11Y_RESULT: ${{ needs.frontend-a11y.result }}
         run: |
+          if [ "$CONTRACT_CHANGED" = "true" ] && [ "$CONTRACT_RESULT" != "success" ]; then
+            echo "The frontend/backend API contract gate did not succeed: $CONTRACT_RESULT"
+            exit 1
+          fi
+
           if [ "$FRONTEND_CHANGED" != "true" ]; then
-            echo "No frontend-relevant changes; frontend gates were skipped."
+            echo "No frontend-relevant changes; browser/frontend gates were skipped."
             exit 0
           fi
 
