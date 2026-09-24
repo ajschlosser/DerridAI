@@ -4127,7 +4127,7 @@ onBeforeUnmount(() => {
             @start-new="startNewBuildSetup"
             @edit-document-metadata="documentMetadataOpen = true"
             @rerun-enrichment="
-              llmActionProviderId = selectedProviderId || providerProfiles[0]?.id || '';
+              llmActionProviderId = llmActionProviderId || selectedProviderId || providerProfiles[0]?.id || '';
               metadataEnrichmentOpen = true;
             "
             @publish="publish({ download: false })"
@@ -4359,7 +4359,7 @@ onBeforeUnmount(() => {
             :disabled="busy !== ''"
             @stop="cancelBuild"
             @run-another="
-              llmActionProviderId = selectedProviderId || providerProfiles[0]?.id || '';
+              llmActionProviderId = llmActionProviderId || selectedProviderId || providerProfiles[0]?.id || '';
               metadataEnrichmentOpen = true;
             "
           />
@@ -5175,7 +5175,7 @@ onBeforeUnmount(() => {
                           i18n.t('pdf_corpus.metadata_enrichment_again_help')
                         "
                         @click="
-                          llmActionProviderId = selectedProviderId || providerProfiles[0]?.id || '';
+                          llmActionProviderId = llmActionProviderId || selectedProviderId || providerProfiles[0]?.id || '';
                           metadataEnrichmentOpen = true;
                         "
                         :disabled="busy !== ''"

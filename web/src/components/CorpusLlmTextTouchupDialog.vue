@@ -67,8 +67,8 @@ function reset() {
   operationMessage.value = "";
 }
 watch(
-  () => props.proposedText,
-  (value) => {
+  () => [props.proposedText, props.recordId] as const,
+  ([value]) => {
     draft.value = String(value || "");
     if (value)
       operationMessage.value = i18n.t("pdf_corpus.llm_touchup_ready");
@@ -78,7 +78,10 @@ watch(
 watch(
   () => [props.open, props.recordId] as const,
   (value, old) => {
-    if (value[0] && (!old?.[0] || value[1] !== old?.[1])) reset();
+    if (value[0] && (!old?.[0] || value[1] !== old?.[1])) {
+      reset();
+      draft.value = String(props.proposedText || "");
+    }
   },
 );
 watch(
