@@ -1,7 +1,6 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -20,6 +19,7 @@ from ..models import (
     RAGRunRequest,
     UpsertJobCreate,
 )
+from ..provider_profile_options import profile_generation_options
 from ..researcher_view import sanitize_rag_job
 from ..services import llm_jobs, llm_tool_jobs, rag_jobs, upsert_jobs
 from ..system_store import system_store
@@ -86,68 +86,6 @@ def create_llm_tool_job(body: LLMToolJobCreate, request: Request) -> dict[str, A
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-_PROFILE_GENERATION_INT_KEYS = {"num_ctx", "num_predict", "top_k", "seed", "mirostat"}
-_PROFILE_GENERATION_FLOAT_KEYS = {"temperature", "top_p", "min_p", "repeat_penalty", "mirostat_eta", "mirostat_tau"}
-
-
-def _profile_generation_options(profile: dict[str, object]) -> dict[str, object]:
-    """Normalize values persisted by the provider-profile form for RAG schemas.
-
-    Older profiles store optional controls as strings (including JSON in
-    ``extra_options``). Admin runs normally pass browser-normalized values, but
-    researcher runs are rebuilt from these server-owned profiles. Normalizing at
-    this trust boundary keeps the static-profile security model while avoiding a
-    400 when Pydantic receives ``"{}"`` where a mapping is required.
-    """
-    result: dict[str, object] = {}
-    for key in _PROFILE_GENERATION_INT_KEYS:
-        value = profile.get(key)
-        if value in (None, ""):
-            continue
-        try:
-            result[key] = int(float(str(value).strip()))
-        except (TypeError, ValueError):
-            continue
-    for key in _PROFILE_GENERATION_FLOAT_KEYS:
-        value = profile.get(key)
-        if value in (None, ""):
-            continue
-        try:
-            result[key] = float(str(value).strip())
-        except (TypeError, ValueError):
-            continue
-
-    think = profile.get("think")
-    if think not in (None, ""):
-        if isinstance(think, bool):
-            result["think"] = think
-        else:
-            normalized = str(think).strip().lower()
-            if normalized in {"true", "1", "yes", "on"}:
-                result["think"] = True
-            elif normalized in {"false", "0", "no", "off"}:
-                result["think"] = False
-            elif normalized in {"low", "medium", "high"}:
-                result["think"] = normalized
-
-    keep_alive = profile.get("keep_alive")
-    if keep_alive not in (None, ""):
-        result["keep_alive"] = str(keep_alive).strip()
-
-    extra_options = profile.get("extra_options")
-    if isinstance(extra_options, dict):
-        result["extra_options"] = extra_options
-    elif isinstance(extra_options, str) and extra_options.strip():
-        try:
-            parsed = json.loads(extra_options)
-        except (TypeError, ValueError, json.JSONDecodeError):
-            parsed = None
-        if isinstance(parsed, dict):
-            result["extra_options"] = parsed
-
-    return result
-
-
 @router.post("/api/jobs/rag")
 def create_rag_job(body: RAGRunRequest, request: Request) -> dict[str, Any]:
     try:
@@ -167,7 +105,7 @@ def create_rag_job(body: RAGRunRequest, request: Request) -> dict[str, Any]:
             if profile is None:
                 raise ValueError("That researcher LLM profile is not available.")
 
-            generation = _profile_generation_options(profile)
+            generation = profile_generation_options(profile)
             payload = body.model_dump()
             payload.update({
                 "provider": profile.get("type") or "ollama",
@@ -192,7 +130,7 @@ def create_rag_job(body: RAGRunRequest, request: Request) -> dict[str, Any]:
                 grade_profile = system_store.researcher_profile(grade_profile_id)
                 if grade_profile is None:
                     raise ValueError("That researcher auto-grade LLM profile is not available.")
-                grade_generation = _profile_generation_options(grade_profile)
+                grade_generation = profile_generation_options(grade_profile)
                 payload.update({
                     "auto_grade_provider": grade_profile.get("type") or "ollama",
                     "auto_grade_model": grade_profile.get("model"),

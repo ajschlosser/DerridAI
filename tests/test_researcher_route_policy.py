@@ -18,14 +18,17 @@ from types import SimpleNamespace
 sys.modules.setdefault("chromadb", types.SimpleNamespace())
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "api"))
 
-from app import main  # noqa: E402
-from app.main import _is_public_language_route, _non_admin_route_allowed  # noqa: E402
+from app import route_policy  # noqa: E402
+from app.route_policy import (  # noqa: E402
+    is_public_language_route,
+    non_admin_route_allowed,
+)
 from app.routers import health as health_routes  # noqa: E402
 
 
 def test_researcher_can_load_hashed_content_policy_mirror():
     """A researcher may GET the hashed policy mirror at /api/i18n/content-policy."""
-    assert _non_admin_route_allowed("researcher", "/api/i18n/content-policy", "GET") is True
+    assert non_admin_route_allowed("researcher", "/api/i18n/content-policy", "GET") is True
 
 
 def test_researcher_cannot_read_or_write_plaintext_locale_policies():
@@ -34,46 +37,46 @@ def test_researcher_cannot_read_or_write_plaintext_locale_policies():
     GET and PUT on /api/i18n/languages/en-US/content-policy are denied, while the ordinary language list and
     a single language dictionary stay readable, so the UI can still load.
     """
-    assert _non_admin_route_allowed("researcher", "/api/i18n/languages/en-US/content-policy", "GET") is False
-    assert _non_admin_route_allowed("researcher", "/api/i18n/languages/en-US/content-policy", "PUT") is False
-    assert _non_admin_route_allowed("researcher", "/api/i18n/languages", "GET") is True
-    assert _non_admin_route_allowed("researcher", "/api/i18n/languages/en-US", "GET") is True
+    assert non_admin_route_allowed("researcher", "/api/i18n/languages/en-US/content-policy", "GET") is False
+    assert non_admin_route_allowed("researcher", "/api/i18n/languages/en-US/content-policy", "PUT") is False
+    assert non_admin_route_allowed("researcher", "/api/i18n/languages", "GET") is True
+    assert non_admin_route_allowed("researcher", "/api/i18n/languages/en-US", "GET") is True
 
 
 def test_researcher_route_allowlist_matches_only_intended_resource_shapes(monkeypatch):
     """A permitted route prefix cannot make a neighboring future route public."""
-    monkeypatch.setattr(main, "role_has_capability", lambda _role, _capability: True)
+    monkeypatch.setattr(route_policy, "role_has_capability", lambda _role, _capability: True)
 
-    assert _non_admin_route_allowed("researcher", "/api/config", "GET") is False
-    assert _is_public_language_route("GET", "/api/i18n/languages/en-US") is True
+    assert non_admin_route_allowed("researcher", "/api/config", "GET") is False
+    assert is_public_language_route("GET", "/api/i18n/languages/en-US") is True
     assert (
-        _is_public_language_route(
+        is_public_language_route(
             "GET", "/api/i18n/languages/en-US/content-policy/extra"
         )
         is False
     )
-    assert _is_public_language_route("PUT", "/api/i18n/languages/en-US") is False
-    assert _non_admin_route_allowed("researcher", "/api/i18n/languages-extra", "GET") is False
+    assert is_public_language_route("PUT", "/api/i18n/languages/en-US") is False
+    assert non_admin_route_allowed("researcher", "/api/i18n/languages-extra", "GET") is False
     assert (
-        _non_admin_route_allowed(
+        non_admin_route_allowed(
             "researcher", "/api/i18n/languages/en-US/content-policy/extra", "GET"
         )
         is False
     )
     assert (
-        _non_admin_route_allowed("researcher", "/api/annotations/12/restore", "DELETE")
+        non_admin_route_allowed("researcher", "/api/annotations/12/restore", "DELETE")
         is False
     )
     assert (
-        _non_admin_route_allowed("researcher", "/api/stores/Corpus/admin/secret", "GET")
+        non_admin_route_allowed("researcher", "/api/stores/Corpus/admin/secret", "GET")
         is False
     )
     assert (
-        _non_admin_route_allowed("researcher", "/api/stores/Corpus/export", "GET")
+        non_admin_route_allowed("researcher", "/api/stores/Corpus/export", "GET")
         is False
     )
     assert (
-        _non_admin_route_allowed(
+        non_admin_route_allowed(
             "researcher", "/api/stores/Corpus/records/id/extra", "GET"
         )
         is True

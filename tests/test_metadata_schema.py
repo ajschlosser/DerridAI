@@ -275,9 +275,11 @@ def test_the_api_lists_saves_exports_imports_and_deletes(tmp_path, monkeypatch):
     except ModuleNotFoundError:
         sys.modules["chromadb"] = types.SimpleNamespace()
     from app import main
+    from app.auth import auth_store
+    from app.routers import corpus as corpus_routes
 
-    monkeypatch.setattr(main, "metadata_schemas", SchemaStore(tmp_path))
-    monkeypatch.setattr(main.auth_store, "user_for_session", lambda cookie: types.SimpleNamespace(id=1, role="admin", username="a"))
+    monkeypatch.setattr(corpus_routes, "metadata_schemas", SchemaStore(tmp_path))
+    monkeypatch.setattr(auth_store, "user_for_session", lambda cookie: types.SimpleNamespace(id=1, role="admin", username="a"))
 
     async def run():
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="http://t") as c:
@@ -310,8 +312,9 @@ def test_the_preview_endpoint_shows_the_prompt_without_calling_a_model(tmp_path,
     except ModuleNotFoundError:
         sys.modules["chromadb"] = types.SimpleNamespace()
     from app import main
+    from app.auth import auth_store
 
-    monkeypatch.setattr(main.auth_store, "user_for_session", lambda cookie: types.SimpleNamespace(id=1, role="admin", username="a"))
+    monkeypatch.setattr(auth_store, "user_for_session", lambda cookie: types.SimpleNamespace(id=1, role="admin", username="a"))
 
     async def run():
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="http://t") as c:
@@ -336,10 +339,12 @@ def test_researcher_cannot_author_metadata_schemas(tmp_path, monkeypatch):
     except ModuleNotFoundError:
         sys.modules["chromadb"] = types.SimpleNamespace()
     from app import main
+    from app.auth import auth_store
+    from app.routers import corpus as corpus_routes
 
-    monkeypatch.setattr(main, "metadata_schemas", SchemaStore(tmp_path))
+    monkeypatch.setattr(corpus_routes, "metadata_schemas", SchemaStore(tmp_path))
     monkeypatch.setattr(
-        main.auth_store,
+        auth_store,
         "user_for_session",
         lambda cookie: types.SimpleNamespace(id=2, role="researcher", username="r"),
     )

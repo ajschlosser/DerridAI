@@ -42,10 +42,11 @@ def test_all_declared_versions_agree():
     for path, found in declared.items():
         assert found, f"{path} does not declare a version"
         assert set(found) == {version}, f"{path} declares {found}, expected {version}"
-    main = read("api/app/main.py")
+    application = read("api/app/application.py")
+    admin_routes = read("api/app/routers/admin.py")
     health_routes = read("api/app/routers/health.py")
-    assert "version=app_version_label()" in main
-    assert '"app_version": APP_VERSION' in main
+    assert "version=app_version_label()" in application
+    assert '"app_version": APP_VERSION' in admin_routes
     assert '"git_commit": APP_GIT_COMMIT or None' in health_routes
     assert "AppBuildInfo" in read("web/src/components/shell/TopbarAccount.vue")
     assert "AppBuildInfo" in read("web/src/components/AuthScreen.vue")
