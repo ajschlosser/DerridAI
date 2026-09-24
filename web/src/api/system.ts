@@ -78,17 +78,6 @@ export interface SystemDataDatabase {
   size_bytes?: number;
   tables: SystemDataTable[];
 }
-export interface SystemVectorStore {
-  name: string;
-  storage_name?: string;
-  count: number;
-  metadata?: Record<string, unknown>;
-  embedding_provider?: string;
-  embedding_model?: string;
-  collection_role?: string;
-  embedding_dimension?: number;
-  distance_metric?: string;
-}
 
 export interface SystemMetadataExemplar {
   exemplar_id: string;
@@ -150,7 +139,6 @@ export const systemApi = {
   updateLanguageContentPolicy: (code: string, payload: Pick<LanguageContentPolicy, "blocked_terms" | "contextual_terms">) => apiRequest<LanguageContentPolicy>(`/api/i18n/languages/${encodeURIComponent(code)}/content-policy`, {method: "PUT", body: JSON.stringify(payload)}),
   generateLanguageContentPolicy: (payload: Record<string, unknown>) => apiRequest<JobSummary>("/api/jobs/llm-tool", {method: "POST", body: JSON.stringify({task: "language_content_policy", language: payload, label: `Languages · ${String(payload.code || "policy")}`, provider_profile_id: String(payload.provider_profile_id || "") || null, max_concurrent_requests: Number(payload.max_concurrent_requests || 1)})}),
   systemData: () => apiRequest<{databases: SystemDataDatabase[]}>("/api/system/data"),
-  systemVectorStores: () => apiRequest<{stores: SystemVectorStore[]}>("/api/system/data/vector-stores"),
   systemMetadataExemplars: (filters: SystemMetadataExemplarFilters = {}) => {
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(filters)) {
