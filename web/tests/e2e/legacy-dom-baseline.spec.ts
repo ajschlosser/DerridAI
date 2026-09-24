@@ -306,13 +306,23 @@ function samplePdf(): Buffer {
 }
 
 const inPdfExplorer = async (page: Page, { open = true } = {}) => {
-  await page.evaluate(() => {
-    window.dispatchEvent(
-      new CustomEvent("derridai:navigate-native", {
-        detail: { path: "/pdf?mode=explorer", runtimeView: "pdf" },
-      }),
-    );
-  });
+  const explorerPath = "/pdf?mode=explorer";
+  await expect
+    .poll(
+      async () => {
+        await page.evaluate((path) => {
+          window.dispatchEvent(
+            new CustomEvent("derridai:navigate-native", {
+              detail: { path, runtimeView: "pdf" },
+            }),
+          );
+        }, explorerPath);
+        const url = new URL(page.url());
+        return `${url.pathname}${url.search}`;
+      },
+      { timeout: 10_000, intervals: [50, 100, 200, 500] },
+    )
+    .toBe(explorerPath);
   await page.waitForLoadState("networkidle");
   const input = page.locator("#pdfInput");
   await expect(input).toBeAttached({ timeout: 10_000 });
