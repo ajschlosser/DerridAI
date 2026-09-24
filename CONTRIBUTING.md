@@ -8,28 +8,31 @@ Read [AGENTS.md](AGENTS.md) for conventions (i18n parity, accessibility, provena
 ```bash
 python -m venv .venv && . .venv/bin/activate
 pip install -r api/requirements.txt -r api/requirements-dev.txt pytest
-cd web && npm install --no-audit --no-fund
+cd web && npm ci --no-audit --no-fund
 ```
 
 Backend tests need no environment setup: `tests/conftest.py` points storage at a temporary directory (and leaves any value CI has already set alone). **Do not `export` `CHROMA_DATA_ROOT`, `AUTH_DB_PATH`, `SYSTEM_DB_PATH`, or `CHROMA_PATH` in your shell.** `docker-compose.yml` interpolates the same names, so an exported test path is picked up by the next `docker compose up` and the API container crash-loops on a host path that does not exist inside it.
 
 ## CI gates
 
-`.github/workflows/frontend.yml` runs five jobs (backend lint, backend types, frontend lint, backend, frontend); all must pass. Run them locally from the repository root unless noted.
+`.github/workflows/frontend.yml` keeps the historical `frontend` required check, but that check now aggregates independent frontend gates so expensive browser coverage runs concurrently and failures surface earlier.
 
-| Job | Command |
+| Gate | Command / responsibility |
 | --- | --- |
 | Backend lint | `pip install -r api/requirements-dev.txt && ruff check api/app tests` |
 | Backend types | `mypy` (config in `mypy.ini`; `check_untyped_defs` is on) |
 | Frontend lint | `cd web && npm run lint` (ESLint, zero warnings) |
 | Backend tests | `python -m compileall -q api/app && pytest -q` |
-| Frontend typecheck | `cd web && npm run typecheck` (strict vue-tsc) |
-| Frontend unit | `cd web && npm run test:unit` (Vitest) |
-| Production build | `cd web && npm run build` |
-| Storybook build | `cd web && npm run build-storybook` |
-| Composed UI, opacity, WCAG 2.2 AA (light and dark) | `cd web && npx playwright install chromium && npm run test:e2e` (Playwright + axe) |
+| Frontend static | `cd web && npm run typecheck && npm run test:unit && npm run build:ci && npm run build-storybook` |
+| Legacy DOM regression | `cd web && npm run build:ci && npm run test:e2e:legacy` |
+| Composed UI / app E2E | `cd web && npm run build:ci && npm run build-storybook && npm run test:e2e` |
+| Corpus Builder WCAG 2.2 AA sweep | `cd web && npm run build-storybook && npm run test:e2e:a11y` |
 
-`cd web && npm run test:frontend` chains typecheck, unit, build, Storybook build, and e2e. The e2e run also serves the production build on port 5199 to render the real Vue views against a mock API (`web/tests/e2e/support`), so run `npm run build` first. If port 6006 or 5199 is busy, set `STORYBOOK_PORT` or `APP_PORT`; do not weaken a gate to get past a local problem.
+Install Chromium once for local browser runs with `cd web && npx playwright install chromium`. `npm run test:frontend` chains all frontend gates for a complete local pass.
+
+In CI, composed browser coverage is sharded and runs against the built Storybook rather than Storybook's development server. The global Playwright project uses desktop Chromium once; tests that require laptop/mobile geometry set the viewport explicitly. Static Storybook builds disable the addon's automatic axe pass because Playwright owns the CI axe scan, avoiding two concurrent accessibility engines examining the same story.
+
+The e2e run also serves the production build on port 5199 to render the real Vue views against a mock API (`web/tests/e2e/support`). For an individual local browser command, build the artifact it needs first. If port 6006 or 5199 is busy, set `STORYBOOK_PORT` or `APP_PORT`; do not weaken a gate to get past a local problem.
 
 ## Working rules
 

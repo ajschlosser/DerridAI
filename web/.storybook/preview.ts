@@ -34,7 +34,13 @@ const preview: Preview = {
       },
     },
   },
-  initialGlobals: { locale: "en-US" },
+  initialGlobals: {
+    locale: "en-US",
+    // Static Storybook builds are scanned explicitly by Playwright in CI. Avoid
+    // racing the addon's automatic axe run against the CI-owned scan. Local
+    // Storybook development remains automatic.
+    a11y: { manual: import.meta.env.PROD },
+  },
   parameters: {
     layout: "padded",
     a11y: { test: "error" },
