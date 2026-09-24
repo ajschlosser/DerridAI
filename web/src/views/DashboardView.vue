@@ -538,8 +538,7 @@ onBeforeUnmount(() => {
             >
               {{
                 i18n.t(
-                  "research.traditional_search",
-                  isResearcher ? "Record search" : "Traditional search",
+                  isResearcher ? "research.traditional_search" : "runtime.traditional_search",
                 )
               }}
             </button>
