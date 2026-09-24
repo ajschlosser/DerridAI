@@ -315,6 +315,15 @@ function displayValue(field: string) {
           @source="emit('source', field)"
           @dirty="(value) => emit('dirty', value)"
         />
+        <button
+          v-if="String(status(field).method || '').includes('llm') && status(field).autofilled"
+          type="button"
+          class="btn small primary quick-confirm"
+          :disabled="fieldBusy(field)"
+          @click="emit('resolve', field, record[field])"
+        >
+          {{ i18n.t("pdf_corpus.confirm_llm_value", "Confirm LLM value") }}
+        </button>
       </div>
     </div>
     <details v-if="settledFields.length" class="settled-metadata">

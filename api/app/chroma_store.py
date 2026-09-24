@@ -890,7 +890,7 @@ class ChromaStore:
 
     def _public_collection_name(self, collection) -> str:
         # The response cache has a stable public alias while using a reserved
-        # internal Chroma collection name.
+        # internal storage name.
         if collection.name == self._RESPONSE_CACHE_STORAGE:
             return self._RESPONSE_CACHE_PUBLIC
         return collection.name
@@ -1053,7 +1053,11 @@ class ChromaStore:
         # user-created names that begin with underscores; this exception is only
         # reachable by the internal response-cache lifecycle.
         name = self._storage_name(requested_name)
-        validation_name = name if requested_name == self._RESPONSE_CACHE_PUBLIC else requested_name
+        validation_name = (
+            name
+            if requested_name == self._RESPONSE_CACHE_PUBLIC
+            else requested_name
+        )
         if len(validation_name) < 3 or len(validation_name) > 128:
             raise ValueError("Collection names must contain 3 to 128 characters.")
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*[A-Za-z0-9]", validation_name):

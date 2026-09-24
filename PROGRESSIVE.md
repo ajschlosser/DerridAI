@@ -1,8 +1,9 @@
 # Progressive Metadata Enhancement
 
-Status: implementation plan and working specification  
-Branch: `feature/progressive-enhancement`  
-Base at branch creation: `cef570171343d1fb949d0bb5d181a844918b0e36` (then-current `master`). `master` has since advanced; rebase/merge is pending and must remain non-destructive.
+Status: active implementation specification and audit log  
+Foundation: progressive backend slice merged in PR #149  
+Current integration: PR #145 (`ajschlosser-solid-goggles`), rebased onto current `master` at `335f3048b3d4c65226d4aa4033808f40dd222c30`  
+Current focus: System Data inspection, PR #145 reconciliation, and validation without exposing vector storage as product semantics.
 
 ## 1. Purpose
 
@@ -566,6 +567,30 @@ Performance tests should set a generous but explicit ceiling for retrieval overh
 
 ## 17. Compatibility with concurrent work
 
+### PR #145 System Data reconciliation
+
+PR #145 introduces a first-class **System Data** administration surface. Progressive Metadata Enhancement uses that surface for inspection rather than exposing its derived storage as a normal research corpus.
+
+The integration contract is now:
+
+- `/api/system/data/metadata-exemplars` is the read-only administrative inspection API;
+- the System Data page presents **Metadata exemplars** as domain data, not as a vector-store browser;
+- visible exemplar fields include metadata field/value, positive/correction kind, authority status, source record/revision/build, schema/version, language/region, evidence block IDs/hash, and the bounded evidence-context window;
+- filters and pagination operate on those semantic/audit fields;
+- embeddings, vector dimensions, Chroma IDs, similarity internals, and collection-storage names are intentionally not part of the ordinary System Data UX;
+- `derridai_metadata_exemplars` remains a rebuildable implementation projection whose authoritative source is reviewed corpus metadata plus evidence;
+- absence of the derived projection is represented as an empty/not-yet-built System Data state rather than an application error.
+
+PR #145 also introduced an earlier `derridai_metadata_memory` semantic reviewer-memory path. That path is superseded by the evidence-bound exemplar architecture and must not coexist as a second semantic learning system. The PR #145 branch has therefore been reconciled so:
+
+- the exact-value SQLite adjudication cache remains useful for deterministic same-record suggestions;
+- semantic reviewer examples are supplied only through the progressive evidence-bound exemplar pipeline;
+- the older Chroma metadata-memory indexing/retrieval hooks are removed;
+- the obsolete semantic-memory clear endpoint/UI action is removed;
+- System Data inspects the progressive exemplar projection instead.
+
+This preserves one semantic precedent model and one provenance contract.
+
 At branch creation, open PR #145 ("Improve corpus enrichment, system data, and source-aware metadata") overlaps the same general area and describes "semantic reviewer memory".
 
 This branch is intentionally based on current `master`, not that PR.
@@ -600,7 +625,7 @@ The initial backend slice is implemented on `feature/progressive-enhancement`:
 
 Empirical quality/latency benchmarking across real corpora and models remains an evaluation activity rather than a prerequisite for the initial implementation. The current semantic index is deliberately build-scoped; a cross-build exemplar catalogue requires an authoritative resolver for source build/record/revision/evidence identity before it should be enabled. The UX/audit expansion in Phase 6 remains intentionally deferred until the backend contract has been exercised in production-like runs.
 
-Validation note: focused regression tests have been added, but this branch has not yet received a complete CI run. Do not treat the presence of tests as evidence that the full suite is green.
+Validation note (PR #145, quality-gates run #503): backend Ruff, mypy, Python syntax, the full backend regression suite, frontend lint, frontend typecheck, frontend unit/component tests, the production build, and the Storybook build have passed on the reconciled branch. The long composed UI/opacity/WCAG E2E phase was still running when this status was recorded; do not describe the complete workflow as green until that final phase succeeds.
 
 
 ### Phase 0 - Baseline and contracts
@@ -656,12 +681,23 @@ Validation note: focused regression tests have been added, but this branch has n
 
 ### Phase 6 - UX/audit surface
 
-Only after the backend contract is stable:
+Status: **partially implemented through PR #145 System Data**.
 
-- extend the existing editorial-memory inspection UI rather than add a duplicate panel;
-- show exemplar source record, field/value, authority, evidence excerpt and why it was retrieved;
-- distinguish semantic retrieval score from confidence;
-- support English/French strings and WCAG 2.2 AA interaction requirements.
+Implemented:
+
+- System Data now exposes a read-only Metadata Exemplars inspector rather than a research-corpus/vector-store surface;
+- show exemplar source record/revision/build, field/value, authority state, schema/language/region, evidence block IDs/hash, and bounded context;
+- field/kind/language/build/schema/record filtering and pagination;
+- explicitly hide vector implementation details from the normal administrative UX;
+- English and French copy;
+- focused backend and frontend regression tests.
+
+Remaining:
+
+- add a direct navigation path from an exemplar to the corresponding Corpus Builder review/evidence surface once that route can preserve build/record context reliably;
+- show retrieval-use history (which enrichment run consumed an exemplar and why it was selected) rather than only the exemplar projection itself;
+- distinguish retrieval/MMR score from model confidence wherever retrieval-use history is shown;
+- run representative WCAG 2.2 AA, forced-colors, dark-mode, long-string, and mobile interaction checks on the inspector.
 
 ## 19. Initial acceptance criteria
 

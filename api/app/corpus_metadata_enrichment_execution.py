@@ -329,7 +329,7 @@ CURRENT REVIEWED RECORD TEXT:
             guidance_prompt = format_group_guidance(group_fields, run_guidance, guidance_matches)
             if guidance_prompt:
                 prompt = prompt + "\n\n" + guidance_prompt
-            remembered: dict[str, list[Any]] = {}
+            remembered: dict[str, Any] = {}
             for field in schema.fields_in(group.key):
                 cached = adjudication_suggestions(
                     record_id=str(record.get("record_id") or ""),
@@ -340,7 +340,7 @@ CURRENT REVIEWED RECORD TEXT:
                 )
                 values = cached.get("prior_values") if isinstance(cached, dict) else None
                 if isinstance(values, list) and values:
-                    remembered[field.name] = values
+                    remembered[field.name] = {"exact_values": values}
             if remembered:
                 prompt += (
                     "\n\nREVIEWER MEMORY (advisory suggestions only; do not copy without "
@@ -548,6 +548,11 @@ CURRENT REVIEWED RECORD TEXT:
     ) -> dict[str, Any]:
         """Bind proposals to source evidence while retaining reviewer-owned values."""
         schema = schema or default_schema()
+        run_guidance = (
+            request.get("run_guidance")
+            if isinstance(request, dict) and isinstance(request.get("run_guidance"), dict)
+            else {}
+        )
         # What may be proposed, cited and reviewed comes from the build's schema, not from a fixed list.
         allowed_fields = _allowed_for(schema)
         attribution_fields = schema.attribution_fields()
@@ -839,6 +844,25 @@ CURRENT REVIEWED RECORD TEXT:
                 continue
             evidence_info = clean_evidence.get(field) if isinstance(clean_evidence.get(field), dict) else {}
             assessment = field_assessments.get(field) if isinstance(field_assessments.get(field), dict) else {}
+            guidance_item = run_guidance.get(field) if isinstance(run_guidance.get(field), dict) else {}
+            required_placeholder = str(guidance_item.get("default_placeholder") or "").strip()
+            if bool(guidance_item.get("required")) and value in (None, "", []):
+                if required_placeholder:
+                    record[field] = required_placeholder
+                    field_status[field] = {
+                        "status": "unresolved",
+                        "method": "run_guidance",
+                        "confidence": None,
+                        "auto_populated": True,
+                        "autofilled": False,
+                        "value_source": "run_guidance",
+                        "verification_status": "pending_review",
+                        "proposed_value": None,
+                        "placeholder": True,
+                        "reason_code": "required_placeholder",
+                        "reason": "The run required a value, but the model could not establish one. Replace this placeholder during review.",
+                    }
+                    continue
             assessment_confidence = assessment.get("confidence") if isinstance(assessment.get("confidence"), (int, float)) else None
             evidence_confidence = evidence_info.get("confidence") if isinstance(evidence_info.get("confidence"), (int, float)) else None
             confidence = float(assessment_confidence if assessment_confidence is not None else evidence_confidence) if (assessment_confidence is not None or evidence_confidence is not None) else None

@@ -18,12 +18,14 @@ from .routers.jobs import router as jobs_router
 from .routers.llm import router as llm_router
 from .routers.stores import router as stores_router
 from .routers.system import router as system_router
+from .routers.system_data import router as system_data_router
 from .validation_handlers import request_validation_error_handler
 
 ROUTERS = (
     auth_router,
     annotations_router,
     system_router,
+    system_data_router,
     i18n_router,
     health_router,
     llm_router,

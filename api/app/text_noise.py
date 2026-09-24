@@ -223,7 +223,11 @@ def fuse_record_noise(
 
 
 def raster_score_for_pages(record: dict[str, Any], pages: list[dict[str, Any]] | None) -> float | None:
-    """Highest raster-noise among pages this record spans; None if no raster evidence."""
+    """Typical raster noise across the pages this record spans; None if unavailable.
+
+    A single damaged page is retained in page-level source diagnostics, but must
+    not make an otherwise readable multi-page record unusable by itself.
+    """
     if not pages:
         return None
     wanted = {int(value) for value in (record.get("pdf_pages") or []) if isinstance(value, int)}
@@ -239,7 +243,13 @@ def raster_score_for_pages(record: dict[str, Any], pages: list[dict[str, Any]] |
             scores.append(float(raster.get("noise")))
         except (TypeError, ValueError):
             continue
-    return max(scores) if scores else None
+    if not scores:
+        return None
+    scores.sort()
+    middle = len(scores) // 2
+    if len(scores) % 2:
+        return scores[middle]
+    return (scores[middle - 1] + scores[middle]) / 2
 
 
 def median_score(records: list[dict[str, Any]]) -> float | None:

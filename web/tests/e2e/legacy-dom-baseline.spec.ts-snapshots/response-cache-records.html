@@ -1,48 +1,98 @@
 <main id="main" class="runtime-surface" aria-live="polite">
-<div class="response-cache-page">
-<section class="card response-cache-overview" data-collapsible-ready="1" data-collapse-key="responsecache::RAG response cache::0">
-<div class="cardhead">
+<div class="system-data-page">
+<header class="page-header">
 <div>
-<b>RAG response cache</b>
-<div class="note">System cache only. This collection is intentionally excluded from corpus Vector Stores, corpus DB counts, language mirroring, and RAG source selection.</div>
+<span class="eyebrow">System Data</span>
+<h1>System Data</h1>
+<p>Inspect progressive metadata, manage the response cache, and administer durable application databases through a safe, backend-neutral interface.</p>
 </div>
-<div class="tools">
-<button class="btn" id="cacheFaq">
+<button class="btn" type="button">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20">
+<path d="M20 11a8 8 0 0 0-14.8-4L3 10">
 </path>
-<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z">
+<path d="M3 4v6h6">
 </path>
-</svg>Open Response Library</button>
-<button class="btn danger" id="clearResponseCache">Clear cache</button>
-</div>
-<span class="ui-collapse-title">RAG response cache</span>
-<button type="button" class="ui-collapse-toggle" title="Collapse" aria-label="Collapse">−</button>
-</div>
-<div class="dashboard-kpis response-cache-kpis">
-<div class="dash-kpi">
-<span>Cached responses</span>
-<strong>3</strong>
-</div>
-<div class="dash-kpi">
-<span>Collection</span>
-<strong>_response_cache</strong>
-</div>
-<div class="dash-kpi">
-<span>Embedding</span>
-<strong>system-managed</strong>
-</div>
-</div>
-<div class="info">Each cache record stores the original RAG query, instructions, run parameters, answer, evidence, retrieval diagnostics, timings, and all saved LLM grading runs.</div>
-</section>
-<section class="card" data-collapsible-ready="1" data-collapse-key="responsecache::Recent cached responses::1">
-<div class="cardhead">
+<path d="M4 13a8 8 0 0 0 14.8 4L21 14">
+</path>
+<path d="M21 20v-6h-6">
+</path>
+</svg> Refresh data</button>
+</header>
+<section class="card cache-summary" aria-labelledby="cache-title">
 <div>
-<b>Recent cached responses</b>
-<div class="note">Latest 100 response-cache entries. Use Response Library for full answer/evidence browsing and re-runs.</div>
+<b id="cache-title">RAG response cache</b>
+<p>System cache only. It is excluded from research corpora and source selection.</p>
 </div>
-<span class="ui-collapse-title">Recent cached responses</span>
-<button type="button" class="ui-collapse-toggle" title="Collapse" aria-label="Collapse">−</button>
+<div class="cache-actions">
+<strong>3</strong>
+<button class="btn" type="button">Open Response Library</button>
+<button class="btn danger" type="button">Clear response cache</button>
+</div>
+</section>
+<section class="card exemplar-panel" aria-labelledby="metadata-exemplars-title">
+<div class="table-header">
+<div>
+<span class="eyebrow">Progressive metadata</span>
+<h2 id="metadata-exemplars-title">Metadata exemplars</h2>
+<p>Read-only, evidence-bound examples learned from reviewed metadata decisions. These are derived from canonical corpus records and can be rebuilt.</p>
+</div>
+<strong class="exemplar-count">0</strong>
+</div>
+<div class="exemplar-filters" role="search" aria-label="Filter metadata exemplars">
+<label>
+<span>Field</span>
+<select class="control">
+<option value="">All</option>
+</select>
+</label>
+<label>
+<span>Kind</span>
+<select class="control">
+<option value="">All</option>
+</select>
+</label>
+<label>
+<span>Language</span>
+<select class="control">
+<option value="">All</option>
+</select>
+</label>
+<label>
+<span>Build</span>
+<select class="control">
+<option value="">All</option>
+</select>
+</label>
+<label>
+<span>Schema</span>
+<select class="control">
+<option value="">All</option>
+</select>
+</label>
+<label class="exemplar-record-filter">
+<span>Record ID</span>
+<input class="control" type="search">
+</label>
+<div class="exemplar-filter-actions">
+<button class="btn" type="button">Apply filters</button>
+<button class="btn" type="button">Clear filters</button>
+</div>
+</div>
+<div class="info">No progressive metadata exemplar index exists yet. Review evidence-bound metadata and run enrichment to create it.</div>
+<footer class="exemplar-pagination">
+<span>0–0 of 0</span>
+<div>
+<button class="btn tiny" type="button" disabled="">Previous</button>
+<button class="btn tiny" type="button" disabled="">Next</button>
+</div>
+</footer>
+</section>
+<section class="card" aria-labelledby="cache-records-title">
+<div class="table-header">
+<div>
+<h2 id="cache-records-title">Response cache records</h2>
+<p>Latest response-cache entries.</p>
+</div>
 </div>
 <div class="tablewrap">
 <table>
@@ -51,10 +101,7 @@
 <th>Created</th>
 <th>Question</th>
 <th>Generation</th>
-<th>Evidence</th>
-<th>Grades</th>
-<th>
-</th>
+<th>Actions</th>
 </tr>
 </thead>
 <tbody>
@@ -62,35 +109,48 @@
 <td><date></td>
 <td>How does Derrida distinguish responsibility from programmable rule-following?</td>
 <td>Ollama · qwen3:14b</td>
-<td>2</td>
-<td>0</td>
 <td>
-<button class="btn tiny" data-cache-faq="0">Open in Response Library</button>
+<button class="btn tiny danger" type="button">Delete row</button>
 </td>
 </tr>
 <tr>
 <td><date></td>
 <td>What is the difference between conditional and unconditional hospitality?</td>
 <td>Ollama · qwen3:14b</td>
-<td>0</td>
-<td>0</td>
 <td>
-<button class="btn tiny" data-cache-faq="1">Open in Response Library</button>
+<button class="btn tiny danger" type="button">Delete row</button>
 </td>
 </tr>
 <tr>
 <td><date></td>
 <td>Why does Derrida return to the figure of the city of refuge?</td>
 <td>OpenAI-compatible · gpt-oss:20b</td>
-<td>0</td>
-<td>0</td>
 <td>
-<button class="btn tiny" data-cache-faq="2">Open in Response Library</button>
+<button class="btn tiny danger" type="button">Delete row</button>
 </td>
 </tr>
 </tbody>
 </table>
 </div>
+</section>
+<section class="data-grid">
+<aside class="card database-list" aria-labelledby="database-title">
+<h2 id="database-title">System databases</h2>
+<button class="database-button active" type="button">
+<b>system</b>
+<small>sqlite · 0 table</small>
+</button>
+<button class="database-button" type="button">
+<b>auth</b>
+<small>sqlite · 0 table</small>
+</button>
+</aside>
+<section class="card table-panel" aria-labelledby="table-title">
+<div>
+<h2 id="table-title">Table</h2>
+<p>Select a table to inspect its rows.</p>
+</div>
+</section>
 </section>
 </div>
 </main>

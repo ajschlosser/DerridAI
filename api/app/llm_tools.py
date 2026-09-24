@@ -20,6 +20,13 @@ from .models import (
     WorkMetadataSeed,
 )
 from .rag import _extract_json, chat_complete
+from .work_metadata_sources import (
+    applicable_fields_for,
+    canonical_source_type,
+    catalogue_sources_for,
+    is_catalogue_supported,
+    web_page_candidate,
+)
 
 
 def _model_for(provider: str, model: str | None) -> str:
@@ -442,6 +449,51 @@ def _crossref_candidates(seed: WorkMetadataSeed) -> list[dict[str, Any]]:
     return out
 
 
+def _openalex_candidates(seed: WorkMetadataSeed) -> list[dict[str, Any]]:
+    current = seed.current_metadata or {}
+    query = str(current.get("document_title") or seed.work).strip()
+    author = str(current.get("document_author") or "").strip()
+    with httpx.Client(
+        timeout=20.0,
+        follow_redirects=True,
+        headers={"User-Agent": "DerridAI (metadata lookup; mailto:research@derridai.local)"},
+    ) as client:
+        response = client.get(
+            "https://api.openalex.org/works",
+            params={"search": " ".join(value for value in (query, author) if value), "per-page": 8},
+        )
+        response.raise_for_status()
+        items = list((response.json() or {}).get("results") or [])
+    out: list[dict[str, Any]] = []
+    for item in items:
+        title = _catalog_text(item.get("title"))
+        primary_location = item.get("primary_location") or {}
+        source = primary_location.get("source") or {}
+        publication_year = item.get("publication_year")
+        authors = [
+            str((authorship.get("author") or {}).get("display_name") or "").strip()
+            for authorship in item.get("authorships") or []
+            if isinstance(authorship, dict)
+        ]
+        metadata = {
+            "source_type": seed.source_type_scope,
+            "document_type": seed.source_type_scope,
+            "document_title": title or None,
+            "short_title": title or None,
+            "document_author": ", ".join(value for value in authors if value) or None,
+            "container_title": _catalog_text(source.get("display_name")) or None,
+            "journal_title": _catalog_text(source.get("display_name")) or None,
+            "publication_year": publication_year,
+            "year": publication_year,
+            "doi": _catalog_text(item.get("doi")) or None,
+            "url": _catalog_text((item.get("primary_location") or {}).get("landing_page_url")) or None,
+            "_catalog_source": "OpenAlex",
+        }
+        metadata["full_citation"] = _mla_citation(metadata) or None
+        out.append(metadata)
+    return out
+
+
 def _google_books_candidates(seed: WorkMetadataSeed) -> list[dict[str, Any]]:
     current = seed.current_metadata or {}
     query = str(current.get("document_title") or seed.work).strip()
@@ -475,15 +527,25 @@ def _google_books_candidates(seed: WorkMetadataSeed) -> list[dict[str, Any]]:
 
 
 def _multi_catalog_candidates(seed: WorkMetadataSeed) -> tuple[list[dict[str, Any]], list[str]]:
-    """Try format-appropriate bibliographic sources instead of stopping at Open Library."""
-    current = seed.current_metadata or {}
-    source_type = str(current.get("source_type") or current.get("document_type") or "").casefold()
+    """Try only sources appropriate to the scoped source type."""
+    source_type = canonical_source_type(seed.source_type_scope)
     attempted_sources: list[str] = []
-    result_sources: list[str] = []
     candidates: list[dict[str, Any]] = []
-    lookups = []
-    if any(token in source_type for token in ("article", "journal", "chapter")):
-        lookups = [("Crossref", _crossref_candidates), ("Open Library", _openlibrary_candidates), ("Google Books", _google_books_candidates)]
+    if source_type == "web":
+        attempted_sources.append("Source webpage metadata")
+        try:
+            candidate = web_page_candidate(seed.current_metadata or {})
+        except httpx.HTTPError:
+            candidate = None
+        return ([candidate] if candidate else []), attempted_sources
+    if not is_catalogue_supported(source_type):
+        return [], catalogue_sources_for(source_type)
+    if source_type == "journal_article":
+        lookups = [("Crossref", _crossref_candidates), ("OpenAlex", _openalex_candidates), ("Open Library", _openlibrary_candidates)]
+    elif source_type == "chapter":
+        lookups = [("Crossref", _crossref_candidates), ("Open Library", _openlibrary_candidates)]
+    elif source_type == "thesis":
+        lookups = [("OpenAlex", _openalex_candidates), ("Crossref", _crossref_candidates)]
     else:
         lookups = [("Open Library", _openlibrary_candidates), ("Google Books", _google_books_candidates), ("Crossref", _crossref_candidates)]
     for name, lookup in lookups:
@@ -493,7 +555,6 @@ def _multi_catalog_candidates(seed: WorkMetadataSeed) -> tuple[list[dict[str, An
         except httpx.HTTPError:
             found = []
         if found:
-            result_sources.append(name)
             for item in found:
                 item = dict(item)
                 item.setdefault("_catalog_source", name)
@@ -524,26 +585,37 @@ def run_work_metadata_lookup(
     if cancelled and cancelled():
         raise InterruptedError()
     if not candidates:
+        source_type = canonical_source_type(seed.source_type_scope)
+        message = (
+            f"No external metadata adapter is configured for {source_type}; "
+            "source-derived metadata was left unchanged."
+            if not is_catalogue_supported(source_type) and source_type != "web"
+            else "No matching metadata record was found across the configured sources."
+        )
         return {
             "work": seed.work,
+            "source_type_scope": source_type,
             "current_metadata": seed.current_metadata,
             "changes": {},
             "rationale": {},
             "catalog_source": ", ".join(catalog_sources) or "Open Library / Google Books / Crossref",
-            "message": "No matching bibliographic catalogue result was found across the configured public catalogues.",
+            "message": message,
         }
 
     compact = [_candidate_public(item) for item in candidates]
     model = _model_for(request.provider, request.model)
-    prompt = f"""You are matching a DerridAI work to bibliographic catalogue records.
+    prompt = f"""You are matching a DerridAI source to format-appropriate metadata records.
 
 WORK LABEL:
 {seed.work}
 
+SOURCE TYPE:
+{canonical_source_type(seed.source_type_scope)}
+
 CURRENT METADATA:
 {json.dumps(seed.current_metadata or {}, ensure_ascii=False, indent=2)}
 
-BIBLIOGRAPHIC CANDIDATES (Open Library, Google Books, and/or Crossref):
+BIBLIOGRAPHIC CANDIDATES:
 {json.dumps(compact, ensure_ascii=False, indent=2)}
 
 Return exactly one JSON object:
@@ -573,6 +645,7 @@ DerridAI will copy them deterministically from the selected catalogue record."""
     if index < 0 or index >= len(candidates):
         return {
             "work": seed.work,
+            "source_type_scope": canonical_source_type(seed.source_type_scope),
             "current_metadata": seed.current_metadata,
             "changes": {},
             "rationale": {},
@@ -589,14 +662,10 @@ DerridAI will copy them deterministically from the selected catalogue record."""
     rationale: dict[str, str] = {}
     current = seed.current_metadata or {}
     for field, proposed in public.items():
-        if field not in {
-            "source_type", "document_type", "document_title", "short_title", "original_title",
-            "document_author", "container_title", "journal_title", "editor", "edition",
-            "volume", "issue", "pages", "year", "publication_year", "publisher",
-            "publication_place", "translator", "document_language", "original_language",
-            "document_is_translation", "isbn", "doi", "url", "full_citation", "cover_url",
-        }:
+        if field not in applicable_fields_for(seed.source_type_scope):
             continue
+        if field in {"source_type", "document_type"}:
+            proposed = canonical_source_type(seed.source_type_scope)
         if proposed in (None, "", []):
             continue
         current_value = current.get(field)
@@ -607,6 +676,7 @@ DerridAI will copy them deterministically from the selected catalogue record."""
 
     return {
         "work": seed.work,
+        "source_type_scope": canonical_source_type(seed.source_type_scope),
         "current_metadata": seed.current_metadata,
         "changes": changes,
         "rationale": rationale,
@@ -643,6 +713,7 @@ def run_work_metadata_batch(
             errors.append({"work": seed.work, "error": str(exc)})
             proposals.append({
                 "work": seed.work,
+                "source_type_scope": seed.source_type_scope,
                 "current_metadata": seed.current_metadata,
                 "changes": {},
                 "rationale": {},

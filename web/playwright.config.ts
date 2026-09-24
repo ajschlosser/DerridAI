@@ -8,6 +8,9 @@ export default defineConfig({
   timeout: 30_000,
   expect: { timeout: 5_000 },
   fullyParallel: true,
+  // Storybook's Vite preview compiles iframe stories lazily. Serial CI access avoids
+  // concurrent first-load requests racing while the preview is preparing a story.
+  workers: process.env.CI ? 1 : undefined,
   snapshotPathTemplate: "{snapshotDir}/{testFilePath}-snapshots/{arg}{ext}",
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",

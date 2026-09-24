@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -112,12 +113,28 @@ def _catalog_from_any(meta: dict[str, Any], etext_id: int) -> dict[str, Any]:
 def _gutendex_search(
     query: str, limit: int, base: str = "https://gutendex.com"
 ) -> list[dict[str, Any]]:
-    response = httpx.get(
-        f"{base}/books", params={"search": query}, timeout=30.0, follow_redirects=True
-    )
-    response.raise_for_status()
-    payload = response.json()
-    return _coerce_gutenberg_results(payload)[:limit]
+    last_error: Exception | None = None
+    for attempt in range(2):
+        try:
+            response = httpx.get(
+                f"{base}/books",
+                params={"search": query, "page": 1},
+                timeout=httpx.Timeout(45.0, connect=10.0),
+                follow_redirects=True,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            return _coerce_gutenberg_results(payload)[:limit]
+        except (httpx.TimeoutException, httpx.NetworkError) as exc:
+            last_error = exc
+            if attempt == 0:
+                time.sleep(0.25)
+    if last_error is not None:
+        # Preserve the transport exception so callers can classify a timeout or
+        # network failure consistently; the API boundary adds the user-facing
+        # 502 context.
+        raise last_error
+    return []
 
 
 def _gutendex_etext(etext_id: int) -> tuple[str, dict[str, Any]]:

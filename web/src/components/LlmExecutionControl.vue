@@ -51,6 +51,16 @@ watch(
   },
   { immediate: true },
 );
+watch(
+  () => props.profiles,
+  (profiles) => {
+    if (!profiles.length) return;
+    if (!profiles.some((profile) => profile.id === props.modelValue)) {
+      emit("update:modelValue", profiles[0].id);
+    }
+  },
+  { immediate: true },
+);
 </script>
 <template>
   <section
