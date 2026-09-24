@@ -104,8 +104,8 @@ export function tr(state, key, fallback = "") {
   return (
     state.translations?.dictionary?.[key] ||
     state.translations?.base?.[key] ||
-    fallback ||
     englishDefault(key) ||
+    fallback ||
     key
   );
 }

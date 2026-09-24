@@ -155,10 +155,7 @@ const changes = computed(() => {
 });
 const dirtyCount = computed(() => Object.keys(changes.value).length);
 function fieldLabel(key: string) {
-  return i18n.t(
-    `field.${key}`,
-    key.replaceAll("_", " ").replace(/\b\w/g, (m) => m.toUpperCase()),
-  );
+  return i18n.t(`field.${key}`);
 }
 function isArrayField(key: string) {
   return (

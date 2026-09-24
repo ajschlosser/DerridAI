@@ -19,9 +19,9 @@ export const useI18nStore = defineStore("i18n", () => {
       || (commonKey ? dictionary.value[commonKey] : undefined)
       || baseDictionary.value[key]
       || (commonKey ? baseDictionary.value[commonKey] : undefined)
-      || fallback
       || englishDefault(key)
       || (commonKey ? englishDefault(commonKey) : "")
+      || fallback
       || key;
   }
 
