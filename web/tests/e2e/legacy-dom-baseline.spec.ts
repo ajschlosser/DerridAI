@@ -314,12 +314,18 @@ const inPdfExplorer = async (page: Page, { open = true } = {}) => {
     );
   });
   await page.waitForLoadState("networkidle");
-  await page.waitForTimeout(800);
+  const input = page.locator("#pdfInput");
+  await expect(input).toBeAttached({ timeout: 10_000 });
   if (!open) return;
-  await page
-    .locator("#pdfInput")
-    .setInputFiles({ name: "trace.pdf", mimeType: "application/pdf", buffer: samplePdf() });
-  await page.waitForTimeout(1500);
+  await input.setInputFiles({
+    name: "trace.pdf",
+    mimeType: "application/pdf",
+    buffer: samplePdf(),
+  });
+  await expect(page.locator(".pdf-document-title")).toContainText("trace.pdf · 2 pages", {
+    timeout: 10_000,
+  });
+  await expect(page.locator("#pdfCanvas")).toBeAttached();
 };
 
 const CHROMA_UP = { "/api/health": { ok: true, chroma: { available: true } } };
@@ -738,7 +744,7 @@ const scenarios: Scenario[] = [
     steps: async (page) => {
       await inPdfExplorer(page);
       await page.locator("#pdfNext").click();
-      await page.waitForTimeout(800);
+      await expect(page.locator("#pdfPageInput")).toHaveValue("2");
     },
   },
   {
