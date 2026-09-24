@@ -48,7 +48,7 @@ describe("jobs state shared between the runtime and Vue", () => {
     expect(store.jobs.map((job) => job.id)).toEqual(["a", "b"]);
     expect(store.activeJobs.map((job) => job.id)).toEqual(["a"]);
     // In-place edits are invisible to Vue until the runtime says something changed.
-    (state.jobs[1] as { status: string }).status = "running";
+    (state.jobs[1] as unknown as { status: string }).status = "running";
     expect(store.activeJobs).toHaveLength(1);
     touchJobs();
     expect(store.version).toBe(1);
