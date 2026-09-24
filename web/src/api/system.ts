@@ -151,7 +151,6 @@ export const systemApi = {
   generateLanguageContentPolicy: (payload: Record<string, unknown>) => apiRequest<JobSummary>("/api/jobs/llm-tool", {method: "POST", body: JSON.stringify({task: "language_content_policy", language: payload, label: `Languages · ${String(payload.code || "policy")}`, provider_profile_id: String(payload.provider_profile_id || "") || null, max_concurrent_requests: Number(payload.max_concurrent_requests || 1)})}),
   systemData: () => apiRequest<{databases: SystemDataDatabase[]}>("/api/system/data"),
   systemVectorStores: () => apiRequest<{stores: SystemVectorStore[]}>("/api/system/data/vector-stores"),
-  clearSystemMetadataMemory: () => apiRequest<{deleted: number}>("/api/system/data/vector-stores/metadata-memory", {method: "DELETE"}),
   systemMetadataExemplars: (filters: SystemMetadataExemplarFilters = {}) => {
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(filters)) {
