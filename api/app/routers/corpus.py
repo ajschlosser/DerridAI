@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
 from ..config import settings
@@ -49,7 +49,11 @@ from ..models import (
 )
 from ..pdf_tools import extract_pdf_text
 from ..routers.jobs import _profile_generation_options
-from ..source_media import fetch_source_url, load_gutenberg_etext, search_project_gutenberg
+from ..source_media import (
+    fetch_source_url,
+    load_gutenberg_etext,
+    search_project_gutenberg,
+)
 from ..system_store import system_store
 
 logger = logging.getLogger(__name__)
