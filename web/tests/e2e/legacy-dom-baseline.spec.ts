@@ -1554,9 +1554,12 @@ const scenarios: Scenario[] = [
         mimeType: "application/zip",
         buffer: Buffer.from("PK"),
       });
+      const reloaded = page.waitForEvent("load", { timeout: 10_000 });
       await page.getByRole("button", { name: "Yes", exact: true }).click();
       await expect(page.getByText(/Restore complete/)).toBeVisible({ timeout: 10_000 });
+      await reloaded;
       await page.waitForLoadState("networkidle");
+      await expect(page.locator("#app")).toBeVisible();
     },
   },
 ];
