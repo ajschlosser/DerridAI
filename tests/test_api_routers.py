@@ -5,7 +5,13 @@ from fastapi.routing import APIRoute
 from starlette.requests import Request
 
 from app.dependencies import get_store
-from app.routers import annotations_router, auth_router, i18n_router
+from app.routers import (
+    annotations_router,
+    auth_router,
+    i18n_router,
+    llm_router,
+    system_router,
+)
 
 
 def _routes(router) -> set[tuple[str, str]]:
@@ -51,6 +57,27 @@ def test_annotation_and_i18n_routers_preserve_existing_http_contract():
         ("GET", "/api/i18n/content-policy"),
         ("GET", "/api/i18n/languages/{code}/content-policy"),
         ("PUT", "/api/i18n/languages/{code}/content-policy"),
+    }
+
+
+def test_system_and_llm_routers_preserve_existing_http_contract():
+    assert _routes(system_router) == {
+        ("GET", "/api/system/researcher-providers"),
+        ("PUT", "/api/system/researcher-providers"),
+        ("GET", "/api/system/storage"),
+        ("POST", "/api/system/researcher-providers/status"),
+        ("POST", "/api/system/researcher-providers/availability"),
+        ("GET", "/api/live"),
+        ("GET", "/api/health"),
+        ("GET", "/api/config"),
+    }
+    assert _routes(llm_router) == {
+        ("GET", "/api/llm/status"),
+        ("POST", "/api/llm/status"),
+        ("POST", "/api/llm/warmup"),
+        ("POST", "/api/rag/grade"),
+        ("POST", "/api/pdf/llm"),
+        ("POST", "/api/llm/touchup"),
     }
 
 
