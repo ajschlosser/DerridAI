@@ -158,7 +158,7 @@ describe("RecordsView", () => {
     setActivePinia(createPinia());
     const snap = baseSnapshot();
     runtime.getRecordsListSnapshot.mockReturnValue(snap);
-    runtime.getShellSnapshot.mockReturnValue({ files: snap.files });
+    runtime.getShellSnapshot.mockReturnValue({ files: snap.files as never[] });
     useI18nStore().languages = [
       { code: "en-US", name: "English", flag: "" },
       { code: "fr-CA", name: "Français", flag: "" },
