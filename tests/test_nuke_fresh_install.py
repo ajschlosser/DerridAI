@@ -200,7 +200,7 @@ def test_nuke_route_clears_session_and_reports_bootstrap(monkeypatch, tmp_path: 
     monkeypatch.setattr(admin_routes, "pdf_corpus_repository", FakeCorpusRepo())
     builds = FakeCorpusBuilds()
     monkeypatch.setattr(admin_routes, "pdf_corpus_builds", builds)
-    monkeypatch.setattr(main, "settings", replace(admin_routes.settings, chroma_data_root=str(data_root)))
+    monkeypatch.setattr(admin_routes, "settings", replace(admin_routes.settings, chroma_data_root=str(data_root)))
 
     configure_auth(monkeypatch, tmp_path)
     auth_store = AuthStore()
