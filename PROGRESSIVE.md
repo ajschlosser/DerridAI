@@ -2,7 +2,7 @@
 
 Status: implementation plan and working specification  
 Branch: `feature/progressive-enhancement`  
-Base: current `master` (rebased before PR creation)
+Base at branch creation: `cef570171343d1fb949d0bb5d181a844918b0e36` (then-current `master`). `master` has since advanced; rebase/merge is pending and must remain non-destructive.
 
 ## 1. Purpose
 
@@ -584,6 +584,7 @@ Before merging:
 The initial backend slice is implemented on `feature/progressive-enhancement`:
 
 - evidence-bound positive and correction exemplars;
+- strict evidence-to-record membership: a globally resolvable source block is not enough unless it belongs to the reviewed RecordRevision;
 - conservative promotion from human-reviewed metadata only;
 - revision-aware, rebuildable Chroma projection;
 - build/schema/language/field scoping;
@@ -592,11 +593,14 @@ The initial backend slice is implemented on `feature/progressive-enhancement`:
 - family-specific prompt injection;
 - lexical editorial-memory fallback when semantic retrieval is unavailable;
 - stable exemplar IDs recorded on enrichment output;
+- explicit hard-negative prompt semantics: `rejected_value` is a known model mistake, never a positive precedent;
 - retrieval latency/count/token telemetry;
 - internal system collection hidden from ordinary Vector Stores;
 - focused regression tests for provenance, trust, rebuilding, fallback, prompt budgets, semantic retrieval, and family scoping.
 
-Empirical quality/latency benchmarking across real corpora and models remains an evaluation activity rather than a prerequisite for the initial implementation. The UX/audit expansion in Phase 6 remains intentionally deferred until the backend contract has been exercised in production-like runs.
+Empirical quality/latency benchmarking across real corpora and models remains an evaluation activity rather than a prerequisite for the initial implementation. The current semantic index is deliberately build-scoped; a cross-build exemplar catalogue requires an authoritative resolver for source build/record/revision/evidence identity before it should be enabled. The UX/audit expansion in Phase 6 remains intentionally deferred until the backend contract has been exercised in production-like runs.
+
+Validation note: focused regression tests have been added, but this branch has not yet received a complete CI run. Do not treat the presence of tests as evidence that the full suite is green.
 
 
 ### Phase 0 - Baseline and contracts
