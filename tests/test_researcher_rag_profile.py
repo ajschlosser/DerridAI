@@ -3,8 +3,8 @@
 Why: researchers may not choose models or endpoints. The API must ignore whatever
 model/base URL/generation options the browser sends and use the administrator's
 approved profile instead.
-How: importing app.main would start global database and job workers, so the test
-extracts just the two functions it needs from main.py with `ast`, compiles them
+How: importing the jobs router would start global database and job workers, so the test
+extracts just the two functions it needs from the router module with `ast`, compiles them
 into an isolated namespace, and substitutes mocks for the job manager and stores.
 """
 from __future__ import annotations
@@ -27,7 +27,7 @@ def test_researcher_rag_uses_approved_model_and_not_browser_overrides():
     http://approved:11434 with temperature 0.2. The job that gets created must carry
     the approved values and be owned by the requesting researcher.
     """
-    path = Path(__file__).resolve().parents[1] / "api/app/main.py"
+    path = Path(__file__).resolve().parents[1] / "api/app/routers/jobs.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
     functions = [node for node in tree.body if isinstance(node, ast.FunctionDef)
                  and node.name in {"create_rag_job", "_profile_generation_options"}]
@@ -38,7 +38,7 @@ def test_researcher_rag_uses_approved_model_and_not_browser_overrides():
     jobs = SimpleNamespace(create=Mock(return_value={"id": "job"}))
     scope = {
         "json": json,
-        "_request_user": lambda request: SimpleNamespace(role="researcher", username="reader"),
+        "request_user": lambda request: SimpleNamespace(role="researcher", username="reader"),
         "enforce_researcher_text": lambda payload: None,
         "system_store": SimpleNamespace(researcher_profile=lambda profile_id: profile),
         "rag_jobs": jobs, "RAGRunRequest": RAGRunRequest, "HTTPException": HTTPException,

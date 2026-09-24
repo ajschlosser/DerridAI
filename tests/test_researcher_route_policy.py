@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "api"))
 
 from app import main  # noqa: E402
 from app.main import _is_public_language_route, _non_admin_route_allowed  # noqa: E402
+from app.routers import health as health_routes  # noqa: E402
 
 
 def test_researcher_can_load_hashed_content_policy_mirror():
@@ -82,7 +83,7 @@ def test_researcher_route_allowlist_matches_only_intended_resource_shapes(monkey
 def test_researcher_health_response_omits_internal_diagnostics(monkeypatch):
     """Researcher health retains workspace availability without revealing infra config."""
     monkeypatch.setattr(
-        main.store,
+        health_routes.store,
         "health",
         lambda: {
             "available": True,
@@ -100,10 +101,10 @@ def test_researcher_health_response_omits_internal_diagnostics(monkeypatch):
     def unexpected_llm_status(*_args, **_kwargs):
         raise AssertionError("admin diagnostics queried")
 
-    monkeypatch.setattr(main, "llm_status", unexpected_llm_status)
+    monkeypatch.setattr(health_routes, "llm_status", unexpected_llm_status)
     request = SimpleNamespace(state=SimpleNamespace(user=SimpleNamespace(role="researcher")))
 
-    response = main.health(request)
+    response = health_routes.health(request)
 
     assert response["chroma"] == {
         "available": True,

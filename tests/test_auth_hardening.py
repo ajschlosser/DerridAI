@@ -260,12 +260,12 @@ def test_lockout_remaining_is_reported_identically_for_real_and_unknown_username
 
 
 def _login_route(store):
-    """Compile only the login route so importing main.py's global workers is unnecessary."""
+    """Compile only the login route so importing application service singletons is unnecessary."""
     import ast
 
     from fastapi import HTTPException
 
-    path = ROOT / "api/app/main.py"
+    path = ROOT / "api/app/routers/auth.py"
     node = next(n for n in ast.parse(path.read_text(encoding="utf-8")).body if isinstance(n, ast.FunctionDef) and n.name == "auth_login")
     node.decorator_list = []
     scope = {
