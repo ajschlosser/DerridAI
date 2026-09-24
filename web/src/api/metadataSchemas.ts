@@ -110,6 +110,8 @@ export function blankField(group = CORE_GROUP): SchemaField {
     evidence: false,
     assess: false,
     review: false,
+    pos_tags: [],
+    ner_tags: [],
     retrieval_profile: {
       enabled: true,
       scope: "same_field",
