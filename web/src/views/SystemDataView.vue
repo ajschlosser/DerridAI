@@ -7,7 +7,7 @@ import {
   systemApi,
   type SystemDataDatabase,
   type SystemDataTable,
-  type SystemVectorStore,
+  type SystemMetadataExemplarPage,
 } from "../api/system";
 import * as runtime from "../runtime/runtimeBridge";
 import { useI18nStore } from "../stores/i18n";
@@ -32,7 +32,21 @@ const cachePayload = ref<{
   exists?: boolean;
   records?: Array<Record<string, unknown>>;
 }>({});
-const vectorStores = ref<SystemVectorStore[]>([]);
+const exemplarPage = ref<SystemMetadataExemplarPage>({
+  exists: false,
+  count: 0,
+  limit: 25,
+  offset: 0,
+  rows: [],
+  facets: { fields: [], kinds: [], languages: [], scopes: [], schemas: [] },
+});
+const exemplarLoading = ref(false);
+const exemplarField = ref("");
+const exemplarKind = ref("");
+const exemplarLanguage = ref("");
+const exemplarScope = ref("");
+const exemplarSchema = ref("");
+const exemplarRecord = ref("");
 
 const database = computed(() =>
   databases.value.find((item) => item.name === selectedDatabase.value),
@@ -102,25 +116,46 @@ async function clearCache() {
   }
 }
 
-async function clearMetadataMemory() {
-  const approved = await runtime.openMessageModal({
-    title: t("runtime.system_clear_memory", "Clear semantic reviewer memory?"),
-    message: t(
-      "runtime.system_clear_memory_help",
-      "This removes derived similarity/MMR suggestions. It does not change corpus records or confirmed decisions.",
-    ),
-    tone: "danger",
-    confirmLabel: t("common.clear", "Clear"),
-    cancelLabel: t("common.cancel", "Cancel"),
-  });
-  if (!approved) return;
+function exemplarValue(value: unknown) {
+  if (value === null || value === undefined) return "—";
+  if (typeof value === "string") return value;
   try {
-    await systemApi.clearSystemMetadataMemory();
-    await load();
-    runtime.notifyToast(t("runtime.system_memory_cleared", "Semantic reviewer memory cleared."));
-  } catch (cause) {
-    runtime.notifyToast(message(cause), { tone: "danger" });
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
   }
+}
+
+async function loadExemplars(offset = 0) {
+  exemplarLoading.value = true;
+  try {
+    exemplarPage.value = await systemApi.systemMetadataExemplars({
+      limit: exemplarPage.value.limit || 25,
+      offset,
+      field: exemplarField.value,
+      kind: exemplarKind.value,
+      language: exemplarLanguage.value,
+      scope_id: exemplarScope.value,
+      schema_id: exemplarSchema.value,
+      record_id: exemplarRecord.value.trim(),
+    });
+  } finally {
+    exemplarLoading.value = false;
+  }
+}
+
+function applyExemplarFilters() {
+  void loadExemplars(0);
+}
+
+function clearExemplarFilters() {
+  exemplarField.value = "";
+  exemplarKind.value = "";
+  exemplarLanguage.value = "";
+  exemplarScope.value = "";
+  exemplarSchema.value = "";
+  exemplarRecord.value = "";
+  void loadExemplars(0);
 }
 
 async function loadTable() {
@@ -138,13 +173,12 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    const [data, vectors] = await Promise.all([
+    const [data] = await Promise.all([
       systemApi.systemData(),
-      systemApi.systemVectorStores(),
       loadCache(),
+      loadExemplars(0),
     ]);
     databases.value = data.databases;
-    vectorStores.value = vectors.stores;
     if (!database.value) selectedDatabase.value = databases.value[0]?.name || "";
     const firstTable = databases.value.find((item) => item.name === selectedDatabase.value)
       ?.tables[0];
@@ -308,63 +342,168 @@ onMounted(() => void load());
           </button>
         </div>
       </section>
-      <section class="card" aria-labelledby="vector-stores-title">
+      <section class="card exemplar-panel" aria-labelledby="metadata-exemplars-title">
         <div class="table-header">
           <div>
-            <h2 id="vector-stores-title">
-              {{ t("runtime.system_vector_stores", "Derived vector stores") }}
+            <span class="eyebrow">{{ t("runtime.system_progressive_metadata", "Progressive metadata") }}</span>
+            <h2 id="metadata-exemplars-title">
+              {{ t("runtime.system_metadata_exemplars", "Metadata exemplars") }}
             </h2>
             <p>
               {{
                 t(
-                  "runtime.system_vector_stores_help",
-                  "Rebuildable system collections used for response caching and semantic reviewer memory.",
+                  "runtime.system_metadata_exemplars_help",
+                  "Read-only, evidence-bound examples learned from reviewed metadata decisions. These are derived from canonical corpus records and can be rebuilt.",
                 )
               }}
             </p>
           </div>
+          <strong class="exemplar-count">{{ exemplarPage.count.toLocaleString() }}</strong>
         </div>
-        <div class="tablewrap">
-          <table>
-            <thead>
-              <tr>
-                <th>{{ t("runtime.system_store_name", "Store") }}</th>
-                <th>{{ t("runtime.system_store_role", "Role") }}</th>
-                <th>{{ t("runtime.system_store_count", "Records") }}</th>
-                <th>{{ t("runtime.system_store_embedding", "Embedding contract") }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="item in vectorStores" :key="item.name">
-                <td>
-                  <b>{{ item.name }}</b
-                  ><small v-if="item.storage_name"> · {{ item.storage_name }}</small>
-                </td>
-                <td>
-                  {{ item.metadata?.derridai_system_collection || item.collection_role || "" }}
-                </td>
-                <td>{{ Number(item.count || 0).toLocaleString() }}</td>
-                <td>
-                  {{ item.embedding_provider || "—" }} · {{ item.embedding_model || "—" }} ·
-                  {{ item.embedding_dimension || "?" }}d · {{ item.distance_metric || "—" }}
-                  <button
-                    v-if="item.metadata?.derridai_system_collection === 'metadata_memory'"
-                    class="btn tiny danger"
-                    type="button"
-                    @click="clearMetadataMemory"
-                  >
-                    {{ t("runtime.system_clear_memory", "Clear memory") }}
-                  </button>
-                </td>
-              </tr>
-              <tr v-if="!vectorStores.length">
-                <td colspan="4" class="note">
-                  {{ t("runtime.system_no_rows", "No rows are available.") }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+
+        <div class="exemplar-filters" role="search" :aria-label="t('runtime.system_exemplar_filters', 'Filter metadata exemplars')">
+          <label>
+            <span>{{ t("runtime.system_exemplar_field", "Field") }}</span>
+            <select v-model="exemplarField" class="control">
+              <option value="">{{ t("runtime.system_all_values", "All") }}</option>
+              <option v-for="item in exemplarPage.facets.fields" :key="item" :value="item">{{ item }}</option>
+            </select>
+          </label>
+          <label>
+            <span>{{ t("runtime.system_exemplar_kind", "Kind") }}</span>
+            <select v-model="exemplarKind" class="control">
+              <option value="">{{ t("runtime.system_all_values", "All") }}</option>
+              <option v-for="item in exemplarPage.facets.kinds" :key="item" :value="item">{{ item }}</option>
+            </select>
+          </label>
+          <label>
+            <span>{{ t("runtime.system_exemplar_language", "Language") }}</span>
+            <select v-model="exemplarLanguage" class="control">
+              <option value="">{{ t("runtime.system_all_values", "All") }}</option>
+              <option v-for="item in exemplarPage.facets.languages" :key="item" :value="item">{{ item }}</option>
+            </select>
+          </label>
+          <label>
+            <span>{{ t("runtime.system_exemplar_build", "Build") }}</span>
+            <select v-model="exemplarScope" class="control">
+              <option value="">{{ t("runtime.system_all_values", "All") }}</option>
+              <option v-for="item in exemplarPage.facets.scopes" :key="item" :value="item">{{ item }}</option>
+            </select>
+          </label>
+          <label>
+            <span>{{ t("runtime.system_exemplar_schema", "Schema") }}</span>
+            <select v-model="exemplarSchema" class="control">
+              <option value="">{{ t("runtime.system_all_values", "All") }}</option>
+              <option v-for="item in exemplarPage.facets.schemas" :key="item" :value="item">{{ item }}</option>
+            </select>
+          </label>
+          <label class="exemplar-record-filter">
+            <span>{{ t("runtime.system_exemplar_record", "Record ID") }}</span>
+            <input v-model="exemplarRecord" class="control" type="search" />
+          </label>
+          <div class="exemplar-filter-actions">
+            <button class="btn" type="button" :disabled="exemplarLoading" @click="applyExemplarFilters">
+              {{ t("runtime.system_apply_filters", "Apply filters") }}
+            </button>
+            <button class="btn" type="button" :disabled="exemplarLoading" @click="clearExemplarFilters">
+              {{ t("runtime.system_clear_filters", "Clear filters") }}
+            </button>
+          </div>
         </div>
+
+        <div v-if="!exemplarPage.exists" class="info">
+          {{
+            t(
+              "runtime.system_metadata_exemplars_not_built",
+              "No progressive metadata exemplar index exists yet. Review evidence-bound metadata and run enrichment to create it.",
+            )
+          }}
+        </div>
+        <div v-else-if="exemplarLoading" class="info">
+          {{ t("runtime.system_metadata_exemplars_loading", "Loading metadata exemplars…") }}
+        </div>
+        <div v-else-if="!exemplarPage.rows.length" class="info">
+          {{ t("runtime.system_no_rows", "No rows are available.") }}
+        </div>
+        <div v-else class="exemplar-list">
+          <article v-for="item in exemplarPage.rows" :key="item.exemplar_id" class="exemplar-card">
+            <header>
+              <div>
+                <span class="exemplar-field">{{ item.field_name }}</span>
+                <strong>{{ exemplarValue(item.field_value) }}</strong>
+              </div>
+              <div class="exemplar-badges">
+                <span>{{ item.kind }}</span>
+                <span v-if="item.assertion_status">{{ item.assertion_status }}</span>
+                <span v-if="item.language">{{ item.language }}</span>
+              </div>
+            </header>
+            <dl class="exemplar-provenance">
+              <div>
+                <dt>{{ t("runtime.system_exemplar_record", "Record") }}</dt>
+                <dd>{{ item.record_id }}<template v-if="item.record_revision"> · r{{ item.record_revision }}</template></dd>
+              </div>
+              <div>
+                <dt>{{ t("runtime.system_exemplar_build", "Build") }}</dt>
+                <dd>{{ item.scope_id || "—" }}</dd>
+              </div>
+              <div>
+                <dt>{{ t("runtime.system_exemplar_schema", "Schema") }}</dt>
+                <dd>{{ item.schema_id || "—" }}<template v-if="item.schema_version"> · {{ item.schema_version }}</template></dd>
+              </div>
+              <div>
+                <dt>{{ t("runtime.system_exemplar_region", "Region") }}</dt>
+                <dd>{{ item.region_type || "—" }}</dd>
+              </div>
+              <div>
+                <dt>{{ t("runtime.system_exemplar_evidence_blocks", "Evidence blocks") }}</dt>
+                <dd>{{ (item.evidence_block_ids || []).join(", ") || "—" }}</dd>
+              </div>
+              <div>
+                <dt>{{ t("runtime.system_exemplar_evidence_hash", "Evidence hash") }}</dt>
+                <dd class="mono">{{ item.evidence_hash || "—" }}</dd>
+              </div>
+            </dl>
+            <details class="exemplar-context">
+              <summary>{{ t("runtime.system_exemplar_context", "Evidence context") }}</summary>
+              <p>{{ item.context_text || "—" }}</p>
+            </details>
+          </article>
+        </div>
+
+        <footer class="exemplar-pagination">
+          <span>
+            {{
+              i18n.tf(
+                "runtime.system_exemplar_range",
+                "{start}–{end} of {count}",
+                {
+                  start: exemplarPage.count ? exemplarPage.offset + 1 : 0,
+                  end: Math.min(exemplarPage.offset + exemplarPage.rows.length, exemplarPage.count),
+                  count: exemplarPage.count,
+                },
+              )
+            }}
+          </span>
+          <div>
+            <button
+              class="btn tiny"
+              type="button"
+              :disabled="exemplarLoading || exemplarPage.offset <= 0"
+              @click="loadExemplars(Math.max(0, exemplarPage.offset - exemplarPage.limit))"
+            >
+              {{ t("common.previous", "Previous") }}
+            </button>
+            <button
+              class="btn tiny"
+              type="button"
+              :disabled="exemplarLoading || exemplarPage.offset + exemplarPage.limit >= exemplarPage.count"
+              @click="loadExemplars(exemplarPage.offset + exemplarPage.limit)"
+            >
+              {{ t("common.next", "Next") }}
+            </button>
+          </div>
+        </footer>
       </section>
       <section class="card" aria-labelledby="cache-records-title">
         <div class="table-header">
@@ -568,6 +707,117 @@ onMounted(() => void load());
   gap: 8px;
   flex-wrap: wrap;
 }
+.exemplar-panel {
+  display: grid;
+  gap: 14px;
+}
+.exemplar-count {
+  font-size: 1.8rem;
+}
+.exemplar-filters {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+.exemplar-filters label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.exemplar-record-filter {
+  grid-column: span 2;
+}
+.exemplar-filter-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.exemplar-list {
+  display: grid;
+  gap: 10px;
+}
+.exemplar-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--soft);
+}
+.exemplar-card > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+.exemplar-card > header > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+.exemplar-field {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.exemplar-badges {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.exemplar-badges span {
+  padding: 3px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  font-size: 0.75rem;
+}
+.exemplar-provenance {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 14px;
+  margin: 0;
+}
+.exemplar-provenance div {
+  min-width: 0;
+}
+.exemplar-provenance dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.exemplar-provenance dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+  font-size: 0.82rem;
+}
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.exemplar-context summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.exemplar-context p {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+.exemplar-pagination {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+.exemplar-pagination > div {
+  display: flex;
+  gap: 6px;
+}
 .data-grid {
   display: grid;
   grid-template-columns: minmax(190px, 0.35fr) minmax(0, 1fr);
@@ -646,8 +896,13 @@ onMounted(() => void load());
 }
 @media (max-width: 800px) {
   .data-grid,
-  .editor-grid {
+  .editor-grid,
+  .exemplar-filters,
+  .exemplar-provenance {
     grid-template-columns: 1fr;
+  }
+  .exemplar-record-filter {
+    grid-column: auto;
   }
   .page-header,
   .cache-summary,
