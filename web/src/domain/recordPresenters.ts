@@ -5,6 +5,7 @@ import { snippet } from "./recordFormatting";
 import { commonWorkValue } from "./workMetadata";
 import { fullCitation, inlineCitation } from "./citations";
 import { lineChart } from "./dashboardCharts";
+import { bindCopy } from "../i18n/bindCopy";
 
 // HTML/data presenters for records, works and dashboard insight panels. Moved verbatim from the legacy runtime;
 // translation and the record helpers that still live in the runtime are passed in as dependencies.
@@ -23,8 +24,8 @@ interface Deps {
 }
 
 export function createRecordPresenters(deps: Deps) {
-  const { tr, trf, pages, recordDbStatus, allAnnotations, compareSearchIndex, label, display } =
-    deps;
+  const { pages, recordDbStatus, allAnnotations, compareSearchIndex, label, display } = deps;
+  const { tr, trf } = bindCopy(deps.tr, deps.trf);
   function uniqueWorkValues(rows: Loose[], field: string) {
     const values = new Map();
     for (const row of rows || []) {

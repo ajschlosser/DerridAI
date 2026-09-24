@@ -88,9 +88,9 @@ def test_all_literal_i18n_keys_used_by_web_code_exist_in_both_builtins():
     # target, and every alias target must itself exist in both dictionaries.
     aliases = dict(re.findall(
         r'"([^"]+)":\s*"(common\.[^"]+)"',
-        (ROOT / "web/src/stores/i18n.ts").read_text(encoding="utf-8"),
+        (ROOT / "web/src/i18n/englishDefault.ts").read_text(encoding="utf-8"),
     ))
-    assert aliases, "COMMON_KEY_ALIASES not found in web/src/stores/i18n.ts"
+    assert aliases, "COMMON_KEY_ALIASES not found in web/src/i18n/englishDefault.ts"
     assert set(aliases.values()) - set(english) == set()
     assert set(aliases.values()) - set(french) == set()
     used = {aliases.get(key, key) for key in used}

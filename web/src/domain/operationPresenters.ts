@@ -1,6 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { isActiveJobStatus } from "./operationsDock";
 import { formatDuration } from "./operationsPanel";
+import { bindCopy } from "../i18n/bindCopy";
 
 // Presentation of background jobs for the Operations panel: labels, facts, subtitles and progress text.
 // Moved verbatim from the legacy runtime; the state it used to read is now passed in as dependencies.
@@ -17,7 +18,7 @@ interface Deps {
 }
 
 export function createOperationPresenters(deps: Deps) {
-  const { tr, trf } = deps;
+  const { tr, trf } = bindCopy(deps.tr, deps.trf);
   const OPERATION_FACT_NAMES: Record<string, [string, string]> = {
     started_by: ["operations.fact.started_by", "Started by"],
     model: ["operations.fact.model", "Model"],

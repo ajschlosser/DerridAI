@@ -8,6 +8,7 @@ import {
   SEARCH_FACET_FIELDS,
   SEARCH_FILTER_FIELDS,
 } from "./runtimeConstants";
+import { bindCopy } from "../i18n/bindCopy";
 
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -26,7 +27,6 @@ interface Deps {
 
 export function createSearchFacets(deps: Deps) {
   const {
-    tr,
     label,
     display,
     recordDbStatus,
@@ -36,6 +36,12 @@ export function createSearchFacets(deps: Deps) {
     dbSearchWhere,
     filterOpsForField,
   } = deps;
+  const { tr } = bindCopy(deps.tr, (_key, fallback, values = {}) =>
+    Object.entries(values).reduce(
+      (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
+      fallback,
+    ),
+  );
   function searchFacetRawValues(record: Loose, field: string, row: Loose | null = null) {
     if (field === "needs_review") return [record?.needs_review ? "true" : "false"];
     if (field === "__db_status") {

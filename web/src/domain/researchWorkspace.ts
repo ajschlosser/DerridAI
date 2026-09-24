@@ -12,6 +12,8 @@ import {
   researchProfileForUi,
   sanitizeResearchGeneration,
 } from "./researchPayloads";
+import { bindCopy } from "../i18n/bindCopy";
+import { englishDefault } from "../i18n/englishDefault";
 
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Parameters of these legacy functions were never typed; they keep the shape their callers give them. */
@@ -76,9 +78,14 @@ export function createResearchWorkspace(deps: Deps) {
     startJobPolling,
     syncJobProgressToasts,
     toast,
-    tr,
     uid,
   } = deps;
+  const { tr } = bindCopy(deps.tr, (key, fallback, values = {}) =>
+    Object.entries(values).reduce(
+      (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
+      fallback || englishDefault(key) || key,
+    ),
+  );
   function researchConfigForUi() {
     return cloneAuditValue(state.ragConfig || {});
   }

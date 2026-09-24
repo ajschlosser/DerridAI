@@ -58,7 +58,7 @@ describe("record workspace commands", () => {
       activeFile: () => null,
     });
     await expect(workspace.saveCurrentRecordChanges({ text: "x" })).rejects.toThrow(
-      "No record selected.",
+      "No record selected",
     );
   });
 });

@@ -7,6 +7,8 @@ import { fullCitation, inlineCitation, mlaPageSpan } from "./citations";
 import { compactRecordHistory, pdfLinks, recordPayload } from "./recordPayloads";
 import { countOccurrences } from "./recordQuery";
 import { cloneAuditValue } from "./recordValues";
+import { bindCopy } from "../i18n/bindCopy";
+import { englishDefault } from "../i18n/englishDefault";
 
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Parameters of these legacy functions were never typed; they keep the shape their callers give them. */
@@ -99,13 +101,18 @@ export function createRecordWorkspace(deps: Deps) {
     toast,
     toggleDbEvidence,
     toggleWorkspaceEvidence,
-    tr,
     uid,
     unlinkAllPdfLinks,
     unlinkPdfLink,
     upsertRows,
     workspaceEvidenceKey,
   } = deps;
+  const { tr } = bindCopy(deps.tr, (key, fallback, values = {}) =>
+    Object.entries(values).reduce(
+      (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
+      fallback || englishDefault(key) || key,
+    ),
+  );
   function recordWorkspaceRecord(record: Any) {
     const out = recordPayload(record, { includeChromaId: true });
     delete out.updates;

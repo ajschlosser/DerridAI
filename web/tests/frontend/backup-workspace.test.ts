@@ -1,6 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { describe, expect, it, vi } from "vitest";
 import { createBackupWorkspace } from "../../src/domain/backupWorkspace";
+import { englishDefault } from "../../src/i18n/englishDefault";
 
 // The confirm, created, failed and restored views are covered by the legacy baseline's backup and restore scenarios
 // (recorded before this logic moved); these pin the guards.
@@ -13,6 +14,7 @@ function setup(state: Record<string, unknown> = {}, profiles: unknown[] = []) {
       toast,
       openMessageModal,
       providerProfiles: () => profiles,
+      tr: (key: string, fallback = "") => fallback || englishDefault(key) || key,
     },
     { get: (target: Record<string, unknown>, name: string) => target[name] ?? vi.fn() },
   );

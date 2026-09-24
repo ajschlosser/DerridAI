@@ -170,7 +170,7 @@ describe("RecordsView", () => {
     const wrapper = await mountRecords();
     expect(wrapper.get("#records-page-title").text()).toContain("Records");
     expect(wrapper.text()).toContain("Glas");
-    expect(wrapper.text()).toContain("Add evidence");
+    expect(wrapper.text()).toContain("Add to evidence");
     expect(wrapper.get(".actions-col").text()).not.toMatch(/Evider/);
     await wrapper.get("tbody tr").trigger("click");
     expect(runtime.openRecordsListRecord).toHaveBeenCalledWith(0);
