@@ -158,12 +158,12 @@ describe("RecordsView", () => {
     setActivePinia(createPinia());
     const snap = baseSnapshot();
     runtime.getRecordsListSnapshot.mockReturnValue(snap);
-    runtime.getShellSnapshot.mockReturnValue({ files: snap.files });
+    runtime.getShellSnapshot.mockReturnValue({ files: snap.files as never[] });
     useI18nStore().languages = [
       { code: "en-US", name: "English", flag: "" },
       { code: "fr-CA", name: "Français", flag: "" },
     ] as never;
-    useShellStore().snapshot.files = snap.files;
+    useShellStore().snapshot.files = snap.files as never;
   });
 
   it("renders the loaded table and opens a record from the row", async () => {

@@ -5,10 +5,16 @@ import { relativeTimeLabel } from "../../src/domain/relativeTimeLabel";
 const now = Date.parse("2026-09-22T12:00:00Z");
 const keys: string[] = [];
 const deps = {
-  tr: (_key: string, fallback: string) => fallback,
-  trf: (key: string, fallback: string, values: Record<string, unknown>) => {
+  tr: (_key: string, fallback = "") => fallback,
+  trf: (
+    key: string,
+    fallbackOrValues: string | Record<string, unknown> = "",
+    values: Record<string, unknown> = {},
+  ) => {
     keys.push(key);
-    return fallback.replace("{count}", String(values.count));
+    const fallback = typeof fallbackOrValues === "string" ? fallbackOrValues : "";
+    const replacements = typeof fallbackOrValues === "string" ? values : fallbackOrValues;
+    return fallback.replace("{count}", String(replacements.count));
   },
 };
 const ago = (ms: number) => new Date(now - ms).toISOString();

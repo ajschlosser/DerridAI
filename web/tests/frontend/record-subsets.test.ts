@@ -62,7 +62,7 @@ describe("record subsets", () => {
       download: true,
     });
     expect(created).toEqual({ name: "only-glas.jsonl", count: 1 });
-    const file = state.files[2] as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const file = state.files[2] as Record<string, any>;
     expect(file.records).toEqual([{ record_id: "glas-1", work: "Glas", _audit: [{ at: "t" }] }]);
     expect(file.records[0]).not.toBe(state.files[0].records[0]);
     // "active" is resolved to the file it meant at creation time.

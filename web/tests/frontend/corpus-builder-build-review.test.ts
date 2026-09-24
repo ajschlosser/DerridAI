@@ -25,7 +25,7 @@ describe("Corpus Builder build, review, and finish states", () => {
     const wrapper=mount(CorpusBuildProgress,{props:{
       status:"awaiting_review",stage:"review",progress:.63,recordCount:31,reviewCount:4,acceptedCount:27,unresolvedCount:2,
       llmMetrics:{calls:12,retries:2,structured_output_failures:1},
-      validation:{valid:false,coverage:.98,metadata_evidence_errors:[{field:"speaker"}],metadata_schema_errors:[{field:"stance"}],citation_errors:[{record_id:"r1"}]},
+      validation:{valid:false,coverage:.98,metadata_evidence_errors:[{record_id:"r1",reason:"Speaker evidence is invalid."}],metadata_schema_errors:[{record_id:"r1",reason:"Stance value is invalid."}],citation_errors:["r1"]},
       warnings:["One boundary remains unresolved."],
     }});
     const progress=wrapper.get('[role="progressbar"]');
@@ -34,7 +34,7 @@ describe("Corpus Builder build, review, and finish states", () => {
     expect(wrapper.get(".unresolved-line").text()).toContain("2");
     expect(wrapper.get(".llm-metrics").text()).toContain("12");
     expect(wrapper.get(".validation-strip").text()).toContain("Validation needs attention");
-    expect(wrapper.get(".validation-details").exists()).toBe(true);
+    expect(wrapper.find(".validation-details").exists()).toBe(true);
   });
 
   it("surfaces recoverable build failures as alerts without hiding preserved warnings", () => {
@@ -99,7 +99,7 @@ describe("Corpus Builder build, review, and finish states", () => {
   it("routes blocker repair actions to the owning review surface", async () => {
     const build:any={...buildBase,publication_readiness:{...buildBase.publication_readiness,can_publish:false,next_action:"resolve_document_metadata",missing_document_fields:["document_author"],blockers:[{code:"required_document_metadata",count:1}]}};
     const wrapper=mount(CorpusFinishWorkspace,{props:{build}});
-    expect(wrapper.get(".blockers").exists()).toBe(true);
+    expect(wrapper.find(".blockers").exists()).toBe(true);
     await buttonByText(wrapper,"Go fix").trigger("click");
     expect(wrapper.emitted("editDocumentMetadata")).toHaveLength(1);
   });

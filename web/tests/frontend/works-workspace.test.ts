@@ -6,7 +6,7 @@ import { createRuntimeState } from "../../src/runtime/runtimeState";
 // The rendered Works view is covered by the legacy baseline's works scenarios (recorded before this logic moved);
 // these pin the commands themselves.
 function setup(overrides: Record<string, unknown> = {}) {
-  const state = createRuntimeState() as unknown as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  const state = createRuntimeState() as unknown as Record<string, any>;
   const calls: string[] = [];
   const spies: Record<string, ReturnType<typeof vi.fn>> = {};
   let ids = 0;

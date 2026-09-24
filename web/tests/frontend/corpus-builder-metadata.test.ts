@@ -33,13 +33,13 @@ describe("Corpus Builder metadata resolution",()=>{
       region_type:{status:"human_confirmed",method:"human",confidence:1},
     }}));
     expect(wrapper.get(".inherited-metadata").text()).toContain("Inherited document metadata");
-    expect(wrapper.get(".settled-metadata").exists()).toBe(true);
+    expect(wrapper.find(".settled-metadata").exists()).toBe(true);
     expect(wrapper.find(".suggestion-toolbar").exists()).toBe(false);
   });
 
   it("keeps invalid or unresolved active fields in the attention group",()=>{
     const wrapper=mountPanel(record({stance:"affirm",metadata_field_status:{stance:{status:"invalid",method:"llm",confidence:.9}}}));
-    expect(wrapper.get('.metadata-grid[role="list"]').exists()).toBe(true);
+    expect(wrapper.find('.metadata-grid[role="list"]').exists()).toBe(true);
     expect(wrapper.get(".review-status").attributes("data-state")).toBe("attention");
   });
 });

@@ -49,7 +49,7 @@ describe("Metadata schemas page", () => {
     await flushPromises();
     expect(wrapper.get("#schemas-page-title").text()).toBe("Metadata schemas");
     expect(wrapper.text()).toContain("System");
-    expect(wrapper.get(".schema-editor").exists()).toBe(true);
+    expect(wrapper.find(".schema-editor").exists()).toBe(true);
     wrapper.unmount();
   });
 });

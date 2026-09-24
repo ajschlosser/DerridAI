@@ -4,7 +4,7 @@ import { runAxe } from "./support/axe";
 function alphaFromCssColor(value:string):number {
   const rgba=value.match(/rgba?\(([^)]+)\)/i);
   if(!rgba)return 1;
-  const parts=rgba[1].split(/[\s,\/]+/).filter(Boolean);
+  const parts=rgba[1].split(/[\s,/]+/).filter(Boolean);
   if(parts.length<4)return 1;
   const alpha=Number(parts[3]);
   return Number.isFinite(alpha)?alpha:1;

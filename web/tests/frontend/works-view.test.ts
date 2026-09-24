@@ -144,7 +144,7 @@ describe("WorksView", () => {
     const wrapper = await mountWorks();
     expect(runtime.prepareWorksWorkspace).toHaveBeenCalled();
     expect(runtime.state.view).toBe("works");
-    expect(wrapper.get("#worksSearch").exists()).toBe(true);
+    expect(wrapper.find("#worksSearch").exists()).toBe(true);
     expect(wrapper.text()).toContain("Glas");
     expect(wrapper.text()).toContain("Sync all works");
     expect(wrapper.get("[data-work-status='Glas']").attributes("data-tone")).toBe("success");

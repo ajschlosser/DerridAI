@@ -6,7 +6,7 @@ import { createRuntimeState } from "../../src/runtime/runtimeState";
 // The rendered Annotations view is covered by the legacy baseline's annotations scenarios (recorded before this logic
 // moved); these pin the commands and the snapshot's shape.
 function setup(overrides: Record<string, unknown> = {}) {
-  const state = createRuntimeState() as unknown as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  const state = createRuntimeState() as unknown as Record<string, any>;
   const calls: string[] = [];
   const spies: Record<string, ReturnType<typeof vi.fn>> = {};
   const deps = new Proxy(

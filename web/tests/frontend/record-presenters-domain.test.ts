@@ -58,38 +58,6 @@ const metric = {
   valueLabel: "V",
   note: "n",
 };
-const pool: unknown[] = [
-  undefined,
-  null,
-  "",
-  "W",
-  "topics",
-  3,
-  [],
-  [row, { ...row, index: 0, record: { ...rec, work: "V", topics: "x;y" } }],
-  rec,
-  row,
-  metric,
-  [
-    ["a", 3],
-    ["b", 1],
-  ],
-  {
-    annotation: {
-      note: "n",
-      quote: "q",
-      tags: ["t"],
-      created_at: "2026-01-01T00:00:00Z",
-      author: "a",
-    },
-    record: rec,
-    work: "W",
-    file: row.file,
-  },
-  { selected: true },
-  { key: "a", label: "Alpha", search: "alpha", record: rec },
-];
-
 describe("record presenters", () => {
   it("renders the pager", () => {
     expect(
