@@ -526,7 +526,9 @@ def test_editorial_memory_semantic_index_can_serve_evidence_bound_quotation_fiel
 
 def test_metadata_prompts_receive_only_examples_for_their_family(monkeypatch):
     import app.corpus_metadata_enrichment_execution as execution
-    from app.corpus_metadata_enrichment_execution import MetadataEnrichmentExecutionMixin
+    from app.corpus_metadata_enrichment_execution import (
+        MetadataEnrichmentExecutionMixin,
+    )
     from app.corpus_models import CORPUS_PROFILES, PROFILE_VERSION
     from app.metadata_schema import default_schema
 
