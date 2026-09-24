@@ -3,7 +3,10 @@ from __future__ import annotations
 
 from .chroma_store import ChromaStore
 from .config import settings
-from .jobs import LLMJobManager, LLMToolJobManager, RAGJobManager, UpsertJobManager
+from .job_llm import LLMJobManager
+from .job_rag import RAGJobManager
+from .job_tools import LLMToolJobManager
+from .job_upsert import UpsertJobManager
 
 # Process-wide service objects. Keeping construction in one module makes route
 # ownership explicit while preserving the application's current singleton
