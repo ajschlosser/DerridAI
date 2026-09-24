@@ -308,6 +308,14 @@ Supported/common fields include:
 - full citation
 - additional detected `document_*`, `publication_*`, and canonical work metadata fields
 
+**Populate metadata with LLM** and **Populate all metadata with LLM** are source-aware. A work containing multiple
+source types is partitioned before lookup so book records are not matched as though they were audio, image, video, or
+web records. Books use Open Library, Google Books, and Crossref; journal articles, chapters, and theses use scholarly
+metadata services such as Crossref and OpenAlex; webpages use declared page metadata; and unsupported media types retain
+their source-derived metadata rather than being sent to a book catalogue. Only fields applicable to the source type are
+proposed. The selected provider profile chooses the LLM used for candidate matching, and every proposal remains
+reviewable before it is copied across the scoped records.
+
 Mixed values are visibly identified. Array/object values are edited as JSON. Every applied field change is recorded in each associated record's `updates` history with `source: "work_metadata"`.
 
 Because the affected record fingerprints change, records previously synchronized to Chroma become `Pending` until the next upsert.

@@ -778,6 +778,7 @@ class RAGGradeBatchRequest(BaseModel):
 class WorkMetadataSeed(BaseModel):
     work: str = Field(min_length=1, max_length=500)
     current_metadata: dict[str, Any] = Field(default_factory=dict)
+    source_type_scope: str = Field(default="unknown", min_length=1, max_length=64)
 
 
 class WorkMetadataRequest(BaseModel):

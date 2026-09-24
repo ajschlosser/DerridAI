@@ -1306,6 +1306,24 @@ async function switchBuildProvider(profileId: string, modelOverride = "") {
 
 async function refreshProviders() {
   const runtimeProfiles = (runtime.getProviderProfilesForUi?.() || []) as ProviderProfile[];
+  const defaultId = String(runtime.getDefaultProviderProfileId?.() || "");
+  const publishProfiles = (profiles: ProviderProfile[]) => {
+    providerProfiles.value = profiles;
+    if (
+      !selectedProviderId.value ||
+      !profiles.some((profile) => profile.id === selectedProviderId.value)
+    ) {
+      selectedProviderId.value =
+        profiles.find((profile) => profile.id === defaultId)?.id || profiles[0]?.id || "";
+    }
+    if (
+      !llmActionProviderId.value ||
+      !profiles.some((profile) => profile.id === llmActionProviderId.value)
+    ) {
+      llmActionProviderId.value = selectedProviderId.value;
+    }
+  };
+  publishProfiles(runtimeProfiles);
   let serverProfiles: ProviderProfile[] = [];
   try {
     serverProfiles = (await systemApi.researcherProviders()).profiles || [];
@@ -1320,6 +1338,9 @@ async function refreshProviders() {
   for (const profile of serverProfiles) merged.set(profile.id, profile);
   for (const profile of runtimeProfiles) merged.set(profile.id, profile);
   const mergedProfiles = Array.from(merged.values());
+  // Publish the configured profiles before probing availability. Provider
+  // pickers must be usable while network status checks are still running.
+  publishProfiles(mergedProfiles);
   const availability = await Promise.all(
     mergedProfiles.map(async (profile) => {
       try {
@@ -1368,7 +1389,6 @@ async function refreshProviders() {
     }),
   );
   providerProfiles.value = availability;
-  const defaultId = String(runtime.getDefaultProviderProfileId?.() || "");
   const activeBuildProfile = String(
     (currentBuild.value?.request as Record<string, unknown> | undefined)?.provider_profile_id || "",
   );

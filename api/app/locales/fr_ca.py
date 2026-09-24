@@ -5354,15 +5354,16 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'works.loading': 'Chargement des œuvres',
  'works.loading_cards': 'Chargement de {count} cartes d’œuvres',
  'works.lookup_scope': 'Portée de la recherche',
- 'works.lookup_scope_help': 'Obtenir les métadonnées bibliographiques de {count} œuvre(s).',
+ 'works.lookup_scope_help': 'Obtenir les métadonnées de {count} groupe(s) de sources.',
  'works.metadata_applied': '{records} fiches mises à jour · {fields} modifications de champs suivies',
- 'works.metadata_fields_help': 'Les propositions peuvent inclure l’éditeur, l’année/le lieu de publication, l’édition, '
-                               'le traducteur, l’ISBN, la langue, la citation et la couverture.',
+ 'works.metadata_fields_help': 'Seuls les champs applicables à chaque type de source sont proposés. Les métadonnées '
+                               'issues de la source sont conservées et chaque changement demeure à vérifier.',
  'works.metadata_lookup_failed': 'Impossible de lancer la recherche de métadonnées',
- 'works.metadata_lookup_started': 'Recherche de métadonnées lancée pour {count} œuvre(s).',
- 'works.metadata_no_match_count': '{count} œuvre(s) n’ont pas de correspondance exploitable ou ont renvoyé une erreur.',
+ 'works.metadata_lookup_started': 'Recherche de métadonnées lancée pour {count} groupe(s) de sources.',
+ 'works.metadata_no_match_count': '{count} groupe(s) de sources n’ont pas de correspondance exploitable ou ont '
+                                  'renvoyé une erreur.',
  'works.metadata_variants': 'Variantes des métadonnées',
- 'works.metadata_workflow_kicker': 'Enrichissement bibliographique',
+ 'works.metadata_workflow_kicker': 'Enrichissement de métadonnées selon la source',
  'works.mixed': 'Mixte',
  'works.mixed_across_records': 'Valeurs mixtes selon les fiches',
  'works.mixed_leave_unchanged': 'Mixte / ne pas modifier',
@@ -5389,11 +5390,20 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'works.overview': 'Aperçu de l’œuvre',
  'works.populate_all_metadata': 'Renseigner toutes les métadonnées avec le LLM',
  'works.populate_all_metadata_label': 'Renseigner les métadonnées · {count} œuvres',
- 'works.populate_metadata_help': 'DerridAI interroge des sources bibliographiques publiques adaptées au format (Open '
-                                 'Library, Google Books et Crossref), demande au LLM sélectionné d’identifier la '
-                                 'meilleure correspondance, puis renvoie des modifications proposées à vérifier. Rien '
-                                 'n’est appliqué automatiquement.',
+ 'works.populate_metadata_help': 'DerridAI sépare les œuvres mixtes par type de source, utilise des sources publiques '
+                                 'adaptées, demande au LLM sélectionné d’identifier les correspondances fiables, puis '
+                                 'renvoie des modifications proposées à vérifier. Rien n’est appliqué automatiquement.',
  'works.populate_metadata_llm': 'Renseigner les métadonnées avec le LLM',
+ 'works.source_type_archival': 'documents d’archives',
+ 'works.source_type_audio': 'audio',
+ 'works.source_type_book': 'livres ou monographies',
+ 'works.source_type_chapter': 'chapitres ou notices de référence',
+ 'works.source_type_image': 'images',
+ 'works.source_type_journal_article': 'articles de revue',
+ 'works.source_type_thesis': 'thèses ou mémoires',
+ 'works.source_type_unknown': 'types de source non résolus',
+ 'works.source_type_video': 'vidéo',
+ 'works.source_type_web': 'pages Web',
  'works.proposal_edit_help': 'Modifiez les valeurs proposées si nécessaire, puis appliquez les champs sélectionnés à '
                              'toutes les fiches chargées appartenant à cette œuvre.',
  'works.proposed_field_changes': 'modifications de champs proposées',
