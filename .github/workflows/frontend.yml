@@ -144,7 +144,7 @@ jobs:
       - name: Python syntax
         run: python -m compileall -q api/app
       - name: Backend and release regression tests
-        run: pytest -q -n auto --dist=worksteal -m "not contract"
+        run: pytest -q -n auto --dist=worksteal --ignore=tests/test_frontend_api_contract.py
 
   api-contract:
     needs: changes
