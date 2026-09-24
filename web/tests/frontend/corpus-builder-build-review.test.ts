@@ -25,7 +25,7 @@ describe("Corpus Builder build, review, and finish states", () => {
     const wrapper=mount(CorpusBuildProgress,{props:{
       status:"awaiting_review",stage:"review",progress:.63,recordCount:31,reviewCount:4,acceptedCount:27,unresolvedCount:2,
       llmMetrics:{calls:12,retries:2,structured_output_failures:1},
-      validation:{valid:false,coverage:.98,metadata_evidence_errors:[{record_id:"r1",reason:"Speaker evidence is invalid."}],metadata_schema_errors:["stance"],citation_errors:["r1"]},
+      validation:{valid:false,coverage:.98,metadata_evidence_errors:[{record_id:"r1",reason:"Speaker evidence is invalid."}],metadata_schema_errors:[{record_id:"r1",reason:"Stance value is invalid."}],citation_errors:["r1"]},
       warnings:["One boundary remains unresolved."],
     }});
     const progress=wrapper.get('[role="progressbar"]');
