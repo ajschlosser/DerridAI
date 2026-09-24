@@ -1,3 +1,4 @@
+/* Copyright 2026 Aaron John Schlosser, PhD. */
 import { defineConfig, devices } from "@playwright/test";
 
 const storybookPort = process.env.STORYBOOK_PORT || "6006";
