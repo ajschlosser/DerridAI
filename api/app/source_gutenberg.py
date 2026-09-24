@@ -130,7 +130,10 @@ def _gutendex_search(
             if attempt == 0:
                 time.sleep(0.25)
     if last_error is not None:
-        raise ValueError("Project Gutenberg catalog timed out; please try again.") from last_error
+        # Preserve the transport exception so callers can classify a timeout or
+        # network failure consistently; the API boundary adds the user-facing
+        # 502 context.
+        raise last_error
     return []
 
 
