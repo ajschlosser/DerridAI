@@ -1,0 +1,63 @@
+"""Regression coverage for API-router extraction."""
+
+from fastapi import FastAPI
+from fastapi.routing import APIRoute
+from starlette.requests import Request
+
+from app.dependencies import get_store
+from app.routers import annotations_router, auth_router, i18n_router
+
+
+def _routes(router) -> set[tuple[str, str]]:
+    return {
+        (method, route.path)
+        for route in router.routes
+        if isinstance(route, APIRoute)
+        for method in route.methods
+        if method not in {"HEAD", "OPTIONS"}
+    }
+
+
+def test_auth_router_preserves_existing_http_contract() -> None:
+    assert _routes(auth_router) == {
+        ("GET", "/api/auth/status"),
+        ("POST", "/api/auth/bootstrap"),
+        ("POST", "/api/auth/login"),
+        ("POST", "/api/auth/logout"),
+        ("GET", "/api/auth/me"),
+        ("GET", "/api/auth/users"),
+        ("POST", "/api/auth/users"),
+        ("PUT", "/api/auth/users/{user_id}"),
+        ("DELETE", "/api/auth/users/{user_id}"),
+        ("GET", "/api/auth/roles"),
+        ("POST", "/api/auth/roles"),
+        ("PUT", "/api/auth/roles/{role}/permissions"),
+        ("DELETE", "/api/auth/roles/{role}"),
+    }
+
+
+def test_annotation_and_i18n_routers_preserve_existing_http_contract() -> None:
+    assert _routes(annotations_router) == {
+        ("GET", "/api/annotations"),
+        ("POST", "/api/annotations"),
+        ("DELETE", "/api/annotations/{annotation_id}"),
+    }
+    assert _routes(i18n_router) == {
+        ("GET", "/api/i18n/languages"),
+        ("GET", "/api/i18n/languages/{code}"),
+        ("PUT", "/api/i18n/languages/{code}"),
+        ("DELETE", "/api/i18n/languages/{code}"),
+        ("POST", "/api/i18n/languages/install"),
+        ("GET", "/api/i18n/content-policy"),
+        ("GET", "/api/i18n/languages/{code}/content-policy"),
+        ("PUT", "/api/i18n/languages/{code}/content-policy"),
+    }
+
+
+def test_store_dependency_resolves_application_owned_store() -> None:
+    app = FastAPI()
+    store = object()
+    app.state.store = store
+    request = Request({"type": "http", "app": app, "headers": []})
+
+    assert get_store(request) is store
