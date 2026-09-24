@@ -2290,7 +2290,6 @@ EN_US: dict[str, str] = {'common.apply': 'Apply',
  'pdf_corpus.source_structure_help': 'Review how this source should be interpreted before records are built.',
  'pdf_corpus.source_structure_label': 'Source',
  'pdf_corpus.source_structure_detail': 'Source-specific controls are shown when applicable.',
- 'pdf_corpus.blocks': 'blocks',
  'pdf_corpus.build_stopped_checkpoint': 'Resuming does not restart completed stages or discard validated records.',
  'pdf_corpus.build_stopped_help': 'Completed checkpoints were preserved. Review the provider and execution settings '
                                   'above, then resume from the last safe checkpoint.',

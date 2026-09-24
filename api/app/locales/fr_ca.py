@@ -2470,7 +2470,6 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'pdf_corpus.source_structure_help': 'Révisez l’interprétation de cette source avant de construire les fiches.',
  'pdf_corpus.source_structure_label': 'Source',
  'pdf_corpus.source_structure_detail': 'Les contrôles propres à la source sont affichés lorsque cela s’applique.',
- 'pdf_corpus.blocks': 'blocs',
  'pdf_corpus.build_started': 'Construction du corpus démarrée. La progression et les points de contrôle terminés sont '
                              'persistés côté serveur.',
  'pdf_corpus.build_stopped_checkpoint': 'La reprise ne recommence pas les étapes terminées et ne supprime pas les '

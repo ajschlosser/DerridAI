@@ -9,7 +9,6 @@ from urllib.parse import urlparse
 
 import httpx
 
-
 SOURCE_TYPE_ALIASES = {
     "monograph": "book",
     "edited_book": "book",

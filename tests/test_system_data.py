@@ -4,7 +4,6 @@ from __future__ import annotations
 import sqlite3
 
 import pytest
-
 from app.database_backend import SQLiteBackend
 from app.system_data import SystemDataService
 

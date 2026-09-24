@@ -1968,7 +1968,7 @@ class ChromaStore:
         """Index one confirmed field decision as derived, provenance-bearing memory."""
         self.ensure_metadata_memory()
         memory_id = hashlib.sha256(
-            f"{record_id}|{field}|{schema_version}".encode("utf-8")
+            f"{record_id}|{field}|{schema_version}".encode()
         ).hexdigest()
         payload = {
             "memory_id": memory_id,

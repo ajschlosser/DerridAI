@@ -1,7 +1,13 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 """Regression coverage for source-aware Works metadata enrichment."""
 
-from api.app.work_metadata_sources import (
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "api"))
+
+from app.work_metadata_sources import (  # noqa: E402
     applicable_fields_for,
     canonical_source_type,
     catalogue_sources_for,

@@ -561,6 +561,11 @@ CURRENT REVIEWED RECORD TEXT:
     ) -> dict[str, Any]:
         """Bind proposals to source evidence while retaining reviewer-owned values."""
         schema = schema or default_schema()
+        run_guidance = (
+            request.get("run_guidance")
+            if isinstance(request, dict) and isinstance(request.get("run_guidance"), dict)
+            else {}
+        )
         # What may be proposed, cited and reviewed comes from the build's schema, not from a fixed list.
         allowed_fields = _allowed_for(schema)
         attribution_fields = schema.attribution_fields()

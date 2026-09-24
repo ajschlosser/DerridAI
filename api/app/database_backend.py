@@ -110,7 +110,7 @@ class SQLiteBackend:
             columns = self._columns(connection, table)
             if not columns:
                 raise KeyError(table)
-            count = int(connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+            count = int(connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])  # noqa: S608
             return {"name": table, "columns": columns, "row_count": count}
         finally:
             if owns_connection:
@@ -121,8 +121,9 @@ class SQLiteBackend:
         with self._connect() as connection:
             rows = [
                 {str(key): value for key, value in dict(row).items()}
-                for row in connection.execute(
-                    f"SELECT * FROM {_identifier(name)} LIMIT ? OFFSET ?", (int(limit), int(offset))
+                for row in connection.execute(  # noqa: S608
+                    f"SELECT * FROM {_identifier(name)} LIMIT ? OFFSET ?",  # noqa: S608
+                    (int(limit), int(offset)),
                 )
             ]
         return {**table, "rows": rows, "offset": offset, "limit": limit}
@@ -136,8 +137,8 @@ class SQLiteBackend:
         columns = list(clean)
         placeholders = ",".join("?" for _ in columns)
         with self._connect() as connection:
-            cursor = connection.execute(
-                f"INSERT INTO {_identifier(name)} ({','.join(_identifier(column) for column in columns)}) VALUES ({placeholders})",
+            cursor = connection.execute(  # noqa: S608
+                f"INSERT INTO {_identifier(name)} ({','.join(_identifier(column) for column in columns)}) VALUES ({placeholders})",  # noqa: S608
                 [self._encode(value) for value in clean.values()],
             )
             connection.commit()
@@ -153,8 +154,8 @@ class SQLiteBackend:
         where = " AND ".join(f"{_identifier(field)}=?" for field in keys)
         assignments = ",".join(f"{_identifier(field)}=?" for field in clean)
         with self._connect() as connection:
-            cursor = connection.execute(
-                f"UPDATE {_identifier(name)} SET {assignments} WHERE {where}",
+            cursor = connection.execute(  # noqa: S608
+                f"UPDATE {_identifier(name)} SET {assignments} WHERE {where}",  # noqa: S608
                 [self._encode(value) for value in [*clean.values(), *keys.values()]],
             )
             connection.commit()
@@ -168,8 +169,8 @@ class SQLiteBackend:
             raise ValueError("A primary key is required.")
         where = " AND ".join(f"{_identifier(field)}=?" for field in keys)
         with self._connect() as connection:
-            cursor = connection.execute(
-                f"DELETE FROM {_identifier(name)} WHERE {where}",
+            cursor = connection.execute(  # noqa: S608
+                f"DELETE FROM {_identifier(name)} WHERE {where}",  # noqa: S608
                 [self._encode(value) for value in keys.values()],
             )
             connection.commit()
