@@ -6,7 +6,7 @@ This describes the code as it exists in 0.62.19. For feature behavior see the [U
 ## Processes
 
 - **web** — Vue 3 single-page app built by Vite and served by nginx (`web/nginx.conf`), which proxies `/api/` to the API. Storybook is an opt-in `dev` compose profile.
-- **api** — one FastAPI process (`api/app/main.py`). Background work runs on threads inside this process; there is no external queue or worker service.
+- **api** — one FastAPI process entered through `api/app/main.py`. The entrypoint composes domain `APIRouter`s from `api/app/routers/`, while process-wide Chroma and job-manager services are constructed in `api/app/services.py`. Background work runs on threads inside this process; there is no external queue or worker service.
 - **LLM backend** — Ollama or an OpenAI-compatible endpoint, reached over HTTP through provider profiles (`llm.py`). Optional compose profile `ollama`.
 - **Chroma backend** — embedded `PersistentClient` by default, or `HttpClient` to a running server (optional compose profile `chroma`, or `CHROMA_BASE_URL` like `OLLAMA_BASE_URL`).
 
