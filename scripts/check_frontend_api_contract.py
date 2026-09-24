@@ -123,7 +123,10 @@ def _template_route(expression: str, constants: dict[str, str]) -> str:
         dynamic = body[index + 2 : cursor].strip()
         if dynamic in constants:
             output.append(constants[dynamic])
-        elif "query" in dynamic or "params" in dynamic:
+        elif (
+            re.search(r"(query|params|suffix)", dynamic, re.IGNORECASE)
+            or re.search(r"""["']\?""", dynamic)
+        ):
             # Query-string construction does not change the OpenAPI route.
             output.append("")
         else:
