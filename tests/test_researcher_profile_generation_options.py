@@ -3,7 +3,7 @@
 Why: researcher accounts run RAG through an administrator-approved provider profile.
 Its generation options are stored as strings (from forms or JSON) and must be
 converted to real types on the server so the browser can never supply or alter them.
-How: imports the helper straight from app.main and feeds it string values.
+How: imports the helper from the jobs router and feeds it string values.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ def test_researcher_static_profile_generation_is_normalized_server_side():
     """
     if str(ROOT/"api") not in sys.path:
         sys.path.insert(0,str(ROOT/"api"))
-    from app.main import _profile_generation_options
+    from app.routers.jobs import _profile_generation_options
     values=_profile_generation_options({
         "num_ctx":"8192",
         "temperature":"0.2",
