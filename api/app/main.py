@@ -2113,15 +2113,6 @@ def get_system_metadata_exemplars(
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-@app.delete("/api/system/data/vector-stores/metadata-memory")
-def clear_system_metadata_memory(request: Request) -> dict[str, Any]:
-    _require_admin(request)
-    try:
-        return {"deleted": store.clear_metadata_memory()}
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-
-
 @app.get("/api/system/data/{database}/{table}")
 def get_system_data_table(
     database: str,
