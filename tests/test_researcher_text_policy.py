@@ -14,7 +14,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = (ROOT / "web/src/runtime/runtime.js").read_text(encoding="utf-8")
-MAIN = (ROOT / "api/app/main.py").read_text(encoding="utf-8")
+POLICY_ROUTES = "\n".join(
+    (ROOT / path).read_text(encoding="utf-8")
+    for path in (
+        "api/app/routers/annotations.py",
+        "api/app/routers/jobs.py",
+        "api/app/routers/stores.py",
+    )
+)
 
 _DUMMY_POLICY = {
     "status": "ready",
@@ -48,7 +55,7 @@ def test_researcher_text_policy_detects_nested_and_obfuscated_language():
     Behavior (dummy placeholder policy): ordinary scholarly text ("hospitality and différance") passes; a
     dotted spelling and a leetspeak spelling ("qwvulg4r") of blocked terms are caught; find_disallowed_path
     reports where in a nested payload the bad value is ("input.tags[1]").
-    Wiring (source text): main.py still defines enforce_researcher_text, and runtime.js still has the warning
+    Wiring (source text): server route owners still enforce researcher text, and runtime.js still has the warning
     message, the input filter, the term-digest helper, and the /api/i18n/content-policy fetch.
     """
     content_filter = _load_content_filter()
@@ -57,7 +64,7 @@ def test_researcher_text_policy_detects_nested_and_obfuscated_language():
     assert content_filter.contains_disallowed_language("z.z.b.l.o.c.k", policies=policies)
     assert content_filter.contains_disallowed_language("qwvulg4r", policies=policies)
     assert content_filter.find_disallowed_path({"note": "clean", "tags": ["ok", "z.z.b.l.o.c.k"]}, policies=policies) == "input.tags[1]"
-    assert "enforce_researcher_text" in MAIN
+    assert "enforce_researcher_text" in POLICY_ROUTES
     assert "content_filter.warning" in RUNTIME
     assert "filterResearcherInputElement" in RUNTIME
     assert "researcherTokenDigest" in RUNTIME
