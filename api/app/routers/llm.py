@@ -1,15 +1,25 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 from __future__ import annotations
 
+import logging
+
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
-from ..llm import TouchupFailure, llm_status, warmup_model
+from ..llm import TouchupFailure, llm_status, propose_touchup, warmup_model
 from ..llm_tools import run_pdf_llm, run_rag_grade
-from ..models import LLMStatusRequest, LLMWarmupRequest, PdfLlmRequest, RAGGradeRequest
+from ..models import (
+    LLMStatusRequest,
+    LLMWarmupRequest,
+    PdfLlmRequest,
+    RAGGradeRequest,
+    TouchupRequest,
+    TouchupResponse,
+)
 from ..services import store
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["llm"])
 
 
@@ -75,4 +85,38 @@ def pdf_llm(body: PdfLlmRequest) -> dict[str, Any]:
         return run_pdf_llm(body)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/api/llm/touchup", response_model=TouchupResponse)
+def llm_touchup(body: TouchupRequest) -> TouchupResponse:
+    try:
+        return TouchupResponse.model_validate(
+            propose_touchup(
+                body.record,
+                body.fields,
+                body.instructions,
+                body.model,
+                body.ollama,
+                provider=body.provider,
+                base_url=body.base_url,
+                api_key=body.api_key,
+            )
+        )
+    except TouchupFailure as exc:
+        detail: dict[str, str] = {"message": exc.message}
+        if exc.diagnostic:
+            detail["diagnostic"] = exc.diagnostic
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=detail,
+        ) from exc
+    except Exception as exc:
+        logger.exception("Unexpected LLM touch-up failure")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": "Unexpected LLM touch-up failure.",
+                "diagnostic": str(exc),
+            },
+        ) from exc
 
