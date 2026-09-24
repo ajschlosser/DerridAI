@@ -98,7 +98,6 @@ async function open(page: Page, scenario: Scenario) {
   // The runtime restores the saved workspace while it starts. Loading a file before that finishes
   // would let the restore overwrite it, so wait for the start-up requests to settle first.
   await page.waitForLoadState("networkidle");
-  await page.waitForTimeout(1000);
   if (scenario.load) {
     await page.setInputFiles("#fileInput", {
       name: "baseline.jsonl",
@@ -121,12 +120,11 @@ async function open(page: Page, scenario: Scenario) {
       .click();
   }
   await page.waitForLoadState("networkidle");
-  await page.waitForTimeout(600);
   await scenario.steps?.(page);
   // Resize last: the narrow layouts hide the sidebar the scenarios navigate with.
+  // Snapshot capture below waits for the resulting DOM to stabilize.
   if (scenario.viewport) {
     await page.setViewportSize(scenario.viewport);
-    await page.waitForTimeout(500);
   }
 }
 
@@ -260,8 +258,8 @@ async function markup(
 ): Promise<string> {
   let last = await rawMarkup(page, target);
   let stableFor = 0;
-  for (let i = 0; i < 40 && stableFor < 4; i++) {
-    await page.waitForTimeout(200);
+  for (let i = 0; i < 40 && stableFor < 3; i++) {
+    await page.waitForTimeout(100);
     const next = await rawMarkup(page, target);
     stableFor = next === last ? stableFor + 1 : 0;
     last = next;
@@ -308,20 +306,36 @@ function samplePdf(): Buffer {
 }
 
 const inPdfExplorer = async (page: Page, { open = true } = {}) => {
-  await page.evaluate(() => {
-    window.dispatchEvent(
-      new CustomEvent("derridai:navigate-native", {
-        detail: { path: "/pdf?mode=explorer", runtimeView: "pdf" },
-      }),
-    );
-  });
+  const explorerPath = "/pdf?mode=explorer";
+  await expect
+    .poll(
+      async () => {
+        await page.evaluate((path) => {
+          window.dispatchEvent(
+            new CustomEvent("derridai:navigate-native", {
+              detail: { path, runtimeView: "pdf" },
+            }),
+          );
+        }, explorerPath);
+        const url = new URL(page.url());
+        return `${url.pathname}${url.search}`;
+      },
+      { timeout: 10_000, intervals: [50, 100, 200, 500] },
+    )
+    .toBe(explorerPath);
   await page.waitForLoadState("networkidle");
-  await page.waitForTimeout(800);
+  const input = page.locator("#pdfInput");
+  await expect(input).toBeAttached({ timeout: 10_000 });
   if (!open) return;
-  await page
-    .locator("#pdfInput")
-    .setInputFiles({ name: "trace.pdf", mimeType: "application/pdf", buffer: samplePdf() });
-  await page.waitForTimeout(1500);
+  await input.setInputFiles({
+    name: "trace.pdf",
+    mimeType: "application/pdf",
+    buffer: samplePdf(),
+  });
+  await expect(page.locator(".pdf-document-title")).toContainText("trace.pdf · 2 pages", {
+    timeout: 10_000,
+  });
+  await expect(page.locator("#pdfCanvas")).toBeAttached();
 };
 
 const CHROMA_UP = { "/api/health": { ok: true, chroma: { available: true } } };
@@ -456,21 +470,21 @@ const researchWithEvidence = async (page: Page) => {
     .getByRole("button", { name: "Record View", exact: true })
     .first()
     .click();
-  await page.waitForTimeout(900);
-  await page.getByRole("button", { name: "Add evidence" }).first().click();
-  await page.waitForTimeout(400);
+  const addEvidence = page.getByRole("button", { name: "Add evidence" }).first();
+  await expect(addEvidence).toBeVisible();
+  await addEvidence.click();
   await page
     .locator("nav, aside")
     .getByRole("button", { name: "Research", exact: true })
     .first()
     .click();
-  await page.waitForTimeout(1500);
+  await expect(page.locator("#researchQuestion")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Remove from evidence/ }).first()).toBeVisible();
 };
 
 const inRecords = async (page: Page) => {
   await page.getByRole("button", { name: "Records", exact: true }).click();
   await page.waitForLoadState("networkidle");
-  await page.waitForTimeout(800);
 };
 const openDialogFromRecords =
   (button: RegExp | string, options: { secondFile?: boolean } = {}) =>
@@ -740,7 +754,7 @@ const scenarios: Scenario[] = [
     steps: async (page) => {
       await inPdfExplorer(page);
       await page.locator("#pdfNext").click();
-      await page.waitForTimeout(800);
+      await expect(page.locator("#pdfPageInput")).toHaveValue("2");
     },
   },
   {
@@ -1431,7 +1445,10 @@ const scenarios: Scenario[] = [
     load: true,
     fixtures: liveJobs({ finishAfterListings: 1 }),
     steps: async (page) => {
-      await page.waitForTimeout(6500);
+      const completed = page.locator('[data-op-id="job-rag-2"]');
+      await expect(completed.locator(".ops-status")).toContainText("Completed", { timeout: 8_000 });
+      // The UI briefly marks newly completed work as fresh; the committed baseline is the settled state.
+      await expect(completed).not.toHaveClass(/is-fresh/, { timeout: 8_000 });
     },
   },
   {
@@ -1440,7 +1457,9 @@ const scenarios: Scenario[] = [
     fixtures: liveJobs(),
     steps: async (page) => {
       await page.locator("#refreshJobs").click();
-      await page.waitForTimeout(900);
+      await expect(
+        page.locator('[role="status"]').filter({ hasText: "Operations updated." }),
+      ).toHaveCount(1);
     },
   },
   {
@@ -1452,7 +1471,7 @@ const scenarios: Scenario[] = [
         .getByRole("button", { name: /^Cancel/ })
         .first()
         .click();
-      await page.waitForTimeout(1200);
+      await expect(page.locator('[data-op-id="job-rag-2"] .ops-status')).toContainText("Cancelled");
     },
   },
   {
@@ -1464,7 +1483,8 @@ const scenarios: Scenario[] = [
         .getByRole("button", { name: /^Remove/ })
         .first()
         .click();
-      await page.waitForTimeout(6500);
+      await expect(page.locator('[data-op-id="job-rag-1"]')).toHaveCount(0, { timeout: 8_000 });
+      await expect(page.locator(".ops-undo")).toHaveCount(0, { timeout: 8_000 });
     },
   },
   {
@@ -1473,7 +1493,8 @@ const scenarios: Scenario[] = [
     fixtures: liveJobs(),
     steps: async (page) => {
       await page.locator("#clearFinishedJobs").click();
-      await page.waitForTimeout(6500);
+      await expect(page.locator('[data-op-id="job-rag-1"]')).toHaveCount(0, { timeout: 8_000 });
+      await expect(page.locator(".ops-undo")).toHaveCount(0, { timeout: 8_000 });
     },
   },
   {
@@ -1549,9 +1570,12 @@ const scenarios: Scenario[] = [
         mimeType: "application/zip",
         buffer: Buffer.from("PK"),
       });
+      const reloaded = page.waitForEvent("load", { timeout: 10_000 });
       await page.getByRole("button", { name: "Yes", exact: true }).click();
       await expect(page.getByText(/Restore complete/)).toBeVisible({ timeout: 10_000 });
+      await reloaded;
       await page.waitForLoadState("networkidle");
+      await expect(page.locator("#app")).toBeVisible();
     },
   },
 ];
