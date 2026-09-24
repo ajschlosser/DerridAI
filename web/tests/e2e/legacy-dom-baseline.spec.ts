@@ -457,13 +457,13 @@ const researchWithEvidence = async (page: Page) => {
   const addEvidence = page.getByRole("button", { name: "Add evidence" }).first();
   await expect(addEvidence).toBeVisible();
   await addEvidence.click();
-  await expect(page.getByRole("button", { name: /Remove from evidence/ }).first()).toBeVisible();
   await page
     .locator("nav, aside")
     .getByRole("button", { name: "Research", exact: true })
     .first()
     .click();
   await expect(page.locator("#researchQuestion")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Remove from evidence/ }).first()).toBeVisible();
 };
 
 const inRecords = async (page: Page) => {
@@ -1429,9 +1429,10 @@ const scenarios: Scenario[] = [
     load: true,
     fixtures: liveJobs({ finishAfterListings: 1 }),
     steps: async (page) => {
-      await expect(page.locator('[data-op-id="job-rag-2"] .ops-status')).toContainText("Completed", {
-        timeout: 8_000,
-      });
+      const completed = page.locator('[data-op-id="job-rag-2"]');
+      await expect(completed.locator(".ops-status")).toContainText("Completed", { timeout: 8_000 });
+      // The UI briefly marks newly completed work as fresh; the committed baseline is the settled state.
+      await expect(completed).not.toHaveClass(/is-fresh/, { timeout: 8_000 });
     },
   },
   {
@@ -1440,7 +1441,9 @@ const scenarios: Scenario[] = [
     fixtures: liveJobs(),
     steps: async (page) => {
       await page.locator("#refreshJobs").click();
-      await expect(page.getByRole("status")).toContainText("Operations updated.");
+      await expect(
+        page.locator('[role="status"]').filter({ hasText: "Operations updated." }),
+      ).toHaveCount(1);
     },
   },
   {
@@ -1465,6 +1468,7 @@ const scenarios: Scenario[] = [
         .first()
         .click();
       await expect(page.locator('[data-op-id="job-rag-1"]')).toHaveCount(0, { timeout: 8_000 });
+      await expect(page.locator(".ops-undo")).toHaveCount(0, { timeout: 8_000 });
     },
   },
   {
@@ -1474,6 +1478,7 @@ const scenarios: Scenario[] = [
     steps: async (page) => {
       await page.locator("#clearFinishedJobs").click();
       await expect(page.locator('[data-op-id="job-rag-1"]')).toHaveCount(0, { timeout: 8_000 });
+      await expect(page.locator(".ops-undo")).toHaveCount(0, { timeout: 8_000 });
     },
   },
   {
