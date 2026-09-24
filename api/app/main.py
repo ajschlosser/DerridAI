@@ -30,16 +30,14 @@ from starlette.background import BackgroundTask
 from .auth import SESSION_COOKIE, AuthUser, auth_store, role_has_capability
 from .chroma_store import ChromaStore, StoreAlreadyExistsError
 from .config import APP_GIT_COMMIT, APP_VERSION, app_version_label, settings
-from .content_filter import (
-    admin_content_policy_view,
-    enforce_researcher_text,
-    public_content_policy_mirror,
-)
-from .content_policy_generation import generate_policy_for_installed_language
+from .content_filter import enforce_researcher_text
 from .corpus_builder import CORPUS_PROFILES, pdf_corpus_builds, pdf_corpus_repository
 from .corpus_review_state import _queue_counts
 from .corpus_reviewer_helpers import _present_for_reviewer
-from .i18n_translation import translate_english_dictionary
+from .dependencies import (
+    request_user as _request_user,
+    require_admin as _require_admin,
+)
 from .jobs import LLMJobManager, LLMToolJobManager, RAGJobManager, UpsertJobManager
 from .llm import TouchupFailure, llm_status, propose_touchup, warmup_model
 from .llm_tools import run_pdf_llm, run_rag_grade
@@ -53,18 +51,12 @@ from .metadata_adjudication_cache import (
 from .metadata_schema import MetadataSchema, SchemaImportError
 from .metadata_schema_store import SchemaLocked, SchemaNotFound, SchemaStore
 from .models import (
-    AnnotationCreateRequest,
-    AuthBootstrapRequest,
-    AuthLoginRequest,
     BulkUpsert,
     ChromaConnectionUpdate,
     ChromaPathUpdate,
     DeriveLanguageStoresRequest,
     EmbeddingPreflightRequest,
     GutenbergImport,
-    LanguageContentPolicyUpdate,
-    LanguageDictionaryUpdate,
-    LanguageInstallRequest,
     LLMJobCreate,
     LLMJobRejectRequest,
     LLMResultResolutionRequest,
@@ -106,8 +98,6 @@ from .models import (
     RecordUpsert,
     ResearcherProviderProfilesUpdate,
     ResearcherProviderStatusRequest,
-    RoleCreateRequest,
-    RolePermissionsUpdate,
     SearchRequest,
     StoreCreate,
     StoredRecordPatch,
@@ -118,8 +108,6 @@ from .models import (
     TouchupRequest,
     TouchupResponse,
     UpsertJobCreate,
-    UserCreateRequest,
-    UserUpdateRequest,
 )
 from .pdf_tools import extract_pdf_text
 from .researcher_view import (
@@ -128,12 +116,13 @@ from .researcher_view import (
     summarize_record,
 )
 from .reviewer_context import current_reviewer, reviewer_id
+from .routers import annotations_router, auth_router, i18n_router
 from .source_media import (
     fetch_source_url,
     load_gutenberg_etext,
     search_project_gutenberg,
 )
-from .system_store import normalize_locale_code, system_store
+from .system_store import system_store
 
 logger = logging.getLogger(__name__)
 
@@ -296,20 +285,6 @@ async def _hide_pending_second_opinions(response):
     return Response(content=body, status_code=response.status_code, headers=headers, media_type="application/json")
 
 
-def _request_user(request: Request) -> AuthUser:
-    user = getattr(request.state, "user", None)
-    if user is None:
-        raise HTTPException(status_code=401, detail="Authentication required.")
-    return user
-
-
-def _require_admin(request: Request) -> AuthUser:
-    user = _request_user(request)
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Administrator access required.")
-    return user
-
-
 def _stamp_record_activity(record: dict[str, Any], username: str) -> dict[str, Any]:
     """Attach the initiating user to audit entries that arrived without one.
 
@@ -331,171 +306,13 @@ def _stamp_record_activity(record: dict[str, Any], username: str) -> dict[str, A
     return copy_record
 
 
-def _session_cookie(response: Response, token: str) -> None:
-    response.set_cookie(
-        SESSION_COOKIE,
-        token,
-        max_age=14 * 24 * 60 * 60,
-        httponly=True,
-        secure=settings.session_cookie_secure,
-        samesite="lax",
-        path="/",
-    )
-
-
-@app.get("/api/auth/status")
-def auth_status(request: Request) -> dict[str, Any]:
-    user = auth_store.user_for_session(request.cookies.get(SESSION_COOKIE))
-    return {
-        "bootstrap_required": auth_store.bootstrap_required(),
-        "authenticated": user is not None,
-        "user": user.public() if user else None,
-    }
-
-
-@app.post("/api/auth/bootstrap")
-def auth_bootstrap(body: AuthBootstrapRequest, response: Response) -> dict[str, Any]:
-    try:
-        user = auth_store.bootstrap_admin(body.username, body.password)
-        user = auth_store.record_login(user.id)
-        token = auth_store.create_session(user.id)
-        _session_cookie(response, token)
-        return {"user": user.public(), "bootstrap_required": False}
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.post("/api/auth/login")
-def auth_login(body: AuthLoginRequest, response: Response) -> dict[str, Any]:
-    retry_after = auth_store.login_lockout_remaining(body.username)
-    if retry_after > 0:
-        # Locked usernames are reported identically whether or not the account
-        # exists, because unknown usernames are throttled with the same counter.
-        raise HTTPException(
-            status_code=429,
-            detail={
-                "message": "Too many failed sign-in attempts. Try again later.",
-                "code": "login_locked",
-                "retry_after_seconds": retry_after,
-            },
-            headers={"Retry-After": str(retry_after)},
-        )
-    user = auth_store.authenticate(body.username, body.password)
-    if user is None:
-        raise HTTPException(status_code=401, detail="Invalid username or password.")
-    try:
-        token = auth_store.create_session(user.id, expected_updated_at=user.updated_at)
-    except ValueError as exc:
-        # Hide whether the account was disabled or changed during this login.
-        raise HTTPException(status_code=401, detail="Invalid username or password.") from exc
-    _session_cookie(response, token)
-    return {"user": user.public()}
-
-
-@app.post("/api/auth/logout")
-def auth_logout(request: Request, response: Response) -> dict[str, Any]:
-    auth_store.delete_session(request.cookies.get(SESSION_COOKIE))
-    response.delete_cookie(SESSION_COOKIE, path="/")
-    return {"ok": True}
-
-
-@app.get("/api/auth/me")
-def auth_me(request: Request) -> dict[str, Any]:
-    user = auth_store.user_for_session(request.cookies.get(SESSION_COOKIE))
-    if user is None:
-        raise HTTPException(status_code=401, detail="Authentication required.")
-    return {"user": user.public()}
-
-
-@app.get("/api/auth/users")
-def auth_users(request: Request) -> dict[str, Any]:
-    _require_admin(request)
-    return {"users": [user.public() for user in auth_store.list_users()]}
-
-
-@app.post("/api/auth/users")
-def auth_create_user(body: UserCreateRequest, request: Request) -> dict[str, Any]:
-    _require_admin(request)
-    try:
-        return {"user": auth_store.create_user(body.username, body.password, body.role).public()}
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.put("/api/auth/users/{user_id}")
-def auth_update_user(user_id: int, body: UserUpdateRequest, request: Request) -> dict[str, Any]:
-    current = _require_admin(request)
-    if current.id == user_id and body.active is False:
-        raise HTTPException(status_code=400, detail="You cannot deactivate your current session account.")
-    if current.id == user_id and body.role is not None and body.role != current.role:
-        raise HTTPException(status_code=400, detail="You cannot change the role of your current session account.")
-    try:
-        user = auth_store.update_user(user_id, role=body.role, active=body.active, password=body.password)
-        return {"user": user.public()}
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="User not found.") from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.delete("/api/auth/users/{user_id}")
-def auth_delete_user(user_id: int, request: Request) -> dict[str, Any]:
-    current = _require_admin(request)
-    if current.id == user_id:
-        raise HTTPException(status_code=400, detail="You cannot delete your current session account.")
-    try:
-        auth_store.delete_user(user_id)
-        return {"deleted": user_id}
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="User not found.") from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.get("/api/auth/roles")
-def auth_roles(request: Request) -> dict[str, Any]:
-    _require_admin(request)
-    roles, capabilities = auth_store.role_definitions()
-    return {"roles": roles, "capabilities": capabilities}
-
-
-@app.post("/api/auth/roles")
-def auth_create_role(body: RoleCreateRequest, request: Request) -> dict[str, Any]:
-    _require_admin(request)
-    try:
-        role = auth_store.create_role(body.name, body.description, body.clone_from)
-        roles, capabilities = auth_store.role_definitions()
-        return {"role": role, "roles": roles, "capabilities": capabilities}
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.put("/api/auth/roles/{role}/permissions")
-def auth_update_role_permissions(role: str, body: RolePermissionsUpdate, request: Request) -> dict[str, Any]:
-    _require_admin(request)
-    try:
-        permissions = auth_store.set_role_permissions(role, body.permissions)
-        roles, capabilities = auth_store.role_definitions()
-        return {"role": role, "permissions": permissions, "roles": roles, "capabilities": capabilities}
-    except ValueError as exc:
-        if "Unknown role" in str(exc):
-            raise HTTPException(status_code=404, detail="Role not found.") from exc
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.delete("/api/auth/roles/{role}")
-def auth_delete_role(role: str, request: Request) -> dict[str, Any]:
-    _require_admin(request)
-    try:
-        auth_store.delete_role(role)
-        roles, capabilities = auth_store.role_definitions()
-        return {"deleted": role, "roles": roles, "capabilities": capabilities}
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="Role not found.") from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
 store = ChromaStore()
+app.state.store = store
+
+app.include_router(auth_router)
+app.include_router(annotations_router)
+app.include_router(i18n_router)
+
 llm_jobs = LLMJobManager(max_workers=64)
 llm_tool_jobs = LLMToolJobManager(store)
 rag_jobs = RAGJobManager(store, ollama_max_concurrent=settings.rag_ollama_max_concurrent)
@@ -503,86 +320,6 @@ rag_jobs = RAGJobManager(store, ollama_max_concurrent=settings.rag_ollama_max_co
 # upsert jobs prevents two large work syncs from competing for CPU/RAM/VRAM and
 # making the entire UI appear frozen; additional sync requests remain queued.
 upsert_jobs = UpsertJobManager(store, max_workers=1)
-
-
-@app.get("/api/annotations")
-def list_annotations(request: Request, store_name: str | None = Query(default=None, alias="store")) -> dict[str, Any]:
-    user = _request_user(request)
-    annotations = system_store.list_annotations()
-    if user.role == "admin":
-        return {"annotations": annotations}
-
-    # Researcher annotations are always scoped to corpus evidence available in
-    # the selected database. This prevents annotations or change context from a
-    # work outside that database from leaking into the researcher workspace.
-    candidate_stores: list[str] = []
-    if store_name:
-        candidate_stores = [store_name]
-    else:
-        try:
-            candidate_stores = [
-                str(item.get("name")) for item in store.list_stores()
-                if item.get("name") and item.get("collection_role") != "language" and not str(item.get("name")).startswith("_response_cache")
-            ]
-        except Exception as exc:
-            # Fail closed for researcher visibility instead of risking a
-            # cross-corpus disclosure. The server log retains diagnosis.
-            logger.warning("Researcher annotation store scope could not be loaded: %s", exc)
-            candidate_stores = []
-    accessible_works: dict[str, set[str]] = {}
-    for name in candidate_stores:
-        try:
-            accessible_works[name] = {str(work) for work in store.list_works(name)}
-        except Exception as exc:
-            # Security scope checks fail closed: an unreadable store exposes no
-            # works rather than risking cross-corpus annotation disclosure.
-            logger.warning("Researcher annotation work scope could not be loaded for %s: %s", name, exc)
-            accessible_works[name] = set()
-    visible: list[dict] = []
-    for item in annotations:
-        item_store = str(item.get("store") or "")
-        if item_store not in accessible_works:
-            continue
-        item_work = str(item.get("work") or "")
-        if item_work and item_work not in accessible_works[item_store]:
-            continue
-        visible.append(item)
-    return {"annotations": visible}
-
-
-@app.post("/api/annotations")
-def create_annotation(body: AnnotationCreateRequest, request: Request) -> dict[str, Any]:
-    user = _request_user(request)
-    if user.role != "admin":
-        try:
-            enforce_researcher_text({"quote": body.quote, "note": body.note, "tags": body.tags})
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-        if not body.store:
-            raise HTTPException(status_code=403, detail="Researcher annotations must be attached to an accessible corpus database record.")
-        try:
-            accessible_record = store.get_record(body.store, body.record_id, include_updates=False)
-        except Exception as exc:
-            # Deliberately fail closed without exposing whether the record or
-            # backing store failed, avoiding an account-enumeration distinction.
-            logger.warning("Researcher annotation evidence check failed closed: %s", exc)
-            accessible_record = None
-        if accessible_record is None:
-            raise HTTPException(status_code=403, detail="That record is not available in the selected corpus database.")
-        if body.work and str(accessible_record.get("work") or "") != str(body.work):
-            raise HTTPException(status_code=403, detail="That work is not available for this record in the selected corpus database.")
-    item = body.model_dump()
-    item.update({"user_id": user.id, "initiated_by": user.username, "author": user.username})
-    return system_store.add_annotation(item)
-
-
-@app.delete("/api/annotations/{annotation_id}")
-def delete_annotation(annotation_id: str, request: Request) -> dict[str, Any]:
-    user = _request_user(request)
-    deleted = system_store.delete_annotation(annotation_id, user_id=user.id, admin=user.role == "admin")
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Annotation not found or not editable by this account.")
-    return {"deleted": annotation_id}
 
 
 @app.get("/api/system/researcher-providers")
@@ -638,148 +375,6 @@ def researcher_provider_availability(
         "models": status.get("models") or [],
         "error": status.get("error"),
     }
-
-
-@app.get("/api/i18n/languages")
-def i18n_languages() -> dict[str, Any]:
-    # Read-only language metadata is public because the sign-in screen itself is
-    # localized. Mutation/install endpoints remain administrator-only.
-    return {"languages": system_store.list_languages()}
-
-
-@app.get("/api/i18n/languages/{code}")
-def i18n_language(code: str) -> dict[str, Any]:
-    # Dictionaries contain UI copy only and must be readable before login.
-    value = system_store.get_language(code)
-    if value is None:
-        raise HTTPException(status_code=404, detail="Language dictionary not found.")
-    return value
-
-
-@app.put("/api/i18n/languages/{code}")
-def i18n_update_language(code: str, body: LanguageDictionaryUpdate, request: Request) -> dict[str, Any]:
-    _require_admin(request)
-    try:
-        return system_store.put_language(code, name=body.name, flag=body.flag, dictionary=body.dictionary)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.delete("/api/i18n/languages/{code}")
-def i18n_delete_language(code: str, request: Request) -> dict[str, Any]:
-    _require_admin(request)
-    try:
-        system_store.delete_language(code)
-        return {"deleted": normalize_locale_code(code)}
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="Language dictionary not found.") from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.post("/api/i18n/languages/install")
-def i18n_install_language(body: LanguageInstallRequest, request: Request) -> dict[str, Any]:
-    """Create a UI dictionary by translating the canonical en-US dictionary."""
-    _require_admin(request)
-    try:
-        code = normalize_locale_code(body.code)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    if system_store.get_language(code) is not None:
-        raise HTTPException(status_code=409, detail=f"Locale {code} is already installed. Edit the existing dictionary or remove it before reinstalling.")
-    base = system_store.get_language("en-US") or {"dictionary": {}}
-    dictionary = dict(base.get("dictionary") or {})
-    model = body.model or (settings.openai_compat_model if body.provider == "openai" else settings.ollama_model)
-    if not model:
-        raise HTTPException(status_code=400, detail="Select a model to translate the language dictionary.")
-    try:
-        translated, translation_stats = translate_english_dictionary(
-            code=code,
-            dictionary=dictionary,
-            provider=body.provider,
-            model=model,
-            base_url=body.base_url,
-            api_key=body.api_key,
-            generation=body.generation,
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Language translation failed: {exc}") from exc
-    saved = system_store.put_language(
-        code,
-        name=body.name or code,
-        flag=body.flag or "🌐",
-        dictionary=translated,
-        translation_report={
-            "status": "completed_with_fallbacks" if int(translation_stats.get("fallback_count") or 0) else "complete",
-            "source_locale": "en-US",
-            "provider": body.provider,
-            "model": model,
-            "completed_at": datetime.now(UTC).isoformat(),
-            "failed_count": int(translation_stats.get("failed_count") or 0),
-            "fallback_count": int(translation_stats.get("fallback_count") or 0),
-            "failed_keys": list(translation_stats.get("failed_keys") or []),
-            "failures": list(translation_stats.get("failures") or [])[:250],
-            "translated_count": int(translation_stats.get("translated_count") or 0),
-            "key_count": int(translation_stats.get("key_count") or len(dictionary)),
-        },
-    )
-    try:
-        system_store.put_content_policy(
-            code,
-            generate_policy_for_installed_language(
-                code=code,
-                provider=body.provider,
-                model=model,
-                base_url=body.base_url,
-                api_key=body.api_key,
-                generation=body.generation,
-            ),
-        )
-    except Exception:
-        logger.warning(
-            "Content policy generation failed during language install for %s",
-            code,
-            exc_info=True,
-        )
-    return system_store.get_language(code) or saved
-
-
-@app.get("/api/i18n/content-policy")
-def i18n_active_content_policy(request: Request) -> dict[str, Any]:
-    """Hashed union of ready locale policies for the researcher client mirror."""
-    _request_user(request)
-    return public_content_policy_mirror(system_store.list_ready_content_policies())
-
-
-@app.get("/api/i18n/languages/{code}/content-policy")
-def i18n_language_content_policy(code: str, request: Request) -> dict[str, Any]:
-    _require_admin(request)
-    try:
-        normalized = normalize_locale_code(code)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    if system_store.get_language(normalized) is None:
-        raise HTTPException(status_code=404, detail="Language dictionary not found.")
-    return admin_content_policy_view(system_store.get_content_policy(normalized), code=normalized)
-
-
-@app.put("/api/i18n/languages/{code}/content-policy")
-def i18n_update_content_policy(code: str, body: LanguageContentPolicyUpdate, request: Request) -> dict[str, Any]:
-    _require_admin(request)
-    try:
-        normalized = normalize_locale_code(code)
-        return system_store.put_content_policy(
-            normalized,
-            {
-                "blocked_terms": body.blocked_terms,
-                "contextual_terms": body.contextual_terms,
-                "source": "admin-edited",
-            },
-        )
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="Language dictionary not found.") from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/api/live")
