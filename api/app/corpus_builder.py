@@ -224,6 +224,7 @@ from .enrichment_ledger import (
 )
 from .error_severity import severity as error_severity
 from .main_text_start import infer_main_text_start
+from .metadata_exemplar_retrieval import ChromaMetadataExemplarIndex
 from .metadata_schema import (
     MetadataSchema,
 )
@@ -1274,6 +1275,10 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         self._executor = ThreadPoolExecutor(max_workers=max(1, max_workers), thread_name_prefix="derridai-pdf-corpus")
         # Conventions confirmed independently in several builds; see enrichment_cycles.
         self._global_learning = GlobalLearningStore(self.repo.root / "global_learning.json")
+        # Semantic metadata memory is derived and best-effort. The Chroma client is
+        # opened lazily only when reviewed exemplars actually exist for retrieval.
+        self._progressive_metadata_index = ChromaMetadataExemplarIndex()
+        self._progressive_metadata_warning_builds: set[str] = set()
         self._ledger = EnrichmentLedger(self.repo.root / "enrichment_ledger.jsonl")
         self._suspended: set[tuple[str, str]] = set()
         self._schemas = SchemaStore(self.repo.root)

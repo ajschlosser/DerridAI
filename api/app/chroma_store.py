@@ -1018,6 +1018,9 @@ class ChromaStore:
         for collection in self.client.list_collections():
             name = collection.name if hasattr(collection, "name") else str(collection)
             col = self.client.get_collection(name)
+            metadata = dict(getattr(col, "metadata", None) or {})
+            if bool(metadata.get("derridai_hidden_system_collection")):
+                continue
             stores.append(self._public_store(col))
         return sorted(stores, key=lambda item: item["name"].casefold())
 
