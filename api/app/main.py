@@ -34,10 +34,7 @@ from .content_filter import enforce_researcher_text
 from .corpus_builder import CORPUS_PROFILES, pdf_corpus_builds, pdf_corpus_repository
 from .corpus_review_state import _queue_counts
 from .corpus_reviewer_helpers import _present_for_reviewer
-from .dependencies import (
-    request_user as _request_user,
-    require_admin as _require_admin,
-)
+from .dependencies import request_user as _request_user
 from .jobs import LLMJobManager, LLMToolJobManager, RAGJobManager, UpsertJobManager
 from .llm import TouchupFailure
 from .metadata_adjudication_cache import (
