@@ -224,11 +224,11 @@ from .enrichment_ledger import (
 )
 from .error_severity import severity as error_severity
 from .main_text_start import infer_main_text_start
+from .metadata_exemplar_retrieval import ChromaMetadataExemplarIndex
 from .metadata_schema import (
     MetadataSchema,
 )
 from .metadata_schema_store import SchemaStore
-from .metadata_exemplar_retrieval import ChromaMetadataExemplarIndex
 from .metadata_values import is_placeholder
 from .models import WorkMetadataRequest, WorkMetadataSeed
 from .rag import _citation_strings, chat_complete
