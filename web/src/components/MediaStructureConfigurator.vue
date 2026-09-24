@@ -1,3 +1,4 @@
+<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18nStore } from "../stores/i18n";
