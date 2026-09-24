@@ -4062,9 +4062,9 @@ onBeforeUnmount(() => {
       </div>
     </details>
 
-    <div class="builder-workspace" :class="{ 'review-mode': showReviewWorkspace && !finishPhase }">
+    <div class="builder-workspace" :class="{ 'review-mode': showReviewWorkspace }">
       <aside
-        v-if="!showReviewWorkspace || finishPhase"
+        v-if="!showReviewWorkspace"
         class="build-rail"
         :aria-label="i18n.t('pdf_corpus.builds')"
       >
@@ -4113,7 +4113,7 @@ onBeforeUnmount(() => {
           class="build-summary"
           :aria-labelledby="'pdf-corpus-current-build'"
         >
-          <div v-if="!showReviewWorkspace || finishPhase" class="summary-top">
+          <div v-if="!showReviewWorkspace" class="summary-top">
             <div>
               <span class="eyebrow">{{ currentBuild.profile_id }}</span>
               <h2 id="pdf-corpus-current-build">{{ currentBuild.source_filename }}</h2>
@@ -4141,11 +4141,11 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <CorpusBuildLifecycleCard
-            v-if="!showReviewWorkspace || finishPhase"
+            v-if="!showReviewWorkspace"
             :build="currentBuild"
           />
           <CorpusQualitySummary
-            v-if="!awaitingManifestReview && (!showReviewWorkspace || finishPhase)"
+            v-if="!awaitingManifestReview && !showReviewWorkspace"
             :build="currentBuild"
           />
 
@@ -4154,7 +4154,7 @@ onBeforeUnmount(() => {
             :stage="currentBuild.stage"
           />
           <CorpusFinishWorkspace
-            v-if="!awaitingManifestReview && finishPhase"
+            v-if="!awaitingManifestReview && finishPhase && !showReviewWorkspace"
             :build="currentBuild"
             :busy="busy !== ''"
             @retry-metadata="retryIncompleteMetadata"
@@ -4181,10 +4181,10 @@ onBeforeUnmount(() => {
             @review="reviewMetadataRecord"
           />
           <CorpusBuildTimeline
-            v-if="!awaitingManifestReview && (!showReviewWorkspace || finishPhase)"
+            v-if="!awaitingManifestReview && (            !showReviewWorkspace)"
             :build="currentBuild"
           />
-          <details v-if="!showReviewWorkspace || finishPhase" class="technical-details">
+          <details v-if="!showReviewWorkspace" class="technical-details">
             <summary>
               {{ i18n.t("pdf_corpus.technical_details") }}
             </summary>
@@ -4290,7 +4290,7 @@ onBeforeUnmount(() => {
             </div>
           </section>
           <section
-            v-if="segmentationNeedsReview && (!showReviewWorkspace || finishPhase)"
+            v-if="segmentationNeedsReview && !showReviewWorkspace"
             class="segmentation-blocked segmentation-review-localized"
             role="status"
             aria-labelledby="segmentation-review-title"
@@ -4339,7 +4339,7 @@ onBeforeUnmount(() => {
             v-if="
               currentBuild.manifest &&
               Object.keys(currentBuild.manifest).length &&
-              (!showReviewWorkspace || finishPhase)
+              !showReviewWorkspace
             "
             class="manifest-details"
             :open="awaitingManifestReview"
@@ -4357,7 +4357,7 @@ onBeforeUnmount(() => {
               @reanalyze="reanalyzeDocument"
             />
           </details>
-          <div v-if="!showReviewWorkspace || finishPhase" class="provenance-strip">
+          <div v-if="!showReviewWorkspace" class="provenance-strip">
             <span>SHA {{ currentBuild.source_sha256?.slice(0, 12) }}…</span
             ><span>{{
               currentBuild.model ||
