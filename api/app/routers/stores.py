@@ -10,6 +10,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from ..chroma_store import ChromaStore, StoreAlreadyExistsError
 from ..dependencies import get_store as store_dependency
 from ..models import (
+    ChromaConnectionUpdate,
+    ChromaPathUpdate,
     DeriveLanguageStoresRequest,
     EmbeddingPreflightRequest,
     StoreCreate,
@@ -19,6 +21,67 @@ from ..models import (
 )
 
 router = APIRouter(tags=["stores"])
+
+
+@router.get("/api/chroma/path")
+def get_chroma_path(
+    store: ChromaStore = Depends(store_dependency),
+) -> dict[str, Any]:
+    return store.health()
+
+
+@router.put("/api/chroma/path")
+def set_chroma_path(
+    body: ChromaPathUpdate,
+    store: ChromaStore = Depends(store_dependency),
+) -> dict[str, Any]:
+    try:
+        return store.set_path(body.path)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/api/chroma/connection")
+def get_chroma_connection(
+    store: ChromaStore = Depends(store_dependency),
+) -> dict[str, Any]:
+    return store.health()
+
+
+@router.post("/api/chroma/connection/probe")
+def probe_chroma_connection(
+    body: ChromaConnectionUpdate,
+    store: ChromaStore = Depends(store_dependency),
+) -> dict[str, Any]:
+    try:
+        return store.probe_connection(
+            mode=body.mode,
+            path=body.path,
+            url=body.url,
+            token=body.token,
+            tenant=body.tenant,
+            database=body.database,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.put("/api/chroma/connection")
+def set_chroma_connection(
+    body: ChromaConnectionUpdate,
+    store: ChromaStore = Depends(store_dependency),
+) -> dict[str, Any]:
+    try:
+        return store.set_connection(
+            mode=body.mode,
+            path=body.path,
+            url=body.url,
+            token=body.token,
+            tenant=body.tenant,
+            database=body.database,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/api/stores")
