@@ -785,15 +785,18 @@ Backups are blocked while background operations are active so the archive is int
 
 **Load from backup** validates the manifest and ZIP member paths before making changes. The API first creates a logical rollback snapshot of the current Chroma database; if Chroma restoration fails, the current vector database is restored from that rollback. After a successful server restore, the browser IndexedDB workspace and current PDF are replaced and the UI reloads.
 
-**System Data** is the administrative surface for the logical `_response_cache`
-and the durable application databases. The response cache remains a Chroma
-system collection, while the database browser exposes tables and rows through a
-backend-neutral contract; SQLite is the current adapter, not a UI-level
-requirement. Sensitive credentials, password material, and session tokens are
-redacted or protected from mutation. The former **Response Cache** route remains
-available as a compatibility alias.
-Chroma itself does not permit collection names beginning with `_`, so the
-physical cache collection is `derridai_response_cache`.
+**System Data** is the administrative surface for the response cache,
+progressive metadata exemplars, and durable application databases. Metadata
+exemplars are read-only, evidence-bound precedents derived from reviewed corpus
+metadata; the inspector shows field/value, review authority, source
+record/revision/build, schema/language, evidence block IDs/hash, and the bounded
+evidence-context window. Their current storage/index technology is an
+implementation detail and is not presented as a research corpus.
+
+The database browser exposes tables and rows through a backend-neutral contract;
+SQLite is the current adapter, not a UI-level requirement. Sensitive credentials,
+password material, and session tokens are redacted or protected from mutation.
+The former **Response Cache** route remains available as a compatibility alias.
 
 Full backups can contain credentials. Treat them as sensitive files.
 
