@@ -329,6 +329,8 @@ function defaults(url: URL, method: string, role: Role): unknown {
   if (path === "/api/stores/derrida_primary/records")
     return { count: STORE_RECORDS.length, records: STORE_RECORDS };
   if (path === "/api/annotations") return { annotations: [] };
+  if (path === "/api/system/data") return { databases: [] };
+  if (path === "/api/system/data/vector-stores") return { stores: [] };
   if (path === "/api/response-cache/records")
     return { records: [], count: 0, total: 0, limit: 50, offset: 0, exists: true };
   if (path === "/api/pdf/corpus-profiles")

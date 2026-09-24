@@ -1399,8 +1399,14 @@ const scenarios: Scenario[] = [
       "DELETE /api/stores/_response_cache": () => ({ ok: true }),
     },
     steps: async (page) => {
-      await page.getByRole("button", { name: "Clear response cache", exact: true }).click();
-      await page.getByRole("button", { name: "Clear response cache", exact: true }).click();
+      await page
+        .locator("#main")
+        .getByRole("button", { name: "Clear response cache", exact: true })
+        .click();
+      await page
+        .getByRole("dialog")
+        .getByRole("button", { name: "Clear response cache", exact: true })
+        .click();
       await page.waitForTimeout(700);
     },
   },
