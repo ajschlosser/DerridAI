@@ -30,10 +30,10 @@ from app.content_filter import (
     term_digest,
 )
 from app.content_policy_generation import generate_content_policy
-from app.jobs import LLMToolJobManager, system_store
+from app.job_tools import LLMToolJobManager
 from app.models import LanguageInstallRequest, LLMToolJobCreate
 from app.persistence import SQLiteSystemRepository
-from app.system_store import SystemStore
+from app.system_store import SystemStore, system_store
 
 _READY = {
     "status": "ready",
@@ -188,7 +188,7 @@ def _capture_policy_generation(monkeypatch, stored_profile):
         captured.update(kwargs)
         return {"blocked_terms": ["aa"], "contextual_terms": []}
 
-    monkeypatch.setattr("app.jobs.generate_policy_for_installed_language", fake_generate)
+    monkeypatch.setattr("app.job_tools.generate_policy_for_installed_language", fake_generate)
     monkeypatch.setattr(system_store, "get_language", lambda code: {"code": code, "name": "English", "flag": "🇺🇸"})
     monkeypatch.setattr(system_store, "researcher_profile", lambda profile_id: stored_profile)
     monkeypatch.setattr(
