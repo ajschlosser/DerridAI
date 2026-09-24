@@ -43,7 +43,7 @@ describe("TopbarChrome", () => {
       attachTo: document.body,
     });
     await flushPromises();
-    expect(wrapper.get("button[aria-label='Help']").exists()).toBe(true);
+    expect(wrapper.find("button[aria-label='Help']").exists()).toBe(true);
     expect(wrapper.get("button[aria-label='Interface language, English']").text()).toContain("English");
     expect(wrapper.findAll("button[aria-haspopup='menu']").map((button) => button.text()).join(" ")).not.toContain("Workspace");
     expect(wrapper.get("button[aria-haspopup='dialog']").attributes("aria-label")).toBe("Account menu for aaron");
