@@ -21,6 +21,7 @@ from app.text_noise import (
     DEFAULT_NOISE_THRESHOLD,
     annotate_records,
     blend_noise_scores,
+    raster_score_for_pages,
     score_text_noise,
     should_ask_llm,
 )
@@ -61,6 +62,17 @@ def test_bilingual_scholarly_prose_stays_legible() -> None:
 
 def test_llm_may_only_raise_noise() -> None:
     assert blend_noise_scores(80, llm_score=10, llm_confidence=0.99) == 80
+
+
+def test_record_raster_noise_uses_typical_page_quality_not_single_worst_page() -> None:
+    record = {"pdf_pages": [1, 2, 3]}
+    pages = [
+        {"pdf_page": 1, "raster": {"noise": 8}},
+        {"pdf_page": 2, "raster": {"noise": 12}},
+        {"pdf_page": 3, "raster": {"noise": 92}},
+    ]
+
+    assert raster_score_for_pages(record, pages) == 12
     assert blend_noise_scores(40, llm_score=70, llm_confidence=0.7) == 70
     assert blend_noise_scores(40, llm_score=70, llm_confidence=0.2) == 40
     assert should_ask_llm(10) is False

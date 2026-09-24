@@ -112,8 +112,7 @@ export function useCorpusBuildLifecycle(
     Boolean(
       hasRecordTopology.value &&
         (!finishPhase.value ||
-          reviewQueue.value === "metadata" ||
-          reviewQueue.value === "rejected"),
+          reviewQueue.value !== "all"),
     ),
   );
   return {

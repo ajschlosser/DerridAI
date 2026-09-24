@@ -1409,8 +1409,16 @@ async function refreshBuilds() {
   const requested = String(route.query.build || "");
   if (requested && builds.value.some((build) => build.build_id === requested))
     selectedBuildId.value = requested;
-  else if (!selectedBuildId.value && builds.value[0])
+  else if (
+    (!selectedBuildId.value ||
+      !builds.value.some((build) => build.build_id === selectedBuildId.value)) &&
+    builds.value[0]
+  )
     selectedBuildId.value = builds.value[0].build_id;
+  else if (!builds.value.length) {
+    selectedBuildId.value = "";
+    currentBuild.value = null;
+  }
 }
 function syncBuildInRail(build: CorpusBuild) {
   const index = builds.value.findIndex((item) => item.build_id === build.build_id);
@@ -2051,6 +2059,13 @@ async function openAllReviewQueue() {
   await refreshRecords(true);
   await nextTick();
   recordListEl.value?.focus({ preventScroll: true });
+}
+function openEnrichmentFromFinish() {
+  // Finish actions always mean all records; never inherit a hidden table selection.
+  selectedReviewIds.value = new Set();
+  llmActionProviderId.value =
+    llmActionProviderId.value || selectedProviderId.value || providerProfiles.value[0]?.id || "";
+  metadataEnrichmentOpen.value = true;
 }
 async function openSourceIssueQueue() {
   reviewQueue.value = "source";
@@ -4150,10 +4165,7 @@ onBeforeUnmount(() => {
             @restore-rejected="restoreAllRejected"
             @start-new="startNewBuildSetup"
             @edit-document-metadata="documentMetadataOpen = true"
-            @rerun-enrichment="
-              llmActionProviderId = llmActionProviderId || selectedProviderId || providerProfiles[0]?.id || '';
-              metadataEnrichmentOpen = true;
-            "
+            @rerun-enrichment="openEnrichmentFromFinish"
             @publish="publish({ download: false })"
           />
           <CorpusMetadataIssues
