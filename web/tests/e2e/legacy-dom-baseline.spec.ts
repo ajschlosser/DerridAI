@@ -4,7 +4,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { FAQ_RECORDS, mockBackend, type Fixtures, type Role } from "./support/mock-backend";
 
 // Characterization baseline for the views that the legacy runtime still renders as HTML strings.
-// Vue-native workspaces (Records, Search, Vector Stores, Works, and so on) are not listed here.
+// Vue-native workspaces (Records, Search, Corpus Data, Works, and so on) are not listed here.
 // The runtime decomposition must not change what these views put on the page, so each one is
 // captured as normalized markup and compared with a committed snapshot. If a refactoring step
 // changes a snapshot, that step has changed the UI and must be fixed, not the snapshot.
@@ -802,18 +802,18 @@ const scenarios: Scenario[] = [
     fixtures: jobFixtures(FINISHED_JOBS),
     steps: clickThenDialog((page) => page.getByRole("button", { name: "Review results" }).first()),
   },
-  // Export, and the collection wizard from Vector Stores.
+  // Export, and the collection wizard from Corpus Data.
   { name: "dialog-export", load: true, target: "dialog", steps: openDialogFromRecords("Export") },
   {
     name: "dialog-collection-wizard-source",
-    nav: "Vector Stores",
+    nav: "Corpus Data",
     load: true,
     target: "dialog",
     steps: clickThenDialog((page) => page.getByRole("button", { name: "New" }).first()),
   },
   {
     name: "dialog-collection-wizard-retrieval",
-    nav: "Vector Stores",
+    nav: "Corpus Data",
     load: true,
     target: "dialog",
     steps: async (page) => {
@@ -856,7 +856,7 @@ const scenarios: Scenario[] = [
   },
   {
     name: "styles-dialog-wizard-dark",
-    nav: "Vector Stores",
+    nav: "Corpus Data",
     load: true,
     scheme: "dark",
     styles: true,
@@ -1153,8 +1153,8 @@ const scenarios: Scenario[] = [
   },
   { name: "styles-research-light", nav: "Research", styles: true },
   { name: "styles-research-dark", nav: "Research", scheme: "dark", styles: true },
-  { name: "styles-vector-light", nav: "Vector Stores", load: true, styles: true },
-  { name: "styles-vector-dark", nav: "Vector Stores", load: true, scheme: "dark", styles: true },
+  { name: "styles-vector-light", nav: "Corpus Data", load: true, styles: true },
+  { name: "styles-vector-dark", nav: "Corpus Data", load: true, scheme: "dark", styles: true },
   { name: "styles-records-light", nav: "Records", load: true, styles: true },
   { name: "styles-records-dark", nav: "Records", load: true, scheme: "dark", styles: true },
   { name: "styles-record-light", nav: "Record View", load: true, styles: true },
@@ -1183,7 +1183,7 @@ const scenarios: Scenario[] = [
   },
   {
     name: "styles-vector-narrow",
-    nav: "Vector Stores",
+    nav: "Corpus Data",
     load: true,
     styles: true,
     viewport: { width: 390, height: 844 },
@@ -1217,7 +1217,7 @@ const scenarios: Scenario[] = [
   },
   {
     name: "styles-vector-tablet",
-    nav: "Vector Stores",
+    nav: "Corpus Data",
     load: true,
     styles: true,
     viewport: { width: 820, height: 1000 },
@@ -1369,7 +1369,7 @@ const scenarios: Scenario[] = [
   // The response cache page is the one Research-area page the runtime still draws.
   {
     name: "response-cache-empty",
-    nav: "Response Cache",
+    nav: "System Data",
     fixtures: {
       ...CHROMA_UP,
       "/api/response-cache/records": { records: [], total: 0, exists: false },
@@ -1377,29 +1377,29 @@ const scenarios: Scenario[] = [
   },
   {
     name: "response-cache-records",
-    nav: "Response Cache",
+    nav: "System Data",
     fixtures: { ...CHROMA_UP, "/api/response-cache/records": FAQ_PAGE },
   },
   {
     name: "response-cache-clear-confirm",
-    nav: "Response Cache",
+    nav: "System Data",
     target: "dialog",
     fixtures: { ...CHROMA_UP, "/api/response-cache/records": FAQ_PAGE },
     steps: async (page) => {
-      await page.getByRole("button", { name: "Clear cache" }).click();
+      await page.getByRole("button", { name: "Clear response cache", exact: true }).click();
       await expect(page.locator("dialog[open], [role=dialog]").last()).toBeVisible();
     },
   },
   {
     name: "response-cache-cleared",
-    nav: "Response Cache",
+    nav: "System Data",
     fixtures: {
       ...CHROMA_UP,
       "/api/response-cache/records": FAQ_PAGE,
       "DELETE /api/stores/_response_cache": () => ({ ok: true }),
     },
     steps: async (page) => {
-      await page.getByRole("button", { name: "Clear cache" }).click();
+      await page.getByRole("button", { name: "Clear response cache", exact: true }).click();
       await page.getByRole("button", { name: "Clear response cache", exact: true }).click();
       await page.waitForTimeout(700);
     },
@@ -1645,9 +1645,9 @@ test.describe("views follow the loaded corpus", () => {
     await expect(page.getByText(/late-00001/).first()).toBeVisible({ timeout: 5000 });
   });
 
-  // The sync buttons stayed disabled after a file was imported while Vector Stores was open.
-  test("Vector Stores enables syncing for a file imported while it is open", async ({ page }) => {
-    await open(page, { name: "vector-import-while-open", nav: "Vector Stores" });
+  // The sync buttons stayed disabled after a file was imported while Corpus Data was open.
+  test("Corpus Data enables syncing for a file imported while it is open", async ({ page }) => {
+    await open(page, { name: "vector-import-while-open", nav: "Corpus Data" });
     const sync = page.locator("main button", { hasText: "Sync active JSONL" });
     await expect(sync).toBeDisabled();
     await page.setInputFiles("#fileInput", {
@@ -1661,7 +1661,7 @@ test.describe("views follow the loaded corpus", () => {
     await expect(sync).toBeEnabled({ timeout: 5000 });
   });
 
-  // Unlike Records/Compare/Vector Stores before their fix, Search's Loaded records scope
+  // Unlike Records/Compare/Corpus Data before their fix, Search's Loaded records scope
   // already reflects a file imported while it is open, because its route.fullPath watcher
   // catches the URL update syncUrl() makes after every import. Locking this in as a
   // regression guard: a Section-C composable conversion of Search must not regress it.

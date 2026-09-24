@@ -10,9 +10,9 @@
 </svg>
 </span>
 <div>
-<p>Bibliographic enrichment</p>
+<p>Source-aware metadata enrichment</p>
 <h2>Populate metadata with LLM</h2>
-<span>DerridAI searches format-appropriate public bibliographic sources (Open Library, Google Books, and Crossref), asks the selected LLM to identify the best match, then returns proposed metadata changes for review. Nothing is applied automatically.</span>
+<span>DerridAI partitions mixed works by source type, uses appropriate public metadata sources, asks the selected LLM to identify reliable matches, then returns proposed metadata changes for review. Nothing is applied automatically.</span>
 </div>
 </div>
 <button class="icon-btn workflow-close" data-close="" title="Close">×</button>
@@ -35,15 +35,15 @@
 <section class="workflow-section">
 <div class="workflow-section-copy">
 <b>Lookup scope</b>
-<span>Retrieve bibliographic metadata for 2 work(s).</span>
+<span>Retrieve metadata for 2 source group(s).</span>
 </div>
 <div class="work-metadata-scope">
-<strong>2 works</strong>
+<strong>2 book</strong>
 <div class="work-metadata-sample">
-<span>Of Grammatology</span>
-<span>On Cosmopolitanism and Forgiveness</span>
+<span>Of Grammatology · book</span>
+<span>On Cosmopolitanism and Forgiveness · book</span>
 </div>
-<small>Proposals can include publisher, publication year/place, edition, translator, ISBN, language, citation, and cover image.</small>
+<small>Only fields applicable to each source type are proposed. Source-derived metadata is preserved, and every change remains subject to review.</small>
 </div>
 </section>
 <section class="workflow-section">

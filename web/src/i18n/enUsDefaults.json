@@ -755,6 +755,7 @@
   "runtime.response_cache_cleared": "Response cache cleared",
   "runtime.system_data": "System Data",
   "runtime.system_data_help": "Manage the response cache and durable application databases through a safe, backend-neutral interface.",
+  "runtime.system_clear_response_cache": "Clear response cache",
   "runtime.system_databases": "System databases",
   "runtime.system_table": "Table",
   "runtime.system_rows": "Rows",

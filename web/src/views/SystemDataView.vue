@@ -88,7 +88,7 @@ async function clearCache() {
       { count: Number(cachePayload.value.total || 0).toLocaleString() },
     ),
     tone: "danger",
-    confirmLabel: t("common.clear", "Clear response cache"),
+    confirmLabel: t("runtime.system_clear_response_cache", "Clear response cache"),
     cancelLabel: t("common.cancel", "Cancel"),
   });
   if (!approved) return;
@@ -298,8 +298,13 @@ onMounted(() => void load());
           <button class="btn" type="button" @click="router.push('/faq')">
             {{ t("runtime.help.open_response_library", "Open Response Library") }}
           </button>
-          <button v-if="cachePayload.exists" class="btn danger" type="button" @click="clearCache">
-            {{ t("common.clear", "Clear cache") }}
+          <button
+            v-if="Number(cachePayload.total || 0) > 0"
+            class="btn danger"
+            type="button"
+            @click="clearCache"
+          >
+            {{ t("runtime.system_clear_response_cache", "Clear response cache") }}
           </button>
         </div>
       </section>

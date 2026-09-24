@@ -9,7 +9,7 @@ const NAV = [
   ["home", "Home", "Overview"], ["global", "Search", "Corpus"], ["works", "Works", "Corpus"],
   ["record", "Record View", "Corpus"], ["rag", "Research", "Research"], ["annotations", "Annotations", "Corpus"],
   ["config", "Settings", "System"], ["list", "Records", "Corpus"], ["pdf", "Corpus Builder", "Tools"],
-  ["compare", "Compare", "Tools"], ["vector", "Vector Stores", "Storage"], ["faq", "Response Library", "Research"],
+  ["compare", "Compare", "Tools"], ["vector", "Corpus Data", "Tools"], ["faq", "Response Library", "Research"],
   ["providers", "LLM Providers", "System"],
 ].map(([id, label, section]) => ({ id, label, icon: "record", section }));
 
@@ -70,7 +70,7 @@ describe("sidebar at sign-in", () => {
     const { primary, more } = sidebarLabels(wrapper);
     expect(primary).toContain("Home");
     expect(primary).toContain("Research");
-    expect(more).toEqual(expect.arrayContaining(["Records", "Corpus Builder", "Compare", "Vector Stores", "Response Library", "LLM Providers"]));
+    expect(more).toEqual(expect.arrayContaining(["Records", "Corpus Builder", "Compare", "Corpus Data", "Response Library", "LLM Providers"]));
     expect(more).toEqual(expect.arrayContaining(["Users & roles", "Roles & permissions", "Manage languages"]));
   });
 
