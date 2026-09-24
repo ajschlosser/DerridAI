@@ -17,7 +17,6 @@ import shutil
 import tempfile
 from pathlib import Path
 
-import pytest
 
 _worker = os.environ.get("PYTEST_XDIST_WORKER", "main")
 _root = tempfile.mkdtemp(prefix=f"derridai-tests-{_worker}-")
