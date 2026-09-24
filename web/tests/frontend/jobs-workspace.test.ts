@@ -4,7 +4,7 @@ import { createJobsWorkspace } from "../../src/domain/jobsWorkspace";
 import { createRuntimeState } from "../../src/runtime/runtimeState";
 import { jobsState } from "../../src/state/jobsState";
 
-type Anything = any; // eslint-disable-line @typescript-eslint/no-explicit-any
+type Anything = any;
 
 // The dashboard's job scenarios (polling, refresh, cancel, remove, clear) are covered by the legacy baseline, recorded
 // before this logic moved; these pin the state handling that does not need a rendered page.

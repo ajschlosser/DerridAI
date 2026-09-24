@@ -7,7 +7,7 @@ import { createRuntimeState } from "../../src/runtime/runtimeState";
 // The Records workspace commands set per-file fields on the runtime state, save preferences and sync the URL. The
 // rendered view is covered by the legacy baseline's records scenarios; these pin the commands themselves.
 function setup(activeFile: unknown = { id: "f1", name: "a.jsonl", records: [] }) {
-  const state = createRuntimeState() as unknown as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  const state = createRuntimeState() as unknown as Record<string, any>;
   const calls: string[] = [];
   const overrides: Record<string, unknown> = {
     state,

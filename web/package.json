@@ -15,12 +15,16 @@
     "test:e2e": "playwright test",
     "test:frontend": "npm run typecheck && npm run test:unit && npm run build:ci && npm run build-storybook && npm run test:e2e:legacy && npm run test:e2e && npm run test:e2e:a11y",
     "i18n:defaults": "node ../scripts/export-en-us-defaults.mjs",
-    "lint": "eslint src --max-warnings 0",
+    "lint": "eslint src tests .storybook playwright*.config.ts vite.config.ts scripts --max-warnings 0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "build:ci": "vite build",
     "test:e2e:legacy": "playwright test -c playwright.legacy.config.ts",
-    "test:e2e:a11y": "playwright test -c playwright.a11y.config.ts"
+    "test:e2e:a11y": "playwright test -c playwright.a11y.config.ts",
+    "typecheck:tests": "vue-tsc --noEmit -p tsconfig.tests.json",
+    "test:workflow": "npm run test:e2e",
+    "test:characterization": "npm run test:e2e:legacy",
+    "test:accessibility": "npm run test:e2e:a11y"
   },
   "dependencies": {
     "diff": "^7.0.0",

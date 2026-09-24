@@ -6,7 +6,7 @@ import { createRuntimeState } from "../../src/runtime/runtimeState";
 // The Search workspace commands set fields on the runtime state, save preferences and sync the URL. The view-level
 // behavior is covered by the legacy baseline's search scenarios; these pin the commands themselves.
 function setup() {
-  const state = createRuntimeState() as unknown as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  const state = createRuntimeState() as unknown as Record<string, any>;
   const calls: string[] = [];
   // Every helper the workspace destructures is a spy; the three that matter here also record their order.
   const deps = new Proxy(

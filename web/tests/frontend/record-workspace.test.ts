@@ -6,7 +6,7 @@ import { createRuntimeState } from "../../src/runtime/runtimeState";
 // The rendered Record view is covered by the legacy baseline's record scenarios (recorded before this logic moved);
 // these pin the commands that do not need a full workspace to run.
 function setup(overrides: Record<string, unknown> = {}) {
-  const state = createRuntimeState() as unknown as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  const state = createRuntimeState() as unknown as Record<string, any>;
   const calls: string[] = [];
   const deps = new Proxy(
     { state, tr: (_key: string, fallback: string) => fallback, ...overrides } as Record<

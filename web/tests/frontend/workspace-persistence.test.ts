@@ -7,9 +7,9 @@ describe("workspace preference persistence", () => {
   it("removes callbacks before saving the structured-clone payload", async () => {
     const state = createRuntimeState();
     state.storageReady = true;
-    state.appConfig.provider_profiles = [{ id: "profile", onChange: () => undefined }];
+    state.appConfig.provider_profiles = [{ id: "profile", onChange: () => undefined }] as never;
     state.selectedEvidence = { formatter: () => "formatted" };
-    const idbPut = vi.fn(async () => undefined);
+    const idbPut = vi.fn(async (_store: string, _value: unknown) => undefined);
     const persistence = createWorkspacePersistence({
       state,
       fileTimers: new Map(),

@@ -59,9 +59,9 @@ describe("WorksOverviewCard", () => {
       props: { work: workItem(), mode: "admin", citationLabel: "Full citation" },
     });
     expect(wrapper.find(".work-overview-card > .work-overview-cover").exists()).toBe(false);
-    expect(wrapper.get(".work-overview-masthead .work-overview-cover").exists()).toBe(true);
-    expect(wrapper.get(".work-overview-content .work-insights-panel").exists()).toBe(true);
-    expect(wrapper.get("img, .work-cover-placeholder").exists()).toBe(true);
+    expect(wrapper.find(".work-overview-masthead .work-overview-cover").exists()).toBe(true);
+    expect(wrapper.find(".work-overview-content .work-insights-panel").exists()).toBe(true);
+    expect(wrapper.find("img, .work-cover-placeholder").exists()).toBe(true);
   });
 
   it("names the cover image from the work title", () => {

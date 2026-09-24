@@ -8,7 +8,7 @@ describe("Corpus source ingest", () => {
     const radios = wrapper.findAll('input[name="source-ocr-strategy"]');
     const choose = wrapper.get("button.source-choose");
     expect(radios).toHaveLength(3);
-    expect(radios[0].element.checked).toBe(true);
+    expect((radios[0].element as HTMLInputElement).checked).toBe(true);
     expect(wrapper.text()).toContain("Use embedded text when available");
     expect(choose.text()).toContain("Choose source file");
     const following = Node.DOCUMENT_POSITION_FOLLOWING;

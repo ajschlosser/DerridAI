@@ -5,11 +5,18 @@ import { createOperationPresenters } from "../../src/domain/operationPresenters"
 // The snapshots were verified to be identical to the original legacy runtime.js functions, over about
 // five hundred job fixtures covering every job type and status, before they were recorded.
 const tr = (_key: string, fallback = "") => fallback;
-const trf = (_key: string, fallback: string, values: Record<string, unknown> = {}) =>
-  Object.entries(values).reduce(
+const trf = (
+  _key: string,
+  fallbackOrValues: string | Record<string, unknown> = "",
+  values: Record<string, unknown> = {},
+) => {
+  const fallback = typeof fallbackOrValues === "string" ? fallbackOrValues : "";
+  const replacements = typeof fallbackOrValues === "string" ? values : fallbackOrValues;
+  return Object.entries(replacements).reduce(
     (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
     fallback,
   );
+};
 const presenters = createOperationPresenters({
   tr,
   trf,

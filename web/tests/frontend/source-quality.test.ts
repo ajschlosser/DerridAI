@@ -167,7 +167,7 @@ describe("source extraction warning placement", () => {
     });
     await nextTick();
     expect(wrapper.find(".focus-source-issue").exists()).toBe(false);
-    expect(wrapper.get(".source-warn-icon").exists()).toBe(true);
+    expect(wrapper.find(".source-warn-icon").exists()).toBe(true);
     wrapper.unmount();
   });
 });

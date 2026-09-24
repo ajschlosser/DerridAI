@@ -1,5 +1,5 @@
 import { mount } from "@vue/test-utils";
-import { defineComponent, h, ref } from "vue";
+import { defineComponent, h } from "vue";
 import { beforeEach, describe, expect, it } from "vitest";
 import CorpusActionMenu from "../../src/components/CorpusActionMenu.vue";
 import { usePdfCorpusPaneSizing } from "../../src/composables/usePdfCorpusPaneSizing";

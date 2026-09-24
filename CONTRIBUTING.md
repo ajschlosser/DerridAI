@@ -15,22 +15,22 @@ Backend tests need no environment setup: `tests/conftest.py` points storage at a
 
 ## CI gates
 
-`.github/workflows/frontend.yml` keeps the historical `frontend` required check, but that check now aggregates independent frontend gates so expensive browser coverage runs concurrently and failures surface earlier.
+`.github/workflows/frontend.yml` keeps the historical `frontend` required check, but that check now aggregates independent frontend gates so expensive browser coverage runs concurrently and failures surface earlier. A changed-path classifier skips backend compute for frontend-only changes and frontend compute for backend-only changes; workflow and shared-script changes deliberately exercise both sides.
 
 | Gate | Command / responsibility |
 | --- | --- |
 | Backend lint | `pip install -r api/requirements-dev.txt && ruff check api/app tests` |
-| Backend types | `mypy` (config in `mypy.ini`; `check_untyped_defs` is on) |
+| Backend types | `pip install mypy==2.3.1 && mypy` (config in `mypy.ini`; `check_untyped_defs` is on; runtime/ML dependencies are not installed) |
 | Frontend lint | `cd web && npm run lint` (ESLint, zero warnings) |
-| Backend tests | `python -m compileall -q api/app && pytest -q` |
+| Backend tests | Runtime requirements except the optional cross-encoder package, then `python -m compileall -q api/app && pytest -q`; reranker-unavailable behavior is exercised through the existing fallback path |
 | Frontend static | `cd web && npm run typecheck && npm run test:unit && npm run build:ci && npm run build-storybook` |
-| Legacy DOM regression | `cd web && npm run build:ci && npm run test:e2e:legacy` |
+| Legacy DOM regression | `cd web && npm run build:ci && npm run test:e2e:legacy`; CI shards the characterization suite across two runners |
 | Composed UI / app E2E | `cd web && npm run build:ci && npm run build-storybook && npm run test:e2e` |
 | Corpus Builder WCAG 2.2 AA sweep | `cd web && npm run build-storybook && npm run test:e2e:a11y` |
 
 Install Chromium once for local browser runs with `cd web && npx playwright install chromium`. `npm run test:frontend` chains all frontend gates for a complete local pass.
 
-In CI, composed browser coverage is sharded and runs against the built Storybook rather than Storybook's development server. The global Playwright project uses desktop Chromium once; tests that require laptop/mobile geometry set the viewport explicitly. Static Storybook builds disable the addon's automatic axe pass because Playwright owns the CI axe scan, avoiding two concurrent accessibility engines examining the same story.
+In CI, both composed browser coverage and the legacy DOM characterization suite are sharded. Browser jobs restore the shared Chromium cache, while only one designated E2E shard populates a cold cache, avoiding simultaneous cache writes. Composed coverage runs against the built Storybook rather than Storybook's development server. The global Playwright project uses desktop Chromium once; tests that require laptop/mobile geometry set the viewport explicitly. Static Storybook builds disable the addon's automatic axe pass because Playwright owns the CI axe scan, avoiding two concurrent accessibility engines examining the same story.
 
 The e2e run also serves the production build on port 5199 to render the real Vue views against a mock API (`web/tests/e2e/support`). For an individual local browser command, build the artifact it needs first. If port 6006 or 5199 is busy, set `STORYBOOK_PORT` or `APP_PORT`; do not weaken a gate to get past a local problem.
 

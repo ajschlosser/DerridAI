@@ -17,7 +17,12 @@ describe("Corpus run guidance", () => {
     await textareas[0].setValue("Exclude bibliography-only mentions.");
     const afterInstruction = wrapper.emitted("update:modelValue")?.at(-1)?.[0] as Record<
       string,
-      unknown
+      {
+        instructions: string;
+        look_for: string[];
+        required?: boolean;
+        default_placeholder?: string;
+      }
     >;
     await wrapper.setProps({ modelValue: afterInstruction });
     await wrapper.findAll("textarea")[1].setValue("Emmanuel Levinas\nLevinas\n");
