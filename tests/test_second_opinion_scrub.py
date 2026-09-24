@@ -13,8 +13,8 @@ except ModuleNotFoundError:
     sys.modules["chromadb"] = types.SimpleNamespace()
 
 from app import main
-from app.routers import corpus as corpus_routes
 from app.reviewer_context import current_reviewer
+from app.routers import corpus as corpus_routes
 from starlette.responses import JSONResponse
 
 
