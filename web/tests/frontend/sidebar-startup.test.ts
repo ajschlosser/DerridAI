@@ -71,7 +71,7 @@ describe("sidebar at sign-in", () => {
     expect(primary).toContain("Home");
     expect(primary).toContain("Research");
     expect(more).toEqual(expect.arrayContaining(["Records", "Corpus Builder", "Compare", "Corpus Data", "Response Library", "LLM Providers"]));
-    expect(more).toEqual(expect.arrayContaining(["Users & roles", "Roles & permissions", "Manage languages"]));
+    expect(more).toEqual(expect.arrayContaining(["Users & roles", "Roles & permissions", "Manage languages", "Metadata memory"]));
   });
 
   it("forgets the menu on sign-out so the next user never sees a stale or partial one", async () => {

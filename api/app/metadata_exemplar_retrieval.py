@@ -24,7 +24,7 @@ from .metadata_exemplars import (
 
 COLLECTION_NAME = "derridai_metadata_exemplars"
 COLLECTION_ROLE = "general"
-PROJECTION_VERSION = 2
+PROJECTION_VERSION = 3
 DEFAULT_FIELD_LIMITS = {
     "speaker": 2,
     "quoted_speaker": 2,
@@ -59,8 +59,13 @@ def _projection(exemplar: dict[str, Any], scope_id: str) -> dict[str, Any]:
         "source_document_id": str(exemplar.get("source_document_id") or ""),
         "field_name": str(exemplar.get("field_name") or ""),
         "field_value_json": _json_value(exemplar.get("field_value")),
+        "rejected_value_json": _json_value(exemplar.get("rejected_value")) if exemplar.get("rejected_value") is not None else "",
         "kind": str(exemplar.get("kind") or "positive"),
         "assertion_status": str(exemplar.get("assertion_status") or ""),
+        "assertion_method": str(exemplar.get("assertion_method") or ""),
+        "reviewed_at": str(exemplar.get("reviewed_at") or ""),
+        "page_start": exemplar.get("page_start") if exemplar.get("page_start") is not None else "",
+        "page_end": exemplar.get("page_end") if exemplar.get("page_end") is not None else "",
         "schema_id": str(exemplar.get("schema_id") or ""),
         "schema_version": str(exemplar.get("schema_version") or ""),
         "language": str(exemplar.get("language") or ""),

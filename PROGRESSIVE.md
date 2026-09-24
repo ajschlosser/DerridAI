@@ -593,20 +593,33 @@ This preserves one semantic precedent model and one provenance contract.
 
 At branch creation, open PR #145 ("Improve corpus enrichment, system data, and source-aware metadata") overlaps the same general area and describes "semantic reviewer memory".
 
-This branch is intentionally based on current `master`, not that PR.
+The compatibility rule is now explicit: **metadata memory is the product/domain abstraction; a vector collection is only one derived storage adapter.**
 
-Before merging:
+The follow-up inspection work therefore exposes a backend-neutral System API contract rather than a Vector Stores route:
 
-- inspect/rebase against any merged #145 work;
-- reuse any durable semantic-memory/database abstraction it introduces if it satisfies the requirements here;
-- avoid retaining two competing reviewer-memory systems;
-- preserve the evidence-bound, field-specific, vector-derived and latency-budgeted requirements in this document.
+- canonical endpoint: `GET /api/system/metadata-memory`;
+- System Data-compatible alias: `GET /api/system/data/metadata-memory`;
+- normalized entries describe reviewed field/value, correction status, source record/revision, schema/build/language scope, evidence references/text, and indexed context;
+- no collection/storage name is exposed in the normalized response;
+- the inspector discovers the current `metadata_exemplars` projection and the `metadata_memory` projection proposed by PR #145;
+- when both projections contain the same reviewed decision, the service deduplicates them and prefers the evidence-bound exemplar;
+- PR #145's System Data page can consume this contract directly without depending on Chroma, collection aliases, or metadata encodings.
+
+This permits PR #145 to change the physical storage implementation without changing the inspection UI/API contract. It also provides a migration path away from two competing reviewer-memory projections: converge storage later while preserving one conceptual System surface.
+
+Before either branch merges across the other:
+
+- rebase against the latest `master`;
+- preserve the conceptual `MetadataMemoryService` boundary;
+- reconcile duplicate semantic-memory writes so one reviewed decision does not become two long-term stores;
+- preserve evidence-bound, field-specific, schema-aware, latency-budgeted retrieval requirements;
+- retain the System Data alias so PR #145's administrative workspace can link/embed the same memory view.
 
 ## 18. Implementation plan
 
 ### Current implementation status
 
-The initial backend slice is implemented on `feature/progressive-enhancement`:
+The initial backend slice merged to `master` in PR #149. The current follow-up branch adds the first audit/inspection surface:
 
 - evidence-bound positive and correction exemplars;
 - strict evidence-to-record membership: a globally resolvable source block is not enough unless it belongs to the reviewed RecordRevision;
@@ -621,9 +634,18 @@ The initial backend slice is implemented on `feature/progressive-enhancement`:
 - explicit hard-negative prompt semantics: `rejected_value` is a known model mistake, never a positive precedent;
 - retrieval latency/count/token telemetry;
 - internal system collection hidden from ordinary Vector Stores;
-- focused regression tests for provenance, trust, rebuilding, fallback, prompt budgets, semantic retrieval, and family scoping.
+- focused regression tests for provenance, trust, rebuilding, fallback, prompt budgets, semantic retrieval, and family scoping;
+- backend-neutral `MetadataMemoryService` for inspection, independent of collection/storage names;
+- normalization of both PR #149 evidence-bound exemplars and PR #145-style semantic reviewer memory;
+- deduplication that prefers evidence-bound reviewed precedents when both representations exist;
+- admin-only System API at `/api/system/metadata-memory` plus the PR #145-compatible `/api/system/data/metadata-memory` alias;
+- canonical evidence-text resolution from retained block IDs where the source build is still available;
+- evidence-integrity verification against the exemplar's stored SHA-256 quote hash, with stale/mismatched evidence surfaced explicitly;
+- source-revision currency checks for audit warnings;
+- projection v3 fields for rejected model values, review method, review timestamp, and page range;
+- first-class System → Metadata memory page with summary counts, filters, pagination, correction visibility, provenance/evidence/context inspection, EN/FR copy, and no Vector Stores terminology.
 
-Empirical quality/latency benchmarking across real corpora and models remains an evaluation activity rather than a prerequisite for the initial implementation. The current semantic index is deliberately build-scoped; a cross-build exemplar catalogue requires an authoritative resolver for source build/record/revision/evidence identity before it should be enabled. The UX/audit expansion in Phase 6 remains intentionally deferred until the backend contract has been exercised in production-like runs.
+Empirical quality/latency benchmarking across real corpora and models remains an evaluation activity rather than a prerequisite for the initial implementation. The current semantic index is deliberately build-scoped; a cross-build exemplar catalogue requires an authoritative resolver for source build/record/revision/evidence identity before it should be enabled.
 
 Validation note (PR #145, quality-gates run #503): backend Ruff, mypy, Python syntax, the full backend regression suite, frontend lint, frontend typecheck, frontend unit/component tests, the production build, and the Storybook build have passed on the reconciled branch. The long composed UI/opacity/WCAG E2E phase was still running when this status was recorded; do not describe the complete workflow as green until that final phase succeeds.
 

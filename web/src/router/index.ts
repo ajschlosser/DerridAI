@@ -94,6 +94,12 @@ const routes: RouteRecordRaw[] = [
     meta: { view: "schemas", capability: "page.schemas", adminOnly: true, vueNative: true },
   },
   {
+    path: "/metadata-memory",
+    name: "metadatamemory",
+    component: () => import("../views/MetadataMemoryView.vue"),
+    meta: { view: "metadatamemory", capability: "page.response_cache", adminOnly: true, vueNative: true },
+  },
+  {
     path: "/settings",
     name: "config",
     component: () => import("../views/SettingsView.vue"),
