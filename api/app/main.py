@@ -29,13 +29,13 @@ from starlette.background import BackgroundTask
 
 from .auth import SESSION_COOKIE, auth_store, role_has_capability
 from .chroma_store import StoreAlreadyExistsError
-from .config import APP_GIT_COMMIT, APP_VERSION, app_version_label, settings
+from .config import APP_VERSION, app_version_label, settings
 from .content_filter import enforce_researcher_text
 from .corpus_builder import CORPUS_PROFILES, pdf_corpus_builds, pdf_corpus_repository
 from .corpus_review_state import _queue_counts
 from .corpus_reviewer_helpers import _present_for_reviewer
-from .http_auth import require_admin as _require_admin
 from .http_auth import request_user as _request_user
+from .http_auth import require_admin as _require_admin
 from .llm import TouchupFailure, propose_touchup
 from .metadata_adjudication_cache import (
     clear as clear_adjudication_cache,
@@ -100,9 +100,11 @@ from .researcher_view import (
 from .reviewer_context import current_reviewer, reviewer_id
 from .routers.annotations import router as annotations_router
 from .routers.auth import router as auth_router
-from .routers.health import health, router as health_router  # noqa: F401
+from .routers.health import health  # noqa: F401
+from .routers.health import router as health_router
 from .routers.i18n import router as i18n_router
-from .routers.jobs import _profile_generation_options, router as jobs_router
+from .routers.jobs import _profile_generation_options
+from .routers.jobs import router as jobs_router
 from .routers.llm import router as llm_router
 from .routers.system import router as system_router
 from .services import llm_jobs, llm_tool_jobs, rag_jobs, store, upsert_jobs
