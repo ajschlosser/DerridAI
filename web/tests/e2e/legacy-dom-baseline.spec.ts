@@ -98,7 +98,6 @@ async function open(page: Page, scenario: Scenario) {
   // The runtime restores the saved workspace while it starts. Loading a file before that finishes
   // would let the restore overwrite it, so wait for the start-up requests to settle first.
   await page.waitForLoadState("networkidle");
-  await page.waitForTimeout(1000);
   if (scenario.load) {
     await page.setInputFiles("#fileInput", {
       name: "baseline.jsonl",
@@ -121,12 +120,11 @@ async function open(page: Page, scenario: Scenario) {
       .click();
   }
   await page.waitForLoadState("networkidle");
-  await page.waitForTimeout(600);
   await scenario.steps?.(page);
   // Resize last: the narrow layouts hide the sidebar the scenarios navigate with.
+  // Snapshot capture below waits for the resulting DOM to stabilize.
   if (scenario.viewport) {
     await page.setViewportSize(scenario.viewport);
-    await page.waitForTimeout(500);
   }
 }
 
@@ -260,8 +258,8 @@ async function markup(
 ): Promise<string> {
   let last = await rawMarkup(page, target);
   let stableFor = 0;
-  for (let i = 0; i < 40 && stableFor < 4; i++) {
-    await page.waitForTimeout(200);
+  for (let i = 0; i < 40 && stableFor < 3; i++) {
+    await page.waitForTimeout(100);
     const next = await rawMarkup(page, target);
     stableFor = next === last ? stableFor + 1 : 0;
     last = next;
@@ -456,21 +454,21 @@ const researchWithEvidence = async (page: Page) => {
     .getByRole("button", { name: "Record View", exact: true })
     .first()
     .click();
-  await page.waitForTimeout(900);
-  await page.getByRole("button", { name: "Add evidence" }).first().click();
-  await page.waitForTimeout(400);
+  const addEvidence = page.getByRole("button", { name: "Add evidence" }).first();
+  await expect(addEvidence).toBeVisible();
+  await addEvidence.click();
+  await expect(page.getByRole("button", { name: /Remove from evidence/ }).first()).toBeVisible();
   await page
     .locator("nav, aside")
     .getByRole("button", { name: "Research", exact: true })
     .first()
     .click();
-  await page.waitForTimeout(1500);
+  await expect(page.locator("#researchQuestion")).toBeVisible();
 };
 
 const inRecords = async (page: Page) => {
   await page.getByRole("button", { name: "Records", exact: true }).click();
   await page.waitForLoadState("networkidle");
-  await page.waitForTimeout(800);
 };
 const openDialogFromRecords =
   (button: RegExp | string, options: { secondFile?: boolean } = {}) =>
@@ -1431,7 +1429,9 @@ const scenarios: Scenario[] = [
     load: true,
     fixtures: liveJobs({ finishAfterListings: 1 }),
     steps: async (page) => {
-      await page.waitForTimeout(6500);
+      await expect(page.locator('[data-op-id="job-rag-2"] .ops-status')).toContainText("Completed", {
+        timeout: 8_000,
+      });
     },
   },
   {
@@ -1440,7 +1440,7 @@ const scenarios: Scenario[] = [
     fixtures: liveJobs(),
     steps: async (page) => {
       await page.locator("#refreshJobs").click();
-      await page.waitForTimeout(900);
+      await expect(page.getByRole("status")).toContainText("Operations updated.");
     },
   },
   {
@@ -1452,7 +1452,7 @@ const scenarios: Scenario[] = [
         .getByRole("button", { name: /^Cancel/ })
         .first()
         .click();
-      await page.waitForTimeout(1200);
+      await expect(page.locator('[data-op-id="job-rag-2"] .ops-status')).toContainText("Cancelled");
     },
   },
   {
@@ -1464,7 +1464,7 @@ const scenarios: Scenario[] = [
         .getByRole("button", { name: /^Remove/ })
         .first()
         .click();
-      await page.waitForTimeout(6500);
+      await expect(page.locator('[data-op-id="job-rag-1"]')).toHaveCount(0, { timeout: 8_000 });
     },
   },
   {
@@ -1473,7 +1473,7 @@ const scenarios: Scenario[] = [
     fixtures: liveJobs(),
     steps: async (page) => {
       await page.locator("#clearFinishedJobs").click();
-      await page.waitForTimeout(6500);
+      await expect(page.locator('[data-op-id="job-rag-1"]')).toHaveCount(0, { timeout: 8_000 });
     },
   },
   {
