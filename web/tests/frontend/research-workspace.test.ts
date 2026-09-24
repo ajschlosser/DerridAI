@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createResearchWorkspace } from "../../src/domain/researchWorkspace";
 import { createRuntimeState } from "../../src/runtime/runtimeState";
 
-type Anything = any; // eslint-disable-line @typescript-eslint/no-explicit-any
+type Anything = any;
 
 // The rendered Research and Response Library views are covered by the legacy baseline's research and faq scenarios
 // (recorded before this logic moved); these pin the commands and their permission checks.
