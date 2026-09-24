@@ -7,6 +7,7 @@ on:
       - "api/**"
       - "tests/**"
       - "web/**"
+      - "scripts/**"
       - ".github/workflows/frontend.yml"
       - "ruff.toml"
       - "mypy.ini"
@@ -16,12 +17,57 @@ on:
       - "api/**"
       - "tests/**"
       - "web/**"
+      - "scripts/**"
       - ".github/workflows/frontend.yml"
       - "ruff.toml"
       - "mypy.ini"
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: filter
+        name: Classify changed paths
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] || [ -z "$BASE_SHA" ] || [[ "$BASE_SHA" =~ ^0+$ ]]; then
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          backend=false
+          frontend=false
+          while IFS= read -r path; do
+            case "$path" in
+              .github/workflows/frontend.yml|scripts/*)
+                backend=true
+                frontend=true
+                ;;
+              api/*|tests/*|ruff.toml|mypy.ini)
+                backend=true
+                ;;
+              web/*)
+                frontend=true
+                ;;
+            esac
+          done < <(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+
+          echo "backend=$backend" >> "$GITHUB_OUTPUT"
+          echo "frontend=$frontend" >> "$GITHUB_OUTPUT"
+
   backend-lint:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,16 +78,23 @@ jobs:
       - run: ruff check api/app tests
 
   backend-types:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -r api/requirements-dev.txt
+          cache: pip
+          cache-dependency-path: mypy.ini
+      - name: Install mypy only
+        run: pip install mypy==2.3.1
       - run: mypy
 
   frontend-lint:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -57,6 +110,8 @@ jobs:
       - run: npm run lint
 
   backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     env:
       CHROMA_DATA_ROOT: /tmp/derridai-data
@@ -70,16 +125,18 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: api/requirements.txt
-      - name: Install backend test dependencies
+      - name: Install backend test dependencies without optional reranker
         run: |
-          python -m pip install --upgrade pip
-          pip install -r api/requirements.txt pytest
+          grep -vE '^sentence-transformers' api/requirements.txt > /tmp/derridai-test-requirements.txt
+          pip install -r /tmp/derridai-test-requirements.txt pytest
       - name: Python syntax
         run: python -m compileall -q api/app
       - name: Backend and release regression tests
         run: pytest -q
 
   frontend-static:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     name: frontend-static
     runs-on: ubuntu-latest
     defaults:
@@ -104,8 +161,14 @@ jobs:
         run: npm run build-storybook
 
   frontend-legacy:
-    name: frontend-legacy
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    name: frontend-legacy (${{ matrix.shard }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ["1/2", "2/2"]
     defaults:
       run:
         working-directory: web
@@ -116,8 +179,9 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - name: Cache Playwright Chromium
-        uses: actions/cache@v4
+      - name: Restore Playwright Chromium cache
+        id: playwright-cache
+        uses: actions/cache/restore@v4
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('web/package-lock.json') }}
@@ -128,9 +192,11 @@ jobs:
       - name: Build production app
         run: npm run build:ci
       - name: Legacy DOM regression tests
-        run: npm run test:e2e:legacy
+        run: npm run test:e2e:legacy -- --shard=${{ matrix.shard }}
 
   frontend-e2e:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     name: frontend-e2e (${{ matrix.shard }})
     runs-on: ubuntu-latest
     strategy:
@@ -147,8 +213,9 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - name: Cache Playwright Chromium
-        uses: actions/cache@v4
+      - name: Restore Playwright Chromium cache
+        id: playwright-cache
+        uses: actions/cache/restore@v4
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('web/package-lock.json') }}
@@ -156,6 +223,12 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
+      - name: Save Playwright Chromium cache
+        if: steps.playwright-cache.outputs.cache-hit != 'true' && matrix.shard == '1/2'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('web/package-lock.json') }}
       - name: Build production app
         run: npm run build:ci
       - name: Build Storybook
@@ -164,6 +237,8 @@ jobs:
         run: npm run test:e2e -- --shard=${{ matrix.shard }}
 
   frontend-a11y:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     name: frontend-a11y
     runs-on: ubuntu-latest
     defaults:
@@ -176,8 +251,9 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - name: Cache Playwright Chromium
-        uses: actions/cache@v4
+      - name: Restore Playwright Chromium cache
+        id: playwright-cache
+        uses: actions/cache/restore@v4
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('web/package-lock.json') }}
@@ -190,12 +266,13 @@ jobs:
       - name: Corpus Builder WCAG 2.2 AA sweep
         run: npm run test:e2e:a11y
 
-  # Preserve the historical required-check name while allowing the expensive
-  # browser suites to run independently and surface failures much earlier.
+  # Preserve the historical required-check name while allowing unrelated
+  # backend-only changes to skip all frontend compute.
   frontend:
     name: frontend
     if: always()
     needs:
+      - changes
       - frontend-lint
       - frontend-static
       - frontend-legacy
@@ -205,12 +282,18 @@ jobs:
     steps:
       - name: Verify frontend gates
         env:
+          FRONTEND_CHANGED: ${{ needs.changes.outputs.frontend }}
           LINT_RESULT: ${{ needs.frontend-lint.result }}
           STATIC_RESULT: ${{ needs.frontend-static.result }}
           LEGACY_RESULT: ${{ needs.frontend-legacy.result }}
           E2E_RESULT: ${{ needs.frontend-e2e.result }}
           A11Y_RESULT: ${{ needs.frontend-a11y.result }}
         run: |
+          if [ "$FRONTEND_CHANGED" != "true" ]; then
+            echo "No frontend-relevant changes; frontend gates were skipped."
+            exit 0
+          fi
+
           for result in "$LINT_RESULT" "$STATIC_RESULT" "$LEGACY_RESULT" "$E2E_RESULT" "$A11Y_RESULT"; do
             if [ "$result" != "success" ]; then
               echo "A frontend quality gate did not succeed: $result"
