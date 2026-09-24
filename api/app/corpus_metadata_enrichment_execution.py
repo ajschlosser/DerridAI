@@ -43,9 +43,6 @@ from .enrichment_ledger import (
     CALL,
     PROPOSED,
 )
-from .metadata_adjudication_cache import (
-    semantic_suggestions as semantic_adjudication_suggestions,
-)
 from .metadata_adjudication_cache import suggestions as adjudication_suggestions
 from .metadata_schema import (
     CORE_FIELDS,
@@ -342,18 +339,8 @@ CURRENT REVIEWED RECORD TEXT:
                     schema_version=str(request.get("schema_version") or ""),
                 )
                 values = cached.get("prior_values") if isinstance(cached, dict) else None
-                semantic = semantic_adjudication_suggestions(
-                    record_id=str(record.get("record_id") or ""),
-                    text=source_text,
-                    field=field.name,
-                    schema_version=str(request.get("schema_version") or ""),
-                )
                 if isinstance(values, list) and values:
                     remembered[field.name] = {"exact_values": values}
-                if semantic:
-                    remembered.setdefault(field.name, {})
-                    if isinstance(remembered[field.name], dict):
-                        remembered[field.name]["semantic_examples"] = semantic
             if remembered:
                 prompt += (
                     "\n\nREVIEWER MEMORY (advisory suggestions only; do not copy without "
