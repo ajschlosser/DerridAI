@@ -236,7 +236,11 @@ class EditorialMemoryMixin:
                             examples[str(field)] = items
                     examples = budget_prompt_examples(examples)
                 elif retrieval_telemetry.get("fallback_reason"):
-                    warned = getattr(self, "_progressive_metadata_warning_builds", set())
+                    warned: set[str] = getattr(
+                        self,
+                        "_progressive_metadata_warning_builds",
+                        set(),
+                    )
                     if build_id not in warned:
                         self._append_warning(
                             build_id,
