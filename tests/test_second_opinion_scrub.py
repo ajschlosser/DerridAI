@@ -13,6 +13,7 @@ except ModuleNotFoundError:
     sys.modules["chromadb"] = types.SimpleNamespace()
 
 from app import main
+from app.routers import corpus as corpus_routes
 from app.reviewer_context import current_reviewer
 from starlette.responses import JSONResponse
 
@@ -69,7 +70,7 @@ def test_through_the_real_app_an_accept_response_hides_the_first_answer(monkeypa
 
     user = types.SimpleNamespace(id=2, role="admin", username="b")
     monkeypatch.setattr(main.auth_store, "user_for_session", lambda cookie: user)
-    monkeypatch.setattr(main.pdf_corpus_builds, "accept_record", lambda *a, **k: record())
+    monkeypatch.setattr(corpus_routes.pdf_corpus_builds, "accept_record", lambda *a, **k: record())
 
     async def call():
         transport = httpx.ASGITransport(app=main.app)
