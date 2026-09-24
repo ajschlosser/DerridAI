@@ -246,10 +246,11 @@ export function createWorkDialogs(deps: Deps) {
         `works.source_type_${canonicalWorkSourceType(sourceType)}`,
         canonicalWorkSourceType(sourceType).replace(/_/g, " "),
       );
-    const sourceScopeSummary = [...sourceScopes.reduce((counts, scope) => {
-      counts.set(scope.sourceType, (counts.get(scope.sourceType) || 0) + 1);
-      return counts;
-    }, new Map<string, number>())]
+    const sourceScopeCounts = new Map<string, number>();
+    for (const scope of sourceScopes) {
+      sourceScopeCounts.set(scope.sourceType, (sourceScopeCounts.get(scope.sourceType) || 0) + 1);
+    }
+    const sourceScopeSummary = [...sourceScopeCounts]
       .map(([sourceType, count]) => `${count} ${sourceTypeLabel(sourceType)}`)
       .join(" · ");
     const profiles = providerProfiles();
@@ -258,7 +259,10 @@ export function createWorkDialogs(deps: Deps) {
     dialog.className = "workflow-dialog work-metadata-llm-dialog";
     const sample = sourceScopes
       .slice(0, 6)
-      .map((scope: Any) => `<span>${esc(scope.work)} · ${esc(sourceTypeLabel(scope.sourceType))}</span>`)
+      .map(
+        (scope: Any) =>
+          `<span>${esc(scope.work)} · ${esc(sourceTypeLabel(scope.sourceType))}</span>`,
+      )
       .join("");
     dialog.innerHTML = `<div class="workflow-dialog-header"><div class="workflow-heading"><span class="workflow-icon">${icon("spark")}</span><div><p>${esc(tr("works.metadata_workflow_kicker", "Source-aware metadata enrichment"))}</p><h2>${esc(tr("works.populate_metadata_llm", "Populate metadata with LLM"))}</h2><span>${esc(tr("works.populate_metadata_help", "DerridAI partitions mixed works by source type, uses appropriate public metadata sources, asks the selected LLM to identify reliable matches, then returns proposed metadata changes for review. Nothing is applied automatically."))}</span></div></div><button class="icon-btn workflow-close" data-close title="${esc(tr("ui.close", "Close"))}">×</button></div>
     <ol class="workflow-steps"><li class="active"><span>1</span><b>${esc(tr("works.step_scope", "Works"))}</b></li><li class="active"><span>2</span><b>${esc(tr("works.step_provider", "Provider profile"))}</b></li><li><span>3</span><b>${esc(tr("works.step_review", "Review proposals"))}</b></li></ol>
@@ -340,9 +344,13 @@ export function createWorkDialogs(deps: Deps) {
         startJobPolling();
         close();
         toast(
-          trf("works.metadata_lookup_started", "Metadata lookup started for {count} source group(s).", {
-            count: sourceScopes.length,
-          }),
+          trf(
+            "works.metadata_lookup_started",
+            "Metadata lookup started for {count} source group(s).",
+            {
+              count: sourceScopes.length,
+            },
+          ),
         );
         if (state.view === "home")
           window.dispatchEvent(new CustomEvent("derridai:dashboard-refresh"));

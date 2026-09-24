@@ -134,7 +134,12 @@ function normaliseImportedGuidance(payload: unknown): Record<string, RunGuidance
   const imported: Record<string, RunGuidanceEntry> = {};
   for (const [field, raw] of Object.entries(source)) {
     if (!fields.has(field) || !raw || typeof raw !== "object" || Array.isArray(raw)) continue;
-    const entry = raw as { instructions?: unknown; look_for?: unknown };
+    const entry = raw as {
+      instructions?: unknown;
+      look_for?: unknown;
+      required?: unknown;
+      default_placeholder?: unknown;
+    };
     const instructions = typeof entry.instructions === "string" ? entry.instructions : "";
     const lookFor = Array.isArray(entry.look_for)
       ? entry.look_for
@@ -241,15 +246,16 @@ async function importGuidance(event: Event) {
             type="checkbox"
             :checked="modelValue[field.name]?.required === true"
             :disabled="disabled"
-            @change="
-              setRequired(field.name, ($event.target as HTMLInputElement).checked)
-            "
+            @change="setRequired(field.name, ($event.target as HTMLInputElement).checked)"
           />
           <span>{{
             i18n.t("pdf_corpus.run_guidance_require_value", "Require a value for this run")
           }}</span>
         </label>
-        <label v-if="modelValue[field.name]?.required" :for="`run-guidance-placeholder-${field.name}`">
+        <label
+          v-if="modelValue[field.name]?.required"
+          :for="`run-guidance-placeholder-${field.name}`"
+        >
           <span>{{
             i18n.t("pdf_corpus.run_guidance_placeholder_label", "Fallback placeholder")
           }}</span>

@@ -26,8 +26,10 @@ describe("Corpus run guidance", () => {
     expect(updates).toBeTruthy();
     expect(updates?.at(-1)?.[0]).toEqual({
       persons: {
+        default_placeholder: "",
         instructions: "Exclude bibliography-only mentions.",
         look_for: ["Emmanuel Levinas", "Levinas"],
+        required: false,
       },
     });
   });
@@ -44,8 +46,10 @@ describe("Corpus run guidance", () => {
 
     expect(wrapper.emitted("update:modelValue")?.at(-1)?.[0]).toEqual({
       persons: {
+        default_placeholder: "",
         instructions: "",
         look_for: ["First "],
+        required: false,
       },
     });
   });
@@ -67,7 +71,12 @@ describe("Corpus run guidance", () => {
           format: "derridai-run-guidance",
           version: 1,
           guidance: {
-            persons: { instructions: "Check attribution.", look_for: ["First Name Last Name"] },
+            persons: {
+              default_placeholder: "",
+              instructions: "Check attribution.",
+              look_for: ["First Name Last Name"],
+              required: false,
+            },
             obsolete: { instructions: "Ignore this field.", look_for: [] },
           },
         }),
@@ -79,7 +88,12 @@ describe("Corpus run guidance", () => {
     await input.trigger("change");
 
     expect(wrapper.emitted("update:modelValue")?.at(-1)?.[0]).toEqual({
-      persons: { instructions: "Check attribution.", look_for: ["First Name Last Name"] },
+      persons: {
+        default_placeholder: "",
+        instructions: "Check attribution.",
+        look_for: ["First Name Last Name"],
+        required: false,
+      },
     });
     expect(wrapper.find('[role="status"]').text()).toContain("imported");
   });
