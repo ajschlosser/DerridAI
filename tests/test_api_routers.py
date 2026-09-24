@@ -10,6 +10,7 @@ from app.routers import (
     auth_router,
     i18n_router,
     llm_router,
+    stores_router,
     system_router,
 )
 
@@ -78,6 +79,33 @@ def test_system_and_llm_routers_preserve_existing_http_contract():
         ("POST", "/api/rag/grade"),
         ("POST", "/api/pdf/llm"),
         ("POST", "/api/llm/touchup"),
+    }
+
+
+def test_store_router_preserves_existing_http_contract():
+    assert _routes(stores_router) == {
+        ("GET", "/api/stores"),
+        ("POST", "/api/stores"),
+        ("POST", "/api/stores/preflight/embedding"),
+        ("GET", "/api/stores/{store_name}"),
+        ("PUT", "/api/stores/{store_name}/embedding"),
+        ("PUT", "/api/stores/{store_name}/languages"),
+        ("PUT", "/api/stores/{store_name}/protection"),
+        ("POST", "/api/stores/{store_name}/derive-languages"),
+        ("DELETE", "/api/stores/{store_name}"),
+        ("DELETE", "/api/stores/{store_name}/works/{work:path}"),
+        ("GET", "/api/response-cache/records"),
+        ("GET", "/api/stores/{store_name}/records"),
+        ("GET", "/api/stores/{store_name}/works"),
+        ("POST", "/api/stores/{store_name}/records/status"),
+        ("POST", "/api/stores/{store_name}/drift"),
+        ("GET", "/api/stores/{store_name}/export"),
+        ("GET", "/api/stores/{store_name}/records/{chroma_id:path}"),
+        ("POST", "/api/stores/{store_name}/records"),
+        ("PATCH", "/api/stores/{store_name}/records/{chroma_id:path}"),
+        ("DELETE", "/api/stores/{store_name}/records/{chroma_id:path}"),
+        ("POST", "/api/stores/{store_name}/records/bulk"),
+        ("POST", "/api/stores/{store_name}/search"),
     }
 
 
