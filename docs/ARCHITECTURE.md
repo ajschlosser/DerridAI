@@ -6,7 +6,7 @@ This describes the code as it exists in 0.62.19. For feature behavior see the [U
 ## Processes
 
 - **web** — Vue 3 single-page app built by Vite and served by nginx (`web/nginx.conf`), which proxies `/api/` to the API. Storybook is an opt-in `dev` compose profile.
-- **api** — one FastAPI process entered through `api/app/main.py`. The entrypoint composes domain `APIRouter`s from `api/app/routers/`, while process-wide Chroma and job-manager services are constructed in `api/app/services.py`. Background work runs on threads inside this process; there is no external queue or worker service.
+- **api** — one FastAPI process exposed through `api/app/main.py`. `api/app/application.py` builds the application, composes domain `APIRouter`s from `api/app/routers/`, and registers cross-cutting middleware/exception handling. Process-wide Chroma and job-manager services are constructed in `api/app/services.py`. Background work runs on threads inside this process; there is no external queue or worker service.
 - **LLM backend** — Ollama or an OpenAI-compatible endpoint, reached over HTTP through provider profiles (`llm.py`). Optional compose profile `ollama`.
 - **Chroma backend** — embedded `PersistentClient` by default, or `HttpClient` to a running server (optional compose profile `chroma`, or `CHROMA_BASE_URL` like `OLLAMA_BASE_URL`).
 
@@ -14,7 +14,8 @@ This describes the code as it exists in 0.62.19. For feature behavior see the [U
 
 | Module | Responsibility |
 | --- | --- |
-| `main.py` | Routes, auth dependency checks, role enforcement, backup/restore. Large; a router split is a documented follow-up. |
+| `main.py`, `application.py` | Minimal ASGI entrypoint plus FastAPI application factory and router composition. |
+| `middleware.py`, `route_policy.py`, `response_filters.py`, `validation_handlers.py` | Cross-cutting API authentication/capability enforcement, second-opinion response privacy, and stable validation-error handling. |
 | `auth.py` | `AuthStore` over SQLite: users, roles/permissions, hashed session tokens, failed-login throttle. PBKDF2 password hashes. |
 | `persistence.py`, `system_store.py` | SQLite repositories for provider profiles, annotations, languages, and the `jobs` table; locale dictionary store. |
 | `chroma_store.py` | ChromaDB access: collections, language mirrors, hybrid search, and the response cache (public name `_response_cache`, stored as `derridai_response_cache`). Distinguishes an absent cache collection from storage errors. Embedded `PersistentClient` or HTTP `HttpClient` (`chroma_connection.py`). |
@@ -62,4 +63,4 @@ Vue 3 + Pinia + Vue Router. `views/` and `components/` (each with a Storybook st
 
 ## Known limits
 
-Single API process; job state is not shared across processes. `main.py`, `chroma_store.py`, and `corpus_builder.py` remain large. See [STATIC_ANALYSIS_FOLLOWUPS.md](STATIC_ANALYSIS_FOLLOWUPS.md) for tracked typing and lint debt.
+Single API process; job state is not shared across processes. `chroma_store.py` and `corpus_builder.py` remain large. See [STATIC_ANALYSIS_FOLLOWUPS.md](STATIC_ANALYSIS_FOLLOWUPS.md) for tracked typing and lint debt.

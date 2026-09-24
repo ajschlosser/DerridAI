@@ -13,6 +13,8 @@ except ModuleNotFoundError:
     sys.modules["chromadb"] = types.SimpleNamespace()
 
 from app import main
+from app.auth import auth_store
+from app.response_filters import hide_pending_second_opinions, scrub_second_opinions
 from app.reviewer_context import current_reviewer
 from app.routers import corpus as corpus_routes
 from starlette.responses import JSONResponse
@@ -31,14 +33,14 @@ def test_nested_records_are_scrubbed_for_the_second_reviewer_only():
     token = current_reviewer.set("user-2")
     try:
         payload = {"record": record(), "records": [record(record_id="r2")], "left_record": record(record_id="r3")}
-        assert main.scrub_second_opinions(payload) is True
+        assert scrub_second_opinions(payload) is True
         assert "assertion" not in json.dumps(payload)
     finally:
         current_reviewer.reset(token)
     token = current_reviewer.set("user-1")
     try:
         payload = {"record": record()}
-        assert main.scrub_second_opinions(payload) is False
+        assert scrub_second_opinions(payload) is False
         assert payload["record"]["discourse_role"] == "assertion"
     finally:
         current_reviewer.reset(token)
@@ -48,7 +50,7 @@ def test_a_response_from_any_route_is_rewritten_in_flight():
     token = current_reviewer.set("user-2")
     try:
         original = JSONResponse({"record": record(), "build": {"status": "awaiting_review"}})
-        cleaned = asyncio.run(main._hide_pending_second_opinions(original))
+        cleaned = asyncio.run(hide_pending_second_opinions(original))
         body = json.loads(cleaned.body)
         assert "assertion" not in json.dumps(body) and body["build"]["status"] == "awaiting_review"
         assert cleaned.headers["content-type"].startswith("application/json")
@@ -60,7 +62,7 @@ def test_responses_that_never_mention_a_second_opinion_pass_through_untouched():
     token = current_reviewer.set("user-2")
     try:
         original = JSONResponse({"record": {"record_id": "r9", "discourse_role": "assertion"}})
-        assert json.loads(asyncio.run(main._hide_pending_second_opinions(original)).body)["record"]["discourse_role"] == "assertion"
+        assert json.loads(asyncio.run(hide_pending_second_opinions(original)).body)["record"]["discourse_role"] == "assertion"
     finally:
         current_reviewer.reset(token)
 
@@ -69,7 +71,7 @@ def test_through_the_real_app_an_accept_response_hides_the_first_answer(monkeypa
     import httpx
 
     user = types.SimpleNamespace(id=2, role="admin", username="b")
-    monkeypatch.setattr(main.auth_store, "user_for_session", lambda cookie: user)
+    monkeypatch.setattr(auth_store, "user_for_session", lambda cookie: user)
     monkeypatch.setattr(corpus_routes.pdf_corpus_builds, "accept_record", lambda *a, **k: record())
 
     async def call():
@@ -108,7 +110,7 @@ def test_the_rest_of_the_record_stops_repeating_the_first_answer(tmp_path):
     )
     token = current_reviewer.set("user-2")
     try:
-        main.scrub_second_opinions({"record": rec})
+        scrub_second_opinions({"record": rec})
     finally:
         current_reviewer.reset(token)
     assert "assertion" not in json.dumps(rec)
