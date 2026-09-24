@@ -77,7 +77,7 @@ export const viewConfig = [
   { id: "vector", label: "Vector Stores", icon: "database", section: "Tools" },
   { id: "rag", label: "Research", icon: "spark", section: "Research" },
   { id: "faq", label: "Response Library", icon: "books", section: "Research" },
-  { id: "responsecache", label: "Response Cache", icon: "database", section: "Research" },
+  { id: "responsecache", label: "System Data", icon: "database", section: "System" },
   { id: "providers", label: "LLM Providers", icon: "spark", section: "System" },
   { id: "schemas", label: "Metadata schemas", icon: "list", section: "System" },
   { id: "config", label: "Settings", icon: "gear", section: "System" },

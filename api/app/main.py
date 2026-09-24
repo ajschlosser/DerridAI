@@ -1,4 +1,4 @@
-# Copyright 2026 Aaron John Schlosser, PhD.
+﻿# Copyright 2026 Aaron John Schlosser, PhD.
 from __future__ import annotations
 
 import json
@@ -34,6 +34,7 @@ from .content_filter import enforce_researcher_text
 from .corpus_builder import CORPUS_PROFILES, pdf_corpus_builds, pdf_corpus_repository
 from .corpus_review_state import _queue_counts
 from .corpus_reviewer_helpers import _present_for_reviewer
+from .database_backend import SQLiteBackend
 from .http_auth import request_user as _request_user
 from .http_auth import require_admin as _require_admin
 from .llm import TouchupFailure, propose_touchup
@@ -113,6 +114,7 @@ from .source_media import (
     load_gutenberg_etext,
     search_project_gutenberg,
 )
+from .system_data import SystemDataService
 from .system_store import system_store
 
 logger = logging.getLogger(__name__)
@@ -135,6 +137,13 @@ app.include_router(i18n_router)
 app.include_router(health_router)
 app.include_router(llm_router)
 app.include_router(jobs_router)
+
+system_data = SystemDataService(
+    {
+        "system": SQLiteBackend("system", system_store.path),
+        "auth": SQLiteBackend("auth", auth_store.path),
+    }
+)
 
 
 @app.exception_handler(RequestValidationError)
@@ -2036,6 +2045,104 @@ def get_response_cache_records(
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.delete("/api/system/data/response-cache-records/{record_id}")
+def delete_system_response_cache_record(record_id: str, request: Request) -> dict[str, Any]:
+    _require_admin(request)
+    try:
+        store.delete_record("_response_cache", record_id)
+        return {"deleted": record_id}
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/api/system/data")
+def get_system_data(request: Request) -> dict[str, Any]:
+    """List all durable system databases through the backend-neutral contract."""
+    _require_admin(request)
+    try:
+        return {"databases": system_data.databases()}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/api/system/data/{database}/{table}")
+def get_system_data_table(
+    database: str,
+    table: str,
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> dict[str, Any]:
+    _require_admin(request)
+    try:
+        return system_data.rows(database, table, limit=limit, offset=offset)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/system/data/{database}/{table}")
+def insert_system_data_row(
+    database: str,
+    table: str,
+    body: dict[str, Any],
+    request: Request,
+) -> dict[str, Any]:
+    _require_admin(request)
+    try:
+        return system_data.insert(database, table, body)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.patch("/api/system/data/{database}/{table}")
+def update_system_data_row(
+    database: str,
+    table: str,
+    body: dict[str, Any],
+    request: Request,
+) -> dict[str, Any]:
+    _require_admin(request)
+    key = body.get("key")
+    values = body.get("values")
+    if not isinstance(key, dict) or not isinstance(values, dict):
+        raise HTTPException(
+            status_code=422,
+            detail="System Data updates require key and values objects.",
+        )
+    try:
+        return system_data.update(database, table, key, values)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/api/system/data/{database}/{table}")
+def delete_system_data_row(
+    database: str,
+    table: str,
+    body: dict[str, Any],
+    request: Request,
+) -> dict[str, Any]:
+    _require_admin(request)
+    key = body.get("key")
+    if not isinstance(key, dict):
+        raise HTTPException(
+            status_code=422,
+            detail="System Data deletes require a key object.",
+        )
+    try:
+        return system_data.delete(database, table, key)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/api/stores/{store_name}/records")

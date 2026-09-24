@@ -771,7 +771,15 @@ Backups are blocked while background operations are active so the archive is int
 
 **Load from backup** validates the manifest and ZIP member paths before making changes. The API first creates a logical rollback snapshot of the current Chroma database; if Chroma restoration fails, the current vector database is restored from that rollback. After a successful server restore, the browser IndexedDB workspace and current PDF are replaced and the UI reloads.
 
-The logical FAQ collection is exposed as `_response_cache` in DerridAI. Chroma itself does not permit collection names beginning with `_`, so its physical collection name is `derridai_response_cache` and carries system metadata identifying it as the response cache.
+**System Data** is the administrative surface for the logical `_response_cache`
+and the durable application databases. The response cache remains a Chroma
+system collection, while the database browser exposes tables and rows through a
+backend-neutral contract; SQLite is the current adapter, not a UI-level
+requirement. Sensitive credentials, password material, and session tokens are
+redacted or protected from mutation. The former **Response Cache** route remains
+available as a compatibility alias.
+Chroma itself does not permit collection names beginning with `_`, so the
+physical cache collection is `derridai_response_cache`.
 
 Full backups can contain credentials. Treat them as sensitive files.
 
