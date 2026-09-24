@@ -2069,21 +2069,6 @@ def get_system_data(request: Request) -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-@app.get("/api/system/data/vector-stores")
-def get_system_vector_stores(request: Request) -> dict[str, Any]:
-    """List derived system vector stores, including metadata reviewer memory."""
-    _require_admin(request)
-    try:
-        stores = [
-            item
-            for item in store.list_stores()
-            if str((item.get("metadata") or {}).get("derridai_system_collection") or "")
-        ]
-        return {"stores": stores}
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-
-
 @app.get("/api/system/data/metadata-exemplars")
 def get_system_metadata_exemplars(
     request: Request,
