@@ -115,6 +115,7 @@ from .source_media import (
     search_project_gutenberg,
 )
 from .system_data import SystemDataService
+from .system_metadata_exemplars import MetadataExemplarInspector
 from .system_store import system_store
 
 logger = logging.getLogger(__name__)
@@ -144,6 +145,7 @@ system_data = SystemDataService(
         "auth": SQLiteBackend("auth", auth_store.path),
     }
 )
+metadata_exemplars = MetadataExemplarInspector(store)
 
 
 @app.exception_handler(RequestValidationError)
@@ -2078,6 +2080,35 @@ def get_system_vector_stores(request: Request) -> dict[str, Any]:
             if str((item.get("metadata") or {}).get("derridai_system_collection") or "")
         ]
         return {"stores": stores}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/api/system/data/metadata-exemplars")
+def get_system_metadata_exemplars(
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    field: str = Query(default="", max_length=120),
+    kind: str = Query(default="", max_length=40),
+    language: str = Query(default="", max_length=40),
+    scope_id: str = Query(default="", max_length=200),
+    schema_id: str = Query(default="", max_length=200),
+    record_id: str = Query(default="", max_length=300),
+) -> dict[str, Any]:
+    """Inspect progressive metadata exemplars as read-only system data."""
+    _require_admin(request)
+    try:
+        return metadata_exemplars.rows(
+            limit=limit,
+            offset=offset,
+            field=field,
+            kind=kind,
+            language=language,
+            scope_id=scope_id,
+            schema_id=schema_id,
+            record_id=record_id,
+        )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
