@@ -16,7 +16,7 @@ DerridAI separates tests by the kind of boundary they exercise rather than by re
 
 | Category | Pytest marker / frontend command | Purpose |
 | --- | --- | --- |
-| Unit | `unit` / `npm run test:unit` | Fast deterministic domain, component, store, and helper behavior. Unmarked backend tests default here. |
+| Unit | `unit` / `npm run test:unit` | Fast deterministic domain, component, store, and helper behavior. |\n| Regression | unmarked existing pytest suite | Broad historical regression coverage; retained without falsely relabeling persistence/route tests as pure units. |
 | Contract | `contract` | Stable compatibility boundaries. The frontend/FastAPI route-and-method contract is enforced here. |
 | Integration | `integration` | Multiple real application subsystems exercised together. Use this only when a fake would hide the behavior being tested. |
 | Characterization | `characterization` / `npm run test:characterization` | Behavior-preservation tests for legacy/refactoring-sensitive surfaces, including the legacy DOM baseline. |
