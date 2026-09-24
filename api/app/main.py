@@ -17,18 +17,18 @@ from .config import app_version_label
 from .corpus_reviewer_helpers import _present_for_reviewer
 from .http_auth import request_user as _request_user
 from .reviewer_context import current_reviewer, reviewer_id
-from .routers.annotations import router as annotations_router
 from .routers.admin import router as admin_router
+from .routers.annotations import router as annotations_router
+from .routers.auth import router as auth_router
 from .routers.chroma import router as chroma_router
 from .routers.corpus import router as corpus_router
-from .routers.auth import router as auth_router
 from .routers.health import health  # noqa: F401
 from .routers.health import router as health_router
 from .routers.i18n import router as i18n_router
 from .routers.jobs import router as jobs_router
 from .routers.llm import router as llm_router
-from .routers.system import router as system_router
 from .routers.stores import router as stores_router
+from .routers.system import router as system_router
 
 logger = logging.getLogger(__name__)
 
