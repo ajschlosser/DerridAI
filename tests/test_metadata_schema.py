@@ -322,3 +322,34 @@ def test_the_preview_endpoint_shows_the_prompt_without_calling_a_model(tmp_path,
     good, bad = asyncio.run(run())
     assert good.status_code == 200 and "A calm passage." in good.json()["prompt"] and good.json()["ran"] is False
     assert bad.status_code == 422
+
+
+def test_researcher_cannot_author_metadata_schemas(tmp_path, monkeypatch):
+    import asyncio
+    import sys
+    import types
+
+    import httpx
+
+    try:
+        import chromadb  # type: ignore  # noqa: F401
+    except ModuleNotFoundError:
+        sys.modules["chromadb"] = types.SimpleNamespace()
+    from app import main
+
+    monkeypatch.setattr(main, "metadata_schemas", SchemaStore(tmp_path))
+    monkeypatch.setattr(
+        main.auth_store,
+        "user_for_session",
+        lambda cookie: types.SimpleNamespace(id=2, role="researcher", username="r"),
+    )
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="http://t") as c:
+            listing = await c.get("/api/pdf/metadata-schemas")
+            created = await c.post("/api/pdf/metadata-schemas", json=custom().model_dump(mode="json"))
+            return listing, created
+
+    listing, created = asyncio.run(run())
+    assert listing.status_code == 403 and created.status_code == 403
+

@@ -908,7 +908,7 @@ function userCapabilities(){
     configureProviders:hasCapability("providers.manage"),
   };
 }
-const pageCapabilities={home:"page.dashboard",list:"page.records",record:"page.record",works:"page.works",global:"page.search",annotations:"page.annotations",pdf:"page.pdf",compare:"page.compare",vector:"page.vector",rag:"page.research",faq:"page.faq",responsecache:"page.response_cache",providers:"page.providers",config:"page.settings"};
+const pageCapabilities={home:"page.dashboard",list:"page.records",record:"page.record",works:"page.works",global:"page.search",annotations:"page.annotations",pdf:"page.pdf",compare:"page.compare",vector:"page.vector",rag:"page.research",faq:"page.faq",responsecache:"page.response_cache",providers:"page.providers",schemas:"page.schemas",config:"page.settings"};
 function canUse(feature){return Boolean(userCapabilities()[feature]);}
 function canAccessPage(view){const capability=pageCapabilities[view];return !capability||hasCapability(capability);}
 function setUserContext(user){
@@ -1786,7 +1786,7 @@ async function syncResearcherProviderProfiles(){
 
 
 function translatedNavLabel(item){
-  const keys={home:"nav.dashboard",list:"nav.records",record:"nav.record",works:"nav.works",global:"nav.search",annotations:"nav.annotations",pdf:"nav.pdf",compare:"nav.compare",vector:"nav.vector",rag:"nav.rag",faq:"nav.faq",responsecache:"nav.cache",providers:"nav.providers",config:"nav.config"};
+  const keys={home:"nav.dashboard",list:"nav.records",record:"nav.record",works:"nav.works",global:"nav.search",annotations:"nav.annotations",pdf:"nav.pdf",compare:"nav.compare",vector:"nav.vector",rag:"nav.rag",faq:"nav.faq",responsecache:"nav.cache",providers:"nav.providers",schemas:"nav.schemas",config:"nav.config"};
   return keys[item.id]?tr(keys[item.id],item.label):item.label;
 }
 function translatedSectionLabel(section){

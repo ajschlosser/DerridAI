@@ -147,6 +147,10 @@ const handsFreeOpen = ref(false);
 const schemaId = ref("default");
 const schemaChoices = ref<SchemaSummary[]>([]);
 const schemaEditorOpen = ref(false);
+function openSchemasPage() {
+  schemaEditorOpen.value = false;
+  void router.push({ name: "schemas" });
+}
 const selectedSchema = ref<MetadataSchema | null>(null);
 const {
   guidance: runGuidance,
@@ -5565,6 +5569,11 @@ onBeforeUnmount(() => {
           }
         "
       />
+      <template #footer>
+        <button type="button" class="btn small" @click="openSchemasPage">
+          {{ i18n.t("schemas.open_page", "Open as a page") }}
+        </button>
+      </template>
     </UiDialog>
     <UiDialog
       v-if="handsFreeOpen"

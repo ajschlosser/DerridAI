@@ -82,6 +82,12 @@ const routes: RouteRecordRaw[] = [
     meta: { view: "providers", capability: "page.providers", adminOnly: true, vueNative: true },
   },
   {
+    path: "/schemas",
+    name: "schemas",
+    component: () => import("../views/MetadataSchemasView.vue"),
+    meta: { view: "schemas", capability: "page.schemas", adminOnly: true, vueNative: true },
+  },
+  {
     path: "/settings",
     name: "config",
     component: () => import("../views/SettingsView.vue"),
