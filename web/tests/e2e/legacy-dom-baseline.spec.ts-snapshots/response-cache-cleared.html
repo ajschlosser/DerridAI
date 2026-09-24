@@ -29,30 +29,63 @@
 <button class="btn danger" type="button">Clear response cache</button>
 </div>
 </section>
-<section class="card" aria-labelledby="vector-stores-title">
+<section class="card exemplar-panel" aria-labelledby="metadata-exemplars-title">
 <div class="table-header">
 <div>
-<h2 id="vector-stores-title">Derived vector stores</h2>
-<p>Rebuildable system collections used for response caching and semantic reviewer memory.</p>
+<span class="eyebrow">Progressive metadata</span>
+<h2 id="metadata-exemplars-title">Metadata exemplars</h2>
+<p>Read-only, evidence-bound examples learned from reviewed metadata decisions. These are derived from canonical corpus records and can be rebuilt.</p>
+</div>
+<strong class="exemplar-count">0</strong>
+</div>
+<div class="exemplar-filters" role="search" aria-label="Filter metadata exemplars">
+<label>
+<span>Field</span>
+<select class="control">
+<option value="">All</option>
+</select>
+</label>
+<label>
+<span>Kind</span>
+<select class="control">
+<option value="">All</option>
+</select>
+</label>
+<label>
+<span>Language</span>
+<select class="control">
+<option value="">All</option>
+</select>
+</label>
+<label>
+<span>Build</span>
+<select class="control">
+<option value="">All</option>
+</select>
+</label>
+<label>
+<span>Schema</span>
+<select class="control">
+<option value="">All</option>
+</select>
+</label>
+<label class="exemplar-record-filter">
+<span>Record ID</span>
+<input class="control" type="search">
+</label>
+<div class="exemplar-filter-actions">
+<button class="btn" type="button">Apply filters</button>
+<button class="btn" type="button">Clear filters</button>
 </div>
 </div>
-<div class="tablewrap">
-<table>
-<thead>
-<tr>
-<th>Store</th>
-<th>Role</th>
-<th>Records</th>
-<th>Embedding contract</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td colspan="4" class="note">No rows are available.</td>
-</tr>
-</tbody>
-</table>
+<div class="info">No progressive metadata exemplar index exists yet. Review evidence-bound metadata and run enrichment to create it.</div>
+<footer class="exemplar-pagination">
+<span>0–0 of 0</span>
+<div>
+<button class="btn tiny" type="button" disabled="">Previous</button>
+<button class="btn tiny" type="button" disabled="">Next</button>
 </div>
+</footer>
 </section>
 <section class="card" aria-labelledby="cache-records-title">
 <div class="table-header">
@@ -103,6 +136,14 @@
 <section class="data-grid">
 <aside class="card database-list" aria-labelledby="database-title">
 <h2 id="database-title">System databases</h2>
+<button class="database-button active" type="button">
+<b>system</b>
+<small>sqlite · 0 table</small>
+</button>
+<button class="database-button" type="button">
+<b>auth</b>
+<small>sqlite · 0 table</small>
+</button>
 </aside>
 <section class="card table-panel" aria-labelledby="table-title">
 <div>

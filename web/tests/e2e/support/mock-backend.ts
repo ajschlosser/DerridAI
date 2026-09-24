@@ -329,7 +329,34 @@ function defaults(url: URL, method: string, role: Role): unknown {
   if (path === "/api/stores/derrida_primary/records")
     return { count: STORE_RECORDS.length, records: STORE_RECORDS };
   if (path === "/api/annotations") return { annotations: [] };
-  if (path === "/api/system/data") return { databases: [] };
+  if (path === "/api/system/data")
+    return {
+      databases: [
+        {
+          name: "system",
+          backend: "sqlite",
+          path: "system.db",
+          size_bytes: 0,
+          tables: [],
+        },
+        {
+          name: "auth",
+          backend: "sqlite",
+          path: "auth.db",
+          size_bytes: 0,
+          tables: [],
+        },
+      ],
+    };
+  if (path === "/api/system/data/metadata-exemplars")
+    return {
+      exists: false,
+      count: 0,
+      limit: 25,
+      offset: 0,
+      rows: [],
+      facets: { fields: [], kinds: [], languages: [], scopes: [], schemas: [] },
+    };
   if (path === "/api/system/data/vector-stores") return { stores: [] };
   if (path === "/api/response-cache/records")
     return { records: [], count: 0, total: 0, limit: 50, offset: 0, exists: true };
