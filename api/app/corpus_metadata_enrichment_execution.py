@@ -572,6 +572,11 @@ CURRENT REVIEWED RECORD TEXT:
         attribution_fields = schema.attribution_fields()
         evidence_required_fields = schema.evidence_fields()
         assessment_required_fields = set(CORE_FIELDS) | {field.name for field in schema.fields if field.assess}
+        cached_prefills = (
+            record.get("metadata_adjudication_prefills")
+            if isinstance(record.get("metadata_adjudication_prefills"), dict)
+            else {}
+        )
         model = str((request or {}).get("model") or "")
         run_id = str((request or {}).get("run_id") or (f"build-{build_id}" if build_id else ""))
         off = experiment.disabled(request)

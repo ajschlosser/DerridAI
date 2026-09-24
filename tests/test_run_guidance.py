@@ -144,7 +144,7 @@ def test_schema_nlp_hints_are_validated_and_included_in_group_prompt():
 
 
 def test_required_run_guidance_field_enters_review_queue_when_model_returns_no_value(tmp_path):
-    manager = cb.PdfCorpusBuildManager(tmp_path / "repo")
+    manager = cb.PdfCorpusBuildManager(cb.PdfCorpusRepository(tmp_path / "repo"))
     schema = ms.MetadataSchema(
         name="Required guidance",
         groups=[ms.SchemaGroup(key="discourse", label="Discourse", intro="Read carefully.")],
