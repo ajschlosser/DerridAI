@@ -4,10 +4,27 @@
 Run from the repository root (see [CONTRIBUTING.md](../CONTRIBUTING.md) for the environment variables that point the tests at a scratch data directory):
 
 ```bash
-pytest -q
+pytest -q -n auto --dist=worksteal
 ```
 
-The tests need no Docker, Ollama, GPU, or real ChromaDB. Files that import `app.corpus_builder`, `app.chroma_store`, or `app.rag` install a stub `chromadb` (or `app.rag`) module first.
+The tests need no Docker, Ollama, GPU, or real ChromaDB. Files that import `app.corpus_builder`, `app.chroma_store`, or `app.rag` install a stub `chromadb` (or `app.rag`) module first. Under pytest-xdist, each worker receives its own temporary storage root so SQLite, filesystem corpus state, and embedded-vector paths cannot collide.
+
+
+## Test taxonomy
+
+DerridAI separates tests by the kind of boundary they exercise rather than by release number:
+
+| Category | Pytest marker / frontend command | Purpose |
+| --- | --- | --- |
+| Unit | `unit` / `npm run test:unit` | Fast deterministic domain, component, store, and helper behavior. Unmarked backend tests default here. |
+| Contract | `contract` | Stable compatibility boundaries. The frontend/FastAPI route-and-method contract is enforced here. |
+| Integration | `integration` | Multiple real application subsystems exercised together. Use this only when a fake would hide the behavior being tested. |
+| Characterization | `characterization` / `npm run test:characterization` | Behavior-preservation tests for legacy/refactoring-sensitive surfaces, including the legacy DOM baseline. |
+| Workflow | `npm run test:workflow` | Browser-level user workflows against built Storybook and the production Vue app. |
+| Accessibility | `npm run test:accessibility` | Exhaustive WCAG-oriented Storybook scans. |
+| Slow | `slow` | Orthogonal marker for intentionally expensive backend cases. |
+
+Pytest uses strict marker registration. Add a category deliberately when a test crosses a boundary; do not use markers to hide flaky tests. The PR backend gate runs all non-contract backend tests in parallel, while the API contract has its own focused gate.
 
 ## How to read a test file
 
