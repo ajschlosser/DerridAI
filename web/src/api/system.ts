@@ -90,6 +90,50 @@ export interface SystemVectorStore {
   distance_metric?: string;
 }
 
+export interface SystemMetadataExemplar {
+  exemplar_id: string;
+  scope_id: string;
+  record_id: string;
+  record_revision?: number | null;
+  source_document_id?: string;
+  field_name: string;
+  field_value: unknown;
+  kind: string;
+  assertion_status?: string;
+  schema_id?: string;
+  schema_version?: string;
+  language?: string;
+  region_type?: string;
+  evidence_hash?: string;
+  evidence_block_ids?: string[];
+  context_text?: string;
+}
+export interface SystemMetadataExemplarFacets {
+  fields: string[];
+  kinds: string[];
+  languages: string[];
+  scopes: string[];
+  schemas: string[];
+}
+export interface SystemMetadataExemplarPage {
+  exists: boolean;
+  count: number;
+  limit: number;
+  offset: number;
+  rows: SystemMetadataExemplar[];
+  facets: SystemMetadataExemplarFacets;
+}
+export interface SystemMetadataExemplarFilters {
+  limit?: number;
+  offset?: number;
+  field?: string;
+  kind?: string;
+  language?: string;
+  scope_id?: string;
+  schema_id?: string;
+  record_id?: string;
+}
+
 export const systemApi = {
   researcherProviders: () => apiRequest<{profiles: ProviderProfile[]}>("/api/system/researcher-providers"),
   setResearcherProviders: (profiles: ProviderProfile[]) => apiRequest<{profiles: ProviderProfile[]}>("/api/system/researcher-providers", {method: "PUT", body: JSON.stringify({profiles})}),
@@ -108,6 +152,15 @@ export const systemApi = {
   systemData: () => apiRequest<{databases: SystemDataDatabase[]}>("/api/system/data"),
   systemVectorStores: () => apiRequest<{stores: SystemVectorStore[]}>("/api/system/data/vector-stores"),
   clearSystemMetadataMemory: () => apiRequest<{deleted: number}>("/api/system/data/vector-stores/metadata-memory", {method: "DELETE"}),
+  systemMetadataExemplars: (filters: SystemMetadataExemplarFilters = {}) => {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters)) {
+      if (value === undefined || value === null || String(value).trim() === "") continue;
+      query.set(key, String(value));
+    }
+    const suffix = query.size ? `?${query.toString()}` : "";
+    return apiRequest<SystemMetadataExemplarPage>(`/api/system/data/metadata-exemplars${suffix}`);
+  },
   systemDataRows: (database: string, table: string, limit = 50, offset = 0) => apiRequest<SystemDataTable & { database: string; rows: Array<Record<string, unknown>>; offset: number; limit: number }>(`/api/system/data/${encodeURIComponent(database)}/${encodeURIComponent(table)}?limit=${limit}&offset=${offset}`),
   insertSystemDataRow: (database: string, table: string, values: Record<string, unknown>) => apiRequest<Record<string, unknown>>(`/api/system/data/${encodeURIComponent(database)}/${encodeURIComponent(table)}`, {method: "POST", body: JSON.stringify(values)}),
   updateSystemDataRow: (database: string, table: string, key: Record<string, unknown>, values: Record<string, unknown>) => apiRequest<Record<string, unknown>>(`/api/system/data/${encodeURIComponent(database)}/${encodeURIComponent(table)}`, {method: "PATCH", body: JSON.stringify({key, values})}),
