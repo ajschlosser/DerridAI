@@ -163,7 +163,7 @@ describe("RecordsView", () => {
       { code: "en-US", name: "English", flag: "" },
       { code: "fr-CA", name: "Français", flag: "" },
     ] as never;
-    useShellStore().snapshot.files = snap.files;
+    useShellStore().snapshot.files = snap.files as never;
   });
 
   it("renders the loaded table and opens a record from the row", async () => {
