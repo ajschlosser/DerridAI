@@ -51,7 +51,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install --no-audit --no-fund
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --no-audit --no-fund
       - run: npm run lint
 
   backend:
@@ -77,7 +79,8 @@ jobs:
       - name: Backend and release regression tests
         run: pytest -q
 
-  frontend:
+  frontend-static:
+    name: frontend-static
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -88,18 +91,129 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: web/package.json
+          cache-dependency-path: web/package-lock.json
       - name: Install frontend dependencies
-        run: npm install --no-audit --no-fund
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+        run: npm ci --no-audit --no-fund
       - name: Typecheck
         run: npm run typecheck
       - name: Unit/component tests
         run: npm run test:unit
       - name: Production build
-        run: npm run build
+        run: npm run build:ci
       - name: Storybook build
         run: npm run build-storybook
-      - name: Composed UI, opacity, and WCAG 2.0 AA tests
-        run: npm run test:e2e
+
+  frontend-legacy:
+    name: frontend-legacy
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Cache Playwright Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('web/package-lock.json') }}
+      - name: Install frontend dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Build production app
+        run: npm run build:ci
+      - name: Legacy DOM regression tests
+        run: npm run test:e2e:legacy
+
+  frontend-e2e:
+    name: frontend-e2e (${{ matrix.shard }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ["1/2", "2/2"]
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Cache Playwright Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('web/package-lock.json') }}
+      - name: Install frontend dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Build production app
+        run: npm run build:ci
+      - name: Build Storybook
+        run: npm run build-storybook
+      - name: Composed UI and WCAG 2.2 AA tests
+        run: npm run test:e2e -- --shard=${{ matrix.shard }}
+
+  frontend-a11y:
+    name: frontend-a11y
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Cache Playwright Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('web/package-lock.json') }}
+      - name: Install frontend dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Build Storybook
+        run: npm run build-storybook
+      - name: Corpus Builder WCAG 2.2 AA sweep
+        run: npm run test:e2e:a11y
+
+  # Preserve the historical required-check name while allowing the expensive
+  # browser suites to run independently and surface failures much earlier.
+  frontend:
+    name: frontend
+    if: always()
+    needs:
+      - frontend-lint
+      - frontend-static
+      - frontend-legacy
+      - frontend-e2e
+      - frontend-a11y
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify frontend gates
+        env:
+          LINT_RESULT: ${{ needs.frontend-lint.result }}
+          STATIC_RESULT: ${{ needs.frontend-static.result }}
+          LEGACY_RESULT: ${{ needs.frontend-legacy.result }}
+          E2E_RESULT: ${{ needs.frontend-e2e.result }}
+          A11Y_RESULT: ${{ needs.frontend-a11y.result }}
+        run: |
+          for result in "$LINT_RESULT" "$STATIC_RESULT" "$LEGACY_RESULT" "$E2E_RESULT" "$A11Y_RESULT"; do
+            if [ "$result" != "success" ]; then
+              echo "A frontend quality gate did not succeed: $result"
+              exit 1
+            fi
+          done
