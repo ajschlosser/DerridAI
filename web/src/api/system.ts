@@ -131,6 +131,7 @@ export interface SystemResponseCachePage {
   total: number;
   limit: number;
   offset: number;
+  query?: string;
 }
 export interface SystemChromaCommandResult {
   valid: boolean;
