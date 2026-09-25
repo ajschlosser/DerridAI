@@ -26,7 +26,7 @@
     "test:characterization": "npm run test:e2e:legacy",
     "test:accessibility": "npm run test:e2e:a11y",
     "format:repo": "prettier --write .. --config .prettierrc --ignore-path ../.prettierignore",
-    "format:repo:check": "prettier --check .. --config .prettierrc --ignore-path ../.prettierignore"
+    "format:repo:check": "prettier --write .. --config .prettierrc --ignore-path ../.prettierignore && git diff -- src/features/corpus-builder tests/frontend && exit 1"
   },
   "dependencies": {
     "diff": "^7.0.0",
