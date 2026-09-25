@@ -47,6 +47,7 @@ from .metadata_adjudication_cache import remember as remember_adjudication
 from .metadata_schema import MetadataSchema
 from .provenance_memory import persist_record_decision
 from .rag import _citation_strings
+from .system_store import system_store
 
 
 def _serialize_record_mutation(method):
