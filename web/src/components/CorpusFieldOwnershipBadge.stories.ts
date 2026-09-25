@@ -31,7 +31,23 @@ export const ModelInvalid: Story = {
 };
 
 export const HumanConfirmed: Story = {
-  args: { status: "human_confirmed" },
+  args: { status: "human_confirmed", derivationMethod: "human" },
+};
+
+export const ModelThenHumanConfirmed: Story = {
+  args: {
+    status: "human_confirmed",
+    method: "llm",
+    derivationMethod: "model",
+  },
+};
+
+export const DeterministicThenHumanConfirmed: Story = {
+  args: {
+    status: "human_confirmed",
+    method: "manifest_page_range",
+    derivationMethod: "deterministic",
+  },
 };
 
 export const ConfirmedAbsent: Story = {
