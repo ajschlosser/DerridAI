@@ -116,6 +116,12 @@ const contractLocked = computed(() => Boolean(current.value?.app_version && curr
 const maxPage = computed(() => Math.max(1, Math.ceil(recordCount.value / (Number(workspace.storePageSize) || 50))));
 const providerLabel = computed(() => {
   const provider = current.value?.embedding_provider || "chroma";
+  if (provider.startsWith("profile:")) {
+    const id = provider.slice("profile:".length);
+    const profile = providerProfiles.value.find((item) => item.id === id);
+    const name = String(profile?.name || id);
+    return current.value?.embedding_model ? `${name} · ${current.value.embedding_model}` : name;
+  }
   if (provider === "ollama") return `Ollama · ${current.value?.embedding_model || ""}`.trim();
   if (provider === "precomputed") return i18n.t("vector.provider_precomputed");
   return i18n.t("vector.provider_chroma");
@@ -286,9 +292,9 @@ async function saveLanguages() {
 
 async function saveEmbedding() {
   if (!activeName.value || contractLocked.value) return;
-  if (embeddingProvider.value === "ollama" && !embeddingModel.value.trim()) return runtime.notifyToast(i18n.t("vector.embedding_model_required"), {tone: "warn"});
+  if (embeddingProvider.value.startsWith("profile:") && !embeddingModel.value.trim()) return runtime.notifyToast(i18n.t("vector.embedding_model_required"), {tone: "warn"});
   try {
-    await chromaApi.setEmbedding(activeName.value, {embedding_provider: embeddingProvider.value, embedding_model: embeddingProvider.value === "ollama" ? embeddingModel.value.trim() : null});
+    await chromaApi.setEmbedding(activeName.value, {embedding_provider: embeddingProvider.value, embedding_model: embeddingProvider.value.startsWith("profile:") ? embeddingModel.value.trim() : null});
     runtime.notifyToast(i18n.t("vector.embedding_saved"), {tone: "success"});
     await load();
   } catch (exc) { runtime.notifyToast(exc instanceof Error ? exc.message : String(exc), {tone: "danger"}); }
@@ -549,13 +555,20 @@ onBeforeUnmount(() => {
                   <div class="vector-settings-body">
                     <UiField :label="i18n.t('vector.embedding_provider')">
                       <select class="control" v-model="embeddingProvider" :disabled="contractLocked">
-                        <option value="ollama">Ollama</option>
                         <option value="chroma">{{ i18n.t("vector.provider_chroma") }}</option>
                         <option value="precomputed">{{ i18n.t("vector.provider_precomputed") }}</option>
+                        <option
+                          v-for="profile in providerProfiles"
+                          :key="profile.id"
+                          :value="`profile:${profile.id}`"
+                        >
+                          {{ profile.name || profile.id }}
+                        </option>
+                        <option v-if="embeddingProvider === 'ollama'" value="ollama">Ollama (legacy)</option>
                       </select>
                     </UiField>
                     <UiField :label="i18n.t('vector.embedding_model')">
-                      <input class="control" v-model="embeddingModel" :disabled="contractLocked || embeddingProvider !== 'ollama'" placeholder="bge-m3:latest">
+                      <input class="control" v-model="embeddingModel" :disabled="contractLocked || !embeddingProvider.startsWith('profile:')" placeholder="bge-m3:latest">
                     </UiField>
                     <UiButton :label="i18n.t('ui.save')" :disabled="contractLocked" @click="saveEmbedding" />
                   </div>
