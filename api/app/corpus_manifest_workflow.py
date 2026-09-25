@@ -35,6 +35,11 @@ from .corpus_models import (
     RecordMetadataModel,
 )
 from .corpus_record_quality import iso_now
+from .field_assertions import (
+    create_unresolved_assertion,
+    current_assertion_by_name,
+    migrate_record_assertions,
+)
 from .corpus_segmentation import (
     _apply_manifest_metadata,
     _normalize_text,
@@ -507,9 +512,21 @@ CURRENT REVIEWED RECORD TEXT:
                 field_status = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
                 if start_changed:
                     # The layout plan labelled these records from the old start page; the new one relabels them.
+                    migrate_record_assertions(record, self._schema_for(build_id))
                     for field in ("region_type", "primary_text"):
                         info = field_status.get(field)
                         if isinstance(info, dict) and info.get("method") == "human_document_layout":
+                            prior = current_assertion_by_name(record, field)
+                            create_unresolved_assertion(
+                                record,
+                                field,
+                                schema=self._schema_for(build_id),
+                                derivation_method="deterministic",
+                                evaluation_status="not_evaluated",
+                                method="manifest_change_invalidation",
+                                reason="The reviewed main-text page range changed; the previous layout classification is no longer current.",
+                                supersedes=prior,
+                            )
                             field_status.pop(field, None)
                 for field in MANIFEST_INHERITED_FIELDS:
                     info = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
