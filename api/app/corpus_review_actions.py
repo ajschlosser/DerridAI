@@ -165,12 +165,12 @@ class ReviewActionsMixin:
         self._push_review_history(build_id, records, action=action, selected_record_id=selected_record_id)
 
 
-    def _persist_reviewed_metadata_memory(
+    def _persist_review_audit_bindings(
         self,
         build_id: str,
         promoted: dict[str, list[str]],
     ) -> None:
-        """Persist record-acceptance promotions through the same memory path as field edits.
+        """Persist durable audit bindings for review-confirmed metadata.
 
         Review actions may be reached through the focused review command, legacy
         disposition endpoints, or bulk review. A model-inferred field becoming
@@ -268,7 +268,7 @@ class ReviewActionsMixin:
         target["record_revision"] = current_revision + 1
         self._rewrite_and_validate(build_id, records)
         if promoted_fields:
-            self._persist_reviewed_metadata_memory(
+            self._persist_review_audit_bindings(
                 build_id,
                 {str(target.get("record_id") or ""): promoted_fields},
             )
@@ -333,7 +333,7 @@ class ReviewActionsMixin:
         target["record_revision"] = current_revision + 1
         build = self._rewrite_and_validate(build_id, records)
         if promoted_fields:
-            self._persist_reviewed_metadata_memory(
+            self._persist_review_audit_bindings(
                 build_id,
                 {str(target.get("record_id") or ""): promoted_fields},
             )
@@ -422,7 +422,7 @@ class ReviewActionsMixin:
             record["record_revision"] = current_revision + 1
             changed += 1
         self._rewrite_and_validate(build_id, records)
-        self._persist_reviewed_metadata_memory(build_id, promoted_by_record)
+        self._persist_review_audit_bindings(build_id, promoted_by_record)
         persisted = self.repo.load_records(build_id)
         return {"changed": changed, "disposition": disposition, "blocked_metadata": blocked_metadata, "blocked_record_ids": blocked_record_ids, "queue_counts": _queue_counts(persisted)}
 
@@ -871,7 +871,7 @@ class ReviewActionsMixin:
             and isinstance(status, dict)
             and str(status.get("status") or "") in {"human_confirmed", "human_override"}
         ):
-            self._persist_reviewed_metadata_memory(
+            self._persist_review_audit_bindings(
                 build_id,
                 {record_id: [field]},
             )
