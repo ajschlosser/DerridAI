@@ -1603,6 +1603,7 @@ watch(
 );
 watch(selectedAssetId, () => {
   if (selectedAssetId.value) void refreshBuilds();
+  else configurationSection.value = "source";
 });
 watch(selectedBuildId, () => {
   sourceProblemDialogBuildId.value = "";
