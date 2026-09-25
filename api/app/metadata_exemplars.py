@@ -54,7 +54,10 @@ def _reviewed_evidence(assertion: FieldAssertion, evidence: dict[str, Any]) -> b
 
     if str(evidence.get("reviewed_by") or "") == "human":
         return True
-    return assertion.authority_status in {"human_confirmed", "human_override"}
+    return (
+        assertion.derivation_method == "model"
+        and assertion.authority_status in {"human_confirmed", "human_override"}
+    )
 
 
 def _source_span(span: dict[str, Any]) -> dict[str, Any]:
