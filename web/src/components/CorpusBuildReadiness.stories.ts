@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import CorpusBuildReadiness from "./CorpusBuildReadiness.vue";
 
 const meta = {
+  id: "corpus-build-readiness",
   title: "Corpus Builder/Setup/Build Readiness",
   component: CorpusBuildReadiness,
   args: {
