@@ -323,19 +323,22 @@ def create_model_assertion(
 
 
 def confirm_assertion(record: dict[str, Any], assertion: FieldAssertion, *, actor: str | None = None, reason: str = "") -> FieldAssertion:
-    return store_assertion(
-        record,
-        assertion.model_copy(update={
-            "assertion_id": f"assertion-{uuid.uuid4().hex}",
-            "authority_status": "human_confirmed",
-            "actor": actor,
-            "reason": reason or assertion.reason,
-            "legacy_status": None,
-            "record_revision": int(record.get("record_revision") or assertion.record_revision or 1),
-            "supersedes_assertion_id": assertion.assertion_id,
-            "created_at": _now(),
-        }),
-    )
+    """Confirm a proposed value without rewriting how that value was derived."""
+    has_value = assertion.value not in (None, "", [])
+    updates: dict[str, Any] = {
+        "assertion_id": f"assertion-{uuid.uuid4().hex}",
+        "authority_status": "human_confirmed",
+        "actor": actor,
+        "reason": reason or assertion.reason,
+        "legacy_status": None,
+        "record_revision": int(record.get("record_revision") or assertion.record_revision or 1),
+        "supersedes_assertion_id": assertion.assertion_id,
+        "created_at": _now(),
+    }
+    if has_value and assertion.value_status == "unresolved":
+        updates["value_status"] = "present"
+        updates["evaluation_status"] = "value_supported"
+    return store_assertion(record, assertion.model_copy(update=updates))
 
 
 def create_human_assertion(
