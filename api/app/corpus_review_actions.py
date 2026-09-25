@@ -103,6 +103,7 @@ class ReviewActionsMixin:
         def _schedule_recheck(self, build_id: str, record: dict[str, Any], field: str, value: Any) -> None: ...
         def _score_recheck(self, build_id: str, record: dict[str, Any], field: str, value: Any, prior_status: dict[str, Any]) -> bool: ...
         def _reopen_due_rechecks(self, build_id: str, records: list[dict[str, Any]], just_decided: dict[str, Any], profile: dict[str, Any]) -> None: ...
+        def _schedule_metadata_exemplar_projection(self, build_id: str) -> None: ...
         def _record_boundary_editorial_example(
             self,
             build_id: str,
@@ -244,6 +245,7 @@ class ReviewActionsMixin:
         self._assert_record_revision(target, expected_revision)
         current_revision = int(target.get("record_revision") or 1)
         self._push_review_history(build_id, records, action=f"review_{disposition}", selected_record_id=record_id)
+        promoted_fields: list[str] = []
         if disposition == "accepted":
             status_map = target.get("metadata_field_status") if isinstance(target.get("metadata_field_status"), dict) else {}
             for field in self._schema_for(build_id).review_fields():
@@ -251,6 +253,7 @@ class ReviewActionsMixin:
                 if info and info.get("status") == "model_inferred":
                     info["status"] = "human_confirmed"
                     info["method"] = "human_review_of_llm_proposal"
+                    promoted_fields.append(field)
             target["metadata_reviewed_at"] = iso_now()
         target["review_disposition"] = disposition
         target["accepted"] = disposition == "accepted"
@@ -260,6 +263,22 @@ class ReviewActionsMixin:
         _mark_human_touch(target, ["__review__"])
         target["record_revision"] = current_revision + 1
         build = self._rewrite_and_validate(build_id, records)
+        if promoted_fields:
+            persisted = next(
+                (row for row in self.repo.load_records(build_id) if row.get("record_id") == record_id),
+                target,
+            )
+            schema = self._schema_for(build_id)
+            for field in promoted_fields:
+                persist_record_decision(
+                    record=persisted,
+                    schema=schema,
+                    field_name=field,
+                    value=persisted.get(field),
+                    scope_id=build_id,
+                )
+            target = persisted
+            self._schedule_metadata_exemplar_projection(build_id)
         # Prefer the next *pending* record in the active review queue.  `all` is
         # intentionally special: `_matches_review_queue(..., "all")` includes
         # already-reviewed records, which previously let Accept & next advance to
@@ -524,7 +543,15 @@ class ReviewActionsMixin:
         schema = self._schema_for(build_id)
         for key, value in changes.items():
             if key not in skipped:
-                persist_record_decision(record=persisted, schema=schema, field_name=key, value=value)
+                persist_record_decision(
+                    record=persisted,
+                    schema=schema,
+                    field_name=key,
+                    value=value,
+                    scope_id=build_id,
+                )
+        if any(key not in skipped for key in changes):
+            self._schedule_metadata_exemplar_projection(build_id)
         _decorate_review_state(persisted)
         _present_for_reviewer(persisted)
         return persisted
@@ -601,7 +628,14 @@ class ReviewActionsMixin:
             record = by_id.get(record_id)
             if record:
                 for key, value in changes.items():
-                    persist_record_decision(record=record, schema=schema, field_name=key, value=value)
+                    persist_record_decision(
+                        record=record,
+                        schema=schema,
+                        field_name=key,
+                        value=value,
+                        scope_id=build_id,
+                    )
+        self._schedule_metadata_exemplar_projection(build_id)
         return {"changed": len(changed_ids), "record_ids": changed_ids, "queue_counts": _queue_counts(persisted)}
 
 
@@ -654,7 +688,9 @@ class ReviewActionsMixin:
                 field_name=field,
                 value=None,
                 decision_kind="absence",
+                scope_id=build_id,
             )
+            self._schedule_metadata_exemplar_projection(build_id)
         else:
             record = self.patch_metadata(build_id, record_id, {field: value}, expected_revision)
         records = self.repo.load_records(build_id)

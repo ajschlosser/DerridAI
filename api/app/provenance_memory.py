@@ -1,10 +1,11 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
-"""Canonical, permission-aware memory and claim provenance.
+"""Durable review-event and claim provenance.
 
-Chroma and other search indexes may project these objects, but this module
-keeps the durable decision and claim/support relationships in SQLite.  A
-binding is intentionally resolved again against the corpus before it is used
-as current evidence.
+The reviewed corpus RecordRevision remains authoritative for current metadata.
+This module keeps a durable audit binding for each human decision plus
+claim/support relationships in SQLite. Chroma and other search indexes are
+derived projections and are always resolved back to current corpus state before
+they can be used as evidence.
 """
 
 from __future__ import annotations
@@ -44,6 +45,7 @@ class MetadataMemoryBinding(BaseModel):
     model_config = ConfigDict(extra="forbid")
     binding_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     record_id: str
+    scope_id: str | None = None
     record_revision: int | None = Field(default=None, ge=1)
     source_document_id: str | None = None
     field_id: str
@@ -105,6 +107,7 @@ def persist_record_decision(
     decision_kind: DecisionKind = "value",
     owner: str | None = None,
     rejected_value: Any = None,
+    scope_id: str | None = None,
 ) -> MetadataMemoryBinding:
     """Create a binding from the canonical record's reviewed evidence."""
     spans: list[EvidenceSpan] = []
@@ -127,6 +130,7 @@ def persist_record_decision(
         field_id = f"legacy.{uuid.uuid5(uuid.NAMESPACE_URL, 'derridai:field:' + field_name)}"
     binding = MetadataMemoryBinding(
         record_id=str(record.get("record_id") or ""),
+        scope_id=str(scope_id or "") or None,
         record_revision=int(record.get("record_revision") or 1),
         source_document_id=source_document_id or None,
         field_id=field_id,
@@ -148,7 +152,10 @@ def persist_metadata_decision(binding: MetadataMemoryBinding) -> MetadataMemoryB
         raise ValueError("An explicit absence cannot carry a value.")
     system_store.put_memory_binding(binding.model_dump(mode="json"))
     system_store.mark_semantic_memory_dirty(
-        "metadata_exemplars", record_id=binding.record_id, reason="reviewed_metadata_decision"
+        "metadata_exemplars",
+        scope_id=binding.scope_id,
+        record_id=binding.record_id,
+        reason="reviewed_metadata_decision",
     )
     return binding
 
