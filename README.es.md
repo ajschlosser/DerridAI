@@ -23,6 +23,7 @@ Consultá la [Guía del usuario](docs/USER_GUIDE.md) para ver la referencia comp
 
 ## Arquitectura
 
+<!-- prettier-ignore -->
 | Servicio    | Stack                                                               | Notas                                                                                                                                          |
 | ----------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `web`       | Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js, servido por nginx | Redirige `/api/` hacia la API; Storybook está disponible como servicio de desarrollo opcional                                                 |
