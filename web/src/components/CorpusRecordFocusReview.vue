@@ -71,6 +71,7 @@ const emit = defineEmits<{
   resolveSourceIssuesChange: [value: boolean];
   openTextCleanup: [];
   resolveMetadata: [field: string, value: unknown];
+  resolveMetadataMany: [changes: Record<string, unknown>];
   confirmNoMetadataValue: [field: string];
   metadataDirty: [dirty: boolean];
   previewJsonl: [];
@@ -512,6 +513,7 @@ watch(
             :busy="busy"
             :confidence-calibration="confidenceCalibration || {}"
             @resolve="(field, value) => emit('resolveMetadata', field, value)"
+            @resolve-many="(changes) => emit('resolveMetadataMany', changes)"
             @no-value="(field) => emit('confirmNoMetadataValue', field)"
             @dirty="(value) => emit('metadataDirty', value)"
             @source="openFieldEvidence($event)"
