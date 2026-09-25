@@ -1003,212 +1003,424 @@ A generic provenance graph might state that Entity A was derived from Entity B a
 
 > **Interoperability design principle.** Use established standards for the general problems they already solve; preserve DERRIDAI for the scholarly and AI-research semantics that remain domain-specific. Interoperability SHOULD preserve traceability, packaging SHOULD preserve reproducibility, local export SHOULD remain possible, and any loss of meaning MUST be explicit rather than silent.
 
-## Extensibility, Conformance, and Reference Schemas
+## Appendix A - Normative Entity Model and Object Glossary
+
+Appendix A is normative. DERRIDAI intentionally keeps the first-class object model small. Generic implementation artifacts MAY exist, but they do not become DERRIDAI semantic objects unless they preserve a distinction DERRIDAI itself needs to standardize.
+
+### Normative entity and cardinality model
+
+The central cardinality rules are:
+
+1. A SourceSpan belongs to exactly one SourceDocument.
+2. A Record belongs to exactly one SourceDocument and derives from one or more SourceSpans, all from that same SourceDocument.
+3. A Record may have zero or more explicitly materialized RecordRevisions; authoritative text and other evidence-affecting changes MUST advance the applicable revision identifier.
+4. An EvidenceRef semantic locator has exactly one authoritative locator mode: record-backed or direct-source-span-backed. Both modes resolve to exactly one SourceDocument; the locator MAY be named or embedded in another retained object.
+5. An EvidencePacket contains ordered composite entries that carry or refer to EvidenceRef locators; those packet entries are not independent DERRIDAI objects.
+6. A SupportBinding binds exactly one GeneratedClaim to one or more named or embedded EvidenceRef locators.
+7. Run-local diagnostics, transport references, storage encodings, validation reports, and external-standard objects MUST NOT replace the durable DERRIDAI identities to which they refer.
+
+A compact cardinality view is:
+
+\`\`\`text
+SourceDocument 1 -------- 0..* SourceSpan
+SourceDocument 1 -------- 0..* Record
+Record         1 -------- 1..* SourceSpan
+Record         1 -------- 0..* RecordRevision
+Record/Revision --------- 0..* FieldAssertion
+
+CorpusPublication -------- 1..* Records or immutable Record locators
+RetrievalRun -------------- may acquire evidence
+EvidencePacket ------------ 0..* ordered composite EvidenceRef entries
+GenerationRun ------------- uses 0..1 EvidencePacket
+GenerationRun 1 ---------- 0..* GeneratedClaim
+GeneratedClaim 1 --------- 0..* SupportBinding
+SupportBinding 1 --------- 1..* EvidenceRef locators
+ResearchRun --------------- references publication/evidence/generation/validation state
+\`\`\`
+
+### Normative Object Glossary
+
+| Object | Identity and persistence | Cardinality and owning profile |
+|---|---|---|
+| **SourceDocument** | Stable documentary representation; durable | 1 SourceDocument -> 0..* SourceSpans and Records. Profile: Core |
+| **SourceSpan** | Reproducible region within one SourceDocument; durable locator | Exactly 1 SourceDocument; may contribute to 0..* Records/EvidenceRefs. Profile: Core |
+| **Record** | Logical research unit; durable | Exactly 1 SourceDocument; 1..* SourceSpans; 0..* RecordRevisions. Profile: Core |
+| **RecordRevision** | Specific state of one Record; durable/versioned | Exactly 1 Record; 0..* EvidenceRefs may reference it. Profile: Core |
+| **FieldAssertion** | Assertion about one stable field identity/value in Record context; durable when retained | Belongs to a Record or RecordRevision context; native encoding may vary if required epistemic dimensions remain recoverable. Profile: Core |
+| **CorpusPublication** | Immutable corpus snapshot identity; durable/immutable | Publishes 1..* Records or immutable Record locators. Profile: Publication |
+| **RetrievalRun** | One computational retrieval operation; run/audit state | May record 0..* result diagnostics and acquisition links. Profile: Retrieval |
+| **EvidenceRef** | Exact evidentiary locator semantics; durable for audit | Exactly 1 locator_kind; resolves to exactly 1 SourceDocument; may be named or embedded. Profile: Evidence |
+| **EvidencePacket** | Exact or deterministically reproducible ordered model context; run-specific/audit-retainable | 0..* composite entries carrying/referring to EvidenceRef locators. Profile: Evidence |
+| **GenerationRun** | One AI generation operation; run-specific/audit-retainable | Uses 0..1 EvidencePacket; produces 0..* GeneratedClaims. Profile: Claim-Binding |
+| **GeneratedClaim** | Identifiable claim within generated output; run-specific/audit-retainable | Exactly 1 GenerationRun; 0..* SupportBindings. Profile: Claim-Binding |
+| **SupportBinding** | Claim-scoped evidentiary relation; run-specific/audit-retainable | Exactly 1 GeneratedClaim; 1..* named or embedded EvidenceRef locators. Profile: Claim-Binding |
+| **ResearchRun** | Coherent retained research-operation audit view; run/audit state | May be one object or a resolvable composition of durable run records; references publication, evidence, generation, validation, and advisory-memory state. Profile: Reproducible Research |
+
+DERRIDAI intentionally does **not** define first-class semantic objects for extraction units, generic relations, metadata schemas, generic transformations, storage projections, collection manifests, retrieval hits or candidates, packet items, transport RecordRefs, validation results, or grade results. Implementations MAY use such artifacts. Their semantics are governed by the relevant DERRIDAI identity, provenance, evidence, or interoperability rules rather than by additional object classes.
+
+## Appendix B - Extensibility and Conformance
 
 ### Extensions and Versioning
 
-#### Extension mechanism
+Implementations MAY define domain-specific fields, validators, acquisition methods, retrieval methods, evidence relations, or profiles. Extensions MUST NOT redefine DERRIDAI Core semantics without declaring an incompatible contract.
 
-DERRIDAI is extensible. Implementations MAY define domain-specific fields, relations, validators, acquisition methods, retrieval methods, evidence relations, or profiles. Extensions MUST NOT redefine DERRIDAI Core semantics without declaring an incompatible specification version.
+Namespaced extension identifiers SHOULD be used when interoperability is expected. Unknown optional extensions SHOULD be preserved where practical and MUST NOT be reinterpreted as known fields with different semantics.
 
-Implementations SHOULD use namespaced extension identifiers when interoperability is expected. A reader encountering an unknown optional extension SHOULD preserve it when practical and MUST NOT treat it as known. An unknown required extension MUST cause the reader to report that it cannot fully interpret the object.
-
-#### Independent version domains
-
-Application version, DERRIDAI specification version, interchange schema version, metadata schema version, prompt contract version, processing profile version, collection manifest version, and model/provider revision MUST remain conceptually distinct.
-
-Changing an application version does not necessarily change the specification version. Changing a prompt does not necessarily change the public Record schema.
-
-#### Specification versioning
-
-DERRIDAI specifications use `MAJOR.MINOR`. A major change indicates incompatible semantics. A minor change may add backward-compatible fields, entities, profiles, or clarifications. Editorial corrections MAY be tracked separately when normative semantics do not change.
-
-Persisted data MUST NOT be silently reinterpreted under a newer incompatible contract. Objects whose semantics depend on a specification, schema, prompt contract, or processing profile SHOULD retain the applicable version identifiers.
+Application version, DERRIDAI specification version, interchange schema version, metadata-contract version, prompt-contract version, processing-profile version, publication version, and model/provider revision MUST remain conceptually distinct. Persisted data MUST NOT be silently reinterpreted under an incompatible newer contract.
 
 ### Conformance Profiles
 
-A conformance profile is a named bundle of requirements. An implementation can therefore state precisely which parts of DERRIDAI it supports rather than making an all-or-nothing claim about the entire specification. Core conformance establishes the common information model; the other profiles add capabilities such as publication, retrieval, evidence binding, reproducibility, or fully local operation.
+A conformance profile is a named bundle of requirements.
 
-#### DERRIDAI Core 1.0
+- **DERRIDAI Core 1.0** establishes documentary identity, Record identity, revision, assertion provenance, validation, visible uncertainty, model independence, and version integrity.
+- **DERRIDAI Publication 1.0** adds immutable validated corpus publication.
+- **DERRIDAI Retrieval 1.0** adds explicit computational retrieval-run semantics while keeping retrieval diagnostics outside authoritative Record state.
+- **DERRIDAI Evidence 1.0** adds EvidenceRef, EvidencePacket, evidence-to-source provenance, declared truncation, and citation integrity.
+- **DERRIDAI Claim-Binding 1.0** depends on Core + Evidence and adds GeneratedClaim, SupportBinding, and the claim-to-source chain.
+- **DERRIDAI Reproducible Research 1.0** depends on Core + Evidence and adds retained ResearchRun state sufficient for substantial process reconstruction.
+- **DERRIDAI Local Sovereign 1.0** adds the ability to perform the declared essential operations within researcher-controlled infrastructure without mandatory remote dependencies.
+- **DERRIDAI PROV Mapping 1.0** and **DERRIDAI RO-Crate 1.0** are interoperability adapter profiles.
 
-A system claiming Core conformance MUST represent SourceDocuments and stable logical Records; preserve source provenance; distinguish Record identity from storage identity; represent revisions when authoritative text changes; preserve source-text fidelity; represent unresolved state; distinguish scholarly data from operational state; and validate required Record structure.
+### Normative Conformance Requirement Catalog
 
-#### DERRIDAI Publication 1.0
+The following identifiers are the tracked conformance requirements for DERRIDAI 1.0. The catalog is limited to requirements that protect DERRIDAI's scholarly semantics, identity, evidence, or declared capability boundaries.
 
-Publication conformance additionally requires immutable corpus snapshots; identification of applicable schema or specification version; validation before publication; exclusion of undeclared transient operational state; and enough source identity to trace published Records to documents.
+#### Core requirements
 
-#### DERRIDAI Retrieval 1.0
+| Requirement | Normative statement | Test class |
+|---|---|---|
+| **CORE-ID-001 MUST** | SourceDocument has a stable \`source_document_id\` not based solely on transient storage or application identifiers. | schema+semantic |
+| **CORE-ID-002 MUST** | Each SourceSpan refers to exactly one SourceDocument. | schema+semantic |
+| **CORE-ID-003 MUST** | Each Record contains \`record_id\`, \`source_document_id\`, \`text\`, and one or more SourceSpans. | schema |
+| **CORE-ID-004 MUST** | Every SourceSpan used by a Record identifies the same SourceDocument as that Record. | semantic |
+| **CORE-ID-005 MUST** | Logical Record identity remains distinguishable from storage identity and derived storage cannot silently become authoritative. | semantic |
+| **CORE-ID-006 MUST** | The RecordRevision identifier changes whenever authoritative Record text changes and whenever another mutation can invalidate a pinned evidence locator or SupportBinding; it MAY also advance for broader authoritative concurrency control. | behavioral+audit |
+| **CORE-ID-007 MUST** | Modification of extracted text preserves original extraction, reconstructible immutable source, or an auditable change trail. | behavioral+audit |
+| **CORE-ID-008 MUST NOT** | Cleaning does not silently paraphrase, summarize, translate, alter proposition-bearing negation, remove meaningful qualification, or erase material distinctions. | behavioral+audit |
+| **CORE-ID-009 MUST NOT** | Segmentation does not silently lose, invent, duplicate, or reorder source material. | semantic+behavioral |
+| **CORE-ID-010 MUST** | Unresolved state remains representable and is not conflated with confirmed absence. | schema+semantic |
+| **CORE-ID-011 MUST** | A declared authority policy governs materialized current values, and human overrides are explicit and auditable. | behavioral+audit |
+| **CORE-ID-012 MUST NOT** | Replacing a model, embedding engine, retrieval engine, or provider does not by itself alter authoritative Record identity, source relationships, or human-confirmed assertions. | behavioral+audit |
+| **CORE-ID-013 MUST** | Authoritative boundaries validate required shape/types and model output is separately validated before semantic entry. | schema+behavioral |
+| **CORE-ID-014 MUST NOT** | Failures affecting provenance, attribution, evidence, publication, or corpus integrity are not silently converted into confident success. | behavioral+audit |
+| **CORE-ID-015 MUST NOT** | Persisted data is not silently reinterpreted under an incompatible newer specification or schema contract. | behavioral+audit |
+| **CORE-ID-016 MUST** | A materialized FieldAssertion preserves independently recoverable derivation, evaluation, authority, and value-state semantics; native field names or compact encodings MAY differ if the mapping is lossless. | schema+semantic |
+| **CORE-ID-017 MUST** | Confidence is omitted when not evaluated; after evaluation it is present as a documented-scale number or explicit null, and is never fabricated as zero or one. | semantic |
+| **CORE-ID-018 SHOULD** | Persisted schema-defined assertions use stable field identity across non-semantic renames, or declare an explicit compatibility mapping. | semantic+audit |
 
-Retrieval conformance additionally requires retrieval results to be represented as envelopes around Records or RecordRefs; retrieval scores to remain outside authoritative Record semantics; retrieval method and score semantics to be identified; logical Record identity to survive storage and retrieval; and reranking to remain separate from Record content.
+#### Publication requirements
 
-#### DERRIDAI Evidence 1.0
+| Requirement | Normative statement | Test class |
+|---|---|---|
+| **PUB-ID-001 MUST NOT** | A final CorpusPublication is not changed in place; corrections create a new publication or revision. | semantic+audit |
+| **PUB-ID-002 MUST** | Published Records pass structural/type/vocabulary validation before publication. | schema+semantic |
+| **PUB-ID-003 MUST** | Publication fails rather than silently removing required provenance fields. | behavioral |
+| **PUB-ID-004 MUST NOT** | Transient operational fields are not published as scholarly Record content unless explicitly defined by the publication contract. | semantic |
 
-Evidence conformance additionally requires EvidenceRefs; evidence-to-Record and evidence-to-source provenance; distinction between evidence IDs and Record IDs; declared truncation; and citation derivation or validation against authoritative metadata.
+#### Retrieval requirements
 
-#### DERRIDAI Claim-Binding 1.0
+| Requirement | Normative statement | Test class |
+|---|---|---|
+| **RET-ID-001 MUST** | The original query is preserved and derived queries are identified as derived when decomposition or translation occurs. | semantic |
+| **RET-ID-002 MUST NOT** | Distance or similarity is not described as confidence or probability unless the retrieval system defines it that way. | semantic |
+| **RET-ID-003 MUST NOT** | Retrieval metadata and scores do not mutate authoritative Record semantics. | semantic |
 
-Claim-Binding conformance additionally requires explicit or reproducibly derived GeneratedClaims; explicit SupportBindings; bindings from supported claims to EvidenceRefs; preservation of the claim-to-source chain; rejection of unknown evidence bindings; and avoidance of treating mere context presence as evidentiary support.
+#### Evidence requirements
 
-#### DERRIDAI Reproducible Research 1.0
+| Requirement | Normative statement | Test class |
+|---|---|---|
+| **EVID-ID-001 MUST** | Every EvidenceRef semantic locator, whether named or embedded, declares exactly one authoritative locator kind: \`record\` or \`source_span\`. | schema+semantic |
+| **EVID-ID-002 MUST** | A record-backed EvidenceRef identifies the applicable RecordRevision whenever its locator depends on mutable Record text. | semantic |
+| **EVID-ID-003 MUST** | A direct-source EvidenceRef contains one SourceDocument identity and one or more SourceSpans, all from that SourceDocument. | schema+semantic |
+| **EVID-ID-004 MUST NOT** | A run-local EvidenceRef ID does not replace its authoritative documentary identity. | semantic |
+| **EVID-ID-005 MUST** | The exact supplied evidence text is retained or deterministically reproducible; truncation is declared and does not change authoritative EvidenceRef identity. | schema+semantic |
+| **EVID-ID-006 MUST** | Citation facts use authoritative structured metadata where deterministically available; missing facts are not invented; formatting changes do not alter source identity. | semantic+behavioral |
 
-Reproducible Research conformance additionally requires sufficient run information to identify source corpus snapshot, evidence-acquisition configuration, evidence used, generation model, generation configuration, prompt contract, output, and validation results. Candidate sets SHOULD be retained when practical.
+#### Claim-Binding requirements
 
-#### DERRIDAI PROV Mapping 1.0
+| Requirement | Normative statement | Test class |
+|---|---|---|
+| **CLM-ID-001 MUST** | Claim-Binding implementations materialize or reproducibly derive GeneratedClaims. | semantic+audit |
+| **CLM-ID-002 MUST** | Claims represented as supported have explicit SupportBindings to one or more named or embedded EvidenceRef semantic locators. | schema+semantic |
+| **CLM-ID-003 MUST NOT** | Evidence is not described as supporting a claim merely because it appeared in model context. | behavioral+audit |
+| **CLM-ID-004 MUST NOT** | Unknown evidence markers do not resolve silently to unrelated sources, and machine claim/evidence relations are not lost merely because markers are rendered as human-readable citations. | semantic |
+| **CLM-ID-005 MUST** | A supported claim resolves through SupportBinding and EvidenceRef to the authoritative Record/RecordRevision or SourceSpan and SourceDocument. | semantic |
+| **CLM-ID-006 MUST NOT** | A failed exact-quotation check is not silently treated as successful support. | semantic+behavioral |
 
-PROV Mapping conformance additionally requires preservation of the applicable DERRIDAI identifier and lineage semantics in a PROV representation; distinction between human and computational agents where known; preservation of RecordRevision and SourceSpan where material; preservation of DERRIDAI-specific epistemic status rather than flattening it into generic derivation; and explicit declaration of lossy mappings.
+#### Reproducible Research requirements
 
-#### DERRIDAI RO-Crate 1.0
+| Requirement | Normative statement | Test class |
+|---|---|---|
+| **REP-ID-001 MUST** | Retained ResearchRun state identifies corpus snapshot, evidence-acquisition configuration, exact supplied evidence or deterministic reconstruction, generation model/configuration, prompt contract, output, and validation results; advisory memory is distinguishable from evidence. | schema+semantic |
+| **REP-ID-002 MUST NOT** | Conformance does not imply byte-identical output reproduction from stochastic or externally mutable models. | claim-review |
 
-RO-Crate conformance additionally requires a declared RO-Crate version and DERRIDAI profile identity; stable references to included or externally referenced DERRIDAI objects; distinction between authoritative and derived artifacts; preservation of ResearchRun and EvidencePacket information sufficient for the claimed reproducibility level; and validation against both RO-Crate structural requirements and DERRIDAI profile semantics.
+#### PROV Mapping requirements
 
-#### DERRIDAI Local Sovereign 1.0
+| Requirement | Normative statement | Test class |
+|---|---|---|
+| **PROV-ID-001 MUST** | A PROV export preserves applicable DERRIDAI identity/lineage semantics, human/computational distinction where known, material RecordRevision/SourceSpan, FieldAssertion state dimensions, claim/evidence binding where present, and declared loss. | external+semantic |
 
-Local Sovereign conformance is defined in the Local Sovereign Profile section and may be claimed in combination with the other profiles. Local Sovereign implementations supporting interoperability SHOULD be able to create and validate PROV and RO-Crate exports without mandatory external network services.
+#### RO-Crate requirements
+
+| Requirement | Normative statement | Test class |
+|---|---|---|
+| **ROCR-ID-001 MUST** | A RO-Crate export declares RO-Crate and DERRIDAI adapter versions, stable object references, authoritative/derived status, sufficient ResearchRun/EvidencePacket state, and validates against both contracts. | external+semantic |
+
+#### Local Sovereign requirements
+
+| Requirement | Normative statement | Test class |
+|---|---|---|
+| **LOC-ID-001 MUST** | For the declared capability/media scope, essential documentary, evidence, inference, validation, and research-output operations can execute within researcher-controlled infrastructure without mandatory remote storage, embedding, inference, authentication, or telemetry. | deployment-test |
+
+### Profile-to-Requirement Matrix
+
+| Profile | Required dependency | Requirement IDs |
+|---|---|---|
+| Core | - | CORE-ID-001 through CORE-ID-018 |
+| Publication | Core | PUB-ID-001 through PUB-ID-004 |
+| Retrieval | Core | RET-ID-001 through RET-ID-003 |
+| Evidence | Core | EVID-ID-001 through EVID-ID-006 |
+| Claim-Binding | Core + Evidence | CLM-ID-001 through CLM-ID-006 |
+| Reproducible Research | Core + Evidence | REP-ID-001, REP-ID-002 |
+| Local Sovereign | Core | LOC-ID-001 |
+| PROV Mapping adapter | Core | PROV-ID-001 |
+| RO-Crate adapter | Core | ROCR-ID-001 |
+
+### Required Invariants and Profile Applicability
+
+| Invariant | Applies to | Requirement IDs | Normative rule |
+|---|---|---|---|
+| Identity invariant | Core | CORE-ID-005 | Logical Record identity remains distinguishable from storage identity. |
+| Source invariant | Core | CORE-ID-002, CORE-ID-004 | A Record and all of its SourceSpans resolve to one and the same SourceDocument. |
+| Revision invariant | Core, Evidence | CORE-ID-006, EVID-ID-002 | Evidence pins the applicable RecordRevision when mutable text or reviewed state can affect the evidence represented; evidence-affecting changes advance the revision. |
+| Conservation invariant | Core | CORE-ID-009 | Segmentation does not silently lose, invent, duplicate, or reorder source material. |
+| Epistemic invariant | Core | CORE-ID-010, CORE-ID-016, CORE-ID-017 | Derivation, evaluation, authority, value state, and confidence availability remain distinguishable. |
+| Assertion invariant | Core | CORE-ID-011, CORE-ID-016, CORE-ID-018 | Interpretive provenance remains distinguishable from the materialized value; durable fields retain stable identity; current-value resolution follows a declared authority policy. |
+| Retrieval invariant | Retrieval | RET-ID-002, RET-ID-003 | Retrieval diagnostics describe retrieval operations, not intrinsic Record properties. |
+| Citation invariant | Evidence | EVID-ID-006 | Citation facts preserve authoritative source identity and are not fabricated to fill missing metadata. |
+| Evidence invariant | Evidence | EVID-ID-001 through EVID-ID-005 | Evidence resolves through one declared authoritative locator and run-local labels do not replace documentary identity. |
+| Generation invariant | Claim-Binding | CLM-ID-003 | Context inclusion alone does not constitute evidence-to-claim support. |
+| Failure invariant | Core; all claimed profiles | CORE-ID-014 | Failures affecting provenance or correctness are not silently converted into confident success. |
+| Model-independence invariant | Core | CORE-ID-012 | Model substitution does not redefine authoritative documentary or human-confirmed state. |
+| Version invariant | Core; all versioned profiles | CORE-ID-015 | Persisted objects retain enough contract identity to avoid silent incompatible reinterpretation. |
+
+## Appendix C - Reference Interchange, Vocabularies, and Schemas
+
+### Reference Interchange and Automated Conformance
+
+DERRIDAI defines a reference JSON interchange profile, \`derridai-reference-json-v1\`, so conformance can be tested independently of an implementation's native database or programming language. Native storage MAY differ. For automated assessment, an implementation MUST be able to emit equivalent reference-interchange data or a documented lossless mapping for the claimed profile.
+
+The principal top-level first-class collections are:
+
+\`source_documents\`, \`source_spans\`, \`records\`, \`record_revisions\`, \`field_assertions\`, \`corpus_publications\`, \`retrieval_runs\`, \`evidence_refs\`, \`evidence_packets\`, \`generation_runs\`, \`generated_claims\`, \`support_bindings\`, and \`research_runs\`.
+
+Implementation-specific extraction units, storage projections, collection manifests, retrieval candidates, validation records, and similar artifacts MAY appear as namespaced extensions, but they are not required DERRIDAI object collections.
+
+Automated conformance distinguishes:
+
+1. **Structural conformance** - JSON Schema shape and types.
+2. **Semantic conformance** - cross-object identity, cardinality, reference, and binding rules.
+3. **Behavioral or deployment conformance** - requirements that need audit evidence, execution harnesses, history, or deployment inspection.
+
+An artifact-level report establishes only the machine-evident subset visible in the supplied artifact. A full implementation conformance report MUST additionally provide evidence for every applicable MUST or MUST NOT requirement that cannot be established from static serialization.
+
+### Controlled Vocabulary Registries
+
+The machine-readable registry package defines the base values for FieldAssertion derivation, evaluation, authority, and value state; EvidenceRef locator kind; support relation; acquisition method; mapping fidelity; and validation severity where used by reports. Implementations MAY extend open vocabularies with namespaced values when the owning profile permits extension.
+
+Base FieldAssertion values include:
+
+- \`derivation_method\`: \`deterministic\`, \`model\`, \`human\`, \`inherited\`, \`imported\`, \`other\`;
+- \`evaluation_status\`: \`not_evaluated\`, \`value_supported\`, \`no_supported_value\`, \`evaluation_failed\`;
+- \`authority_status\`: \`unreviewed\`, \`human_confirmed\`, \`human_override\`, \`disputed\`;
+- \`value_status\`: \`present\`, \`confirmed_absent\`, \`invalid\`, \`unresolved\`;
+- EvidenceRef \`locator_kind\`: \`record\`, \`source_span\`.
 
 ### Canonical Conceptual Schemas
 
-The following examples show one concrete serialization of the information model. They are intended to make the abstract entities easier to recognize in software. Field order is not significant, and conforming implementations may use other programming languages or storage formats as long as they preserve the required semantics. The following JSON forms are illustrative serializations of the normative concepts. Field order is non-normative and profiles MAY add fields.
+The following examples are illustrative serializations of the normative concepts. Field order is non-normative and profiles MAY add fields.
 
 #### Canonical Record
 
-    {
-      "record_id": "record-00142",
-      "record_revision": 3,
-      "source_document_id": "doc-9f4c",
-      "source_spans": [{
-        "source_document_id": "doc-9f4c",
-        "source_unit_ids": ["block-401", "block-402"],
-        "physical_page_start": 113,
-        "physical_page_end": 114,
-        "printed_page_start": 97,
-        "printed_page_end": 98
-      }],
-      "text": "...",
-      "work": "Example Work",
-      "document_author": "Example Author",
-      "document_language": "en",
-      "speaker": "Example Author",
-      "position_holder": "Other Thinker",
-      "stance": "questions",
-      "discourse_role": "analysis",
-      "proposition_status": "attributed"
-    }
+\`\`\`json
+{
+  "record_id": "record-00142",
+  "record_revision": 3,
+  "source_document_id": "doc-9f4c",
+  "source_spans": [{
+    "source_span_id": "span-401-402",
+    "source_document_id": "doc-9f4c",
+    "physical_page_start": 113,
+    "physical_page_end": 114,
+    "printed_page_start": 97,
+    "printed_page_end": 98
+  }],
+  "text": "...",
+  "speaker": "Example Author",
+  "position_holder": "Other Thinker",
+  "stance": "questions"
+}
+\`\`\`
 
 #### Canonical FieldAssertion
 
-    {
-      "field": "position_holder",
-      "value": "Other Thinker",
-      "status": "model_inferred",
-      "method": "llm",
-      "checked": true,
-      "confidence": 0.87,
-      "reason": "Passage attributes the proposition to another thinker.",
-      "evidence_refs": ["evref-81"],
-      "model": "model-x"
-    }
-
-An evaluated field whose confidence is explicitly unavailable may use `"confidence": null`; omission of the field MUST NOT be silently conflated with such a result.
-
-#### Canonical RetrievalCandidate
-
-    {
-      "candidate_id": "candidate-27",
-      "record_ref": {
-        "publication_id": "pub-2026-09",
-        "record_id": "record-00142",
-        "record_revision": 3
-      },
-      "collection": "corpus_en",
-      "distance": 0.194,
-      "rrf_score": 0.0481,
-      "rerank_score": 6.42,
-      "retrieval_hits": [
-        {"search_type": "semantic", "rank": 2},
-        {"search_type": "lexical", "rank": 7}
-      ]
-    }
-
-#### Canonical EvidenceItem
-
-    {
-      "evidence_id": "E3",
-      "evidence_ref": {
-        "evidence_ref_id": "evref-81",
-        "record_id": "record-00142",
-        "record_revision": 3,
-        "source_document_id": "doc-9f4c",
-        "record_character_start": 212,
-        "record_character_end": 911
-      },
-      "inline_citation": "Author 1997: 97-98",
-      "full_citation": "Author, Example. Example Work. ...",
-      "text_truncated": false
-    }
+\`\`\`json
+{
+  "assertion_id": "fa-81",
+  "record_id": "record-00142",
+  "record_revision": 3,
+  "field_id": "core.position_holder",
+  "field": "position_holder",
+  "metadata_contract": "scholarly-attribution-v4",
+  "value": "Other Thinker",
+  "derivation_method": "model",
+  "evaluation_status": "value_supported",
+  "authority_status": "human_confirmed",
+  "value_status": "present",
+  "method": "semantic-attribution-v3",
+  "confidence": 0.87,
+  "reason": "Passage attributes the proposition to another thinker.",
+  "evidence_refs": ["evref-81"]
+}
+\`\`\`
 
 #### Canonical SupportBinding
 
-    {
-      "claim_id": "claim-4",
-      "evidence_refs": ["evref-81", "evref-93"],
-      "relation": "supports",
-      "validation_status": "validated"
-    }
+\`\`\`json
+{
+  "binding_id": "sb-8",
+  "claim_id": "claim-12",
+  "evidence_refs": ["evref-81"],
+  "relation": "supports",
+  "derived_from_marker": "E0",
+  "validation_status": "verified"
+}
+\`\`\`
 
-### Required Invariants
+#### Canonical RetrievalRun
 
-Every conforming implementation MUST preserve the following invariants within the profiles it claims.
+\`\`\`json
+{
+  "retrieval_run_id": "ret-17",
+  "original_query": "hospitality and sovereignty",
+  "methods": ["hybrid"],
+  "source_publication_id": "pub-2026-09",
+  "results": [{
+    "record_id": "record-00142",
+    "record_revision": 3,
+    "rank": 1,
+    "score": 0.31,
+    "score_semantics": "cosine_distance"
+  }]
+}
+\`\`\`
 
-- **Identity invariant.** Logical Record identity remains distinguishable from storage identity.
+#### Canonical EvidenceRef
 
-- **Source invariant.** A Record can be traced to its SourceDocument.
+\`\`\`json
+{
+  "evidence_ref_id": "evref-81",
+  "locator_kind": "record",
+  "publication_id": "pub-2026-09",
+  "record_id": "record-00142",
+  "record_revision": 3,
+  "record_character_start": 0,
+  "record_character_end": 742
+}
+\`\`\`
 
-- **Span invariant.** Evidence can be traced to the Record or source span from which it derives.
+#### Canonical ResearchRun
 
-- **Revision invariant.** Evidence depending on mutable text can identify the relevant RecordRevision.
+\`\`\`json
+{
+  "run_id": "research-44",
+  "specification_version": "1.0",
+  "publication_ids": ["pub-2026-09"],
+  "evidence_packet_ids": ["packet-12"],
+  "advisory_memory": {"prior_claim_ids": ["claim-old-7"]},
+  "generation_run_ids": ["gen-9"],
+  "prompt_contract_version": "research-answer-v4",
+  "output": "..."
+}
+\`\`\`
 
-- **Conservation invariant.** Segmentation does not silently lose, invent, duplicate, or reorder source material.
+#### Canonical EvidencePacket
 
-- **Epistemic invariant.** Unresolved, absent, inferred, deterministic, and human-confirmed states are not silently collapsed.
+\`\`\`json
+{
+  "packet_id": "packet-12",
+  "entries": [{
+    "entry_id": "E0",
+    "evidence_ref_id": "evref-81",
+    "text": "...",
+    "text_truncated": false,
+    "text_transform": {"kind": "record-prefix", "character_limit": 12000},
+    "selection_reason": "researcher selected"
+  }]
+}
+\`\`\`
 
-- **Assertion invariant.** Interpretive provenance remains distinguishable from the value being asserted.
+## Appendix D - Relationship to External Standards
 
-- **Retrieval invariant.** Retrieval properties describe retrieval events, not intrinsic Record properties.
+DERRIDAI's contribution is not a new generic provenance vocabulary, workflow engine, archive format, or serialization technology. It specifies scholarly-AI semantics that general standards can carry.
 
-- **Derived-store invariant.** Rebuildable indexes do not silently replace authoritative corpus state.
+| Standard or technology | Primary responsibility relative to DERRIDAI |
+|---|---|
+| **DERRIDAI** | Documentary identity, scholarly attribution and epistemic state, evidentiary use, and source-to-claim traceability |
+| **W3C PROV** | General provenance relationships among entities, activities, and agents |
+| **RO-Crate** | Portable packaging and contextual metadata for research objects |
+| **JSON / JSON-LD / RDF** | Serialization and exchange technologies |
 
-- **Citation invariant.** Citation facts are derived from authoritative metadata where deterministically possible.
+PROV does not by itself define DERRIDAI distinctions such as SourceSpan precision, Record versus RecordRevision, speaker versus position holder, FieldAssertion authority, exact EvidenceRef locator mode, or SupportBinding. RO-Crate does not define what constitutes a DERRIDAI Record, which corpus state is authoritative, or how evidence supports a GeneratedClaim.
 
-- **Evidence invariant.** Evidence identifiers do not replace persistent Record identity.
+> **Interoperability design principle.** Use established standards for the general problems they already solve; use DERRIDAI only for the scholarly and AI-research semantics that remain domain-specific. Any loss of those semantics MUST be explicit rather than silent.
 
-- **Generation invariant.** Context inclusion alone does not constitute evidence-to-claim binding.
+## Appendix E - Reference Implementation
 
-- **Failure invariant.** Failures affecting provenance or correctness are not silently converted into confident success.
+_This appendix is non-normative._
 
-- **Model-independence invariant.** Replacing a computational model does not by itself redefine authoritative Record identity, documentary provenance, or human-confirmed assertions.
+The published DERRIDAI Core Specification 1.0 PDF records a pre-publication audit of DerridAI \`master\` at commit \`724bef420a404fb2bc24182d8218f7a56d0ed84f\` on 24 September 2026. That audit is a historical implementation snapshot, not part of the normative contract. The repository may advance beyond it while remaining governed by the normative requirements above.
 
-- **Version invariant.** Persisted objects retain sufficient version information to avoid silent reinterpretation under incompatible semantics.
+The DerridAI application is the originating reference implementation. Its practical scholarly-provenance shorthand is:
 
-### Reference Implementation Mapping
+\`SOURCE -> PASSAGE -> SPEAKER -> POSITION HOLDER -> STANCE -> PROPOSITION -> EXACT EVIDENCE -> CITATION -> CLAIM\`
 
-The DerridAI reference implementation maps naturally onto the specification. Its provenance-record structure corresponds to the Record concept; source blocks and source spans correspond to SourceUnit and SourceSpan; and record revision corresponds to RecordRevision. Metadata field status and evidence correspond to FieldAssertion provenance. Chroma record encoding corresponds to StorageProjection, while collection manifests correspond to CollectionManifest. RetrievalCandidate and EvidenceItem correspond to their DERRIDAI counterparts. Selected evidence corresponds to EvidenceRef or directly selected candidates. RAG runs correspond to ResearchRunManifest plus GenerationRun. Evidence labels such as E0 are run-local evidence IDs, deterministic citation binding corresponds to Citation Binding, and `derridai-corpus-jsonl-v1` is an implementation-specific publication profile.
+Implementation lessons incorporated into DERRIDAI 1.0 include:
 
-This mapping is informative unless separately adopted as a normative compatibility profile. The reference implementation MAY expose the same native objects through PROV and RO-Crate adapters; such adapters SHOULD remain projections of the authoritative DERRIDAI model rather than alternate sources of truth.
+- **Pinned metadata contracts.** A run/build is bound to the metadata-contract snapshot it actually used; later schema edits do not reinterpret prior work. Stable field identity is recommended across non-semantic renames.
+- **Protected segmentation.** Source conservation includes avoiding attribution- and quotation-sensitive splits merely to satisfy engineering size targets.
+- **Server-side evidence rehydration.** Compact evidence references may be resolved back to authoritative Records instead of round-tripping stale full records through a client.
+- **Packet integrity before generation.** Structural provenance checks are distinct from the semantic question of whether evidence truly supports a claim.
+- **Rendered citations are not SupportBindings.** Machine evidence-marker relations must survive independently of human-readable citation formatting.
+- **Advisory memory is not evidence.** Prior responses, claims, and reviewed decisions may guide later work, but current support requires re-resolution against current documentary state.
 
-### Non-Normative Rationale
+Reference-implementation coverage MUST NOT be treated as a conformance score unless each applicable requirement ID has been tested and documented under the relevant conformance profile.
+
+## Appendix F - Rationale and Summary
 
 _This section is non-normative._
 
-The Record is central because chunks are usually implementation artifacts while Records are intended to survive changes in retrieval infrastructure. Evidence is modeled as a role because the same Record can support one inquiry and be irrelevant to another. Attribution remains first-class because document author, speaker, position holder, target, and quoted source can differ. Operational state and vector infrastructure remain separate because they change more readily than documentary identity.
+DERRIDAI deliberately standardizes fewer objects than a complete application may contain. The Record is central because retrieval chunks, database rows, and cache entries are implementation artifacts while Records are intended to survive changes in retrieval infrastructure.
 
-DERRIDAI is therefore compatible with a future in which vector retrieval becomes less central. The durable abstraction is `Record -> Evidence Acquisition -> Evidence -> AI reasoning -> claim`; the acquisition mechanism may be vector, lexical, human, long-context, agentic, or another method as long as the resulting evidence resolves to the Durable Research Layer.
+Evidence is a role rather than a copy because the same documentary material may support one inquiry and be irrelevant in another. Attribution remains first-class because document author, speaker, position holder, target, and quoted source can differ. FieldAssertion remains first-class because derivation, evaluation, authority, and value state are scholarly distinctions that generic provenance alone does not capture.
+
+By contrast, extraction blocks, generic relations, schema-editor objects, storage projections, collection manifests, retrieval-candidate classes, packet-item wrapper classes, validation-result classes, and grading-result classes are not necessary to define DERRIDAI's scholarly semantics. Implementations may use them freely without making them part of the DERRIDAI conceptual model.
 
 ### Specification Summary
 
-The minimal DERRIDAI model is: `SourceDocument -> SourceSpan -> Record -> Evidence -> GeneratedClaim`
+The DERRIDAI conceptual model is the scholarly source-to-claim chain:
 
-with explicit intermediate objects added when required by the claimed profile.
+\`SourceDocument -> SourceSpan -> Record -> RecordRevision -> FieldAssertion -> Evidence Acquisition -> EvidenceRef -> EvidencePacket -> GenerationRun -> GeneratedClaim -> SupportBinding\`
 
-For audit, the direction is reversed: `GeneratedClaim -> EvidenceRef -> RecordRevision -> Record -> SourceSpan -> SourceDocument`.
+These are semantic roles, not mandatory class names. EvidenceRef and EvidencePacket may be embedded in retained run data, and a native FieldAssertion representation may use different field names when the required epistemic dimensions are recoverable without loss. Advisory memory remains outside the evidence chain until it is re-resolved against current documentary state.
 
-DERRIDAI keeps documentary identity and provenance durable while models, retrieval systems, execution environments, and interoperability formats remain replaceable.
+The minimum DERRIDAI Core conformance profile requires the durable documentary substrate:
+
+\`SourceDocument -> SourceSpan -> Record\`
+
+with revision and assertion provenance preserved when applicable. Evidence, generation, and claim-binding requirements become mandatory when those capabilities are claimed; they remain part of the conceptual architecture whether or not a particular implementation instantiates them.
+
+For audit, the essential chain reverses from GeneratedClaim through SupportBinding and EvidenceRef to the exact RecordRevision or SourceSpan and ultimately to the SourceDocument.
+
+The scope rule follows directly: **DERRIDAI standardizes an object only when the object preserves a scholarly identity or distinction that must survive across implementations; generic infrastructure remains implementation-specific and is constrained only where it can damage that scholarly traceability.**
+
