@@ -306,7 +306,19 @@ class MetadataSchema(BaseModel):
         return {f.name for f in self.fields if f.evidence}
 
     def review_fields(self) -> list[str]:
-        return list(CORE_FIELDS) + [f.name for f in self.fields if f.review]
+        return list(CORE_FIELDS) + [
+            f.name
+            for f in self.fields
+            if f.review and f.role != "operational" and f.review_visibility != "hidden"
+        ]
+
+    def record_review_fields(self) -> list[str]:
+        """Fields intended for the ordinary human Record-review surface."""
+        return list(CORE_FIELDS) + [
+            f.name
+            for f in self.fields
+            if f.role != "operational" and f.review_visibility != "hidden"
+        ]
 
     def by_name(self) -> dict[str, SchemaField]:
         return {f.name: f for f in self.fields}
