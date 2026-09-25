@@ -58,40 +58,46 @@ const canForward = computed(
   () => historyIndex.value >= 0 && historyIndex.value < history.value.length - 1,
 );
 
-const neighbors = computed(() => {
+type GraphNeighbor = {
+  edge: ResearchObjectEdge;
+  node: ResearchObjectNode;
+  relation: string;
+  cardinality?: string | null;
+  direction: "in" | "out";
+};
+
+const neighbors = computed<GraphNeighbor[]>(() => {
   const current = focus.value;
   if (!current) return [];
-  return edges.value
-    .flatMap((edge) => {
-      if (edge.source === current.id) {
-        const target = nodeMap.value.get(edge.target);
-        return target
-          ? [{
-              edge,
-              node: target,
-              relation: edge.relation,
-              cardinality: edge.source_cardinality,
-              direction: "out" as const,
-            }]
-          : [];
+  const result: GraphNeighbor[] = [];
+  for (const edge of edges.value) {
+    if (edge.source === current.id) {
+      const node = nodeMap.value.get(edge.target);
+      if (node) {
+        result.push({
+          edge,
+          node,
+          relation: edge.relation,
+          cardinality: edge.source_cardinality,
+          direction: "out",
+        });
       }
-      if (edge.target === current.id) {
-        const target = nodeMap.value.get(edge.source);
-        return target
-          ? [{
-              edge,
-              node: target,
-              relation: edge.inverse_relation,
-              cardinality: edge.target_cardinality,
-              direction: "in" as const,
-            }]
-          : [];
+    } else if (edge.target === current.id) {
+      const node = nodeMap.value.get(edge.source);
+      if (node) {
+        result.push({
+          edge,
+          node,
+          relation: edge.inverse_relation,
+          cardinality: edge.target_cardinality,
+          direction: "in",
+        });
       }
-      return [];
-    })
-    .sort((a, b) =>
-      `${a.relation} ${a.node.label}`.localeCompare(`${b.relation} ${b.node.label}`),
-    );
+    }
+  }
+  return result.sort((a, b) =>
+    `${a.relation} ${a.node.label}`.localeCompare(`${b.relation} ${b.node.label}`),
+  );
 });
 
 const visibleHistory = computed(() =>
