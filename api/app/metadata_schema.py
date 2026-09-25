@@ -401,15 +401,6 @@ class MetadataResponseBase(BaseModel):
         metadata = metadata_obj.model_dump() if isinstance(metadata_obj, BaseModel) else dict(metadata_obj or {})
         assessments_obj = getattr(self, "field_assessments", None)
         assessments = assessments_obj.model_dump() if isinstance(assessments_obj, BaseModel) else dict(assessments_obj or {})
-        evidence_obj = getattr(self, "field_evidence", None)
-        if isinstance(evidence_obj, BaseModel):
-            evidence = evidence_obj.model_dump()
-        else:
-            evidence = {
-                str(key): value.model_dump() if isinstance(value, BaseModel) else value
-                for key, value in dict(evidence_obj or {}).items()
-            }
-
         def missing(value: Any) -> bool:
             return value is None or value == "" or value == []
 
