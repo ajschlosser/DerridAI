@@ -192,11 +192,23 @@ class ReviewActionsMixin:
             if record is None:
                 continue
             for field in dict.fromkeys(str(item) for item in fields if str(item)):
+                status = (
+                    (record.get("metadata_field_status") or {}).get(field)
+                    if isinstance(record.get("metadata_field_status"), dict)
+                    else None
+                )
+                decision_kind = (
+                    "absence"
+                    if isinstance(status, dict)
+                    and str(status.get("status") or "") == "confirmed_absent"
+                    else "value"
+                )
                 persist_record_decision(
                     record=record,
                     schema=schema,
                     field_name=field,
                     value=record.get(field),
+                    decision_kind=decision_kind,
                     scope_id=build_id,
                 )
                 wrote = True
@@ -869,7 +881,7 @@ class ReviewActionsMixin:
         if (
             unique_ids
             and isinstance(status, dict)
-            and str(status.get("status") or "") in {"human_confirmed", "human_override"}
+            and str(status.get("status") or "") in {"human_confirmed", "human_override", "confirmed_absent"}
         ):
             self._persist_review_audit_bindings(
                 build_id,
