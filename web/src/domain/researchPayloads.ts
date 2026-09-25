@@ -43,12 +43,12 @@ export function researchProfileForUi(profile: Loose | null | undefined) {
 
 export function researchEvidenceForUi(item: Loose | null | undefined) {
   if (!item) return null;
-  const metadata =
+  const metadata: Record<string, unknown> =
     item.metadata && typeof item.metadata === "object" && !Array.isArray(item.metadata)
-      ? cloneAuditValue(item.metadata)
+      ? (cloneAuditValue(item.metadata) as Record<string, unknown>)
       : assertionValues(item);
   const assertions = Array.isArray(item.assertions)
-    ? cloneAuditValue(item.assertions)
+    ? (cloneAuditValue(item.assertions) as ReturnType<typeof assertionSummaries>)
     : assertionSummaries(item);
   return {
     key: item.key,
