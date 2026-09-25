@@ -17,8 +17,7 @@ const items = [
 const mountMenu = () =>
   mount(CorpusActionMenu, { props: { label: "More actions", items }, attachTo: document.body });
 const body = () => new DOMWrapper(document.body);
-const key = (selector: string, k: string) =>
-  body().get(selector).trigger("keydown", { key: k });
+const key = (selector: string, k: string) => body().get(selector).trigger("keydown", { key: k });
 
 describe("CorpusActionMenu", () => {
   afterEach(() => {
