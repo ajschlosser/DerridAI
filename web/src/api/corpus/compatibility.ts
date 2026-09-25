@@ -8,5 +8,5 @@
 export const LEGACY_CORPUS_BASE = "/api/pdf";
 
 export function legacyCorpusUrl(path: string): string {
-  return `${LEGACY_CORPUS_BASE}/${path.replace(/^\\/+/, "")}`;
+  return `${LEGACY_CORPUS_BASE}/${path.replace(/^\/+/, "")}`;
 }
