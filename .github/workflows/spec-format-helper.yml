@@ -1,0 +1,29 @@
+name: Spec format helper
+
+on:
+  push:
+    branches:
+      - docs/sync-core-spec-1.0
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npx prettier --write ../SPECIFICATION.md --config .prettierrc
+      - uses: actions/upload-artifact@v4
+        with:
+          name: formatted-specification
+          path: SPECIFICATION.md
