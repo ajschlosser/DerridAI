@@ -42,10 +42,11 @@ type RelationshipGroup = {
   items: GraphNeighbor[];
 };
 
-const modeTabs = computed(() => [
-  { id: "trace", label: i18n.t("traceability.this_record", "This record") },
-  { id: "model", label: i18n.t("traceability.data_model", "DERRIDAI model") },
-]);
+const modeTabs = computed(() => {
+  const tabs = [{ id: "trace", label: i18n.t("traceability.this_record", "This record") }];
+  if (props.model) tabs.push({ id: "model", label: i18n.t("traceability.data_model", "DERRIDAI model") });
+  return tabs;
+});
 
 const nodes = computed<ResearchObjectNode[]>(() => {
   if (mode.value === "trace") return props.graph?.nodes || [];
@@ -242,6 +243,10 @@ function defaultFocus() {
   return nodeMap.value.has(preferred) ? preferred : nodes.value[0]?.id || "";
 }
 
+function setMode(value: string) {
+  mode.value = value === "model" && props.model ? "model" : "trace";
+}
+
 function selectFocus(id: string) {
   if (nodeMap.value.has(id)) focusId.value = id;
 }
@@ -313,10 +318,11 @@ watch(mode, () => resetFocus());
     </header>
 
     <UiTabs
-      v-model="mode"
+      :model-value="mode"
       :tabs="modeTabs"
       :tablist-label="i18n.t('traceability.mode', 'Traceability view')"
       id-prefix="traceability-view"
+      @update:model-value="setMode"
     />
 
     <div v-if="loading" class="traceability-state" role="status">
