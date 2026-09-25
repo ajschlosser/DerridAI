@@ -824,8 +824,7 @@ def migrate_record_assertions(record: dict[str, Any], schema: Any | None = None)
                 current.record_revision != int(record.get("record_revision") or 1)
                 or
                 str(status.get("status") or "") not in {"", _compatibility_status(current)}
-                or (current.value_status == "present" and current.value != value)
-                or (current.value_status == "confirmed_absent" and value is not None)
+                or current.value != value
                 or (assertion.evidence != current.evidence)
             )
         ):
