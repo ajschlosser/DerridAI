@@ -627,10 +627,21 @@ def project_record_assertions(record: dict[str, Any]) -> dict[str, Any]:
             continue
         if current.value_status == "confirmed_absent":
             record[current.field_name] = None
-        elif current.value_status == "present":
+        elif current.value_status == "present" or current.value not in (None, "", []):
+            # Unresolved/invalid assertions may intentionally carry a visible
+            # candidate value for human review. Epistemic uncertainty belongs
+            # in value_status/evaluation_status, not in destructive projection.
             record[current.field_name] = copy.deepcopy(current.value)
-        else:
+        elif (
+            current.method == "human_recheck"
+            or bool((current.legacy_metadata or {}).get("blind"))
+            or bool((current.legacy_metadata or {}).get("recheck"))
+        ):
+            # Blind review requires an explicit empty control while the sealed
+            # answer lives only in the audit ledger.
             record[current.field_name] = None
+        else:
+            record.pop(current.field_name, None)
         status = {
             "status": _compatibility_status(current),
             "method": current.method or current.derivation_method,
