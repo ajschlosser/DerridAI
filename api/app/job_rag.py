@@ -30,6 +30,13 @@ def _optional_int(value: Any) -> int | None:
         return None
 
 
+def _first_present(*values: Any) -> Any:
+    for value in values:
+        if value is not None and value != "":
+            return value
+    return None
+
+
 class RAGJobManager(PersistentJobStateMixin):
     JOB_TYPE = "rag"
     """
@@ -231,44 +238,62 @@ class RAGJobManager(PersistentJobStateMixin):
             claims.append(claim.model_dump(mode="json"))
             for evidence_id in evidence_ids:
                 item = evidence_by_id.get(evidence_id) or {}
-                    record = item.get("record") if isinstance(item.get("record"), dict) else {}
-                    if not record.get("record_id"):
-                        continue
-                    source_document_id = str(record.get("source_document_id") or "").strip()
-                    source_spans = []
-                    if source_document_id:
-                        from .provenance_memory import EvidenceSpan
+                record = item.get("record") if isinstance(item.get("record"), dict) else {}
+                if not record.get("record_id"):
+                    continue
+                source_document_id = str(
+                    record.get("source_document_id") or record.get("source_asset_id") or ""
+                ).strip()
+                source_spans = []
+                if source_document_id:
+                    from .provenance_memory import EvidenceSpan
 
-                        for span in record.get("source_spans") or []:
-                            if not isinstance(span, dict):
-                                continue
-                            unit_ids = list(span.get("source_unit_ids") or [])
-                            if span.get("block_id"):
-                                unit_ids.append(span["block_id"])
-                            source_spans.append(EvidenceSpan(
-                                source_document_id=source_document_id,
-                                source_unit_ids=list(dict.fromkeys(str(value) for value in unit_ids if str(value).strip())),
-                                physical_page_start=_optional_int(span.get("pdf_page") or span.get("page")),
-                                physical_page_end=_optional_int(span.get("pdf_page") or span.get("page")),
-                                printed_page_start=span.get("printed_page_label"),
-                                printed_page_end=span.get("printed_page_label"),
-                                character_start=_optional_int(span.get("char_start") or span.get("start")),
-                                character_end=_optional_int(span.get("char_end") or span.get("end")),
-                            ))
-                    binding = persist_support_binding(SupportBinding(
-                        claim_id=claim.claim_id,
-                        owner=owner,
-                        record_id=str(record["record_id"]),
-                        record_revision=int(record.get("record_revision") or 1),
-                        source_document_id=source_document_id or None,
-                        source_spans=source_spans,
-                        relation="supports",
-                        citation={
-                            "inline": item.get("inline_citation"),
-                            "full": item.get("full_citation"),
-                        },
-                    ))
-                    bindings.append(binding.model_dump(mode="json"))
+                    for span in record.get("source_spans") or []:
+                        if not isinstance(span, dict):
+                            continue
+                        unit_ids = list(span.get("source_unit_ids") or [])
+                        for key in ("source_unit_id", "block_id"):
+                            if span.get(key):
+                                unit_ids.append(span[key])
+                        source_spans.append(EvidenceSpan(
+                            source_document_id=source_document_id,
+                            source_unit_ids=list(
+                                dict.fromkeys(
+                                    str(value)
+                                    for value in unit_ids
+                                    if str(value).strip()
+                                )
+                            ),
+                            physical_page_start=_optional_int(
+                                _first_present(span.get("pdf_page"), span.get("page"))
+                            ),
+                            physical_page_end=_optional_int(
+                                _first_present(span.get("pdf_page"), span.get("page"))
+                            ),
+                            printed_page_start=span.get("printed_page_label"),
+                            printed_page_end=span.get("printed_page_label"),
+                            character_start=_optional_int(
+                                _first_present(span.get("char_start"), span.get("start"))
+                            ),
+                            character_end=_optional_int(
+                                _first_present(span.get("char_end"), span.get("end"))
+                            ),
+                        ))
+                binding = persist_support_binding(SupportBinding(
+                    claim_id=claim.claim_id,
+                    owner=owner,
+                    record_id=str(record["record_id"]),
+                    record_revision=int(record.get("record_revision") or 1),
+                    source_document_id=source_document_id or None,
+                    source_spans=source_spans,
+                    relation="supports",
+                    citation={
+                        "inline": item.get("inline_citation"),
+                        "full": item.get("full_citation"),
+                        "evidence_marker": evidence_id,
+                    },
+                ))
+                bindings.append(binding.model_dump(mode="json"))
         return {"claims": claims, "support_bindings": bindings}
 
     def _acquire_ollama_slot(self, job_id: str) -> bool:
