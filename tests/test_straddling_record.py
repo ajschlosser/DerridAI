@@ -1,5 +1,9 @@
 from app.corpus_segmentation import _apply_manifest_metadata, _construct_records
-from app.field_assertions import create_human_assertion, current_assertion_by_name, project_record_assertions
+from app.field_assertions import (
+    create_human_assertion,
+    current_assertion_by_name,
+    project_record_assertions,
+)
 
 
 def rec(pages):
