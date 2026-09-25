@@ -426,33 +426,66 @@ defineExpose({ select, draft });
                 </select></label
               >
               <fieldset class="schema-field schema-memory">
-                <legend>{{ t("memory", "Memory & retrieval") }}</legend>
+                <legend
+                  :title="t('memory_help', 'Controls evidence-bound human-reviewed precedents used as few-shot guidance for this metadata field. These settings never change the reviewed source record itself.')"
+                >
+                  {{ t("memory", "Memory & retrieval") }} <span aria-hidden="true">ⓘ</span>
+                </legend>
                 <label class="check"
-                  ><input v-model="item.field.retrieval_profile.enabled" type="checkbox" /><span>{{
-                    t("memory_enabled", "Use reviewed precedents")
-                  }}</span></label
+                  ><input v-model="item.field.retrieval_profile.enabled" type="checkbox" /><span
+                    :title="t('memory_enabled_help', 'When enabled, DerridAI may retrieve human-reviewed evidence-bound examples for this field during metadata enrichment.')"
+                    >{{ t("memory_enabled", "Use reviewed precedents") }} <span aria-hidden="true">ⓘ</span></span
+                  ></label
                 >
                 <label class="check"
                   ><input
                     v-model="item.field.retrieval_profile.include_corrections"
                     type="checkbox"
-                  /><span>{{ t("memory_corrections", "Include corrections") }}</span></label
+                  /><span
+                    :title="t('memory_corrections_help', 'Include reviewed cases where a model value was rejected and replaced. The rejected value remains negative evidence; it is never taught as a correct answer.')"
+                    >{{ t("memory_corrections", "Include corrections") }} <span aria-hidden="true">ⓘ</span></span
+                  ></label
                 >
                 <label class="check"
                   ><input
                     v-model="item.field.retrieval_profile.include_confirmed_absence"
                     type="checkbox"
-                  /><span>{{ t("memory_absence", "Include confirmed absence") }}</span></label
+                  /><span
+                    :title="t('memory_absence_help', 'Include reviewer-confirmed no-value examples only when that absence has explicit reviewed source evidence.')"
+                    >{{ t("memory_absence", "Include confirmed absence") }} <span aria-hidden="true">ⓘ</span></span
+                  ></label
                 >
-                <label
-                  ><span>{{ t("memory_limit", "Maximum precedents") }}</span
-                  ><input
-                    v-model.number="item.field.retrieval_profile.max_items"
-                    class="control"
-                    type="number"
-                    min="0"
-                    max="50"
-                /></label>
+                <div class="schema-memory-numbers">
+                  <label
+                    ><span
+                      :title="t('memory_limit_help', 'Maximum number of reviewed precedents for this field that may enter the bounded prompt packet. Set 0 to disable retrieval for this field without deleting its reviewed history.')"
+                      >{{ t("memory_limit", "Maximum precedents") }} <span aria-hidden="true">ⓘ</span></span
+                    ><input
+                      v-model.number="item.field.retrieval_profile.max_items"
+                      class="control"
+                      type="number"
+                      min="0"
+                      max="50"
+                  /></label>
+                  <label
+                    ><span
+                      :title="t('memory_similarity_help', 'Discard semantic matches below this similarity threshold. 0 accepts any semantic similarity; 1 requires the strongest possible match.')"
+                      >{{ t("memory_similarity", "Minimum similarity") }} <span aria-hidden="true">ⓘ</span></span
+                    ><input
+                      v-model.number="item.field.retrieval_profile.min_similarity"
+                      class="control"
+                      type="number"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                  /></label>
+                </div>
+                <small class="hint">{{
+                  t(
+                    "memory_help",
+                    "These controls affect only retrieval of reviewed precedents during future metadata enrichment; the canonical reviewed record and evidence remain unchanged.",
+                  )
+                }}</small>
               </fieldset>
             </div>
             <label class="schema-field"
@@ -793,6 +826,32 @@ h4 {
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
   gap: 10px;
 }
+.schema-memory {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  min-inline-size: min(100%, 18rem);
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+}
+.schema-memory legend {
+  padding: 0 4px;
+  font-size: 0.8125rem;
+  font-weight: 750;
+}
+.schema-memory-numbers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.schema-memory-numbers label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.75rem;
+  font-weight: 650;
+}
 .schema-field-card {
   display: grid;
   gap: 10px;
@@ -875,7 +934,8 @@ h4 {
   .schema-editor {
     grid-template-columns: minmax(0, 1fr);
   }
-  .value-row {
+  .value-row,
+  .schema-memory-numbers {
     grid-template-columns: minmax(0, 1fr);
   }
 }

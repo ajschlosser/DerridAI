@@ -60,26 +60,35 @@ MAX_FIELDS = 60
 MAX_GROUPS = 6
 
 FieldType = Literal["text", "number", "boolean", "choice", "list"]
-RetrievalScope = Literal["same_schema", "same_field", "all_reviewed"]
-
-
 class RetrievalProfile(BaseModel):
-    """Declarative policy for which reviewed memory may guide a field.
+    """Policy for evidence-bound reviewed precedents used during metadata enrichment.
 
-    This is configuration, not a retrieval result.  Scores, ranks, and
-    provider-specific diagnostics therefore never become part of a schema.
+    The profile intentionally contains only controls with implemented semantics.
+    Older schema files may still contain the abandoned multi-workflow routing
+    fields; those are migrated away here instead of remaining inert configuration.
     """
 
     model_config = ConfigDict(extra="forbid")
     enabled: bool = True
-    scope: RetrievalScope = "same_field"
     max_items: int = Field(default=6, ge=0, le=50)
     min_similarity: float = Field(default=0.0, ge=0.0, le=1.0)
     include_corrections: bool = True
     include_confirmed_absence: bool = True
-    use_for_metadata_enrichment: bool = True
-    use_for_response_memory: bool = False
-    use_for_claim_memory: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_legacy_routing(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        result = dict(value)
+        if result.pop("use_for_metadata_enrichment", True) is False:
+            result["enabled"] = False
+        # These fields were serialized before they had production semantics.
+        # Retrieval is field-specific evidence-bound metadata enrichment; response
+        # and claim memory remain separate systems.
+        for key in ("scope", "use_for_response_memory", "use_for_claim_memory"):
+            result.pop(key, None)
+        return result
 
 
 class SchemaValue(BaseModel):
