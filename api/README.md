@@ -18,19 +18,19 @@ Interactive OpenAPI documentation is available at `/docs` on a running API. The 
 
 ## Domain ownership
 
-| Area | Primary modules |
-| --- | --- |
-| Corpus orchestration | `corpus_builder.py` plus focused `corpus_*` lifecycle, manifest, segmentation, enrichment, review, quality, publication, and schema/profile modules |
-| Source ingestion | `corpus_extraction.py`, `source_media.py`, `source_text.py`, `source_audio.py`, `source_gutenberg.py`, `source_safety.py`, `source_quality.py`, `source_kinds.py` |
-| Canonical field state | `field_assertions.py` and record/revision review code |
+| Area                                    | Primary modules                                                                                                                                                             |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Corpus orchestration                    | `corpus_builder.py` plus focused `corpus_*` lifecycle, manifest, segmentation, enrichment, review, quality, publication, and schema/profile modules                         |
+| Source ingestion                        | `corpus_extraction.py`, `source_media.py`, `source_text.py`, `source_audio.py`, `source_gutenberg.py`, `source_safety.py`, `source_quality.py`, `source_kinds.py`           |
+| Canonical field state                   | `field_assertions.py` and record/revision review code                                                                                                                       |
 | Metadata schemas and reviewed precedent | `metadata_schema*.py`, `metadata_exemplars.py`, `metadata_exemplar_projection.py`, `metadata_exemplar_retrieval.py`, `metadata_memory.py`, `metadata_adjudication_cache.py` |
-| Provenance / Research memory | `provenance_memory.py`, `system_store.py` |
-| Search/vector storage | `chroma_store.py`, `chroma_connection.py`, `system_chroma_console.py` |
-| Research/RAG | `rag.py`, `researcher_view.py`, bibliography/evaluation helpers |
-| Background operations | `job_llm.py`, `job_rag.py`, `job_tools.py`, `job_upsert.py`; shared durable behavior in `job_state.py`; `jobs.py` is a compatibility export layer |
-| Providers and LLM tools | `llm.py`, `llm_tools.py`, provider-profile and translation/content-policy helpers |
-| Auth and server-owned persistence | `auth.py`, `persistence.py`, `system_store.py`, `database_backend.py` |
-| Localization | `locales/` and language/content-policy services |
+| Provenance / Research memory            | `provenance_memory.py`, `system_store.py`                                                                                                                                   |
+| Search/vector storage                   | `chroma_store.py`, `chroma_connection.py`, `system_chroma_console.py`                                                                                                       |
+| Research/RAG                            | `rag.py`, `researcher_view.py`, bibliography/evaluation helpers                                                                                                             |
+| Background operations                   | `job_llm.py`, `job_rag.py`, `job_tools.py`, `job_upsert.py`; shared durable behavior in `job_state.py`; `jobs.py` is a compatibility export layer                           |
+| Providers and LLM tools                 | `llm.py`, `llm_tools.py`, provider-profile and translation/content-policy helpers                                                                                           |
+| Auth and server-owned persistence       | `auth.py`, `persistence.py`, `system_store.py`, `database_backend.py`                                                                                                       |
+| Localization                            | `locales/` and language/content-policy services                                                                                                                             |
 
 The decomposition is deliberate. A compatibility import from a large module is not a reason to put new implementation logic back into that module.
 
