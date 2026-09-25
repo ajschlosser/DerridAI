@@ -3,7 +3,7 @@
 
 Deterministic record-level and build-level bookkeeping for the metadata-enrichment
 pipeline, independent of repository state or an active LLM session. Moved verbatim
-out of PdfCorpusBuildManager (see PROGRESS.md).
+out of PdfCorpusBuildManager (extracted during the 0.70 decomposition).
 """
 
 from __future__ import annotations
