@@ -168,6 +168,42 @@ export function sanitizeResearchGeneration(input: unknown = {}) {
   return out;
 }
 
+const LEGACY_RESEARCH_PROMPT_METADATA_FIELDS = [
+  "speaker",
+  "quoted_speaker",
+  "quoted_author",
+  "quoted_work",
+  "quoted_position_holder",
+  "position_holder",
+  "stance",
+  "proposition_status",
+  "target",
+  "discourse_role",
+];
+
+function promptMetadataFields(value: unknown, fallback: string[] = []): string[] {
+  if (!Array.isArray(value)) return [...fallback];
+  return [
+    ...new Set(
+      value
+        .map((item) => String(item || "").trim())
+        .filter((item) => item && item.length <= 120 && !item.startsWith("_")),
+    ),
+  ].slice(0, 120);
+}
+
+function normalizedPromptMetadata(value: unknown) {
+  const source =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  return {
+    evidence: promptMetadataFields(source.evidence, LEGACY_RESEARCH_PROMPT_METADATA_FIELDS),
+    context: promptMetadataFields(source.context),
+    record: promptMetadataFields(source.record),
+  };
+}
+
 export function normalizedResearchConfig(cfg: Loose = {}) {
   const locales = Array.isArray(cfg.locales)
     ? [...new Set(cfg.locales.map(String).filter((value) => ["en", "fr"].includes(value)))]
@@ -223,6 +259,7 @@ export function normalizedResearchConfig(cfg: Loose = {}) {
     search_types: searchTypes,
     bind_citations: cfg.bind_citations !== false,
     include_works_cited: cfg.include_works_cited !== false,
+    prompt_metadata: normalizedPromptMetadata(cfg.prompt_metadata),
     auto_grade: Boolean(cfg.auto_grade),
     skip_retrieval: Boolean(cfg.skip_retrieval),
     use_prior_response_memory: Boolean(cfg.use_prior_response_memory),
