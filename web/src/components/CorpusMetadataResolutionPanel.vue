@@ -48,15 +48,18 @@ const inheritedFieldSet = new Set([
   "document_title",
   "short_title",
   "original_title",
+  "canonical_work_id",
   "document_author",
   "translator",
   "edition",
+  "year",
   "publication_year",
   "publisher",
   "publication_place",
   "isbn",
   "document_language",
   "original_language",
+  "language",
   "document_is_translation",
 ]);
 // Which fields a record shows, in order: the locked core, then the fields of the build's schema, then the document-level ones
