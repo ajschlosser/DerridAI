@@ -50,8 +50,7 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
     if (next < 0 || next >= options.focusHistory.value.length) return;
     options.focusHistoryIndex.value = next;
     const id = options.focusHistory.value[next];
-    const targetOffset =
-      options.focusHistoryOffsets.value[next] ?? options.recordOffset.value;
+    const targetOffset = options.focusHistoryOffsets.value[next] ?? options.recordOffset.value;
     const local =
       targetOffset === options.recordOffset.value
         ? options.records.value.find((row) => row.record_id === id)
@@ -75,10 +74,7 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
       }
     }
 
-    if (
-      delta > 0 &&
-      options.recordOffset.value + options.pageSize < options.recordTotal.value
-    ) {
+    if (delta > 0 && options.recordOffset.value + options.pageSize < options.recordTotal.value) {
       options.recordOffset.value += options.pageSize;
       await options.refreshRecords(false);
       const next = options.records.value[0];
@@ -116,9 +112,7 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
       options.selectRecord(next);
       return;
     }
-    if (
-      options.recordOffset.value + options.pageSize < options.recordTotal.value
-    ) {
+    if (options.recordOffset.value + options.pageSize < options.recordTotal.value) {
       options.recordOffset.value += options.pageSize;
       await options.refreshRecords();
       return;
@@ -146,8 +140,7 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
   }
 
   async function openMetadataIssueQueue() {
-    const first =
-      options.currentBuild.value?.metadata_issue_summary?.records?.[0]?.record_id;
+    const first = options.currentBuild.value?.metadata_issue_summary?.records?.[0]?.record_id;
     await openQueue("metadata", first ? String(first) : "");
   }
 
@@ -169,17 +162,12 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
 
   async function previousPage() {
     if (options.recordOffset.value <= 0) return;
-    options.recordOffset.value = Math.max(
-      0,
-      options.recordOffset.value - options.pageSize,
-    );
+    options.recordOffset.value = Math.max(0, options.recordOffset.value - options.pageSize);
     await options.refreshRecords();
   }
 
   async function nextPage() {
-    if (
-      options.recordOffset.value + options.pageSize >= options.recordTotal.value
-    ) {
+    if (options.recordOffset.value + options.pageSize >= options.recordTotal.value) {
       return;
     }
     options.recordOffset.value += options.pageSize;
