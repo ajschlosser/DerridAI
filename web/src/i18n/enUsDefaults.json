@@ -5565,5 +5565,22 @@
   "schemas.ner_tag.quantity": "Measurement",
   "schemas.ner_tag.time": "Time",
   "schemas.ner_tag.work_of_art": "Creative work",
-  "research.configure_prompt_metadata": "Configure prompt metadata"
+  "research.configure_prompt_metadata": "Configure prompt metadata",
+  "pdf_corpus.assertion_details": "Assertion details",
+  "pdf_corpus.assertion_disputed": "Disputed",
+  "pdf_corpus.assertion_derivation": "Derivation",
+  "pdf_corpus.assertion_evaluation": "Evaluation",
+  "pdf_corpus.assertion_authority": "Authority",
+  "pdf_corpus.assertion_value_state": "Value state",
+  "pdf_corpus.assertion_model": "Model",
+  "pdf_corpus.assertion_actor": "Actor",
+  "pdf_corpus.assertion_revision": "Record revision",
+  "pdf_corpus.assertion_created": "Created",
+  "pdf_corpus.assertion_evidence_count": "{count} evidence reference(s)",
+  "pdf_corpus.assertion_retained_alternatives": "Retained alternative assertions",
+  "pdf_corpus.run_monitor": "Run monitor",
+  "pdf_corpus.running": "Running",
+  "pdf_corpus.show_diagnostics": "Show diagnostics",
+  "pdf_corpus.hide_diagnostics": "Hide diagnostics",
+  "pdf_corpus.progress": "Progress"
 }
