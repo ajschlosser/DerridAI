@@ -379,8 +379,24 @@ def test_editorial_memory_semantic_retrieval_uses_bound_canonical_exemplars():
         def get_build(self, build_id):
             return {
                 "asset_id": "asset-1",
-                "schema_id": "derrida",
-                "metadata_schema_version": "v7",
+                "schema": {
+                    "id": "derrida",
+                    "schema_version": "v7",
+                    "fields": [
+                        {
+                            "name": "position_holder",
+                            "field_id": "field.position_holder",
+                            "group": "discourse",
+                            "retrieval_profile": {
+                                "enabled": True,
+                                "max_items": 3,
+                                "min_similarity": 0.73,
+                                "include_corrections": True,
+                                "include_confirmed_absence": True,
+                            },
+                        }
+                    ],
+                },
             }
 
         def load_blocks(self, asset_id):
@@ -401,6 +417,8 @@ def test_editorial_memory_semantic_retrieval_uses_bound_canonical_exemplars():
             assert kwargs["schema_version"] == "v7"
             assert kwargs["language"] == "en"
             assert kwargs["exclude_record_id"] == "r2"
+            assert kwargs["field_limits"] == {"position_holder": 3}
+            assert kwargs["field_min_similarity"] == {"position_holder": 0.73}
             assert len(kwargs["exemplars"]) == 1
             exemplar = kwargs["exemplars"][0]
             assert exemplar["evidence_text"] == blocks()["b2"]["text"]
