@@ -23,9 +23,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
  * Centralizing this prevents global shortcuts from firing while a researcher is
  * editing text/metadata and gives normal/focus review one command vocabulary.
  */
-export function corpusReviewCommandFromKeydown(
-  event: KeyboardEvent,
-): CorpusReviewCommand | null {
+export function corpusReviewCommandFromKeydown(event: KeyboardEvent): CorpusReviewCommand | null {
   if (
     event.defaultPrevented ||
     event.ctrlKey ||
