@@ -1,5 +1,72 @@
 <script setup lang="ts">
-withDefaults(defineProps<{label:string;tone?:"neutral"|"info"|"success"|"warning"|"danger";help?:string;showDot?:boolean}>(),{tone:"neutral",help:"",showDot:true});
+withDefaults(
+  defineProps<{
+    label: string;
+    tone?: "neutral" | "info" | "success" | "warning" | "danger";
+    help?: string;
+    showDot?: boolean;
+  }>(),
+  { tone: "neutral", help: "", showDot: true },
+);
 </script>
-<template><span class="ui-status-badge" :data-tone="tone" :title="help"><span v-if="showDot" class="ui-status-dot" aria-hidden="true"></span>{{label}}<span v-if="help" class="sr-only"> — {{help}}</span></span></template>
-<style scoped>.ui-status-badge{display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:4px 9px;border:1px solid var(--border-subtle);border-radius:999px;background:var(--surface-inset);color:var(--text-tertiary);font-size:.8125rem;font-weight:700;line-height:1.3;white-space:nowrap}.ui-status-dot{inline-size:8px;block-size:8px;border-radius:50%;background:var(--text-tertiary)}.ui-status-badge[data-tone="info"]{background:var(--tone-info-bg);border-color:var(--tone-info-edge);color:var(--tone-info-fg)}.ui-status-badge[data-tone="info"] .ui-status-dot{background:var(--tone-info-border)}.ui-status-badge[data-tone="success"]{background:var(--tone-ok-bg);border-color:var(--tone-ok-edge);color:var(--tone-ok-fg)}.ui-status-badge[data-tone="success"] .ui-status-dot{background:var(--tone-ok-border)}.ui-status-badge[data-tone="warning"]{background:var(--tone-warn-bg);border-color:var(--tone-warn-edge);color:var(--tone-warn-fg)}.ui-status-badge[data-tone="warning"] .ui-status-dot{background:var(--tone-warn-border)}.ui-status-badge[data-tone="danger"]{background:var(--tone-danger-bg);border-color:var(--tone-danger-edge);color:var(--tone-danger-fg)}.ui-status-badge[data-tone="danger"] .ui-status-dot{background:var(--tone-danger-border)}</style>
+<template>
+  <span class="ui-status-badge" :data-tone="tone" :title="help"
+    ><span v-if="showDot" class="ui-status-dot" aria-hidden="true"></span>{{ label
+    }}<span v-if="help" class="sr-only"> — {{ help }}</span></span
+  >
+</template>
+<style scoped>
+.ui-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 4px 9px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-inset);
+  color: var(--text-tertiary);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.ui-status-dot {
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+.ui-status-badge[data-tone="info"] {
+  background: var(--tone-info-bg);
+  border-color: var(--tone-info-edge);
+  color: var(--tone-info-fg);
+}
+.ui-status-badge[data-tone="info"] .ui-status-dot {
+  background: var(--tone-info-border);
+}
+.ui-status-badge[data-tone="success"] {
+  background: var(--tone-ok-bg);
+  border-color: var(--tone-ok-edge);
+  color: var(--tone-ok-fg);
+}
+.ui-status-badge[data-tone="success"] .ui-status-dot {
+  background: var(--tone-ok-border);
+}
+.ui-status-badge[data-tone="warning"] {
+  background: var(--tone-warn-bg);
+  border-color: var(--tone-warn-edge);
+  color: var(--tone-warn-fg);
+}
+.ui-status-badge[data-tone="warning"] .ui-status-dot {
+  background: var(--tone-warn-border);
+}
+.ui-status-badge[data-tone="danger"] {
+  background: var(--tone-danger-bg);
+  border-color: var(--tone-danger-edge);
+  color: var(--tone-danger-fg);
+}
+.ui-status-badge[data-tone="danger"] .ui-status-dot {
+  background: var(--tone-danger-border);
+}
+</style>

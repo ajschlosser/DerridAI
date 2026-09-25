@@ -70,11 +70,7 @@ const verificationKind = computed(() => {
   const status = String(props.status || "");
   if (status === "unresolved" || status === "invalid") return "pending_review";
   if (status === "model_inferred") return "auto_resolved";
-  if (
-    status === "human_confirmed" ||
-    status === "human_override" ||
-    status === "confirmed_absent"
-  )
+  if (status === "human_confirmed" || status === "human_override" || status === "confirmed_absent")
     return "human_confirmed";
   return "";
 });
@@ -101,9 +97,7 @@ const verificationLabel = computed(() =>
       :tone="verificationKind === 'auto_resolved' ? 'success' : 'warning'" /><UiStatusBadge
       v-if="audit && sourceKind === 'llm'"
       :label="i18n.t('pdf_corpus.ownership.spot_check')"
-      :help="
-        i18n.t('pdf_corpus.ownership_help.spot_check')
-      "
+      :help="i18n.t('pdf_corpus.ownership_help.spot_check')"
       tone="warning"
   /></span>
 </template>

@@ -53,6 +53,8 @@ services:
       AUTH_LOGIN_LOCKOUT_SECONDS: ${AUTH_LOGIN_LOCKOUT_SECONDS:-300}
       SYSTEM_DB_PATH: ${SYSTEM_DB_PATH:-/data/.home/derridai-system.sqlite3}
       RESEARCHER_TEXT_MAX_CHARS: ${RESEARCHER_TEXT_MAX_CHARS:-1600}
+      PDF_MAX_UPLOAD_MB: ${PDF_MAX_UPLOAD_MB:-500}
+      ENRICHMENT_MAX_CONCURRENT_RUNS: ${ENRICHMENT_MAX_CONCURRENT_RUNS:-1}
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-ollama}
       CHROMA_MODE: ${CHROMA_MODE:-embedded}
       CHROMA_BASE_URL: ${CHROMA_BASE_URL:-http://chroma:8000}
@@ -73,6 +75,9 @@ services:
       OPENAI_CONNECT_TIMEOUT_SECONDS: ${OPENAI_CONNECT_TIMEOUT_SECONDS:-10}
       OPENAI_TIMEOUT_SECONDS: ${OPENAI_TIMEOUT_SECONDS:-1800}
       LLM_MAX_TEXT_CHARS: ${LLM_MAX_TEXT_CHARS:-50000}
+      LLM_METADATA_NUM_PREDICT: ${LLM_METADATA_NUM_PREDICT:-768}
+      LLM_TEXT_NUM_PREDICT: ${LLM_TEXT_NUM_PREDICT:-4096}
+      LLM_MAX_FIELDS: ${LLM_MAX_FIELDS:-12}
       RAG_DEFAULT_K: ${RAG_DEFAULT_K:-64}
       RAG_DEFAULT_FETCH_K: ${RAG_DEFAULT_FETCH_K:-500}
       RAG_DEFAULT_RERANK_TOP_N: ${RAG_DEFAULT_RERANK_TOP_N:-24}
@@ -82,12 +87,20 @@ services:
       RAG_DEFAULT_RECORD_CHAR_LIMIT: ${RAG_DEFAULT_RECORD_CHAR_LIMIT:-12000}
       RAG_DEFAULT_TOTAL_CHAR_LIMIT: ${RAG_DEFAULT_TOTAL_CHAR_LIMIT:-120000}
       RAG_OLLAMA_MAX_CONCURRENT: ${RAG_OLLAMA_MAX_CONCURRENT:-1}
+      RAG_AUTO_GRADE_MAX_ATTEMPTS: ${RAG_AUTO_GRADE_MAX_ATTEMPTS:-2}
+      RAG_AUTO_GRADE_RETRY_DELAY_SECONDS: ${RAG_AUTO_GRADE_RETRY_DELAY_SECONDS:-1.5}
       RAG_CROSS_ENCODER_MODEL: ${RAG_CROSS_ENCODER_MODEL:-cross-encoder/ms-marco-MiniLM-L-6-v2}
       RAG_MODEL_CACHE: ${RAG_MODEL_CACHE:-/data/models}
     volumes:
       - ./data:/data
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/live', timeout=3)"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/live', timeout=3)",
+        ]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -116,7 +129,13 @@ services:
     volumes:
       - ./data/chroma-server:/data
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v2/heartbeat', timeout=3)"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v2/heartbeat', timeout=3)",
+        ]
       interval: 15s
       timeout: 5s
       retries: 8

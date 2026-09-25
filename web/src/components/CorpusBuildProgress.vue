@@ -47,8 +47,8 @@ function stageLabel() {
 const validationReady = computed(() =>
   Boolean(
     props.validation &&
-    typeof props.validation.valid === "boolean" &&
-    ["review", "ready", "published"].includes(String(props.stage || "")),
+      typeof props.validation.valid === "boolean" &&
+      ["review", "ready", "published"].includes(String(props.stage || "")),
   ),
 );
 const validationValid = computed(() => props.validation?.valid === true);
@@ -139,32 +139,27 @@ const nextStage = computed(() => {
       class="unresolved-line"
       role="status"
     >
-      <b>{{
-        i18n.t("pdf_corpus.metadata_enrichment_in_progress")
-      }}</b
+      <b>{{ i18n.t("pdf_corpus.metadata_enrichment_in_progress") }}</b
       ><span
         >{{ props.metadataOperation.records_processed || 0 }} /
         {{ props.metadataOperation.records_total || 0 }}
-        {{ i18n.t("pdf_corpus.records") }} ·
-        {{ props.metadataOperation.provider || "ollama" }} ·
-        {{
-          props.metadataOperation.model || i18n.t("pdf_corpus.default_model")
-        }}</span
+        {{ i18n.t("pdf_corpus.records") }} · {{ props.metadataOperation.provider || "ollama" }} ·
+        {{ props.metadataOperation.model || i18n.t("pdf_corpus.default_model") }}</span
       ><span v-if="props.metadataOperation.current_pass">{{
         i18n.tf("pdf_corpus.enrichment_pass_number", {
           pass: props.metadataOperation.current_pass,
         })
       }}</span
       ><span v-if="props.metadataOperation.records_reopened">{{
-        i18n.tf("pdf_corpus.record_span_reopened_notice", { count: props.metadataOperation.records_reopened })
+        i18n.tf("pdf_corpus.record_span_reopened_notice", {
+          count: props.metadataOperation.records_reopened,
+        })
       }}</span>
     </div>
     <div class="stage-explanation">
       <b>{{ stageLabel() }}</b
       ><span>{{ stageExplanation }}</span
-      ><small v-if="nextStage"
-        >{{ i18n.t("pdf_corpus.next_stage") }}: {{ nextStage }}</small
-      >
+      ><small v-if="nextStage">{{ i18n.t("pdf_corpus.next_stage") }}: {{ nextStage }}</small>
     </div>
     <CorpusSegmentationTelemetry
       v-if="props.segmentationTelemetry"
@@ -172,25 +167,21 @@ const nextStage = computed(() => {
     />
     <div v-if="props.llmMetrics && Number(props.llmMetrics.calls || 0) > 0" class="llm-metrics">
       <span
-        ><b>{{ props.llmMetrics.calls || 0 }}</b>
-        {{ i18n.t("pdf_corpus.llm_calls") }}</span
+        ><b>{{ props.llmMetrics.calls || 0 }}</b> {{ i18n.t("pdf_corpus.llm_calls") }}</span
       ><span v-if="props.llmMetrics.manifest_calls"
-        >{{ props.llmMetrics.manifest_calls }}
-        {{ i18n.t("pdf_corpus.manifest_calls") }}</span
+        >{{ props.llmMetrics.manifest_calls }} {{ i18n.t("pdf_corpus.manifest_calls") }}</span
       ><span v-if="props.llmMetrics.segmentation_calls"
         >{{ props.llmMetrics.segmentation_calls }}
         {{ i18n.t("pdf_corpus.segmentation_calls") }}</span
       ><span v-if="props.llmMetrics.metadata_calls"
-        >{{ props.llmMetrics.metadata_calls }}
-        {{ i18n.t("pdf_corpus.metadata_calls") }}</span
+        >{{ props.llmMetrics.metadata_calls }} {{ i18n.t("pdf_corpus.metadata_calls") }}</span
       ><span v-if="props.llmMetrics.retries"
         >{{ props.llmMetrics.retries }} {{ i18n.t("pdf_corpus.llm_retries") }}</span
       ><span v-if="props.llmMetrics.structured_output_failures"
         >{{ props.llmMetrics.structured_output_failures }}
         {{ i18n.t("pdf_corpus.structured_failures") }}</span
       ><span v-if="props.llmMetrics.escalations"
-        >{{ props.llmMetrics.escalations }}
-        {{ i18n.t("pdf_corpus.escalations") }}</span
+        >{{ props.llmMetrics.escalations }} {{ i18n.t("pdf_corpus.escalations") }}</span
       >
     </div>
     <div
@@ -230,18 +221,13 @@ const nextStage = computed(() => {
           ? i18n.t("pdf_corpus.validation_passed")
           : i18n.t("pdf_corpus.validation_attention")
       }}</b
-      ><span
-        >{{ validationCoverage }}%
-        {{ i18n.t("pdf_corpus.source_coverage") }}</span
+      ><span>{{ validationCoverage }}% {{ i18n.t("pdf_corpus.source_coverage") }}</span
       ><span v-if="validationEvidenceIssues"
-        >{{ validationEvidenceIssues }}
-        {{ i18n.t("pdf_corpus.evidence_issues") }}</span
+        >{{ validationEvidenceIssues }} {{ i18n.t("pdf_corpus.evidence_issues") }}</span
       ><span v-if="validationSchemaIssues"
-        >{{ validationSchemaIssues }}
-        {{ i18n.t("pdf_corpus.schema_issues") }}</span
+        >{{ validationSchemaIssues }} {{ i18n.t("pdf_corpus.schema_issues") }}</span
       ><span v-if="validationPageLabelIssues"
-        >{{ validationPageLabelIssues }}
-        {{ i18n.t("pdf_corpus.page_label_issues") }}</span
+        >{{ validationPageLabelIssues }} {{ i18n.t("pdf_corpus.page_label_issues") }}</span
       >
     </div>
     <details v-if="validationReady && !validationValid" class="validation-details">

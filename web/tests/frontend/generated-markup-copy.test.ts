@@ -20,14 +20,18 @@ describe("PDF explorer copy module", () => {
   it("localizes extract fallbacks used by the live canvas renderer", () => {
     const copy = createPdfExplorerCopy(
       (key, fallback = "") =>
-        key === "pdf.extract.file_gone" ? "Le fichier PDF n’est plus disponible dans cette session de navigateur." : fallback,
+        key === "pdf.extract.file_gone"
+          ? "Le fichier PDF n’est plus disponible dans cette session de navigateur."
+          : fallback,
       (_key, fallback, values = {}) =>
         Object.entries(values).reduce(
           (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
           fallback,
         ),
     );
-    expect(copy.fileGone).toBe("Le fichier PDF n’est plus disponible dans cette session de navigateur.");
+    expect(copy.fileGone).toBe(
+      "Le fichier PDF n’est plus disponible dans cette session de navigateur.",
+    );
     expect(copy.sourcePdfJsPage(4)).toBe("PDF.js (browser), page 4");
     expect(copy.pageMarker(2)).toBe("--- Page 2 ---");
   });
@@ -95,12 +99,17 @@ describe("LLM tool and record dialog markup", () => {
 
   it("localizes LLM tool result actions", async () => {
     const { llmToolResultBody } = await import("../../src/domain/llmToolMarkup");
-    const { actions } = llmToolResultBody("pdf_clean_text", {}, { text: "x" }, {
-      tr: (key, fallback = "") =>
-        key === "jobs.tool.use_page_text" ? "Utiliser comme texte de page" : fallback,
-      trf,
-      ragGradeHtml: () => "",
-    });
+    const { actions } = llmToolResultBody(
+      "pdf_clean_text",
+      {},
+      { text: "x" },
+      {
+        tr: (key, fallback = "") =>
+          key === "jobs.tool.use_page_text" ? "Utiliser comme texte de page" : fallback,
+        trf,
+        ragGradeHtml: () => "",
+      },
+    );
     expect(actions).toContain("Utiliser comme texte de page");
     expect(actions).not.toContain("Use as current page text");
   });
@@ -109,7 +118,9 @@ describe("LLM tool and record dialog markup", () => {
     const { createJobDialogCopy } = await import("../../src/domain/jobDialogCopy");
     const copy = createJobDialogCopy(
       (key, fallback = "") =>
-        key === "jobs.toast.configure_provider" ? "Configurez d’abord un fournisseur LLM" : fallback,
+        key === "jobs.toast.configure_provider"
+          ? "Configurez d’abord un fournisseur LLM"
+          : fallback,
       (_key, fallback) => fallback,
     );
     expect(copy.configureProvider).toBe("Configurez d’abord un fournisseur LLM");

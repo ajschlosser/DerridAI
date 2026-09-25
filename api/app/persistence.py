@@ -1,4 +1,13 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
+"""Durable server-owned application repositories.
+
+The system SQLite database stores application/provenance/operation state; auth
+uses its separate SQLite database, while canonical corpus files and derived
+Chroma projections keep their own lifecycles. Keeping these boundaries explicit
+prevents a repository helper from accidentally turning a cache or projection
+into the authoritative scholarly record.
+"""
+
 from __future__ import annotations
 
 import copy

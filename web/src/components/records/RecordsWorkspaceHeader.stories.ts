@@ -16,4 +16,6 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof RecordsWorkspaceHeader>;
 export const Default: Story = {};
-export const Empty: Story = {args: {fileName: "", matched: 0, total: 0, flagged: 0, selected: 0}};
+export const Empty: Story = {
+  args: { fileName: "", matched: 0, total: 0, flagged: 0, selected: 0 },
+};

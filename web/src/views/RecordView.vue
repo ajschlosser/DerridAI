@@ -35,11 +35,7 @@ const annotationError = ref("");
 
 const record = computed(() => snapshot.value.record || {});
 const work = computed(() =>
-  String(
-    record.value.work ||
-      record.value.document_title ||
-      i18n.t("record.untitled"),
-  ),
+  String(record.value.work || record.value.document_title || i18n.t("record.untitled")),
 );
 const author = computed(() => String(record.value.document_author || ""));
 const year = computed<string | number | null>(() => {
@@ -57,16 +53,11 @@ const positionLabel = computed(() =>
 const badges = computed(() => {
   const out: Array<{ text: string; tone?: string }> = [];
   if (record.value.region_type) out.push({ text: String(record.value.region_type) });
-  if (record.value.primary_text === false)
-    out.push({ text: i18n.t("record.secondary_text") });
-  else if (record.value.primary_text === true)
-    out.push({ text: i18n.t("record.primary_text") });
-  if (record.value.document_is_translation)
-    out.push({ text: i18n.t("record.translation") });
-  if (record.value.needs_review)
-    out.push({ text: i18n.t("record.needs_review"), tone: "warn" });
-  if (snapshot.value.mode === "database")
-    out.push({ text: i18n.t("record.database_record") });
+  if (record.value.primary_text === false) out.push({ text: i18n.t("record.secondary_text") });
+  else if (record.value.primary_text === true) out.push({ text: i18n.t("record.primary_text") });
+  if (record.value.document_is_translation) out.push({ text: i18n.t("record.translation") });
+  if (record.value.needs_review) out.push({ text: i18n.t("record.needs_review"), tone: "warn" });
+  if (snapshot.value.mode === "database") out.push({ text: i18n.t("record.database_record") });
   else if (snapshot.value.file_name) out.push({ text: String(snapshot.value.file_name) });
   return out;
 });
@@ -241,10 +232,7 @@ onBeforeUnmount(() => {
     <section v-else-if="!snapshot.available" class="record-workspace-empty">
       <h1>{{ i18n.t("record.no_record_selected") }}</h1>
       <p>
-        {{
-          snapshot.reason ||
-          i18n.t("record.no_record_help")
-        }}
+        {{ snapshot.reason || i18n.t("record.no_record_help") }}
       </p>
       <div>
         <button type="button" @click="runtime.navigateRecordWorkspace('global')">
@@ -313,9 +301,7 @@ onBeforeUnmount(() => {
           @click="inspectorCollapsed = !inspectorCollapsed"
         >
           {{
-            inspectorCollapsed
-              ? i18n.t("record.show_inspector")
-              : i18n.t("record.hide_inspector")
+            inspectorCollapsed ? i18n.t("record.show_inspector") : i18n.t("record.hide_inspector")
           }}
         </button>
       </div>
@@ -386,11 +372,7 @@ onBeforeUnmount(() => {
                 {{ i18n.t("annotations.add_note_tags") }}
               </h2>
             </div>
-            <button
-              type="button"
-              :aria-label="i18n.t('ui.close')"
-              @click="closeAnnotation"
-            >
+            <button type="button" :aria-label="i18n.t('ui.close')" @click="closeAnnotation">
               ×
             </button>
           </header>
@@ -402,9 +384,7 @@ onBeforeUnmount(() => {
                 id="recordAnnotationNote"
                 v-model="annotationNote"
                 rows="5"
-                :placeholder="
-                  i18n.t('annotations.note_placeholder')
-                "
+                :placeholder="i18n.t('annotations.note_placeholder')"
               ></textarea>
             </label>
             <label

@@ -64,11 +64,9 @@ const canConfigureResearch = computed(() =>
 );
 const canGrade = computed(() => auth.isAdmin);
 const runDisabledReason = computed(() => {
-  if (!workspace.value?.can_run || !auth.can("rag.run"))
-    return i18n.t("permissions.rag_denied");
+  if (!workspace.value?.can_run || !auth.can("rag.run")) return i18n.t("permissions.rag_denied");
   if (!prompt.value.trim()) return i18n.t("research.prompt_required");
-  if (!profiles.value.length)
-    return i18n.t("research.no_profile_configured");
+  if (!profiles.value.length) return i18n.t("research.no_profile_configured");
   if (preset.value === "evidence" && !selectedEvidence.value.length)
     return i18n.t("research.evidence_required");
   if (preset.value !== "evidence" && !config.value?.source_collection && !stores.value.length)
@@ -354,12 +352,7 @@ async function cancelJob(job: ResearchJob) {
   }
 }
 async function removeJob(job: ResearchJob) {
-  if (
-    !window.confirm(
-      i18n.t("research.remove_run_confirm"),
-    )
-  )
-    return;
+  if (!window.confirm(i18n.t("research.remove_run_confirm"))) return;
   try {
     await runtime.deleteResearchJob(job.id);
     if (activeJob.value?.id === job.id) activeJob.value = null;
@@ -450,10 +443,9 @@ async function discoverModels() {
     discoveredModels.value = (await runtime.discoverResearchModels(
       config.value.provider_profile_id,
     )) as string[];
-    runtime.notifyToast(
-      `${discoveredModels.value.length} ${i18n.t("research.models_found")}`,
-      { tone: "success" },
-    );
+    runtime.notifyToast(`${discoveredModels.value.length} ${i18n.t("research.models_found")}`, {
+      tone: "success",
+    });
   } catch (error) {
     runtime.notifyToast(error instanceof Error ? error.message : String(error), { tone: "danger" });
   }
@@ -493,8 +485,7 @@ onBeforeUnmount(() => {
 <template>
   <main class="vue-native-page research-native-page" aria-labelledby="research-page-title">
     <div v-if="loading && !workspace" class="research-loading" role="status">
-      <span class="spinner"></span
-      >{{ i18n.t("research.loading_workspace") }}
+      <span class="spinner"></span>{{ i18n.t("research.loading_workspace") }}
     </div>
     <AccessibleEmptyState
       v-else-if="noDatabase"
@@ -505,9 +496,7 @@ onBeforeUnmount(() => {
           ? i18n.t('research.empty_state_help')
           : i18n.t('research.empty_state_denied')
       "
-      :action-label="
-        canCreateDatabase ? i18n.t('research.empty_state_action') : ''
-      "
+      :action-label="canCreateDatabase ? i18n.t('research.empty_state_action') : ''"
       @action="runtime.openDatabaseCreationFromResearch?.()"
     />
     <template v-else-if="workspace && config">
@@ -515,9 +504,7 @@ onBeforeUnmount(() => {
         :kicker="i18n.t('research.page_kicker')"
         :title="i18n.t('research.page_title')"
         title-id="research-page-title"
-        :description="
-          i18n.t('research.page_subtitle')
-        "
+        :description="i18n.t('research.page_subtitle')"
         :actions-label="i18n.t('research.page_state')"
       >
         <template #actions>

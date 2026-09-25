@@ -552,15 +552,18 @@ onBeforeUnmount(() => {
                   aria-hidden="true"
                   v-html="gearIconInner"
                 ></svg
-                >{{ copy.manageProviders }}</button>
+                >{{ copy.manageProviders }}
+              </button>
             </div>
           </details>
-          <button class="btn small primary" id="pdfCorpusBuilder" @click="openCorpusBuilder"
-            ><AppIcon name="spark" />{{ copy.buildRecordSet }}</button>
+          <button class="btn small primary" id="pdfCorpusBuilder" @click="openCorpusBuilder">
+            <AppIcon name="spark" />{{ copy.buildRecordSet }}
+          </button>
         </div>
         <div class="pdf-context-row">
           <div class="pdf-context-pill">
-            <span>{{ copy.source }}</span><b>p. {{ state.pdf.page }}</b>
+            <span>{{ copy.source }}</span
+            ><b>p. {{ state.pdf.page }}</b>
           </div>
           <div class="pdf-context-pill">
             <span>{{ copy.works }}</span>
@@ -570,7 +573,8 @@ onBeforeUnmount(() => {
             >
           </div>
           <div class="pdf-context-pill">
-            <span>{{ copy.currentPageRecords }}</span><b>{{ linked.length }}</b>
+            <span>{{ copy.currentPageRecords }}</span
+            ><b>{{ linked.length }}</b>
           </div>
           <button
             v-if="selectedRelated()"
@@ -717,8 +721,8 @@ onBeforeUnmount(() => {
                       aria-hidden="true"
                       v-html="copyIconInner"
                     ></svg
-                    >{{ copy.copy }}</button
-                  >
+                    >{{ copy.copy }}
+                  </button>
                   <button
                     class="btn small"
                     :data-cite-row-key="runtime.reviewKey(file, index)"
@@ -747,21 +751,24 @@ onBeforeUnmount(() => {
                       :name="
                         runtime.evidenceIsSelected(evidenceKey(file.id, index)) ? 'check' : 'plus'
                       "
-                      />{{ copy.evidence }}</button>
+                    />{{ copy.evidence }}
+                  </button>
                   <button
                     class="btn small"
                     :data-linked-open-file="file.id"
                     :data-linked-open-index="index"
                     @click="openLinkedRecord(file.id, index)"
-                    ><AppIcon name="record" />{{ copy.openRecord }}</button
                   >
+                    <AppIcon name="record" />{{ copy.openRecord }}
+                  </button>
                   <button
                     class="btn small danger unlink-pdf-link"
                     :data-unlink-file="file.id"
                     :data-unlink-index="index"
                     :title="copy.unlinkTitle"
                     @click="unlinkRecord(file.id, index)"
-                    ><svg
+                  >
+                    <svg
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
@@ -771,7 +778,8 @@ onBeforeUnmount(() => {
                       aria-hidden="true"
                       v-html="closeIconInner"
                     ></svg
-                    >{{ copy.unlink }}</button>
+                    >{{ copy.unlink }}
+                  </button>
                 </div>
               </div>
             </template>
@@ -825,8 +833,8 @@ onBeforeUnmount(() => {
                       stroke-linejoin="round"
                       aria-hidden="true"
                       v-html="copyIconInner"
-                    ></svg
-                  ></button>
+                    ></svg>
+                  </button>
                   <button
                     class="copy-record-mini"
                     :data-cite-row-key="runtime.reviewKey(file, index)"
@@ -878,9 +886,9 @@ onBeforeUnmount(() => {
         <div class="drop-icon"><AppIcon name="pdf" /></div>
         <h1>{{ copy.explorer }}</h1>
         <p v-text="copy.emptyHelp"></p>
-        <button class="btn primary" id="openPdf2" @click="openPdfPicker"
-          ><AppIcon name="pdf" />{{ copy.choosePdf }}</button
-        >
+        <button class="btn primary" id="openPdf2" @click="openPdfPicker">
+          <AppIcon name="pdf" />{{ copy.choosePdf }}
+        </button>
       </div>
     </section>
   </main>

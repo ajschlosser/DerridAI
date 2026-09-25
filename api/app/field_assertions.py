@@ -23,7 +23,7 @@ EvaluationStatus = Literal["not_evaluated", "value_supported", "no_supported_val
 AuthorityStatus = Literal["unreviewed", "human_confirmed", "human_override", "disputed"]
 ValueStatus = Literal["present", "confirmed_absent", "invalid", "unresolved"]
 
-_STATUS_TO_CANONICAL = {
+_STATUS_TO_CANONICAL: dict[str, tuple[DerivationMethod, EvaluationStatus, AuthorityStatus, ValueStatus]] = {
     "model_inferred": ("model", "value_supported", "unreviewed", "present"),
     "llm_inferred": ("model", "value_supported", "unreviewed", "present"),
     "human_confirmed": ("model", "value_supported", "human_confirmed", "present"),
@@ -507,6 +507,10 @@ def _legacy_assertion(
     legacy_status_name = str(status.get("status") or "").strip()
     if not legacy_status_name and value in (None, "", []):
         return None
+    derivation: DerivationMethod
+    evaluation: EvaluationStatus
+    authority: AuthorityStatus
+    value_status: ValueStatus
     derivation, evaluation, authority, value_status = _STATUS_TO_CANONICAL.get(
         legacy_status_name,
         ("imported", "not_evaluated", "unreviewed", "present" if value not in (None, "", []) else "unresolved"),

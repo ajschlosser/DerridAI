@@ -70,8 +70,7 @@ watch(
   () => [props.proposedText, props.recordId] as const,
   ([value]) => {
     draft.value = String(value || "");
-    if (value)
-      operationMessage.value = i18n.t("pdf_corpus.llm_touchup_ready");
+    if (value) operationMessage.value = i18n.t("pdf_corpus.llm_touchup_ready");
   },
   { immediate: true },
 );
@@ -87,8 +86,7 @@ watch(
 watch(
   () => props.busy,
   (value) => {
-    if (value)
-      operationMessage.value = i18n.t("pdf_corpus.llm_touchup_contacting");
+    if (value) operationMessage.value = i18n.t("pdf_corpus.llm_touchup_contacting");
   },
 );
 function run() {
@@ -103,9 +101,7 @@ function run() {
     :open="open"
     size="xlarge"
     :title="i18n.t('pdf_corpus.llm_touchup_title')"
-    :description="
-      i18n.tf('pdf_corpus.llm_touchup_help')
-    "
+    :description="i18n.tf('pdf_corpus.llm_touchup_help')"
     :close-label="i18n.t('ui.close')"
     @close="emit('close')"
     ><LlmExecutionControl
@@ -113,9 +109,7 @@ function run() {
       :model-override="modelOverride"
       :profiles="profiles"
       :disabled="busy"
-      :task="
-        i18n.t('pdf_corpus.llm_touchup_provider_help')
-      "
+      :task="i18n.t('pdf_corpus.llm_touchup_provider_help')"
       :concurrency-risk="concurrencyRisk"
       :active-requests="activeRequests"
       :concurrency-limit="concurrencyLimit"
@@ -123,14 +117,10 @@ function run() {
       @update:model-override="(value) => emit('update:modelOverride', value)" />
     <details class="built-in-policy">
       <summary>
-        {{
-          i18n.t("pdf_corpus.touchup_builtin_policy")
-        }}
+        {{ i18n.t("pdf_corpus.touchup_builtin_policy") }}
       </summary>
       <p>
-        {{
-          i18n.t("pdf_corpus.touchup_builtin_policy_help")
-        }}
+        {{ i18n.t("pdf_corpus.touchup_builtin_policy_help") }}
       </p>
     </details>
     <div class="touchup-controls">
@@ -139,31 +129,23 @@ function run() {
         ><input
           v-model="instructions"
           class="control"
-          :placeholder="
-            i18n.t('pdf_corpus.llm_touchup_instruction_placeholder')
-          "
+          :placeholder="i18n.t('pdf_corpus.llm_touchup_instruction_placeholder')"
           aria-describedby="touchup-instruction-help" /></label
       ><UiButton
         variant="primary"
         :disabled="busy || !providerProfileId"
         :label="
-          busy
-            ? i18n.t('pdf_corpus.llm_touchup_running')
-            : i18n.t('pdf_corpus.run_llm_touchup')
+          busy ? i18n.t('pdf_corpus.llm_touchup_running') : i18n.t('pdf_corpus.run_llm_touchup')
         "
         @click="run"
       />
     </div>
     <p id="touchup-instruction-help" v-if="redundant" class="redundant-warning" role="status">
-      {{
-        i18n.t("pdf_corpus.touchup_redundant_instruction")
-      }}
+      {{ i18n.t("pdf_corpus.touchup_redundant_instruction") }}
     </p>
     <p v-if="error" class="operation-error" role="alert">{{ error }}</p>
     <p v-else-if="noChange" class="operation-status" aria-live="polite">
-      {{
-        i18n.t("pdf_corpus.llm_touchup_no_change")
-      }}
+      {{ i18n.t("pdf_corpus.llm_touchup_no_change") }}
     </p>
     <p v-else-if="operationMessage" class="operation-status" aria-live="polite">
       {{ operationMessage }}
@@ -174,47 +156,60 @@ function run() {
     <p v-if="provider || proposalId || runId" class="model-note proposal-context">
       {{
         i18n.tf("pdf_corpus.llm_touchup_context", {
-            provider: provider || "—",
-            proposal: proposalId || "—",
-            run: runId || "—",
-          })
+          provider: provider || "—",
+          proposal: proposalId || "—",
+          run: runId || "—",
+        })
       }}
       <span v-if="proposalCreatedAt">
         ·
-        {{
-          i18n.tf("pdf_corpus.llm_touchup_created", { at: proposalCreatedAt })
-        }}</span
+        {{ i18n.tf("pdf_corpus.llm_touchup_created", { at: proposalCreatedAt }) }}</span
       >
     </p>
-    <section v-if="proposedText && !noChange" class="touchup-review" aria-labelledby="touchup-review-title">
+    <section
+      v-if="proposedText && !noChange"
+      class="touchup-review"
+      aria-labelledby="touchup-review-title"
+    >
       <div class="touchup-review-head">
         <div>
-          <p class="eyebrow">{{ i18n.t("pdf_corpus.llm_touchup_review_eyebrow", "Review workspace") }}</p>
-          <h3 id="touchup-review-title">{{ i18n.t("pdf_corpus.llm_touchup_diff_preview", "Highlighted changes") }}</h3>
+          <p class="eyebrow">
+            {{ i18n.t("pdf_corpus.llm_touchup_review_eyebrow", "Review workspace") }}
+          </p>
+          <h3 id="touchup-review-title">
+            {{ i18n.t("pdf_corpus.llm_touchup_diff_preview", "Highlighted changes") }}
+          </h3>
         </div>
-        <span class="review-chip">{{ i18n.t("pdf_corpus.llm_touchup_not_applied", "Not applied") }}</span>
+        <span class="review-chip">{{
+          i18n.t("pdf_corpus.llm_touchup_not_applied", "Not applied")
+        }}</span>
       </div>
       <div v-if="textDiff" class="touchup-diff" aria-live="polite">
         <div class="touchup-diff-columns">
           <div class="diff-pane-label">{{ i18n.t("pdf_corpus.cleanup_before", "Before") }}</div>
-          <div class="diff-pane-label proposed-label">{{ i18n.t("pdf_corpus.llm_touchup_proposed", "LLM proposal") }}</div>
+          <div class="diff-pane-label proposed-label">
+            {{ i18n.t("pdf_corpus.llm_touchup_proposed", "LLM proposal") }}
+          </div>
           <pre class="change-diff current-diff" v-html="textDiff.left"></pre>
           <pre class="change-diff proposed-diff" v-html="textDiff.right"></pre>
         </div>
       </div>
       <label class="proposal-editor">
         <span>{{ i18n.t("pdf_corpus.llm_touchup_edit_label", "Editable proposal") }}</span>
-        <textarea v-model="draft" :aria-label="i18n.t('pdf_corpus.llm_touchup_proposed', 'LLM proposal')"></textarea>
+        <textarea
+          v-model="draft"
+          :aria-label="i18n.t('pdf_corpus.llm_touchup_proposed', 'LLM proposal')"
+        ></textarea>
       </label>
     </section>
     <p v-if="diffSummary" class="touchup-change-summary" role="status">
       {{
         i18n.tf("pdf_corpus.llm_touchup_change_summary", {
-            removed: diffSummary.removed,
-            added: diffSummary.added,
-            before: diffSummary.before,
-            after: diffSummary.after,
-          })
+          removed: diffSummary.removed,
+          added: diffSummary.added,
+          before: diffSummary.before,
+          after: diffSummary.after,
+        })
       }}
     </p>
     <div v-if="!noChange && (changes?.length || warnings?.length)" class="touchup-notes">
@@ -232,9 +227,7 @@ function run() {
       </section>
     </div>
     <template #footer
-      ><span class="footer-note">{{
-        i18n.t("pdf_corpus.llm_touchup_source_preserved")
-      }}</span>
+      ><span class="footer-note">{{ i18n.t("pdf_corpus.llm_touchup_source_preserved") }}</span>
       <div>
         <UiButton :label="i18n.t('ui.cancel')" @click="emit('close')" /><UiButton
           v-if="proposalStatus === 'pending_review' && proposalId"
@@ -372,7 +365,9 @@ function run() {
   border-radius: 10px;
   background: var(--soft);
   color: var(--text);
-  font: 15px/1.6 Georgia, serif;
+  font:
+    15px/1.6 Georgia,
+    serif;
 }
 .touchup-notes h3 {
   font-size: 0.9375rem;

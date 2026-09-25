@@ -218,33 +218,25 @@ function reset() {
   >
     <section class="manifest-impact" aria-labelledby="manifest-impact-title">
       <div>
-        <span class="eyebrow">{{
-          i18n.t("pdf_corpus.document_defaults")
-        }}</span>
+        <span class="eyebrow">{{ i18n.t("pdf_corpus.document_defaults") }}</span>
         <h3 id="manifest-impact-title">
           {{ i18n.t("pdf_corpus.document_defaults_title") }}
         </h3>
         <p>
-          {{
-            i18n.t("pdf_corpus.manifest_help")
-          }}
+          {{ i18n.t("pdf_corpus.manifest_help") }}
         </p>
       </div>
       <div class="manifest-impact-side">
         <UiButton
           :label="i18n.t('pdf_corpus.reanalyze_document')"
           :disabled="props.disabled"
-          :title="
-            i18n.t('pdf_corpus.reanalyze_document_help')
-          "
+          :title="i18n.t('pdf_corpus.reanalyze_document_help')"
           @click="emit('reanalyze')"
         />
         <UiStatusBadge
           v-if="props.affectedRecords > 0"
           tone="info"
-          :label="
-            i18n.tf('pdf_corpus.document_defaults_records', { count: props.affectedRecords })
-          "
+          :label="i18n.tf('pdf_corpus.document_defaults_records', { count: props.affectedRecords })"
           :show-dot="false"
         />
       </div>
@@ -286,9 +278,8 @@ function reset() {
         >
           <span>{{
             i18n.tf("pdf_corpus.manifest_changed_elsewhere", {
-                value:
-                  serverChanged[field.key] || i18n.t("pdf_corpus.manifest_empty_value"),
-              })
+              value: serverChanged[field.key] || i18n.t("pdf_corpus.manifest_empty_value"),
+            })
           }}</span>
           <button
             type="button"
@@ -305,17 +296,16 @@ function reset() {
           role="note"
         >
           <b>{{
-            i18n.tf("pdf_corpus.manifest_start_inferred", { percent: Math.round(startInference.confidence * 100) })
+            i18n.tf("pdf_corpus.manifest_start_inferred", {
+              percent: Math.round(startInference.confidence * 100),
+            })
           }}</b>
           <ul>
             <li v-for="clue in startInference.clues" :key="clue.kind">{{ clue.detail }}</li>
           </ul>
         </div>
       </UiField>
-      <UiField
-        v-if="group.key === 'language'"
-        :label="i18n.t('pdf_corpus.manifest_translation')"
-      >
+      <UiField v-if="group.key === 'language'" :label="i18n.t('pdf_corpus.manifest_translation')">
         <select v-model="translationDraft" class="control" :disabled="props.disabled">
           <option value="">{{ i18n.t("pdf_corpus.manifest_unknown") }}</option>
           <option value="yes">{{ i18n.t("ui.yes") }}</option>

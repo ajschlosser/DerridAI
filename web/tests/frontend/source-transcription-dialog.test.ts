@@ -54,7 +54,9 @@ describe("SourceTranscriptionDialog", () => {
       props: { open: true, pdfUrl: "", page: 1, pageCount: 1, text: "Transcript", busy: true },
       attachTo: document.body,
     });
-    expect(document.body.querySelector(".transcription-pane")?.getAttribute("aria-busy")).toBe("true");
+    expect(document.body.querySelector(".transcription-pane")?.getAttribute("aria-busy")).toBe(
+      "true",
+    );
     expect(document.body.querySelector("textarea")?.hasAttribute("disabled")).toBe(true);
   });
 });

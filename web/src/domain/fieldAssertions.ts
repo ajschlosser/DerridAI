@@ -112,7 +112,10 @@ export function assertionPresentationTab(assertion: FieldAssertionView): Asserti
   const id = assertion.field_id;
   if (id.startsWith("derridai.indexing.") || BUILTIN_INDEXING_FIELDS.has(assertion.field_name))
     return "indexing";
-  if (id.startsWith("derridai.quotation.") || BUILTIN_OVERVIEW_ASSERTION_FIELDS.has(assertion.field_name))
+  if (
+    id.startsWith("derridai.quotation.") ||
+    BUILTIN_OVERVIEW_ASSERTION_FIELDS.has(assertion.field_name)
+  )
     return "overview";
   return "provenance";
 }

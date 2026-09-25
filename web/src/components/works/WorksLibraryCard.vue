@@ -82,8 +82,7 @@ function onCardClick(event: MouseEvent) {
               />
             </span>
             <span v-else-if="props.work.translator.value"
-              >{{ i18n.t("works.translated_by") }}
-              {{ props.work.translator.value }}</span
+              >{{ i18n.t("works.translated_by") }} {{ props.work.translator.value }}</span
             >
           </div>
         </div>
@@ -120,9 +119,7 @@ function onCardClick(event: MouseEvent) {
                 :data-edit-work-meta="props.work.work"
                 @click.stop="emit('edit')"
               >
-                <AppIcon name="edit" aria-hidden="true" />{{
-                  i18n.t("works.edit_metadata")
-                }}
+                <AppIcon name="edit" aria-hidden="true" />{{ i18n.t("works.edit_metadata") }}
               </button>
               <template v-if="props.work.review">
                 <button
@@ -143,9 +140,7 @@ function onCardClick(event: MouseEvent) {
                   :data-auto-work="props.work.work"
                   @click.stop="emit('improve')"
                 >
-                  <AppIcon name="spark" aria-hidden="true" />{{
-                    i18n.t("works.auto_improve")
-                  }}
+                  <AppIcon name="spark" aria-hidden="true" />{{ i18n.t("works.auto_improve") }}
                 </button>
               </template>
               <button
@@ -154,9 +149,7 @@ function onCardClick(event: MouseEvent) {
                 :data-remove-work="props.work.work"
                 @click.stop="emit('remove')"
               >
-                <AppIcon name="close" aria-hidden="true" />{{
-                  i18n.t("works.remove_entire")
-                }}
+                <AppIcon name="close" aria-hidden="true" />{{ i18n.t("works.remove_entire") }}
               </button>
             </div>
           </details>
@@ -184,7 +177,10 @@ function onCardClick(event: MouseEvent) {
           :data-work-review="props.work.work"
           :disabled="!props.work.review"
           :aria-label="
-            i18n.tf('works.open_review_records_for_work', { count: props.work.review, work: props.work.work })
+            i18n.tf('works.open_review_records_for_work', {
+              count: props.work.review,
+              work: props.work.work,
+            })
           "
           @click.stop="emit('flagged')"
         >

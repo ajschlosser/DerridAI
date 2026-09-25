@@ -49,8 +49,7 @@ export function createPdfExplorerCopy(translate: Tr, interpolate: Trf) {
     recordFallback: tr("pdf.record_fallback"),
     renderer: tr("pdf.renderer_pdfjs"),
     fallbackRenderer: tr("pdf.renderer_fallback"),
-    linkedOnPage: (count: number) =>
-      trf("pdf.linked_on_page", { count }),
+    linkedOnPage: (count: number) => trf("pdf.linked_on_page", { count }),
     pageText: tr("pdf.page_text"),
     extractThenClean: tr("pdf.extract_then_clean"),
     sourceLabel: (source: string) => trf("pdf.extraction_source", { source }),
@@ -70,46 +69,29 @@ export function createPdfExplorerCopy(translate: Tr, interpolate: Trf) {
     unlinkTitle: tr("pdf.unlink_title"),
     noLinkedYet: tr("pdf.no_linked_yet"),
     recordsAnywhere: tr("pdf.records_anywhere"),
-    relatedNote: (count: number) =>
-      trf("pdf.related_note",
-        { count },
-      ),
+    relatedNote: (count: number) => trf("pdf.related_note", { count }),
     filterLinked: tr("pdf.filter_linked"),
     copyEntire: tr("pdf.copy_entire"),
     openPdfPage: (page: number) => trf("pdf.open_page", { page }),
     noFilterMatch: tr("pdf.no_filter_match"),
-    showingFirst: (shown: number, total: number) =>
-      trf("pdf.showing_first",
-        { shown, total },
-      ),
+    showingFirst: (shown: number, total: number) => trf("pdf.showing_first", { shown, total }),
     recordN: (n: number) => trf("dashboard.record_n", { n }),
     chooseAutocomplete: tr("pdf.choose_autocomplete"),
     couldNotOpen: tr("pdf.could_not_open"),
     pdfJsUnavailable: tr("pdf.extract.pdfjs_unavailable"),
-    jsInitFailed: (error: string) =>
-      trf("pdf.js_init_failed",
-        { error },
-      ),
+    jsInitFailed: (error: string) => trf("pdf.js_init_failed", { error }),
     rendering: (page: number) => trf("pdf.rendering", { page }),
-    renderFailed: (page: number, error: string) =>
-      trf("pdf.render_failed", { page, error }),
+    renderFailed: (page: number, error: string) => trf("pdf.render_failed", { page, error }),
     fileGone: tr("pdf.extract.file_gone"),
-    apiUnreachable: (error: string) =>
-      trf("pdf.extract.api_unreachable", { error }),
-    extractHttpFailed: (status: string | number) =>
-      trf("pdf.extract.http_failed", { status }),
-    sourcePdfJsPage: (page: number) =>
-      trf("pdf.extract.source_pdfjs_page", { page }),
-    sourcePyMuPage: (page: number) =>
-      trf("pdf.extract.source_pymu_page", { page }),
+    apiUnreachable: (error: string) => trf("pdf.extract.api_unreachable", { error }),
+    extractHttpFailed: (status: string | number) => trf("pdf.extract.http_failed", { status }),
+    sourcePdfJsPage: (page: number) => trf("pdf.extract.source_pdfjs_page", { page }),
+    sourcePyMuPage: (page: number) => trf("pdf.extract.source_pymu_page", { page }),
     sourcePdfJsAll: tr("pdf.extract.source_pdfjs_all"),
     sourcePyMuAll: tr("pdf.extract.source_pymu_all"),
     noTextLayer: tr("pdf.extract.no_text_layer"),
     pdfJsFailed: (error: string) => trf("pdf.extract.pdfjs_failed", { error }),
-    needsOcrPage: (page: number) =>
-      trf("pdf.extract.needs_ocr_page",
-        { page },
-      ),
+    needsOcrPage: (page: number) => trf("pdf.extract.needs_ocr_page", { page }),
     needsOcrAll: tr("pdf.extract.needs_ocr_all"),
     pageMarker: (page: number) => trf("pdf.extract.page_marker", { page }),
   };

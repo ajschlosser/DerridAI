@@ -61,9 +61,7 @@ function valueRequired(op: string) {
       </label>
     </header>
     <p class="search-rule-help">
-      {{
-        i18n.t("search.advanced_filter_help")
-      }}
+      {{ i18n.t("search.advanced_filter_help") }}
     </p>
     <ol class="search-rule-list">
       <li v-for="(filter, index) in filters" :key="filter.id" class="search-rule-row is-applied">
@@ -90,9 +88,7 @@ function valueRequired(op: string) {
       </li>
       <li class="search-rule-row is-compose">
         <span class="search-rule-join">{{
-          filters.length
-            ? i18n.t("search.filter_and")
-            : i18n.t("search.filter_where")
+          filters.length ? i18n.t("search.filter_and") : i18n.t("search.filter_where")
         }}</span>
         <label>
           <span class="sr-only">{{ i18n.t("search.field") }}</span>
@@ -206,10 +202,9 @@ function valueRequired(op: string) {
 }
 .search-rule-row {
   display: grid;
-  grid-template-columns: 4.5rem minmax(8.5rem, 1.05fr) minmax(7.5rem, 0.85fr) minmax(
-      10rem,
-      1.4fr
-    ) auto;
+  grid-template-columns:
+    4.5rem minmax(8.5rem, 1.05fr) minmax(7.5rem, 0.85fr) minmax(10rem, 1.4fr)
+    auto;
   gap: var(--space-2);
   align-items: center;
   min-height: 48px;

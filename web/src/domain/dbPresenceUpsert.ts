@@ -322,7 +322,9 @@ export function createDbPresenceUpsert(deps: Deps) {
     if (activeUpsert)
       return openMessageModal({
         title: tr("operations.vector_sync_active_title"),
-        message: trf("operations.vector_sync_active_help", { label: activeUpsert.label || activeUpsert.store_name || "The current sync" }),
+        message: trf("operations.vector_sync_active_help", {
+          label: activeUpsert.label || activeUpsert.store_name || "The current sync",
+        }),
         confirmLabel: tr("ui.ok"),
       });
     const store = state.activeStore;
@@ -330,7 +332,9 @@ export function createDbPresenceUpsert(deps: Deps) {
     if (rows.length > 500 && !largeSyncConfirmed) {
       const approved = await openMessageModal({
         title: tr("operations.large_sync_background_title"),
-        message: trf("operations.large_sync_background_help", { count: rows.length.toLocaleString() }),
+        message: trf("operations.large_sync_background_help", {
+          count: rows.length.toLocaleString(),
+        }),
         confirmLabel: tr("operations.start_background_build"),
         cancelLabel: tr("ui.cancel"),
       });
@@ -375,10 +379,9 @@ export function createDbPresenceUpsert(deps: Deps) {
       state.jobs = [job, ...state.jobs.filter((existing: Any) => existing.id !== job.id)];
       syncJobProgressToasts();
       startJobPolling();
-      toast(
-        trf("operations.vector_build_queued", { count: rows.length.toLocaleString(), store }),
-        { tone: "success" },
-      );
+      toast(trf("operations.vector_build_queued", { count: rows.length.toLocaleString(), store }), {
+        tone: "success",
+      });
       notifyVectorStoresChanged();
       if (state.view === "home") refreshOperationsPanelOnly();
       return true;

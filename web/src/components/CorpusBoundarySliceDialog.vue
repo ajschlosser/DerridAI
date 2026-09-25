@@ -62,9 +62,7 @@ watch(
     :open="true"
     size="xlarge"
     :title="i18n.t('pdf_corpus.slice_record')"
-    :description="
-      i18n.t('pdf_corpus.slice_record_help')
-    "
+    :description="i18n.t('pdf_corpus.slice_record_help')"
     :close-label="i18n.t('ui.close')"
     @close="emit('close')"
     ><label class="slice-label"
@@ -79,9 +77,7 @@ watch(
       ></textarea>
     </label>
     <p id="slice-instructions" class="instructions">
-      {{
-        i18n.t("pdf_corpus.slice_point_help")
-      }}
+      {{ i18n.t("pdf_corpus.slice_point_help") }}
     </p>
     <div class="preview-grid">
       <article>
@@ -106,9 +102,7 @@ watch(
           :disabled="busy || !canPrevious || !canNext || !before || !selected || !after"
           @click="apply('new')"
         >
-          {{
-            i18n.t("pdf_corpus.create_record_from_selection")
-          }}</button
+          {{ i18n.t("pdf_corpus.create_record_from_selection") }}</button
         ><button
           v-if="keepEnd !== null"
           class="btn"
@@ -125,9 +119,7 @@ watch(
           @click="apply('previous')"
         >
           ←
-          {{
-            i18n.t("pdf_corpus.move_before_previous")
-          }}</button
+          {{ i18n.t("pdf_corpus.move_before_previous") }}</button
         ><button
           v-if="keepEnd === null"
           class="btn primary"

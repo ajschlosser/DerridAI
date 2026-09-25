@@ -1,4 +1,5 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+
 # AGENTS.md
 
 Guidance for coding agents and contributors working on DerridAI. See [README.md](README.md) for the project overview, [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for feature behavior, and [docs/PROJECT_CONTEXT.md](docs/PROJECT_CONTEXT.md) for the scholarly rationale and which capabilities are implemented versus intended.
@@ -23,7 +24,7 @@ DerridAI is a local-first Docker application for building, auditing, and queryin
 - `web/src/` — Vue 3 + TypeScript frontend: `views/`, `components/` (with Storybook coverage where applicable), `stores/` (Pinia), `router/`, `api/`, `composables/`, `domain/`, `runtime/` (remaining compatibility/runtime orchestration), `types/`.
 - `web/tests/frontend/` (Vitest + Vue Test Utils + happy-dom) and `web/tests/e2e/` (Playwright + axe-core).
 - `tests/` — Python regression suite; topical `test_<subject>.py` files (named for the behavior under test, not a release; see `tests/README.md`), and `tests/fixtures/`.
-- `docs/` — `USER_GUIDE.md`, design notes, and `docs/notes/<version>.md` release notes.
+- `docs/` — current architecture/domain contracts plus `docs/notes/<version>.md` historical release notes. Do not create one-off progress/status documents when an authoritative current document or release note can carry the information.
 - `data/` — runtime state (Chroma, SQLite, models), git-ignored except `.gitkeep`. Never commit its contents.
 - `docker-compose.yml`, `.env.example`, `scripts/` (diagnostics, and `migrate-css-tokens.py` for moving styles onto design tokens), `.github/workflows/frontend.yml` (CI).
 
@@ -33,6 +34,7 @@ DerridAI is a local-first Docker application for building, auditing, and queryin
 pytest -q -n auto --dist=worksteal         # backend + release regression tests (from repo root)
 pytest -q -m contract tests/test_frontend_api_contract.py
 python -m compileall -q api/app             # syntax check
+cd web && npm run format:repo:check         # repository-wide Prettier check
 cd web && npm run typecheck                 # vue-tsc
 cd web && npm run typecheck:tests           # test/config TypeScript
 cd web && npm run test:unit                 # Vitest
@@ -73,7 +75,7 @@ Backend tests stub `chromadb` and put `api/` on `sys.path`; they do not need Doc
   - LLM output is untrusted until validated. Deterministic code owns IDs, citations, page lookup, exact-quote checks, schema checks, dedup, and embedding compatibility; prefer it over another LLM prompt.
   - Unresolved or uncertain results (segmentation, metadata, attribution, thin evidence) stay visible and marked for review. Never manufacture certainty, and never silently swallow errors that can affect correctness.
   - Segmentation must conserve text: no text lost, invented, duplicated, or reordered.
-  - Preprocessing is conservative. Do not strip stopwords or aggressively normalize; negations and qualifiers (*not, without, if, only*) can carry the proposition.
+  - Preprocessing is conservative. Do not strip stopwords or aggressively normalize; negations and qualifiers (_not, without, if, only_) can carry the proposition.
   - Bump the contract or prompt version identifiers (for example `derrida-scholarly-v12`, `derridai-record-metadata-v9`) when their semantics change.
 - **Source ingestion and media fidelity:**
   - Treat uploaded/remote source content as inert data. Never execute embedded document content, macros, scripts, fields, external relationships, or active objects.
@@ -99,7 +101,7 @@ Backend tests stub `chromadb` and put `api/` on `sys.path`; they do not need Doc
 - Make focused changes; do not refactor or add abstractions beyond the task. Prefer editing existing files.
 - Add a regression test for each behavior change, in a new or existing `tests/test_*.py` (and Vitest/Playwright tests for frontend behavior).
 - Test behavior, not text. Do not add tests that only assert a string appears in a doc or source file, and do not hard-code the release version in tests; version agreement is covered once in `tests/test_release_consistency.py`.
-- Run the relevant checks before reporting done, and report honestly which checks could not run.
+- Run the relevant checks before reporting done, and report honestly which checks could not run. For handoff/documentation work, keep README and CONTRIBUTING setup commands executable from a clean checkout and keep the repository-wide Prettier check green.
 - Commit as the repository owner: Aaron Schlosser, PhD <aaron@aaronschlosser.com>. Only commit when asked; never push or force-push without being asked.
 
 ## Saving tokens and execution time

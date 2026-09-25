@@ -250,7 +250,9 @@ describe("useSplitter", () => {
     const vertical = harness({ edge: "start", axis: "vertical" });
     await press(vertical.wrapper, "ArrowDown");
     expect(vertical.api.size.value).toBe(316);
-    await vertical.wrapper.get("[role=separator]").trigger("pointerdown", { button: 0, pointerId: 1 });
+    await vertical.wrapper
+      .get("[role=separator]")
+      .trigger("pointerdown", { button: 0, pointerId: 1 });
     window.dispatchEvent(new MouseEvent("pointermove", { clientY: 700 }));
     expect(vertical.api.size.value).toBe(500);
     window.dispatchEvent(new MouseEvent("pointerup"));

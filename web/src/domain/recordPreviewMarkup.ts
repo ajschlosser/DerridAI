@@ -31,7 +31,10 @@ export function recordPreviewDialogHtml(
     reviewKey: (file: Any, index: number) => string;
   },
 ): string {
-  const { tr, trf, label, pages, fullCitation, jsonPretty, formatTimestamp, reviewKey } = { ...deps, ...bindCopy(deps.tr, deps.trf) };
+  const { tr, trf, label, pages, fullCitation, jsonPretty, formatTimestamp, reviewKey } = {
+    ...deps,
+    ...bindCopy(deps.tr, deps.trf),
+  };
   const { record, local, stale, important, proposedFields, proposal, updates } = input;
   const titleId = record.record_id || trf("dashboard.record_n", { n: local.index + 1 });
   return `<div class="dh"><div><h2 class="dialog-title">${esc(tr("jobs.preview.title"))}</h2><div class="dialog-subtitle">${esc(titleId)} · ${esc(record.work || local.file.name)} · ${esc(local.file.name)}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>

@@ -46,8 +46,7 @@ const titleId = `${dialogId}-title`;
 const heading = ref<HTMLElement | null>(null);
 const initials = () => userInitials(props.username);
 const translatedRole = () => roleLabel(props.role, props.roleName, i18n.t);
-const accountName = () =>
-  i18n.tf("ui.account_menu_named", { name: props.username });
+const accountName = () => i18n.tf("ui.account_menu_named", { name: props.username });
 
 function focusable(): HTMLElement[] {
   if (!panel.value) return [];
@@ -150,7 +149,9 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", outside, true)
       :aria-labelledby="titleId"
       @keydown="onPanelKey"
     >
-      <h2 :id="titleId" ref="heading" class="sr-only" tabindex="-1">{{ i18n.t("ui.account_menu") }}</h2>
+      <h2 :id="titleId" ref="heading" class="sr-only" tabindex="-1">
+        {{ i18n.t("ui.account_menu") }}
+      </h2>
       <div class="topbar-account-identity">
         <span class="shell-avatar" aria-hidden="true">{{ initials() }}</span>
         <div>
@@ -166,12 +167,7 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", outside, true)
           icon="gear"
           @click="go('config')"
         />
-        <UiButton
-          v-if="compact"
-          :label="i18n.t('ui.help')"
-          icon="help"
-          @click="openHelp"
-        />
+        <UiButton v-if="compact" :label="i18n.t('ui.help')" icon="help" @click="openHelp" />
         <div v-if="compact && languages.length" class="topbar-account-locale">
           <p id="account-locale-label">{{ i18n.t("ui.language_menu") }}</p>
           <div role="radiogroup" aria-labelledby="account-locale-label">

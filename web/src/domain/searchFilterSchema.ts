@@ -13,10 +13,15 @@ export interface SearchFilterFieldOption {
   kind: FilterFieldKind;
 }
 
-export function filterFieldsFromSchema(schema: MetadataSchema | null | undefined): SearchFilterFieldOption[] {
+export function filterFieldsFromSchema(
+  schema: MetadataSchema | null | undefined,
+): SearchFilterFieldOption[] {
   const fields = schema?.fields || [];
   return fields
-    .filter((field) => field.name && !SEARCH_AUTOCOMPLETE_EXCLUDED.has(field.name) && !field.name.startsWith("__"))
+    .filter(
+      (field) =>
+        field.name && !SEARCH_AUTOCOMPLETE_EXCLUDED.has(field.name) && !field.name.startsWith("__"),
+    )
     .map((field) => ({
       key: field.name,
       label: field.label || field.name,
@@ -28,9 +33,13 @@ export function filterFieldsFromNames(
   names: string[],
   labels: (key: string) => string = (key) => key,
 ): SearchFilterFieldOption[] {
-  return [...new Set(names.filter((name) => name && !name.startsWith("__") && !SEARCH_AUTOCOMPLETE_EXCLUDED.has(name)))].map(
-    (key) => ({ key, label: labels(key), kind: kindForLegacyField(key) }),
-  );
+  return [
+    ...new Set(
+      names.filter(
+        (name) => name && !name.startsWith("__") && !SEARCH_AUTOCOMPLETE_EXCLUDED.has(name),
+      ),
+    ),
+  ].map((key) => ({ key, label: labels(key), kind: kindForLegacyField(key) }));
 }
 
 export function kindForLegacyField(field: string): FilterFieldKind {
@@ -47,7 +56,12 @@ export function kindForLegacyField(field: string): FilterFieldKind {
     ].includes(field)
   )
     return "number";
-  if (field === "is_direct_quote" || field === "primary_text" || field === "needs_review" || field === "document_is_translation")
+  if (
+    field === "is_direct_quote" ||
+    field === "primary_text" ||
+    field === "needs_review" ||
+    field === "document_is_translation"
+  )
     return "boolean";
   if (
     [
@@ -66,7 +80,12 @@ export function kindForLegacyField(field: string): FilterFieldKind {
     ].includes(field)
   )
     return "list";
-  if (field === "stance" || field === "proposition_status" || field === "region_type" || field === "discourse_role")
+  if (
+    field === "stance" ||
+    field === "proposition_status" ||
+    field === "region_type" ||
+    field === "discourse_role"
+  )
     return "choice";
   return "text";
 }
@@ -86,7 +105,10 @@ export function resolveSearchFilterFields(options: {
   if (fromSchema.length) return fromSchema;
   const collection = filterFieldsFromNames(options.collectionFields || [], labels);
   if (collection.length) return collection;
-  return filterFieldsFromNames([...(SEARCH_FILTER_FIELDS as string[]), ...(options.availableFields || [])], labels);
+  return filterFieldsFromNames(
+    [...(SEARCH_FILTER_FIELDS as string[]), ...(options.availableFields || [])],
+    labels,
+  );
 }
 
 export function filterOpsForKind(
@@ -156,11 +178,56 @@ export function chosenFilterSchemaId(options: { store: string; associatedId?: st
   return loadFilterSchemaOverride(options.store) || options.associatedId || DEFAULT_SCHEMA_ID;
 }
 
-const NUMERIC_FILTER_FIELDS = new Set(["page_start", "page_end", "year", "publication_year", "text_length", "extraction_quality", "attribution_confidence", "semantic_classification_confidence"]);
-const COLLECTION_FILTER_FIELDS = new Set(["topics", "concepts", "persons", "works_referenced", "institutions_referenced", "locations_referenced", "events_referenced", "groups_referenced", "languages_referenced", "document_language", "quoted_speaker", "quotation_chain"]);
+const NUMERIC_FILTER_FIELDS = new Set([
+  "page_start",
+  "page_end",
+  "year",
+  "publication_year",
+  "text_length",
+  "extraction_quality",
+  "attribution_confidence",
+  "semantic_classification_confidence",
+]);
+const COLLECTION_FILTER_FIELDS = new Set([
+  "topics",
+  "concepts",
+  "persons",
+  "works_referenced",
+  "institutions_referenced",
+  "locations_referenced",
+  "events_referenced",
+  "groups_referenced",
+  "languages_referenced",
+  "document_language",
+  "quoted_speaker",
+  "quotation_chain",
+]);
 
 export function filterOpsForField(field: string): [string, string][] {
-  if (NUMERIC_FILTER_FIELDS.has(field)) return [["eq", "equals"], ["neq", "not equal"], ["gte", "greater than or equal"], ["lte", "less than or equal"], ["empty", "is empty"], ["notempty", "is not empty"]];
-  if (COLLECTION_FILTER_FIELDS.has(field)) return [["has", "contains"], ["nhas", "does not contain"], ["eq", "equals exactly"], ["neq", "does not equal"], ["empty", "is empty"], ["notempty", "is not empty"]];
-  return [["eq", "equals"], ["neq", "not equal"], ["has", "contains"], ["nhas", "does not contain"], ["empty", "is empty"], ["notempty", "is not empty"]];
+  if (NUMERIC_FILTER_FIELDS.has(field))
+    return [
+      ["eq", "equals"],
+      ["neq", "not equal"],
+      ["gte", "greater than or equal"],
+      ["lte", "less than or equal"],
+      ["empty", "is empty"],
+      ["notempty", "is not empty"],
+    ];
+  if (COLLECTION_FILTER_FIELDS.has(field))
+    return [
+      ["has", "contains"],
+      ["nhas", "does not contain"],
+      ["eq", "equals exactly"],
+      ["neq", "does not equal"],
+      ["empty", "is empty"],
+      ["notempty", "is not empty"],
+    ];
+  return [
+    ["eq", "equals"],
+    ["neq", "not equal"],
+    ["has", "contains"],
+    ["nhas", "does not contain"],
+    ["empty", "is empty"],
+    ["notempty", "is not empty"],
+  ];
 }

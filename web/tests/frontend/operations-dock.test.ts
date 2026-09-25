@@ -53,37 +53,47 @@ describe("job status helpers", () => {
   });
 
   it("clamps progress to a trustworthy 0–100 percent", () => {
-    expect(jobProgressPercent({completed: 5, total: 10})).toBe(50);
-    expect(jobProgressPercent({completed: 0, total: 0})).toBe(0);
-    expect(jobProgressPercent({completed: 12, total: 10})).toBe(100);
+    expect(jobProgressPercent({ completed: 5, total: 10 })).toBe(50);
+    expect(jobProgressPercent({ completed: 0, total: 0 })).toBe(0);
+    expect(jobProgressPercent({ completed: 12, total: 10 })).toBe(100);
   });
 });
 
 describe("collapsed dock copy", () => {
   it("names a single running job and its percent", () => {
-    expect(dockCollapsedSummary({
-      activeCount: 1,
-      failedCount: 0,
-      finishedCount: 0,
-      primaryLabel: "PDF corpus build",
-      primaryPercent: 43,
-    })).toEqual({
+    expect(
+      dockCollapsedSummary({
+        activeCount: 1,
+        failedCount: 0,
+        finishedCount: 0,
+        primaryLabel: "PDF corpus build",
+        primaryPercent: 43,
+      }),
+    ).toEqual({
       key: "operations.pill_primary_progress",
       fallback: "{label} · {percent}%",
-      values: {label: "PDF corpus build", percent: 43},
+      values: { label: "PDF corpus build", percent: 43 },
       tone: "info",
       percent: 43,
     });
   });
 
   it("counts concurrent work and surfaces failures", () => {
-    expect(dockCollapsedSummary({activeCount: 2, failedCount: 0, finishedCount: 1}).key).toBe("operations.pill_running_other");
-    expect(dockCollapsedSummary({activeCount: 1, failedCount: 2, finishedCount: 0})).toMatchObject({
+    expect(dockCollapsedSummary({ activeCount: 2, failedCount: 0, finishedCount: 1 }).key).toBe(
+      "operations.pill_running_other",
+    );
+    expect(
+      dockCollapsedSummary({ activeCount: 1, failedCount: 2, finishedCount: 0 }),
+    ).toMatchObject({
       key: "operations.pill_running_failed",
-      values: {running: 1, failed: 2},
+      values: { running: 1, failed: 2 },
       tone: "danger",
     });
-    expect(dockCollapsedSummary({activeCount: 0, failedCount: 1, finishedCount: 0}).tone).toBe("danger");
-    expect(dockCollapsedSummary({activeCount: 0, failedCount: 0, finishedCount: 2}).key).toBe("operations.pill_finished_other");
+    expect(dockCollapsedSummary({ activeCount: 0, failedCount: 1, finishedCount: 0 }).tone).toBe(
+      "danger",
+    );
+    expect(dockCollapsedSummary({ activeCount: 0, failedCount: 0, finishedCount: 2 }).key).toBe(
+      "operations.pill_finished_other",
+    );
   });
 });

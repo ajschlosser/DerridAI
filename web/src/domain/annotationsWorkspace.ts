@@ -185,16 +185,12 @@ export function createAnnotationsWorkspace(deps: Deps) {
       ),
       record_id: String(item.record?.record_id || tr("nav.record")),
       work: item.work,
-      field: annotation.field
-        ? label(annotation.field)
-        : tr("annotations.record_note"),
+      field: annotation.field ? label(annotation.field) : tr("annotations.record_note"),
       quote: String(annotation.quote || ""),
       note: String(annotation.note || ""),
       tags: Array.isArray(annotation.tags) ? annotation.tags.map(String) : [],
       author: String(
-        annotation.initiated_by ||
-          annotation.author ||
-          tr("annotations.unknown_author"),
+        annotation.initiated_by || annotation.author || tr("annotations.unknown_author"),
       ),
       source: item.server
         ? annotation.store || tr("annotations.shared")

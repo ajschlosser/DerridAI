@@ -52,8 +52,7 @@ const progressText = computed(() => {
   if (props.view.status === "queued") return i18n.t("operations.panel.waiting");
   const parts = [props.view.progressLabel];
   const eta = etaSeconds(props.view, props.now);
-  if (eta !== null)
-    parts.push(i18n.tf("operations.panel.eta", { time: time(eta) }));
+  if (eta !== null) parts.push(i18n.tf("operations.panel.eta", { time: time(eta) }));
   return parts.filter(Boolean).join(" · ");
 });
 const timingText = computed(() => {
@@ -67,9 +66,7 @@ const timingText = computed(() => {
   }
   const parts: string[] = [];
   if (v.startedAt && v.finishedAt)
-    parts.push(
-      i18n.tf("operations.panel.took", { time: time(elapsedSeconds(v, props.now)) }),
-    );
+    parts.push(i18n.tf("operations.panel.took", { time: time(elapsedSeconds(v, props.now)) }));
   return parts.join(" · ");
 });
 const whenIso = computed(() =>
@@ -82,8 +79,7 @@ const whenIso = computed(() =>
 const whenText = computed(() => {
   const when = relativeTime(whenIso.value, props.now, locale.value);
   if (!when) return "";
-  if (props.view.status === "queued")
-    return i18n.tf("operations.panel.queued_at", { when });
+  if (props.view.status === "queued") return i18n.tf("operations.panel.queued_at", { when });
   return active.value
     ? i18n.tf("operations.panel.started", { when })
     : i18n.tf("operations.panel.finished", { when });
@@ -93,17 +89,14 @@ const resultLabel = computed(() => {
   const kind = props.view.result?.kind;
   if (kind === "build") return i18n.t("operations.panel.action_open_build");
   if (kind === "review") return i18n.t("operations.panel.action_review");
-  if (kind === "review-partial")
-    return i18n.t("operations.panel.action_review_partial");
+  if (kind === "review-partial") return i18n.t("operations.panel.action_review_partial");
   return i18n.t("operations.panel.action_open_result");
 });
 const resultAria = computed(() => {
   const name = props.view.label;
   const kind = props.view.result?.kind;
-  if (kind === "build")
-    return i18n.tf("operations.panel.open_build_for", { name });
-  if (kind === "review")
-    return i18n.tf("operations.panel.review_for", { name });
+  if (kind === "build") return i18n.tf("operations.panel.open_build_for", { name });
+  if (kind === "review") return i18n.tf("operations.panel.review_for", { name });
   if (kind === "review-partial")
     return i18n.tf("operations.panel.review_partial_for", {
       name,
@@ -164,9 +157,7 @@ const resultAria = computed(() => {
           aria-valuemax="100"
           :aria-valuenow="determinate ? percent : undefined"
           :aria-valuetext="progressText"
-          :aria-label="
-            i18n.tf('operations.panel.progress_for', { name: view.label })
-          "
+          :aria-label="i18n.tf('operations.panel.progress_for', { name: view.label })"
         >
           <span
             class="ops-progress-fill"
@@ -190,9 +181,7 @@ const resultAria = computed(() => {
         ><span v-if="whenText && (timingText || view.owner)" class="sr-only">. </span>
         <span v-if="timingText">{{ timingText }}</span
         ><span v-if="timingText && view.owner" class="sr-only">. </span>
-        <span v-if="view.owner">{{
-          i18n.tf("operations.panel.by", { name: view.owner })
-        }}</span>
+        <span v-if="view.owner">{{ i18n.tf("operations.panel.by", { name: view.owner }) }}</span>
       </p>
 
       <dl v-if="view.facts.length" class="ops-facts">
@@ -218,9 +207,7 @@ const resultAria = computed(() => {
         type="button"
         class="ops-btn"
         :class="{ 'is-primary': !view.result && !active }"
-        :aria-label="
-          i18n.tf('operations.panel.details_for', { name: view.label })
-        "
+        :aria-label="i18n.tf('operations.panel.details_for', { name: view.label })"
         :data-primary="!view.result ? '' : undefined"
         @click="emit('details', view.id)"
       >

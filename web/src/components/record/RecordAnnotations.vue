@@ -55,9 +55,7 @@ function dateLabel(value?: string | null) {
     <div v-else class="annotation-empty">
       <strong>{{ i18n.t("annotations.none_record") }}</strong>
       <p>
-        {{
-          i18n.t("annotations.none_record_help")
-        }}
+        {{ i18n.t("annotations.none_record_help") }}
       </p>
     </div>
   </section>

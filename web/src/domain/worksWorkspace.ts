@@ -172,8 +172,7 @@ export function createWorksWorkspace(deps: Deps) {
       storesEmptyLabel: "No corpus Chroma collections",
       citationLabel: label("full_citation"),
       populateDisabledReason: "",
-      syncAllDisabledReason:
-        noDbReason || tr("works.select_collection"),
+      syncAllDisabledReason: noDbReason || tr("works.select_collection"),
       corpusManageDeniedReason: tr("permissions.corpus_manage_denied"),
       hasProviderProfiles: providerProfiles().length > 0,
       shared: Boolean(new URLSearchParams(location.search).get("file")),

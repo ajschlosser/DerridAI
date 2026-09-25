@@ -75,9 +75,7 @@ function queueRemoval(message: string, ids: string[], commit: () => Promise<void
     void commitPending();
   }, props.undoMs);
   pending.value = { message, timer, ids, commit };
-  announce(
-    `${message} ${i18n.t("operations.panel.undo_hint")}`,
-  );
+  announce(`${message} ${i18n.t("operations.panel.undo_hint")}`);
 }
 function undo() {
   const current = pending.value;
@@ -90,10 +88,8 @@ function undo() {
 function removeOne(id: string) {
   const view = views.value.find((item) => item.id === id);
   if (!view) return;
-  queueRemoval(
-    i18n.tf("operations.panel.removed", { name: view.label }),
-    [id],
-    () => props.bridge.remove(id),
+  queueRemoval(i18n.tf("operations.panel.removed", { name: view.label }), [id], () =>
+    props.bridge.remove(id),
   );
 }
 function clearFinished() {
@@ -235,9 +231,7 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
           {{ i18n.t("operations.background") }}
         </h2>
         <p class="ops-lede">
-          {{
-            i18n.t("operations.shared_queue")
-          }}
+          {{ i18n.t("operations.shared_queue") }}
         </p>
       </div>
       <div class="ops-head-actions">
@@ -256,11 +250,7 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
       </div>
     </header>
 
-    <div
-      class="ops-filters"
-      role="group"
-      :aria-label="i18n.t('operations.panel.filter_label')"
-    >
+    <div class="ops-filters" role="group" :aria-label="i18n.t('operations.panel.filter_label')">
       <button
         v-for="[id, key, fallback] in FILTERS"
         :key="id"
@@ -285,9 +275,7 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
       <span class="ops-empty-art" aria-hidden="true"><AppIcon name="history" /></span>
       <h3>{{ i18n.t("operations.panel.empty_title") }}</h3>
       <p>
-        {{
-          i18n.t("operations.panel.empty_body")
-        }}
+        {{ i18n.t("operations.panel.empty_body") }}
       </p>
     </div>
     <p v-else-if="filterEmpty" class="ops-empty-inline">

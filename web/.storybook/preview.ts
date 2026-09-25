@@ -14,7 +14,9 @@ setup((app) => {
 function directionForLocale(locale: string) {
   try {
     const script = new Intl.Locale(locale).maximize().script || "";
-    return ["Arab", "Hebr", "Syrc", "Thaa", "Nkoo", "Adlm", "Rohg", "Mand"].includes(script) ? "rtl" : "ltr";
+    return ["Arab", "Hebr", "Syrc", "Thaa", "Nkoo", "Adlm", "Rohg", "Mand"].includes(script)
+      ? "rtl"
+      : "ltr";
   } catch {
     return "ltr";
   }

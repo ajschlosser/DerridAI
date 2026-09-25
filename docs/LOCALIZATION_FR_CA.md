@@ -1,4 +1,5 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+
 # French (`fr-CA`) localization standard
 
 DerridAI uses `fr-CA` for its built-in Canadian French interface dictionary. The goal is professional, natural French software copy while preserving scholarly source material exactly.

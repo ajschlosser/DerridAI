@@ -69,9 +69,7 @@ const sizing = computed(() =>
         <span class="eyebrow">{{ i18n.t("pdf_corpus.readiness.eyebrow") }}</span>
         <h3 id="build-readiness-title">
           {{
-            ready
-              ? i18n.t("pdf_corpus.readiness.ready")
-              : i18n.t("pdf_corpus.readiness.not_ready")
+            ready ? i18n.t("pdf_corpus.readiness.ready") : i18n.t("pdf_corpus.readiness.not_ready")
           }}
         </h3>
       </div>
@@ -79,9 +77,7 @@ const sizing = computed(() =>
         <div>
           <dt>{{ i18n.t("pdf_corpus.readiness.source") }}</dt>
           <dd>
-            {{
-              sourceFilename ||
-              i18n.t("pdf_corpus.choose_source_prompt")
+            {{ sourceFilename || i18n.t("pdf_corpus.choose_source_prompt")
             }}<small v-if="sourceFilename"
               ><template v-if="hasPages(mediaKind)"
                 >{{ pageCount }} {{ i18n.t("pdf_corpus.pages") }} ·
@@ -93,10 +89,7 @@ const sizing = computed(() =>
         <div v-if="hasPages(mediaKind)">
           <dt>{{ i18n.t("pdf_corpus.readiness.structure") }}</dt>
           <dd>
-            {{
-              structureSummary ||
-              i18n.t("pdf_corpus.readiness.structure_unset")
-            }}
+            {{ structureSummary || i18n.t("pdf_corpus.readiness.structure_unset") }}
           </dd>
         </div>
         <div>
@@ -126,9 +119,7 @@ const sizing = computed(() =>
         <li v-for="warning in warnings" :key="warning">{{ warning }}</li>
       </ul>
       <p v-if="activeBuildCount" class="capacity-note">
-        {{
-          i18n.tf("pdf_corpus.active_build_capacity", { count: activeBuildCount })
-        }}
+        {{ i18n.tf("pdf_corpus.active_build_capacity", { count: activeBuildCount }) }}
       </p>
     </div>
     <button

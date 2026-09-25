@@ -14,9 +14,7 @@ export function useAnnotationsWorkspace() {
     loading.value = true;
     error.value = "";
     try {
-      snapshot.value = await annotationsService.loadWorkspace(
-        force || Boolean(snapshot.value),
-      );
+      snapshot.value = await annotationsService.loadWorkspace(force || Boolean(snapshot.value));
     } catch (exception) {
       error.value = exception instanceof Error ? exception.message : String(exception);
     } finally {
@@ -52,10 +50,14 @@ export function useAnnotationsWorkspace() {
       await load(true);
       return true;
     } catch (exception) {
-      window.dispatchEvent(new CustomEvent("derridai:toast", { detail: {
-        message: exception instanceof Error ? exception.message : String(exception),
-        tone: "danger",
-      }}));
+      window.dispatchEvent(
+        new CustomEvent("derridai:toast", {
+          detail: {
+            message: exception instanceof Error ? exception.message : String(exception),
+            tone: "danger",
+          },
+        }),
+      );
       return false;
     } finally {
       removing.value = null;

@@ -1,4 +1,5 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+
 # Metadata memory and reviewed precedents
 
 DerridAI can use prior human-reviewed metadata decisions to guide later metadata enrichment. This is retrieval over reviewed precedents, not model training, and it does not make prior values authoritative for a new record.
@@ -35,12 +36,12 @@ Schema fields have stable semantic identities independent of display labels. A d
 
 The current retrieval-policy contract is:
 
-| Field | Meaning |
-| --- | --- |
-| `enabled` | Whether reviewed precedents may be supplied for this field/group |
-| `max_items` | Maximum precedents contributed by the field |
-| `min_similarity` | Minimum semantic similarity accepted for a retrieved precedent |
-| `include_corrections` | Whether reviewed correction/hard-negative cases may participate |
+| Field                       | Meaning                                                               |
+| --------------------------- | --------------------------------------------------------------------- |
+| `enabled`                   | Whether reviewed precedents may be supplied for this field/group      |
+| `max_items`                 | Maximum precedents contributed by the field                           |
+| `min_similarity`            | Minimum semantic similarity accepted for a retrieved precedent        |
+| `include_corrections`       | Whether reviewed correction/hard-negative cases may participate       |
 | `include_confirmed_absence` | Whether explicitly evidence-bound no-value precedents may participate |
 
 Locked core metadata fields inherit applicable group policy. Legacy routing/scope/Research-memory flags are migrated for compatibility and are not part of the current schema contract.

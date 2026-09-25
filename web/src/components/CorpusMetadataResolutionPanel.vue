@@ -191,11 +191,16 @@ function options(field: string) {
       else if (typeof candidate === "string") values.push(candidate);
     }
     const nlpTags = schemaFields.value[field]?.ner_tags || [];
-    if (nlpTags.length && /\b(?:PERSON|PER|ORG|GPE|LOC|FAC|WORK_OF_ART|EVENT|PRODUCT)\b/i.test(nlpTags.join(" "))) {
+    if (
+      nlpTags.length &&
+      /\b(?:PERSON|PER|ORG|GPE|LOC|FAC|WORK_OF_ART|EVENT|PRODUCT)\b/i.test(nlpTags.join(" "))
+    ) {
       // Keep this deterministic and dependency-free: capitalized spans are useful
       // reviewer candidates even when an optional NLP provider is unavailable.
       const text = String((props.record as Record<string, unknown>).text || "");
-      for (const match of text.matchAll(/\b[A-ZÀ-ÖØ-Þ][\p{L}'-]*(?:\s+[A-ZÀ-ÖØ-Þ][\p{L}'-]*){0,4}\b/gu)) {
+      for (const match of text.matchAll(
+        /\b[A-ZÀ-ÖØ-Þ][\p{L}'-]*(?:\s+[A-ZÀ-ÖØ-Þ][\p{L}'-]*){0,4}\b/gu,
+      )) {
         const candidate = match[0].trim();
         if (candidate.length > 1) values.push(candidate);
       }
@@ -247,9 +252,7 @@ function displayValue(field: string) {
       <div>
         <h3 id="metadata-review-title">{{ i18n.t("pdf_corpus.metadata_tab") }}</h3>
         <p>
-          {{
-            i18n.t("pdf_corpus.metadata_streamlined_help")
-          }}
+          {{ i18n.t("pdf_corpus.metadata_streamlined_help") }}
         </p>
       </div>
       <p v-if="activeField" class="active-field" role="status">
@@ -278,9 +281,7 @@ function displayValue(field: string) {
       @resolve="(field, value) => emit('resolve', field, value)"
     />
     <p v-if="enrichmentPending" class="enrichment-note" role="status">
-      {{
-        i18n.t("pdf_corpus.metadata_enrichment_pending_help")
-      }}
+      {{ i18n.t("pdf_corpus.metadata_enrichment_pending_help") }}
     </p>
     <div v-if="llmSuggestionCount" class="suggestion-toolbar">
       <div>
@@ -289,9 +290,7 @@ function displayValue(field: string) {
             count: llmSuggestionCount,
           })
         }}</b
-        ><span>{{
-          i18n.t("pdf_corpus.llm_suggestions_ready_help")
-        }}</span>
+        ><span>{{ i18n.t("pdf_corpus.llm_suggestions_ready_help") }}</span>
       </div>
       <button
         type="button"
@@ -388,9 +387,7 @@ function displayValue(field: string) {
         <span>{{ addableFields.length }}</span>
       </summary>
       <p class="add-metadata-help">
-        {{
-          i18n.t("pdf_corpus.add_metadata_help")
-        }}
+        {{ i18n.t("pdf_corpus.add_metadata_help") }}
       </p>
       <div class="metadata-grid" role="list">
         <div v-for="field in addableFields" :key="field" class="metadata-list-item" role="listitem">
@@ -422,9 +419,7 @@ function displayValue(field: string) {
         <span>{{ inheritedFields.length }}</span>
       </summary>
       <p>
-        {{
-          i18n.t("pdf_corpus.inherited_metadata_help")
-        }}
+        {{ i18n.t("pdf_corpus.inherited_metadata_help") }}
       </p>
       <div class="inherited-grid" role="list">
         <article

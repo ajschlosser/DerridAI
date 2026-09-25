@@ -158,10 +158,10 @@ export function createWorkDialogs(deps: Deps) {
     dialog.className = "work-metadata-dialog";
     dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">${esc(tr("works.edit_work_metadata"))}</h2><div class="dialog-subtitle">${esc(work)} · ${esc(trf("works.associated_records_files", { records: rows.length.toLocaleString(), files: new Set(rows.map((row: Any) => row.file.name)).size }))}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
   <div class="db work-metadata-body"><div class="info">${trf("works.edit_metadata_apply_help", {
-      apply: `<b>${esc(tr("common.apply"))}</b>`,
-      work: "<code>work</code>",
-      updates: "<code>updates</code>",
-    })}</div><div class="work-meta-table">${available.map((field) => workMetadataControl(field, rows)).join("")}</div></div>
+    apply: `<b>${esc(tr("common.apply"))}</b>`,
+    work: "<code>work</code>",
+    updates: "<code>updates</code>",
+  })}</div><div class="work-meta-table">${available.map((field) => workMetadataControl(field, rows)).join("")}</div></div>
   <div class="da"><button class="btn" data-close>${esc(tr("ui.cancel"))}</button><button class="btn primary" id="applyWorkMetadata">${esc(trf("works.apply_selected_to_records", { count: rows.length.toLocaleString() }))}</button></div>`;
     document.body.appendChild(dialog);
     showAppModal(dialog);
@@ -181,8 +181,7 @@ export function createWorkDialogs(deps: Deps) {
       const selected = [...dialog.querySelectorAll("[data-work-meta-apply]:checked")].map(
         (box) => box.dataset.workMetaApply,
       );
-      if (!selected.length)
-        return toast(tr("works.select_field_to_apply"));
+      if (!selected.length) return toast(tr("works.select_field_to_apply"));
       const changes: Any = {};
       try {
         for (const field of selected) {
@@ -195,7 +194,11 @@ export function createWorkDialogs(deps: Deps) {
       if (
         !(await openMessageModal({
           title: tr("works.apply_metadata_confirm"),
-          message: trf("works.apply_fields_to_records", { fields: selected.length, records: rows.length, work }),
+          message: trf("works.apply_fields_to_records", {
+            fields: selected.length,
+            records: rows.length,
+            work,
+          }),
           confirmLabel: tr("works.apply_metadata"),
           cancelLabel: tr("ui.cancel"),
         }))
@@ -227,17 +230,17 @@ export function createWorkDialogs(deps: Deps) {
       shell();
       renderView();
       toast(
-        trf("works.metadata_applied", { records: changedRecords.toLocaleString(), fields: fieldChanges.toLocaleString() }),
+        trf("works.metadata_applied", {
+          records: changedRecords.toLocaleString(),
+          fields: fieldChanges.toLocaleString(),
+        }),
         { tone: "success" },
       );
     };
   }
   function openWorkMetadataLlmDialog(items: Any) {
     const works = (items || []).filter((item: Any) => item?.work && item?.rows?.length);
-    if (!works.length)
-      return toast(
-        tr("works.no_work_metadata_rows"),
-      );
+    if (!works.length) return toast(tr("works.no_work_metadata_rows"));
     const sourceScopes = works.flatMap((item: Any) =>
       workMetadataSourceGroups(item).map((scope) => ({ ...scope, work: item.work })),
     );
@@ -299,10 +302,7 @@ export function createWorkDialogs(deps: Deps) {
       const profile = providerProfile(profileId);
       if (!profile) return toast(tr("works.provider_required"));
       const config = providerRequestConfig(profile, { textReview: false });
-      if (!config?.model)
-        return toast(
-          tr("works.provider_model_required"),
-        );
+      if (!config?.model) return toast(tr("works.provider_model_required"));
       const payload = sourceScopes.map((scope: Any) => ({
         work: scope.work,
         source_type_scope: scope.sourceType,
@@ -423,10 +423,7 @@ export function createWorkDialogs(deps: Deps) {
       const selected = [...dialog.querySelectorAll("[data-work-proposal-select]:checked")]
         .map((box) => Number(box.dataset.workProposalSelect))
         .filter((index) => flattened[index]);
-      if (!selected.length)
-        return toast(
-          tr("works.select_metadata_changes"),
-        );
+      if (!selected.length) return toast(tr("works.select_metadata_changes"));
       const grouped = new Map();
       try {
         for (const index of selected) {
@@ -479,7 +476,10 @@ export function createWorkDialogs(deps: Deps) {
         shell();
         renderView();
         toast(
-          trf("works.metadata_applied", { records: changedRecords.toLocaleString(), fields: fieldChanges.toLocaleString() }),
+          trf("works.metadata_applied", {
+            records: changedRecords.toLocaleString(),
+            fields: fieldChanges.toLocaleString(),
+          }),
           { tone: "success" },
         );
       } catch (error: Any) {
@@ -517,10 +517,7 @@ export function createWorkDialogs(deps: Deps) {
         (input) => input.dataset.removeWorkFile,
       );
       const removeDb = Boolean(dialog.querySelector("#removeWorkDb")?.checked && dbStore);
-      if (!fileIds.length && !removeDb)
-        return toast(
-          tr("works.select_file_or_chroma"),
-        );
+      if (!fileIds.length && !removeDb) return toast(tr("works.select_file_or_chroma"));
       const button = dialog.querySelector("#confirmRemoveWork");
       button.disabled = true;
       button.textContent = tr("works.removing");
@@ -564,19 +561,19 @@ export function createWorkDialogs(deps: Deps) {
         renderView();
         toast(
           trf("works.removed_summary", {
-              work,
-              local: localDeleted.toLocaleString(),
-              db: removeDb
-                ? trf("works.removed_db", " · {db} DB{mirror}", {
-                    db: dbDeleted.toLocaleString(),
-                    mirror: mirrored
-                      ? trf("works.removed_mirror", " · {count} language mirror", {
-                          count: mirrored.toLocaleString(),
-                        })
-                      : "",
-                  })
-                : "",
-            }),
+            work,
+            local: localDeleted.toLocaleString(),
+            db: removeDb
+              ? trf("works.removed_db", " · {db} DB{mirror}", {
+                  db: dbDeleted.toLocaleString(),
+                  mirror: mirrored
+                    ? trf("works.removed_mirror", " · {count} language mirror", {
+                        count: mirrored.toLocaleString(),
+                      })
+                    : "",
+                })
+              : "",
+          }),
         );
       } catch (error: Any) {
         button.disabled = false;
@@ -598,8 +595,7 @@ export function createWorkDialogs(deps: Deps) {
       );
       return works.size > 1;
     });
-    if (!eligible.length)
-      return toast(tr("works.no_multi_work_jsonl"));
+    if (!eligible.length) return toast(tr("works.no_multi_work_jsonl"));
     const dialog = document.createElement("dialog");
     dialog.className = "work-separate-dialog";
     const options = eligible
@@ -651,8 +647,7 @@ export function createWorkDialogs(deps: Deps) {
           .filter(
             (record: Any) =>
               (String(record?.work || record?.document_title || "").trim() ||
-                tr("works.untitled")) ===
-              work,
+                tr("works.untitled")) === work,
           )
           .map(cloneAuditValue);
         if (!records.length) continue;
@@ -678,8 +673,7 @@ export function createWorkDialogs(deps: Deps) {
         file.records = file.records.filter(
           (record: Any) =>
             !selectedSet.has(
-              String(record?.work || record?.document_title || "").trim() ||
-              tr("works.untitled"),
+              String(record?.work || record?.document_title || "").trim() || tr("works.untitled"),
             ),
         );
         file.dirty = new Set(file.records.map((_: Any, index: Any) => index));

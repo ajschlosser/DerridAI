@@ -128,11 +128,7 @@ onMounted(() => void load());
       :description="i18n.t('metadata_memory.help')"
     >
       <template #actions>
-        <UiButton
-          :label="i18n.t('metadata_memory.refresh')"
-          :disabled="loading"
-          @click="load"
-        />
+        <UiButton :label="i18n.t('metadata_memory.refresh')" :disabled="loading" @click="load" />
       </template>
     </UiPageHeader>
 
@@ -211,8 +207,16 @@ onMounted(() => void load());
         </select>
       </label>
       <div class="filter-actions">
-        <UiButton variant="primary" :label="i18n.t('metadata_memory.apply_filters')" type="submit" />
-        <UiButton :label="i18n.t('metadata_memory.clear_filters')" type="button" @click="clearFilters" />
+        <UiButton
+          variant="primary"
+          :label="i18n.t('metadata_memory.apply_filters')"
+          type="submit"
+        />
+        <UiButton
+          :label="i18n.t('metadata_memory.clear_filters')"
+          type="button"
+          @click="clearFilters"
+        />
       </div>
     </form>
 
@@ -249,7 +253,10 @@ onMounted(() => void load());
               <td>
                 <b>{{ item.field }}</b>
                 <pre class="memory-value">{{ displayValue(item.value) }}</pre>
-                <p v-if="item.kind === 'correction' && item.rejected_value !== undefined" class="negative-precedent">
+                <p
+                  v-if="item.kind === 'correction' && item.rejected_value !== undefined"
+                  class="negative-precedent"
+                >
                   <span>{{ i18n.t("metadata_memory.rejected_value") }}</span>
                   {{ displayValue(item.rejected_value) }}
                 </p>
@@ -280,10 +287,12 @@ onMounted(() => void load());
               <td>
                 <small v-if="item.build_id">{{ item.build_id }}</small>
                 <small v-if="item.schema_id || item.schema_version">
-                  {{ item.schema_id || "—" }}<template v-if="item.schema_version"> · {{ item.schema_version }}</template>
+                  {{ item.schema_id || "—"
+                  }}<template v-if="item.schema_version"> · {{ item.schema_version }}</template>
                 </small>
                 <small v-if="item.language || item.region_type">
-                  {{ item.language || "—" }}<template v-if="item.region_type"> · {{ item.region_type }}</template>
+                  {{ item.language || "—"
+                  }}<template v-if="item.region_type"> · {{ item.region_type }}</template>
                 </small>
               </td>
               <td class="evidence-cell">

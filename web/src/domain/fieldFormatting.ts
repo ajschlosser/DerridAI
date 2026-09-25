@@ -25,8 +25,7 @@ export function createFieldFormatting(deps: Deps) {
         ? value.map((v) => (typeof v === "object" ? JSON.stringify(v) : String(v))).join(", ")
         : "—";
     if (typeof value === "object") return JSON.stringify(value);
-    if (typeof value === "boolean")
-      return value ? tr("runtime.yes") : tr("runtime.no");
+    if (typeof value === "boolean") return value ? tr("runtime.yes") : tr("runtime.no");
     return String(value);
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

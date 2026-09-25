@@ -24,7 +24,9 @@
     "typecheck:tests": "vue-tsc --noEmit -p tsconfig.tests.json",
     "test:workflow": "npm run test:e2e",
     "test:characterization": "npm run test:e2e:legacy",
-    "test:accessibility": "npm run test:e2e:a11y"
+    "test:accessibility": "npm run test:e2e:a11y",
+    "format:repo": "prettier --write .. --config .prettierrc --ignore-path ../.prettierignore",
+    "format:repo:check": "prettier --check .. --config .prettierrc --ignore-path ../.prettierignore"
   },
   "dependencies": {
     "diff": "^7.0.0",

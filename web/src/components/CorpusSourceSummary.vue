@@ -82,11 +82,7 @@ const i18n = useI18nStore();
       />
     </div>
     <div v-else-if="!hasPages(mediaKind) || imageUrl">
-      <img
-        v-if="imageUrl"
-        :src="imageUrl"
-        :alt="i18n.t('pdf_corpus.source_context')"
-      />
+      <img v-if="imageUrl" :src="imageUrl" :alt="i18n.t('pdf_corpus.source_context')" />
       <audio
         v-if="audioUrl"
         controls
@@ -100,9 +96,7 @@ const i18n = useI18nStore();
       </article>
     </div>
     <div v-else class="source-unavailable">
-      {{
-        i18n.t("pdf_corpus.source_loading_or_unavailable")
-      }}
+      {{ i18n.t("pdf_corpus.source_loading_or_unavailable") }}
     </div>
     <div class="source-summary-actions">
       <button type="button" class="btn primary" @click="emit('openViewer')">

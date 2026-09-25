@@ -25,7 +25,11 @@ describe("search filter schema", () => {
   beforeEach(() => localStorage.clear());
 
   it("uses schema fields and skips corpus text", () => {
-    expect(filterFieldsFromSchema(schema).map((field) => field.key)).toEqual(["speaker", "year", "topics"]);
+    expect(filterFieldsFromSchema(schema).map((field) => field.key)).toEqual([
+      "speaker",
+      "year",
+      "topics",
+    ]);
   });
 
   it("prefers a schema over collection and fallback lists", () => {
@@ -46,14 +50,20 @@ describe("search filter schema", () => {
   });
 
   it("limits database operators to equality unless filters-only search is active", () => {
-    expect(filterOpsForKind("list", { database: true, method: "similarity" }).map(([op]) => op)).toEqual(["eq"]);
-    expect(filterOpsForKind("list", { database: true, method: "filter" }).map(([op]) => op)).toEqual(["has", "eq"]);
+    expect(
+      filterOpsForKind("list", { database: true, method: "similarity" }).map(([op]) => op),
+    ).toEqual(["eq"]);
+    expect(
+      filterOpsForKind("list", { database: true, method: "filter" }).map(([op]) => op),
+    ).toEqual(["has", "eq"]);
   });
 
   it("stores a user-chosen schema for a corpus and otherwise uses the associated or default schema", () => {
     expect(chosenFilterSchemaId({ store: "derrida-primary", associatedId: "notes" })).toBe("notes");
     saveFilterSchemaOverride("derrida-primary", "custom");
-    expect(chosenFilterSchemaId({ store: "derrida-primary", associatedId: "notes" })).toBe("custom");
+    expect(chosenFilterSchemaId({ store: "derrida-primary", associatedId: "notes" })).toBe(
+      "custom",
+    );
     expect(defaultFilterSchemaId()).toBe("default");
   });
 });

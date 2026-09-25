@@ -38,16 +38,11 @@ const i18n = useI18nStore();
       <span class="section-label">{{ i18n.t("works.workspace_kicker") }}</span>
       <h1 id="works-page-title">{{ i18n.t("nav.works") }}</h1>
       <p>
-        {{
-          i18n.t("works.workspace_help")
-        }}
+        {{ i18n.t("works.workspace_help") }}
       </p>
     </div>
 
-    <div
-      class="works-header-actions"
-      :aria-label="i18n.t('works.workspace_actions')"
-    >
+    <div class="works-header-actions" :aria-label="i18n.t('works.workspace_actions')">
       <button
         id="chooseWorksJsonl"
         type="button"
@@ -57,14 +52,10 @@ const i18n = useI18nStore();
         :title="props.canManageCorpus ? undefined : props.corpusManageDeniedReason"
         @click="emit('chooseJsonl')"
       >
-        <AppIcon name="upload" aria-hidden="true" />{{
-          i18n.t("records.choose_jsonl")
-        }}
+        <AppIcon name="upload" aria-hidden="true" />{{ i18n.t("records.choose_jsonl") }}
       </button>
       <button id="separateWorks" type="button" class="btn small" @click="emit('separate')">
-        <AppIcon name="filter" aria-hidden="true" />{{
-          i18n.t("works.separate_jsonl")
-        }}
+        <AppIcon name="filter" aria-hidden="true" />{{ i18n.t("works.separate_jsonl") }}
       </button>
       <button
         id="populateAllWorks"
@@ -75,9 +66,7 @@ const i18n = useI18nStore();
         :title="props.canPopulate ? undefined : props.populateDisabledReason"
         @click="emit('populateAll')"
       >
-        <AppIcon name="spark" aria-hidden="true" />{{
-          i18n.t("works.populate_all_metadata")
-        }}
+        <AppIcon name="spark" aria-hidden="true" />{{ i18n.t("works.populate_all_metadata") }}
       </button>
       <button
         id="syncAllWorks"
@@ -88,16 +77,11 @@ const i18n = useI18nStore();
         :title="props.canSyncAll ? undefined : props.syncAllDisabledReason"
         @click="emit('syncAll')"
       >
-        <AppIcon name="database" aria-hidden="true" />{{
-          i18n.t("works.sync_all")
-        }}
+        <AppIcon name="database" aria-hidden="true" />{{ i18n.t("works.sync_all") }}
       </button>
     </div>
 
-    <dl
-      class="works-header-metrics"
-      :aria-label="i18n.t('works.workspace_summary')"
-    >
+    <dl class="works-header-metrics" :aria-label="i18n.t('works.workspace_summary')">
       <div>
         <dt>{{ i18n.t("dynamic.works") }}</dt>
         <dd>{{ props.totalWorks.toLocaleString(i18n.locale) }}</dd>

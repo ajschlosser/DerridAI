@@ -145,9 +145,7 @@ export function createOperationDock(deps: Deps) {
       toggle.setAttribute("aria-expanded", state.operationToastsMinimized ? "false" : "true");
       toggle.setAttribute(
         "aria-label",
-        state.operationToastsMinimized
-          ? tr("operations.expand")
-          : tr("operations.collapse"),
+        state.operationToastsMinimized ? tr("operations.expand") : tr("operations.collapse"),
       );
     }
     applyOperationStackPosition(stack);
@@ -380,9 +378,7 @@ export function createOperationDock(deps: Deps) {
       toggle.setAttribute("aria-expanded", state.operationToastsMinimized ? "false" : "true");
       toggle.setAttribute(
         "aria-label",
-        state.operationToastsMinimized
-          ? tr("operations.expand")
-          : tr("operations.collapse"),
+        state.operationToastsMinimized ? tr("operations.expand") : tr("operations.collapse"),
       );
     }
   }
@@ -496,9 +492,7 @@ export function createOperationDock(deps: Deps) {
     const actions = [];
     if (active) {
       if (job.cancel_requested || job.status === "cancelling")
-        actions.push(
-          `<span class="cancel-pending">${esc(tr("operations.cancelling"))}</span>`,
-        );
+        actions.push(`<span class="cancel-pending">${esc(tr("operations.cancelling"))}</span>`);
       else
         actions.push(
           `<button type="button" class="btn tiny danger" data-toast-cancel-job="${job.id}">${esc(tr("ui.cancel"))}</button>`,

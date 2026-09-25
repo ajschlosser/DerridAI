@@ -97,9 +97,7 @@ const i18n = useI18nStore();
             <h2>{{ i18n.t("works.indexed_patterns") }}</h2>
           </div>
           <p>
-            {{
-              i18n.t("works.work_insights_help")
-            }}
+            {{ i18n.t("works.work_insights_help") }}
           </p>
         </div>
         <div class="work-insights-grid">
@@ -114,14 +112,10 @@ const i18n = useI18nStore();
       <div class="work-overview-actions">
         <template v-if="props.mode === 'admin'">
           <button id="overviewSearchWork" type="button" class="btn primary" @click="emit('search')">
-            <AppIcon name="search" aria-hidden="true" />{{
-              i18n.t("works.search_records")
-            }}
+            <AppIcon name="search" aria-hidden="true" />{{ i18n.t("works.search_records") }}
           </button>
           <button id="overviewEditWork" type="button" class="btn" @click="emit('edit')">
-            <AppIcon name="edit" aria-hidden="true" />{{
-              i18n.t("works.edit_metadata")
-            }}
+            <AppIcon name="edit" aria-hidden="true" />{{ i18n.t("works.edit_metadata") }}
           </button>
           <button
             id="overviewPopulateWork"
@@ -129,9 +123,7 @@ const i18n = useI18nStore();
             class="btn soft"
             @click="emit('populate')"
           >
-            <AppIcon name="spark" aria-hidden="true" />{{
-              i18n.t("works.populate_metadata_llm")
-            }}
+            <AppIcon name="spark" aria-hidden="true" />{{ i18n.t("works.populate_metadata_llm") }}
           </button>
           <button
             v-if="props.work.annotations"
@@ -149,9 +141,7 @@ const i18n = useI18nStore();
         </template>
         <template v-else>
           <button id="browseResearchWork" type="button" class="btn primary" @click="emit('browse')">
-            <AppIcon name="search" aria-hidden="true" />{{
-              i18n.t("works.browse_records")
-            }}
+            <AppIcon name="search" aria-hidden="true" />{{ i18n.t("works.browse_records") }}
           </button>
           <button
             v-if="props.work.annotations"

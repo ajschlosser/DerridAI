@@ -31,13 +31,13 @@ describe("RecordsFileRail", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     useI18nStore().languages = [
-      {code: "en-US", name: "English", flag: ""},
-      {code: "fr-CA", name: "Français", flag: ""},
+      { code: "en-US", name: "English", flag: "" },
+      { code: "fr-CA", name: "Français", flag: "" },
     ] as never;
   });
 
   it("selects and closes files without treating close as select", async () => {
-    const wrapper = mount(RecordsFileRail, {props: {files, canManage: true}});
+    const wrapper = mount(RecordsFileRail, { props: { files, canManage: true } });
     expect(wrapper.text()).toContain("Local JSONL");
     expect(wrapper.text()).toContain("Imported");
     expect(wrapper.text()).toContain("Subset · glas.jsonl");
@@ -51,14 +51,14 @@ describe("RecordsFileRail", () => {
   });
 
   it("hides file actions when the workspace cannot be managed", () => {
-    const wrapper = mount(RecordsFileRail, {props: {files, canManage: false}});
+    const wrapper = mount(RecordsFileRail, { props: { files, canManage: false } });
     expect(wrapper.find(".records-file-actions").exists()).toBe(false);
     expect(wrapper.find(".records-file-close").exists()).toBe(false);
     wrapper.unmount();
   });
 
   it("keeps merge disabled until two files are loaded", () => {
-    const wrapper = mount(RecordsFileRail, {props: {files: [files[0]], canManage: true}});
+    const wrapper = mount(RecordsFileRail, { props: { files: [files[0]], canManage: true } });
     const merge = wrapper.findAll("button").find((button) => button.text().includes("Merge files"));
     expect(merge?.attributes("disabled")).toBeDefined();
     wrapper.unmount();

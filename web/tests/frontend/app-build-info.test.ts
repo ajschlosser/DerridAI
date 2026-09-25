@@ -14,11 +14,11 @@ describe("AppBuildInfo", () => {
 
   it("hides the git commit unless asked", () => {
     expect(mount(AppBuildInfo).text()).not.toContain("Build vitest");
-    expect(mount(AppBuildInfo, {props: {showCommit: true}}).text()).toContain("Build vitest");
+    expect(mount(AppBuildInfo, { props: { showCommit: true } }).text()).toContain("Build vitest");
   });
 
   it("can omit copyright for compact version-only chrome", () => {
-    const text = mount(AppBuildInfo, {props: {showCopyright: false}}).text();
+    const text = mount(AppBuildInfo, { props: { showCopyright: false } }).text();
     expect(text).toContain(`DerridAI ${pkg.version}`);
     expect(text).not.toContain("The New England Transcendental Club of California");
   });

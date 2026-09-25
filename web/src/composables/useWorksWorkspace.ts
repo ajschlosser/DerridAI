@@ -23,7 +23,7 @@ export function useWorksWorkspace() {
 
   async function prepare() {
     error.value = "";
-    const result = (await runtime.prepareWorksWorkspace?.()) as {error?: string} | undefined;
+    const result = (await runtime.prepareWorksWorkspace?.()) as { error?: string } | undefined;
     error.value = String(result?.error || "");
     load();
     return result;
@@ -88,7 +88,7 @@ export function useWorksWorkspace() {
   }
 
   function searchRecords(work: string, needsReview = false) {
-    runtime.searchWorkRecords?.(work, {needsReview});
+    runtime.searchWorkRecords?.(work, { needsReview });
   }
 
   function inspectMixed(work: string, field: string) {

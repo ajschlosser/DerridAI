@@ -330,8 +330,7 @@ function searchMeta(cell: RecordsCell) {
   records.searchMetadata(cell);
 }
 function cellText(cell: RecordsCell) {
-  if (cell.kind === "review")
-    return cell.text === "yes" ? i18n.t("record.needs_review") : "—";
+  if (cell.kind === "review") return cell.text === "yes" ? i18n.t("record.needs_review") : "—";
   if (cell.kind === "status") return statusLabel(cell.status_kind || "", cell.text);
   return cell.text;
 }
@@ -404,14 +403,9 @@ onBeforeUnmount(() => tableObserver?.disconnect());
       />
       <div class="records-main">
         <template v-if="snapshot.available">
-          <section
-            class="records-command"
-            :aria-label="i18n.t('records.table_controls')"
-          >
+          <section class="records-command" :aria-label="i18n.t('records.table_controls')">
             <label class="records-search">
-              <span class="sr-only">{{
-                i18n.t("records.search_in_file")
-              }}</span>
+              <span class="sr-only">{{ i18n.t("records.search_in_file") }}</span>
               <AppIcon class="records-search-icon" name="search" />
               <input
                 type="search"
@@ -432,10 +426,7 @@ onBeforeUnmount(() => tableObserver?.disconnect());
                 @change="changeStore(($event.target as HTMLSelectElement).value)"
               >
                 <option v-if="!snapshot.stores.length" value="">
-                  {{
-                    snapshot.db_unavailable_reason ||
-                    i18n.t("records.no_collection")
-                  }}
+                  {{ snapshot.db_unavailable_reason || i18n.t("records.no_collection") }}
                 </option>
                 <option v-for="store in snapshot.stores" :key="store.name" :value="store.name">
                   {{ store.name }} ({{ store.count.toLocaleString(i18n.locale) }})
@@ -452,9 +443,7 @@ onBeforeUnmount(() => tableObserver?.disconnect());
               </span>
             </p>
             <label class="records-page-size">
-              <span class="sr-only">{{
-                i18n.t("search.results_per_page")
-              }}</span>
+              <span class="sr-only">{{ i18n.t("search.results_per_page") }}</span>
               <select
                 class="control"
                 :value="snapshot.page_size"
@@ -465,11 +454,7 @@ onBeforeUnmount(() => tableObserver?.disconnect());
                 </option>
               </select>
             </label>
-            <div
-              class="records-density"
-              role="group"
-              :aria-label="i18n.t('records.density')"
-            >
+            <div class="records-density" role="group" :aria-label="i18n.t('records.density')">
               <button
                 type="button"
                 class="btn tiny"
@@ -577,9 +562,7 @@ onBeforeUnmount(() => tableObserver?.disconnect());
             class="records-table-scroll ui-table-scroll"
             tabindex="0"
             role="region"
-            :aria-label="
-              i18n.t('records.table_scroll_label')
-            "
+            :aria-label="i18n.t('records.table_scroll_label')"
           >
             <table
               class="records-table ui-table"
@@ -704,9 +687,7 @@ onBeforeUnmount(() => tableObserver?.disconnect());
                       icon="search"
                       icon-tone="neutral"
                       :title="i18n.t('records.no_matches')"
-                      :description="
-                        i18n.t('records.no_matches_help')
-                      "
+                      :description="i18n.t('records.no_matches_help')"
                     />
                   </td>
                 </tr>
@@ -715,9 +696,7 @@ onBeforeUnmount(() => tableObserver?.disconnect());
                   :key="row.key"
                   :class="{ selected: row.selected }"
                   tabindex="0"
-                  :aria-label="
-                    i18n.tf('records.open_named', { record: row.record_id })
-                  "
+                  :aria-label="i18n.tf('records.open_named', { record: row.record_id })"
                   @click="openRow(row, $event)"
                   @keydown="onRowKey(row, $event)"
                 >
@@ -807,9 +786,7 @@ onBeforeUnmount(() => tableObserver?.disconnect());
                       >
                         <AppIcon :name="row.evidence_selected ? 'check' : 'plus'" />
                         {{
-                          row.evidence_selected
-                            ? i18n.t("ui.selected")
-                            : i18n.t("ui.add_evidence")
+                          row.evidence_selected ? i18n.t("ui.selected") : i18n.t("ui.add_evidence")
                         }}
                       </button>
                     </div>
@@ -819,10 +796,7 @@ onBeforeUnmount(() => tableObserver?.disconnect());
             </table>
           </div>
 
-          <nav
-            class="records-pagination"
-            :aria-label="i18n.t('records.pagination')"
-          >
+          <nav class="records-pagination" :aria-label="i18n.t('records.pagination')">
             <button type="button" class="btn" :disabled="snapshot.page <= 1" @click="changePage(1)">
               {{ i18n.t("records.first_page") }}
             </button>

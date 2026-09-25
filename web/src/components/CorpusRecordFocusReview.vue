@@ -189,7 +189,8 @@ function openFieldEvidence(field: string) {
 }
 function normalizedWords(value: string) {
   return new Set(
-    value.toLocaleLowerCase()
+    value
+      .toLocaleLowerCase()
       .split(/[^\p{L}\p{N}]+/u)
       .map((item) => item.trim())
       .filter((item) => item.length > 2),
@@ -199,7 +200,10 @@ function nearestEvidenceBlock(selectedText: string): SourceBlock | null {
   const selected = selectedText.replace(/\s+/g, " ").trim().toLocaleLowerCase();
   if (!selected) return null;
   const exact = blocks.value.find((block) =>
-    String(block.text || "").replace(/\s+/g, " ").toLocaleLowerCase().includes(selected),
+    String(block.text || "")
+      .replace(/\s+/g, " ")
+      .toLocaleLowerCase()
+      .includes(selected),
   );
   if (exact) return exact;
   const wanted = normalizedWords(selected);
@@ -271,13 +275,9 @@ watch(
   >
     <header class="focus-head">
       <div class="focus-title-block">
-        <nav
-          class="focus-breadcrumb"
-          :aria-label="i18n.t('pdf_corpus.focus_navigation')"
-        >
+        <nav class="focus-breadcrumb" :aria-label="i18n.t('pdf_corpus.focus_navigation')">
           <span>{{ i18n.t("pdf_corpus.corpus_builder") }}</span
-          ><span aria-hidden="true">›</span
-          ><span>{{ i18n.t("pdf_corpus.record_review") }}</span
+          ><span aria-hidden="true">›</span><span>{{ i18n.t("pdf_corpus.record_review") }}</span
           ><span aria-hidden="true">›</span><strong>{{ record.record_id }}</strong>
         </nav>
         <div class="focus-history-controls">
@@ -361,9 +361,7 @@ watch(
       <article class="focus-record" aria-labelledby="focus-record-heading">
         <div class="focus-record-heading">
           <div>
-            <span class="eyebrow">{{
-              i18n.t("pdf_corpus.reviewed_record_text")
-            }}</span>
+            <span class="eyebrow">{{ i18n.t("pdf_corpus.reviewed_record_text") }}</span>
             <h3 id="focus-record-heading">
               {{
                 record.text_review_status === "human_corrected"
@@ -374,8 +372,7 @@ watch(
           </div>
           <div class="heading-actions">
             <span v-if="unresolved.length" class="unresolved-badge"
-              >{{ unresolved.length }}
-              {{ i18n.t("pdf_corpus.unresolved_fields") }}</span
+              >{{ unresolved.length }} {{ i18n.t("pdf_corpus.unresolved_fields") }}</span
             ><button
               v-if="record.source_quality_issues?.length"
               class="source-warn-icon"
@@ -392,11 +389,7 @@ watch(
               @click="editingText ? (editingText = false) : beginTextEdit()"
               :disabled="busy"
             >
-              {{
-                editingText
-                  ? i18n.t("ui.cancel")
-                  : i18n.t("pdf_corpus.edit_text")
-              }}
+              {{ editingText ? i18n.t("ui.cancel") : i18n.t("pdf_corpus.edit_text") }}
             </button>
           </div>
         </div>
@@ -408,9 +401,7 @@ watch(
           }}
           <span v-if="record.text_noise.unusable">
             ·
-            {{
-              i18n.t("pdf_corpus.text_noise.unusable")
-            }}
+            {{ i18n.t("pdf_corpus.text_noise.unusable") }}
           </span>
         </p>
         <CorpusReviewQueueContext
@@ -424,12 +415,8 @@ watch(
           class="touchup-proposal"
           role="status"
         >
-          <b>{{
-            i18n.t("pdf_corpus.llm_touchup_proposal_available")
-          }}</b
-          ><span>{{
-            i18n.t("pdf_corpus.llm_touchup_proposal_help")
-          }}</span
+          <b>{{ i18n.t("pdf_corpus.llm_touchup_proposal_available") }}</b
+          ><span>{{ i18n.t("pdf_corpus.llm_touchup_proposal_help") }}</span
           ><button class="btn small" type="button" :disabled="busy" @click="beginTextEdit(true)">
             {{ i18n.t("pdf_corpus.review_touchup_proposal") }}
           </button>
@@ -547,9 +534,7 @@ watch(
               {{ i18n.t("pdf_corpus.run_guidance_matches") }}
             </h3>
             <p>
-              {{
-                i18n.t("pdf_corpus.run_guidance_matches_help")
-              }}
+              {{ i18n.t("pdf_corpus.run_guidance_matches_help") }}
             </p>
             <ul>
               <li v-for="[field, hits] in guidanceMatches" :key="field">
@@ -568,7 +553,12 @@ watch(
           <div class="evidence-assignment">
             <h3>{{ i18n.t("pdf_corpus.evidence_assignment_title", "Evidence for metadata") }}</h3>
             <p class="empty-note">
-              {{ i18n.t("pdf_corpus.evidence_assignment_help", "Choose a metadata field, then add or remove the source spans that directly support its value. Human-selected evidence becomes reviewed provenance and can support evidence-bound metadata exemplars.") }}
+              {{
+                i18n.t(
+                  "pdf_corpus.evidence_assignment_help",
+                  "Choose a metadata field, then add or remove the source spans that directly support its value. Human-selected evidence becomes reviewed provenance and can support evidence-bound metadata exemplars.",
+                )
+              }}
             </p>
             <FieldEvidenceList
               :evidence="record.metadata_evidence || {}"
@@ -653,9 +643,7 @@ watch(
               {{ i18n.t("pdf_corpus.extracted_source_text") }}
             </summary>
             <p class="empty-note">
-              {{
-                i18n.t("pdf_corpus.extracted_source_text_help")
-              }}
+              {{ i18n.t("pdf_corpus.extracted_source_text_help") }}
             </p>
             <article v-for="block in blocks" :key="block.block_id" class="source-row">
               <header>
@@ -665,9 +653,7 @@ watch(
               <p>{{ block.text }}</p>
             </article>
             <p v-if="!blocks.length" class="empty-note">
-              {{
-                i18n.t("pdf_corpus.source_loading_or_unavailable")
-              }}
+              {{ i18n.t("pdf_corpus.source_loading_or_unavailable") }}
             </p>
           </details>
           <details class="focus-source-section">

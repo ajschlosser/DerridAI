@@ -39,9 +39,7 @@ const showAddCard = computed(() =>
 );
 const loadingTitle = computed(() => i18n.t("works.loading"));
 const loadingDetail = computed(() =>
-  auth.isResearcher
-    ? i18n.t("works.checking_database")
-    : i18n.t("works.checking_database"),
+  auth.isResearcher ? i18n.t("works.checking_database") : i18n.t("works.checking_database"),
 );
 
 function startReveal() {
@@ -178,9 +176,7 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
           }}
         </p>
         <button id="choose" type="button" class="btn primary" @click="works.chooseJsonl()">
-          <AppIcon name="upload" aria-hidden="true" />{{
-            i18n.t("records.choose_jsonl")
-          }}
+          <AppIcon name="upload" aria-hidden="true" />{{ i18n.t("records.choose_jsonl") }}
         </button>
       </div>
     </section>
@@ -239,8 +235,7 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
         </div>
         <div class="tools">
           <span class="note"
-            >{{ snapshot.works.length.toLocaleString(i18n.locale) }}
-            {{ i18n.t("works.shown") }} ·
+            >{{ snapshot.works.length.toLocaleString(i18n.locale) }} {{ i18n.t("works.shown") }} ·
             {{ snapshot.totalWorks.toLocaleString(i18n.locale) }}
             {{ i18n.t("dynamic.works") }} ·
             {{ snapshot.totalRecords.toLocaleString(i18n.locale) }}
@@ -249,11 +244,7 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
         </div>
       </div>
 
-      <section
-        id="worksGrid"
-        class="works works-library-grid"
-        :aria-label="i18n.t('nav.works')"
-      >
+      <section id="worksGrid" class="works works-library-grid" :aria-label="i18n.t('nav.works')">
         <div v-if="showSkeleton" class="progressive-loading" role="status" aria-live="polite">
           <div class="progressive-loading-head">
             <span class="spinner small-spinner"></span
@@ -308,9 +299,7 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
           <span class="work-add-jsonl-icon"><AppIcon name="plus" aria-hidden="true" /></span>
           <span>
             <b>{{ i18n.t("works.add_jsonl") }}</b>
-            <small>{{
-              i18n.t("works.add_jsonl_help")
-            }}</small>
+            <small>{{ i18n.t("works.add_jsonl_help") }}</small>
           </span>
         </button>
       </section>
@@ -321,9 +310,7 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
         :kicker="i18n.t('section.corpus')"
         :title="i18n.t('nav.works')"
         title-id="works-page-title"
-        :description="
-          i18n.t('research.works_menu_help')
-        "
+        :description="i18n.t('research.works_menu_help')"
       />
 
       <WorksOverviewCard
@@ -378,8 +365,7 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
             <b>{{ work.work }}</b>
             <small>{{ work.subtitle }}</small>
             <small
-              >{{ work.count.toLocaleString(i18n.locale) }}
-              {{ i18n.t("dynamic.records") }}</small
+              >{{ work.count.toLocaleString(i18n.locale) }} {{ i18n.t("dynamic.records") }}</small
             >
           </span>
           <span class="work-menu-arrow">›</span>

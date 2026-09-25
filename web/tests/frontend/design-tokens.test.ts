@@ -6,16 +6,19 @@ import { describe, expect, it } from "vitest";
 const tokens = readFileSync("src/styles/tokens.css", "utf8");
 const styles = readFileSync("src/style.css", "utf8");
 
-function block(css: string, opener: string): string {
-  const start = css.indexOf(opener);
-  if (start < 0) throw new Error(`No block for ${opener}`);
-  const open = css.indexOf("{", start);
+function block(css: string, selector: string): string {
+  const start = css.indexOf(selector);
+  if (start < 0) throw new Error(`No block for ${selector}`);
+  const open = css.indexOf("{", start + selector.length);
+  if (open < 0 || css.slice(start + selector.length, open).trim()) {
+    throw new Error(`No block for ${selector}`);
+  }
   let depth = 0;
   for (let i = open; i < css.length; i++) {
     if (css[i] === "{") depth++;
     if (css[i] === "}" && --depth === 0) return css.slice(open + 1, i);
   }
-  throw new Error(`Unclosed block for ${opener}`);
+  throw new Error(`Unclosed block for ${selector}`);
 }
 function value(css: string, name: string): string {
   const match = css.match(new RegExp(`${name}\\s*:\\s*([^;]+);`));
@@ -40,12 +43,12 @@ const contrast = (a: RGB, b: RGB) => {
   return (hi + 0.05) / (lo + 0.05);
 };
 
-const light = block(tokens, ":root {");
-const dark = block(tokens, 'html[data-color-scheme="dark"] {');
-const darkNeutrals = block(styles, 'html[data-color-scheme="dark"]{');
+const light = block(tokens, ":root");
+const dark = block(tokens, 'html[data-color-scheme="dark"]');
+const darkNeutrals = block(styles, 'html[data-color-scheme="dark"]');
 const surfaces = { light: hex("#ffffff"), dark: hex(value(darkNeutrals, "--card")) };
 const themes = ["green", "blue", "slate"].map((name) => {
-  const rule = block(styles, `[data-ui-theme="${name}"]{`);
+  const rule = block(styles, `[data-ui-theme="${name}"]`);
   return {
     name,
     accent: hex(value(rule, "--ui-accent")),

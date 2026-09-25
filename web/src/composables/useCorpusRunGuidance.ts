@@ -52,7 +52,10 @@ export function useCorpusRunGuidance(
     for (const [field, value] of Object.entries(guidance.value)) {
       const entry = {
         instructions: value.instructions.trim(),
-        look_for: value.look_for.map((term) => term.trim()).filter(Boolean).slice(0, 40),
+        look_for: value.look_for
+          .map((term) => term.trim())
+          .filter(Boolean)
+          .slice(0, 40),
       };
       if (entry.instructions || entry.look_for.length) result[field] = entry;
     }

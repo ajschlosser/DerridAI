@@ -22,7 +22,8 @@ export interface AnnotationService {
 }
 
 export const annotationsService: AnnotationService = {
-  loadWorkspace: (force) => runtime.loadAnnotationsWorkspace(force) as Promise<AnnotationsWorkspaceSnapshot>,
+  loadWorkspace: (force) =>
+    runtime.loadAnnotationsWorkspace(force) as Promise<AnnotationsWorkspaceSnapshot>,
   setQuery: (value) => runtime.setAnnotationsWorkspaceQuery(value),
   setView: (value) => runtime.setAnnotationsWorkspaceView(value),
   openRecord: (annotation) => runtime.openAnnotationsWorkspaceRecord(annotation),

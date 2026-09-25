@@ -24,17 +24,10 @@ function formatDate(value?: string) {
 </script>
 
 <template>
-  <section
-    class="response-selection-bar"
-    :aria-label="
-      i18n.t('faq.current_question')
-    "
-  >
+  <section class="response-selection-bar" :aria-label="i18n.t('faq.current_question')">
     <div class="response-selection-main">
       <span class="response-selection-label"
-        ><AppIcon name="search" aria-hidden="true" />{{
-          i18n.t("faq.current_question")
-        }}</span
+        ><AppIcon name="search" aria-hidden="true" />{{ i18n.t("faq.current_question") }}</span
       >
       <h2>{{ record.question || i18n.t("faq.untitled_question") }}</h2>
       <div class="response-selection-meta">
@@ -50,15 +43,12 @@ function formatDate(value?: string) {
           {{ i18n.t("research.evidence_records") }}</span
         >
         <span v-if="grade != null" class="grade"
-          ><AppIcon name="spark" />{{ i18n.t("faq.saved_grade") }}
-          {{ grade }}/10</span
+          ><AppIcon name="spark" />{{ i18n.t("faq.saved_grade") }} {{ grade }}/10</span
         >
       </div>
     </div>
     <button type="button" class="response-selection-browse" @click="emit('browse')">
-      <AppIcon name="search" />{{
-        i18n.t("faq.find_another_question")
-      }}
+      <AppIcon name="search" />{{ i18n.t("faq.find_another_question") }}
     </button>
   </section>
 </template>

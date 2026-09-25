@@ -8,8 +8,8 @@ const meta = {
   args: {
     modelValue: "f::0",
     options: [
-      {value: "f::0", label: "tab.jsonl · r-a · Glas"},
-      {value: "f::1", label: "tab.jsonl · r-b · Voice and Phenomenon"},
+      { value: "f::0", label: "tab.jsonl · r-a · Glas" },
+      { value: "f::1", label: "tab.jsonl · r-b · Voice and Phenomenon" },
     ],
     label: "Find a loaded record",
     placeholder: "Type record ID, work, author, or file…",
@@ -22,4 +22,10 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Default: Story = {};
-export const Empty: Story = {args: {modelValue: "", options: [], emptyHint: "Load JSONL files or browse the corpus database first."}};
+export const Empty: Story = {
+  args: {
+    modelValue: "",
+    options: [],
+    emptyHint: "Load JSONL files or browse the corpus database first.",
+  },
+};

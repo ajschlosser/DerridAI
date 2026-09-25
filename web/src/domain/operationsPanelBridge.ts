@@ -284,13 +284,14 @@ export function createOperationsPanelBridge(deps: Deps) {
           const stageElapsed = Number.isFinite(stageStart as Any)
             ? humanDuration(Math.max(0, (Date.now() - (stageStart as Any)) / 1000))
             : "—";
-          const scheduler = job.provider === "openai"
-            ? tr("rag.param.scheduler_uncapped")
-            : param(
-                "rag.param.scheduler",
-                "scheduler {value}",
-                `${job.scheduling?.active_when_started ?? state.health?.rag_concurrency?.ollama_active ?? "—"}/${job.scheduling?.limit ?? state.appConfig.ollama_rag_concurrency ?? 1}`,
-              );
+          const scheduler =
+            job.provider === "openai"
+              ? tr("rag.param.scheduler_uncapped")
+              : param(
+                  "rag.param.scheduler",
+                  "scheduler {value}",
+                  `${job.scheduling?.active_when_started ?? state.health?.rag_concurrency?.ollama_active ?? "—"}/${job.scheduling?.limit ?? state.appConfig.ollama_rag_concurrency ?? 1}`,
+                );
           const params = [
             param("rag.param.started_by", "started by {value}", job.owner || "—"),
             param("rag.param.provider", "provider {value}", job.provider || "—"),
@@ -305,8 +306,16 @@ export function createOperationsPanelBridge(deps: Deps) {
               "reranker model {value}",
               request.cross_encoder_model || request.reranker || "—",
             ),
-            param("rag.param.languages", "languages {value}", (request.locales || []).join("+") || "—"),
-            param("rag.param.retrieval", "retrieval {value}", (request.search_types || []).join("+") || "—"),
+            param(
+              "rag.param.languages",
+              "languages {value}",
+              (request.locales || []).join("+") || "—",
+            ),
+            param(
+              "rag.param.retrieval",
+              "retrieval {value}",
+              (request.search_types || []).join("+") || "—",
+            ),
             param("rag.param.k", "k {value}", request.k ?? "—"),
             param("rag.param.fetch", "fetch {value}", request.fetch_k ?? "—"),
             param("rag.param.lambda", "λ {value}", request.lambda_mult ?? "—"),

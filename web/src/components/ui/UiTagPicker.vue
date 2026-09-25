@@ -24,7 +24,9 @@ const open = ref(false);
 const active = ref(-1);
 const input = ref<HTMLInputElement | null>(null);
 
-const selected = computed(() => new Set((props.modelValue || []).map((value) => value.toLocaleUpperCase())));
+const selected = computed(
+  () => new Set((props.modelValue || []).map((value) => value.toLocaleUpperCase())),
+);
 const filtered = computed(() => {
   const needle = query.value.trim().toLocaleUpperCase();
   return props.options
@@ -34,7 +36,9 @@ const filtered = computed(() => {
 });
 
 function commit(value: string) {
-  const option = props.options.find((item) => item.toLocaleUpperCase() === value.toLocaleUpperCase());
+  const option = props.options.find(
+    (item) => item.toLocaleUpperCase() === value.toLocaleUpperCase(),
+  );
   if (!option || selected.value.has(option.toLocaleUpperCase())) return;
   emit("update:modelValue", [...(props.modelValue || []), option]);
   query.value = "";
@@ -44,7 +48,10 @@ function commit(value: string) {
 }
 
 function remove(value: string) {
-  emit("update:modelValue", (props.modelValue || []).filter((item) => item !== value));
+  emit(
+    "update:modelValue",
+    (props.modelValue || []).filter((item) => item !== value),
+  );
 }
 
 function removeAriaLabel(value: string) {

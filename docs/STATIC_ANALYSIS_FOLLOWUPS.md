@@ -1,4 +1,5 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+
 # Static-analysis follow-ups
 
 This is the current registry for intentional Ruff, mypy, ESLint, and TypeScript debt that remains visible in source/config suppressions. It is not a snapshot of line numbers from a past release.
@@ -31,6 +32,7 @@ The former SA-11 “missing runtime symbol” inventory is retired: those exact 
 - Ruff is configured in `ruff.toml`.
 - mypy is configured in `mypy.ini`.
 - frontend lint/type gates are defined in `web/package.json` and TypeScript/ESLint config.
+- repository-wide Prettier ownership is defined by `web/package.json`, `web/.prettierrc`, and the root `.prettierignore`; generated legacy DOM snapshots are excluded because formatting would alter characterization baselines.
 - CI orchestration and path/shard behavior live in `.github/workflows/frontend.yml`.
 - Accessibility regressions belong to Playwright/axe and focused semantic tests, not static-analysis suppressions.
 

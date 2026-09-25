@@ -10,7 +10,11 @@ type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-e
 
 interface Deps {
   tr: (key: string, fallback?: string) => string;
-  trf: (key: string, fallbackOrValues?: string | Record<string, unknown>, values?: Record<string, unknown>) => string;
+  trf: (
+    key: string,
+    fallbackOrValues?: string | Record<string, unknown>,
+    values?: Record<string, unknown>,
+  ) => string;
   getLocale: () => string;
   getStores: () => Loose[];
   providerProfiles: () => Loose[];
@@ -65,13 +69,9 @@ export function createOperationPresenters(deps: Deps) {
         rag_grade_batch: tr("operations.job.rag_grade_batch"),
         work_metadata: tr("works.populate_metadata_llm"),
       };
-      return (
-        job.label || known[job.tool || job.mode] || tr("operations.job.llm_tool")
-      );
+      return job.label || known[job.tool || job.mode] || tr("operations.job.llm_tool");
     }
-    return job.mode === "auto"
-      ? tr("operations.job.auto")
-      : tr("operations.job.review");
+    return job.mode === "auto" ? tr("operations.job.auto") : tr("operations.job.review");
   }
   function jobProviderSummary(job: Loose) {
     if (job.type === "upsert")
@@ -122,8 +122,7 @@ export function createOperationPresenters(deps: Deps) {
     return null;
   }
   function operationSubtitle(job: Loose) {
-    if (job.status === "cancelling" || job.cancel_requested)
-      return tr("operations.sub.cancelling");
+    if (job.status === "cancelling" || job.cancel_requested) return tr("operations.sub.cancelling");
     if (job.type === "rag")
       return String(job.stage_detail || job.stage || tr("operations.sub.queued"));
     if (job.type === "upsert")
@@ -144,8 +143,7 @@ export function createOperationPresenters(deps: Deps) {
     // A PDF corpus build reports a synthetic count (source blocks x weighted
     // stage progress), not a real tally, so show only the honest percentage.
     if (job.type === "pdf_corpus") {
-      if (job.status === "completed")
-        return tr("operations.progress_build_complete");
+      if (job.status === "completed") return tr("operations.progress_build_complete");
       return trf("operations.progress_overall", { percent: pct });
     }
     return style === "of"
@@ -221,10 +219,7 @@ export function createOperationPresenters(deps: Deps) {
         [tr("pdf_corpus.records"), job.record_count ?? 0],
         [tr("pdf_corpus.need_review"), job.review_count ?? 0],
         [tr("pdf_corpus.unresolved_regions"), job.unresolved_regions ?? 0],
-        [
-          tr("pdf_corpus.concurrent_requests"),
-          job.max_concurrent_requests ?? 1,
-        ],
+        [tr("pdf_corpus.concurrent_requests"), job.max_concurrent_requests ?? 1],
       );
     } else if (job.type === "llm_tool") {
       pairs.push(

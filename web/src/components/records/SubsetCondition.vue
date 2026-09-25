@@ -37,9 +37,7 @@ function setOperator(next: string) {
     <select
       v-model="field"
       class="control"
-      :aria-label="
-        i18n.tf('subset.field_label', { position: props.position })
-      "
+      :aria-label="i18n.tf('subset.field_label', { position: props.position })"
     >
       <option v-for="item in props.fields" :key="item.key" :value="item.key">
         {{ item.label }}
@@ -48,9 +46,7 @@ function setOperator(next: string) {
     <select
       class="control"
       :value="operator"
-      :aria-label="
-        i18n.tf('subset.operator_label', { position: props.position })
-      "
+      :aria-label="i18n.tf('subset.operator_label', { position: props.position })"
       @change="setOperator(($event.target as HTMLSelectElement).value)"
     >
       <option v-for="item in SUBSET_OPERATORS" :key="item" :value="item">
@@ -62,13 +58,9 @@ function setOperator(next: string) {
       class="control"
       autocomplete="off"
       :disabled="valueless"
-      :placeholder="
-        valueless ? i18n.t('subset.no_value') : i18n.t('subset.value')
-      "
+      :placeholder="valueless ? i18n.t('subset.no_value') : i18n.t('subset.value')"
       :list="suggested ? listId : undefined"
-      :aria-label="
-        i18n.tf('subset.value_label', { position: props.position })
-      "
+      :aria-label="i18n.tf('subset.value_label', { position: props.position })"
     />
     <datalist v-if="suggested" :id="listId">
       <option v-for="item in props.suggestions" :key="item" :value="item" />
@@ -76,9 +68,7 @@ function setOperator(next: string) {
     <button
       type="button"
       class="btn danger"
-      :aria-label="
-        i18n.tf('subset.remove_condition_named', { position: props.position })
-      "
+      :aria-label="i18n.tf('subset.remove_condition_named', { position: props.position })"
       @click="emit('remove')"
     >
       {{ i18n.t("ui.remove") }}

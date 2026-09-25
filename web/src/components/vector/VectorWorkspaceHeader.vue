@@ -18,9 +18,7 @@ const i18n = useI18nStore();
     class="vector-workspace-header"
     :kicker="i18n.t('section.storage', 'Storage')"
     :title="i18n.t('nav.vector', 'Corpus Data')"
-    :description="
-      i18n.t('vector.page_help')
-    "
+    :description="i18n.t('vector.page_help')"
     title-id="vector-page-title"
     :actions-label="i18n.t('vector.manage_collections')"
   >

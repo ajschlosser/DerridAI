@@ -60,7 +60,9 @@ export const INSPECTOR_FIELD_CATALOG: Record<InspectorTabKey, string[]> = {
   ],
 };
 
-export function inspectorFieldCatalog(record?: Record<string, unknown> | null): Record<InspectorTabKey, string[]> {
+export function inspectorFieldCatalog(
+  record?: Record<string, unknown> | null,
+): Record<InspectorTabKey, string[]> {
   const asserted = assertionFieldsByTab(record || {});
   return {
     overview: [...new Set([...INSPECTOR_FIELD_CATALOG.overview, ...asserted.overview])],
@@ -166,7 +168,11 @@ export function normalizeInspectorLayout(
       if (!item || typeof item !== "object") continue;
       const row = item as Record<string, unknown>;
       if (row.kind === "heading") {
-        cleaned.push({ id: String(row.id || uid()), kind: "heading", label: String(row.label || "").trim() || "Section" });
+        cleaned.push({
+          id: String(row.id || uid()),
+          kind: "heading",
+          label: String(row.label || "").trim() || "Section",
+        });
         continue;
       }
       if (row.kind === "field") {
@@ -181,7 +187,11 @@ export function normalizeInspectorLayout(
   return next;
 }
 
-export function moveInspectorRow(rows: InspectorLayoutRow[], from: number, to: number): InspectorLayoutRow[] {
+export function moveInspectorRow(
+  rows: InspectorLayoutRow[],
+  from: number,
+  to: number,
+): InspectorLayoutRow[] {
   if (from === to || from < 0 || to < 0 || from >= rows.length || to >= rows.length) return rows;
   const next = [...rows];
   const [item] = next.splice(from, 1);
@@ -189,7 +199,9 @@ export function moveInspectorRow(rows: InspectorLayoutRow[], from: number, to: n
   return next;
 }
 
-export function groupInspectorRows(rows: InspectorLayoutRow[]): Array<{ heading: string | null; fields: string[] }> {
+export function groupInspectorRows(
+  rows: InspectorLayoutRow[],
+): Array<{ heading: string | null; fields: string[] }> {
   const sections: Array<{ heading: string | null; fields: string[] }> = [];
   let current: { heading: string | null; fields: string[] } = { heading: null, fields: [] };
   for (const row of rows) {
@@ -209,13 +221,20 @@ export function unusedInspectorFields(
   rows: InspectorLayoutRow[],
   record?: Record<string, unknown> | null,
 ): string[] {
-  const used = new Set(rows.filter((row): row is { id: string; kind: "field"; field: string } => row.kind === "field").map((row) => row.field));
+  const used = new Set(
+    rows
+      .filter((row): row is { id: string; kind: "field"; field: string } => row.kind === "field")
+      .map((row) => row.field),
+  );
   return inspectorFieldCatalog(record)[tab].filter((name) => !used.has(name));
 }
 
 export function loadInspectorLayout(record?: Record<string, unknown> | null): InspectorLayout {
   try {
-    return normalizeInspectorLayout(JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"), record);
+    return normalizeInspectorLayout(
+      JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"),
+      record,
+    );
   } catch {
     return defaultInspectorLayout(record);
   }

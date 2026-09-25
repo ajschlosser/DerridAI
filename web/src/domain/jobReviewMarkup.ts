@@ -32,7 +32,10 @@ export function llmReviewDialogHtml(
     reviewKey: (file: Any, index: number) => string;
   },
 ): string {
-  const { tr, trf, label, reviewDiffSides, reviewKey } = { ...deps, ...bindCopy(deps.tr, deps.trf) };
+  const { tr, trf, label, reviewDiffSides, reviewKey } = {
+    ...deps,
+    ...bindCopy(deps.tr, deps.trf),
+  };
   const {
     job,
     flattened,
@@ -67,21 +70,16 @@ export function llmReviewDialogHtml(
         .join("")}</div></details>`
     : "";
 
-  const title =
-    job.mode === "auto"
-      ? tr("jobs.review.auto_title")
-      : tr("jobs.review.title");
-  const subtitle = trf("jobs.review.subtitle",
-    {
-      completed: job.completed,
-      total: job.total,
-      pendingResults,
-      pendingChanges,
-      remaining,
-      failures: failures.length,
-      status: statusText,
-    },
-  );
+  const title = job.mode === "auto" ? tr("jobs.review.auto_title") : tr("jobs.review.title");
+  const subtitle = trf("jobs.review.subtitle", {
+    completed: job.completed,
+    total: job.total,
+    pendingResults,
+    pendingChanges,
+    remaining,
+    failures: failures.length,
+    status: statusText,
+  });
 
   return `<div class="dh"><div><h2 class="dialog-title">${esc(title)}</h2><div class="dialog-subtitle">${esc(subtitle)}</div></div><div class="tools">${active ? `<span class="job-status running">${esc(tr("jobs.review.live"))}</span>` : ""}<button class="btn icon-only" data-close>${icon("close")}</button></div></div>
     <div class="db job-change-review">

@@ -49,7 +49,8 @@ const server = createServer(async (request, response) => {
 
     const body = await readFile(filePath);
     response.writeHead(200, {
-      "content-type": contentTypes.get(extname(filePath).toLowerCase()) || "application/octet-stream",
+      "content-type":
+        contentTypes.get(extname(filePath).toLowerCase()) || "application/octet-stream",
       "cache-control": "no-store",
     });
     response.end(body);

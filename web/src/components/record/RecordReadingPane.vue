@@ -255,19 +255,11 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onGlobalKeydown));
           :aria-pressed="focusMode"
           @click="focusMode = !focusMode"
         >
-          {{
-            focusMode
-              ? i18n.t("record.exit_focus")
-              : i18n.t("record.focus_mode")
-          }}
+          {{ focusMode ? i18n.t("record.exit_focus") : i18n.t("record.focus_mode") }}
         </button>
       </div>
     </header>
-    <div
-      class="record-reading-text"
-      tabindex="0"
-      :aria-label="i18n.t('record.text')"
-    >
+    <div class="record-reading-text" tabindex="0" :aria-label="i18n.t('record.text')">
       <template v-for="(segment, index) in segments" :key="index">
         <mark
           v-if="segment.search"

@@ -15,7 +15,7 @@ Administrators can create additional **custom roles**. A custom role starts from
 
 Role capabilities are enforced by both navigation and the API. Unsaved permission changes stay visible until you save, and leaving the page or switching roles asks for confirmation.
 
-Researcher-visible corpus text is transformed on the API before it is returned to the browser. `text` is passed through a dependency-free Edmundson-style extractive summarizer with values from `topics`, `concepts`, and `persons` treated as bonus terms. Summaries contain at most 2–3 selected sentence extracts joined by ` [...] ` and respect `RESEARCHER_TEXT_MAX_CHARS` (default `1600`). Text-valued entries inside the record `updates` audit history are sanitized by the same policy. The full corpus text remains available internally to the RAG pipeline for retrieval/generation, but is not exposed in researcher job results or read-only corpus search.
+Researcher-visible corpus text is transformed on the API before it is returned to the browser. `text` is passed through a dependency-free Edmundson-style extractive summarizer with values from `topics`, `concepts`, and `persons` treated as bonus terms. Summaries contain at most 2–3 selected sentence extracts joined by `[...]` and respect `RESEARCHER_TEXT_MAX_CHARS` (default `1600`). Text-valued entries inside the record `updates` audit history are sanitized by the same policy. The full corpus text remains available internally to the RAG pipeline for retrieval/generation, but is not exposed in researcher job results or read-only corpus search.
 
 ### Sign-in protection
 
@@ -324,11 +324,11 @@ Because the affected record fingerprints change, records previously synchronized
 
 Chroma is derived data. The corpus JSONL/PDF pipeline is the source of truth; collections can be deleted and rebuilt. DerridAI can use Chroma in three ways, analogous to how Ollama is either a host process or the compose service, plus the extra local-filesystem mode that is still the default:
 
-| Mode | When to use | How |
-| --- | --- | --- |
-| **Local filesystem** (`CHROMA_MODE=embedded`, default) | Local-first install | `PersistentClient` on `CHROMA_PATH` (`./data/chroma`) |
-| **Bundled Chroma container** | Process isolation, or sharing the store with other tools | `docker compose --profile chroma up -d`, then `CHROMA_MODE=http` and `CHROMA_BASE_URL=http://chroma:8000` |
-| **Running Chroma server** | A server already on the host or in the lab | `CHROMA_MODE=http` and `CHROMA_BASE_URL=http://host.docker.internal:8001` (or the lab URL) |
+| Mode                                                   | When to use                                              | How                                                                                                       |
+| ------------------------------------------------------ | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| **Local filesystem** (`CHROMA_MODE=embedded`, default) | Local-first install                                      | `PersistentClient` on `CHROMA_PATH` (`./data/chroma`)                                                     |
+| **Bundled Chroma container**                           | Process isolation, or sharing the store with other tools | `docker compose --profile chroma up -d`, then `CHROMA_MODE=http` and `CHROMA_BASE_URL=http://chroma:8000` |
+| **Running Chroma server**                              | A server already on the host or in the lab               | `CHROMA_MODE=http` and `CHROMA_BASE_URL=http://host.docker.internal:8001` (or the lab URL)                |
 
 Vector Stores → Connection settings can probe and switch backends at runtime. Switching does **not** move collections. Do not point embedded storage and a Chroma server at the same directory (one writer per path). NUKE in HTTP mode deletes collections on that server; it does not empty a leftover local `chroma` folder. Backups always go through the client API and preserve embeddings.
 

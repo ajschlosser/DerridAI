@@ -17,12 +17,23 @@ const i18n = useI18nStore();
   <div class="shell-sidebar-footer">
     <div class="shell-mini-status">
       <template v-if="props.isAdmin">
-        <span><i :class="['status-dot', props.hasCorpusDb ? 'ok' : '']" aria-hidden="true"></i>{{ props.totalLoaded.toLocaleString(i18n.locale) }} {{ i18n.t('dynamic.records') }}</span>
-        <span v-if="props.corpusStoreCount">{{ props.corpusStoreCount }} {{ i18n.t('ui.corpus_dbs') }}</span>
+        <span
+          ><i :class="['status-dot', props.hasCorpusDb ? 'ok' : '']" aria-hidden="true"></i
+          >{{ props.totalLoaded.toLocaleString(i18n.locale) }} {{ i18n.t("dynamic.records") }}</span
+        >
+        <span v-if="props.corpusStoreCount"
+          >{{ props.corpusStoreCount }} {{ i18n.t("ui.corpus_dbs") }}</span
+        >
       </template>
       <template v-else>
-        <span><i :class="['status-dot', props.hasCorpusDb ? 'ok' : '']" aria-hidden="true"></i>{{ props.activeStore || i18n.t('research.none_selected') }}</span>
-        <span>{{ props.dbRecords.toLocaleString(i18n.locale) }} {{ i18n.t('dynamic.records') }} · {{ props.selectedEvidenceCount }} {{ i18n.t('dynamic.selected_evidence') }}</span>
+        <span
+          ><i :class="['status-dot', props.hasCorpusDb ? 'ok' : '']" aria-hidden="true"></i
+          >{{ props.activeStore || i18n.t("research.none_selected") }}</span
+        >
+        <span
+          >{{ props.dbRecords.toLocaleString(i18n.locale) }} {{ i18n.t("dynamic.records") }} ·
+          {{ props.selectedEvidenceCount }} {{ i18n.t("dynamic.selected_evidence") }}</span
+        >
       </template>
     </div>
   </div>
@@ -33,7 +44,7 @@ const i18n = useI18nStore();
   display: grid;
   gap: 5px;
   color: var(--muted);
-  font-size: .8125rem;
+  font-size: 0.8125rem;
   padding: 0 5px;
 }
 .shell-mini-status span {
@@ -45,10 +56,10 @@ const i18n = useI18nStore();
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-@media (max-height:820px) and (min-width:901px) {
+@media (max-height: 820px) and (min-width: 901px) {
   .shell-mini-status {
-    font-size: .8125rem!important;
-    gap: 2px!important;
+    font-size: 0.8125rem !important;
+    gap: 2px !important;
   }
 }
 </style>

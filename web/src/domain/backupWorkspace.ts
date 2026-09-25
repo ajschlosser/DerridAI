@@ -43,9 +43,7 @@ export function createBackupWorkspace(deps: Deps) {
       ["queued", "running", "cancelling"].includes(job.status),
     );
     if (activeJobs.length) {
-      return toast(
-        trf("runtime.toast.wait_before_backup", { count: activeJobs.length }),
-      );
+      return toast(trf("runtime.toast.wait_before_backup", { count: activeJobs.length }));
     }
     const hasCredentials = backupContainsCredentials();
     const warning = hasCredentials
@@ -146,8 +144,7 @@ export function createBackupWorkspace(deps: Deps) {
     const activeJobs = state.jobs.filter((job: Any) =>
       ["queued", "running", "cancelling"].includes(job.status),
     );
-    if (activeJobs.length)
-      return toast(tr("runtime.toast.wait_before_restore"));
+    if (activeJobs.length) return toast(tr("runtime.toast.wait_before_restore"));
     if (
       !confirmed &&
       !(await openMessageModal({

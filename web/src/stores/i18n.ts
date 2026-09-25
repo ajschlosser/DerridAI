@@ -15,14 +15,16 @@ export const useI18nStore = defineStore("i18n", () => {
 
   function t(key: string, fallback?: string) {
     const commonKey = COMMON_KEY_ALIASES[key];
-    return dictionary.value[key]
-      || (commonKey ? dictionary.value[commonKey] : undefined)
-      || baseDictionary.value[key]
-      || (commonKey ? baseDictionary.value[commonKey] : undefined)
-      || fallback
-      || englishDefault(key)
-      || (commonKey ? englishDefault(commonKey) : "")
-      || key;
+    return (
+      dictionary.value[key] ||
+      (commonKey ? dictionary.value[commonKey] : undefined) ||
+      baseDictionary.value[key] ||
+      (commonKey ? baseDictionary.value[commonKey] : undefined) ||
+      fallback ||
+      englishDefault(key) ||
+      (commonKey ? englishDefault(commonKey) : "") ||
+      key
+    );
   }
 
   function tf(
@@ -35,20 +37,31 @@ export const useI18nStore = defineStore("i18n", () => {
     if (fallbackOrValues && typeof fallbackOrValues === "object") vars = fallbackOrValues;
     else if (typeof fallbackOrValues === "string") fallback = fallbackOrValues;
     let text = String(t(key, fallback));
-    for (const [name, value] of Object.entries(vars)) text = text.replaceAll(`{${name}}`, String(value));
+    for (const [name, value] of Object.entries(vars))
+      text = text.replaceAll(`{${name}}`, String(value));
     return text;
   }
 
   function directionForLocale(code: string) {
     try {
       const script = new Intl.Locale(code).maximize().script || "";
-      return new Set(["Arab", "Hebr", "Syrc", "Thaa", "Nkoo", "Adlm", "Rohg", "Mand"]).has(script) ? "rtl" : "ltr";
-    } catch { return "ltr"; }
+      return new Set(["Arab", "Hebr", "Syrc", "Thaa", "Nkoo", "Adlm", "Rohg", "Mand"]).has(script)
+        ? "rtl"
+        : "ltr";
+    } catch {
+      return "ltr";
+    }
   }
 
   async function loadLanguages() {
-    try { languages.value = (await systemApi.languages()).languages; }
-    catch { languages.value = [{code: "en-US", name: "English", flag: "🇺🇸"}, {code: "fr-CA", name: "Français", flag: "🇨🇦"}]; }
+    try {
+      languages.value = (await systemApi.languages()).languages;
+    } catch {
+      languages.value = [
+        { code: "en-US", name: "English", flag: "🇺🇸" },
+        { code: "fr-CA", name: "Français", flag: "🇨🇦" },
+      ];
+    }
   }
 
   async function setLocale(code: string) {
@@ -64,28 +77,37 @@ export const useI18nStore = defineStore("i18n", () => {
       localStorage.setItem("derridai-locale", data.code);
       document.documentElement.lang = data.code;
       document.documentElement.dir = directionForLocale(data.code);
-      runtime.setTranslationDictionary(data.code, dictionary.value, baseDictionary.value, { name: data.name, flag: data.flag });
+      runtime.setTranslationDictionary(data.code, dictionary.value, baseDictionary.value, {
+        name: data.name,
+        flag: data.flag,
+      });
       if (document.querySelector("#main")) runtime.renderView();
-    } finally { loading.value = false; }
+    } finally {
+      loading.value = false;
+    }
   }
 
   async function refreshLanguagesFromEvent() {
     const requested = locale.value;
     await loadLanguages();
-    const available = languages.value.some(item => item.code === requested);
+    const available = languages.value.some((item) => item.code === requested);
     await setLocale(available ? requested : "en-US");
   }
 
   if (typeof window !== "undefined" && !languageEventBridgeInstalled) {
     languageEventBridgeInstalled = true;
     window.addEventListener("derridai:languages-changed", () => {
-      void refreshLanguagesFromEvent().catch(exc => console.warn("Could not refresh installed languages", exc));
+      void refreshLanguagesFromEvent().catch((exc) =>
+        console.warn("Could not refresh installed languages", exc),
+      );
     });
   }
 
   async function initialize() {
     await loadLanguages();
-    const available = languages.value.some(item => item.code === locale.value) ? locale.value : "en-US";
+    const available = languages.value.some((item) => item.code === locale.value)
+      ? locale.value
+      : "en-US";
     try {
       await setLocale(available);
     } catch (exc) {
@@ -101,5 +123,17 @@ export const useI18nStore = defineStore("i18n", () => {
     }
   }
 
-  return { locale, languages, dictionary, baseDictionary, loading, t, tf, directionForLocale, loadLanguages, setLocale, initialize };
+  return {
+    locale,
+    languages,
+    dictionary,
+    baseDictionary,
+    loading,
+    t,
+    tf,
+    directionForLocale,
+    loadLanguages,
+    setLocale,
+    initialize,
+  };
 });

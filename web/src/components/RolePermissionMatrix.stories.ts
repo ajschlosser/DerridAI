@@ -5,22 +5,58 @@ import RolePermissionMatrix from "../components/RolePermissionMatrix.vue";
 import type { CapabilityDefinition } from "../api/auth";
 
 const catalog: CapabilityDefinition[] = [
-  {id: "page.dashboard", category: "Pages", label: "Dashboard", description: "Open the dashboard.", configurable: true},
-  {id: "page.research", category: "Pages", label: "Research", description: "Open the Research workspace.", configurable: true},
-  {id: "rag.run", category: "Research", label: "Run Research", description: "Start evidence-grounded Research jobs.", configurable: true},
-  {id: "corpus.read", category: "Corpus", label: "Read corpus", description: "Read researcher-safe corpus records.", configurable: true},
-  {id: "corpus.search", category: "Corpus", label: "Search corpus", description: "Search protected corpus records.", configurable: true},
-  {id: "users.manage", category: "Administration", label: "Manage users", description: "Administrator-only account management.", configurable: false},
+  {
+    id: "page.dashboard",
+    category: "Pages",
+    label: "Dashboard",
+    description: "Open the dashboard.",
+    configurable: true,
+  },
+  {
+    id: "page.research",
+    category: "Pages",
+    label: "Research",
+    description: "Open the Research workspace.",
+    configurable: true,
+  },
+  {
+    id: "rag.run",
+    category: "Research",
+    label: "Run Research",
+    description: "Start evidence-grounded Research jobs.",
+    configurable: true,
+  },
+  {
+    id: "corpus.read",
+    category: "Corpus",
+    label: "Read corpus",
+    description: "Read researcher-safe corpus records.",
+    configurable: true,
+  },
+  {
+    id: "corpus.search",
+    category: "Corpus",
+    label: "Search corpus",
+    description: "Search protected corpus records.",
+    configurable: true,
+  },
+  {
+    id: "users.manage",
+    category: "Administration",
+    label: "Manage users",
+    description: "Administrator-only account management.",
+    configurable: false,
+  },
 ];
 
 const meta = {
   title: "System/Role Permission Matrix",
   component: RolePermissionMatrix,
   render: (args) => ({
-    components: {RolePermissionMatrix},
+    components: { RolePermissionMatrix },
     setup: () => {
       const selected = ref([...args.modelValue]);
-      return {args, selected};
+      return { args, selected };
     },
     template: `<RolePermissionMatrix v-bind="args" v-model="selected" />`,
   }),
@@ -44,13 +80,13 @@ export const ResearchFocused: Story = {
 export const ReadOnlyCustomRole: Story = {
   args: {
     modelValue: ["page.dashboard", "corpus.read"],
-    capabilities: catalog.filter(item => item.configurable),
+    capabilities: catalog.filter((item) => item.configurable),
   },
 };
 
 export const AdministratorLocked: Story = {
   args: {
-    modelValue: catalog.map(item => item.id),
+    modelValue: catalog.map((item) => item.id),
     disabled: true,
   },
 };

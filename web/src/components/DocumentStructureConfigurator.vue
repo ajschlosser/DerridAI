@@ -110,14 +110,10 @@ function save() {
   <section class="structure-config" aria-labelledby="document-structure-title">
     <header>
       <div>
-        <span class="eyebrow">{{
-          i18n.t("pdf_corpus.document_structure")
-        }}</span>
+        <span class="eyebrow">{{ i18n.t("pdf_corpus.document_structure") }}</span>
         <h3 id="document-structure-title">{{ asset.filename }}</h3>
         <p>
-          {{
-            i18n.t("pdf_corpus.document_structure_help")
-          }}
+          {{ i18n.t("pdf_corpus.document_structure_help") }}
         </p>
       </div>
     </header>
@@ -132,9 +128,7 @@ function save() {
           >
             ← {{ i18n.t("ui.previous") }}</button
           ><label
-            ><span class="sr-only">{{
-              i18n.t("pdf_corpus.physical_pdf_page")
-            }}</span
+            ><span class="sr-only">{{ i18n.t("pdf_corpus.physical_pdf_page") }}</span
             ><input
               class="control compact"
               type="number"
@@ -184,9 +178,7 @@ function save() {
         </div>
         <div class="current-page-actions">
           <button class="btn" type="button" @click="draft.main_text_pdf_start = current">
-            {{
-              i18n.t("pdf_corpus.set_current_main_start")
-            }}</button
+            {{ i18n.t("pdf_corpus.set_current_main_start") }}</button
           ><button class="btn" type="button" @click="draft.bibliography_pdf_start = current">
             {{ i18n.t("pdf_corpus.set_current_bibliography") }}
           </button>
@@ -197,14 +189,10 @@ function save() {
           <legend>{{ i18n.t("pdf_corpus.page_layout") }}</legend>
           <label class="radio-row"
             ><input v-model="draft.page_layout" type="radio" value="single" />
-            <span>{{
-              i18n.t("pdf_corpus.single_page_layout")
-            }}</span></label
+            <span>{{ i18n.t("pdf_corpus.single_page_layout") }}</span></label
           ><label class="radio-row"
             ><input v-model="draft.page_layout" type="radio" value="two_up" />
-            <span>{{
-              i18n.t("pdf_corpus.two_up_layout")
-            }}</span></label
+            <span>{{ i18n.t("pdf_corpus.two_up_layout") }}</span></label
           ><label v-if="draft.page_layout === 'two_up'"
             ><span>{{ i18n.t("pdf_corpus.reading_order") }}</span
             ><select v-model="draft.reading_order" class="control">
@@ -220,9 +208,7 @@ function save() {
         <fieldset>
           <legend>{{ i18n.t("pdf_corpus.structural_anchors") }}</legend>
           <label
-            ><span>{{
-              i18n.t("pdf_corpus.main_text_starts_pdf")
-            }}</span>
+            ><span>{{ i18n.t("pdf_corpus.main_text_starts_pdf") }}</span>
             <div class="anchor">
               <input
                 v-model.number="draft.main_text_pdf_start"
@@ -241,16 +227,16 @@ function save() {
           >
           <div v-if="showClues && inference" class="start-clues" role="note">
             <b>{{
-              i18n.tf("pdf_corpus.manifest_start_inferred", { percent: Math.round(inference.confidence * 100) })
+              i18n.tf("pdf_corpus.manifest_start_inferred", {
+                percent: Math.round(inference.confidence * 100),
+              })
             }}</b>
             <ul>
               <li v-for="clue in inference.clues" :key="clue.kind">{{ clue.detail }}</li>
             </ul>
           </div>
           <label
-            ><span>{{
-              i18n.t("pdf_corpus.first_printed_page_number")
-            }}</span
+            ><span>{{ i18n.t("pdf_corpus.first_printed_page_number") }}</span
             ><input
               v-model.number="draft.main_text_printed_start"
               class="control"
@@ -263,9 +249,7 @@ function save() {
               <option value="right">{{ i18n.t("pdf_corpus.right_page") }}</option>
             </select></label
           ><label
-            ><span>{{
-              i18n.t("pdf_corpus.bibliography_starts_pdf")
-            }}</span>
+            ><span>{{ i18n.t("pdf_corpus.bibliography_starts_pdf") }}</span>
             <div class="anchor">
               <input
                 v-model.number="draft.bibliography_pdf_start"
@@ -307,17 +291,13 @@ function save() {
           >
           <div v-if="draft.thread_mode !== 'continuous'" class="thread-languages">
             <label
-              ><span>{{
-                i18n.t("pdf_corpus.thread_a_language")
-              }}</span
+              ><span>{{ i18n.t("pdf_corpus.thread_a_language") }}</span
               ><input
                 v-model="draft.thread_a_language"
                 class="control"
                 placeholder="en_us" /></label
             ><label
-              ><span>{{
-                i18n.t("pdf_corpus.thread_b_language")
-              }}</span
+              ><span>{{ i18n.t("pdf_corpus.thread_b_language") }}</span
               ><input v-model="draft.thread_b_language" class="control" placeholder="fr_fr"
             /></label>
           </div>
@@ -328,22 +308,24 @@ function save() {
       <div>
         <b>{{ i18n.t("pdf_corpus.generated_mapping") }}</b
         ><span>{{
-          i18n.tf("pdf_corpus.mapping_summary", { mapped: mappedCount, total: asset.page_count, exceptions: exceptionCount })
+          i18n.tf("pdf_corpus.mapping_summary", {
+            mapped: mappedCount,
+            total: asset.page_count,
+            exceptions: exceptionCount,
+          })
         }}</span
         ><small>{{
           i18n.tf("pdf_corpus.deterministic_structure_summary", {
-              methods: extractionSummary.methods.length,
-              regions: extractionSummary.regions.length,
-              threads: extractionSummary.threads,
-            })
+            methods: extractionSummary.methods.length,
+            regions: extractionSummary.regions.length,
+            threads: extractionSummary.threads,
+          })
         }}</small>
       </div>
       <details class="exceptions">
         <summary class="btn">{{ i18n.t("pdf_corpus.review_mapping") }}</summary>
         <p>
-          {{
-            i18n.t("pdf_corpus.mapping_exceptions_help")
-          }}
+          {{ i18n.t("pdf_corpus.mapping_exceptions_help") }}
         </p>
         <PdfPageLabelEditor
           :pages="asset.pages || []"
@@ -371,11 +353,7 @@ function save() {
           :disabled="disabled || saving || !dirty"
           @click="save"
         >
-          {{
-            saving
-              ? i18n.t("ui.saving")
-              : i18n.t("pdf_corpus.save_document_structure")
-          }}
+          {{ saving ? i18n.t("ui.saving") : i18n.t("pdf_corpus.save_document_structure") }}
         </button>
       </div>
     </footer>

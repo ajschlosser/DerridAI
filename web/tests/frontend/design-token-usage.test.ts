@@ -36,7 +36,8 @@ function vueFiles(dir: string): string[] {
 
 describe("design token usage", () => {
   it("keeps legacy runtime dialog and overlay surfaces themeable", () => {
-    const lightSurface = /(?:\.dh, \.da|\.card|\.topbar|\.file-tabs|\.breadcrumb-bar|\.operation-stack-toolbar|\.record-selection-toolbar)\s*\{[^}]*background(?:-color)?\s*:\s*(?:rgba?\([^}]*255|#fff)/s;
+    const lightSurface =
+      /(?:\.dh, \.da|\.card|\.topbar|\.file-tabs|\.breadcrumb-bar|\.operation-stack-toolbar|\.record-selection-toolbar)\s*\{[^}]*background(?:-color)?\s*:\s*(?:rgba?\([^}]*255|#fff)/s;
     expect(readFileSync("src/style.css", "utf8")).not.toMatch(lightSurface);
   });
 

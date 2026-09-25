@@ -418,10 +418,7 @@ export function createSearchWorkspace(deps: Deps) {
       );
       if (Object.keys(safe).length !== Object.keys(previous).length) {
         state.dbSearchWhere = safe;
-        toast(
-          tr("search.contains_filter_removed"),
-          { tone: "info" },
-        );
+        toast(tr("search.contains_filter_removed"), { tone: "info" });
       }
     }
     state.dbSearchMethod = method;
@@ -479,8 +476,7 @@ export function createSearchWorkspace(deps: Deps) {
     const requested = [...new Set((columns || []).map(String))].filter((key) =>
       available.includes(key),
     );
-    const fallback =
-      scope === "loaded" ? SEARCH_LOADED_COLUMNS : TABLE_DEFAULTS.global;
+    const fallback = scope === "loaded" ? SEARCH_LOADED_COLUMNS : TABLE_DEFAULTS.global;
     state.tableColumns.global = requested.length
       ? requested
       : fallback.filter((key) => available.includes(key));

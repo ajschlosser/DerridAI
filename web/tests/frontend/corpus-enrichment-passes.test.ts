@@ -70,7 +70,9 @@ describe("Metadata enrichment passes", () => {
       },
     });
     expect(wrapper.text()).toContain("without reviewing every record");
-    expect(wrapper.findAll("button").some((node: any) => node.text().includes("Dismiss"))).toBe(false);
+    expect(wrapper.findAll("button").some((node: any) => node.text().includes("Dismiss"))).toBe(
+      false,
+    );
     await buttonByText(wrapper, "Run another pass").trigger("click");
     expect(wrapper.emitted("run-another")).toHaveLength(1);
   });

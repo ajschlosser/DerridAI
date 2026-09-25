@@ -122,7 +122,11 @@ const EDITOR_GROUPS = [
       "quotation_chain",
     ],
   },
-  { key: "record.group_indexing", fallback: "Indexing", fields: ["topics", "concepts", "persons", "works_referenced"] },
+  {
+    key: "record.group_indexing",
+    fallback: "Indexing",
+    fields: ["topics", "concepts", "persons", "works_referenced"],
+  },
   {
     key: "record.group_quality",
     fallback: "Quality & review",
@@ -139,7 +143,11 @@ const EDITOR_GROUPS = [
     fallback: "Language & translation",
     fields: ["document_language", "original_language", "document_is_translation", "translator"],
   },
-  { key: "record.group_citation", fallback: "Citation", fields: ["inline_citation", "full_citation"] },
+  {
+    key: "record.group_citation",
+    fallback: "Citation",
+    fields: ["inline_citation", "full_citation"],
+  },
   { key: "record.group_text", fallback: "Text", fields: ["text", "text_length"] },
 ];
 
@@ -306,7 +314,10 @@ export function createRecordDialogs(deps: Deps) {
         currentWork,
         allCount: allRows().length,
         fieldOptions: fields
-          .map((field: Any) => `<option value="${esc(field)}">${esc(label(field))} · ${esc(field)}</option>`)
+          .map(
+            (field: Any) =>
+              `<option value="${esc(field)}">${esc(label(field))} · ${esc(field)}</option>`,
+          )
           .join(""),
       },
       { tr, trf },
@@ -328,10 +339,10 @@ export function createRecordDialogs(deps: Deps) {
       const rawValues = target.slice(0, 300).map((row: Any) => row.record?.[field]);
       const values = [...new Set(rawValues.map((value: Any) => JSON.stringify(value)))];
       dialog.querySelector("#bulkFieldHint").textContent = trf("records.bulk.hint", {
-          targets: target.length.toLocaleString(),
-          values: values.length,
-          sampled: values.length > 8 ? tr("records.bulk.sampled", " (sampled)") : "",
-        });
+        targets: target.length.toLocaleString(),
+        values: values.length,
+        sampled: values.length > 8 ? tr("records.bulk.sampled", " (sampled)") : "",
+      });
       const input = dialog.querySelector("#bulkFieldValue");
       if (values.length === 1 && (lastHintField !== field || !input.value.trim())) {
         const only = rawValues[0];
@@ -387,11 +398,7 @@ export function createRecordDialogs(deps: Deps) {
       shell();
       renderView();
       toast(
-        copy.bulkUpdated(
-          field,
-          changing.length.toLocaleString(),
-          fieldChanges.toLocaleString(),
-        ),
+        copy.bulkUpdated(field, changing.length.toLocaleString(), fieldChanges.toLocaleString()),
       );
     };
   }
@@ -512,9 +519,7 @@ export function createRecordDialogs(deps: Deps) {
       dialog.remove();
       shell();
       renderView();
-      count
-        ? toast(copy.saved(count), { tone: "success" })
-        : toast(copy.noChanges);
+      count ? toast(copy.saved(count), { tone: "success" }) : toast(copy.noChanges);
     };
   }
   function openStoreRecordEditor(record: Any) {
@@ -624,9 +629,7 @@ export function createRecordDialogs(deps: Deps) {
         .join("");
       dialog.innerHTML = recordHistoryDialogHtml(
         {
-          recordId:
-            file.records[index]?.record_id ||
-            trf("dashboard.record_n", { n: index + 1 }),
+          recordId: file.records[index]?.record_id || trf("dashboard.record_n", { n: index + 1 }),
           changeSets: versions.length - 1,
           olderDisabled: cursor <= 0,
           newerDisabled: cursor >= currentIndex,
@@ -730,8 +733,7 @@ export function createRecordDialogs(deps: Deps) {
           <div class="queue-change-list hidden" data-queue-changes="${esc(key)}">${changes.map((change: Any) => `<div class="queue-change-row"><b>${esc(label(change.field_name || "field"))}</b><span>${esc(change.source || tr("jobs.preview.manual"))}${change.timestamp ? ` · ${esc(formatTimestamp(change.timestamp))}` : ""}</span><details><summary>${esc(tr("records.upsert.values"))}</summary><div class="queue-change-values"><pre>${esc(jsonPretty(change.old_value))}</pre><span>→</span><pre>${esc(jsonPretty(change.new_value))}</pre></div></details></div>`).join("")}</div>
         </section>`;
           })
-          .join("") ||
-        `<div class="llm-empty">${esc(tr("vector.no_unsynced_changes"))}</div>`
+          .join("") || `<div class="llm-empty">${esc(tr("vector.no_unsynced_changes"))}</div>`
       }</div>
     </div>
       <div class="da"><button class="btn" data-close>${esc(tr("common.close"))}</button>${currentRows.length ? `<button class="btn primary" id="upsertQueued">${icon("database")}${esc(tr("vector.sync_selected"))}</button>` : ""}</div>`;

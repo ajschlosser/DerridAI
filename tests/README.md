@@ -1,7 +1,8 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+
 # Backend test suite
 
-Run from the repository root (see [CONTRIBUTING.md](../CONTRIBUTING.md) for the environment variables that point the tests at a scratch data directory):
+Run from the repository root after installing `api/requirements-dev.txt` as described in [CONTRIBUTING.md](../CONTRIBUTING.md):
 
 ```bash
 pytest -q -n auto --dist=worksteal
@@ -9,21 +10,20 @@ pytest -q -n auto --dist=worksteal
 
 The tests need no Docker, Ollama, GPU, or real ChromaDB. Files that import `app.corpus_builder`, `app.chroma_store`, or `app.rag` install a stub `chromadb` (or `app.rag`) module first. Under pytest-xdist, each worker receives its own temporary storage root so SQLite, filesystem corpus state, and embedded-vector paths cannot collide.
 
-
 ## Test taxonomy
 
 DerridAI separates tests by the kind of boundary they exercise rather than by release number:
 
-| Category | Pytest marker / frontend command | Purpose |
-| --- | --- | --- |
-| Unit | `unit` / `npm run test:unit` | Fast deterministic domain, component, store, and helper behavior. |
-| Regression | unmarked existing pytest suite | Broad historical regression coverage; retained without falsely relabeling persistence/route tests as pure units. |
-| Contract | `contract` | Stable compatibility boundaries. The frontend/FastAPI route-and-method contract is enforced here. |
-| Integration | `integration` | Multiple real application subsystems exercised together. Use this only when a fake would hide the behavior being tested. |
-| Characterization | `characterization` / `npm run test:characterization` | Behavior-preservation tests for legacy/refactoring-sensitive surfaces, including the legacy DOM baseline. |
-| Workflow | `npm run test:workflow` | Browser-level user workflows against built Storybook and the production Vue app. |
-| Accessibility | `npm run test:accessibility` | Exhaustive WCAG-oriented Storybook scans. |
-| Slow | `slow` | Orthogonal marker for intentionally expensive backend cases. |
+| Category         | Pytest marker / frontend command                     | Purpose                                                                                                                  |
+| ---------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Unit             | `unit` / `npm run test:unit`                         | Fast deterministic domain, component, store, and helper behavior.                                                        |
+| Regression       | unmarked existing pytest suite                       | Broad historical regression coverage; retained without falsely relabeling persistence/route tests as pure units.         |
+| Contract         | `contract`                                           | Stable compatibility boundaries. The frontend/FastAPI route-and-method contract is enforced here.                        |
+| Integration      | `integration`                                        | Multiple real application subsystems exercised together. Use this only when a fake would hide the behavior being tested. |
+| Characterization | `characterization` / `npm run test:characterization` | Behavior-preservation tests for legacy/refactoring-sensitive surfaces, including the legacy DOM baseline.                |
+| Workflow         | `npm run test:workflow`                              | Browser-level user workflows against built Storybook and the production Vue app.                                         |
+| Accessibility    | `npm run test:accessibility`                         | Exhaustive WCAG-oriented Storybook scans.                                                                                |
+| Slow             | `slow`                                               | Orthogonal marker for intentionally expensive backend cases.                                                             |
 
 Pytest uses strict marker registration. Add a category deliberately when a test crosses a boundary; do not use markers to hide flaky tests. The PR backend gate runs all non-contract backend tests in parallel, while the API contract has its own focused gate.
 
@@ -37,20 +37,20 @@ File names describe the behavior under test (for example `test_review_queues.py`
 
 ## Areas
 
-| Area | Files |
-| --- | --- |
-| Corpus Builder: segmentation and topology | `test_corpus_build_resilience`, `test_segmentation_default_keep`, `test_segmentation_candidates`, `test_record_topology`, `test_boundary_suspects_and_undo`, `test_boundary_adjudication` |
+| Area                                         | Files                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Corpus Builder: segmentation and topology    | `test_corpus_build_resilience`, `test_segmentation_default_keep`, `test_segmentation_candidates`, `test_record_topology`, `test_boundary_suspects_and_undo`, `test_boundary_adjudication`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Corpus Builder: metadata, provenance, review | `test_hybrid_metadata`, `test_profile_identity_and_metadata_gating`, `test_primary_text_editing`, `test_review_decisions`, `test_review_queues`, `test_metadata_stage_checkpoints`, `test_human_overrides_and_reruns`, `test_human_metadata_ownership`, `test_bulk_review_during_enrichment`, `test_metadata_constraints`, `test_editorial_memory_and_provider_switch`, `test_corpus_provider_credentials`, `test_reviewer_document_structure`, `test_confident_autofill`, `test_metadata_schema`, `test_run_guidance`, `test_metadata_exemplar_projection`, `test_progressive_metadata_exemplars`, `test_progressive_metadata_retrieval`, `test_unified_memory_provenance`, `test_metadata_memory_inspector` |
-| Corpus Builder: text, layout, publication | `test_semantic_atoms_and_mla_citations`, `test_source_quality_and_publication_schema`, `test_publication_lifecycle`, `test_text_cleanup_and_adaptive_enrichment`, `test_verse_cleanup_and_rejected_records`, `test_document_layout` |
-| Failure handling | `test_failure_visibility` |
-| Authentication, roles, researcher policy | `test_roles_and_rag_request_validation`, `test_researcher_profile_generation_options`, `test_auth_hardening`, `test_researcher_rag_profile`, `test_researcher_text_policy`, `test_content_filter_false_positives`, `test_language_content_policy`, `test_researcher_route_policy` |
-| Persistence and vector store | `test_sqlite_persistence`, `test_collection_name_schema`, `test_packet_reduction`, `test_chroma_connection`, `test_chroma_embedding_profiles`, `test_system_chroma_console`, `test_system_metadata_exemplars` |
-| Languages and translation | `test_locale_dictionaries`, `test_language_translation_validation`, `test_language_translation_resume`, `test_language_translation_repair`, `test_locale_and_accessibility_floor` |
-| Release housekeeping | `test_release_consistency` |
+| Corpus Builder: text, layout, publication    | `test_semantic_atoms_and_mla_citations`, `test_source_quality_and_publication_schema`, `test_publication_lifecycle`, `test_text_cleanup_and_adaptive_enrichment`, `test_verse_cleanup_and_rejected_records`, `test_document_layout`                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Failure handling                             | `test_failure_visibility`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Authentication, roles, researcher policy     | `test_roles_and_rag_request_validation`, `test_researcher_profile_generation_options`, `test_auth_hardening`, `test_researcher_rag_profile`, `test_researcher_text_policy`, `test_content_filter_false_positives`, `test_language_content_policy`, `test_researcher_route_policy`                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Persistence and vector store                 | `test_sqlite_persistence`, `test_collection_name_schema`, `test_packet_reduction`, `test_chroma_connection`, `test_chroma_embedding_profiles`, `test_system_chroma_console`, `test_system_metadata_exemplars`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Languages and translation                    | `test_locale_dictionaries`, `test_language_translation_validation`, `test_language_translation_resume`, `test_language_translation_repair`, `test_locale_and_accessibility_floor`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Release housekeeping                         | `test_release_consistency`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 ## Conventions
 
 - Test behavior, not source text. A few older tests still check that a hook exists in a source file; their docstrings say so.
-- Do not hard-code the release version in tests; `test_release_consistency.py` is the one place that checks version agreement. Tests that pin the corpus *profile* or *prompt* version ids (for example `test_profile_and_prompt_ids_are_pinned`) do so deliberately, and must be updated when those ids are bumped.
+- Do not hard-code the release version in tests; `test_release_consistency.py` is the one place that checks version agreement. Tests that pin the corpus _profile_ or _prompt_ version ids (for example `test_profile_and_prompt_ids_are_pinned`) do so deliberately, and must be updated when those ids are bumped.
 - Prefer temporary directories (`tmp_path`) and monkeypatching over real services.
 - `tests/fixtures/` holds JSON inputs (for example `corpus_builder/topology_cases.json`). Add a case there to extend coverage without new test code.

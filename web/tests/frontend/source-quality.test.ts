@@ -118,12 +118,16 @@ describe("useCorpusIngestWarning", () => {
 describe("source extraction warning placement", () => {
   it("flags ingest noise that exceeds the unusable threshold", () => {
     expect(assetHasExtractionWarning({ extraction_noise: { exceeds_threshold: true } })).toBe(true);
-    expect(assetHasExtractionWarning({ extraction_noise: { exceeds_threshold: false } })).toBe(false);
+    expect(assetHasExtractionWarning({ extraction_noise: { exceeds_threshold: false } })).toBe(
+      false,
+    );
     expect(assetHasExtractionWarning({ source_quality: { blocking_page_count: 1 } })).toBe(true);
   });
 
   it("flags records that still carry source issues", () => {
-    expect(recordHasSourceWarning({ source_quality_issues: [{ code: "illegible_text" }] })).toBe(true);
+    expect(recordHasSourceWarning({ source_quality_issues: [{ code: "illegible_text" }] })).toBe(
+      true,
+    );
     expect(recordHasSourceWarning({ source_quality_issues: [] })).toBe(false);
   });
 

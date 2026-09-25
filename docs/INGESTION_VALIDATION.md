@@ -1,4 +1,5 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+
 # Source ingestion safety and fidelity
 
 Corpus Builder accepts multiple source-media kinds. This document is the current ingestion contract: source content is untrusted input, extracted source identity must remain auditable, and controls/evidence coordinates must match the selected medium rather than inherit PDF assumptions.
@@ -19,16 +20,16 @@ Every ingestion path must:
 
 ## Format boundaries
 
-| Source kind | Required safety/fidelity behavior |
-| --- | --- |
-| PDF | Validate the file; use native text and bounded OCR fallback where needed; preserve physical-page and printed-page distinctions; retain extraction/page-label warnings; never treat embedded active content as executable. |
-| DOCX | Treat as an archive/XML container; reject malformed structures, dangerous entity/expansion behavior, active objects/fields and external relationships; enforce compressed/uncompressed resource bounds; preserve extracted text and extractor provenance. |
-| RTF | Validate header/group structure and nesting; reject embedded objects/active fields and pathological depth/size; extract text without executing control content. |
-| Plain text | Enforce byte/encoding limits and preserve source text; do not invent page semantics. |
-| Images | Decode only supported inert formats; enforce byte and pixel/dimension limits before OCR; reject unsupported active/vector formats where the safe path does not support them; image metadata is data, not executable content. |
-| Audio | Keep speech dependencies optional/isolated; validate codec/container through bounded probing; enforce byte/duration/time limits; handle missing dependencies/credentials explicitly; preserve transcript timing/speaker provenance and allow human transcript revisions without overwriting extraction history. |
-| URL | Fetch only through the supported bounded ingestion path; preserve requested/final source identity and extraction provenance; do not treat remote page scripts as executable application content. |
-| Project Gutenberg | Resolve edition identity explicitly; preserve selected edition/source URL/digest/metadata; enforce network/encoding/size limits; identical text from different editions must not collapse scholarly source identity. |
+| Source kind       | Required safety/fidelity behavior                                                                                                                                                                                                                                                                               |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PDF               | Validate the file; use native text and bounded OCR fallback where needed; preserve physical-page and printed-page distinctions; retain extraction/page-label warnings; never treat embedded active content as executable.                                                                                       |
+| DOCX              | Treat as an archive/XML container; reject malformed structures, dangerous entity/expansion behavior, active objects/fields and external relationships; enforce compressed/uncompressed resource bounds; preserve extracted text and extractor provenance.                                                       |
+| RTF               | Validate header/group structure and nesting; reject embedded objects/active fields and pathological depth/size; extract text without executing control content.                                                                                                                                                 |
+| Plain text        | Enforce byte/encoding limits and preserve source text; do not invent page semantics.                                                                                                                                                                                                                            |
+| Images            | Decode only supported inert formats; enforce byte and pixel/dimension limits before OCR; reject unsupported active/vector formats where the safe path does not support them; image metadata is data, not executable content.                                                                                    |
+| Audio             | Keep speech dependencies optional/isolated; validate codec/container through bounded probing; enforce byte/duration/time limits; handle missing dependencies/credentials explicitly; preserve transcript timing/speaker provenance and allow human transcript revisions without overwriting extraction history. |
+| URL               | Fetch only through the supported bounded ingestion path; preserve requested/final source identity and extraction provenance; do not treat remote page scripts as executable application content.                                                                                                                |
+| Project Gutenberg | Resolve edition identity explicitly; preserve selected edition/source URL/digest/metadata; enforce network/encoding/size limits; identical text from different editions must not collapse scholarly source identity.                                                                                            |
 
 ## Media-specific evidence and controls
 

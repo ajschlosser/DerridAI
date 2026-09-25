@@ -61,20 +61,14 @@ function remove(index: number) {
           ×
         </button>
       </span>
-      <span v-if="!props.values.length" class="record-index-empty">{{
-        i18n.t("ui.none")
-      }}</span>
+      <span v-if="!props.values.length" class="record-index-empty">{{ i18n.t("ui.none") }}</span>
     </div>
     <div v-if="props.editable" class="record-index-add">
       <label
-        ><span class="sr-only">{{
-          i18n.tf("record.add_term", { label: props.title })
-        }}</span
+        ><span class="sr-only">{{ i18n.tf("record.add_term", { label: props.title }) }}</span
         ><input
           v-model="draft"
-          :placeholder="
-            i18n.tf('record.add_term', { label: props.title.toLocaleLowerCase() })
-          "
+          :placeholder="i18n.tf('record.add_term', { label: props.title.toLocaleLowerCase() })"
           @keydown.enter.prevent="add" /></label
       ><button type="button" :disabled="!draft.trim()" @click="add">
         {{ i18n.t("ui.add") }}

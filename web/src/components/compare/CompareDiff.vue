@@ -18,7 +18,7 @@ defineProps<{
       v-for="row in rows"
       :key="row.key"
       class="compare-diff-card"
-      :class="{changed: row.changed, text: row.key === 'text'}"
+      :class="{ changed: row.changed, text: row.key === 'text' }"
       role="listitem"
     >
       <header>
@@ -42,29 +42,110 @@ defineProps<{
   </div>
 </template>
 <style scoped>
-.compare-diff{display:grid;gap:12px}
-.compare-diff-empty{padding:18px;border:1px dashed var(--line);border-radius:14px;color:var(--muted);font-size:.875rem}
-.compare-diff-card{overflow:hidden;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
-.compare-diff-card.changed{box-shadow:inset 3px 0 0 var(--accent)}
-.compare-diff-card header{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;padding:10px 14px;background:var(--panel-2);border-bottom:1px solid var(--line)}
-.compare-diff-card h3{margin:0;font-size:.9375rem;line-height:1.3}
-.compare-diff-card code,.compare-diff-card span{color:var(--muted);font-size:.8125rem}
-.compare-diff-sides{display:grid;grid-template-columns:1fr 1fr}
-.compare-diff-sides section{min-width:0;padding:12px 14px}
-.compare-diff-sides section+section{border-left:1px solid var(--line)}
-.compare-side-kicker{margin:0 0 8px;font-size:.8125rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color: var(--accent-fg)}
-pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:0.875rem;line-height:1.5;min-height:1.5em;color:var(--text)}
-pre :deep(.del),pre span.del{color:var(--tone-danger-fg) !important;background:var(--tone-danger-bg);text-decoration:line-through;font-weight:700;font-size:0.875rem}
-pre :deep(.ins),pre span.ins{color:var(--text) !important;background:var(--tone-ok-bg);font-weight:700;font-size:0.875rem}
-@media (max-width:800px){
-  .compare-diff-sides{grid-template-columns:1fr}
-  .compare-diff-sides section+section{border-left:0;border-top:1px solid var(--line)}
+.compare-diff {
+  display: grid;
+  gap: 12px;
 }
-@media (forced-colors: active){
-  .compare-diff-card.changed{outline:2px solid CanvasText}
-  .del,.ins{outline:1px solid CanvasText}
+.compare-diff-empty {
+  padding: 18px;
+  border: 1px dashed var(--line);
+  border-radius: 14px;
+  color: var(--muted);
+  font-size: 0.875rem;
 }
-@media (prefers-reduced-motion: reduce){
-  .compare-diff-card{transition:none}
+.compare-diff-card {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+}
+.compare-diff-card.changed {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.compare-diff-card header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px 14px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--line);
+}
+.compare-diff-card h3 {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.3;
+}
+.compare-diff-card code,
+.compare-diff-card span {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.compare-diff-sides {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.compare-diff-sides section {
+  min-width: 0;
+  padding: 12px 14px;
+}
+.compare-diff-sides section + section {
+  border-left: 1px solid var(--line);
+}
+.compare-side-kicker {
+  margin: 0 0 8px;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-fg);
+}
+pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  min-height: 1.5em;
+  color: var(--text);
+}
+pre :deep(.del),
+pre span.del {
+  color: var(--tone-danger-fg) !important;
+  background: var(--tone-danger-bg);
+  text-decoration: line-through;
+  font-weight: 700;
+  font-size: 0.875rem;
+}
+pre :deep(.ins),
+pre span.ins {
+  color: var(--text) !important;
+  background: var(--tone-ok-bg);
+  font-weight: 700;
+  font-size: 0.875rem;
+}
+@media (max-width: 800px) {
+  .compare-diff-sides {
+    grid-template-columns: 1fr;
+  }
+  .compare-diff-sides section + section {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+}
+@media (forced-colors: active) {
+  .compare-diff-card.changed {
+    outline: 2px solid CanvasText;
+  }
+  .del,
+  .ins {
+    outline: 1px solid CanvasText;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .compare-diff-card {
+    transition: none;
+  }
 }
 </style>

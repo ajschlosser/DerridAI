@@ -21,7 +21,9 @@ const nodes = computed(() =>
 );
 const supporting = computed(() => {
   const keys = props.fields?.length
-    ? props.fields.filter((key) => !["speaker", "position_holder", "stance", "target"].includes(key))
+    ? props.fields.filter(
+        (key) => !["speaker", "position_holder", "stance", "target"].includes(key),
+      )
     : ["discourse_role", "proposition_status", "claim_scope", "semantic_function"];
   return keys
     .map((key) => ({
@@ -45,24 +47,16 @@ const supporting = computed(() => {
       <span
         v-if="nodes.length"
         class="provenance-count"
-        :aria-label="
-          i18n.tf('record.provenance_fields', { count: nodes.length })
-        "
+        :aria-label="i18n.tf('record.provenance_fields', { count: nodes.length })"
         >{{ nodes.length }}</span
       >
     </header>
 
     <p class="provenance-help">
-      {{
-        i18n.t("record.provenance_help")
-      }}
+      {{ i18n.t("record.provenance_help") }}
     </p>
 
-    <ol
-      v-if="nodes.length"
-      class="provenance-path"
-      :aria-label="i18n.t('record.attribution_path')"
-    >
+    <ol v-if="nodes.length" class="provenance-path" :aria-label="i18n.t('record.attribution_path')">
       <li v-for="(node, index) in nodes" :key="node.key">
         <span class="provenance-step" aria-hidden="true">{{ index + 1 }}</span>
         <button type="button" @click="emit('search', node.key, String(node.value))">
@@ -72,9 +66,7 @@ const supporting = computed(() => {
       </li>
     </ol>
     <p v-else class="provenance-empty">
-      {{
-        i18n.t("record.provenance_empty")
-      }}
+      {{ i18n.t("record.provenance_empty") }}
     </p>
 
     <dl v-if="supporting.length" class="provenance-support">

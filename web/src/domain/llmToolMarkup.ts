@@ -53,7 +53,10 @@ export function llmToolResultBody(
     const body = `<section class="bulk-grade-result"><div class="compare-result-summary"><div><strong>${Number(result.graded || 0).toLocaleString()}</strong><span>${esc(tr("jobs.tool.graded"))}</span></div><div><strong>${Number(result.failed || 0).toLocaleString()}</strong><span>${esc(tr("jobs.tool.failed"))}</span></div><div><strong>${Number(result.total || 0).toLocaleString()}</strong><span>${esc(tr("jobs.tool.responses"))}</span></div></div>${errors ? `<details><summary>${esc(trf("jobs.tool.errors_n", { count: result.errors.length }))}</summary><pre class="rag-json">${esc(JSON.stringify(result.errors, null, 2))}</pre></details>` : `<div class="info">${esc(tr("jobs.tool.all_processed"))}</div>`}</section>`;
     return { body, actions: "" };
   }
-  return { body: `<pre class="rag-json">${esc(JSON.stringify(result, null, 2))}</pre>`, actions: "" };
+  return {
+    body: `<pre class="rag-json">${esc(JSON.stringify(result, null, 2))}</pre>`,
+    actions: "",
+  };
 }
 
 export function llmTaskLauncherHtml(

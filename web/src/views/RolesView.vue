@@ -117,8 +117,7 @@ function displayDescription(item: RoleDefinition) {
 
 function assignedLabel(count: number) {
   if (count === 0) return i18n.t("roles.assigned_none");
-  if (count === 1)
-    return i18n.tf("roles.assigned_one", { count });
+  if (count === 1) return i18n.tf("roles.assigned_one", { count });
   return i18n.tf("roles.assigned_many", { count });
 }
 
@@ -354,9 +353,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
       :kicker="i18n.t('section.system')"
       :title="i18n.t('roles.title')"
       title-id="roles-page-title"
-      :description="
-        i18n.t('roles.description')
-      "
+      :description="i18n.t('roles.description')"
       :actions-label="i18n.t('roles.page_actions')"
     >
       <template #actions>
@@ -418,9 +415,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
               variant="danger"
               :label="i18n.t('roles.delete')"
               :disabled="!dataCurrent || assignedCount > 0"
-              :disabled-reason="
-                i18n.t('roles.cannot_delete_assigned')
-              "
+              :disabled-reason="i18n.t('roles.cannot_delete_assigned')"
               @click="openDelete"
             />
             <UiButton
@@ -441,14 +436,10 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
         </header>
         <div class="role-editor-body">
           <p v-if="role?.locked" class="info">
-            {{
-              i18n.t("roles.admin_locked_help")
-            }}
+            {{ i18n.t("roles.admin_locked_help") }}
           </p>
           <p v-else class="info">
-            {{
-              i18n.t("roles.non_admin_help")
-            }}
+            {{ i18n.t("roles.non_admin_help") }}
           </p>
           <p class="note">
             {{
@@ -484,21 +475,13 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
     <UiDialog
       :open="createOpen"
       :title="i18n.t('roles.create')"
-      :description="
-        i18n.t('roles.create_help')
-      "
+      :description="i18n.t('roles.create_help')"
       :close-label="i18n.t('ui.close')"
       size="medium"
       @close="createOpen = false"
     >
       <form class="role-create-fields" @submit.prevent="createRole">
-        <UiField
-          :label="i18n.t('roles.name')"
-          :hint="
-            i18n.t('roles.create_name_help')
-          "
-          required
-        >
+        <UiField :label="i18n.t('roles.name')" :hint="i18n.t('roles.create_name_help')" required>
           <input
             id="newRoleName"
             v-model="roleName"
@@ -526,17 +509,11 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
         </UiField>
       </form>
       <template #footer>
-        <UiButton
-          :label="i18n.t('ui.cancel')"
-          :disabled="creating"
-          @click="createOpen = false"
-        />
+        <UiButton :label="i18n.t('ui.cancel')" :disabled="creating" @click="createOpen = false" />
         <UiButton
           variant="primary"
           type="submit"
-          :label="
-            creating ? i18n.t('ui.working') : i18n.t('roles.create')
-          "
+          :label="creating ? i18n.t('ui.working') : i18n.t('roles.create')"
           :disabled="creating || roleName.trim().length < 2"
           @click="createRole"
         />
