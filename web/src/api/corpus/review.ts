@@ -66,24 +66,21 @@ export const corpusReviewApi = {
       blocked_metadata?: number;
       blocked_record_ids?: string[];
       queue_counts?: CorpusBuild["review_queue_counts"];
-    }>(
-      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/disposition`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          disposition,
-          reason,
-          review_queue:
-            reviewQueue && !["all", "accepted", "rejected"].includes(reviewQueue)
-              ? reviewQueue
-              : null,
-          filter_disposition:
-            reviewQueue === "accepted" ? "accepted" : reviewQueue === "rejected" ? "rejected" : null,
-          query,
-          record_ids: recordIds,
-        }),
-      },
-    ),
+    }>(`${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/disposition`, {
+      method: "POST",
+      body: JSON.stringify({
+        disposition,
+        reason,
+        review_queue:
+          reviewQueue && !["all", "accepted", "rejected"].includes(reviewQueue)
+            ? reviewQueue
+            : null,
+        filter_disposition:
+          reviewQueue === "accepted" ? "accepted" : reviewQueue === "rejected" ? "rejected" : null,
+        query,
+        record_ids: recordIds,
+      }),
+    }),
   undoReview: (buildId: string) =>
     apiRequest<{
       restored: boolean;
