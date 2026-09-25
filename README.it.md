@@ -212,4 +212,4 @@ La cronologia delle versioni è in [CHANGELOG.md](CHANGELOG.md) e `docs/notes/<v
 
 ## Licenza
 
-Al momento non è incluso alcun file di licenza. I file sorgente riportano `Copyright 2026 Aaron John Schlosser, PhD.`. La schermata di accesso, il menu account e Impostazioni → Informazioni su DerridAI mostrano `© 2026 The New England Transcendental Club of California`.
+Copyright © 2026 Aaron John Schlosser, PhD. DerridAI è distribuito secondo i termini della [GNU Affero General Public License, versione 3](LICENSE) (`AGPL-3.0-only`). La schermata di accesso, il menu account e Impostazioni → Informazioni su DerridAI mostrano `© 2026 The New England Transcendental Club of California`.
