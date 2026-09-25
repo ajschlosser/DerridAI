@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import type { ProviderProfile } from "../api/system";
 import UiButton from "./ui/UiButton.vue";
+import UiTagPicker from "./ui/UiTagPicker.vue";
 import ProviderProfileSelect from "./ProviderProfileSelect.vue";
 import {
   CORE_FIELDS,
@@ -43,6 +44,8 @@ function load(schema: MetadataSchema, fresh = false) {
   const next = JSON.parse(JSON.stringify(schema)) as MetadataSchema;
   for (const field of next.fields) {
     field.retrieval_profile ||= blankField().retrieval_profile;
+    field.pos_tags ||= [];
+    field.ner_tags ||= [];
   }
   draft.value = next;
   savedHash.value = JSON.stringify(draft.value);
@@ -183,10 +186,15 @@ const fieldsOf = (key: string) =>
     .map((field, index) => ({ field, index }))
     .filter((item) => item.field.group === key);
 const addValue = (field: SchemaField) => field.values.push({ value: "", definition: "" });
-const tagText = (values: string[]) => values.join(", ");
-const setTags = (field: SchemaField, key: "pos_tags" | "ner_tags", text: string) => {
-  field[key] = [...new Set(text.split(/[,\n]/).map((value) => value.trim()).filter(Boolean))].slice(0, 16);
-};
+const UNIVERSAL_POS_TAGS = [
+  "ADJ", "ADP", "ADV", "AUX", "CCONJ", "DET", "INTJ", "NOUN", "NUM",
+  "PART", "PRON", "PROPN", "PUNCT", "SCONJ", "SYM", "VERB", "X",
+];
+const NER_TAGS = [
+  "CARDINAL", "DATE", "EVENT", "FAC", "GPE", "LANGUAGE", "LAW", "LOC",
+  "MONEY", "NORP", "ORDINAL", "ORG", "PERCENT", "PERSON", "PRODUCT",
+  "QUANTITY", "TIME", "WORK_OF_ART",
+];
 
 // ---- preview ---------------------------------------------------------------------------------------------------
 const previewGroup = ref(CORE_GROUP);
@@ -459,21 +467,35 @@ defineExpose({ select, draft });
             >
             <div class="row nlp-hints">
               <label class="schema-field"
-                ><span>{{ t("pos_tags", "POS tags (optional)") }}</span
-                ><input
-                  class="control"
-                  :value="tagText(item.field.pos_tags || [])"
-                  placeholder="NOUN, PROPN"
-                  @input="setTags(item.field, 'pos_tags', ($event.target as HTMLInputElement).value)"
-              /></label>
+                ><span
+                  :title="t('pos_tags_help', 'POS tags are retrieval/model hints. They do not write metadata by themselves; they tell enrichment to prefer values grounded in tokens with these grammatical roles.')"
+                  >{{ t("pos_tags", "POS tags (optional)") }} <span aria-hidden="true">ⓘ</span></span
+                ><UiTagPicker
+                  v-model="item.field.pos_tags"
+                  :options="UNIVERSAL_POS_TAGS"
+                  :label="t('pos_tags', 'POS tags (optional)')"
+                  :placeholder="t('pos_tags_placeholder', 'Search POS tags…')"
+                  :remove-label="t('remove_tag', 'Remove {value}')"
+                />
+                <small class="hint">{{
+                  t("pos_tags_help", "Autocomplete uses the Universal POS tag set. These are advisory enrichment hints, not additional output fields.")
+                }}</small>
+              </label>
               <label class="schema-field"
-                ><span>{{ t("ner_tags", "NER tags (optional)") }}</span
-                ><input
-                  class="control"
-                  :value="tagText(item.field.ner_tags || [])"
-                  placeholder="PERSON, WORK_OF_ART"
-                  @input="setTags(item.field, 'ner_tags', ($event.target as HTMLInputElement).value)"
-              /></label>
+                ><span
+                  :title="t('ner_tags_help', 'NER tags are entity-type hints. They do not add entities automatically; they tell enrichment which named-entity classes are especially relevant to this field.')"
+                  >{{ t("ner_tags", "NER tags (optional)") }} <span aria-hidden="true">ⓘ</span></span
+                ><UiTagPicker
+                  v-model="item.field.ner_tags"
+                  :options="NER_TAGS"
+                  :label="t('ner_tags', 'NER tags (optional)')"
+                  :placeholder="t('ner_tags_placeholder', 'Search NER tags…')"
+                  :remove-label="t('remove_tag', 'Remove {value}')"
+                />
+                <small class="hint">{{
+                  t("ner_tags_help", "Autocomplete uses DerridAI's supported NER vocabulary. These are advisory enrichment hints and do not change the field type.")
+                }}</small>
+              </label>
             </div>
             <div v-if="item.field.type === 'choice'" class="values">
               <div v-for="(value, vi) in item.field.values" :key="vi" class="value-row">
@@ -497,26 +519,34 @@ defineExpose({ select, draft });
                 {{ t("add_value", "Add a value") }}
               </button>
               <label class="check"
-                ><input v-model="item.field.strict" type="checkbox" /><span>{{
+                ><input v-model="item.field.strict" type="checkbox" /><span
+                  :title="t('strict_help', 'When enabled, values outside this list fail schema validation instead of being accepted as free text.')"
+                >{{
                   t("strict", "The model may only return these values")
-                }}</span></label
+                }} <span aria-hidden="true">ⓘ</span></span></label
               >
             </div>
             <div class="flags">
               <label class="check"
-                ><input v-model="item.field.evidence" type="checkbox" /><span>{{
+                ><input v-model="item.field.evidence" type="checkbox" /><span
+                  :title="t('evidence_help', 'Supported values are expected to bind to source blocks. Missing or invalid evidence keeps the field reviewable instead of discarding the whole LLM response.')"
+                >{{
                   t("evidence", "Must cite the source")
-                }}</span></label
+                }} <span aria-hidden="true">ⓘ</span></span></label
               >
               <label class="check"
-                ><input v-model="item.field.assess" type="checkbox" /><span>{{
+                ><input v-model="item.field.assess" type="checkbox" /><span
+                  :title="t('assess_help', 'Requires the model to return a structured assessment for this field, including confidence, outcome, and review need.')"
+                >{{
                   t("assess", "Report its confidence")
-                }}</span></label
+                }} <span aria-hidden="true">ⓘ</span></span></label
               >
               <label class="check"
-                ><input v-model="item.field.review" type="checkbox" /><span>{{
+                ><input v-model="item.field.review" type="checkbox" /><span
+                  :title="t('review_help', 'If this field remains unresolved or model-inferred, record acceptance requires a human decision according to the review workflow.')"
+                >{{
                   t("review", "A person must settle it before accepting")
-                }}</span></label
+                }} <span aria-hidden="true">ⓘ</span></span></label
               >
               <span class="grow"></span>
               <button

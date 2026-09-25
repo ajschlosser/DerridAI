@@ -25,7 +25,7 @@ const dontShowAgain = ref(false);
       i18n.t('pdf_corpus.source_warning_ingest_help')
     "
     :close-label="i18n.t('ui.close')"
-    @close="emit('close')"
+    @close="emit('close', dontShowAgain)"
   >
     <div class="quality-dialog">
       <div v-if="extractionNoise" class="quality-summary" role="status">

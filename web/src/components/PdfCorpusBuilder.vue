@@ -77,7 +77,12 @@ import AppIcon from "./AppIcon.vue";
 import CorpusActionMenu, { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
 import { recordState, recordIssueKinds } from "../domain/corpusReview";
 import { RecordMutationQueue } from "../domain/recordMutationQueue";
-import { firstRecordWithSourceWarning, recordHasSourceWarning } from "../domain/sourceQuality";
+import {
+  firstRecordWithSourceWarning,
+  hideSourceWarnings,
+  recordHasSourceWarning,
+  sourceWarningsHidden,
+} from "../domain/sourceQuality";
 import { recurringShortLines } from "../domain/textCleanup";
 import * as runtime from "../runtime/runtime.js";
 
@@ -475,6 +480,13 @@ function extraIssueKinds(record: CorpusRecord) {
   const state = recordState(record);
   return recordIssueKinds(record).filter((kind: string) => kind !== state);
 }
+function recordLlmProcessed(record: CorpusRecord) {
+  if (record.metadata_enrichment_finished) return true;
+  if (String(record.metadata_enrichment_state || "") === "complete") return true;
+  return Object.values(record.metadata_stage_status || {}).some((value) =>
+    ["complete", "needs_review"].includes(String(value || "")),
+  );
+}
 
 const selectedAsset = computed(
   () => assets.value.find((item) => item.asset_id === selectedAssetId.value) || null,
@@ -488,6 +500,10 @@ const {
 function openRecordSourceWarning(record: CorpusRecord) {
   selectRecord(record);
   recordSourceWarningOpen.value = true;
+}
+function acknowledgeRecordSourceWarning(dontShowAgain = false) {
+  if (dontShowAgain) hideSourceWarnings();
+  recordSourceWarningOpen.value = false;
 }
 const evidenceBlockIds = computed(() => {
   if (!selectedRecord.value) return new Set<string>();
@@ -1591,6 +1607,7 @@ async function refreshRecords(reset = false, preferredId = "") {
     const firstSourceProblem = firstRecordWithSourceWarning(result.items);
     if (
       firstSourceProblem &&
+      !sourceWarningsHidden() &&
       sourceProblemDialogBuildId.value !== selectedBuildId.value &&
       !recordSourceWarningOpen.value
     ) {
@@ -2653,6 +2670,52 @@ async function saveMetadata() {
     pdfCorpusApi.patchMetadata(context.buildId, context.recordId, changes, rebase ? undefined : context.expectedRevision),
   );
 }
+async function assignEvidenceBlock(field: string, blockId: string) {
+  if (!currentBuild.value || !selectedRecord.value || !field || !blockId) return;
+  const viewport = captureReviewViewport();
+  selectedEvidenceField.value = field;
+  const existing = selectedRecord.value.metadata_evidence?.[field];
+  const ids = new Set((existing?.block_ids || []).map(String));
+  if (ids.has(blockId)) {
+    await restoreReviewViewport(viewport);
+    return;
+  }
+  ids.add(blockId);
+  const buildId = currentBuild.value.build_id;
+  const recordId = selectedRecord.value.record_id;
+  const expectedRevision = Number(selectedRecord.value.record_revision || 1);
+  const evidence = {
+    ...(selectedRecord.value.metadata_evidence || {}),
+    [field]: {
+      ...(existing || {}),
+      block_ids: Array.from(ids),
+      confidence: existing?.confidence ?? 1,
+      reason: existing?.reason || i18n.t("pdf_corpus.human_evidence_reason"),
+    },
+  };
+  const row: CorpusRecord = {
+    ...selectedRecord.value,
+    metadata_evidence: evidence,
+    record_revision: expectedRevision + 1,
+  } as CorpusRecord;
+  selectedRecord.value = row;
+  metadataDraft.value = JSON.stringify(recordMetadata(row), null, 2);
+  const index = records.value.findIndex((item) => item.record_id === recordId);
+  if (index >= 0) records.value.splice(index, 1, row);
+  await restoreReviewViewport(viewport);
+  queueRecordRequest(recordId, [field], (rebase) =>
+    pdfCorpusApi.patchEvidence(
+      buildId,
+      recordId,
+      field,
+      Array.from(ids),
+      existing?.confidence ?? 1,
+      existing?.reason || i18n.t("pdf_corpus.human_evidence_reason"),
+      rebase ? undefined : expectedRevision,
+    ),
+  );
+}
+
 async function toggleEvidenceBlock(blockId: string) {
   if (!currentBuild.value || !selectedRecord.value || !selectedEvidenceField.value) return;
   const viewport = captureReviewViewport();
@@ -4955,6 +5018,13 @@ defineExpose({
                       ><span class="record-row-status" :data-state="recordState(record)">{{
                         recordStateLabel(record)
                       }}</span
+                      ><span
+                        v-if="recordState(record) === 'ready' && recordLlmProcessed(record)"
+                        class="record-llm-processed"
+                        :title="i18n.t('pdf_corpus.llm_processed_help', 'The metadata enrichment run finished for this record; it is now waiting for human review.')"
+                      ><AppIcon name="spark" />{{
+                        i18n.t("pdf_corpus.llm_processed", "LLM processed")
+                      }}</span
                       ><small v-if="extraIssueKinds(record).length" class="record-issue-summary">{{
                         extraIssueKinds(record)
                           .map((kind) => i18n.t(`pdf_corpus.record_state.${kind}`, kind))
@@ -5888,7 +5958,7 @@ defineExpose({
     <CorpusSourceQualityDialog
       :open="recordSourceWarningOpen && Boolean(selectedRecord?.source_quality_issues?.length)"
       :issues="selectedRecord?.source_quality_issues"
-      @close="recordSourceWarningOpen = false"
+      @close="acknowledgeRecordSourceWarning"
       @edit-text="
         recordSourceWarningOpen = false;
         beginTextEdit();
@@ -6019,6 +6089,11 @@ defineExpose({
         @open-source-viewer="sourceTranscriptionOpen = true"
         :just-processed-record-id="justProcessedRecordId"
         :next-record-id="nextQueueRecordId"
+        :selected-evidence-field="selectedEvidenceField"
+        :evidence-block-ids="[...evidenceBlockIds]"
+        @select-evidence="selectedEvidenceField = $event"
+        @toggle-evidence="toggleEvidenceBlock"
+        @assign-evidence="assignEvidenceBlock"
         @navigate-record="navigateToQueueRecord"
     /></Teleport>
   </section>
@@ -7374,6 +7449,24 @@ summary:focus-visible {
   color: var(--accent-fg);
   font-size: 0.8125rem;
   font-weight: 800;
+}
+.record-llm-processed {
+  display: inline-flex !important;
+  width: fit-content;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 2px 6px;
+  border: 1px solid var(--tone-ok-border);
+  border-radius: 999px;
+  background: var(--tone-ok-bg);
+  color: var(--tone-ok-fg);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.record-llm-processed svg {
+  width: 13px;
+  height: 13px;
 }
 .record-row-status[data-state="metadata"],
 .record-row-status[data-state="topology"],

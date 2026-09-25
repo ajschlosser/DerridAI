@@ -10,6 +10,7 @@ from app.provenance_memory import (
     MetadataMemoryBinding,
     SupportBinding,
     persist_metadata_decision,
+    persist_record_decision,
     resolve_support_binding,
 )
 from app.system_store import SystemStore
@@ -71,6 +72,63 @@ def test_memory_and_support_bindings_are_durable_and_stale_revision_is_visible(t
     )
     stale = resolve_support_binding(support, lambda _record_id: {"record_id": "r1", "record_revision": 3})
     assert stale.validation_status == "stale"
+
+
+
+
+def test_record_decision_preserves_evidence_span_provenance(tmp_path: Path, monkeypatch):
+    import app.provenance_memory as memory_module
+    import app.system_store as store_module
+
+    repository = SQLiteSystemRepository(tmp_path / "system.sqlite3")
+    monkeypatch.setattr(store_module, "system_repository", repository)
+    store = SystemStore()
+    monkeypatch.setattr(memory_module, "system_store", store)
+
+    schema = MetadataSchema(
+        id="schema-1",
+        name="Notes",
+        groups=[SchemaGroup(key="discourse", label="Discourse", intro="Read it.")],
+        fields=[SchemaField(name="mood", label="Mood")],
+    )
+    record = {
+        "record_id": "r1",
+        "record_revision": 4,
+        "source_asset_id": "asset-1",
+        "source_block_ids": ["b1", "b2"],
+        "source_spans": [
+            {
+                "source_document_id": "asset-1",
+                "source_unit_id": "b2",
+                "block_id": "b2",
+                "page": 7,
+                "printed_page_label": "23",
+                "char_start": 40,
+                "char_end": 88,
+            }
+        ],
+        "metadata_evidence": {"mood": {"block_ids": ["b2"]}},
+    }
+
+    binding = persist_record_decision(
+        record=record,
+        schema=schema,
+        field_name="mood",
+        value="critical",
+        scope_id="build-1",
+    )
+
+    assert binding.source_document_id == "asset-1"
+    assert len(binding.evidence) == 1
+    span = binding.evidence[0]
+    assert span.source_unit_ids == ["b2"]
+    assert span.physical_page_start == 7
+    assert span.physical_page_end == 7
+    assert span.printed_page_start == "23"
+    assert span.printed_page_end == "23"
+    assert span.character_start == 40
+    assert span.character_end == 88
+    assert store.list_semantic_memory_dirty("metadata_exemplars", scope_id="build-1")
 
 
 def test_research_memory_reads_are_owner_scoped(tmp_path: Path):

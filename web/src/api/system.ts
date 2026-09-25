@@ -112,6 +112,23 @@ export interface SystemMetadataExemplarPage {
   rows: SystemMetadataExemplar[];
   facets: SystemMetadataExemplarFacets;
 }
+export interface SystemChromaCollection {
+  name: string;
+  count: number;
+  derived?: boolean;
+  role?: string;
+}
+export interface SystemChromaCommandResult {
+  valid: boolean;
+  verb: "get" | "query";
+  collection: string;
+  options: Record<string, unknown>;
+  embedding_provider?: string;
+  embedding_model?: string | null;
+  explanation: string;
+  result?: Record<string, unknown>;
+}
+
 export interface SystemMetadataExemplarFilters {
   limit?: number;
   offset?: number;
@@ -139,6 +156,10 @@ export const systemApi = {
   updateLanguageContentPolicy: (code: string, payload: Pick<LanguageContentPolicy, "blocked_terms" | "contextual_terms">) => apiRequest<LanguageContentPolicy>(`/api/i18n/languages/${encodeURIComponent(code)}/content-policy`, {method: "PUT", body: JSON.stringify(payload)}),
   generateLanguageContentPolicy: (payload: Record<string, unknown>) => apiRequest<JobSummary>("/api/jobs/llm-tool", {method: "POST", body: JSON.stringify({task: "language_content_policy", language: payload, label: `Languages · ${String(payload.code || "policy")}`, provider_profile_id: String(payload.provider_profile_id || "") || null, max_concurrent_requests: Number(payload.max_concurrent_requests || 1)})}),
   systemData: () => apiRequest<{databases: SystemDataDatabase[]}>("/api/system/data"),
+  systemChromaCollections: () => apiRequest<{collections: SystemChromaCollection[]}>("/api/system/chroma/collections"),
+  validateSystemChroma: (command: string) => apiRequest<SystemChromaCommandResult>("/api/system/chroma/validate", {method: "POST", body: JSON.stringify({command})}),
+  querySystemChroma: (command: string) => apiRequest<SystemChromaCommandResult>("/api/system/chroma/query", {method: "POST", body: JSON.stringify({command})}),
+
   systemMetadataExemplars: (filters: SystemMetadataExemplarFilters = {}) => {
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(filters)) {

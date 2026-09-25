@@ -28,6 +28,7 @@ const emit = defineEmits<{
   save: [value: unknown];
   noValue: [];
   source: [];
+  assignSelectionEvidence: [text: string];
   dirty: [dirty: boolean];
 }>();
 const i18n = useI18nStore();
@@ -133,8 +134,11 @@ function markDirty() {
   dirty.value = true;
   emit("dirty", true);
 }
+function selectedRecordText() {
+  return String(window.getSelection()?.toString() || "").trim();
+}
 function selectFromText() {
-  const selected = String(window.getSelection()?.toString() || "").trim();
+  const selected = selectedRecordText();
   if (!selected) return;
   if (props.control === "multi-combobox") {
     const current = String(draft.value || "")
@@ -357,6 +361,20 @@ const autoResolved = computed(
           @click="selectFromText"
         >
           {{ i18n.t("pdf_corpus.select_from_text") }}
+        </button>
+        <button
+          type="button"
+          class="btn subtle"
+          :disabled="busy || !editing"
+          :title="i18n.t('pdf_corpus.assign_selected_evidence_help', 'Select supporting text in the record, then attach the nearest source span as evidence for this field.')"
+          @click="
+            () => {
+              const selected = selectedRecordText();
+              if (selected) emit('assignSelectionEvidence', selected);
+            }
+          "
+        >
+          {{ i18n.t("pdf_corpus.assign_selected_evidence", "Use selection as evidence") }}
         </button>
       </div>
       <p

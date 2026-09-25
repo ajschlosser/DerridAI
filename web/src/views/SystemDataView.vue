@@ -8,6 +8,8 @@ import {
   type SystemDataDatabase,
   type SystemDataTable,
   type SystemMetadataExemplarPage,
+  type SystemChromaCollection,
+  type SystemChromaCommandResult,
 } from "../api/system";
 import * as runtime from "../runtime/runtimeBridge";
 import { useI18nStore } from "../stores/i18n";
@@ -47,6 +49,12 @@ const exemplarLanguage = ref("");
 const exemplarScope = ref("");
 const exemplarSchema = ref("");
 const exemplarRecord = ref("");
+const systemChromaCollections = ref<SystemChromaCollection[]>([]);
+const chromaCommand = ref("");
+const chromaValidation = ref<SystemChromaCommandResult | null>(null);
+const chromaResult = ref<SystemChromaCommandResult | null>(null);
+const chromaBusy = ref(false);
+const chromaError = ref("");
 
 const database = computed(() =>
   databases.value.find((item) => item.name === selectedDatabase.value),
@@ -158,6 +166,48 @@ function clearExemplarFilters() {
   void loadExemplars(0);
 }
 
+async function loadSystemChroma() {
+  try {
+    const payload = await systemApi.systemChromaCollections();
+    systemChromaCollections.value = payload.collections || [];
+    if (!chromaCommand.value && systemChromaCollections.value[0]) {
+      chromaCommand.value = `get ${systemChromaCollections.value[0].name} --limit 10`;
+    }
+  } catch {
+    // System Chroma inspection is supplemental. A missing/unavailable vector
+    // backend must not prevent administrators from inspecting SQLite/system data.
+    systemChromaCollections.value = [];
+  }
+}
+
+async function validateChromaCommand() {
+  chromaBusy.value = true;
+  chromaError.value = "";
+  chromaResult.value = null;
+  try {
+    chromaValidation.value = await systemApi.validateSystemChroma(chromaCommand.value);
+  } catch (cause) {
+    chromaValidation.value = null;
+    chromaError.value = message(cause);
+  } finally {
+    chromaBusy.value = false;
+  }
+}
+
+async function executeChromaCommand() {
+  chromaBusy.value = true;
+  chromaError.value = "";
+  try {
+    chromaValidation.value = await systemApi.validateSystemChroma(chromaCommand.value);
+    chromaResult.value = await systemApi.querySystemChroma(chromaCommand.value);
+  } catch (cause) {
+    chromaResult.value = null;
+    chromaError.value = message(cause);
+  } finally {
+    chromaBusy.value = false;
+  }
+}
+
 async function loadTable() {
   if (!selectedDatabase.value || !selectedTable.value) {
     tablePayload.value = null;
@@ -177,6 +227,7 @@ async function load() {
       systemApi.systemData(),
       loadCache(),
       loadExemplars(0),
+      loadSystemChroma(),
     ]);
     databases.value = data.databases;
     if (!database.value) selectedDatabase.value = databases.value[0]?.name || "";
@@ -505,6 +556,68 @@ onMounted(() => void load());
           </div>
         </footer>
       </section>
+      <section class="card chroma-console" aria-labelledby="system-chroma-console-title">
+        <div class="table-header">
+          <div>
+            <span class="eyebrow">{{ t("runtime.system_chroma", "System Chroma") }}</span>
+            <h2 id="system-chroma-console-title">{{ t("runtime.system_chroma_console", "Read-only query console") }}</h2>
+            <p>
+              {{
+                t(
+                  "runtime.system_chroma_console_help",
+                  "Inspect internal vector projections with CLI-style get and query commands. Commands are parsed and validated server-side before execution; no mutation commands are accepted.",
+                )
+              }}
+            </p>
+          </div>
+          <div class="chroma-collection-summary">
+            <span v-for="item in systemChromaCollections" :key="item.name">
+              <b>{{ item.name }}</b> · {{ item.count.toLocaleString() }}
+            </span>
+          </div>
+        </div>
+        <label class="console-command">
+          <span>{{ t("runtime.system_chroma_command", "Command") }}</span>
+          <textarea
+            v-model="chromaCommand"
+            class="control mono"
+            rows="3"
+            spellcheck="false"
+            placeholder='query derridai_metadata_exemplars --text "responsibility to the Other" --n-results 8 --where "{"field_name":"position_holder"}"'
+            @input="
+              chromaValidation = null;
+              chromaResult = null;
+              chromaError = '';
+            "
+          />
+        </label>
+        <div class="console-help">
+          <code>get COLLECTION --where '{"field_name":"speaker"}' --limit 20</code>
+          <code>query COLLECTION --text "passage" --n-results 8 --where-document '{"$contains":"Levinas"}'</code>
+        </div>
+        <div class="schema-actions">
+          <button class="btn" type="button" :disabled="chromaBusy || !chromaCommand.trim()" @click="validateChromaCommand">
+            {{ t("runtime.system_chroma_validate", "Validate & explain") }}
+          </button>
+          <button class="btn primary" type="button" :disabled="chromaBusy || !chromaCommand.trim()" @click="executeChromaCommand">
+            {{ t("runtime.system_chroma_execute", "Execute query") }}
+          </button>
+        </div>
+        <p v-if="chromaError" class="info error" role="alert">{{ chromaError }}</p>
+        <div v-if="chromaValidation" class="query-explanation" role="status">
+          <b>{{ t("runtime.system_chroma_will_do", "What this will do") }}</b>
+          <p>{{ chromaValidation.explanation }}</p>
+          <small>
+            {{ chromaValidation.embedding_provider || "—" }}
+            <template v-if="chromaValidation.embedding_model"> · {{ chromaValidation.embedding_model }}</template>
+          </small>
+        </div>
+        <details v-if="chromaResult?.result" class="query-result" open>
+          <summary>{{ t("runtime.system_chroma_result", "Query result") }}</summary>
+          <pre>{{ JSON.stringify(chromaResult.result, null, 2) }}</pre>
+        </details>
+      </section>
+
       <section class="card" aria-labelledby="cache-records-title">
         <div class="table-header">
           <div>
@@ -672,6 +785,66 @@ onMounted(() => void load());
   display: grid;
   gap: 16px;
 }
+.chroma-console {
+  display: grid;
+  gap: 14px;
+}
+.chroma-collection-summary {
+  display: grid;
+  gap: 4px;
+  max-width: 42rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-align: end;
+}
+.console-command {
+  display: grid;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 750;
+}
+.console-command textarea {
+  min-height: 84px;
+  resize: vertical;
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+.console-help {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--soft);
+  overflow-x: auto;
+}
+.console-help code {
+  white-space: nowrap;
+  font-size: 0.78rem;
+}
+.query-explanation {
+  padding: 12px 14px;
+  border-inline-start: 4px solid var(--accent);
+  border-radius: 8px;
+  background: var(--soft);
+}
+.query-explanation p {
+  margin: 4px 0;
+  line-height: 1.5;
+}
+.query-explanation small {
+  color: var(--muted);
+}
+.query-result pre {
+  max-height: 34rem;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--soft);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.76rem;
+}
+
 .page-header,
 .cache-summary,
 .table-header {

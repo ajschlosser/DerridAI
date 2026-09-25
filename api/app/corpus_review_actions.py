@@ -22,7 +22,7 @@ import json
 import re
 import uuid
 from functools import wraps
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ValidationError
 
@@ -47,6 +47,7 @@ from .metadata_adjudication_cache import remember as remember_adjudication
 from .metadata_schema import MetadataSchema
 from .provenance_memory import persist_record_decision
 from .rag import _citation_strings
+from .system_store import system_store
 
 
 def _serialize_record_mutation(method):
@@ -104,6 +105,7 @@ class ReviewActionsMixin:
         def _schedule_recheck(self, build_id: str, record: dict[str, Any], field: str, value: Any) -> None: ...
         def _score_recheck(self, build_id: str, record: dict[str, Any], field: str, value: Any, prior_status: dict[str, Any]) -> bool: ...
         def _reopen_due_rechecks(self, build_id: str, records: list[dict[str, Any]], just_decided: dict[str, Any], profile: dict[str, Any]) -> None: ...
+        def _schedule_metadata_exemplar_projection(self, build_id: str) -> None: ...
         def _record_boundary_editorial_example(
             self,
             build_id: str,
@@ -183,6 +185,69 @@ class ReviewActionsMixin:
         self.repo.save_checkpoint(build_id, "review_history", {"undo": undo[-40:], "redo": []})
 
 
+    def _persist_review_audit_bindings(
+        self,
+        build_id: str,
+        promoted: dict[str, list[str]],
+    ) -> None:
+        """Persist durable audit bindings for review-confirmed metadata.
+
+        SQLite audit bindings are durable provenance. Chroma remains a derived,
+        rebuildable projection and is scheduled only after the reviewed record
+        has been persisted successfully.
+        """
+
+        if not promoted:
+            return
+        schema = self._schema_for(build_id)
+        wrote = False
+        for record_id, fields in promoted.items():
+            try:
+                record = self.repo.get_record(build_id, record_id)
+            except KeyError:
+                continue
+            for field in dict.fromkeys(str(item) for item in fields if str(item)):
+                status = (
+                    (record.get("metadata_field_status") or {}).get(field)
+                    if isinstance(record.get("metadata_field_status"), dict)
+                    else None
+                )
+                decision_kind: Literal["value", "absence"] = (
+                    "absence"
+                    if isinstance(status, dict)
+                    and str(status.get("status") or "") == "confirmed_absent"
+                    else "value"
+                )
+                persist_record_decision(
+                    record=record,
+                    schema=schema,
+                    field_name=field,
+                    value=record.get(field),
+                    decision_kind=decision_kind,
+                    scope_id=build_id,
+                )
+                wrote = True
+        if wrote:
+            self._schedule_metadata_exemplar_projection(build_id)
+
+    def _invalidate_metadata_exemplar_projection(
+        self,
+        build_id: str,
+        *,
+        record_id: str | None = None,
+        reason: str,
+    ) -> None:
+        """Mark the derived metadata exemplar index stale after review-state changes."""
+
+        system_store.mark_semantic_memory_dirty(
+            "metadata_exemplars",
+            scope_id=build_id,
+            record_id=record_id,
+            reason=reason,
+        )
+        self._schedule_metadata_exemplar_projection(build_id)
+
+
     @_serialize_record_mutation
     def set_disposition(self, build_id: str, record_id: str, disposition: str, reason: str = "", expected_revision: int | None = None) -> dict[str, Any]:
         if disposition not in {"pending", "accepted", "rejected"}:
@@ -198,6 +263,7 @@ class ReviewActionsMixin:
             raise ValueError("Resolve the source extraction problem before accepting this record.")
         if disposition == "accepted" and (list(target.get("metadata_review_fields") or []) or list(target.get("metadata_incomplete_fields") or [])):
             raise ValueError("Resolve the queued record metadata before accepting this record.")
+        promoted_fields: list[str] = []
         if disposition == "accepted":
             status_map = target.get("metadata_field_status") if isinstance(target.get("metadata_field_status"), dict) else {}
             for field in self._schema_for(build_id).review_fields():
@@ -208,6 +274,7 @@ class ReviewActionsMixin:
                     info["status"] = "human_confirmed"
                     info["method"] = "human_review_of_llm_proposal"
                     info["reason"] = (str(info.get("reason") or "") + " Confirmed when the reviewer accepted the record.").strip()
+                    promoted_fields.append(field)
             target["metadata_reviewed_at"] = iso_now()
         target["review_disposition"] = disposition
         target["accepted"] = disposition == "accepted"
@@ -224,6 +291,11 @@ class ReviewActionsMixin:
         _mark_human_touch(target, ["__review__"])
         target["record_revision"] = current_revision + 1
         self._rewrite_targeted_record(build_id, target, previous_record)
+        if promoted_fields:
+            self._persist_review_audit_bindings(
+                build_id,
+                {record_id: promoted_fields},
+            )
         return target
 
 
@@ -262,6 +334,7 @@ class ReviewActionsMixin:
         self._assert_record_revision(target, expected_revision)
         current_revision = int(target.get("record_revision") or 1)
         self._push_review_history(build_id, records, action=f"review_{disposition}", selected_record_id=record_id)
+        promoted_fields: list[str] = []
         if disposition == "accepted":
             status_map = target.get("metadata_field_status") if isinstance(target.get("metadata_field_status"), dict) else {}
             for field in self._schema_for(build_id).review_fields():
@@ -269,6 +342,7 @@ class ReviewActionsMixin:
                 if info and info.get("status") == "model_inferred":
                     info["status"] = "human_confirmed"
                     info["method"] = "human_review_of_llm_proposal"
+                    promoted_fields.append(field)
             target["metadata_reviewed_at"] = iso_now()
         target["review_disposition"] = disposition
         target["accepted"] = disposition == "accepted"
@@ -278,6 +352,11 @@ class ReviewActionsMixin:
         _mark_human_touch(target, ["__review__"])
         target["record_revision"] = current_revision + 1
         build = self._rewrite_and_validate(build_id, records)
+        if promoted_fields:
+            self._persist_review_audit_bindings(
+                build_id,
+                {record_id: promoted_fields},
+            )
         # Prefer the next *pending* record in the active review queue.  `all` is
         # intentionally special: `_matches_review_queue(..., "all")` includes
         # already-reviewed records, which previously let Accept & next advance to
@@ -310,6 +389,7 @@ class ReviewActionsMixin:
         changed = 0
         blocked_metadata = 0
         blocked_record_ids: list[str] = []
+        promoted_by_record: dict[str, list[str]] = {}
         for record in records:
             if selected_ids and str(record.get("record_id") or "") not in selected_ids:
                 continue
@@ -332,11 +412,15 @@ class ReviewActionsMixin:
             current_revision = int(record.get("record_revision") or 1)
             if disposition == "accepted":
                 status_map = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
+                promoted_fields: list[str] = []
                 for field in self._schema_for(build_id).review_fields():
                     info = status_map.get(field) if isinstance(status_map.get(field), dict) else None
                     if info and info.get("status") == "model_inferred":
                         info["status"] = "human_confirmed"
                         info["method"] = "human_review_of_llm_proposal"
+                        promoted_fields.append(field)
+                if promoted_fields:
+                    promoted_by_record[str(record.get("record_id") or "")] = promoted_fields
                 record["metadata_reviewed_at"] = iso_now()
             record["review_disposition"] = disposition
             record["accepted"] = disposition == "accepted"
@@ -354,7 +438,9 @@ class ReviewActionsMixin:
             record["record_revision"] = current_revision + 1
             changed += 1
         self._rewrite_and_validate(build_id, records)
-        return {"changed": changed, "disposition": disposition, "blocked_metadata": blocked_metadata, "blocked_record_ids": blocked_record_ids, "queue_counts": _queue_counts(records)}
+        self._persist_review_audit_bindings(build_id, promoted_by_record)
+        persisted = self.repo.load_records(build_id)
+        return {"changed": changed, "disposition": disposition, "blocked_metadata": blocked_metadata, "blocked_record_ids": blocked_record_ids, "queue_counts": _queue_counts(persisted)}
 
 
     @_serialize_record_mutation
@@ -378,6 +464,11 @@ class ReviewActionsMixin:
             restored["record_revision"] = int(current.get("record_revision") or 1) + 1
             self._rewrite_targeted_record(build_id, restored, current)
             self.repo.save_checkpoint(build_id, "review_history", {"undo": undo, "redo": redo[-40:]})
+            self._invalidate_metadata_exemplar_projection(
+                build_id,
+                record_id=str(entry["record_id"]),
+                reason="review_history_undo",
+            )
             return {"restored": True, "action": entry.get("action"), "selected_record_id": entry.get("selected_record_id"), "record_count": int(self.repo.get_build(build_id).get("record_count") or 0), "can_undo": bool(undo), "can_redo": True}
         current = self.repo.load_records(build_id)
         redo.append({
@@ -387,6 +478,10 @@ class ReviewActionsMixin:
         records = entry["records"]
         self._rewrite_and_validate(build_id, records)
         self.repo.save_checkpoint(build_id, "review_history", {"undo": undo, "redo": redo[-40:]})
+        self._invalidate_metadata_exemplar_projection(
+            build_id,
+            reason="review_history_undo",
+        )
         return {"restored": True, "action": entry.get("action"), "selected_record_id": entry.get("selected_record_id"), "record_count": len(records), "can_undo": bool(undo), "can_redo": True}
 
 
@@ -411,6 +506,11 @@ class ReviewActionsMixin:
             restored["record_revision"] = int(current.get("record_revision") or 1) + 1
             self._rewrite_targeted_record(build_id, restored, current)
             self.repo.save_checkpoint(build_id, "review_history", {"undo": undo[-40:], "redo": redo})
+            self._invalidate_metadata_exemplar_projection(
+                build_id,
+                record_id=str(entry["record_id"]),
+                reason="review_history_redo",
+            )
             return {"restored": True, "action": entry.get("action"), "selected_record_id": entry.get("selected_record_id"), "record_count": int(self.repo.get_build(build_id).get("record_count") or 0), "can_undo": True, "can_redo": bool(redo)}
         current = self.repo.load_records(build_id)
         undo.append({
@@ -420,6 +520,10 @@ class ReviewActionsMixin:
         records = entry["records"]
         self._rewrite_and_validate(build_id, records)
         self.repo.save_checkpoint(build_id, "review_history", {"undo": undo[-40:], "redo": redo})
+        self._invalidate_metadata_exemplar_projection(
+            build_id,
+            reason="review_history_redo",
+        )
         return {"restored": True, "action": entry.get("action"), "selected_record_id": entry.get("selected_record_id"), "record_count": len(records), "can_undo": True, "can_redo": bool(redo)}
 
 
@@ -538,6 +642,10 @@ class ReviewActionsMixin:
                 self._record_human_llm_feedback(build_id, key, prior_value, value, prior_status, target)
                 self._schedule_recheck(build_id, target, key, value)
                 self._request_second_opinion(build_id, target, key, value)
+            if prior_value != value and isinstance(target.get("metadata_evidence"), dict):
+                evidence_map = dict(target.get("metadata_evidence") or {})
+                evidence_map.pop(key, None)
+                target["metadata_evidence"] = evidence_map
             target[key] = value
             if key in self._editable_fields(build_id):
                 is_override = key in MANIFEST_INHERITED_FIELDS
@@ -577,7 +685,15 @@ class ReviewActionsMixin:
         schema = self._schema_for(build_id)
         for key, value in changes.items():
             if key not in skipped:
-                persist_record_decision(record=persisted, schema=schema, field_name=key, value=value)
+                persist_record_decision(
+                    record=persisted,
+                    schema=schema,
+                    field_name=key,
+                    value=value,
+                    scope_id=build_id,
+                )
+        if any(key not in skipped for key in changes):
+            self._schedule_metadata_exemplar_projection(build_id)
         _decorate_review_state(persisted)
         _present_for_reviewer(persisted)
         return persisted
@@ -624,6 +740,10 @@ class ReviewActionsMixin:
                 prior_status = dict(statuses.get(key) or {}) if isinstance(statuses.get(key), dict) else {}
                 prior_value = record.get(key)
                 self._record_human_llm_feedback(build_id, key, prior_value, value, prior_status, record)
+                if prior_value != value and isinstance(record.get("metadata_evidence"), dict):
+                    evidence_map = dict(record.get("metadata_evidence") or {})
+                    evidence_map.pop(key, None)
+                    record["metadata_evidence"] = evidence_map
                 record[key] = value
                 override = key in MANIFEST_INHERITED_FIELDS
                 statuses[key] = {
@@ -654,7 +774,14 @@ class ReviewActionsMixin:
             record = by_id.get(record_id)
             if record:
                 for key, value in changes.items():
-                    persist_record_decision(record=record, schema=schema, field_name=key, value=value)
+                    persist_record_decision(
+                        record=record,
+                        schema=schema,
+                        field_name=key,
+                        value=value,
+                        scope_id=build_id,
+                    )
+        self._schedule_metadata_exemplar_projection(build_id)
         return {"changed": len(changed_ids), "record_ids": changed_ids, "queue_counts": _queue_counts(persisted)}
 
 
@@ -692,6 +819,13 @@ class ReviewActionsMixin:
             prior_status = dict((target.get("metadata_field_status") or {}).get(field) or {})
             self._record_human_llm_feedback(build_id, field, target.get(field), None, prior_status, target)
             target[field] = None
+            evidence_map = (
+                dict(target.get("metadata_evidence") or {})
+                if isinstance(target.get("metadata_evidence"), dict)
+                else {}
+            )
+            evidence_map.pop(field, None)
+            target["metadata_evidence"] = evidence_map
             target.setdefault("metadata_field_status", {})[field] = {"status":"confirmed_absent","method":"human","confidence":1.0,"reason_code":"no_supported_value","reason":"Reviewer confirmed that no supported value applies to this record."}
             target.setdefault("metadata_decisions", []).append({"field":field,"value":None,"at":iso_now(),"source":"confirmed_absent"})
             target["metadata_decisions"] = target["metadata_decisions"][-100:]
@@ -706,7 +840,9 @@ class ReviewActionsMixin:
                 field_name=field,
                 value=None,
                 decision_kind="absence",
+                scope_id=build_id,
             )
+            self._schedule_metadata_exemplar_projection(build_id)
         else:
             record = self.patch_metadata(build_id, record_id, {field: value}, expected_revision)
         current_record = self.repo.get_record(build_id, record_id)
@@ -791,6 +927,28 @@ class ReviewActionsMixin:
         target["metadata_attention_reasons"] = ["Source evidence binding changed and metadata validation must be rerun."]
         target["record_revision"] = current_revision + 1
         self._rewrite_targeted_record(build_id, target, previous_record)
+        status = (
+            (target.get("metadata_field_status") or {}).get(field)
+            if isinstance(target.get("metadata_field_status"), dict)
+            else None
+        )
+        if (
+            unique_ids
+            and isinstance(status, dict)
+            and str(status.get("status") or "") in {"human_confirmed", "human_override", "confirmed_absent"}
+        ):
+            self._persist_review_audit_bindings(
+                build_id,
+                {record_id: [field]},
+            )
+        else:
+            # Evidence is part of the derived exemplar. Removing or changing
+            # evidence must invalidate any older vector projection.
+            self._invalidate_metadata_exemplar_projection(
+                build_id,
+                record_id=record_id,
+                reason="reviewed_metadata_evidence_changed",
+            )
         return target
 
 

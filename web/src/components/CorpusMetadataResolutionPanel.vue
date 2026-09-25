@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { isPlaceholderValue, usableListOptions } from "../domain/metadataValues";
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import type { CorpusRecord } from "../api/pdfCorpus";
 import { useI18nStore } from "../stores/i18n";
 import { metadataConstraints } from "../domain/metadataConstraints";
@@ -26,9 +26,11 @@ const emit = defineEmits<{
   noValue: [field: string];
   resolveMany: [changes: Record<string, unknown>];
   source: [field: string];
+  selectionEvidence: [field: string, text: string];
   dirty: [dirty: boolean];
 }>();
 const i18n = useI18nStore();
+const populatedOpen = ref(true);
 const requiredFields = new Set(["region_type", "primary_text", "discourse_role"]);
 const inheritedFieldSet = new Set([
   "work",
@@ -328,6 +330,7 @@ function displayValue(field: string) {
           @save="(value) => emit('resolve', field, value)"
           @no-value="emit('noValue', field)"
           @source="emit('source', field)"
+          @assign-selection-evidence="(text) => emit('selectionEvidence', field, text)"
           @dirty="(value) => emit('dirty', value)"
         />
         <button
@@ -341,7 +344,12 @@ function displayValue(field: string) {
         </button>
       </div>
     </div>
-    <details v-if="settledFields.length" class="settled-metadata">
+    <details
+      v-if="settledFields.length"
+      class="settled-metadata"
+      :open="populatedOpen"
+      @toggle="populatedOpen = ($event.currentTarget as HTMLDetailsElement).open"
+    >
       <summary>
         {{ i18n.t("pdf_corpus.populated_metadata") }}
         <span>{{ settledFields.length }}</span>
@@ -367,6 +375,7 @@ function displayValue(field: string) {
             @save="(value) => emit('resolve', field, value)"
             @no-value="emit('noValue', field)"
             @source="emit('source', field)"
+            @assign-selection-evidence="(text) => emit('selectionEvidence', field, text)"
             @dirty="(value) => emit('dirty', value)"
           />
         </div>
@@ -400,6 +409,7 @@ function displayValue(field: string) {
             @save="(value) => emit('resolve', field, value)"
             @no-value="emit('noValue', field)"
             @source="emit('source', field)"
+            @assign-selection-evidence="(text) => emit('selectionEvidence', field, text)"
             @dirty="(value) => emit('dirty', value)"
           />
         </div>

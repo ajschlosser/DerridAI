@@ -225,6 +225,10 @@ from .enrichment_ledger import (
 )
 from .error_severity import severity as error_severity
 from .main_text_start import infer_main_text_start
+from .metadata_exemplar_projection import (
+    dirty_metadata_exemplar_build_ids,
+    project_build_metadata_exemplars,
+)
 from .metadata_exemplar_retrieval import ChromaMetadataExemplarIndex
 from .metadata_schema import (
     MetadataSchema,
@@ -1428,6 +1432,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         # opened lazily only when reviewed exemplars actually exist for retrieval.
         self._progressive_metadata_index = ChromaMetadataExemplarIndex()
         self._progressive_metadata_warning_builds: set[str] = set()
+        self._metadata_projection_lock = threading.RLock()
         self._ledger = EnrichmentLedger(self.repo.root / "enrichment_ledger.jsonl")
         self._suspended: set[tuple[str, str]] = set()
         self._schemas = SchemaStore(self.repo.root)
@@ -1438,6 +1443,58 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         self._loaded_models_cache: tuple[float, str, set[str]] = (0.0, "", set())
         self._provider_epoch: dict[str, int] = {}  # bumped whenever a build's provider is switched, so a running pass can notice
         self._mark_interrupted()
+        self._recover_metadata_exemplar_projections()
+
+    def _project_metadata_exemplars(
+        self,
+        build_id: str,
+        *,
+        force: bool = False,
+    ) -> dict[str, Any]:
+        with self._metadata_projection_lock:
+            return project_build_metadata_exemplars(
+                self.repo,
+                build_id,
+                self._progressive_metadata_index,
+                force=force,
+            )
+
+    def _project_metadata_exemplars_best_effort(self, build_id: str) -> dict[str, Any]:
+        """Project reviewed metadata without making human review depend on Chroma.
+
+        The durable SQLite outbox is written before this method is scheduled.
+        Projection failures therefore remain dirty for startup/next-review retry
+        instead of escaping through executors that run submitted work inline or
+        otherwise coupling review success to vector availability.
+        """
+        try:
+            return self._project_metadata_exemplars(build_id)
+        except Exception as exc:
+            self._append_warning(
+                build_id,
+                "Metadata exemplar projection is pending because the derived vector "
+                f"index could not be updated ({exc}).",
+            )
+            return {
+                "scope_id": build_id,
+                "skipped": False,
+                "projected": False,
+                "error": str(exc),
+            }
+
+    def _schedule_metadata_exemplar_projection(self, build_id: str) -> None:
+        # Review durability never depends on Chroma. The SQLite outbox is committed
+        # first; projection runs best-effort and an unacknowledged item is retried
+        # after restart or the next review in this build.
+        self._executor.submit(self._project_metadata_exemplars_best_effort, build_id)
+
+    def _recover_metadata_exemplar_projections(self) -> None:
+        try:
+            build_ids = dirty_metadata_exemplar_build_ids(self.repo)
+        except Exception:
+            return
+        for build_id in build_ids:
+            self._schedule_metadata_exemplar_projection(build_id)
 
 
 

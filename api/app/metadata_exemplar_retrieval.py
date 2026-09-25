@@ -395,6 +395,7 @@ class ChromaMetadataExemplarIndex:
         language: str = "",
         field_limits: dict[str, int] | None = None,
         field_min_similarity: dict[str, float] | None = None,
+        field_include_corrections: dict[str, bool] | None = None,
         packet_char_budget: int = DEFAULT_PACKET_CHAR_BUDGET,
         fetch_k: int = DEFAULT_FETCH_K,
         exclude_record_id: str = "",
@@ -488,6 +489,10 @@ class ChromaMetadataExemplarIndex:
                     and (
                         _distance_similarity(row.get("distance"))
                         >= max(0.0, min(1.0, float((field_min_similarity or {}).get(field, 0.0))))
+                    )
+                    and (
+                        str(canonical[row["id"]].get("kind") or "positive") != "correction"
+                        or bool((field_include_corrections or {}).get(field, True))
                     )
                 ]
                 return field, _mmr(candidates, limit), len(candidates)

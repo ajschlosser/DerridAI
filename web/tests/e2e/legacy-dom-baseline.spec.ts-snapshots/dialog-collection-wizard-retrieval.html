@@ -60,13 +60,6 @@
 <fieldset class="vector-provider-choice">
 <legend>Embedding provider</legend>
 <div class="vector-provider-options">
-<label class="selected">
-<input type="radio" name="wizardEmbeddingProviderRadio" value="ollama" checked="">
-<span>
-<b>Ollama</b>
-<small>Generate embeddings with a configured local Ollama model.</small>
-</span>
-</label>
 <label class="">
 <input type="radio" name="wizardEmbeddingProviderRadio" value="chroma">
 <span>
@@ -81,12 +74,19 @@
 <small>Records must already contain embedding vectors; semantic query embedding is unavailable.</small>
 </span>
 </label>
+<label class="selected">
+<input type="radio" name="wizardEmbeddingProviderRadio" value="profile:primary" checked="">
+<span>
+<b>Local Ollama</b>
+<small>OLLAMA · gemma4:12b</small>
+</span>
+</label>
 </div>
 </fieldset>
 <div class="wizard-two-col">
 <label class="field ">
 <span>Embedding model</span>
-<input class="control" id="wizardEmbeddingModel" list="wizardEmbeddingModels" value="bge-m3:latest" placeholder="bge-m3:latest">
+<input class="control" id="wizardEmbeddingModel" list="wizardEmbeddingModels" value="gemma4:12b" placeholder="bge-m3:latest">
 <datalist id="wizardEmbeddingModels">
 </datalist>
 </label>

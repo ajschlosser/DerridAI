@@ -1,11 +1,10 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
-"""Backend-neutral inspection of DerridAI's learned metadata precedents.
+"""Backend-neutral inspection of DerridAI's evidence-bound metadata precedents.
 
-The product surface exposes *metadata memory*, not Chroma collections.  Today the
-service reads the progressive evidence-bound projection and, when present, the
-semantic reviewer-memory projection introduced by PR #145.  Both are derived
-storage details: rows are normalized into one scholarly/audit contract and
-duplicate decisions prefer the richer evidence-bound representation.
+The reviewed corpus RecordRevision and its reviewed evidence are authoritative.
+The product surface exposes the single rebuildable metadata-exemplar projection;
+the superseded PR #145 reviewer-memory collection is deliberately ignored so
+DerridAI has one semantic learning path rather than competing memory systems.
 """
 
 from __future__ import annotations
@@ -17,8 +16,7 @@ from typing import Any
 
 from .metadata_exemplar_retrieval import COLLECTION_NAME
 
-PR145_COLLECTION_NAME = "derridai_metadata_memory"
-SYSTEM_KINDS = {"metadata_exemplars", "metadata_memory"}
+SYSTEM_KINDS = {"metadata_exemplars"}
 PAGE_SCAN_SIZE = 500
 
 
@@ -45,8 +43,6 @@ def _memory_kind(collection: Any) -> str:
     name = _text(getattr(collection, "name", ""))
     if name == COLLECTION_NAME:
         return "metadata_exemplars"
-    if name == PR145_COLLECTION_NAME:
-        return "metadata_memory"
     return ""
 
 
@@ -56,76 +52,42 @@ def _normalized_item(
     document: Any,
     metadata: Mapping[str, Any],
 ) -> dict[str, Any] | None:
-    if memory_kind == "metadata_exemplars":
-        field = _text(metadata.get("field_name"))
-        record_id = _text(metadata.get("record_id"))
-        if not field or not record_id:
-            return None
-        block_ids = _decode_json(metadata.get("evidence_block_ids_json"), [])
-        if not isinstance(block_ids, list):
-            block_ids = []
-        return {
-            "id": _text(metadata.get("metadata_exemplar_id")) or item_id,
-            "memory_type": "evidence_bound",
-            "kind": _text(metadata.get("kind")) or "positive",
-            "field": field,
-            "field_id": _text(metadata.get("field_id")),
-            "value": _decode_json(metadata.get("field_value_json")),
-            "rejected_value": _decode_json(metadata.get("rejected_value_json")),
-            "authority": _text(metadata.get("assertion_status")),
-            "review_method": _text(metadata.get("assertion_method")),
-            "record_id": record_id,
-            "record_revision": metadata.get("record_revision"),
-            "build_id": _text(metadata.get("scope_id")),
-            "source_document_id": _text(metadata.get("source_document_id")),
-            "schema_id": _text(metadata.get("schema_id")),
-            "schema_version": _text(metadata.get("schema_version")),
-            "language": _text(metadata.get("language")),
-            "region_type": _text(metadata.get("region_type")),
-            "page_start": metadata.get("page_start"),
-            "page_end": metadata.get("page_end"),
-            "reviewed_at": _text(metadata.get("reviewed_at")),
-            "evidence_bound": True,
-            "evidence_hash": _text(metadata.get("evidence_hash")),
-            "evidence_block_ids": [str(value) for value in block_ids if str(value)],
-            "evidence_text": "",
-            "context_text": str(document or metadata.get("context_text") or ""),
-        }
-
-    if memory_kind == "metadata_memory":
-        field = _text(metadata.get("memory_field") or metadata.get("field"))
-        record_id = _text(metadata.get("source_record_id") or metadata.get("record_id"))
-        if not field or not record_id:
-            return None
-        return {
-            "id": item_id,
-            "memory_type": "reviewer_memory",
-            "kind": "positive",
-            "field": field,
-            "field_id": _text(metadata.get("field_id")),
-            "value": _decode_json(metadata.get("memory_value")),
-            "rejected_value": None,
-            "authority": _text(metadata.get("status")) or "human_confirmed",
-            "review_method": "",
-            "record_id": record_id,
-            "record_revision": metadata.get("record_revision"),
-            "build_id": _text(metadata.get("build_id")),
-            "source_document_id": _text(metadata.get("source_document_id")),
-            "schema_id": _text(metadata.get("schema_id")),
-            "schema_version": _text(metadata.get("schema_version")),
-            "language": _text(metadata.get("language")),
-            "region_type": _text(metadata.get("region_type")),
-            "page_start": metadata.get("page_start"),
-            "page_end": metadata.get("page_end"),
-            "reviewed_at": _text(metadata.get("reviewed_at")),
-            "evidence_bound": False,
-            "evidence_hash": "",
-            "evidence_block_ids": [],
-            "evidence_text": "",
-            "context_text": str(document or metadata.get("text") or ""),
-        }
-    return None
-
+    if memory_kind != "metadata_exemplars":
+        return None
+    field = _text(metadata.get("field_name"))
+    record_id = _text(metadata.get("record_id"))
+    if not field or not record_id:
+        return None
+    block_ids = _decode_json(metadata.get("evidence_block_ids_json"), [])
+    if not isinstance(block_ids, list):
+        block_ids = []
+    return {
+        "id": _text(metadata.get("metadata_exemplar_id")) or item_id,
+        "memory_type": "evidence_bound",
+        "kind": _text(metadata.get("kind")) or "positive",
+        "field": field,
+        "field_id": _text(metadata.get("field_id")),
+        "value": _decode_json(metadata.get("field_value_json")),
+        "rejected_value": _decode_json(metadata.get("rejected_value_json")),
+        "authority": _text(metadata.get("assertion_status")),
+        "review_method": _text(metadata.get("assertion_method")),
+        "record_id": record_id,
+        "record_revision": metadata.get("record_revision"),
+        "build_id": _text(metadata.get("scope_id")),
+        "source_document_id": _text(metadata.get("source_document_id")),
+        "schema_id": _text(metadata.get("schema_id")),
+        "schema_version": _text(metadata.get("schema_version")),
+        "language": _text(metadata.get("language")),
+        "region_type": _text(metadata.get("region_type")),
+        "page_start": metadata.get("page_start"),
+        "page_end": metadata.get("page_end"),
+        "reviewed_at": _text(metadata.get("reviewed_at")),
+        "evidence_bound": True,
+        "evidence_hash": _text(metadata.get("evidence_hash")),
+        "evidence_block_ids": [str(value) for value in block_ids if str(value)],
+        "evidence_text": "",
+        "context_text": str(document or metadata.get("context_text") or ""),
+    }
 
 def _dedupe_key(item: Mapping[str, Any]) -> tuple[str, str, str, str]:
     value = json.dumps(item.get("value"), ensure_ascii=False, sort_keys=True, default=str)
@@ -138,7 +100,7 @@ def _dedupe_key(item: Mapping[str, Any]) -> tuple[str, str, str, str]:
 
 
 class MetadataMemoryService:
-    """Read-only audit view over whichever derived metadata-memory backends exist."""
+    """Read-only audit view over the evidence-bound exemplar projection."""
 
     def __init__(self, store: Any, corpus_repository: Any | None = None) -> None:
         self.store = store
@@ -287,13 +249,7 @@ class MetadataMemoryService:
                 if item is None:
                     continue
                 key = _dedupe_key(item)
-                prior = merged.get(key)
-                # Evidence-bound exemplars win over older/general semantic
-                # reviewer memory for the same reviewed decision.
-                if prior is None or (
-                    item.get("evidence_bound") and not prior.get("evidence_bound")
-                ):
-                    merged[key] = item
+                merged[key] = item
 
         items = list(merged.values())
         if field:
