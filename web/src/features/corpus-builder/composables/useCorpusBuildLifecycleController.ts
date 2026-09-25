@@ -136,8 +136,7 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
       await refreshBuild();
 
       if (
-        Number(options.currentBuild.value?.record_count || 0) >
-        options.hydratedTopologyCount.value
+        Number(options.currentBuild.value?.record_count || 0) > options.hydratedTopologyCount.value
       ) {
         await nextTick();
         await options.refreshRecords(false, options.selectedRecordId.value);
@@ -176,9 +175,7 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
         schema_id: options.schemaId.value,
         run_guidance: options.runGuidancePayload(),
         ...options.providerPayload.value,
-        ...(options.handsFree.value.enabled
-          ? { autonomous: { ...options.handsFree.value } }
-          : {}),
+        ...(options.handsFree.value.enabled ? { autonomous: { ...options.handsFree.value } } : {}),
       };
       const build = await corpusBuilderApi.createBuild(payload);
       options.selectedBuildId.value = build.build_id;
