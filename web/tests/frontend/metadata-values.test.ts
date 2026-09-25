@@ -49,16 +49,16 @@ describe("metadata values that are not answers", () => {
     expect(
       usableOptions([
         "Jacques Derrida",
-        '\"reason\": \"The quote describes a tension.\"',
-        '[\"p00014-b0002\"]',
+        '"reason": "The quote describes a tension."',
+        '["p00014-b0002"]',
         "p00014-b0002",
-        '{\"needs_review\":true}',
+        '{"needs_review":true}',
       ]),
     ).toEqual(["Jacques Derrida"]);
     expect(
       usableListOptions([
         "hospitality, cosmopolitanism",
-        '\"block_ids\": [\"p00014-b0002\"]',
+        '"block_ids": ["p00014-b0002"]',
         ["Levinas", "p00014-b0002"],
       ]),
     ).toEqual(["hospitality", "cosmopolitanism", "Levinas"]);
