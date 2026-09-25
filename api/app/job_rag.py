@@ -20,7 +20,7 @@ from .job_state import (
 from .llm_tools import run_rag_grade
 from .models import RAGGradeRequest, RAGRunRequest
 from .persistence import job_repository
-from .rag import run_rag_pipeline
+from .rag import extract_evidence_ids, run_rag_pipeline, strip_evidence_markers
 
 
 def _optional_int(value: Any) -> int | None:
@@ -204,7 +204,10 @@ class RAGJobManager(PersistentJobStateMixin):
             persist_support_binding,
         )
 
-        answer = str(result.get("answer") or "")
+        # Persist support from the structured/raw generation before citation
+        # rendering removes evidence markers. Fall back to the rendered answer
+        # only for historical or externally supplied results without raw_answer.
+        answer = str(result.get("raw_answer") or result.get("answer") or "")
         evidence_by_id = {
             str(item.get("evidence_id") or ""): item
             for item in result.get("evidence") or []
@@ -214,21 +217,20 @@ class RAGJobManager(PersistentJobStateMixin):
         bindings: list[dict[str, Any]] = []
         for match in re.finditer(r"(?P<sentence>[^.!?]+(?:[.!?]|$))", answer):
             sentence = match.group("sentence").strip()
-            marker_groups = re.findall(r"\[\[(E\d+(?:\s*,\s*E\d+)*)\]\]", sentence)
-            if not marker_groups:
+            evidence_ids = extract_evidence_ids(sentence)
+            if not evidence_ids:
                 continue
             claim = persist_generated_claim(GeneratedClaim(
                 run_id=run_id,
                 response_record_id=response_record_id or None,
                 owner=owner,
-                claim_text=re.sub(r"\s*\[\[[^\]]+\]\]", "", sentence).strip(),
+                claim_text=strip_evidence_markers(sentence),
                 answer_start=match.start(),
                 answer_end=match.end(),
             ))
             claims.append(claim.model_dump(mode="json"))
-            for marker_group in marker_groups:
-                for evidence_id in re.findall(r"E\d+", marker_group):
-                    item = evidence_by_id.get(evidence_id) or {}
+            for evidence_id in evidence_ids:
+                item = evidence_by_id.get(evidence_id) or {}
                     record = item.get("record") if isinstance(item.get("record"), dict) else {}
                     if not record.get("record_id"):
                         continue
