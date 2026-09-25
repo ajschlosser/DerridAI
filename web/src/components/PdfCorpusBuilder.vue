@@ -83,6 +83,7 @@ import CorpusRunMonitor from "./corpus-builder/CorpusRunMonitor.vue";
 import CorpusConfigurationNav, {
   type CorpusConfigurationSection,
 } from "./corpus-builder/CorpusConfigurationNav.vue";
+import CorpusBuilderWorkspaceHeader from "./corpus-builder/CorpusBuilderWorkspaceHeader.vue";
 import CorpusActionMenu, { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
 import { recordState, recordIssueKinds } from "../domain/corpusReview";
 import { RecordMutationQueue } from "../domain/recordMutationQueue";
@@ -1751,17 +1752,16 @@ defineExpose({
 
 <template>
   <section class="corpus-builder" :aria-labelledby="'pdf-corpus-builder-title'">
-    <header class="builder-header">
-      <div>
-        <span class="eyebrow">{{ i18n.t("pdf_corpus.eyebrow") }}</span>
-        <h1 id="pdf-corpus-builder-title">
-          {{ i18n.t("pdf_corpus.title") }}
-        </h1>
-        <p>
-          {{ i18n.t("pdf_corpus.subtitle") }}
-        </p>
-      </div>
-      <div class="header-actions">
+    <CorpusBuilderWorkspaceHeader
+      :source-filename="selectedAsset?.filename || ''"
+      :build-id="currentBuild?.build_id || ''"
+      :publication-id="currentBuild?.publication?.publication_id || ''"
+      :stage="currentBuild?.stage || ''"
+      :status="currentBuild?.status || ''"
+      :record-count="currentBuild?.record_count || 0"
+      :accepted-count="currentBuild?.accepted_count || 0"
+    >
+      <template #actions>
         <CorpusBuildHistoryMenu
           :builds="builds"
           :total="buildsTotal"
@@ -1789,8 +1789,8 @@ defineExpose({
               : i18n.t("pdf_corpus.start_new_build")
           }}
         </button>
-      </div>
-    </header>
+      </template>
+    </CorpusBuilderWorkspaceHeader>
 
     <div
       ref="statusRegion"
