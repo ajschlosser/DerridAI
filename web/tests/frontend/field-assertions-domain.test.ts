@@ -68,7 +68,13 @@ describe("canonical FieldAssertion presentation", () => {
     const conflict = assertionConflict(record, "speaker");
     expect(conflict?.current?.value).toBe("Derrida");
     expect(conflict?.alternatives.map((item) => item.value)).toEqual(["Levinas"]);
-    expect(conflict?.disputed).toBe(true);
+    expect(conflict?.disputed).toBe(false);
+  });
+
+  it("marks authority disputes independently from retained alternatives", () => {
+    const disputed = structuredClone(record);
+    disputed.field_assertions["derridai.speaker"][1].authority_status = "disputed";
+    expect(assertionConflict(disputed, "speaker")?.disputed).toBe(true);
   });
 
   it("does not treat identical historical values as a semantic conflict", () => {
