@@ -168,6 +168,18 @@ describe("the schema editor", () => {
     w.unmount();
   });
 
+  it("shows only implemented reviewed-precedent controls, including minimum similarity", async () => {
+    const w = await mountEditor();
+    expect(w.text()).toContain("Memory & retrieval");
+    expect(w.text()).toContain("Maximum precedents");
+    expect(w.text()).toContain("Minimum similarity");
+    const thresholds = w.findAll('input[type="number"][min="0"][max="1"][step="0.05"]');
+    expect(thresholds.length).toBeGreaterThan(0);
+    expect(w.text()).not.toContain("Response memory");
+    expect(w.text()).not.toContain("Claim memory");
+    w.unmount();
+  });
+
   it("duplicates the built-in schema into an unsaved copy that can be edited and saved", async () => {
     const create = vi
       .spyOn(metadataSchemasApi, "create")
