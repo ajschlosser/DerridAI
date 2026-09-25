@@ -1,0 +1,41 @@
+name: Traceability format helper
+
+on:
+  push:
+    branches:
+      - tmp/traceability-format
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tmp/traceability-format
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Format traceability files
+        run: |
+          npx prettier --write             src/components/record/RecordTraceabilityExplorer.vue             src/components/record/ResearchObjectDiagram.vue             tests/frontend/record-traceability-explorer.test.ts
+      - name: Commit formatting
+        working-directory: .
+        run: |
+          if git diff --quiet --             web/src/components/record/RecordTraceabilityExplorer.vue             web/src/components/record/ResearchObjectDiagram.vue             web/tests/frontend/record-traceability-explorer.test.ts; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add             web/src/components/record/RecordTraceabilityExplorer.vue             web/src/components/record/ResearchObjectDiagram.vue             web/tests/frontend/record-traceability-explorer.test.ts
+          git commit -m "Format traceability redesign"
+          git push origin HEAD:tmp/traceability-format
