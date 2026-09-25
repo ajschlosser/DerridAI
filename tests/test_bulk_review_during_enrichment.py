@@ -69,8 +69,16 @@ def test_bulk_accept_persists_promoted_metadata_memory(tmp_path:Path, monkeypatc
     repo,build=install(tmp_path)
     rows=repo.load_records(build['build_id'])
     for row in rows:
+        # Keep the acceptance fixture structurally valid. The behavior under test
+        # is promotion of the model-inferred review field, not required-core blocking.
+        row['region_type']='main_text'
+        row['primary_text']=True
         row['discourse_role']='analysis'
-        row['metadata_field_status']={'discourse_role':{'status':'model_inferred','method':'llm','confidence':0.9}}
+        row['metadata_field_status']={
+            'region_type':{'status':'deterministic','method':'source_structure','confidence':1.0},
+            'primary_text':{'status':'deterministic','method':'source_structure','confidence':1.0},
+            'discourse_role':{'status':'model_inferred','method':'llm','confidence':0.9},
+        }
         row['metadata_incomplete_fields']=[]
         row['metadata_review_fields']=[]
         row['metadata_complete']=True
