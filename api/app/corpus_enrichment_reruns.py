@@ -31,7 +31,6 @@ from .corpus_review_state import _sync_record_metadata_state
 from .corpus_reviewer_helpers import _metadata_issue_type
 from .enrichment_cycles import (
     CONFIDENCE_FIELDS,
-    HUMAN_OWNED_STATUSES,
     MAX_PASSES,
     resolve_conflict,
     same_value,
