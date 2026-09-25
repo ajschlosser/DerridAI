@@ -44,6 +44,7 @@ from .field_assertions import (
     create_unresolved_assertion,
     migrate_record_assertions,
     project_record_assertions,
+    reset_fields_for_evaluation,
 )
 from .reviewer_context import current_reviewer
 
@@ -359,9 +360,15 @@ class BuildLifecycleMixin:
                     if isinstance(entry, dict) and entry.get("field") == field:
                         entry["value"] = None  # the earlier answer must not travel with the record
                         entry["sealed"] = True
-                record[field] = [] if isinstance(record.get(field), list) else None
                 schema = self._schema_for(build_id)
-                migrate_record_assertions(record, schema)
+                reset_fields_for_evaluation(
+                    record,
+                    [field],
+                    schema=schema,
+                    discard_history=True,
+                    method="human_recheck",
+                    reason="",
+                )
                 create_unresolved_assertion(
                     record,
                     field,
