@@ -1,86 +1,100 @@
 # DerridAI API
 
-This project contains the backend services for DerridAI, providing endpoints for corpus building, record management, and RAG interactions.
+The `api/` tree is DerridAI's FastAPI backend. It owns server-side authorization, source ingestion, canonical corpus/review operations, durable system/provenance state, derived Chroma projections, provider integration, RAG, and background-operation orchestration.
 
-## Overview
+Use the root [README](../README.md) for installation and first-run setup. Use [CONTRIBUTING](../CONTRIBUTING.md) for the supported Python/Node versions and quality gates. This file is the backend code map.
 
-- **Framework**: FastAPI
-- **Language**: Python 3.12
-- **Key Features**:
-  - Corpus builder (PDF to JSONL)
-  - Record review and editing
-  - RAG-based retrieval and generation
-  - User authentication and authorization
+## Application composition
 
-## Getting Started
+The backend is intentionally split by responsibility:
 
-### Local Development
+- `app/main.py` — minimal ASGI entrypoint.
+- `app/application.py` — constructs FastAPI, middleware, exception handling, and router composition.
+- `app/routers/` — HTTP transport grouped by domain. Keep ordinary route handlers here rather than growing `main.py`.
+- `app/services.py` — shared service construction.
+- `app/config.py` — environment-backed runtime configuration and build/version identity.
 
-To get started with the API locally, follow these steps:
+Interactive OpenAPI documentation is available at `/docs` on a running API. The unauthenticated liveness endpoint is `GET /api/live`; administrator diagnostics are exposed separately through authenticated health/config surfaces.
 
-1. **Environment Setup**:
-   Ensure you have Docker and Docker Compose installed. Create a `.env` file in the root directory (or copy `.env.example`) and configure your API keys and local settings.
+## Domain ownership
 
-2. **Start the Services**:
-   Run the following command to build and start the backend and frontend:
+| Area | Primary modules |
+| --- | --- |
+| Corpus orchestration | `corpus_builder.py` plus focused `corpus_*` lifecycle, manifest, segmentation, enrichment, review, quality, publication, and schema/profile modules |
+| Source ingestion | `corpus_extraction.py`, `source_media.py`, `source_text.py`, `source_audio.py`, `source_gutenberg.py`, `source_safety.py`, `source_quality.py`, `source_kinds.py` |
+| Canonical field state | `field_assertions.py` and record/revision review code |
+| Metadata schemas and reviewed precedent | `metadata_schema*.py`, `metadata_exemplars.py`, `metadata_exemplar_projection.py`, `metadata_exemplar_retrieval.py`, `metadata_memory.py`, `metadata_adjudication_cache.py` |
+| Provenance / Research memory | `provenance_memory.py`, `system_store.py` |
+| Search/vector storage | `chroma_store.py`, `chroma_connection.py`, `system_chroma_console.py` |
+| Research/RAG | `rag.py`, `researcher_view.py`, bibliography/evaluation helpers |
+| Background operations | `job_llm.py`, `job_rag.py`, `job_tools.py`, `job_upsert.py`; shared durable behavior in `job_state.py`; `jobs.py` is a compatibility export layer |
+| Providers and LLM tools | `llm.py`, `llm_tools.py`, provider-profile and translation/content-policy helpers |
+| Auth and server-owned persistence | `auth.py`, `persistence.py`, `system_store.py`, `database_backend.py` |
+| Localization | `locales/` and language/content-policy services |
 
-   ```bash
-   docker compose up -d --build
-   ```
+The decomposition is deliberate. A compatibility import from a large module is not a reason to put new implementation logic back into that module.
 
-3. **Access the API**:
-   - **Swagger UI**: `http://localhost:8000/docs`
-   - **Redoc**: `http://localhost:8000/redoc`
+## Data authority
 
-### Codebase Navigation
+Do not treat every persisted database as equivalent.
 
-The `api/` directory contains the core backend logic. Here is a breakdown of the primary components:
+- Reviewed records, revisions, field assertions, review decisions, exact evidence bindings, and source identities are canonical scholarly state.
+- SQLite stores authentication separately from server-owned application/provenance/job state.
+- Chroma corpus indexes, metadata-exemplar indexes, and other semantic/vector projections are derived and rebuildable.
+- Metadata precedent memory and Research response/claim memory have different authority and lifecycle semantics even when both use retrieval.
+- Active background execution is in-process. Job snapshots/history are durably mirrored to SQLite; interrupted queued/running/cancelling jobs are marked failed after restart rather than silently replayed.
 
-- `app/`: The main FastAPI application.
-  - `main.py`: Entry point for the FastAPI application, defining routes and middleware.
-  - `config.py`: Configuration management using environment variables.
-  - `auth.py`: Authentication and authorization logic.
-  - `models/`: Pydantic models for request/response validation and SQLAlchemy models for database interaction.
-  - `routes/`: (If applicable) Organized API endpoints.
-- `corpus_builder.py`: The core logic for the ingestion pipeline (PDF $\rightarrow$ JSONL).
-- `chroma_store.py`: Logic for interacting with the ChromaDB vector store.
-- `rag.py`: The RAG engine implementation, including retrieval and reranking.
-- `llm.py` / `llm_tools.py`: Integration with various LLM providers (Ollama, OpenAI, etc.).
-- `jobs.py`: Background task processing using Celery or similar.
-- `persistence.py` / `system_store.py`: Database interaction layer for SQLite.
-- `locales/`: Translation files for multi-language support.
+See [Architecture](../docs/ARCHITECTURE.md) and [Metadata memory](../docs/METADATA_MEMORY.md) before changing these boundaries.
 
-## Documentation
+## Source ingestion
 
-The API documentation can be accessed at:
-`http://localhost:8000/docs`
+Source files and remote content are untrusted inert data. The backend supports PDF, text/RTF/DOCX, images, audio, URL, and Project Gutenberg ingestion with medium-specific extraction and evidence coordinates.
 
-## Architecture & Capabilities
+Never execute document-provided macros, scripts, fields, active objects, relationships, or commands. Keep byte/resource/decompression/image/audio/tool limits in front of expensive processing and preserve extractor/tool/version provenance. See [Source ingestion safety and fidelity](../docs/INGESTION_VALIDATION.md).
 
-The API serves as the central hub for the DerridAI ecosystem, managing the lifecycle of scholarly data from ingestion to retrieval. It is built with FastAPI and follows a modular architecture:
+## Local development
 
-- **Ingestion Pipeline**: Handles the conversion of raw PDFs into structured JSONL records. This pipeline is specifically engineered for scholarly texts, ensuring that complex academic structures are preserved during conversion. This includes:
-  - **Extraction**: Extracting text from PDF files while preserving layout, footnotes, and citations.
-  - **Segmentation**: Breaking down long texts into manageable chunks while maintaining context and ensuring that citations remain linked to their respective claims.
-  - **Enrichment**: Automatically identifying and assigning metadata (e.g., speaker, stance, evidence) to each segment. A critical component of this phase is the preservation of scholarly provenance: the system distinguishes between the primary author's voice and the voices of cited scholars, ensuring that the distinction between the author's voice and the voices of cited scholars is maintained in the final data structure.
-- **Storage Layer**: Manages a hybrid storage system designed for both structured metadata management and high-dimensional vector search:
-  - **Relational Database (SQLite)**: Serves as the source of truth for structured data, including user accounts, session state, and the primary metadata for every record. It ensures ACID compliance for critical system operations.
-  - **Vector Store (ChromaDB)**: Powers the semantic retrieval engine by storing high-dimensional embeddings. It is optimized for rapid similarity searches, allowing the system to retrieve the most relevant scholarly segments in milliseconds.
-- **RAG Engine**: Orchestrates the retrieval-augmented generation process to ensure evidence-grounded outputs:
-  - **Retrieval**: Executes multi-vector searches to fetch relevant segments. It utilizes hybrid search techniques to combine semantic similarity with keyword matching.
-  - **Reranking**: Processes the retrieved candidates through a reranking model to prioritize the most contextually relevant segments, ensuring the most critical information is prioritized within the LLM's context window.
-  - **Generation**: Interfaces with a variety of LLM providers (including local models via Ollama and remote models via OpenAI-compatible APIs). It enforces strict grounding, ensuring that the model's output is directly supported by the retrieved evidence.
-- **Auth & Security**: Implements a robust security layer to protect the integrity of the scholarly corpus:
-  - **Authentication**: Secure login and session management for different user roles.
-  - **Authorization**: Role-Based Access Control (RBAC) ensures that only authorized users can perform specific actions, such as modifying the core corpus or performing advanced research queries.
-  - **Data Integrity**: Ensures that the transition from raw data to structured records maintains a strict chain of provenance.
+Create the Python environment from the repository root:
 
-## Gotchas & Known Issues
+```bash
+python3.12 -m venv .venv
+. .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r api/requirements-dev.txt
+```
 
-While the system is designed for robustness, there are several critical areas that require attention during setup and development:
+For an application runtime, prefer the root Compose workflow so storage paths and service networking match the supported local deployment:
 
-- **Environment Configuration**: A properly populated `.env` file is mandatory. Ensure you have specific keys for your LLM provider (e.g., `OPENAI_API_KEY`) and local services.
-- **Ollama Dependency**: If using local models, the Ollama service must be running and the specific models must be pre-pulled (e.g., `ollama pull llama3`).
-- **Docker Build Logic**: The build process uses a `gitmeta` mount to capture repository metadata. This requires a valid git history to be present during the build phase.
-- **Port Conflicts**: The API typically runs on port `8000` and Ollama on `11434`. Ensure these are not occupied by other services on your host machine.
-- **ChromaDB Persistence**: Ensure that the Docker volumes for ChromaDB are correctly mapped; otherwise, the vector index will be lost upon container restart.
+```bash
+cp .env.example .env
+docker compose config --quiet
+docker compose up -d --build
+curl -fsS http://127.0.0.1:8000/api/live
+```
+
+Backend tests do not require Docker, Ollama, a GPU, or a real Chroma service; test configuration redirects storage to isolated temporary paths.
+
+## Validation
+
+From the repository root:
+
+```bash
+ruff check api/app tests scripts/check_frontend_api_contract.py
+mypy
+python -m compileall -q api/app
+pytest -q -n auto --dist=worksteal --ignore=tests/test_frontend_api_contract.py
+pytest -q -m contract tests/test_frontend_api_contract.py
+```
+
+Focused test taxonomy and fixture guidance are in [tests/README.md](../tests/README.md).
+
+## Backend change rules
+
+- Enforce authorization and role boundaries in the API even when the frontend also hides a capability.
+- Treat LLM output as untrusted proposals until deterministic schema, provenance, evidence, and vocabulary checks accept it.
+- Preserve speaker → position holder → stance → proposition → evidence/source relationships. Do not flatten quoted/analyzed positions into the primary author's claims.
+- Preserve revision/source identity when binding evidence or memory; stale bindings must surface as stale/unresolved rather than rebinding silently.
+- Keep segmentation text-conserving and preprocessing conservative.
+- Keep long operations cancellable, observable, and bounded.
+- Add a regression test for behavior changes and run the smallest relevant gate set before handoff.
+- Do not add new active architecture guidance to version-specific release notes; update the unversioned contract document and use release notes only to record what changed.
