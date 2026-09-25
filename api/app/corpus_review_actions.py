@@ -43,6 +43,16 @@ from .corpus_segmentation import (
     _scholarly_page_range,
 )
 from .enrichment_ledger import ACCEPTED
+from .field_assertions import (
+    confirm_absence,
+    confirm_assertion,
+    confirm_model_assertions,
+    create_human_assertion,
+    current_assertion_by_name,
+    migrate_record_assertions,
+    project_record_assertions,
+    replace_assertion_evidence,
+)
 from .metadata_adjudication_cache import remember as remember_adjudication
 from .metadata_schema import MetadataSchema
 from .provenance_memory import persist_record_decision
