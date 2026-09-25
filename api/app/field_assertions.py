@@ -338,13 +338,46 @@ def confirm_assertion(record: dict[str, Any], assertion: FieldAssertion, *, acto
     )
 
 
-def override_assertion(record: dict[str, Any], field_name: str, value: Any, *, schema: Any | None = None, supersedes: FieldAssertion | None = None, actor: str | None = None, reason: str = "") -> FieldAssertion:
+def create_human_assertion(
+    record: dict[str, Any],
+    field_name: str,
+    value: Any,
+    *,
+    schema: Any | None = None,
+    supersedes: FieldAssertion | None = None,
+    override: bool = False,
+    actor: str | None = None,
+    reason: str = "",
+    method: str = "human_review",
+) -> FieldAssertion:
+    present = value not in (None, "", [])
     return _new_assertion(
-        record, field_name=field_name, schema=schema, value=value,
-        derivation_method="human", evaluation_status="value_supported",
-        authority_status="human_override", method="human_review", actor=actor,
-        reason=reason or "Human record-level override.",
+        record,
+        field_name=field_name,
+        schema=schema,
+        value=value,
+        derivation_method="human",
+        evaluation_status="value_supported" if present else "no_supported_value",
+        authority_status="human_override" if override else "human_confirmed",
+        value_status="present" if present else "unresolved",
+        method=method,
+        actor=actor,
+        reason=reason or ("Human record-level override." if override else "Human-reviewed value."),
         supersedes_assertion_id=supersedes.assertion_id if supersedes else None,
+    )
+
+
+def override_assertion(record: dict[str, Any], field_name: str, value: Any, *, schema: Any | None = None, supersedes: FieldAssertion | None = None, actor: str | None = None, reason: str = "") -> FieldAssertion:
+    return create_human_assertion(
+        record,
+        field_name,
+        value,
+        schema=schema,
+        supersedes=supersedes,
+        override=True,
+        actor=actor,
+        reason=reason,
+        method="human_review",
     )
 
 
