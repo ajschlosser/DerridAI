@@ -37,6 +37,7 @@ from .corpus_llm_helpers import (
 from .corpus_record_quality import iso_now
 from .corpus_review_actions import _serialize_record_mutation
 from .corpus_review_state import _sync_record_metadata_state
+from .field_assertions import create_unresolved_assertion, migrate_record_assertions, project_record_assertions
 from .corpus_reviewer_helpers import _human_touched
 from .enrichment_ledger import RECHECK, RECHECK_SEAL
 from .error_severity import severity as error_severity
@@ -354,10 +355,23 @@ class BuildLifecycleMixin:
                         entry["value"] = None  # the earlier answer must not travel with the record
                         entry["sealed"] = True
                 record[field] = [] if isinstance(record.get(field), list) else None
-                record.setdefault("metadata_field_status", {})[field] = {
-                    "status": "unresolved", "method": "human_recheck", "recheck": True, "reason_code": "recheck", "auto_populated": False,
-                    "reason": "",
-                }
+                schema = self._schema_for(build_id)
+                migrate_record_assertions(record, schema)
+                create_unresolved_assertion(
+                    record,
+                    field,
+                    schema=schema,
+                    derivation_method="other",
+                    evaluation_status="not_evaluated",
+                    method="human_recheck",
+                    reason="",
+                    legacy_metadata={
+                        "recheck": True,
+                        "reason_code": "recheck",
+                        "auto_populated": False,
+                    },
+                )
+                project_record_assertions(record)
                 del scheduled[field]
                 record["accepted"] = False
                 record["needs_review"] = True
