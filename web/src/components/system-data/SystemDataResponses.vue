@@ -1,6 +1,6 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import AppIcon from "../AppIcon.vue";
 import {
@@ -24,6 +24,7 @@ const page = ref<SystemResponseCachePage>({
 const loading = ref(false);
 const error = ref("");
 const query = ref("");
+const resultCount = computed(() => query.value.trim() ? Number(page.value.count ?? 0) : Number(page.value.total || 0));
 
 function t(key: string, fallback: string) {
   return i18n.t(key, fallback);
@@ -173,7 +174,7 @@ onMounted(() => void load(0));
     <div v-else-if="page.total === 0 && !query" class="state">
       {{ t("runtime.system_responses_empty", "No saved responses yet.") }}
     </div>
-    <div v-else-if="page.records.length === 0" class="state">
+    <div v-else-if="resultCount === 0" class="state">
       {{ t("runtime.system_responses_no_matches", "No saved responses match this search.") }}
     </div>
 
@@ -186,7 +187,7 @@ onMounted(() => void load(0));
             {
               start: page.offset + 1,
               end: Math.min(page.offset + page.records.length, page.total),
-              total: page.total.toLocaleString(),
+              total: resultCount.toLocaleString(),
             },
           )
         }}
@@ -237,7 +238,7 @@ onMounted(() => void load(0));
         <button
           class="btn tiny"
           type="button"
-          :disabled="loading || page.offset + page.records.length >= page.total"
+          :disabled="loading || page.offset + page.records.length >= resultCount"
           @click="load(page.offset + page.limit)"
         >
           {{ t("common.next", "Next") }}
