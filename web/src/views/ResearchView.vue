@@ -49,7 +49,9 @@ const profiles = computed(() => workspace.value?.profiles || []);
 const stores = computed(() => workspace.value?.stores || []);
 const metadataFields = computed(() => {
   const fields = new Set<string>();
-  const selectedStore = stores.value.find((store) => store.name === config.value?.source_collection);
+  const selectedStore = stores.value.find(
+    (store) => store.name === config.value?.source_collection,
+  );
   for (const field of selectedStore?.filter_fields || []) fields.add(String(field));
   for (const item of selectedEvidence.value) {
     for (const assertion of item.assertions || []) {
@@ -58,8 +60,9 @@ const metadataFields = computed(() => {
     }
     for (const field of Object.keys(item.metadata || {})) fields.add(field);
   }
-  for (const scope of ["evidence", "context", "record"] as const)
+  for (const scope of ["evidence", "context", "record"] as const) {
     for (const field of config.value?.prompt_metadata?.[scope] || []) fields.add(field);
+  }
   for (const field of [
     "speaker",
     "quoted_speaker",
@@ -71,8 +74,9 @@ const metadataFields = computed(() => {
     "proposition_status",
     "target",
     "discourse_role",
-  ])
+  ]) {
     fields.add(field);
+  }
   return [...fields]
     .filter((field) => field && !field.startsWith("_"))
     .sort((a, b) => a.localeCompare(b));
