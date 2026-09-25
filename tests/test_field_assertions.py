@@ -17,6 +17,7 @@ from app.field_assertions import (
     reset_fields_for_evaluation,
     validate_projection,
 )
+from app.corpus_record_quality import _metadata_source_quality_gate
 from app.metadata_schema import default_schema
 from pydantic import ValidationError
 
@@ -242,3 +243,31 @@ def test_schema_identity_survives_legacy_migration_and_custom_fields() -> None:
     assert assertion is not None
     assert assertion.field_id == "field-interlocutor-role"
     assert record["interlocutor_role"] == "critic"
+
+
+
+def test_source_quality_failure_creates_unresolved_assertion_not_absence() -> None:
+    schema = default_schema()
+    record = {
+        "record_id": "r-source-quality",
+        "record_revision": 1,
+        "text": "corrupted source",
+        "source_quality_issues": [{"code": "fragmented_glyph_layout", "severity": "blocking"}],
+        "metadata_field_status": {},
+    }
+
+    blocked = _metadata_source_quality_gate(
+        record,
+        ["speaker"],
+        None,
+        schema=schema,
+    )
+
+    assert blocked is True
+    assertion = current_assertion_by_name(record, "speaker")
+    assert assertion is not None
+    assert assertion.evaluation_status == "not_evaluated"
+    assert assertion.value_status == "unresolved"
+    assert assertion.authority_status == "unreviewed"
+    assert assertion.value_status != "confirmed_absent"
+    assert "confidence" not in assertion.model_dump(mode="json", exclude_none=True)
