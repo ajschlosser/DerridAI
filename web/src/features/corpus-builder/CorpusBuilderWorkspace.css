@@ -1255,6 +1255,21 @@ summary:focus-visible {
 .builder-workspace.review-mode .build-main {
   max-width: none;
   width: 100%;
+  display: grid;
+  gap: var(--space-3);
+}
+.builder-workspace.review-mode .build-summary {
+  display: none;
+}
+.builder-workspace.review-mode .review-session {
+  order: 0;
+}
+.builder-workspace.review-mode .review-frame {
+  order: 1;
+}
+.builder-workspace.review-mode .run-monitor {
+  order: 2;
+  margin-top: var(--space-2);
 }
 .review-toolbar {
   position: sticky;
@@ -1262,12 +1277,13 @@ summary:focus-visible {
   z-index: 11;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(220px, 320px) auto;
-  gap: 12px;
+  gap: var(--space-3);
   align-items: center;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--card);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--surface-card) 96%, transparent);
+  backdrop-filter: blur(12px);
 }
 .review-toolbar .control {
   min-height: 40px;
