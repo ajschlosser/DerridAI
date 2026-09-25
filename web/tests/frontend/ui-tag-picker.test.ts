@@ -1,3 +1,4 @@
+// Copyright 2026 Aaron John Schlosser, PhD.
 import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import UiTagPicker from "../../src/components/ui/UiTagPicker.vue";
@@ -9,6 +10,7 @@ describe("UiTagPicker", () => {
         modelValue: ["NOUN"],
         options: ["NOUN", "PROPN", "PRON", "VERB"],
         label: "POS tags",
+        removeLabel: "Remove {value}",
       },
       attachTo: document.body,
     });
@@ -32,6 +34,7 @@ describe("UiTagPicker", () => {
         modelValue: [],
         options: ["NOUN", "PROPN"],
         label: "POS tags",
+        removeLabel: "Remove {value}",
       },
     });
 
@@ -50,6 +53,7 @@ describe("UiTagPicker", () => {
         modelValue: ["PERSON", "ORG"],
         options: ["PERSON", "ORG", "WORK_OF_ART"],
         label: "NER tags",
+        removeLabel: "Remove {value}",
       },
     });
 
