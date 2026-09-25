@@ -23,6 +23,7 @@ A teljes funkcióreferenciáért lásd a [Felhasználói útmutatót](docs/USER_
 
 ## Architektúra
 
+<!-- prettier-ignore -->
 | Szolgáltatás | Technológia                                                        | Megjegyzések                                                                                                                                 |
 | ------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | `web`        | Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js, nginx szolgálja ki | A `/api/` kéréseket az API felé továbbítja; a Storybook opcionális fejlesztői szolgáltatásként érhető el                                  |
