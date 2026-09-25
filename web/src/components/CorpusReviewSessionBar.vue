@@ -29,12 +29,14 @@ const i18n = useI18nStore();
 <template>
   <section class="review-session" aria-labelledby="review-session-title">
     <div class="review-identity">
-      <span class="eyebrow">{{ i18n.t("pdf_corpus.review_mode") }}</span
-      ><b id="review-session-title">{{ props.sourceFilename }}</b
-      ><small
-        >{{ props.model || i18n.t("pdf_corpus.provider_default")
-        }}<template v-if="props.buildId"> · {{ props.buildId }}</template></small
-      >
+      <span class="eyebrow">{{ i18n.t("pdf_corpus.review_mode") }}</span>
+      <b id="review-session-title">{{
+        i18n.t("pdf_corpus.review_workspace_title", "Scholarly review")
+      }}</b>
+      <small>
+        <template v-if="props.sourceFilename">{{ props.sourceFilename }} · </template
+        >{{ props.model || i18n.t("pdf_corpus.provider_default") }}
+      </small>
     </div>
     <dl class="review-stats">
       <div>
@@ -66,59 +68,60 @@ const i18n = useI18nStore();
 .review-session {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) auto auto;
-  gap: 18px;
+  gap: var(--space-4);
   align-items: center;
-  padding: 12px 16px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--panel) 97%, transparent);
-  backdrop-filter: blur(8px);
-  box-shadow: var(--shadow-sm, 0 4px 16px rgb(0 0 0/0.04));
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-card);
 }
 .review-identity {
   display: grid;
-  gap: 2px;
+  gap: var(--space-1);
   min-width: 0;
 }
 .review-identity b {
-  font-size: 0.9375rem;
+  font-size: var(--fs-base);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .review-identity small {
-  font-size: 0.8125rem;
-  color: var(--muted);
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .eyebrow {
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--muted);
-  font-weight: 800;
+  color: var(--text-secondary);
+  font-weight: var(--fw-bold);
 }
 .review-stats {
   display: flex;
-  gap: 4px;
+  gap: var(--space-2);
   margin: 0;
 }
 .review-stats > div {
-  min-width: 74px;
-  padding: 6px 9px;
+  min-width: 4.75rem;
+  padding: var(--space-2) var(--space-3);
   text-align: center;
-  border-inline-start: 1px solid var(--line);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-subtle);
 }
 .review-stats dd {
   margin: 0;
-  font-size: 1rem;
-  font-weight: 850;
+  font-size: var(--fs-base);
+  font-weight: var(--fw-bold);
 }
 .review-stats dt {
-  font-size: 0.75rem;
-  color: var(--muted);
+  margin-top: 0.1rem;
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
   line-height: 1.25;
 }
 @media (max-width: 1100px) {
@@ -126,27 +129,21 @@ const i18n = useI18nStore();
     grid-template-columns: 1fr auto;
   }
   .review-stats {
-    grid-column: 1/-1;
+    grid-column: 1 / -1;
     justify-content: flex-start;
-  }
-  .review-stats > div:first-child {
-    border-inline-start: 0;
   }
 }
 @media (max-width: 700px) {
   .review-session {
-    position: static;
     grid-template-columns: 1fr;
-    gap: 10px;
+    gap: var(--space-3);
   }
   .review-stats {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .review-stats > div {
-    border: 0;
-    background: var(--panel-2, var(--soft));
-    border-radius: 8px;
+    min-width: 0;
   }
   .review-identity b,
   .review-identity small {
