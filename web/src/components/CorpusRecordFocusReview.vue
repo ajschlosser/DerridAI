@@ -96,7 +96,6 @@ const position = computed(() => {
     total = Number(props.record.topology_count ?? 0);
   return index >= 0 && total > 0 ? `${index + 1} / ${total}` : "—";
 });
-const evidence = computed(() => Object.entries(props.record.metadata_evidence || {}));
 const guidanceMatches = computed(() =>
   Object.entries(props.record.metadata_guidance_matches || {}),
 );
