@@ -71,7 +71,11 @@ Backend policy now reads FieldAssertions directly for:
 - metadata retry eligibility;
 - metadata issue summaries and enrichment contribution metrics.
 
-`metadata_field_status` may still be written or read while constructing compatibility projections, preserving blind-review/recheck telemetry, or migrating historical records. New scholarly authority decisions must not originate from that flattened status token.
+`metadata_field_status` may still be written or read while constructing compatibility projections, preserving blind-review/recheck and model-run telemetry, formatting legacy API/UI output, or normalizing an in-flight model response before it is converted to assertions. New scholarly authority decisions must not originate from that flattened status token.
+
+Persistent scholarly mutation paths are assertion-native. This includes initial deterministic segmentation metadata, manifest inheritance/reclassification, source-quality and worker failures, human confirmation/override/confirmed absence, evidence edits, record acceptance, hands-free settlement, enrichment merges, multi-pass disagreements, rerun resets, blind rechecks, editorial memory, exemplar trust, retry classification, and unresolved-field metrics.
+
+A useful maintenance test is intentional projection corruption: changing only a compatibility `status` token must not change which value is authoritative, whether automatic enrichment may overwrite it, whether a field is epistemically unresolved, or whether reviewed evidence is eligible as precedent.
 
 ## Canary coverage
 
