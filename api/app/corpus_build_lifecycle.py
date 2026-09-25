@@ -37,10 +37,14 @@ from .corpus_llm_helpers import (
 from .corpus_record_quality import iso_now
 from .corpus_review_actions import _serialize_record_mutation
 from .corpus_review_state import _sync_record_metadata_state
-from .field_assertions import create_unresolved_assertion, migrate_record_assertions, project_record_assertions
 from .corpus_reviewer_helpers import _human_touched
 from .enrichment_ledger import RECHECK, RECHECK_SEAL
 from .error_severity import severity as error_severity
+from .field_assertions import (
+    create_unresolved_assertion,
+    migrate_record_assertions,
+    project_record_assertions,
+)
 from .reviewer_context import current_reviewer
 
 
