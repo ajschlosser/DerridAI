@@ -19,8 +19,15 @@ function openCollectionCreationWizard({defaultProvider="ollama",defaultModel="bg
   dialog.className="collection-wizard-dialog workflow-dialog collection-wizard-v037";
   const works=collectionSyncableWorks();
   const embeddingProfiles=(providerProfiles||[]).filter(profile=>profile&&profile.id&&["ollama","openai"].includes(String(profile.type||"").toLowerCase()));
-  const profileDefault=embeddingProfiles.find(profile=>String(profile.type||"").toLowerCase()===String(defaultProvider||"").toLowerCase())||embeddingProfiles[0];
-  const initialProvider=String(defaultProvider||"").startsWith("profile:")?String(defaultProvider):(profileDefault?`profile:${profileDefault.id}`:"chroma");
+  const requestedProvider=String(defaultProvider||"").toLowerCase();
+  const profileDefault=embeddingProfiles.find(profile=>String(profile.type||"").toLowerCase()===requestedProvider);
+  const initialProvider=String(defaultProvider||"").startsWith("profile:")
+    ? String(defaultProvider)
+    : requestedProvider==="chroma"||requestedProvider==="precomputed"
+      ? requestedProvider
+      : profileDefault
+        ? `profile:${profileDefault.id}`
+        : "chroma";
   const initialProfile=embeddingProfiles.find(profile=>`profile:${profile.id}`===initialProvider);
   const form={name:recordStores().length?"":"derrida-primary",description:"",role:"primary",languages:new Set(),provider:initialProvider,model:String(initialProfile?.model||defaultModel||""),dimension:"",distance:"cosine",retrieval:"hybrid",protected:false,selectedWorks:new Set(),preflight:null};
   let step=0;
