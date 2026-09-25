@@ -363,6 +363,7 @@ def budget_prompt_examples(
     examples: dict[str, list[dict[str, Any]]],
     *,
     token_budget: int = DEFAULT_PROMPT_TOKEN_BUDGET,
+    field_limits: dict[str, int] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     """Bound the complete exemplar packet, not merely each field's top-k.
 
@@ -381,7 +382,15 @@ def budget_prompt_examples(
         items = examples.get(field)
         if not isinstance(items, list):
             continue
-        limit = FIELD_EXAMPLE_LIMITS.get(field, DEFAULT_FIELD_EXAMPLE_LIMIT)
+        limit = max(
+            0,
+            int(
+                (field_limits or {}).get(
+                    field,
+                    FIELD_EXAMPLE_LIMITS.get(field, DEFAULT_FIELD_EXAMPLE_LIMIT),
+                )
+            ),
+        )
         queues[field] = [dict(item) for item in items[:limit] if isinstance(item, dict)]
 
     selected: dict[str, list[dict[str, Any]]] = {}
