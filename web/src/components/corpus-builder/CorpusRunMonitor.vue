@@ -10,6 +10,7 @@ import CorpusHandsFreeReport from "../CorpusHandsFreeReport.vue";
 import CorpusEnrichmentMetrics from "../CorpusEnrichmentMetrics.vue";
 import CorpusTextCleanupSummary from "../CorpusTextCleanupSummary.vue";
 import CorpusLlmEffectivenessPanel from "../CorpusLlmEffectivenessPanel.vue";
+import UiButton from "../ui/UiButton.vue";
 
 const props = defineProps<{
   build: CorpusBuild;
@@ -60,18 +61,16 @@ const contribution = computed(() => props.build.llm_contribution || {});
         <strong>{{ progress }}%</strong>
         <span v-if="running">{{ i18n.t("pdf_corpus.running", "Running") }}</span>
         <span v-else>{{ i18n.t(`pdf_corpus.status.${build.status}`, build.status) }}</span>
-        <button
-          type="button"
-          class="btn small"
-          :aria-expanded="expanded"
-          @click="expanded = !expanded"
-        >
-          {{
+        <UiButton
+          size="small"
+          :expanded="expanded"
+          :label="
             expanded
-              ? i18n.t("pdf_corpus.hide_diagnostics", "Hide diagnostics")
-              : i18n.t("pdf_corpus.show_diagnostics", "Show diagnostics")
-          }}
-        </button>
+              ? i18n.t('pdf_corpus.hide_diagnostics', 'Hide diagnostics')
+              : i18n.t('pdf_corpus.show_diagnostics', 'Show diagnostics')
+          "
+          @click="expanded = !expanded"
+        />
       </div>
     </header>
 
@@ -135,15 +134,16 @@ const contribution = computed(() => props.build.llm_contribution || {});
 <style scoped>
 .run-monitor {
   display: grid;
-  gap: 10px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--card);
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-card);
 }
 .run-monitor-head {
   display: flex;
-  gap: 18px;
+  gap: var(--space-4);
   align-items: flex-start;
   justify-content: space-between;
 }
@@ -151,52 +151,53 @@ const contribution = computed(() => props.build.llm_contribution || {});
   min-width: 0;
 }
 .run-monitor-identity h3 {
-  margin: 2px 0 3px;
-  font-size: 0.9375rem;
+  margin: var(--space-1) 0;
+  font-size: var(--fs-base);
 }
 .run-monitor-identity p {
   margin: 0;
-  color: var(--muted);
-  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
 }
 .run-monitor-state {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
-  font-size: 0.8125rem;
+  font-size: var(--fs-sm);
 }
 .run-monitor-progress {
   width: 100%;
   height: 6px;
 }
 .run-monitor-alerts {
-  padding: 8px 10px;
-  border: 1px solid var(--tone-warn-edge);
-  border-radius: 8px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--tone-warn-border);
+  border-radius: var(--radius-control);
   background: var(--tone-warn-bg);
-  font-size: 0.8125rem;
+  color: var(--tone-warn-fg);
+  font-size: var(--fs-sm);
 }
 .run-monitor-alerts p,
 .run-monitor-alerts ul {
   margin: 0;
 }
 .run-monitor-alerts ul {
-  padding-inline-start: 18px;
+  padding-inline-start: var(--space-4);
 }
 .run-monitor-diagnostics {
   display: grid;
-  gap: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--line);
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
 }
 .eyebrow {
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: var(--muted);
-  font-weight: 800;
+  color: var(--text-secondary);
+  font-weight: var(--fw-bold);
 }
 @media (max-width: 720px) {
   .run-monitor-head {
