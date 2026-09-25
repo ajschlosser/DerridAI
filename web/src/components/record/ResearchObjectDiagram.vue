@@ -47,11 +47,14 @@ function laneForType(type: string): LaneId {
   return laneOrder.find((lane) => laneTypes[lane].has(type)) || "research";
 }
 
-const laneNodes = computed(() => {
-  const grouped = Object.fromEntries(laneOrder.map((lane) => [lane, []])) as Record<
-    LaneId,
-    ResearchObjectNode[]
-  >;
+const laneNodes = computed<Record<LaneId, ResearchObjectNode[]>>(() => {
+  const grouped: Record<LaneId, ResearchObjectNode[]> = {
+    source: [],
+    record: [],
+    metadata: [],
+    evidence: [],
+    research: [],
+  };
   for (const node of props.nodes) grouped[laneForType(node.object_type)].push(node);
   return grouped;
 });
