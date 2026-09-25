@@ -428,6 +428,10 @@ def project_record_assertions(record: dict[str, Any]) -> dict[str, Any]:
     prior_status_map = record.get("metadata_field_status")
     if not isinstance(prior_status_map, dict):
         prior_status_map = {}
+    compatibility_by_name: dict[str, dict[str, Any]] = {}
+    for field_name, prior in prior_status_map.items():
+        if isinstance(prior, dict):
+            compatibility_by_name[str(field_name)] = copy.deepcopy(prior)
     for field_id, raw_values in _assertions(record).items():
         current = current_assertion(record, field_id)
         if current is None or not current.field_name:
@@ -448,6 +452,9 @@ def project_record_assertions(record: dict[str, Any]) -> dict[str, Any]:
             "authority_status": current.authority_status,
             "value_status": current.value_status,
         }
+        for key, value in compatibility_by_name.get(current.field_name, {}).items():
+            if key not in status:
+                status[key] = copy.deepcopy(value)
         prior = prior_status_map.get(current.field_name)
         if isinstance(prior, dict):
             # Preserve legacy audit keys (for example blind/recheck markers and
@@ -470,6 +477,7 @@ def project_record_assertions(record: dict[str, Any]) -> dict[str, Any]:
             if not (isinstance(prior, dict) and not prior.get("assertion_id") and "confidence" in prior):
                 status.pop("confidence", None)
         status_map[current.field_name] = status
+        compatibility_by_name[current.field_name] = copy.deepcopy(status)
         if current.evidence:
             evidence_map[current.field_name] = copy.deepcopy(current.evidence[0] if len(current.evidence) == 1 else {"spans": current.evidence})
     if status_map:

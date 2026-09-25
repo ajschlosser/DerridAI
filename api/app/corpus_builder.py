@@ -179,6 +179,7 @@ from .corpus_review_state import (
 from .corpus_reviewer_helpers import (
     _metadata_issue_type,
     _present_for_reviewer,
+    _scrub_canonical_transport,
 )
 from .corpus_reviewer_helpers import (
     _operation_from_build as _operation_from_build,
@@ -1185,10 +1186,17 @@ class PdfCorpusRepository:
             return []
         with self._lock:
             with path.open("r", encoding="utf-8") as handle:
-                return [
+                records = [
                     migrate_record_assertions(_migrate_status_vocabulary(json.loads(line)), schema)
                     for line in handle if line.strip()
                 ]
+                for record in records:
+                    if any(
+                        isinstance(status, dict) and status.get("recheck")
+                        for status in (record.get("metadata_field_status") or {}).values()
+                    ):
+                        _scrub_canonical_transport(record)
+                return records
 
     def page_records(self, build_id: str, *, offset: int = 0, limit: int = 50, needs_review: bool | None = None, disposition: str | None = None, metadata_incomplete: bool | None = None, source_problem: bool | None = None, review_queue: str | None = None, query: str = "") -> dict[str, Any]:
         # Stream the JSONL rather than loading the entire generated corpus for a
