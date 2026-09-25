@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from .experiment import is_gold
+from .field_assertions import current_assertion_by_name, current_assertions, migrate_record_assertions
 
 HUMAN_OWNED_STATUSES = frozenset({"human_confirmed", "human_override", "confirmed_absent"})
 MAX_PASSES = 10
@@ -135,7 +136,7 @@ def learn_from_review(records: list[dict[str, Any]]) -> dict[str, Any]:
     for record in records:
         if is_gold(str(record.get("record_id") or "")):
             continue  # the frozen gold set is scored, never learned from
-        statuses = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
+        migrate_record_assertions(record)
         decided: set[str] = set()
         # Values a person turned down after a model filled them in, whichever pass or build step did it.
         for turned_down in record.get("llm_rejections") or []:
@@ -147,19 +148,20 @@ def learn_from_review(records: list[dict[str, Any]]) -> dict[str, Any]:
             if not isinstance(dispute, dict):
                 continue
             field = str(dispute.get("field") or "")
-            info = statuses.get(field) if isinstance(statuses.get(field), dict) else {}
-            if not field or str(info.get("status") or "") not in {"human_confirmed", "human_override"}:
+            assertion = current_assertion_by_name(record, field)
+            if not field or assertion is None or assertion.authority_status not in {"human_confirmed", "human_override"}:
                 continue
             decided.add(field)
             tally(field, record.get(field) == dispute.get("proposed"), record, dispute.get("proposed"))
         for entry in record.get("metadata_enrichment_history") or []:
             for field in (entry.get("added_fields") or []) if isinstance(entry, dict) else []:
-                info = statuses.get(str(field)) if isinstance(statuses.get(str(field)), dict) else {}
-                status = str(info.get("status") or "")
-                if field in decided or status not in {"human_confirmed", "human_override"}:
+                field = str(field)
+                assertion = current_assertion_by_name(record, field)
+                if field in decided or assertion is None or assertion.authority_status not in {"human_confirmed", "human_override"}:
                     continue
                 decided.add(field)
-                tally(str(field), status == "human_confirmed", record, info.get("llm_value"))
+                accepted = assertion.authority_status == "human_confirmed" and assertion.derivation_method == "model"
+                tally(field, accepted, record, (assertion.legacy_metadata or {}).get("llm_value"))
     return {"field_stats": stats, "rejected_examples": rejected}
 
 
@@ -175,21 +177,29 @@ def learn_from_pass(records: list[dict[str, Any]]) -> dict[str, Any]:
     learned = learn_from_review(records)
     judged = set((learned.get("field_stats") or {}).keys())
     for record in records:
-        statuses = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
-        for field, info in statuses.items():
-            if isinstance(info, dict) and str(info.get("status") or "") in HUMAN_OWNED_STATUSES:
-                judged.add(str(field))
+        migrate_record_assertions(record)
+        for assertion in current_assertions(record):
+            if (
+                assertion.authority_status in {"human_confirmed", "human_override"}
+                or assertion.value_status == "confirmed_absent"
+            ):
+                judged.add(str(assertion.field_name))
     counts: dict[str, dict[str, dict[str, Any]]] = {}
     disputed: dict[str, int] = {}
     for record in records:
-        statuses = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
+        migrate_record_assertions(record)
         for field in PASS_LEARNING_FIELDS:
             if field in judged:
                 continue
-            info = statuses.get(field) if isinstance(statuses.get(field), dict) else {}
-            if str(info.get("status") or "") != "model_inferred":
+            assertion = current_assertion_by_name(record, field)
+            if (
+                assertion is None
+                or assertion.derivation_method != "model"
+                or assertion.authority_status != "unreviewed"
+                or assertion.value_status != "present"
+            ):
                 continue
-            confidence = info.get("confidence")
+            confidence = assertion.confidence
             if not isinstance(confidence, (int, float)) or isinstance(confidence, bool) or float(confidence) < PRIOR_PASS_MIN_CONFIDENCE:
                 continue
             value = record.get(field)
