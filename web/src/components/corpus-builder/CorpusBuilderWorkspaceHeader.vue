@@ -33,8 +33,11 @@ const progressLabel = computed(() => {
   if (!props.recordCount) return "";
   return i18n.tf(
     "pdf_corpus.workspace.record_progress",
-    { accepted: props.acceptedCount, total: props.recordCount },
-    `${props.acceptedCount.toLocaleString()} of ${props.recordCount.toLocaleString()} Records accepted`,
+    "{accepted} of {total} Records accepted",
+    {
+      accepted: props.acceptedCount.toLocaleString(),
+      total: props.recordCount.toLocaleString(),
+    },
   );
 });
 </script>
