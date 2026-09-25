@@ -75,6 +75,7 @@ import { useCorpusIngestWarning } from "../composables/useCorpusIngestWarning";
 import { useCorpusRunGuidance } from "../composables/useCorpusRunGuidance";
 import { useCorpusReviewWorkspace } from "../features/corpus-builder/composables/useCorpusReviewWorkspace";
 import { corpusReviewCommandFromKeydown } from "../features/corpus-builder/domain/reviewCommands";
+import { editableRecordMetadata } from "../features/corpus-builder/domain/recordMetadata";
 import AppIcon from "./AppIcon.vue";
 import CorpusActionMenu, { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
 import { recordState, recordIssueKinds } from "../domain/corpusReview";
@@ -1111,58 +1112,11 @@ function setMessage(message: string, tone: "error" | "notice" = "notice") {
 }
 
 function recordMetadata(record: CorpusRecord) {
-  // Keep the advanced editor packet minimal and aligned with the backend's
-  // human-editable metadata contract. Operational/source/provenance fields are
-  // never serialized back merely because they were present on the record.
-  const editableFields = [
-    "work",
-    "document_title",
-    "short_title",
-    "original_title",
-    "canonical_work_id",
-    "document_author",
-    "translator",
-    "edition",
-    "year",
-    "publication_year",
-    "publisher",
-    "publication_place",
-    "isbn",
-    "document_language",
-    "original_language",
-    "document_is_translation",
-    "language",
-    "region_type",
-    "region_author",
-    "primary_text",
-    "speaker",
-    "position_holder",
-    "target",
-    "discourse_role",
-    "proposition_status",
-    "semantic_function",
-    "stance",
-    "claim_scope",
-    "is_direct_quote",
-    "quoted_speaker",
-    "quoted_author",
-    "quoted_work",
-    "quoted_position_holder",
-    "quoted_addressee",
-    "quoted_referent",
-    "quotation_chain",
-    "topics",
-    "concepts",
-    "persons",
-    "works_referenced",
-    "needs_review",
-    "review_reason",
-  ];
-  return Object.fromEntries(
-    editableFields.filter((key) => record[key] !== undefined).map((key) => [key, record[key]]),
+  return editableRecordMetadata(
+    record as unknown as Record<string, unknown>,
+    currentBuild.value?.schema || selectedSchema.value,
   );
 }
-
 function applyOptimisticMetadata(changes: Record<string, unknown>) {
   if (!currentBuild.value || !selectedRecord.value) return null;
   const buildId = currentBuild.value.build_id;
@@ -1173,16 +1127,8 @@ function applyOptimisticMetadata(changes: Record<string, unknown>) {
     ...changes,
     record_revision: expectedRevision + 1,
   } as CorpusRecord;
-  const status = { ...(row.metadata_field_status || {}) };
-  for (const field of Object.keys(changes)) {
-    status[field] = {
-      status: changes[field] === null ? "confirmed_absent" : "human_confirmed",
-      method: "human",
-      confidence: 1,
-      reason: "Saved locally; server confirmation pending.",
-    };
-  }
-  row.metadata_field_status = status;
+  // Do not invent canonical authority during an optimistic save. The server
+  // response creates the durable human assertion and becomes authoritative.
   selectedRecord.value = row;
   metadataDraft.value = JSON.stringify(recordMetadata(row), null, 2);
   const index = records.value.findIndex((item) => item.record_id === recordId);
