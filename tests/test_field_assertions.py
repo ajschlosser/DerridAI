@@ -3,7 +3,10 @@
 
 from __future__ import annotations
 
+from pydantic import ValidationError
 import pytest
+
+from app.corpus_record_quality import _metadata_source_quality_gate
 from app.field_assertions import (
     FieldAssertion,
     confirm_absence,
@@ -18,9 +21,7 @@ from app.field_assertions import (
     reset_fields_for_evaluation,
     validate_projection,
 )
-from app.corpus_record_quality import _metadata_source_quality_gate
 from app.metadata_schema import default_schema
-from pydantic import ValidationError
 
 
 def test_model_confidence_and_human_confirmation_preserve_derivation() -> None:
