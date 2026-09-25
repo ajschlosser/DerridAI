@@ -116,7 +116,7 @@ Cancellation is deliberately explicit:
 
 While an in-flight call or batch is winding down, status is shown as `cancelling` rather than pretending cancellation has already completed.
 
-Background job state is process-local and does not survive an API-container restart.
+Background job execution is process-local, but job snapshots/history are durably mirrored to the system database. If the API restarts while work is queued, running, or cancelling, that interrupted job is marked failed rather than automatically replayed; completed history remains inspectable.
 
 ## LLM review run modes
 
@@ -855,7 +855,7 @@ docker compose up -d --build
 
 ## Current limitations
 
-- background-job state is process-local and does not survive API restart;
+- in-flight background execution is process-local; durable job history survives restart, while interrupted work is marked failed rather than automatically replayed;
 - browser workspace persistence is origin-specific;
 - image-only PDFs do not receive built-in OCR;
 - first use of a cross-encoder can require a model download;
