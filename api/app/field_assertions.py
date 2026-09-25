@@ -395,18 +395,24 @@ def override_assertion(record: dict[str, Any], field_name: str, value: Any, *, s
 
 
 def confirm_absence(record: dict[str, Any], field_name: str, *, schema: Any | None = None, prior: FieldAssertion | None = None, actor: str | None = None, reason: str = "") -> FieldAssertion:
-    derivation: DerivationMethod = prior.derivation_method if prior else "human"
-    evaluated = prior is not None and prior.evaluation_status != "not_evaluated"
+    confirms_prior_absence = bool(
+        prior
+        and prior.evaluation_status == "no_supported_value"
+        and prior.value_status in {"unresolved", "confirmed_absent"}
+    )
+    derivation: DerivationMethod = (
+        prior.derivation_method if prior and confirms_prior_absence else "human"
+    )
     return _new_assertion(
         record, field_name=field_name, schema=schema, value=None,
         derivation_method=derivation, evaluation_status="no_supported_value",
         authority_status="human_confirmed", value_status="confirmed_absent",
         method="human_review", actor=actor,
-        confidence=prior.confidence if evaluated else None,
-        calibration=copy.deepcopy(prior.calibration) if prior else None,
-        evidence=copy.deepcopy(prior.evidence) if prior else [],
-        model=prior.model if prior else None,
-        run_id=prior.run_id if prior else None,
+        confidence=prior.confidence if prior and confirms_prior_absence else None,
+        calibration=copy.deepcopy(prior.calibration) if prior and confirms_prior_absence else None,
+        evidence=copy.deepcopy(prior.evidence) if prior and confirms_prior_absence else [],
+        model=prior.model if prior and confirms_prior_absence else None,
+        run_id=prior.run_id if prior and confirms_prior_absence else None,
         schema_id=prior.schema_id if prior else None,
         schema_version=prior.schema_version if prior else None,
         reason=reason or "Reviewer confirmed that no supported value applies.",
