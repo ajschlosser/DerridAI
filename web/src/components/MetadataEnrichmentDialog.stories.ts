@@ -1,7 +1,7 @@
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- SA-16: intentionally sparse Storybook fixture exercises partial/loading data without fabricating unrelated fields.
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
+import type { ProviderProfile } from "../api/system";
 import MetadataEnrichmentDialog from "./MetadataEnrichmentDialog.vue";
-const profiles: any[] = [
+const profiles: ProviderProfile[] = [
   { id: "primary", name: "Gemma second reader", type: "ollama", model: "gemma-4-26B" },
 ];
 const meta = {
