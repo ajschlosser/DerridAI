@@ -439,7 +439,7 @@ watch(
   border-radius: 999px;
   padding: 2px 6px;
   color: var(--muted);
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-style: normal;
   font-weight: 700;
 }
@@ -462,7 +462,7 @@ watch(
   place-items: center;
   border-radius: 999px;
   background: var(--soft);
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 800;
 }
 .object-graph-neighbors ul {
