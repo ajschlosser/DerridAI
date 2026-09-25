@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import type { CorpusRecord, SourceBlock } from "../api/pdfCorpus";
+import { hideSourceWarnings } from "../domain/sourceQuality";
 import type { ProviderProfile } from "../api/system";
 import CorpusSourceIssuePanel from "./CorpusSourceIssuePanel.vue";
 import CorpusSourceQualityDialog from "./CorpusSourceQualityDialog.vue";
@@ -172,6 +173,10 @@ function saveText() {
   if (!textDraft.value.trim()) return;
   emit("saveText", textDraft.value, resolveSourceIssues.value);
   editingText.value = false;
+}
+function acknowledgeSourceIssue(dontShowAgain = false) {
+  if (dontShowAgain) hideSourceWarnings();
+  sourceIssueOpen.value = false;
 }
 function preventBackgroundScroll() {
   document.documentElement.dataset.focusReview = "true";
@@ -689,7 +694,7 @@ watch(
     <CorpusSourceQualityDialog
       :open="sourceIssueOpen && Boolean(record.source_quality_issues?.length)"
       :issues="record.source_quality_issues"
-      @close="sourceIssueOpen = false"
+      @close="acknowledgeSourceIssue"
       @edit-text="
         sourceIssueOpen = false;
         beginTextEdit();
