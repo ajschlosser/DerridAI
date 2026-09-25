@@ -740,3 +740,55 @@ export interface GutenbergHit {
   author: string;
   language: string;
 }
+
+export interface EnrichmentModelMetrics {
+  proposals: number;
+  reviews: number;
+  autofilled: number;
+  acceptance_rate: number | null;
+  brier_score: number | null;
+  correction_rate: number | null;
+  rejection_rate: number | null;
+  autofill_precision: number | null;
+  stability: number | null;
+  touched_share: number | null;
+  grounded_rate: number | null;
+  ms_per_accepted_field: number | null;
+  precision_at_threshold: {
+    threshold: number;
+    reviews: number;
+    precision: number | null;
+    coverage: number | null;
+  }[];
+  learning_curve: { reviews_before: number; acceptance: number | null }[];
+  acceptance_ci: Interval;
+  substantive_error_rate: Interval;
+  autofill_precision_ci: Interval;
+  spot_checks_still_needed: number;
+  correction_severity: Record<string, number>;
+  supported_rate: number | null;
+  supported_checked: number;
+  repeat_rate: number | null;
+  proposals_after_a_rejection: number;
+  review_seconds_per_decision: number | null;
+  seconds_to_first_useful_value: number | null;
+  autofill_suspensions: number;
+  autofill_resumptions: number;
+}
+
+export interface Interval {
+  rate: number | null;
+  low: number | null;
+  high: number | null;
+  n: number;
+}
+
+export interface EnrichmentMetrics {
+  self_consistency?: Interval;
+  inter_annotator?: Interval & { kappa: number | null };
+  models: Record<string, EnrichmentModelMetrics>;
+  inter_model_agreement: { compared: number; agreement: number | null };
+  unresolved_remaining: number | null;
+  runs: string[];
+  concurrency: { limit: number; working: number };
+}
