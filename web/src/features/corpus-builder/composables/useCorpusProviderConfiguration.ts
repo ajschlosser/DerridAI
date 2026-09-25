@@ -280,7 +280,8 @@ export function useCorpusProviderConfiguration(currentBuild: Ref<CorpusBuild | n
     );
 
     const activeBuildProfile = String(
-      (currentBuild.value?.request as Record<string, unknown> | undefined)?.provider_profile_id || "",
+      (currentBuild.value?.request as Record<string, unknown> | undefined)?.provider_profile_id ||
+        "",
     );
     if (
       activeBuildProfile &&
