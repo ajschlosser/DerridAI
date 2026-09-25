@@ -1289,8 +1289,10 @@ function queueRecordRequest(
   recordId: string,
   fields: string[],
   request: () => Promise<unknown>,
+  onFailure?: () => void,
 ) {
   recordSaveQueue.enqueue(recordId, request, (exc) => {
+    onFailure?.();
     setMessage(
       i18n.tf("pdf_corpus.record_save_failed", {
         record: recordId,
@@ -2702,26 +2704,69 @@ async function toggleEvidenceBlock(blockId: string) {
 async function merge(direction: "previous" | "next") {
   if (!currentBuild.value || !selectedRecord.value) return;
   const id = selectedRecord.value.record_id;
+  const index = records.value.findIndex((row) => row.record_id === id);
+  const neighborIndex = direction === "previous" ? index - 1 : index + 1;
+  if (index < 0 || neighborIndex < 0 || neighborIndex >= records.value.length) return;
+  const before = records.value.slice();
+  const beforeTotal = recordTotal.value;
+  const beforeSelected = selectedRecord.value;
+  const firstIndex = Math.min(index, neighborIndex);
+  const first = records.value[firstIndex];
+  const second = records.value[Math.max(index, neighborIndex)];
+  const merged: CorpusRecord = {
+    ...first,
+    text: [first.text, second.text].filter(Boolean).join("\n\n"),
+    text_length: [first.text, second.text].filter(Boolean).join("\n\n").length,
+    source_block_ids: [
+      ...(first.source_block_ids || []),
+      ...(second.source_block_ids || []),
+    ],
+    source_unit_ids: [
+      ...(first.source_unit_ids || []),
+      ...(second.source_unit_ids || []),
+    ],
+    source_spans: [...(first.source_spans || []), ...(second.source_spans || [])],
+    review_disposition: "pending",
+    accepted: false,
+    rejected: false,
+    needs_review: true,
+    record_revision: Math.max(
+      Number(first.record_revision || 1),
+      Number(second.record_revision || 1),
+    ) + 1,
+  };
   const viewport = captureReviewViewport();
-  busy.value = "record";
-  try {
-    const row = await pdfCorpusApi.merge(
-      currentBuild.value.build_id,
-      id,
-      direction,
-      Number(selectedRecord.value.record_revision || 1),
-    );
-    await refreshBuild();
-    await refreshRecords(false, row.record_id);
-    await restoreReviewViewport(viewport, { record: true });
-    setMessage(
-      i18n.tf("pdf_corpus.merged", { direction: i18n.t(`pdf_corpus.${direction}`, direction) }),
-    );
-  } catch (exc) {
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
+  records.value.splice(firstIndex, 2, merged);
+  recordTotal.value = Math.max(0, recordTotal.value - 1);
+  selectedRecord.value = merged;
+  selectedRecordId.value = merged.record_id;
+  await restoreReviewViewport(viewport, { record: true });
+  queueRecordRequest(
+    `${id}:${second.record_id}`,
+    ["record boundary"],
+    async () => {
+      const row = await pdfCorpusApi.merge(
+        currentBuild.value!.build_id,
+        id,
+        direction,
+        Number(before.find((item) => item.record_id === id)?.record_revision || 1),
+      );
+      await refreshBuild();
+      await refreshRecords(false, row.record_id);
+      await restoreReviewViewport(viewport, { record: true });
+      setMessage(
+        i18n.tf("pdf_corpus.merged", {
+          direction: i18n.t(`pdf_corpus.${direction}`, direction),
+        }),
+      );
+    },
+    () => {
+      records.value = before;
+      recordTotal.value = beforeTotal;
+      selectedRecord.value = beforeSelected;
+      selectedRecordId.value = beforeSelected.record_id;
+    },
+  );
 }
 async function split(afterBlockId: string) {
   if (!currentBuild.value || !selectedRecord.value) return;
