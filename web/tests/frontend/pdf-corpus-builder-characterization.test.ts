@@ -8,6 +8,13 @@ const pdfCorpusApi = vi.hoisted(() => ({
   listAssets: vi.fn(),
   profiles: vi.fn(),
   listBuilds: vi.fn(),
+  build: vi.fn(),
+  records: vi.fn(),
+  blocks: vi.fn(),
+  markViewed: vi.fn(),
+  patchText: vi.fn(),
+  patchMetadata: vi.fn(),
+  reviewDecision: vi.fn(),
   assetContentUrl: vi.fn((assetId: string) => `/api/pdf/assets/${assetId}/content`),
 }));
 
@@ -86,12 +93,49 @@ async function mountBuilder() {
   return wrapper;
 }
 
+const reviewBuild = {
+  build_id: "build-1",
+  asset_id: "asset-1",
+  status: "awaiting_review",
+  stage: "review",
+  record_count: 1,
+  metadata_total: 1,
+  schema: defaultSchema,
+  request: {},
+};
+
+const reviewRecord = {
+  record_id: "record-1",
+  record_revision: 1,
+  text: "Original text",
+  text_length: 13,
+  source_block_ids: ["block-1"],
+  source_spans: [{ block_id: "block-1", page: 1 }],
+  metadata_field_status: {},
+  metadata_evidence: {},
+  review_disposition: "pending",
+  needs_review: true,
+  accepted: false,
+  rejected: false,
+};
+
 describe("PdfCorpusBuilder characterization", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     pdfCorpusApi.listAssets.mockResolvedValue({ items: [] });
     pdfCorpusApi.profiles.mockResolvedValue({ items: [] });
     pdfCorpusApi.listBuilds.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 100 });
+    pdfCorpusApi.build.mockResolvedValue(reviewBuild);
+    pdfCorpusApi.records.mockResolvedValue({
+      items: [reviewRecord],
+      total: 1,
+      offset: 0,
+      limit: 50,
+      queue_counts: {},
+      metadata_values: {},
+    });
+    pdfCorpusApi.blocks.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 500 });
+    pdfCorpusApi.markViewed.mockResolvedValue({});
     systemApi.researcherProviders.mockResolvedValue({ profiles: [] });
     systemApi.researcherProviderAvailability.mockResolvedValue({
       available: false,
@@ -131,6 +175,119 @@ describe("PdfCorpusBuilder characterization", () => {
     expect(wrapper.findComponent({ name: "CorpusBuildReadiness" }).exists()).toBe(true);
     expect(wrapper.get("#pdf-corpus-source-title").text()).toBe("Source document");
 
+    wrapper.unmount();
+  });
+
+  it("applies text edits before the unresolved persistence request settles", async () => {
+    pdfCorpusApi.listBuilds.mockResolvedValue({
+      items: [reviewBuild],
+      total: 1,
+      offset: 0,
+      limit: 100,
+    });
+    pdfCorpusApi.listAssets.mockResolvedValue({
+      items: [{ asset_id: "asset-1", filename: "source.pdf", page_count: 1 }],
+    });
+    pdfCorpusApi.blocks.mockResolvedValue({
+      items: [{ block_id: "block-1", page: 1, text: "Original text" }],
+      total: 1,
+      offset: 0,
+      limit: 500,
+    });
+    pdfCorpusApi.patchText.mockReturnValue(new Promise(() => undefined));
+    const wrapper = await mountBuilder();
+    const exposed = wrapper.vm as unknown as {
+      selectedRecord: typeof reviewRecord;
+      saveTextFromFocus: (text: string, resolve: boolean) => Promise<void>;
+    };
+
+    await exposed.saveTextFromFocus("Edited immediately", false);
+
+    expect(exposed.selectedRecord.text).toBe("Edited immediately");
+    expect(exposed.selectedRecord.record_revision).toBe(2);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(pdfCorpusApi.patchText).toHaveBeenCalledWith(
+      "build-1",
+      "record-1",
+      "Edited immediately",
+      1,
+      false,
+    );
+    wrapper.unmount();
+  });
+
+  it("keeps the local edit and scopes a persistence error to its record and field", async () => {
+    pdfCorpusApi.listBuilds.mockResolvedValue({
+      items: [reviewBuild],
+      total: 1,
+      offset: 0,
+      limit: 100,
+    });
+    pdfCorpusApi.listAssets.mockResolvedValue({
+      items: [{ asset_id: "asset-1", filename: "source.pdf", page_count: 1 }],
+    });
+    pdfCorpusApi.blocks.mockResolvedValue({
+      items: [{ block_id: "block-1", page: 1, text: "Original text" }],
+      total: 1,
+      offset: 0,
+      limit: 500,
+    });
+    pdfCorpusApi.patchText.mockRejectedValue(new Error("offline"));
+    const wrapper = await mountBuilder();
+    const exposed = wrapper.vm as unknown as {
+      selectedRecord: typeof reviewRecord;
+      saveTextFromFocus: (text: string, resolve: boolean) => Promise<void>;
+      error: string;
+    };
+
+    await exposed.saveTextFromFocus("Edited locally", false);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(exposed.selectedRecord.text).toBe("Edited locally");
+    expect(exposed.error).toContain("record-1");
+    expect(exposed.error).toContain("text");
+    expect(exposed.error).toContain("offline");
+    expect(pdfCorpusApi.patchText).toHaveBeenCalledTimes(2);
+    wrapper.unmount();
+  });
+
+  it("shows acceptance immediately while authoritative review persistence is pending", async () => {
+    pdfCorpusApi.listBuilds.mockResolvedValue({
+      items: [reviewBuild],
+      total: 1,
+      offset: 0,
+      limit: 100,
+    });
+    pdfCorpusApi.listAssets.mockResolvedValue({
+      items: [{ asset_id: "asset-1", filename: "source.pdf", page_count: 1 }],
+    });
+    pdfCorpusApi.blocks.mockResolvedValue({
+      items: [{ block_id: "block-1", page: 1, text: "Original text" }],
+      total: 1,
+      offset: 0,
+      limit: 500,
+    });
+    pdfCorpusApi.reviewDecision.mockReturnValue(new Promise(() => undefined));
+    const wrapper = await mountBuilder();
+    const exposed = wrapper.vm as unknown as {
+      selectedRecord: typeof reviewRecord;
+      setDisposition: (disposition: "accepted") => Promise<void>;
+    };
+
+    await exposed.setDisposition("accepted");
+
+    expect(exposed.selectedRecord.review_disposition).toBe("accepted");
+    expect(exposed.selectedRecord.accepted).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(pdfCorpusApi.reviewDecision).toHaveBeenCalledWith(
+      "build-1",
+      "record-1",
+      "accepted",
+      "",
+      1,
+      "all",
+    );
     wrapper.unmount();
   });
 });
