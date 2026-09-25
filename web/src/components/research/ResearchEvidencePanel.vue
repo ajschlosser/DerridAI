@@ -136,9 +136,7 @@ function selectedRows(item: ResearchEvidenceSelection) {
     <header class="research-panel-heading">
       <div>
         <b>{{
-          showingResult
-            ? i18n.t("research.answer_evidence")
-            : i18n.t("rag.selected_evidence")
+          showingResult ? i18n.t("research.answer_evidence") : i18n.t("rag.selected_evidence")
         }}</b
         ><small
           >{{ showingResult ? resultEvidence.length : selectedEvidence.length }}
@@ -191,9 +189,7 @@ function selectedRows(item: ResearchEvidenceSelection) {
           }}</span>
           <div>
             <b>{{
-              display(record.work) ||
-              display(record.record_id) ||
-              i18n.t("research.evidence")
+              display(record.work) || display(record.record_id) || i18n.t("research.evidence")
             }}</b
             ><small>{{ active.inline_citation || "" }}</small>
           </div>
@@ -264,10 +260,7 @@ function selectedRows(item: ResearchEvidenceSelection) {
               <span aria-hidden="true" class="research-selected-chevron">⌄</span>
             </summary>
             <div class="research-selected-preview">
-              <dl
-                v-if="selectedRows(item).length"
-                class="research-relation-grid compact"
-              >
+              <dl v-if="selectedRows(item).length" class="research-relation-grid compact">
                 <template v-for="row in selectedRows(item)" :key="row.field"
                   ><dt>{{ row.label }}</dt>
                   <dd>{{ row.value }}</dd></template
@@ -277,9 +270,7 @@ function selectedRows(item: ResearchEvidenceSelection) {
                 {{ item.text_preview }}<template v-if="item.text_preview.length >= 280">…</template>
               </p>
               <p v-else class="note">
-                {{
-                  i18n.t("research.selected_preview_unavailable")
-                }}
+                {{ i18n.t("research.selected_preview_unavailable") }}
               </p>
             </div>
           </details>
@@ -297,9 +288,7 @@ function selectedRows(item: ResearchEvidenceSelection) {
         <span aria-hidden="true">∴</span>
         <b>{{ i18n.t("research.no_selected_evidence") }}</b>
         <p>
-          {{
-            i18n.t("research.no_selected_evidence_help")
-          }}
+          {{ i18n.t("research.no_selected_evidence_help") }}
         </p>
       </div>
     </template>

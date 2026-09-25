@@ -65,7 +65,6 @@ describe("research payloads", () => {
     expect(normalizedResearchConfig().search_types).toEqual(["similarity", "lexical", "mmr"]);
   });
 
-
   it("preserves custom assertion metadata for Research evidence", () => {
     const item = researchEvidenceForUi({
       key: "custom",

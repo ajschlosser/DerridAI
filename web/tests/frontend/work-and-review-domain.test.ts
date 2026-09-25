@@ -71,7 +71,6 @@ describe("touch-up fields", () => {
     expect(fields).not.toContain("current_field_assertions");
     expect(fields).not.toContain("metadata_field_status");
   });
-
 });
 
 describe("review presentation", () => {

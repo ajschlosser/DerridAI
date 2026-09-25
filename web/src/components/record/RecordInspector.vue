@@ -45,10 +45,14 @@ const tabs = computed(() => [
 ]);
 const overviewSections = computed(() => groupInspectorRows(layout.value.overview));
 const indexingFields = computed(() =>
-  layout.value.indexing.filter((row): row is Extract<InspectorLayoutRow, { kind: "field" }> => row.kind === "field").map((row) => row.field),
+  layout.value.indexing
+    .filter((row): row is Extract<InspectorLayoutRow, { kind: "field" }> => row.kind === "field")
+    .map((row) => row.field),
 );
 const provenanceFields = computed(() =>
-  layout.value.provenance.filter((row): row is Extract<InspectorLayoutRow, { kind: "field" }> => row.kind === "field").map((row) => row.field),
+  layout.value.provenance
+    .filter((row): row is Extract<InspectorLayoutRow, { kind: "field" }> => row.kind === "field")
+    .map((row) => row.field),
 );
 function applyLayout(next: InspectorLayout) {
   layout.value = next;
@@ -78,8 +82,7 @@ const pageSpan = computed(() => {
 function present(value: unknown) {
   if (value === null || value === undefined || value === "") return "—";
   if (Array.isArray(value)) return value.length ? value.join(", ") : "—";
-  if (typeof value === "boolean")
-    return value ? i18n.t("runtime.yes") : i18n.t("runtime.no");
+  if (typeof value === "boolean") return value ? i18n.t("runtime.yes") : i18n.t("runtime.no");
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }
@@ -185,7 +188,11 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
             {{ i18n.t("record.configure_fields") }}
           </button>
         </div>
-        <section v-for="(section, index) in overviewSections" :key="`${section.heading || 'fields'}-${index}`" class="inspector-field-group">
+        <section
+          v-for="(section, index) in overviewSections"
+          :key="`${section.heading || 'fields'}-${index}`"
+          class="inspector-field-group"
+        >
           <h3 v-if="section.heading">{{ headingText(section.heading) }}</h3>
           <dl class="record-meta-list">
             <div v-for="field in section.fields" :key="field">
@@ -287,7 +294,13 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
         @open="emit('openHistory')"
       />
     </div>
-    <InspectorLayoutEditor ref="layoutEditor" :layout="layout" :record="record" @apply="applyLayout" @reset="resetLayout" />
+    <InspectorLayoutEditor
+      ref="layoutEditor"
+      :layout="layout"
+      :record="record"
+      @apply="applyLayout"
+      @reset="resetLayout"
+    />
   </aside>
 </template>
 <style scoped>
