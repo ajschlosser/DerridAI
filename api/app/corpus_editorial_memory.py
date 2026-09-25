@@ -277,15 +277,20 @@ class EditorialMemoryMixin:
             # Keep prompts compact. Include up to four field-specific examples;
             # zero-overlap examples are still useful only for discourse role when
             # a repeated build convention exists.
-            kept = [item for item in ranked if float(item.get("similarity") or 0) > 0][:4]
+            configured_limit = field_limits.get(field)
+            prelimit = max(4, int(configured_limit)) if configured_limit is not None else 4
+            kept = [
+                item for item in ranked
+                if float(item.get("similarity") or 0) > 0
+            ][:prelimit]
             if not kept and field == "discourse_role" and conventions.get(field):
-                kept = ranked[:2]
+                kept = ranked[:max(2, prelimit)]
             if kept:
                 examples[field] = kept
         # Bound the complete few-shot packet rather than only each field.  This
         # keeps progressive retrieval from trading metadata quality for prompt
         # bloat as the reviewed corpus grows.
-        examples = budget_prompt_examples(examples)
+        examples = budget_prompt_examples(examples, field_limits=field_limits or None)
 
         retrieval_telemetry: dict[str, Any] = {}
         progressive_index = getattr(self, "_progressive_metadata_index", None)
@@ -293,7 +298,10 @@ class EditorialMemoryMixin:
             retrieval_fields = sorted({
                 str(item.get("field_name") or "")
                 for item in canonical_exemplars
-                if str(item.get("field_name") or "") in enabled_fields
+                if (
+                    str(item.get("field_name") or "") in enabled_fields
+                    and int(field_limits.get(str(item.get("field_name") or ""), 1)) > 0
+                )
             })
             semantic = progressive_index.retrieve(
                 scope_id=build_id,
@@ -316,7 +324,10 @@ class EditorialMemoryMixin:
                     for field, items in semantic["examples"].items():
                         if isinstance(items, list) and items:
                             examples[str(field)] = items
-                    examples = budget_prompt_examples(examples)
+                    examples = budget_prompt_examples(
+                        examples,
+                        field_limits=field_limits or None,
+                    )
                 elif retrieval_telemetry.get("fallback_reason"):
                     warned: set[str] = getattr(
                         self,
