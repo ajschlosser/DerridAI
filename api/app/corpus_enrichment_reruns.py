@@ -36,6 +36,7 @@ from .enrichment_cycles import (
     same_value,
 )
 from .field_assertions import (
+    create_model_assertion,
     current_assertion_by_name,
     migrate_record_assertions,
     project_record_assertions,
@@ -319,6 +320,37 @@ class EnrichmentRerunsMixin:
                 new_assertion = current_assertion_by_name(candidate, field)
                 old_info = live_status.get(field) if isinstance(live_status.get(field), dict) else {}
                 new_info = cand_status.get(field) if isinstance(cand_status.get(field), dict) else {}
+                # Some provider/test candidates are shallow derivatives of the live
+                # record: their top-level proposal and compatibility status are new,
+                # but the copied canonical assertion still describes the old value.
+                # Normalize that mismatch into a fresh model assertion before
+                # conflict resolution so canonical state follows the proposal.
+                if new not in (None, "", []) and (
+                    new_assertion is None or not same_value(new_assertion.value, new)
+                ):
+                    evidence_map = (
+                        candidate.get("metadata_evidence")
+                        if isinstance(candidate.get("metadata_evidence"), dict)
+                        else {}
+                    )
+                    evidence_item = evidence_map.get(field) if isinstance(evidence_map.get(field), dict) else None
+                    new_assertion = create_model_assertion(
+                        candidate,
+                        field,
+                        new,
+                        schema=active_schema,
+                        confidence=(
+                            float(new_info["confidence"])
+                            if isinstance(new_info.get("confidence"), (int, float))
+                            and not isinstance(new_info.get("confidence"), bool)
+                            else None
+                        ),
+                        method=str(new_info.get("method") or "llm"),
+                        reason=str(new_info.get("reason") or ""),
+                        evidence=[dict(evidence_item)] if evidence_item else [],
+                        model=str(new_info.get("model") or request.get("model") or "") or None,
+                        run_id=str(new_info.get("run_id") or run_id or "") or None,
+                    )
                 if new in (None, "", []):
                     continue
                 if old_assertion is not None and old_assertion.authority_status in {"human_confirmed", "human_override"}:
