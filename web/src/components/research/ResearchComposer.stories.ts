@@ -15,6 +15,11 @@ const meta: Meta<typeof ResearchComposer> = {
     responseLanguage: "auto",
     preset: "balanced",
     evidenceCount: 4,
+    promptMetadata: {
+      evidence: ["speaker", "position_holder", "stance", "discourse_role"],
+      context: ["quoted_author"],
+      record: [],
+    },
     stores: [
       {
         name: "derrida_primary",
