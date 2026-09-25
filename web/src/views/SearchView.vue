@@ -168,11 +168,12 @@ function loadColumnWidths() {
     return {};
   }
 }
-// eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
 function persistColumnWidths() {
   try {
     localStorage.setItem("derridai.search.columnWidths.v1", JSON.stringify(columnWidths));
-  } catch {}
+  } catch {
+    // Browser storage is a convenience only; quota/privacy failures must not block Search.
+  }
 }
 function loadSavedState() {
   try {
@@ -188,23 +189,25 @@ function loadSavedState() {
     recentSearches.value = [];
   }
 }
-// eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
 function persistSavedViews() {
   try {
     localStorage.setItem(
       "derridai.search.savedViews.v1",
       JSON.stringify(savedViews.value.slice(0, 40)),
     );
-  } catch {}
+  } catch {
+    // Browser storage is a convenience only; quota/privacy failures must not block Search.
+  }
 }
-// eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
 function persistRecent() {
   try {
     localStorage.setItem(
       "derridai.search.recent.v1",
       JSON.stringify(recentSearches.value.slice(0, 12)),
     );
-  } catch {}
+  } catch {
+    // Browser storage is a convenience only; quota/privacy failures must not block Search.
+  }
 }
 
 async function load(options: { refresh?: boolean; autoRun?: boolean } = {}) {
