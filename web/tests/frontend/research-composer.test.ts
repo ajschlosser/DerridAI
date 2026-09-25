@@ -18,7 +18,7 @@ const baseProps = {
     record: [],
   },
   stores: [{ name: "derrida_primary", count: 12 }],
-  profiles: [{ id: "phi4", name: "Phi-4", type: "ollama", model: "phi4:14b" }],
+  profiles: [{ id: "phi4", name: "Phi-4", type: "ollama" as const, model: "phi4:14b" }],
   history: [],
   canRun: true,
   canConfigure: true,
