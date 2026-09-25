@@ -919,15 +919,17 @@ class ReviewActionsMixin:
             self._push_record_review_history(build_id, action="metadata_confirm_absent", record_id=record_id, previous_record=previous_record)
             prior_status = dict((target.get("metadata_field_status") or {}).get(field) or {})
             self._record_human_llm_feedback(build_id, field, target.get(field), None, prior_status, target)
-            target[field] = None
-            evidence_map = (
-                dict(target.get("metadata_evidence") or {})
-                if isinstance(target.get("metadata_evidence"), dict)
-                else {}
+            schema = self._schema_for(build_id)
+            migrate_record_assertions(target, schema)
+            prior_assertion = current_assertion_by_name(target, field)
+            confirm_absence(
+                target,
+                field,
+                schema=schema,
+                prior=prior_assertion,
+                reason="Reviewer confirmed that no supported value applies to this record.",
             )
-            evidence_map.pop(field, None)
-            target["metadata_evidence"] = evidence_map
-            target.setdefault("metadata_field_status", {})[field] = {"status":"confirmed_absent","method":"human","confidence":1.0,"reason_code":"no_supported_value","reason":"Reviewer confirmed that no supported value applies to this record."}
+            project_record_assertions(target)
             target.setdefault("metadata_decisions", []).append({"field":field,"value":None,"at":iso_now(),"source":"confirmed_absent"})
             target["metadata_decisions"] = target["metadata_decisions"][-100:]
             target["metadata_reviewed_at"] = iso_now(); _mark_human_touch(target,[field])
@@ -1024,19 +1026,37 @@ class ReviewActionsMixin:
         else:
             evidence.pop(field, None)
         target["metadata_evidence"] = evidence
+        schema = self._schema_for(build_id)
+        migrate_record_assertions(target, schema)
+        assertion = current_assertion_by_name(target, field)
+        if assertion is not None:
+            assertion_evidence = (
+                [{
+                    "block_ids": unique_ids,
+                    "confidence": max(0.0, min(1.0, float(confidence))),
+                    "reason": str(reason or "Human-reviewed evidence binding."),
+                    "reviewed_by": "human",
+                    "reviewed_at": iso_now(),
+                }]
+                if unique_ids
+                else []
+            )
+            replace_assertion_evidence(
+                target,
+                assertion,
+                assertion_evidence,
+                reason=str(reason or "Human-reviewed evidence binding changed."),
+            )
+            project_record_assertions(target)
         target["metadata_needs_attention"] = True
         target["metadata_attention_reasons"] = ["Source evidence binding changed and metadata validation must be rerun."]
         target["record_revision"] = current_revision + 1
         self._rewrite_targeted_record(build_id, target, previous_record)
-        status = (
-            (target.get("metadata_field_status") or {}).get(field)
-            if isinstance(target.get("metadata_field_status"), dict)
-            else None
-        )
+        current = current_assertion_by_name(target, field)
         if (
             unique_ids
-            and isinstance(status, dict)
-            and str(status.get("status") or "") in {"human_confirmed", "human_override", "confirmed_absent"}
+            and current is not None
+            and current.authority_status in {"human_confirmed", "human_override"}
         ):
             self._persist_review_audit_bindings(
                 build_id,
