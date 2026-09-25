@@ -568,7 +568,7 @@ watch(
           <div class="evidence-assignment">
             <h3>{{ i18n.t("pdf_corpus.evidence_assignment_title", "Evidence for metadata") }}</h3>
             <p class="empty-note">
-              {{ i18n.t("pdf_corpus.evidence_assignment_help", "Choose a metadata field, then add or remove the source spans that directly support its value. Human-selected evidence becomes part of the reviewed provenance used by metadata memory.") }}
+              {{ i18n.t("pdf_corpus.evidence_assignment_help", "Choose a metadata field, then add or remove the source spans that directly support its value. Human-selected evidence becomes reviewed provenance and can support evidence-bound metadata exemplars.") }}
             </p>
             <FieldEvidenceList
               :evidence="record.metadata_evidence || {}"
