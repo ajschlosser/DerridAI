@@ -23,7 +23,14 @@ const runtime = vi.hoisted(() => ({
     appConfig: {},
   },
 }));
-vi.mock("../../src/runtime/runtime.js", () => ({ ...runtime, __v_isRef: false, __v_isReadonly: false, __v_isShallow: false, __v_skip: true, __v_raw: undefined }));
+vi.mock("../../src/runtime/runtime.js", () => ({
+  ...runtime,
+  __v_isRef: false,
+  __v_isReadonly: false,
+  __v_isShallow: false,
+  __v_skip: true,
+  __v_raw: undefined,
+}));
 
 const chromaApi = vi.hoisted(() => ({
   health: vi.fn(),
@@ -50,16 +57,33 @@ import VectorStoresView from "../../src/views/VectorStoresView.vue";
 import { useAuthStore } from "../../src/stores/auth";
 
 const readyHealth = {
-  available: true, mode: "embedded" as const, path: "/data/chroma", host_path_hint: "./data/chroma", data_root: "/data",
-  url: null, tenant: null, database: null, token_configured: false, writable: true, heartbeat_ok: true,
-  chroma_version: "1.1.0", collection_count: 0, identity: "Local Chroma · ./data/chroma", error: null,
+  available: true,
+  mode: "embedded" as const,
+  path: "/data/chroma",
+  host_path_hint: "./data/chroma",
+  data_root: "/data",
+  url: null,
+  tenant: null,
+  database: null,
+  token_configured: false,
+  writable: true,
+  heartbeat_ok: true,
+  chroma_version: "1.1.0",
+  collection_count: 0,
+  identity: "Local Chroma · ./data/chroma",
+  error: null,
 };
 
 async function mountView(role: "admin" | "researcher") {
   const pinia = createPinia();
   setActivePinia(pinia);
   const auth = useAuthStore();
-  auth.user = { id: 1, username: "u", role, capabilities: role === "admin" ? [] : ["page.search", "page.vector"] } as never;
+  auth.user = {
+    id: 1,
+    username: "u",
+    role,
+    capabilities: role === "admin" ? [] : ["page.search", "page.vector"],
+  } as never;
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -69,7 +93,10 @@ async function mountView(role: "admin" | "researcher") {
   });
   await router.push("/databases");
   await router.isReady();
-  const wrapper = mount(VectorStoresView, { attachTo: document.body, global: { plugins: [pinia, router] } });
+  const wrapper = mount(VectorStoresView, {
+    attachTo: document.body,
+    global: { plugins: [pinia, router] },
+  });
   await flushPromises();
   return { wrapper, router };
 }
@@ -101,7 +128,9 @@ describe("VectorStoresView", () => {
 
   it("opens connection settings from the workspace header", async () => {
     const { wrapper } = await mountView("admin");
-    const buttons = wrapper.findAll("button").filter(button => button.text().includes("Connection settings"));
+    const buttons = wrapper
+      .findAll("button")
+      .filter((button) => button.text().includes("Connection settings"));
     expect(buttons.length).toBeGreaterThan(0);
     await buttons[0].trigger("click");
     await flushPromises();

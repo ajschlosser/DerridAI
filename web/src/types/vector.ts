@@ -85,6 +85,6 @@ export interface VectorSearchResult {
   id?: string;
   distance?: number;
   hybrid_score?: number;
-  retrieval_hits?: {type: string}[];
+  retrieval_hits?: { type: string }[];
   record: VectorRecord;
 }

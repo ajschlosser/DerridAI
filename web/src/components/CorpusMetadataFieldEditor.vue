@@ -207,9 +207,7 @@ const autoResolved = computed(
       </div>
     </div>
     <p v-if="status?.recheck" class="blind-note" role="status">
-      {{
-        i18n.t("pdf_corpus.recheck_prompt")
-      }}
+      {{ i18n.t("pdf_corpus.recheck_prompt") }}
     </p>
     <p v-else-if="recheck" class="blind-note" role="status">
       {{
@@ -219,9 +217,7 @@ const autoResolved = computed(
       }}
     </p>
     <p v-if="status?.blind" class="blind-note" role="status">
-      {{
-        i18n.t("pdf_corpus.blind_review")
-      }}
+      {{ i18n.t("pdf_corpus.blind_review") }}
     </p>
     <p v-else-if="hasValue(revealed)" class="blind-note" role="status">
       {{
@@ -233,13 +229,15 @@ const autoResolved = computed(
     <div v-if="!editing" class="field-current">{{ display(resolvedValue) }}</div>
     <div v-else class="field-editor">
       <div
-        v-if="['deterministic_llm_disagreement', 'human_llm_disagreement'].includes(String(status?.reason_code || ''))"
+        v-if="
+          ['deterministic_llm_disagreement', 'human_llm_disagreement'].includes(
+            String(status?.reason_code || ''),
+          )
+        "
         class="disagreement"
         role="status"
       >
-        <b>{{
-          i18n.t("pdf_corpus.metadata_disagreement")
-        }}</b
+        <b>{{ i18n.t("pdf_corpus.metadata_disagreement") }}</b
         ><span>{{
           i18n.tf("pdf_corpus.deterministic_value", {
             value: String(status?.deterministic_value ?? "—"),
@@ -345,9 +343,7 @@ const autoResolved = computed(
           @click="save"
         >
           {{
-            saving
-              ? i18n.t("pdf_corpus.saving_decision")
-              : i18n.t("pdf_corpus.save_field_value")
+            saving ? i18n.t("pdf_corpus.saving_decision") : i18n.t("pdf_corpus.save_field_value")
           }}
         </button>
         <button type="button" class="btn" :disabled="busy" @click="emit('noValue')">
@@ -366,7 +362,12 @@ const autoResolved = computed(
           type="button"
           class="btn subtle"
           :disabled="busy || !editing"
-          :title="i18n.t('pdf_corpus.assign_selected_evidence_help', 'Select supporting text in the record, then attach the nearest source span as evidence for this field.')"
+          :title="
+            i18n.t(
+              'pdf_corpus.assign_selected_evidence_help',
+              'Select supporting text in the record, then attach the nearest source span as evidence for this field.',
+            )
+          "
           @click="
             () => {
               const selected = selectedRecordText();
@@ -381,9 +382,7 @@ const autoResolved = computed(
         v-if="control === 'combobox' || control === 'multi-combobox' || control === 'text'"
         class="selection-help"
       >
-        {{
-          i18n.t("pdf_corpus.select_from_text_help")
-        }}
+        {{ i18n.t("pdf_corpus.select_from_text_help") }}
       </p>
       <div class="field-meta">
         <span v-if="isLlm && hasValue(resolvedValue)" class="proposal">{{
@@ -403,14 +402,17 @@ const autoResolved = computed(
           })
         }}</span>
         <span v-if="status?.raw_llm_value && status?.raw_llm_value !== resolvedValue">{{
-          i18n.tf("pdf_corpus.llm_value_normalized", { raw: String(status?.raw_llm_value), value: String(resolvedValue) })
+          i18n.tf("pdf_corpus.llm_value_normalized", {
+            raw: String(status?.raw_llm_value),
+            value: String(resolvedValue),
+          })
         }}</span>
         <span>{{ confidenceLabel }}</span>
         <span v-if="calibratedAcceptance && calibratedAcceptance.reviewed >= 3">{{
           i18n.tf("pdf_corpus.calibrated_acceptance", {
-              percent: Math.round(calibratedAcceptance.acceptanceRate * 100),
-              count: calibratedAcceptance.reviewed,
-            })
+            percent: Math.round(calibratedAcceptance.acceptanceRate * 100),
+            count: calibratedAcceptance.reviewed,
+          })
         }}</span>
         <span v-if="saved" class="saved" role="status">{{
           i18n.t("pdf_corpus.decision_saved_editable")

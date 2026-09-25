@@ -9,9 +9,9 @@ export interface RecordsFileProvenance {
   count?: number;
   dirty?: Set<unknown> | unknown[] | number;
   active?: boolean;
-  subset?: {source?: string; source_label?: string} | null;
+  subset?: { source?: string; source_label?: string } | null;
   merged_from?: string[] | null;
-  derived_from?: {type?: string; source_file?: string; work?: string} | null;
+  derived_from?: { type?: string; source_file?: string; work?: string } | null;
   imported_from_chroma?: string | null;
   content_hash?: string;
 }
@@ -66,13 +66,21 @@ export function describeRecordsFile(
   };
 }
 
-export function serializableRecordsFile(file: RecordsFileProvenance & {records: unknown[]; errors?: unknown[]; imported_at?: string; content_hash?: string}) {
+export function serializableRecordsFile(
+  file: RecordsFileProvenance & {
+    records: unknown[];
+    errors?: unknown[];
+    imported_at?: string;
+    content_hash?: string;
+  },
+) {
   return {
     id: file.id,
     name: file.name,
     records: file.records,
     errors: file.errors || [],
-    dirty: file.dirty instanceof Set ? [...file.dirty] : Array.isArray(file.dirty) ? file.dirty : [],
+    dirty:
+      file.dirty instanceof Set ? [...file.dirty] : Array.isArray(file.dirty) ? file.dirty : [],
     imported_at: file.imported_at || new Date().toISOString(),
     saved_at: new Date().toISOString(),
     content_hash: file.content_hash || "",

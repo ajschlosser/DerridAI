@@ -84,10 +84,7 @@ function scoreText(score: number | null) {
 </script>
 
 <template>
-  <section
-    class="evaluation-report"
-    :aria-label="i18n.t('faq.evaluation_report')"
-  >
+  <section class="evaluation-report" :aria-label="i18n.t('faq.evaluation_report')">
     <header class="evaluation-report-hero">
       <div
         class="evaluation-score"
@@ -101,23 +98,15 @@ function scoreText(score: number | null) {
         ><span>/10</span>
       </div>
       <div>
-        <span class="evaluation-kicker">{{
-          i18n.t("faq.evaluation_report")
-        }}</span>
+        <span class="evaluation-kicker">{{ i18n.t("faq.evaluation_report") }}</span>
         <h3>
-          {{
-            summary ||
-            i18n.t("faq.grade_summary_fallback")
-          }}
+          {{ summary || i18n.t("faq.grade_summary_fallback") }}
         </h3>
         <p v-if="analysis">{{ analysis }}</p>
       </div>
     </header>
 
-    <section
-      class="evaluation-categories"
-      :aria-label="i18n.t('faq.grade_categories')"
-    >
+    <section class="evaluation-categories" :aria-label="i18n.t('faq.grade_categories')">
       <article v-for="key in CATEGORY_KEYS" :key="key" class="evaluation-category">
         <div class="evaluation-category-head">
           <strong>{{ categoryLabel(key) }}</strong
@@ -170,9 +159,7 @@ function scoreText(score: number | null) {
     <details class="evaluation-raw">
       <summary>{{ i18n.t("faq.grade_raw_output") }}</summary>
       <p>
-        {{
-          i18n.t("faq.grade_raw_output_help")
-        }}
+        {{ i18n.t("faq.grade_raw_output_help") }}
       </p>
       <pre>{{ formatJson(rawOutput) }}</pre>
     </details>

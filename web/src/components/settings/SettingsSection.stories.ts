@@ -7,8 +7,8 @@ const meta = {
   title: "Settings/Section",
   component: SettingsSection,
   render: (args) => ({
-    components: {SettingsSection, UiButton},
-    setup: () => ({args}),
+    components: { SettingsSection, UiButton },
+    setup: () => ({ args }),
     template: `<SettingsSection v-bind="args"><p>Retrieval k, rerank top N, and evidence budgets stay together.</p><template #actions><UiButton variant="primary" label="Save RAG defaults" /></template></SettingsSection>`,
   }),
   args: {
@@ -23,9 +23,11 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Unsaved: Story = {};
-export const ReadOnly: Story = {args: {status: "readonly", statusLabel: "Read-only", persistence: "Managed elsewhere"}};
+export const ReadOnly: Story = {
+  args: { status: "readonly", statusLabel: "Read-only", persistence: "Managed elsewhere" },
+};
 export const French: Story = {
-  parameters: {locale: "fr-CA"},
+  parameters: { locale: "fr-CA" },
   args: {
     title: "Valeurs par défaut du pipeline RAG",
     description: "Repérage, fusion, reclassement et budget de preuves.",

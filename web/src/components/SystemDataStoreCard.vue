@@ -47,7 +47,9 @@ defineEmits<{ open: [] }>();
   border-radius: 14px;
   background: var(--card);
 }
-.system-store-card.sensitive { border-style: dashed; }
+.system-store-card.sensitive {
+  border-style: dashed;
+}
 .store-icon {
   display: grid;
   place-items: center;
@@ -56,25 +58,69 @@ defineEmits<{ open: [] }>();
   border-radius: 11px;
   background: var(--soft);
 }
-.store-icon :deep(svg) { width: 21px; height: 21px; }
-.store-copy { min-width: 0; }
-.store-heading { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-h3 { margin: 0; font-size: .98rem; }
-p { margin: 5px 0 0; color: var(--muted); line-height: 1.45; }
-small { display: block; margin-top: 7px; color: var(--muted); overflow-wrap: anywhere; }
+.store-icon :deep(svg) {
+  width: 21px;
+  height: 21px;
+}
+.store-copy {
+  min-width: 0;
+}
+.store-heading {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+h3 {
+  margin: 0;
+  font-size: 0.98rem;
+}
+p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+small {
+  display: block;
+  margin-top: 7px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
 .store-status {
   display: inline-flex;
   gap: 6px;
   align-items: center;
-  font-size: .75rem;
+  font-size: 0.75rem;
   color: var(--muted);
 }
-.status-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.store-action { display: grid; gap: 8px; justify-items: end; }
-.store-action strong { font-size: 1.05rem; }
-.store-action :deep(svg) { width: 14px; height: 14px; }
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.store-action {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+.store-action strong {
+  font-size: 1.05rem;
+}
+.store-action :deep(svg) {
+  width: 14px;
+  height: 14px;
+}
 @media (max-width: 640px) {
-  .system-store-card { grid-template-columns: 38px minmax(0,1fr); }
-  .store-action { grid-column: 2; width: 100%; display: flex; justify-content: space-between; align-items: center; }
+  .system-store-card {
+    grid-template-columns: 38px minmax(0, 1fr);
+  }
+  .store-action {
+    grid-column: 2;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
 }
 </style>

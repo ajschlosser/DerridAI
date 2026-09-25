@@ -10,9 +10,7 @@ const i18n = useI18nStore();
 const annotations = useAnnotationsWorkspace();
 const { snapshot, loading, error, removing } = annotations;
 const emptyMessage = computed(() =>
-  snapshot.value?.total
-    ? i18n.t("annotations.empty")
-    : i18n.t("annotations.none_yet"),
+  snapshot.value?.total ? i18n.t("annotations.empty") : i18n.t("annotations.none_yet"),
 );
 
 watch(
@@ -28,9 +26,7 @@ onMounted(() => void annotations.load());
       :kicker="i18n.t('section.corpus')"
       :title="i18n.t('nav.annotations')"
       title-id="annotations-page-title"
-      :description="
-        i18n.t('annotations.page_help')
-      "
+      :description="i18n.t('annotations.page_help')"
     />
 
     <section v-if="loading" class="card annotations-state" role="status">
@@ -47,15 +43,11 @@ onMounted(() => void annotations.load());
       <section class="card annotations-index-card">
         <div class="annotations-toolbar">
           <label class="search">
-            <span class="sr-only">{{
-              i18n.t("annotations.search_placeholder")
-            }}</span>
+            <span class="sr-only">{{ i18n.t("annotations.search_placeholder") }}</span>
             <input
               type="search"
               :value="snapshot.query"
-              :placeholder="
-                i18n.t('annotations.search_placeholder')
-              "
+              :placeholder="i18n.t('annotations.search_placeholder')"
               @input="annotations.setQuery(($event.target as HTMLInputElement).value)"
             />
           </label>
@@ -81,13 +73,15 @@ onMounted(() => void annotations.load());
               {{ i18n.t("annotations.recent") }}
             </button>
           </div>
-          <span class="note">{{
-            i18n.tf("annotations.annotation_count", {
-              count: snapshot.total.toLocaleString(i18n.locale),
-            })
-          }}
-          · {{ snapshot.groups.length.toLocaleString(i18n.locale) }}
-          {{ i18n.t("dynamic.works") }}</span>
+          <span class="note"
+            >{{
+              i18n.tf("annotations.annotation_count", {
+                count: snapshot.total.toLocaleString(i18n.locale),
+              })
+            }}
+            · {{ snapshot.groups.length.toLocaleString(i18n.locale) }}
+            {{ i18n.t("dynamic.works") }}</span
+          >
         </div>
       </section>
 

@@ -10,7 +10,7 @@ const props = withDefaults(
     files: RecordsFileTab[];
     canManage?: boolean;
   }>(),
-  {canManage: true},
+  { canManage: true },
 );
 const emit = defineEmits<{
   select: [id: string];
@@ -40,7 +40,7 @@ function originLine(file: RecordsFileTab) {
 }
 
 function closeLabel(file: RecordsFileTab) {
-  return i18n.tf("records.close_named", {name: file.name});
+  return i18n.tf("records.close_named", { name: file.name });
 }
 </script>
 <template>
@@ -55,9 +55,7 @@ function closeLabel(file: RecordsFileTab) {
         }}</span>
       </div>
     </div>
-    <p class="records-file-help">{{
-      i18n.t("records.files_help")
-    }}</p>
+    <p class="records-file-help">{{ i18n.t("records.files_help") }}</p>
     <div
       v-if="props.canManage"
       class="records-file-actions"
@@ -72,7 +70,12 @@ function closeLabel(file: RecordsFileTab) {
         :disabled-reason="i18n.t('ui.need_two_tabs_merge')"
         @click="emit('merge')"
       />
-      <UiButton size="small" icon="filter" :label="i18n.t('ui.create_subset')" @click="emit('subset')" />
+      <UiButton
+        size="small"
+        icon="filter"
+        :label="i18n.t('ui.create_subset')"
+        @click="emit('subset')"
+      />
       <UiButton size="small" icon="download" :label="i18n.t('ui.export')" @click="emit('export')" />
     </div>
     <div class="records-file-list" role="list">
@@ -80,7 +83,7 @@ function closeLabel(file: RecordsFileTab) {
         v-for="file in props.files"
         :key="file.id"
         class="records-file-item"
-        :class="{active: file.active}"
+        :class="{ active: file.active }"
         role="listitem"
       >
         <button
@@ -95,7 +98,9 @@ function closeLabel(file: RecordsFileTab) {
               i18n.t("records.file_edited")
             }}</span>
             <span>{{ originLine(file) }}</span>
-            <span>{{ file.count.toLocaleString(i18n.locale) }} {{ i18n.t("dynamic.records") }}</span>
+            <span
+              >{{ file.count.toLocaleString(i18n.locale) }} {{ i18n.t("dynamic.records") }}</span
+            >
           </small>
         </button>
         <button

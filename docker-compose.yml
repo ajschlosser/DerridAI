@@ -87,7 +87,13 @@ services:
     volumes:
       - ./data:/data
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/live', timeout=3)"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/live', timeout=3)",
+        ]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -116,7 +122,13 @@ services:
     volumes:
       - ./data/chroma-server:/data
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v2/heartbeat', timeout=3)"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v2/heartbeat', timeout=3)",
+        ]
       interval: 15s
       timeout: 5s
       retries: 8

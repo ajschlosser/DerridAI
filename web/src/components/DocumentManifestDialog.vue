@@ -3,9 +3,16 @@ import { useI18nStore } from "../stores/i18n";
 import DocumentManifestEditor from "./DocumentManifestEditor.vue";
 import UiDialog from "./ui/UiDialog.vue";
 
-const props=withDefaults(defineProps<{manifest?:Record<string,unknown>;disabled?:boolean;affectedRecords?:number}>(),{manifest:()=>({}),disabled:false,affectedRecords:0});
-const emit=defineEmits<{save:[changes:Record<string,unknown>];reanalyze:[];close:[]} >();
-const i18n=useI18nStore();
+const props = withDefaults(
+  defineProps<{
+    manifest?: Record<string, unknown>;
+    disabled?: boolean;
+    affectedRecords?: number;
+  }>(),
+  { manifest: () => ({}), disabled: false, affectedRecords: 0 },
+);
+const emit = defineEmits<{ save: [changes: Record<string, unknown>]; reanalyze: []; close: [] }>();
+const i18n = useI18nStore();
 </script>
 
 <template>
@@ -20,7 +27,7 @@ const i18n=useI18nStore();
       :manifest="props.manifest"
       :disabled="props.disabled"
       :affected-records="props.affectedRecords"
-      @save="emit('save',$event)"
+      @save="emit('save', $event)"
       @reanalyze="emit('reanalyze')"
     />
   </UiDialog>

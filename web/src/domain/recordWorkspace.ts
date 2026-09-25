@@ -406,14 +406,12 @@ export function createRecordWorkspace(deps: Deps) {
     return getRecordWorkspaceSnapshot();
   }
   async function addCurrentRecordAnnotation(payload: Loose = {}) {
-    if (!hasCapability("annotations.write"))
-      throw new Error(tr("permissions.annotations_denied"));
+    if (!hasCapability("annotations.write")) throw new Error(tr("permissions.annotations_denied"));
     const field = String(payload.field || "text"),
       quote = String(payload.quote || "").trim(),
       note = String(payload.note || "").trim(),
       tags = Array.isArray(payload.tags) ? payload.tags.map(String).filter(Boolean) : [];
-    if (!quote && !note && !tags.length)
-      throw new Error(tr("annotations.empty"));
+    if (!quote && !note && !tags.length) throw new Error(tr("annotations.empty"));
     if (isResearcher()) {
       const record = await researcherCurrentRecord();
       if (!record) throw new Error(tr("record.no_record_selected"));
@@ -504,9 +502,7 @@ export function createRecordWorkspace(deps: Deps) {
   async function currentRecordPrimaryAction(action: Any, payload: Loose = {}) {
     if (action === "upsert") {
       if (isResearcher() || !canUse("manageCorpus"))
-        throw new Error(
-          tr("permissions.corpus_denied"),
-        );
+        throw new Error(tr("permissions.corpus_denied"));
       const file = activeFile();
       if (!file) return false;
       await upsertRows(
@@ -517,9 +513,7 @@ export function createRecordWorkspace(deps: Deps) {
     }
     if (action === "llm") {
       if (isResearcher() || !canUse("editLocalRecords"))
-        throw new Error(
-          tr("permissions.record_edit_denied"),
-        );
+        throw new Error(tr("permissions.record_edit_denied"));
       const file = activeFile();
       if (!file) return false;
       const index = selectedIndex(file);
@@ -528,9 +522,7 @@ export function createRecordWorkspace(deps: Deps) {
     }
     if (action === "ocr") {
       if (isResearcher() || !canUse("editLocalRecords"))
-        throw new Error(
-          tr("permissions.record_edit_denied"),
-        );
+        throw new Error(tr("permissions.record_edit_denied"));
       const file = activeFile();
       if (!file) return false;
       cleanRecord(file, selectedIndex(file));
@@ -538,17 +530,14 @@ export function createRecordWorkspace(deps: Deps) {
     }
     if (action === "history") {
       if (isResearcher() || !canUse("editLocalRecords"))
-        throw new Error(
-          tr("permissions.record_edit_denied"),
-        );
+        throw new Error(tr("permissions.record_edit_denied"));
       const file = activeFile();
       if (!file) return false;
       openRecordHistoryBrowser(file, selectedIndex(file));
       return true;
     }
     if (action === "open_pdf") {
-      if (!canAccessPage("pdf"))
-        throw new Error(tr("permissions.pdf_denied"));
+      if (!canAccessPage("pdf")) throw new Error(tr("permissions.pdf_denied"));
       const snapshot: Loose = await getRecordWorkspaceSnapshot();
       const link = snapshot?.pdf_links?.[Number(payload.index) || 0];
       if (!link) return false;
@@ -566,8 +555,7 @@ export function createRecordWorkspace(deps: Deps) {
       return true;
     }
     if (action === "pdf_explorer") {
-      if (!canAccessPage("pdf"))
-        throw new Error(tr("permissions.pdf_denied"));
+      if (!canAccessPage("pdf")) throw new Error(tr("permissions.pdf_denied"));
       openPdfExplorerWorkspace();
       return true;
     }

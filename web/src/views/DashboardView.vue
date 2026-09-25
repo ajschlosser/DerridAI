@@ -272,10 +272,7 @@ async function goSearch() {
     if (!state.activeStore) {
       runtime.persistPrefs();
       if (runtime.canAccessPage("vector")) {
-        runtime.notifyToast(
-          i18n.t("search.redirect_database"),
-          { tone: "info" },
-        );
+        runtime.notifyToast(i18n.t("search.redirect_database"), { tone: "info" });
         runtime.openDatabaseCreationFromResearch();
       } else {
         runtime.navigateTo("global");
@@ -515,9 +512,7 @@ onBeforeUnmount(() => {
             <small>— Jacques Derrida</small>
             <div class="dashboard-hero-actions">
               <button class="btn dark" id="dashStartSearch" @click="goNav('global')">
-                <AppIcon name="search" />{{
-                  i18n.t("dashboard.start_searching")
-                }}
+                <AppIcon name="search" />{{ i18n.t("dashboard.start_searching") }}
               </button>
               <button class="btn" id="dashBrowseWorks" @click="goNav('works')">
                 <AppIcon name="books" />{{ i18n.t("dashboard.browse_works") }}
@@ -537,9 +532,7 @@ onBeforeUnmount(() => {
               @click="setSearchMode('traditional')"
             >
               {{
-                i18n.t(
-                  isResearcher ? "research.traditional_search" : "runtime.traditional_search",
-                )
+                i18n.t(isResearcher ? "research.traditional_search" : "runtime.traditional_search")
               }}
             </button>
             <button
@@ -584,9 +577,7 @@ onBeforeUnmount(() => {
               v-text="`${i18n.t('dashboard.advanced_filters')} →`"
             ></button>
             <p class="dashboard-search-help">
-              {{
-                i18n.t("dashboard.search_help")
-              }}
+              {{ i18n.t("dashboard.search_help") }}
             </p>
           </div>
         </article>
@@ -614,9 +605,7 @@ onBeforeUnmount(() => {
             <button
               :disabled="isResearcher"
               :data-disabled-reason="
-                isResearcher
-                  ? i18n.t('dashboard.words_hidden_researcher')
-                  : undefined
+                isResearcher ? i18n.t('dashboard.words_hidden_researcher') : undefined
               "
             >
               <span class="dashboard-overview-icon"><AppIcon name="list" /></span>
@@ -759,8 +748,7 @@ onBeforeUnmount(() => {
                 <span v-else>
                   {{
                     runtime.label(
-                      (item.update as Any).field_name ||
-                        i18n.t("dashboard.updated_record"),
+                      (item.update as Any).field_name || i18n.t("dashboard.updated_record"),
                     )
                   }}
                   ·
@@ -773,9 +761,7 @@ onBeforeUnmount(() => {
               </button>
             </template>
             <div v-else class="dashboard-activity-empty">
-              {{
-                i18n.t("dashboard.no_recent_activity")
-              }}
+              {{ i18n.t("dashboard.no_recent_activity") }}
             </div>
           </div>
         </article>
@@ -824,9 +810,7 @@ onBeforeUnmount(() => {
                 }}</span>
                 <span>
                   <b>{{ item.work }}</b>
-                  <small>{{
-                    item.year || i18n.t("dashboard.year_not_recorded")
-                  }}</small>
+                  <small>{{ item.year || i18n.t("dashboard.year_not_recorded") }}</small>
                   <small
                     >{{ Number(item.count).toLocaleString() }}
                     {{ i18n.t("dynamic.records") }}</small
@@ -857,9 +841,7 @@ onBeforeUnmount(() => {
             <b>{{ i18n.t("dashboard.appearance") }}</b>
           </div>
           <p>
-            {{
-              i18n.t("dashboard.appearance_help")
-            }}
+            {{ i18n.t("dashboard.appearance_help") }}
           </p>
           <fieldset class="dashboard-theme-options">
             <legend>{{ i18n.t("dashboard.interface_theme") }}</legend>
@@ -892,9 +874,7 @@ onBeforeUnmount(() => {
             <b>{{ i18n.t("dashboard.appearance") }}</b>
           </div>
           <p>
-            {{
-              i18n.t("permissions.appearance_denied")
-            }}
+            {{ i18n.t("permissions.appearance_denied") }}
           </p>
         </article>
         <article v-else class="card dashboard-quick-card dashboard-language-card">
@@ -903,9 +883,7 @@ onBeforeUnmount(() => {
             <b>{{ i18n.t("dashboard.language_settings") }}</b>
           </div>
           <p>
-            {{
-              i18n.t("dashboard.language_settings_help")
-            }}
+            {{ i18n.t("dashboard.language_settings_help") }}
           </p>
           <div class="dashboard-quick-field dashboard-locale-field">
             <span>{{ i18n.t("dashboard.interface_language") }}</span>
@@ -924,9 +902,7 @@ onBeforeUnmount(() => {
             <b>{{ i18n.t("dashboard.llm_provider_settings") }}</b>
           </div>
           <p>
-            {{
-              i18n.t("dashboard.llm_provider_help")
-            }}
+            {{ i18n.t("dashboard.llm_provider_help") }}
           </p>
           <div class="dashboard-provider-fields">
             <div class="dashboard-quick-field">
@@ -943,11 +919,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <button class="btn" id="dashProviders" @click="openProviders">
-            {{
-              isResearcher
-                ? i18n.t("nav.rag")
-                : i18n.t("dashboard.manage_provider")
-            }}
+            {{ isResearcher ? i18n.t("nav.rag") : i18n.t("dashboard.manage_provider") }}
           </button>
         </article>
         <article class="card dashboard-quick-card dashboard-record-preview">
@@ -961,9 +933,7 @@ onBeforeUnmount(() => {
               id="dashRecordView"
               :disabled="!previewTarget"
               :data-disabled-reason="
-                !previewTarget
-                  ? i18n.t('dashboard.no_record_available')
-                  : undefined
+                !previewTarget ? i18n.t('dashboard.no_record_available') : undefined
               "
               @click="openRecordPreview"
               v-text="`${i18n.t('research.open')} →`"
@@ -1045,8 +1015,7 @@ onBeforeUnmount(() => {
             <div class="dashboard-annotation-meta">
               <span class="dashboard-annotation-work">{{ (latestAnnotation as Any).work }}</span>
               <span class="dashboard-annotation-pages">{{
-                mlaPageSpan((latestAnnotation as Any).record) ||
-                i18n.t("record.page_not_recorded")
+                mlaPageSpan((latestAnnotation as Any).record) || i18n.t("record.page_not_recorded")
               }}</span>
               <span class="dashboard-annotation-author">{{
                 (latestAnnotation as Any).annotation.initiated_by ||
@@ -1112,9 +1081,7 @@ onBeforeUnmount(() => {
           ></button>
         </div>
         <p class="dashboard-corpus-help">
-          {{
-            i18n.t("pdf_corpus.home_help")
-          }}
+          {{ i18n.t("pdf_corpus.home_help") }}
         </p>
         <div class="dashboard-corpus-list">
           <template v-if="corpusBuilds.length">
@@ -1132,9 +1099,7 @@ onBeforeUnmount(() => {
                 aria-hidden="true"
               ></span>
               <span class="dashboard-corpus-copy">
-                <b>{{
-                  (job as Any).source_filename || i18n.t("pdf_corpus.source_pdf")
-                }}</b>
+                <b>{{ (job as Any).source_filename || i18n.t("pdf_corpus.source_pdf") }}</b>
                 <small>{{ corpusBuildStatusLabel(job as Any) }}</small>
               </span>
               <span class="dashboard-corpus-progress">
@@ -1144,9 +1109,7 @@ onBeforeUnmount(() => {
             </button>
           </template>
           <div v-else class="dashboard-corpus-empty">
-            {{
-              i18n.t("pdf_corpus.home_empty")
-            }}
+            {{ i18n.t("pdf_corpus.home_empty") }}
           </div>
         </div>
       </section>

@@ -1,15 +1,191 @@
-import type { Meta, StoryObj } from '@storybook/vue3-vite';
-import CorpusMetadataFieldEditor from './CorpusMetadataFieldEditor.vue';
-const meta={title:'Corpus Builder/Review/Metadata Field',component:CorpusMetadataFieldEditor,args:{field:'region_type',value:'front_matter',control:'enum',options:['front_matter','main_text','back_matter'],status:{status:'unresolved',method:'llm',confidence:.58,reason:'The opening pages appear to be publishing front matter.'},constraint:null}} satisfies Meta<typeof CorpusMetadataFieldEditor>;
-export default meta; type Story=StoryObj<typeof meta>;
-export const EnumSuggestion:Story={args:{calibratedAcceptance:{reviewed:12,acceptanceRate:.83}}};
-export const FreeTextAutocomplete:Story={args:{field:'position_holder',value:'Jacques Derrida',control:'combobox',allowCustom:true,options:['Jacques Derrida','Immanuel Kant','Emmanuel Levinas'],status:{status:'model_inferred',method:'llm',confidence:.82,reason:'The passage presents Derrida as the holder of the stated position.'}}};
-export const DeterministicConstraint:Story={args:{field:'primary_text',value:false,control:'boolean',status:{status:'deterministic',method:'region_type_consistency',confidence:1},constraint:{value:false,reason:'Front matter cannot be primary text.'}}};
-export const DeterministicLlmConflict:Story={args:{field:'region_type',value:'main_text',control:'enum',options:['front_matter','main_text','back_matter'],status:{status:'unresolved',method:'deterministic+llm',reason_code:'deterministic_llm_disagreement',deterministic_value:'front_matter',llm_value:'main_text',llm_confidence:.84,deterministic_reason:'The page precedes the inferred main-text boundary.',llm_reason:'The passage is continuous authorial argument.'}}};
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
+import CorpusMetadataFieldEditor from "./CorpusMetadataFieldEditor.vue";
+const meta = {
+  title: "Corpus Builder/Review/Metadata Field",
+  component: CorpusMetadataFieldEditor,
+  args: {
+    field: "region_type",
+    value: "front_matter",
+    control: "enum",
+    options: ["front_matter", "main_text", "back_matter"],
+    status: {
+      status: "unresolved",
+      method: "llm",
+      confidence: 0.58,
+      reason: "The opening pages appear to be publishing front matter.",
+    },
+    constraint: null,
+  },
+} satisfies Meta<typeof CorpusMetadataFieldEditor>;
+export default meta;
+type Story = StoryObj<typeof meta>;
+export const EnumSuggestion: Story = {
+  args: { calibratedAcceptance: { reviewed: 12, acceptanceRate: 0.83 } },
+};
+export const FreeTextAutocomplete: Story = {
+  args: {
+    field: "position_holder",
+    value: "Jacques Derrida",
+    control: "combobox",
+    allowCustom: true,
+    options: ["Jacques Derrida", "Immanuel Kant", "Emmanuel Levinas"],
+    status: {
+      status: "model_inferred",
+      method: "llm",
+      confidence: 0.82,
+      reason: "The passage presents Derrida as the holder of the stated position.",
+    },
+  },
+};
+export const DeterministicConstraint: Story = {
+  args: {
+    field: "primary_text",
+    value: false,
+    control: "boolean",
+    status: { status: "deterministic", method: "region_type_consistency", confidence: 1 },
+    constraint: { value: false, reason: "Front matter cannot be primary text." },
+  },
+};
+export const DeterministicLlmConflict: Story = {
+  args: {
+    field: "region_type",
+    value: "main_text",
+    control: "enum",
+    options: ["front_matter", "main_text", "back_matter"],
+    status: {
+      status: "unresolved",
+      method: "deterministic+llm",
+      reason_code: "deterministic_llm_disagreement",
+      deterministic_value: "front_matter",
+      llm_value: "main_text",
+      llm_confidence: 0.84,
+      deterministic_reason: "The page precedes the inferred main-text boundary.",
+      llm_reason: "The passage is continuous authorial argument.",
+    },
+  },
+};
 
-export const AutoPopulatedStance:Story={args:{field:'stance',value:'affirm',control:'enum',options:['affirm','reject','criticize','question','qualify','suspend','neutral','describe'],status:{status:'model_inferred',method:'llm',confidence:.91,auto_populated:true,proposed_value:'affirm',reason:'The position holder explicitly endorses the proposition.'},open:true}};
-export const AutoPopulatedPropositionStatus:Story={args:{field:'proposition_status',value:'asserted',control:'enum',options:['asserted','affirmed','rejected','criticized','questioned','qualified','hypothetical','attributed','reported','conceded','suspended'],status:{status:'model_inferred',method:'llm',confidence:.93,auto_populated:true,proposed_value:'asserted',reason:'The proposition is directly asserted in the passage.'},open:true}};
-export const NarrowOpenCombobox:Story={args:{field:'position_holder',value:'Jacques Derrida',control:'combobox',allowCustom:true,options:['Jacques Derrida','Emmanuel Levinas','Immanuel Kant'],status:{status:'unresolved',method:'llm',confidence:.88,auto_populated:true,proposed_value:'Jacques Derrida'},open:true},parameters:{viewport:{defaultViewport:'mobile2'}}};
+export const AutoPopulatedStance: Story = {
+  args: {
+    field: "stance",
+    value: "affirm",
+    control: "enum",
+    options: [
+      "affirm",
+      "reject",
+      "criticize",
+      "question",
+      "qualify",
+      "suspend",
+      "neutral",
+      "describe",
+    ],
+    status: {
+      status: "model_inferred",
+      method: "llm",
+      confidence: 0.91,
+      auto_populated: true,
+      proposed_value: "affirm",
+      reason: "The position holder explicitly endorses the proposition.",
+    },
+    open: true,
+  },
+};
+export const AutoPopulatedPropositionStatus: Story = {
+  args: {
+    field: "proposition_status",
+    value: "asserted",
+    control: "enum",
+    options: [
+      "asserted",
+      "affirmed",
+      "rejected",
+      "criticized",
+      "questioned",
+      "qualified",
+      "hypothetical",
+      "attributed",
+      "reported",
+      "conceded",
+      "suspended",
+    ],
+    status: {
+      status: "model_inferred",
+      method: "llm",
+      confidence: 0.93,
+      auto_populated: true,
+      proposed_value: "asserted",
+      reason: "The proposition is directly asserted in the passage.",
+    },
+    open: true,
+  },
+};
+export const NarrowOpenCombobox: Story = {
+  args: {
+    field: "position_holder",
+    value: "Jacques Derrida",
+    control: "combobox",
+    allowCustom: true,
+    options: ["Jacques Derrida", "Emmanuel Levinas", "Immanuel Kant"],
+    status: {
+      status: "unresolved",
+      method: "llm",
+      confidence: 0.88,
+      auto_populated: true,
+      proposed_value: "Jacques Derrida",
+    },
+    open: true,
+  },
+  parameters: { viewport: { defaultViewport: "mobile2" } },
+};
 
-export const ReviewerStructureConflict:Story={args:{field:'region_type',value:'main_text',control:'enum',options:['front_matter','main_text','back_matter'],status:{status:'unresolved',method:'deterministic+llm',reason_code:'deterministic_llm_disagreement',deterministic_value:'main_text',llm_value:'front_matter',llm_confidence:.96,llm_checked:true,prefilled_candidate:'deterministic',auto_populated:false,deterministic_reason:'Derived from reviewer-confirmed document structure.',llm_reason:'The semantic reader interpreted the passage as front matter.'},open:true}};
-export const NormalizedStanceAlias:Story={args:{field:'stance',value:'affirm',control:'enum',options:['affirm','reject','criticize','question','qualify','suspend','neutral','describe'],status:{status:'model_inferred',method:'llm',confidence:.91,auto_populated:true,proposed_value:'affirm',raw_llm_value:'affirmed',llm_checked:true,reason:'The position holder endorses the proposition.'},open:true}};
+export const ReviewerStructureConflict: Story = {
+  args: {
+    field: "region_type",
+    value: "main_text",
+    control: "enum",
+    options: ["front_matter", "main_text", "back_matter"],
+    status: {
+      status: "unresolved",
+      method: "deterministic+llm",
+      reason_code: "deterministic_llm_disagreement",
+      deterministic_value: "main_text",
+      llm_value: "front_matter",
+      llm_confidence: 0.96,
+      llm_checked: true,
+      prefilled_candidate: "deterministic",
+      auto_populated: false,
+      deterministic_reason: "Derived from reviewer-confirmed document structure.",
+      llm_reason: "The semantic reader interpreted the passage as front matter.",
+    },
+    open: true,
+  },
+};
+export const NormalizedStanceAlias: Story = {
+  args: {
+    field: "stance",
+    value: "affirm",
+    control: "enum",
+    options: [
+      "affirm",
+      "reject",
+      "criticize",
+      "question",
+      "qualify",
+      "suspend",
+      "neutral",
+      "describe",
+    ],
+    status: {
+      status: "model_inferred",
+      method: "llm",
+      confidence: 0.91,
+      auto_populated: true,
+      proposed_value: "affirm",
+      raw_llm_value: "affirmed",
+      llm_checked: true,
+      reason: "The position holder endorses the proposition.",
+    },
+    open: true,
+  },
+};

@@ -135,7 +135,11 @@ export function normalizeInspectorLayout(raw: unknown): InspectorLayout {
       if (!item || typeof item !== "object") continue;
       const row = item as Record<string, unknown>;
       if (row.kind === "heading") {
-        cleaned.push({ id: String(row.id || uid()), kind: "heading", label: String(row.label || "").trim() || "Section" });
+        cleaned.push({
+          id: String(row.id || uid()),
+          kind: "heading",
+          label: String(row.label || "").trim() || "Section",
+        });
         continue;
       }
       if (row.kind === "field") {
@@ -150,7 +154,11 @@ export function normalizeInspectorLayout(raw: unknown): InspectorLayout {
   return next;
 }
 
-export function moveInspectorRow(rows: InspectorLayoutRow[], from: number, to: number): InspectorLayoutRow[] {
+export function moveInspectorRow(
+  rows: InspectorLayoutRow[],
+  from: number,
+  to: number,
+): InspectorLayoutRow[] {
   if (from === to || from < 0 || to < 0 || from >= rows.length || to >= rows.length) return rows;
   const next = [...rows];
   const [item] = next.splice(from, 1);
@@ -158,7 +166,9 @@ export function moveInspectorRow(rows: InspectorLayoutRow[], from: number, to: n
   return next;
 }
 
-export function groupInspectorRows(rows: InspectorLayoutRow[]): Array<{ heading: string | null; fields: string[] }> {
+export function groupInspectorRows(
+  rows: InspectorLayoutRow[],
+): Array<{ heading: string | null; fields: string[] }> {
   const sections: Array<{ heading: string | null; fields: string[] }> = [];
   let current: { heading: string | null; fields: string[] } = { heading: null, fields: [] };
   for (const row of rows) {
@@ -174,7 +184,11 @@ export function groupInspectorRows(rows: InspectorLayoutRow[]): Array<{ heading:
 }
 
 export function unusedInspectorFields(tab: InspectorTabKey, rows: InspectorLayoutRow[]): string[] {
-  const used = new Set(rows.filter((row): row is { id: string; kind: "field"; field: string } => row.kind === "field").map((row) => row.field));
+  const used = new Set(
+    rows
+      .filter((row): row is { id: string; kind: "field"; field: string } => row.kind === "field")
+      .map((row) => row.field),
+  );
   return INSPECTOR_FIELD_CATALOG[tab].filter((name) => !used.has(name));
 }
 

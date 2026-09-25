@@ -42,7 +42,10 @@ export const PROVIDER_BULK_FIELDS: ProviderBulkField[] = [
   { key: "mirostat_tau", types: ["ollama"], input: "number", min: 0, step: 0.01 },
 ];
 
-export function mergeSavedProfile(persisted: ProviderProfile[], draft: ProviderProfile): ProviderProfile[] {
+export function mergeSavedProfile(
+  persisted: ProviderProfile[],
+  draft: ProviderProfile,
+): ProviderProfile[] {
   const copy = JSON.parse(JSON.stringify(draft)) as ProviderProfile;
   let found = false;
   const next = persisted.map((profile) => {

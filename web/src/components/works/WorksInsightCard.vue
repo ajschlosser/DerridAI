@@ -44,9 +44,7 @@ function percent(value: number) {
     <template v-if="props.insight.type === 'pie'">
       <p v-if="!total" class="work-insight-empty">
         <b>{{ i18n.t("works.no_indexed_values") }}</b>
-        <span>{{
-          i18n.t("works.no_indexed_values_help")
-        }}</span>
+        <span>{{ i18n.t("works.no_indexed_values_help") }}</span>
       </p>
       <div v-else class="work-insight-pie-layout">
         <div
@@ -79,9 +77,7 @@ function percent(value: number) {
     <ol v-else>
       <li v-if="!props.insight.values.length" class="work-insight-empty">
         <b>{{ i18n.t("works.no_indexed_values") }}</b>
-        <span>{{
-          i18n.t("works.no_indexed_values_help")
-        }}</span>
+        <span>{{ i18n.t("works.no_indexed_values_help") }}</span>
       </li>
       <li v-for="item in props.insight.values" :key="item.key">
         <button

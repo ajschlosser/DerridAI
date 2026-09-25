@@ -20,18 +20,25 @@ import VectorBackendPanel from "../components/vector/VectorBackendPanel.vue";
 import VectorCollectionHero from "../components/vector/VectorCollectionHero.vue";
 import VectorCollectionRail from "../components/vector/VectorCollectionRail.vue";
 import VectorWorkspaceHeader from "../components/vector/VectorWorkspaceHeader.vue";
-import type { ChromaConnectionUpdate, ChromaHealth, VectorCollection, VectorRecord, VectorSearchResult, VectorWorkStat } from "../types/vector";
+import type {
+  ChromaConnectionUpdate,
+  ChromaHealth,
+  VectorCollection,
+  VectorRecord,
+  VectorSearchResult,
+  VectorWorkStat,
+} from "../types/vector";
 
 type VectorTab = "overview" | "data" | "retrieval" | "builds" | "settings";
 type BrowseMode = "works" | "records";
 // Workspace fields the runtime shares with this view live in the vector store; the rest are still read from the
 // runtime's own state.
 type RuntimeOnlyState = {
-  files: Array<{id: string; records: unknown[]}>;
+  files: Array<{ id: string; records: unknown[] }>;
   activeFileId: string | null;
-  llmStatus: {models?: Array<{name: string}>} | null;
+  llmStatus: { models?: Array<{ name: string }> } | null;
   health: Record<string, unknown> | null;
-  appConfig: {embedding_provider?: string; embedding_model?: string};
+  appConfig: { embedding_provider?: string; embedding_model?: string };
 };
 const runtimeState = runtime.state as unknown as RuntimeOnlyState;
 const vector = useVectorStore();
@@ -70,7 +77,11 @@ const collections = ref<VectorCollection[]>([]);
 const providerProfiles = ref<ProviderProfile[]>([]);
 const activeName = ref("");
 const filter = ref(String(workspace.vectorCollectionFilter || ""));
-const tab = ref<VectorTab>(VECTOR_TABS.includes(workspace.vectorTab as VectorTab) ? workspace.vectorTab as VectorTab : "overview");
+const tab = ref<VectorTab>(
+  VECTOR_TABS.includes(workspace.vectorTab as VectorTab)
+    ? (workspace.vectorTab as VectorTab)
+    : "overview",
+);
 const connectionOpen = ref(false);
 const probing = ref(false);
 const applying = ref(false);
@@ -93,27 +104,40 @@ const embeddingProvider = ref("ollama");
 const embeddingModel = ref("");
 const deriveEn = ref("");
 const deriveFr = ref("");
-const confirm = ref<{kind: "delete" | "derive"; title: string; message: string} | null>(null);
+const confirm = ref<{ kind: "delete" | "derive"; title: string; message: string } | null>(null);
 let filterTimer = 0;
 
-const current = computed(() => collections.value.find(store => store.name === activeName.value) || null);
+const current = computed(
+  () => collections.value.find((store) => store.name === activeName.value) || null,
+);
 const visibleCollections = computed(() => {
   const needle = filter.value.trim().toLowerCase();
-  return needle ? collections.value.filter(store => store.name.toLowerCase().includes(needle)) : collections.value;
+  return needle
+    ? collections.value.filter((store) => store.name.toLowerCase().includes(needle))
+    : collections.value;
 });
 const tabs = computed(() => [
-  {id: "overview", label: i18n.t("vector.tab_overview")},
-  {id: "data", label: i18n.t("vector.tab_data")},
-  {id: "retrieval", label: i18n.t("vector.tab_retrieval")},
-  {id: "builds", label: i18n.t("vector.tab_builds")},
-  {id: "settings", label: i18n.t("vector.tab_settings")},
+  { id: "overview", label: i18n.t("vector.tab_overview") },
+  { id: "data", label: i18n.t("vector.tab_data") },
+  { id: "retrieval", label: i18n.t("vector.tab_retrieval") },
+  { id: "builds", label: i18n.t("vector.tab_builds") },
+  { id: "settings", label: i18n.t("vector.tab_settings") },
 ]);
 const browseTabs = computed(() => [
-  {id: "works", label: `${i18n.t("dashboard.works")} ${works.value.length}`},
-  {id: "records", label: `${i18n.t("dashboard.records")} ${Number(current.value?.count || 0).toLocaleString(i18n.locale)}`},
+  { id: "works", label: `${i18n.t("dashboard.works")} ${works.value.length}` },
+  {
+    id: "records",
+    label: `${i18n.t("dashboard.records")} ${Number(current.value?.count || 0).toLocaleString(i18n.locale)}`,
+  },
 ]);
-const contractLocked = computed(() => Boolean(current.value?.app_version && current.value.app_version !== "legacy") || Boolean(current.value?.count));
-const maxPage = computed(() => Math.max(1, Math.ceil(recordCount.value / (Number(workspace.storePageSize) || 50))));
+const contractLocked = computed(
+  () =>
+    Boolean(current.value?.app_version && current.value.app_version !== "legacy") ||
+    Boolean(current.value?.count),
+);
+const maxPage = computed(() =>
+  Math.max(1, Math.ceil(recordCount.value / (Number(workspace.storePageSize) || 50))),
+);
 const providerLabel = computed(() => {
   const provider = current.value?.embedding_provider || "chroma";
   if (provider.startsWith("profile:")) {
@@ -126,7 +150,11 @@ const providerLabel = computed(() => {
   if (provider === "precomputed") return i18n.t("vector.provider_precomputed");
   return i18n.t("vector.provider_chroma");
 });
-const semanticUnavailable = computed(() => current.value?.embedding_provider === "precomputed" && ["similarity", "mmr"].includes(searchMode.value));
+const semanticUnavailable = computed(
+  () =>
+    current.value?.embedding_provider === "precomputed" &&
+    ["similarity", "mmr"].includes(searchMode.value),
+);
 
 function persistWorkspace() {
   workspace.activeStore = activeName.value;
@@ -143,10 +171,10 @@ function persistWorkspace() {
 
 function syncHealthIntoRuntime(next: ChromaHealth) {
   health.value = next;
-  runtimeState.health = {...(runtimeState.health || {}), chroma: next, chroma_path: next.path};
+  runtimeState.health = { ...(runtimeState.health || {}), chroma: next, chroma_path: next.path };
 }
 
-async function load(options: {details?: boolean} = {}) {
+async function load(options: { details?: boolean } = {}) {
   loading.value = !collections.value.length;
   error.value = "";
   try {
@@ -157,11 +185,14 @@ async function load(options: {details?: boolean} = {}) {
     ]);
     providerProfiles.value = providers.profiles || [];
     syncHealthIntoRuntime(nextHealth);
-    const corpusStores = stores.filter(store => !store.metadata?.derridai_system_collection);
+    const corpusStores = stores.filter((store) => !store.metadata?.derridai_system_collection);
     collections.value = corpusStores;
-    if (activeName.value && !corpusStores.some(store => store.name === activeName.value)) activeName.value = "";
-    if (!activeName.value) activeName.value = String(workspace.activeStore || corpusStores[0]?.name || "");
-    if (activeName.value && !corpusStores.some(store => store.name === activeName.value)) activeName.value = corpusStores[0]?.name || "";
+    if (activeName.value && !corpusStores.some((store) => store.name === activeName.value))
+      activeName.value = "";
+    if (!activeName.value)
+      activeName.value = String(workspace.activeStore || corpusStores[0]?.name || "");
+    if (activeName.value && !corpusStores.some((store) => store.name === activeName.value))
+      activeName.value = corpusStores[0]?.name || "";
     workspace.stores = corpusStores;
     persistWorkspace();
     pendingCount.value = runtime.pendingUpsertRows?.().length || 0;
@@ -172,7 +203,14 @@ async function load(options: {details?: boolean} = {}) {
       embeddingModel.value = current.value.embedding_model || "";
       deriveEn.value = `${current.value.name}_en`;
       deriveFr.value = `${current.value.name}_fr`;
-      if (!workspace.storeSearchMode) searchMode.value = ({hybrid: "hybrid", lexical: "lexical", semantic: "similarity"} as Record<string, string>)[current.value.retrieval_mode || ""] || "hybrid";
+      if (!workspace.storeSearchMode)
+        searchMode.value =
+          (
+            { hybrid: "hybrid", lexical: "lexical", semantic: "similarity" } as Record<
+              string,
+              string
+            >
+          )[current.value.retrieval_mode || ""] || "hybrid";
     }
     if (options.details !== false && current.value && tab.value === "data") await loadData();
     if (workspace.vectorAutoCreateRequested && !corpusStores.length) {
@@ -189,19 +227,27 @@ async function load(options: {details?: boolean} = {}) {
 }
 
 async function loadData() {
-  if (!activeName.value) { works.value = []; records.value = []; recordCount.value = 0; return; }
+  if (!activeName.value) {
+    works.value = [];
+    records.value = [];
+    recordCount.value = 0;
+    return;
+  }
   try {
     const payload = await chromaApi.works(activeName.value);
-    works.value = payload.stats || (payload.works || []).map(work => ({work, count: 0}));
+    works.value = payload.stats || (payload.works || []).map((work) => ({ work, count: 0 }));
     if (browseMode.value === "records") {
-      const params = new URLSearchParams({limit: String(workspace.storePageSize || 50), offset: String(Math.max(0, (storePage.value - 1) * (workspace.storePageSize || 50)))});
+      const params = new URLSearchParams({
+        limit: String(workspace.storePageSize || 50),
+        offset: String(Math.max(0, (storePage.value - 1) * (workspace.storePageSize || 50))),
+      });
       if (storeWork.value) params.set("work", storeWork.value);
       const page = await chromaApi.records(activeName.value, params);
       records.value = page.records || [];
       recordCount.value = page.count || 0;
     }
   } catch (exc) {
-    runtime.notifyToast(exc instanceof Error ? exc.message : String(exc), {tone: "danger"});
+    runtime.notifyToast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
   }
 }
 
@@ -216,24 +262,37 @@ function openCreate() {
 }
 
 async function probe(body: ChromaConnectionUpdate) {
-  probing.value = true; connectionError.value = ""; probeResult.value = null;
-  try { probeResult.value = await chromaApi.probe(body); }
-  catch (exc) { connectionError.value = i18n.tf("vector.connection_failed", {message: exc instanceof Error ? exc.message : String(exc)}); }
-  finally { probing.value = false; }
+  probing.value = true;
+  connectionError.value = "";
+  probeResult.value = null;
+  try {
+    probeResult.value = await chromaApi.probe(body);
+  } catch (exc) {
+    connectionError.value = i18n.tf("vector.connection_failed", {
+      message: exc instanceof Error ? exc.message : String(exc),
+    });
+  } finally {
+    probing.value = false;
+  }
 }
 
 async function applyConnection(body: ChromaConnectionUpdate) {
-  applying.value = true; connectionError.value = "";
+  applying.value = true;
+  connectionError.value = "";
   try {
     const next = await chromaApi.setConnection(body);
     syncHealthIntoRuntime(next);
     connectionOpen.value = false;
-    runtime.notifyToast(i18n.t("vector.connection_changed"), {tone: "success"});
+    runtime.notifyToast(i18n.t("vector.connection_changed"), { tone: "success" });
     activeName.value = "";
     await load();
   } catch (exc) {
-    connectionError.value = i18n.tf("vector.connection_failed", {message: exc instanceof Error ? exc.message : String(exc)});
-  } finally { applying.value = false; }
+    connectionError.value = i18n.tf("vector.connection_failed", {
+      message: exc instanceof Error ? exc.message : String(exc),
+    });
+  } finally {
+    applying.value = false;
+  }
 }
 
 function selectCollection(name: string) {
@@ -244,18 +303,21 @@ function selectCollection(name: string) {
   storeWork.value = "";
   searchResults.value = [];
   persistWorkspace();
-  void load({details: false});
+  void load({ details: false });
 }
 
 function setTab(next: string) {
-  tab.value = (tabs.value.some(item => item.id === next) ? next : "overview") as VectorTab;
+  tab.value = (tabs.value.some((item) => item.id === next) ? next : "overview") as VectorTab;
   persistWorkspace();
   if (tab.value === "data") void loadData();
 }
 
 function setBrowse(next: string) {
   browseMode.value = next === "records" ? "records" : "works";
-  if (browseMode.value === "records") { storeWork.value = ""; storePage.value = 1; }
+  if (browseMode.value === "records") {
+    storeWork.value = "";
+    storePage.value = 1;
+  }
   persistWorkspace();
   void loadData();
 }
@@ -274,39 +336,65 @@ async function runSearch() {
   searching.value = true;
   persistWorkspace();
   try {
-    const payload = await chromaApi.search(activeName.value, {query: searchQuery.value.trim(), mode: searchMode.value, n_results: 30});
+    const payload = await chromaApi.search(activeName.value, {
+      query: searchQuery.value.trim(),
+      mode: searchMode.value,
+      n_results: 30,
+    });
     searchResults.value = payload.results || [];
   } catch (exc) {
-    runtime.notifyToast(exc instanceof Error ? exc.message : String(exc), {tone: "danger"});
-  } finally { searching.value = false; }
+    runtime.notifyToast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
+  } finally {
+    searching.value = false;
+  }
 }
 
 async function saveLanguages() {
   if (!activeName.value) return;
   try {
-    await chromaApi.setLanguages(activeName.value, {language_codes: languageCodes.value, collection_role: role.value});
-    runtime.notifyToast(i18n.t("vector.language_tags_saved"), {tone: "success"});
+    await chromaApi.setLanguages(activeName.value, {
+      language_codes: languageCodes.value,
+      collection_role: role.value,
+    });
+    runtime.notifyToast(i18n.t("vector.language_tags_saved"), { tone: "success" });
     await load();
-  } catch (exc) { runtime.notifyToast(exc instanceof Error ? exc.message : String(exc), {tone: "danger"}); }
+  } catch (exc) {
+    runtime.notifyToast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
+  }
 }
 
 async function saveEmbedding() {
   if (!activeName.value || contractLocked.value) return;
-  if (embeddingProvider.value.startsWith("profile:") && !embeddingModel.value.trim()) return runtime.notifyToast(i18n.t("vector.embedding_model_required"), {tone: "warn"});
+  if (embeddingProvider.value.startsWith("profile:") && !embeddingModel.value.trim())
+    return runtime.notifyToast(i18n.t("vector.embedding_model_required"), { tone: "warn" });
   try {
-    await chromaApi.setEmbedding(activeName.value, {embedding_provider: embeddingProvider.value, embedding_model: embeddingProvider.value.startsWith("profile:") ? embeddingModel.value.trim() : null});
-    runtime.notifyToast(i18n.t("vector.embedding_saved"), {tone: "success"});
+    await chromaApi.setEmbedding(activeName.value, {
+      embedding_provider: embeddingProvider.value,
+      embedding_model: embeddingProvider.value.startsWith("profile:")
+        ? embeddingModel.value.trim()
+        : null,
+    });
+    runtime.notifyToast(i18n.t("vector.embedding_saved"), { tone: "success" });
     await load();
-  } catch (exc) { runtime.notifyToast(exc instanceof Error ? exc.message : String(exc), {tone: "danger"}); }
+  } catch (exc) {
+    runtime.notifyToast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
+  }
 }
 
 async function toggleProtection() {
   if (!current.value) return;
   try {
     await chromaApi.setProtection(current.value.name, !current.value.protected);
-    runtime.notifyToast(current.value.protected ? i18n.t("vector.protection_disabled") : i18n.t("vector.protection_enabled"), {tone: "success"});
+    runtime.notifyToast(
+      current.value.protected
+        ? i18n.t("vector.protection_disabled")
+        : i18n.t("vector.protection_enabled"),
+      { tone: "success" },
+    );
     await load();
-  } catch (exc) { runtime.notifyToast(exc instanceof Error ? exc.message : String(exc), {tone: "danger"}); }
+  } catch (exc) {
+    runtime.notifyToast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
+  }
 }
 
 async function confirmAction() {
@@ -317,38 +405,57 @@ async function confirmAction() {
     try {
       await chromaApi.remove(activeName.value);
       activeName.value = "";
-      runtime.notifyToast(i18n.t("vector.collection_deleted"), {tone: "success"});
+      runtime.notifyToast(i18n.t("vector.collection_deleted"), { tone: "success" });
       await load();
-    } catch (exc) { runtime.notifyToast(exc instanceof Error ? exc.message : String(exc), {tone: "danger"}); }
+    } catch (exc) {
+      runtime.notifyToast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
+    }
   }
   if (kind === "derive") {
     if (!activeName.value || !deriveEn.value.trim() || !deriveFr.value.trim()) return;
     try {
-      await chromaApi.deriveLanguages(activeName.value, {en_name: deriveEn.value.trim(), fr_name: deriveFr.value.trim(), overwrite: true});
-      runtime.notifyToast(i18n.t("vector.language_collections"), {tone: "success"});
+      await chromaApi.deriveLanguages(activeName.value, {
+        en_name: deriveEn.value.trim(),
+        fr_name: deriveFr.value.trim(),
+        overwrite: true,
+      });
+      runtime.notifyToast(i18n.t("vector.language_collections"), { tone: "success" });
       await load();
-    } catch (exc) { runtime.notifyToast(exc instanceof Error ? exc.message : String(exc), {tone: "danger"}); }
+    } catch (exc) {
+      runtime.notifyToast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
+    }
   }
 }
 
 function syncActive() {
-  const file = runtimeState.files?.find(item => item.id === runtimeState.activeFileId);
-  if (!file) return runtime.notifyToast(i18n.t("vector.load_jsonl_first"), {tone: "warn"});
-  void runtime.upsertRows(file.records.map((record: unknown, index: number) => ({file, record, index})), "records").then(() => load());
+  const file = runtimeState.files?.find((item) => item.id === runtimeState.activeFileId);
+  if (!file) return runtime.notifyToast(i18n.t("vector.load_jsonl_first"), { tone: "warn" });
+  void runtime
+    .upsertRows(
+      file.records.map((record: unknown, index: number) => ({ file, record, index })),
+      "records",
+    )
+    .then(() => load());
 }
 function syncAll() {
-  const rows = (runtimeState.files || []).flatMap(file => file.records.map((record, index) => ({file, record, index})));
-  if (!rows.length) return runtime.notifyToast(i18n.t("vector.load_jsonl_any_first"), {tone: "warn"});
+  const rows = (runtimeState.files || []).flatMap((file) =>
+    file.records.map((record, index) => ({ file, record, index })),
+  );
+  if (!rows.length)
+    return runtime.notifyToast(i18n.t("vector.load_jsonl_any_first"), { tone: "warn" });
   void runtime.upsertRows(rows, "records").then(() => load());
 }
 
 function snippet(text: unknown) {
-  const value = String(text || "").replace(/\s+/g, " ").trim();
+  const value = String(text || "")
+    .replace(/\s+/g, " ")
+    .trim();
   return value.length > 280 ? `${value.slice(0, 277)}…` : value;
 }
 function toggleLanguage(code: string, checked: boolean) {
-  if (checked && !languageCodes.value.includes(code)) languageCodes.value = [...languageCodes.value, code];
-  else if (!checked) languageCodes.value = languageCodes.value.filter(item => item !== code);
+  if (checked && !languageCodes.value.includes(code))
+    languageCodes.value = [...languageCodes.value, code];
+  else if (!checked) languageCodes.value = languageCodes.value.filter((item) => item !== code);
 }
 
 async function redirectResearcher() {
@@ -356,15 +463,25 @@ async function redirectResearcher() {
   await router.replace("/search");
 }
 
-function onStoresChanged() { void load(); }
-watch(filter, value => {
+function onStoresChanged() {
+  void load();
+}
+watch(filter, (value) => {
   window.clearTimeout(filterTimer);
   filterTimer = window.setTimeout(() => persistWorkspace(), 140);
   workspace.vectorCollectionFilter = value;
 });
-watch(() => i18n.locale, () => { void load({details: false}); });
+watch(
+  () => i18n.locale,
+  () => {
+    void load({ details: false });
+  },
+);
 onMounted(async () => {
-  if (auth.isResearcher) { await redirectResearcher(); return; }
+  if (auth.isResearcher) {
+    await redirectResearcher();
+    return;
+  }
   window.addEventListener("derridai:vector-stores-changed", onStoresChanged);
   await load();
 });
@@ -375,16 +492,38 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="vue-native-page vector-native-page" :aria-busy="loading" aria-labelledby="vector-page-title">
-    <div v-if="auth.isResearcher" class="vector-page-loading" role="status"><span class="spinner"></span>{{ i18n.t("search.redirect_database", "Opening corpus search…") }}</div>
-    <div v-else-if="loading && !collections.length && !error" class="vector-page-loading" role="status"><span class="spinner"></span>{{ i18n.t("vector.loading_stores", "Loading Corpus Data…") }}</div>
+  <main
+    class="vue-native-page vector-native-page"
+    :aria-busy="loading"
+    aria-labelledby="vector-page-title"
+  >
+    <div v-if="auth.isResearcher" class="vector-page-loading" role="status">
+      <span class="spinner"></span
+      >{{ i18n.t("search.redirect_database", "Opening corpus search…") }}
+    </div>
+    <div
+      v-else-if="loading && !collections.length && !error"
+      class="vector-page-loading"
+      role="status"
+    >
+      <span class="spinner"></span>{{ i18n.t("vector.loading_stores", "Loading Corpus Data…") }}
+    </div>
     <section v-else-if="error" class="vector-page-error">
       <h1 id="vector-page-title">{{ i18n.t("nav.vector", "Corpus Data") }}</h1>
       <p>{{ error }}</p>
       <UiButton :label="i18n.t('ui.retry')" @click="load()" />
     </section>
     <template v-else>
-      <VectorWorkspaceHeader :health="health" :collection-count="collections.length" @create="openCreate" @connection="connectionOpen = true; probeResult = null; connectionError = ''" />
+      <VectorWorkspaceHeader
+        :health="health"
+        :collection-count="collections.length"
+        @create="openCreate"
+        @connection="
+          connectionOpen = true;
+          probeResult = null;
+          connectionError = '';
+        "
+      />
 
       <AccessibleEmptyState
         v-if="!collections.length"
@@ -420,37 +559,182 @@ onBeforeUnmount(() => {
               @sync="runtime.triggerUpsertQueue()"
               @retrieval="setTab('retrieval')"
               @protection="toggleProtection"
-              @delete="confirm = {kind: 'delete', title: i18n.t('vector.delete_collection'), message: i18n.tf('vector.delete_collection_confirm', {name: current.name})}"
+              @delete="
+                confirm = {
+                  kind: 'delete',
+                  title: i18n.t('vector.delete_collection'),
+                  message: i18n.tf('vector.delete_collection_confirm', { name: current.name }),
+                }
+              "
             />
-            <UiTabs :tabs="tabs" :model-value="tab" id-prefix="vector-section" :tablist-label="i18n.t('vector.workspace_sections')" @update:model-value="setTab" />
+            <UiTabs
+              :tabs="tabs"
+              :model-value="tab"
+              id-prefix="vector-section"
+              :tablist-label="i18n.t('vector.workspace_sections')"
+              @update:model-value="setTab"
+            />
 
-            <section v-show="tab === 'overview'" id="vector-section-panel-overview" class="vector-tab-surface" role="tabpanel" aria-labelledby="vector-section-tab-overview">
+            <section
+              v-show="tab === 'overview'"
+              id="vector-section-panel-overview"
+              class="vector-tab-surface"
+              role="tabpanel"
+              aria-labelledby="vector-section-tab-overview"
+            >
               <div class="vector-overview-grid">
-                <article class="card vector-overview-card"><span>{{ i18n.t("vector.sync_state") }}</span><b>{{ pendingCount ? i18n.tf("vector.changes_pending", {count: pendingCount.toLocaleString(i18n.locale)}) : i18n.t("vector.current") }}</b><small>{{ current.last_synced_at ? i18n.tf("vector.synced_at", {time: new Date(current.last_synced_at).toLocaleString(i18n.locale)}) : i18n.t("vector.never_synced") }}</small></article>
-                <article class="card vector-overview-card"><span>{{ i18n.t("vector.retrieval_contract") }}</span><b>{{ current.retrieval_mode || "semantic" }} · {{ current.distance_metric || "l2" }}{{ current.embedding_dimension ? ` · ${Number(current.embedding_dimension).toLocaleString(i18n.locale)}d` : "" }}</b><small>{{ providerLabel }}</small></article>
-                <article class="card vector-overview-card"><span>{{ i18n.t("vector.source") }}</span><b>{{ current.source_label || current.source_kind || i18n.t("vector.source_unrecorded") }}</b><small>{{ Number(current.source_record_count || current.count || 0).toLocaleString(i18n.locale) }} {{ i18n.t("dynamic.records") }}</small></article>
-                <article class="card vector-overview-card"><span>{{ i18n.t("vector.current_build") }}</span><b>{{ current.build_id ? current.build_id.slice(-12) : i18n.t("vector.no_build") }}</b><small>{{ (current.build_history || []).length.toLocaleString(i18n.locale) }} {{ i18n.t("vector.completed_builds") }}</small></article>
+                <article class="card vector-overview-card">
+                  <span>{{ i18n.t("vector.sync_state") }}</span
+                  ><b>{{
+                    pendingCount
+                      ? i18n.tf("vector.changes_pending", {
+                          count: pendingCount.toLocaleString(i18n.locale),
+                        })
+                      : i18n.t("vector.current")
+                  }}</b
+                  ><small>{{
+                    current.last_synced_at
+                      ? i18n.tf("vector.synced_at", {
+                          time: new Date(current.last_synced_at).toLocaleString(i18n.locale),
+                        })
+                      : i18n.t("vector.never_synced")
+                  }}</small>
+                </article>
+                <article class="card vector-overview-card">
+                  <span>{{ i18n.t("vector.retrieval_contract") }}</span
+                  ><b
+                    >{{ current.retrieval_mode || "semantic" }} ·
+                    {{ current.distance_metric || "l2"
+                    }}{{
+                      current.embedding_dimension
+                        ? ` · ${Number(current.embedding_dimension).toLocaleString(i18n.locale)}d`
+                        : ""
+                    }}</b
+                  ><small>{{ providerLabel }}</small>
+                </article>
+                <article class="card vector-overview-card">
+                  <span>{{ i18n.t("vector.source") }}</span
+                  ><b>{{
+                    current.source_label ||
+                    current.source_kind ||
+                    i18n.t("vector.source_unrecorded")
+                  }}</b
+                  ><small
+                    >{{
+                      Number(current.source_record_count || current.count || 0).toLocaleString(
+                        i18n.locale,
+                      )
+                    }}
+                    {{ i18n.t("dynamic.records") }}</small
+                  >
+                </article>
+                <article class="card vector-overview-card">
+                  <span>{{ i18n.t("vector.current_build") }}</span
+                  ><b>{{
+                    current.build_id ? current.build_id.slice(-12) : i18n.t("vector.no_build")
+                  }}</b
+                  ><small
+                    >{{ (current.build_history || []).length.toLocaleString(i18n.locale) }}
+                    {{ i18n.t("vector.completed_builds") }}</small
+                  >
+                </article>
               </div>
-              <div v-if="current.last_build_error" class="info warn" role="status"><b>{{ i18n.t("vector.last_build_error") }}</b><span>{{ current.last_build_error }}</span></div>
+              <div v-if="current.last_build_error" class="info warn" role="status">
+                <b>{{ i18n.t("vector.last_build_error") }}</b
+                ><span>{{ current.last_build_error }}</span>
+              </div>
             </section>
 
-            <section v-show="tab === 'data'" id="vector-section-panel-data" class="card vector-browser-card vector-tab-surface" role="tabpanel" aria-labelledby="vector-section-tab-data">
-              <UiTabs :tabs="browseTabs" :model-value="browseMode" id-prefix="vector-browse" :tablist-label="i18n.t('vector.browse_works')" @update:model-value="setBrowse" />
-              <div v-show="browseMode === 'works'" id="vector-browse-panel-works" role="tabpanel" aria-labelledby="vector-browse-tab-works" class="db-work-grid">
-                <button v-for="item in works" :key="item.work" type="button" class="db-work-card" @click="openWork(item.work)"><span><b>{{ item.work }}</b><small>{{ i18n.t("vector.open_work_records") }}</small></span><strong>{{ item.count == null ? "—" : Number(item.count).toLocaleString(i18n.locale) }}</strong></button>
+            <section
+              v-show="tab === 'data'"
+              id="vector-section-panel-data"
+              class="card vector-browser-card vector-tab-surface"
+              role="tabpanel"
+              aria-labelledby="vector-section-tab-data"
+            >
+              <UiTabs
+                :tabs="browseTabs"
+                :model-value="browseMode"
+                id-prefix="vector-browse"
+                :tablist-label="i18n.t('vector.browse_works')"
+                @update:model-value="setBrowse"
+              />
+              <div
+                v-show="browseMode === 'works'"
+                id="vector-browse-panel-works"
+                role="tabpanel"
+                aria-labelledby="vector-browse-tab-works"
+                class="db-work-grid"
+              >
+                <button
+                  v-for="item in works"
+                  :key="item.work"
+                  type="button"
+                  class="db-work-card"
+                  @click="openWork(item.work)"
+                >
+                  <span
+                    ><b>{{ item.work }}</b
+                    ><small>{{ i18n.t("vector.open_work_records") }}</small></span
+                  ><strong>{{
+                    item.count == null ? "—" : Number(item.count).toLocaleString(i18n.locale)
+                  }}</strong>
+                </button>
                 <p v-if="!works.length" class="note">{{ i18n.t("research.no_work_metadata") }}</p>
               </div>
-              <div v-show="browseMode === 'records'" id="vector-browse-panel-records" role="tabpanel" aria-labelledby="vector-browse-tab-records">
+              <div
+                v-show="browseMode === 'records'"
+                id="vector-browse-panel-records"
+                role="tabpanel"
+                aria-labelledby="vector-browse-tab-records"
+              >
                 <div class="toolbar store-record-toolbar">
-                  <div><b>{{ storeWork || i18n.t("research.all_records") }}</b><div class="note">{{ recordCount.toLocaleString(i18n.locale) }} {{ i18n.t("dynamic.records") }} · {{ i18n.t("dynamic.page") }} {{ storePage }} {{ i18n.t("research.of") }} {{ maxPage }}</div></div>
+                  <div>
+                    <b>{{ storeWork || i18n.t("research.all_records") }}</b>
+                    <div class="note">
+                      {{ recordCount.toLocaleString(i18n.locale) }}
+                      {{ i18n.t("dynamic.records") }} · {{ i18n.t("dynamic.page") }}
+                      {{ storePage }} {{ i18n.t("research.of") }} {{ maxPage }}
+                    </div>
+                  </div>
                   <div class="tools">
-                    <label class="sr-only" for="vector-store-work">{{ i18n.t("dashboard.works") }}</label>
-                    <select id="vector-store-work" class="control" :value="storeWork" @change="storeWork = ($event.target as HTMLSelectElement).value; storePage = 1; persistWorkspace(); loadData()">
+                    <label class="sr-only" for="vector-store-work">{{
+                      i18n.t("dashboard.works")
+                    }}</label>
+                    <select
+                      id="vector-store-work"
+                      class="control"
+                      :value="storeWork"
+                      @change="
+                        storeWork = ($event.target as HTMLSelectElement).value;
+                        storePage = 1;
+                        persistWorkspace();
+                        loadData();
+                      "
+                    >
                       <option value="">{{ i18n.t("dashboard.all_works") }}</option>
-                      <option v-for="item in works" :key="item.work" :value="item.work">{{ item.work }}</option>
+                      <option v-for="item in works" :key="item.work" :value="item.work">
+                        {{ item.work }}
+                      </option>
                     </select>
-                    <UiButton :label="i18n.t('ui.previous')" :disabled="storePage <= 1" @click="storePage -= 1; persistWorkspace(); loadData()" />
-                    <UiButton :label="i18n.t('ui.next')" :disabled="storePage >= maxPage" @click="storePage += 1; persistWorkspace(); loadData()" />
+                    <UiButton
+                      :label="i18n.t('ui.previous')"
+                      :disabled="storePage <= 1"
+                      @click="
+                        storePage -= 1;
+                        persistWorkspace();
+                        loadData();
+                      "
+                    />
+                    <UiButton
+                      :label="i18n.t('ui.next')"
+                      :disabled="storePage >= maxPage"
+                      @click="
+                        storePage += 1;
+                        persistWorkspace();
+                        loadData();
+                      "
+                    />
                   </div>
                 </div>
                 <div
@@ -460,24 +744,58 @@ onBeforeUnmount(() => {
                   tabindex="0"
                 >
                   <table class="store-table ui-table">
-                    <caption class="sr-only">{{ i18n.t("dashboard.records") }}</caption>
-                    <thead><tr><th scope="col">{{ i18n.t("field.work") }}</th><th scope="col">{{ i18n.t("field.record_id") }}</th><th scope="col">{{ i18n.t("record.page") }}</th><th scope="col">{{ i18n.t("record.text") }}</th></tr></thead>
+                    <caption class="sr-only">
+                      {{
+                        i18n.t("dashboard.records")
+                      }}
+                    </caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">{{ i18n.t("field.work") }}</th>
+                        <th scope="col">{{ i18n.t("field.record_id") }}</th>
+                        <th scope="col">{{ i18n.t("record.page") }}</th>
+                        <th scope="col">{{ i18n.t("record.text") }}</th>
+                      </tr>
+                    </thead>
                     <tbody>
-                      <tr v-for="record in records" :key="String(record._chroma_id || record.record_id)">
+                      <tr
+                        v-for="record in records"
+                        :key="String(record._chroma_id || record.record_id)"
+                      >
                         <td>{{ record.work || "—" }}</td>
                         <td>{{ record.record_id || record._chroma_id || "—" }}</td>
-                        <td>{{ record.page_start ?? "—" }}{{ record.page_end && record.page_end !== record.page_start ? `–${record.page_end}` : "" }}</td>
+                        <td>
+                          {{ record.page_start ?? "—"
+                          }}{{
+                            record.page_end && record.page_end !== record.page_start
+                              ? `–${record.page_end}`
+                              : ""
+                          }}
+                        </td>
                         <td>{{ snippet(record.text) }}</td>
                       </tr>
-                      <tr v-if="!records.length"><td colspan="4" class="note">{{ i18n.t("vector.no_matching_records") }}</td></tr>
+                      <tr v-if="!records.length">
+                        <td colspan="4" class="note">{{ i18n.t("vector.no_matching_records") }}</td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>
               </div>
             </section>
 
-            <section v-show="tab === 'retrieval'" id="vector-section-panel-retrieval" class="card vector-search-card vector-tab-surface" role="tabpanel" aria-labelledby="vector-section-tab-retrieval">
-              <div class="cardhead"><div><b>{{ i18n.t("vector.test_retrieval") }}</b><div class="note">{{ i18n.t("vector.test_retrieval_help") }}</div></div></div>
+            <section
+              v-show="tab === 'retrieval'"
+              id="vector-section-panel-retrieval"
+              class="card vector-search-card vector-tab-surface"
+              role="tabpanel"
+              aria-labelledby="vector-section-tab-retrieval"
+            >
+              <div class="cardhead">
+                <div>
+                  <b>{{ i18n.t("vector.test_retrieval") }}</b>
+                  <div class="note">{{ i18n.t("vector.test_retrieval_help") }}</div>
+                </div>
+              </div>
               <form class="vector-search-config" @submit.prevent="runSearch">
                 <UiField :label="i18n.t('vector.search_method')">
                   <select class="control" v-model="searchMode">
@@ -488,51 +806,154 @@ onBeforeUnmount(() => {
                   </select>
                 </UiField>
                 <div class="vector-search-row">
-                  <label class="sr-only" for="vector-store-query">{{ i18n.t("vector.test_retrieval") }}</label>
-                  <input id="vector-store-query" class="control" v-model="searchQuery" :placeholder="i18n.t('vector.retrieval_search_placeholder')" autocomplete="off">
-                  <UiButton type="submit" variant="primary" :label="searching ? i18n.t('search.searching') : i18n.t('ui.search')" :disabled="searching || semanticUnavailable" :disabled-reason="i18n.t('vector.precomputed_search_help')" />
-                  <UiButton type="button" :label="i18n.t('ui.clear')" @click="searchQuery = ''; searchResults = []; persistWorkspace()" />
+                  <label class="sr-only" for="vector-store-query">{{
+                    i18n.t("vector.test_retrieval")
+                  }}</label>
+                  <input
+                    id="vector-store-query"
+                    class="control"
+                    v-model="searchQuery"
+                    :placeholder="i18n.t('vector.retrieval_search_placeholder')"
+                    autocomplete="off"
+                  />
+                  <UiButton
+                    type="submit"
+                    variant="primary"
+                    :label="searching ? i18n.t('search.searching') : i18n.t('ui.search')"
+                    :disabled="searching || semanticUnavailable"
+                    :disabled-reason="i18n.t('vector.precomputed_search_help')"
+                  />
+                  <UiButton
+                    type="button"
+                    :label="i18n.t('ui.clear')"
+                    @click="
+                      searchQuery = '';
+                      searchResults = [];
+                      persistWorkspace();
+                    "
+                  />
                 </div>
               </form>
               <div class="vector-search-results">
-                <article v-for="result in searchResults" :key="String(result.id || result.record?._chroma_id || result.record?.record_id)" class="result store-result">
+                <article
+                  v-for="result in searchResults"
+                  :key="String(result.id || result.record?._chroma_id || result.record?.record_id)"
+                  class="result store-result"
+                >
                   <div class="result-main">
-                    <div class="note">{{ result.hybrid_score != null ? `${i18n.t("vector.hybrid_score")} ${Number(result.hybrid_score).toFixed(4)}` : (result.distance != null ? Number(result.distance).toFixed(4) : "") }}</div>
+                    <div class="note">
+                      {{
+                        result.hybrid_score != null
+                          ? `${i18n.t("vector.hybrid_score")} ${Number(result.hybrid_score).toFixed(4)}`
+                          : result.distance != null
+                            ? Number(result.distance).toFixed(4)
+                            : ""
+                      }}
+                    </div>
                     <b>{{ result.record?.work || result.record?.record_id || result.id }}</b>
                     <div class="textcell">{{ snippet(result.record?.text) }}</div>
                   </div>
                 </article>
-                <p v-if="!searchResults.length" class="note">{{ i18n.t("vector.search_results_empty") }}</p>
+                <p v-if="!searchResults.length" class="note">
+                  {{ i18n.t("vector.search_results_empty") }}
+                </p>
               </div>
             </section>
 
-            <section v-show="tab === 'builds'" id="vector-section-panel-builds" class="card vector-manifest-card vector-tab-surface" role="tabpanel" aria-labelledby="vector-section-tab-builds">
-              <div class="cardhead"><div><b>{{ i18n.t("vector.manifest_builds") }}</b><div class="note">{{ i18n.t("vector.manifest_builds_help") }}</div></div><span class="badge">v{{ current.manifest_version || 1 }}</span></div>
+            <section
+              v-show="tab === 'builds'"
+              id="vector-section-panel-builds"
+              class="card vector-manifest-card vector-tab-surface"
+              role="tabpanel"
+              aria-labelledby="vector-section-tab-builds"
+            >
+              <div class="cardhead">
+                <div>
+                  <b>{{ i18n.t("vector.manifest_builds") }}</b>
+                  <div class="note">{{ i18n.t("vector.manifest_builds_help") }}</div>
+                </div>
+                <span class="badge">v{{ current.manifest_version || 1 }}</span>
+              </div>
               <dl class="manifest-review vector-manifest-review">
-                <div><dt>{{ i18n.t("vector.status") }}</dt><dd>{{ String(current.status || (current.count ? "ready" : "empty")) }}</dd></div>
-                <div><dt>{{ i18n.t("vector.retrieval_mode") }}</dt><dd>{{ current.retrieval_mode || "semantic" }}</dd></div>
-                <div><dt>{{ i18n.t("vector.embedding_dimension") }}</dt><dd>{{ current.embedding_dimension ? Number(current.embedding_dimension).toLocaleString(i18n.locale) : "—" }}</dd></div>
-                <div><dt>{{ i18n.t("vector.distance_metric") }}</dt><dd>{{ current.distance_metric || "l2" }}</dd></div>
-                <div><dt>{{ i18n.t("vector.text_field") }}</dt><dd><code>{{ current.text_field || "text" }}</code></dd></div>
-                <div><dt>{{ i18n.t("vector.source_records") }}</dt><dd>{{ Number(current.source_record_count || 0).toLocaleString(i18n.locale) }}</dd></div>
-                <div><dt>{{ i18n.t("vector.created_with") }}</dt><dd>{{ current.app_version || "legacy" }}</dd></div>
+                <div>
+                  <dt>{{ i18n.t("vector.status") }}</dt>
+                  <dd>{{ String(current.status || (current.count ? "ready" : "empty")) }}</dd>
+                </div>
+                <div>
+                  <dt>{{ i18n.t("vector.retrieval_mode") }}</dt>
+                  <dd>{{ current.retrieval_mode || "semantic" }}</dd>
+                </div>
+                <div>
+                  <dt>{{ i18n.t("vector.embedding_dimension") }}</dt>
+                  <dd>
+                    {{
+                      current.embedding_dimension
+                        ? Number(current.embedding_dimension).toLocaleString(i18n.locale)
+                        : "—"
+                    }}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ i18n.t("vector.distance_metric") }}</dt>
+                  <dd>{{ current.distance_metric || "l2" }}</dd>
+                </div>
+                <div>
+                  <dt>{{ i18n.t("vector.text_field") }}</dt>
+                  <dd>
+                    <code>{{ current.text_field || "text" }}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ i18n.t("vector.source_records") }}</dt>
+                  <dd>
+                    {{ Number(current.source_record_count || 0).toLocaleString(i18n.locale) }}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ i18n.t("vector.created_with") }}</dt>
+                  <dd>{{ current.app_version || "legacy" }}</dd>
+                </div>
               </dl>
               <details class="vector-build-history" :open="!(current.build_history || []).length">
-                <summary>{{ i18n.tf("vector.build_history", {count: (current.build_history || []).length}) }}</summary>
+                <summary>
+                  {{
+                    i18n.tf("vector.build_history", { count: (current.build_history || []).length })
+                  }}
+                </summary>
                 <div v-if="current.build_history?.length" class="vector-build-list">
-                  <article v-for="build in [...current.build_history].reverse()" :key="String(build.build_id)">
-                    <div><b>{{ build.build_id || i18n.t("vector.build") }}</b></div>
-                    <small>{{ build.finished_at || build.created_at || "" }} · {{ Number(build.record_count || 0).toLocaleString(i18n.locale) }} {{ i18n.t("dynamic.records") }}</small>
+                  <article
+                    v-for="build in [...current.build_history].reverse()"
+                    :key="String(build.build_id)"
+                  >
+                    <div>
+                      <b>{{ build.build_id || i18n.t("vector.build") }}</b>
+                    </div>
+                    <small
+                      >{{ build.finished_at || build.created_at || "" }} ·
+                      {{ Number(build.record_count || 0).toLocaleString(i18n.locale) }}
+                      {{ i18n.t("dynamic.records") }}</small
+                    >
                   </article>
                 </div>
                 <p v-else class="note">{{ i18n.t("vector.no_build_history") }}</p>
               </details>
             </section>
 
-            <div v-show="tab === 'settings'" id="vector-section-panel-settings" class="vector-tab-surface" role="tabpanel" aria-labelledby="vector-section-tab-settings">
+            <div
+              v-show="tab === 'settings'"
+              id="vector-section-panel-settings"
+              class="vector-tab-surface"
+              role="tabpanel"
+              aria-labelledby="vector-section-tab-settings"
+            >
               <div class="vector-settings-grid">
                 <UiCard>
-                  <div class="cardhead"><div><b>{{ i18n.t("vector.role_language_title") }}</b><div class="note">{{ i18n.t("vector.role_language_help") }}</div></div></div>
+                  <div class="cardhead">
+                    <div>
+                      <b>{{ i18n.t("vector.role_language_title") }}</b>
+                      <div class="note">{{ i18n.t("vector.role_language_help") }}</div>
+                    </div>
+                  </div>
                   <div class="vector-settings-body">
                     <UiField :label="i18n.t('vector.collection_role')">
                       <select class="control" v-model="role">
@@ -544,19 +965,44 @@ onBeforeUnmount(() => {
                     <fieldset class="vector-inline-fieldset">
                       <legend>{{ i18n.t("vector.language_tags") }}</legend>
                       <div class="language-checks">
-                        <label v-for="code in ['en', 'fr']" :key="code"><input type="checkbox" :checked="languageCodes.includes(code)" @change="toggleLanguage(code, ($event.target as HTMLInputElement).checked)"><span>{{ code }}</span></label>
+                        <label v-for="code in ['en', 'fr']" :key="code"
+                          ><input
+                            type="checkbox"
+                            :checked="languageCodes.includes(code)"
+                            @change="
+                              toggleLanguage(code, ($event.target as HTMLInputElement).checked)
+                            "
+                          /><span>{{ code }}</span></label
+                        >
                       </div>
                     </fieldset>
                     <UiButton :label="i18n.t('ui.save')" @click="saveLanguages" />
                   </div>
                 </UiCard>
                 <UiCard>
-                  <div class="cardhead"><div><b>{{ i18n.t("vector.embedding_configuration") }}</b><div class="note">{{ contractLocked ? i18n.t("vector.embedding_locked_help") : i18n.t("vector.embedding_edit_help") }}</div></div></div>
+                  <div class="cardhead">
+                    <div>
+                      <b>{{ i18n.t("vector.embedding_configuration") }}</b>
+                      <div class="note">
+                        {{
+                          contractLocked
+                            ? i18n.t("vector.embedding_locked_help")
+                            : i18n.t("vector.embedding_edit_help")
+                        }}
+                      </div>
+                    </div>
+                  </div>
                   <div class="vector-settings-body">
                     <UiField :label="i18n.t('vector.embedding_provider')">
-                      <select class="control" v-model="embeddingProvider" :disabled="contractLocked">
+                      <select
+                        class="control"
+                        v-model="embeddingProvider"
+                        :disabled="contractLocked"
+                      >
                         <option value="chroma">{{ i18n.t("vector.provider_chroma") }}</option>
-                        <option value="precomputed">{{ i18n.t("vector.provider_precomputed") }}</option>
+                        <option value="precomputed">
+                          {{ i18n.t("vector.provider_precomputed") }}
+                        </option>
                         <option
                           v-for="profile in providerProfiles"
                           :key="profile.id"
@@ -564,41 +1010,105 @@ onBeforeUnmount(() => {
                         >
                           {{ profile.name || profile.id }}
                         </option>
-                        <option v-if="embeddingProvider === 'ollama'" value="ollama">Ollama (legacy)</option>
+                        <option v-if="embeddingProvider === 'ollama'" value="ollama">
+                          Ollama (legacy)
+                        </option>
                       </select>
                     </UiField>
                     <UiField :label="i18n.t('vector.embedding_model')">
-                      <input class="control" v-model="embeddingModel" :disabled="contractLocked || !embeddingProvider.startsWith('profile:')" placeholder="bge-m3:latest">
+                      <input
+                        class="control"
+                        v-model="embeddingModel"
+                        :disabled="contractLocked || !embeddingProvider.startsWith('profile:')"
+                        placeholder="bge-m3:latest"
+                      />
                     </UiField>
-                    <UiButton :label="i18n.t('ui.save')" :disabled="contractLocked" @click="saveEmbedding" />
+                    <UiButton
+                      :label="i18n.t('ui.save')"
+                      :disabled="contractLocked"
+                      @click="saveEmbedding"
+                    />
                   </div>
                 </UiCard>
               </div>
               <UiCard class="vector-transfer-card">
-                <div class="cardhead"><div><b>{{ i18n.t("vector.import_export") }}</b><div class="note">{{ i18n.t("vector.import_export_help") }}</div></div></div>
+                <div class="cardhead">
+                  <div>
+                    <b>{{ i18n.t("vector.import_export") }}</b>
+                    <div class="note">{{ i18n.t("vector.import_export_help") }}</div>
+                  </div>
+                </div>
                 <div class="vector-transfer-groups">
                   <div>
                     <span class="section-label">{{ i18n.t("vector.sync_into_collection") }}</span>
                     <div class="store-actions">
-                      <UiButton :label="i18n.t('vector.sync_active_jsonl')" icon="database" :disabled="!loadedFileCount" @click="syncActive" />
-                      <UiButton :label="i18n.t('vector.sync_all_loaded')" icon="database" :disabled="!loadedFileCount" @click="syncAll" />
+                      <UiButton
+                        :label="i18n.t('vector.sync_active_jsonl')"
+                        icon="database"
+                        :disabled="!loadedFileCount"
+                        @click="syncActive"
+                      />
+                      <UiButton
+                        :label="i18n.t('vector.sync_all_loaded')"
+                        icon="database"
+                        :disabled="!loadedFileCount"
+                        @click="syncAll"
+                      />
                     </div>
                   </div>
                   <div>
                     <span class="section-label">{{ i18n.t("vector.export_from_collection") }}</span>
                     <div class="store-actions">
-                      <UiButton :label="i18n.t('vector.open_db_jsonl')" icon="download" @click="runtime.exportStoreJsonl({loadTab: true})" />
-                      <UiButton :label="i18n.t('vector.download_db_jsonl')" icon="download" @click="runtime.exportStoreJsonl({downloadFile: true})" />
+                      <UiButton
+                        :label="i18n.t('vector.open_db_jsonl')"
+                        icon="download"
+                        @click="runtime.exportStoreJsonl({ loadTab: true })"
+                      />
+                      <UiButton
+                        :label="i18n.t('vector.download_db_jsonl')"
+                        icon="download"
+                        @click="runtime.exportStoreJsonl({ downloadFile: true })"
+                      />
                     </div>
                   </div>
                 </div>
               </UiCard>
-              <UiCard v-if="current.collection_role !== 'language' && current.name !== '_response_cache'">
-                <div class="cardhead"><div><b>{{ i18n.t("vector.language_collections") }}</b><div class="note">{{ i18n.t("vector.language_derive_help") }}</div></div></div>
+              <UiCard
+                v-if="current.collection_role !== 'language' && current.name !== '_response_cache'"
+              >
+                <div class="cardhead">
+                  <div>
+                    <b>{{ i18n.t("vector.language_collections") }}</b>
+                    <div class="note">{{ i18n.t("vector.language_derive_help") }}</div>
+                  </div>
+                </div>
                 <div class="language-database-grid">
-                  <UiField :label="i18n.t('vector.english_collection')" :hint="i18n.t('vector.english_collection_help')"><input class="control" v-model="deriveEn"></UiField>
-                  <UiField :label="i18n.t('vector.french_collection')" :hint="i18n.t('vector.french_collection_help')"><input class="control" v-model="deriveFr"></UiField>
-                  <UiButton :label="i18n.t('vector.generate_language_collections')" variant="primary" icon="database" @click="confirm = {kind: 'derive', title: i18n.t('vector.generate_language_collections'), message: i18n.tf('vector.derive_confirm', {en: deriveEn, fr: deriveFr, source: current.name})}" />
+                  <UiField
+                    :label="i18n.t('vector.english_collection')"
+                    :hint="i18n.t('vector.english_collection_help')"
+                    ><input class="control" v-model="deriveEn"
+                  /></UiField>
+                  <UiField
+                    :label="i18n.t('vector.french_collection')"
+                    :hint="i18n.t('vector.french_collection_help')"
+                    ><input class="control" v-model="deriveFr"
+                  /></UiField>
+                  <UiButton
+                    :label="i18n.t('vector.generate_language_collections')"
+                    variant="primary"
+                    icon="database"
+                    @click="
+                      confirm = {
+                        kind: 'derive',
+                        title: i18n.t('vector.generate_language_collections'),
+                        message: i18n.tf('vector.derive_confirm', {
+                          en: deriveEn,
+                          fr: deriveFr,
+                          source: current.name,
+                        }),
+                      }
+                    "
+                  />
                 </div>
               </UiCard>
             </div>
@@ -615,7 +1125,15 @@ onBeforeUnmount(() => {
       size="large"
       @close="connectionOpen = false"
     >
-      <VectorBackendPanel :health="health" :probing="probing" :applying="applying" :probe-result="probeResult" :error="connectionError" @probe="probe" @apply="applyConnection" />
+      <VectorBackendPanel
+        :health="health"
+        :probing="probing"
+        :applying="applying"
+        :probe-result="probeResult"
+        :error="connectionError"
+        @probe="probe"
+        @apply="applyConnection"
+      />
     </UiDialog>
     <UiDialog
       :open="Boolean(confirm)"
@@ -627,21 +1145,60 @@ onBeforeUnmount(() => {
     >
       <div class="vector-confirm-actions">
         <UiButton :label="i18n.t('ui.cancel')" @click="confirm = null" />
-        <UiButton :label="confirm?.kind === 'delete' ? i18n.t('vector.delete_collection') : i18n.t('vector.generate_language_collections')" :variant="confirm?.kind === 'delete' ? 'danger' : 'primary'" @click="confirmAction" />
+        <UiButton
+          :label="
+            confirm?.kind === 'delete'
+              ? i18n.t('vector.delete_collection')
+              : i18n.t('vector.generate_language_collections')
+          "
+          :variant="confirm?.kind === 'delete' ? 'danger' : 'primary'"
+          @click="confirmAction"
+        />
       </div>
     </UiDialog>
   </main>
 </template>
 
 <style scoped>
-.vector-native-page{display:grid;gap:var(--page-gap)}
-.vector-page-loading,.vector-page-error{min-height:240px;display:grid;place-content:center;gap:10px;text-align:center}
-.vector-tab-surface{margin-top:12px}
-.vector-search-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center}
-.vector-confirm-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
-.vector-native-page :deep(.control){min-height:40px}
-.vector-native-page :is(button,input,select,textarea,summary):focus-visible{outline:3px solid var(--focus-ring,var(--accent));outline-offset:2px}
-@media(max-width:760px){.vector-search-row{grid-template-columns:1fr}}
+.vector-native-page {
+  display: grid;
+  gap: var(--page-gap);
+}
+.vector-page-loading,
+.vector-page-error {
+  min-height: 240px;
+  display: grid;
+  place-content: center;
+  gap: 10px;
+  text-align: center;
+}
+.vector-tab-surface {
+  margin-top: 12px;
+}
+.vector-search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+}
+.vector-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.vector-native-page :deep(.control) {
+  min-height: 40px;
+}
+.vector-native-page :is(button, input, select, textarea, summary):focus-visible {
+  outline: 3px solid var(--focus-ring, var(--accent));
+  outline-offset: 2px;
+}
+@media (max-width: 760px) {
+  .vector-search-row {
+    grid-template-columns: 1fr;
+  }
+}
 .store-result {
   display: flex;
   justify-content: space-between;
@@ -653,9 +1210,9 @@ onBeforeUnmount(() => {
   flex: 1;
 }
 .vector-store-layout {
-  display: grid!important;
-  grid-template-columns: minmax(230px,280px) minmax(0,1fr)!important;
-  gap: 12px!important;
+  display: grid !important;
+  grid-template-columns: minmax(230px, 280px) minmax(0, 1fr) !important;
+  gap: 12px !important;
   align-items: start;
 }
 .vector-store-main {
@@ -666,14 +1223,14 @@ onBeforeUnmount(() => {
 .vector-search-results {
   padding: 0 12px 12px;
 }
-@media (max-width:1050px) {
+@media (max-width: 1050px) {
   .vector-store-layout {
-    grid-template-columns: 220px minmax(0,1fr)!important;
+    grid-template-columns: 220px minmax(0, 1fr) !important;
   }
 }
-@media (max-width:760px) {
+@media (max-width: 760px) {
   .vector-store-layout {
-    grid-template-columns: 1fr!important;
+    grid-template-columns: 1fr !important;
   }
 }
 .vector-manifest-card {
@@ -687,7 +1244,7 @@ onBeforeUnmount(() => {
   border-top: 1px solid var(--line);
   padding-top: 12px;
 }
-.vector-build-history>summary {
+.vector-build-history > summary {
   cursor: pointer;
   font-weight: 700;
 }
@@ -702,7 +1259,7 @@ onBeforeUnmount(() => {
   border-radius: 10px;
   background: var(--panel-2);
 }
-.vector-build-list article>div {
+.vector-build-list article > div {
   display: flex;
   gap: 8px;
   justify-content: space-between;
@@ -715,7 +1272,7 @@ onBeforeUnmount(() => {
 }
 .vector-overview-grid {
   display: grid;
-  grid-template-columns: repeat(4,minmax(0,1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 10px;
 }
@@ -724,32 +1281,32 @@ onBeforeUnmount(() => {
   gap: 5px;
   padding: 14px;
 }
-.vector-overview-card>span {
-  font-size: .8125rem;
+.vector-overview-card > span {
+  font-size: 0.8125rem;
   font-weight: 750;
-  letter-spacing: .035em;
+  letter-spacing: 0.035em;
   text-transform: uppercase;
   color: var(--muted);
 }
-.vector-overview-card>b {
-  font-size: .98rem;
+.vector-overview-card > b {
+  font-size: 0.98rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.vector-overview-card>small {
+.vector-overview-card > small {
   color: var(--muted);
-  font-size: .76rem;
+  font-size: 0.76rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-@media (max-width:1180px) {
+@media (max-width: 1180px) {
   .vector-overview-grid {
-    grid-template-columns: repeat(2,minmax(0,1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
-@media (max-width:760px) {
+@media (max-width: 760px) {
   .vector-overview-grid {
     grid-template-columns: 1fr;
   }

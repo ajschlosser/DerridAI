@@ -14,7 +14,6 @@ export interface CorpusSegmentationTelemetry {
   reviewCount?: number;
 }
 
-
 export interface RecordSizingPolicy {
   preferred_record_chars: number;
   record_length_tolerance: number;

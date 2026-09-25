@@ -182,7 +182,11 @@ export function barChart(
     .join("")}</div></section>`;
 }
 
-export function statList(title: string, items: Array<[string, number]>, i18n: ChartI18n = {}): string {
+export function statList(
+  title: string,
+  items: Array<[string, number]>,
+  i18n: ChartI18n = {},
+): string {
   const { tr, trf } = chartCopy(i18n);
   return `<section class="card dash-ranking"><div class="cardhead"><b>${esc(title)}</b></div><div>${items.map(([value, count], index) => `<button class="rank-row" type="button" data-dashboard-search="${esc(value)}" title="${esc(trf("dashboard.search_for_value", { value }))}"><span>${index + 1}</span><b>${esc(value)}</b><strong>${count.toLocaleString()}</strong></button>`).join("") || `<div class="note" style="padding:12px">${esc(tr("runtime.no_data"))}</div>`}</div></section>`;
 }

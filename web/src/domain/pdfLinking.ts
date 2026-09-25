@@ -89,8 +89,7 @@ export function createPdfLinking(deps: Deps) {
     );
   }
   function openLoadedPdfPage(page: Any) {
-    if (!state.pdf.doc && !state.pdf.file)
-      return toast(tr("pdf.link.open_first_explorer"));
+    if (!state.pdf.doc && !state.pdf.file) return toast(tr("pdf.link.open_first_explorer"));
     const max = state.pdf.doc?.numPages || Number(page) || 1;
     state.pdf.page = Math.max(1, Math.min(max, Number(page) || 1));
     state.pdf.text = "";
@@ -122,7 +121,10 @@ export function createPdfLinking(deps: Deps) {
       if (
         !(await openMessageModal({
           title: tr("pdf.link.replace_title"),
-          message: trf("pdf.link.replace_message", { current: links[0].pdf_file, next: target.pdf_file }),
+          message: trf("pdf.link.replace_message", {
+            current: links[0].pdf_file,
+            next: target.pdf_file,
+          }),
           tone: "danger",
           confirmLabel: tr("pdf.link.replace_confirm"),
           cancelLabel: tr("common.cancel"),

@@ -1,4 +1,5 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+
 # Metadata schemas
 
 A metadata schema says which fields a JSONL record has, what each may hold, and what the model is told to look for in each. Builds target a schema; the built-in one describes the fields DerridAI has always produced.

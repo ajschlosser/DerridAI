@@ -51,7 +51,7 @@ The DerridAI application is the originating reference implementation.
 
 The terms **MUST**, **MUST NOT**, **REQUIRED**, **SHALL**, **SHALL NOT**, **SHOULD**, **SHOULD NOT**, **RECOMMENDED**, **MAY**, and **OPTIONAL** are normative. MUST and MUST NOT are necessary for conformance to the applicable profile. SHOULD and SHOULD NOT may be departed from only for a documented reason that does not violate a MUST-level invariant. MAY describes permitted behavior.
 
-Sections explicitly marked *Non-normative* are explanatory.
+Sections explicitly marked _Non-normative_ are explanatory.
 
 #### Design goals
 
@@ -650,7 +650,7 @@ The following DERRIDAI objects SHOULD be exportable as PROV Entities when presen
 Where both Record and RecordRevision are exported, the persistent logical Record MUST remain distinguishable from a particular revision of that Record. A consumer MUST be able to determine which exact RecordRevision was used as evidence when the native ResearchRun preserves that information.
 
 | **DERRIDAI object**                        | PROV-oriented representation                                                                           |
-|:-------------------------------------------|:-------------------------------------------------------------------------------------------------------|
+| :----------------------------------------- | :----------------------------------------------------------------------------------------------------- |
 | **SourceDocument, SourceUnit, SourceSpan** | Entity representing documentary material or an identified portion of it.                               |
 | **Record, RecordRevision**                 | Entity representing persistent scholarly identity and a particular state of that identity.             |
 | **FieldAssertion**                         | Entity whose lineage records inference, validation, confirmation, or override.                         |
@@ -872,7 +872,7 @@ Where practical, implementations SHOULD support both forward and reverse traceab
 
 DERRIDAI interoperability SHOULD be implemented through explicit profiles rather than through an undifferentiated claim of compatibility. A formal conformance statement MUST identify the profile to which the claim applies.
 
-A statement such as *DERRIDAI compatible* is insufficient for formal conformance. A formal statement SHOULD instead identify, for example, DERRIDAI Core 1.0, DERRIDAI Evidence 1.0, DERRIDAI PROV Mapping 1.0, and DERRIDAI RO-Crate 1.0.
+A statement such as _DERRIDAI compatible_ is insufficient for formal conformance. A formal statement SHOULD instead identify, for example, DERRIDAI Core 1.0, DERRIDAI Evidence 1.0, DERRIDAI PROV Mapping 1.0, and DERRIDAI RO-Crate 1.0.
 
 #### Partial support
 
@@ -913,7 +913,7 @@ External-standard support MUST NOT imply cloud dependence. A Local Sovereign imp
 The standards addressed in this section solve related but different problems.
 
 |                               |                                                                                  |
-|:------------------------------|:---------------------------------------------------------------------------------|
+| :---------------------------- | :------------------------------------------------------------------------------- |
 | **DERRIDAI**                  | Scholarly-AI research semantics and traceability.                                |
 | **W3C PROV**                  | General provenance relationships among entities, activities, and agents.         |
 | **RO-Crate**                  | Portable research-object packaging and contextual metadata.                      |
@@ -1124,7 +1124,7 @@ This mapping is informative unless separately adopted as a normative compatibili
 
 ### Non-Normative Rationale
 
-*This section is non-normative.*
+_This section is non-normative._
 
 The Record is central because chunks are usually implementation artifacts while Records are intended to survive changes in retrieval infrastructure. Evidence is modeled as a role because the same Record can support one inquiry and be irrelevant to another. Attribution remains first-class because document author, speaker, position holder, target, and quoted source can differ. Operational state and vector infrastructure remain separate because they change more readily than documentary identity.
 

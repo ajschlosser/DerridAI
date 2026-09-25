@@ -57,14 +57,10 @@ function createdDate(value: string) {
       <b>{{ props.user.username }}</b>
       <span class="user-status-line">
         <UiStatusBadge
-          :label="
-            props.user.active ? i18n.t('ui.active') : i18n.t('ui.disabled')
-          "
+          :label="props.user.active ? i18n.t('ui.active') : i18n.t('ui.disabled')"
           :tone="props.user.active ? 'success' : 'neutral'"
         />
-        <span>
-          · {{ i18n.t("ui.created") }} {{ createdDate(props.user.created_at) }}
-        </span>
+        <span> · {{ i18n.t("ui.created") }} {{ createdDate(props.user.created_at) }} </span>
       </span>
       <small>
         {{ i18n.t("users.last_login") }}: {{ formatLogin(props.user.last_login) }} ·
@@ -76,14 +72,8 @@ function createdDate(value: string) {
       class="control user-role-select"
       :value="props.user.role"
       :disabled="props.disabled || props.user.id === props.currentUserId"
-      :aria-label="
-        i18n.tf('users.role_for', { username: props.user.username })
-      "
-      :title="
-        props.user.id === props.currentUserId
-          ? i18n.t('ui.current_role_locked')
-          : undefined
-      "
+      :aria-label="i18n.tf('users.role_for', { username: props.user.username })"
+      :title="props.user.id === props.currentUserId ? i18n.t('ui.current_role_locked') : undefined"
       @change="roleChanged"
     >
       <option v-for="role in props.roles" :key="role.id" :value="role.id">
@@ -107,9 +97,7 @@ function createdDate(value: string) {
       <span
         class="action-tooltip-wrap"
         :data-tooltip="
-          props.user.id === props.currentUserId
-            ? i18n.t('ui.cannot_disable_self')
-            : ''
+          props.user.id === props.currentUserId ? i18n.t('ui.cannot_disable_self') : ''
         "
       >
         <button
@@ -130,19 +118,13 @@ function createdDate(value: string) {
       </span>
       <span
         class="action-tooltip-wrap"
-        :data-tooltip="
-          props.user.id === props.currentUserId
-            ? i18n.t('ui.cannot_delete_self')
-            : ''
-        "
+        :data-tooltip="props.user.id === props.currentUserId ? i18n.t('ui.cannot_delete_self') : ''"
       >
         <button
           class="btn small danger"
           type="button"
           :disabled="props.disabled || props.user.id === props.currentUserId"
-          :aria-label="
-            i18n.tf('users.delete_named', { username: props.user.username })
-          "
+          :aria-label="i18n.tf('users.delete_named', { username: props.user.username })"
           @click="emit('deleteUser', props.user)"
         >
           {{ i18n.t("users.delete") }}

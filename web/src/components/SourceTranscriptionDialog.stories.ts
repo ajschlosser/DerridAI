@@ -70,7 +70,9 @@ export const TextOnlyReview: Story = {
     pageCount: 1,
     printedPage: null,
     text: longText,
-    blocks: [{ ...audioBlocks[0], block_id: "text-0001", start: undefined, end: undefined, speaker: "" }],
+    blocks: [
+      { ...audioBlocks[0], block_id: "text-0001", start: undefined, end: undefined, speaker: "" },
+    ],
   },
   parameters: { viewport: { defaultViewport: "mobile2" } },
 };

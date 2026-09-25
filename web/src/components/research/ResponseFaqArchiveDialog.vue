@@ -83,9 +83,7 @@ function choose(record: ResponseFaqRecord) {
           <span class="section-label">{{ i18n.t("faq.library_kicker") }}</span>
           <h2 id="responseArchiveTitle">{{ i18n.t("faq.library_title") }}</h2>
           <p>
-            {{
-              i18n.t("faq.archive_help")
-            }}
+            {{ i18n.t("faq.archive_help") }}
           </p>
         </div>
         <button
@@ -125,16 +123,12 @@ function choose(record: ResponseFaqRecord) {
       <div class="response-archive-index-head">
         <div>
           <strong>{{ i18n.t("faq.questions_label") }}</strong
-          ><span>{{
-            i18n.t("faq.questions_help")
-          }}</span>
+          ><span>{{ i18n.t("faq.questions_help") }}</span>
         </div>
         <div class="response-archive-count" aria-live="polite">
           <strong>{{ (search ? count : total).toLocaleString(i18n.locale) }}</strong
           ><span>{{
-            search
-              ? i18n.t("faq.question_matches")
-              : i18n.t("faq.saved_questions")
+            search ? i18n.t("faq.question_matches") : i18n.t("faq.saved_questions")
           }}</span>
         </div>
       </div>

@@ -73,13 +73,23 @@ const routes: RouteRecordRaw[] = [
     path: "/response-cache",
     name: "responsecache",
     redirect: (to) => ({ path: "/system-data", query: { ...to.query, section: "responses" } }),
-    meta: { view: "systemdata", capability: "page.response_cache", adminOnly: true, vueNative: true },
+    meta: {
+      view: "systemdata",
+      capability: "page.response_cache",
+      adminOnly: true,
+      vueNative: true,
+    },
   },
   {
     path: "/system-data",
     name: "systemdata",
     component: () => import("../views/SystemDataView.vue"),
-    meta: { view: "systemdata", capability: "page.response_cache", adminOnly: true, vueNative: true },
+    meta: {
+      view: "systemdata",
+      capability: "page.response_cache",
+      adminOnly: true,
+      vueNative: true,
+    },
   },
   {
     path: "/providers",
@@ -97,7 +107,12 @@ const routes: RouteRecordRaw[] = [
     path: "/metadata-memory",
     name: "metadatamemory",
     component: () => import("../views/MetadataMemoryView.vue"),
-    meta: { view: "metadatamemory", capability: "page.response_cache", adminOnly: true, vueNative: true },
+    meta: {
+      view: "metadatamemory",
+      capability: "page.response_cache",
+      adminOnly: true,
+      vueNative: true,
+    },
   },
   {
     path: "/settings",

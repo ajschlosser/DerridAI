@@ -4,10 +4,10 @@ import CompareDiff from "./CompareDiff.vue";
 import { buildCompareRows } from "../../domain/compare";
 
 const rows = buildCompareRows(
-  {record_id: "r-a", work: "Glas", text: "the gift of death"},
-  {record_id: "r-a", work: "Glas", text: "the gift of life"},
+  { record_id: "r-a", work: "Glas", text: "the gift of death" },
+  { record_id: "r-a", work: "Glas", text: "the gift of life" },
   "changed",
-).map(row => ({...row, label: row.key === "text" ? "Text" : row.key}));
+).map((row) => ({ ...row, label: row.key === "text" ? "Text" : row.key }));
 
 const meta = {
   title: "Compare/Diff",
@@ -24,4 +24,4 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Changed: Story = {};
-export const Identical: Story = {args: {rows: []}};
+export const Identical: Story = { args: { rows: [] } };

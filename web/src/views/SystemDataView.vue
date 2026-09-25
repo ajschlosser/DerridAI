@@ -19,8 +19,18 @@ const i18n = useI18nStore();
 const sections: Array<{ id: Section; labelKey: string; fallback: string; icon: string }> = [
   { id: "overview", labelKey: "runtime.system_overview", fallback: "Overview", icon: "dashboard" },
   { id: "responses", labelKey: "runtime.system_responses", fallback: "Responses", icon: "record" },
-  { id: "metadata", labelKey: "runtime.system_metadata_examples", fallback: "Metadata examples", icon: "spark" },
-  { id: "databases", labelKey: "runtime.system_databases", fallback: "Databases", icon: "database" },
+  {
+    id: "metadata",
+    labelKey: "runtime.system_metadata_examples",
+    fallback: "Metadata examples",
+    icon: "spark",
+  },
+  {
+    id: "databases",
+    labelKey: "runtime.system_databases",
+    fallback: "Databases",
+    icon: "database",
+  },
   { id: "advanced", labelKey: "runtime.system_advanced", fallback: "Advanced", icon: "gear" },
 ];
 
@@ -28,13 +38,16 @@ const activeSection = computed<Section>(() => {
   const requested = String(route.query.section || "overview");
   return sections.some((item) => item.id === requested) ? (requested as Section) : "overview";
 });
-const activeComponent = computed(() => ({
-  overview: SystemDataOverview,
-  responses: SystemDataResponses,
-  metadata: SystemDataMetadataExamples,
-  databases: SystemDataDatabases,
-  advanced: SystemDataAdvanced,
-})[activeSection.value]);
+const activeComponent = computed(
+  () =>
+    ({
+      overview: SystemDataOverview,
+      responses: SystemDataResponses,
+      metadata: SystemDataMetadataExamples,
+      databases: SystemDataDatabases,
+      advanced: SystemDataAdvanced,
+    })[activeSection.value],
+);
 
 function t(key: string, fallback: string) {
   return i18n.t(key, fallback);
@@ -76,7 +89,10 @@ function setSection(section: Section) {
     </div>
 
     <div class="workspace-shell">
-      <nav class="section-rail" :aria-label="t('runtime.system_workspace', 'System Data workspaces')">
+      <nav
+        class="section-rail"
+        :aria-label="t('runtime.system_workspace', 'System Data workspaces')"
+      >
         <button
           v-for="item in sections"
           :key="item.id"
@@ -173,8 +189,14 @@ function setSection(section: Section) {
     animation: workspace-in 140ms ease-out;
   }
   @keyframes workspace-in {
-    from { opacity: .72; transform: translateY(2px); }
-    to { opacity: 1; transform: none; }
+    from {
+      opacity: 0.72;
+      transform: translateY(2px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
   }
 }
 @media (max-width: 820px) {
@@ -191,7 +213,7 @@ function setSection(section: Section) {
   }
   .mobile-section-picker label {
     color: var(--muted);
-    font-size: .78rem;
+    font-size: 0.78rem;
     font-weight: 700;
   }
 }

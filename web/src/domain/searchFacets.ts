@@ -60,9 +60,7 @@ export function createSearchFacets(deps: Deps) {
   }
   function searchFacetDisplay(field: string, value: string) {
     if (field === "needs_review")
-      return value === "true"
-        ? tr("search.needs_review")
-        : tr("search.reviewed");
+      return value === "true" ? tr("search.needs_review") : tr("search.reviewed");
     if (field === "__db_status") {
       const labelsByKind: Record<string, string> = {
         synced: tr("search.db_synced"),
@@ -123,10 +121,15 @@ export function createSearchFacets(deps: Deps) {
   function buildSearchFacets(source: Loose[], { database = false } = {}) {
     const rows = (database ? null : source) as Loose[];
     const records = (database ? source : null) as Loose[];
-    const facetFields = [
-      ...new Set([...SEARCH_FACET_FIELDS, ...recordFields()]),
-    ].filter((field) => !SEARCH_AUTOCOMPLETE_EXCLUDED.has(field) && field !== "text" && field !== "field_assertions" && field !== "current_field_assertions");
-    return facetFields.filter((field) => !(database && field === "__db_status"))
+    const facetFields = [...new Set([...SEARCH_FACET_FIELDS, ...recordFields()])].filter(
+      (field) =>
+        !SEARCH_AUTOCOMPLETE_EXCLUDED.has(field) &&
+        field !== "text" &&
+        field !== "field_assertions" &&
+        field !== "current_field_assertions",
+    );
+    return facetFields
+      .filter((field) => !(database && field === "__db_status"))
       .map((field) => {
         const counts = database
           ? searchFacetCountsFromRecords(records, field)
@@ -201,9 +204,7 @@ export function createSearchFacets(deps: Deps) {
         field,
         field_label: label(field),
         op: contains ? "has" : "eq",
-        op_label: contains
-          ? tr("search.operator_has")
-          : tr("search.operator_eq"),
+        op_label: contains ? tr("search.operator_has") : tr("search.operator_eq"),
         value: String(contains ? value.$contains : (value ?? "")),
       };
     });
@@ -242,12 +243,9 @@ export function createSearchFacets(deps: Deps) {
       if (terms.some((term) => text.includes(term))) reasons.push(label(field));
       if (reasons.length >= 3) break;
     }
-    if (database && method === "similarity")
-      reasons.unshift(tr("search.semantic_match"));
-    if (database && method === "mmr")
-      reasons.unshift(tr("search.mmr_match"));
-    if (database && method === "filter")
-      reasons.unshift(tr("search.filter_match"));
+    if (database && method === "similarity") reasons.unshift(tr("search.semantic_match"));
+    if (database && method === "mmr") reasons.unshift(tr("search.mmr_match"));
+    if (database && method === "filter") reasons.unshift(tr("search.filter_match"));
     if (
       !database &&
       terms.length &&

@@ -63,18 +63,11 @@ watch(
 );
 </script>
 <template>
-  <section
-    class="llm-execution"
-    role="group"
-    :aria-label="i18n.t('pdf_corpus.llm_execution')"
-  >
+  <section class="llm-execution" role="group" :aria-label="i18n.t('pdf_corpus.llm_execution')">
     <div class="llm-notice">
       <div>
         <b>{{ i18n.t("pdf_corpus.llm_will_be_used") }}</b
-        ><small>{{
-          task ||
-          i18n.t("pdf_corpus.llm_choose_profile_help")
-        }}</small>
+        ><small>{{ task || i18n.t("pdf_corpus.llm_choose_profile_help") }}</small>
       </div>
     </div>
     <label
@@ -107,13 +100,14 @@ watch(
         @input="emit('update:modelOverride', ($event.target as HTMLInputElement).value)"
       /><datalist :id="`llm-models-${selected.id}`">
         <option v-for="model in models" :key="model" :value="model" /></datalist
-      ><small>{{
-        i18n.t("pdf_corpus.model_override_help")
-      }}</small></label
+      ><small>{{ i18n.t("pdf_corpus.model_override_help") }}</small></label
     ><small v-if="modelError" class="model-error" role="status">{{ modelError }}</small>
     <p v-if="concurrencyRisk && selected?.type === 'ollama'" class="capacity-warning" role="status">
       {{
-        i18n.tf("pdf_corpus.ollama_concurrency_warning", { active: activeRequests ?? concurrencyLimit ?? 1, limit: concurrencyLimit ?? 1 })
+        i18n.tf("pdf_corpus.ollama_concurrency_warning", {
+          active: activeRequests ?? concurrencyLimit ?? 1,
+          limit: concurrencyLimit ?? 1,
+        })
       }}
     </p>
   </section>

@@ -14,7 +14,13 @@ export interface CorpusActionMenuItem {
 }
 
 const props = withDefaults(
-  defineProps<{ label: string; items: CorpusActionMenuItem[]; menuLabel?: string; disabled?: boolean; placement?: "top" | "bottom" }>(),
+  defineProps<{
+    label: string;
+    items: CorpusActionMenuItem[];
+    menuLabel?: string;
+    disabled?: boolean;
+    placement?: "top" | "bottom";
+  }>(),
   { menuLabel: "", disabled: false, placement: "top" },
 );
 const emit = defineEmits<{ select: [id: string] }>();
@@ -103,7 +109,12 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", outside, true)
 </script>
 
 <template>
-  <div ref="root" class="action-menu" :data-placement="flipped ? (placement === 'top' ? 'bottom' : 'top') : placement" :data-align="alignEnd ? 'end' : 'start'">
+  <div
+    ref="root"
+    class="action-menu"
+    :data-placement="flipped ? (placement === 'top' ? 'bottom' : 'top') : placement"
+    :data-align="alignEnd ? 'end' : 'start'"
+  >
     <button
       ref="trigger"
       type="button"
@@ -115,9 +126,19 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", outside, true)
       @click="toggle"
       @keydown="onTriggerKey"
     >
-      <span class="action-menu-label">{{ label }}</span><span class="action-menu-dots" aria-hidden="true"></span><span class="action-menu-caret" aria-hidden="true"></span>
+      <span class="action-menu-label">{{ label }}</span
+      ><span class="action-menu-dots" aria-hidden="true"></span
+      ><span class="action-menu-caret" aria-hidden="true"></span>
     </button>
-    <ul v-if="open" :id="menuId" ref="menu" class="action-menu-list" role="menu" :aria-label="menuLabel || label" @keydown="onMenuKey">
+    <ul
+      v-if="open"
+      :id="menuId"
+      ref="menu"
+      class="action-menu-list"
+      role="menu"
+      :aria-label="menuLabel || label"
+      @keydown="onMenuKey"
+    >
       <li v-for="item in items" :key="item.id" role="none">
         <button
           type="button"
@@ -157,8 +178,8 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", outside, true)
   display: none;
   inline-size: 1.125rem;
   block-size: 0.25rem;
-  background:
-    radial-gradient(circle, currentColor 1.5px, transparent 2px) 0 50% / 0.375rem 100% repeat-x;
+  background: radial-gradient(circle, currentColor 1.5px, transparent 2px) 0 50% / 0.375rem 100%
+    repeat-x;
 }
 .action-menu-list {
   position: absolute;

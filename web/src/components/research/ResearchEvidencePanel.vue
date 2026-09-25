@@ -69,9 +69,7 @@ const relationRows = computed(() =>
     <header class="research-panel-heading">
       <div>
         <b>{{
-          showingResult
-            ? i18n.t("research.answer_evidence")
-            : i18n.t("rag.selected_evidence")
+          showingResult ? i18n.t("research.answer_evidence") : i18n.t("rag.selected_evidence")
         }}</b
         ><small
           >{{ showingResult ? resultEvidence.length : selectedEvidence.length }}
@@ -124,9 +122,7 @@ const relationRows = computed(() =>
           }}</span>
           <div>
             <b>{{
-              display(record.work) ||
-              display(record.record_id) ||
-              i18n.t("research.evidence")
+              display(record.work) || display(record.record_id) || i18n.t("research.evidence")
             }}</b
             ><small>{{ active.inline_citation || "" }}</small>
           </div>
@@ -237,9 +233,7 @@ const relationRows = computed(() =>
                 {{ item.text_preview }}<template v-if="item.text_preview.length >= 280">…</template>
               </p>
               <p v-else class="note">
-                {{
-                  i18n.t("research.selected_preview_unavailable")
-                }}
+                {{ i18n.t("research.selected_preview_unavailable") }}
               </p>
             </div>
           </details>
@@ -257,9 +251,7 @@ const relationRows = computed(() =>
         <span aria-hidden="true">∴</span>
         <b>{{ i18n.t("research.no_selected_evidence") }}</b>
         <p>
-          {{
-            i18n.t("research.no_selected_evidence_help")
-          }}
+          {{ i18n.t("research.no_selected_evidence_help") }}
         </p>
       </div>
     </template>

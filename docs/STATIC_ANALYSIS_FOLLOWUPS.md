@@ -1,4 +1,5 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+
 # Static-analysis follow-ups
 
 This is the current registry for intentional Ruff, mypy, ESLint, and TypeScript debt that remains visible in source/config suppressions. It is not a snapshot of line numbers from a past release.

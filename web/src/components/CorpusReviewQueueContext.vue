@@ -16,10 +16,7 @@ const i18n = useI18nStore();
 </script>
 
 <template>
-  <nav
-    class="queue-context"
-    :aria-label="i18n.t('pdf_corpus.review_queue_context')"
-  >
+  <nav class="queue-context" :aria-label="i18n.t('pdf_corpus.review_queue_context')">
     <span v-if="props.justProcessedRecordId">
       {{ i18n.t("pdf_corpus.just_processed") }}
       <button

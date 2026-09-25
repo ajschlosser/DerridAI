@@ -185,11 +185,7 @@ onBeforeUnmount(async () => {
 </script>
 
 <template>
-  <section
-    ref="shell"
-    class="pdf-evidence-viewer"
-    :aria-label="i18n.t('pdf_corpus.source_pdf')"
-  >
+  <section ref="shell" class="pdf-evidence-viewer" :aria-label="i18n.t('pdf_corpus.source_pdf')">
     <div
       v-if="zoomable"
       class="viewer-controls"
@@ -218,10 +214,7 @@ onBeforeUnmount(async () => {
       }}
     </div>
     <div class="page-stage" :class="{ zoomed: zoom > 1 }" :aria-busy="loading ? 'true' : 'false'">
-      <canvas
-        ref="canvas"
-        :aria-label="i18n.tf('pdf_corpus.pdf_page_canvas', { page })"
-      ></canvas>
+      <canvas ref="canvas" :aria-label="i18n.tf('pdf_corpus.pdf_page_canvas', { page })"></canvas>
       <div class="block-overlay" aria-hidden="true">
         <span
           v-for="block in pageBlocks"
@@ -233,9 +226,7 @@ onBeforeUnmount(async () => {
       </div>
     </div>
     <p class="viewer-caption">
-      {{
-        i18n.tf("pdf_corpus.pdf_highlight_help", { page })
-      }}
+      {{ i18n.tf("pdf_corpus.pdf_highlight_help", { page }) }}
     </p>
   </section>
 </template>

@@ -123,9 +123,7 @@ defineExpose({ open, close });
     :title="title || i18n.t('records.configure_columns')"
     :description="
       description ||
-      (sizing
-        ? i18n.t('table.columns_help_widths')
-        : i18n.t('records.configure_columns_help'))
+      (sizing ? i18n.t('table.columns_help_widths') : i18n.t('records.configure_columns_help'))
     "
     :close-label="i18n.t('common.close')"
     @close="close"
@@ -179,9 +177,7 @@ defineExpose({ open, close });
                 type="button"
                 class="btn tiny"
                 :disabled="index === 0"
-                :aria-label="
-                  i18n.tf('search.move_column_up', { column: column.label })
-                "
+                :aria-label="i18n.tf('search.move_column_up', { column: column.label })"
                 @click="move(column.key, -1)"
               >
                 ↑
@@ -203,9 +199,7 @@ defineExpose({ open, close });
                 type="button"
                 class="btn tiny"
                 :disabled="modelValue.length <= 1"
-                :aria-label="
-                  i18n.tf('records.hide_column', { column: column.label })
-                "
+                :aria-label="i18n.tf('records.hide_column', { column: column.label })"
                 @click="hide(column.key)"
               >
                 {{ i18n.t("ui.remove") }}

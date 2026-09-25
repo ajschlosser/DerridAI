@@ -8,7 +8,8 @@ const meta = {
   args: {
     icon: "database",
     title: "Application data",
-    detail: "Durable application information such as provider profiles, annotations, languages, and jobs.",
+    detail:
+      "Durable application information such as provider profiles, annotations, languages, and jobs.",
     technical: "system · durable SQLite",
     status: "Available",
     count: "7 tables",
@@ -25,7 +26,8 @@ export const Sensitive: Story = {
   args: {
     icon: "lock",
     title: "Identity and access",
-    detail: "Sensitive identity state including users, roles or permissions, sessions, and login security.",
+    detail:
+      "Sensitive identity state including users, roles or permissions, sessions, and login security.",
     technical: "auth · sensitive durable SQLite",
     count: "5 tables",
     sensitive: true,
@@ -47,7 +49,8 @@ export const FrenchLengthStress: Story = {
   parameters: { locale: "fr-CA" },
   args: {
     title: "Données de l’application",
-    detail: "Données durables de l’application, notamment les profils de fournisseurs, les annotations, les langues et les tâches.",
+    detail:
+      "Données durables de l’application, notamment les profils de fournisseurs, les annotations, les langues et les tâches.",
     technical: "system · SQLite durable",
     status: "Disponible",
     count: "7 tables",

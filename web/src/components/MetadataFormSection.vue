@@ -18,11 +18,37 @@ const id = useId();
 </template>
 
 <style scoped>
-.metadata-form-section { display: grid; gap: 12px; }
-.metadata-form-section > header { display: grid; gap: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
-h3 { margin: 0; font-size: 1rem; }
-p { margin: 0; color: var(--muted); font-size: 0.875rem; line-height: 1.5; }
-.metadata-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px; }
-.metadata-form-grid :deep(.wide) { grid-column: 1 / -1; }
-@media (max-width: 720px) { .metadata-form-grid { grid-template-columns: minmax(0, 1fr); } }
+.metadata-form-section {
+  display: grid;
+  gap: 12px;
+}
+.metadata-form-section > header {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.metadata-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+}
+.metadata-form-grid :deep(.wide) {
+  grid-column: 1 / -1;
+}
+@media (max-width: 720px) {
+  .metadata-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 </style>

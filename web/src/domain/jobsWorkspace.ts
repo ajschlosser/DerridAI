@@ -332,9 +332,7 @@ export function createJobsWorkspace(deps: Deps) {
     for (const job of state.jobs) {
       if (isActiveJobStatus(job.status)) {
         if (previous.size && !previous.has(job.id)) {
-          announceOperationDock(
-            trf("operations.live_started", { label: jobLabel(job) }),
-          );
+          announceOperationDock(trf("operations.live_started", { label: jobLabel(job) }));
         }
         ensureJobProgressCard(job);
         continue;

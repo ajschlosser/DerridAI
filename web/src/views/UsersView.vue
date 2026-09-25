@@ -88,12 +88,7 @@ async function toggleActive(user: AuthUser) {
   try {
     const result = await authApi.updateUser(user.id, { active: !user.active });
     users.value = users.value.map((item) => (item.id === user.id ? result.user : item));
-    notify(
-      user.active
-        ? i18n.t("users.disabled_toast")
-        : i18n.t("users.enabled_toast"),
-      "success",
-    );
+    notify(user.active ? i18n.t("users.disabled_toast") : i18n.t("users.enabled_toast"), "success");
   } catch (exc) {
     error.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
   }
@@ -154,9 +149,7 @@ onMounted(refresh);
     <UiPageHeader
       :kicker="i18n.t('section.system')"
       :title="i18n.t('users.title')"
-      :description="
-        i18n.t('users.description')
-      "
+      :description="i18n.t('users.description')"
     />
     <div v-if="error" class="info error" role="alert">{{ error }}</div>
     <section class="card user-create-card" :aria-busy="!dataCurrent">
@@ -164,9 +157,7 @@ onMounted(refresh);
         <div>
           <b>{{ i18n.t("users.create") }}</b>
           <div class="note">
-            {{
-              i18n.t("users.create_help")
-            }}
+            {{ i18n.t("users.create_help") }}
           </div>
         </div>
       </div>
@@ -183,9 +174,7 @@ onMounted(refresh);
           />
         </div>
         <div class="field">
-          <label for="new-user-password">{{
-            i18n.t("users.temporary_password")
-          }}</label>
+          <label for="new-user-password">{{ i18n.t("users.temporary_password") }}</label>
           <input
             id="new-user-password"
             v-model="password"
@@ -216,9 +205,7 @@ onMounted(refresh);
           </select>
         </div>
         <button class="btn primary" :disabled="!dataCurrent || createBusy">
-          {{
-            createBusy ? i18n.t("ui.loading") : i18n.t("users.create")
-          }}
+          {{ createBusy ? i18n.t("ui.loading") : i18n.t("users.create") }}
         </button>
       </form>
     </section>
@@ -282,9 +269,7 @@ onMounted(refresh);
         <div>
           <b>{{ i18n.t("roles.title") }}</b>
           <div class="note">
-            {{
-              i18n.t("roles.users_link_help")
-            }}
+            {{ i18n.t("roles.users_link_help") }}
           </div>
         </div>
         <button class="btn" type="button" @click="openRoles">
@@ -303,9 +288,7 @@ onMounted(refresh);
         <div>
           <h2 id="user-admin-dialog-title" class="dialog-title">
             {{
-              dialogMode === "password"
-                ? i18n.t("users.reset_password")
-                : i18n.t("users.delete")
+              dialogMode === "password" ? i18n.t("users.reset_password") : i18n.t("users.delete")
             }}
           </h2>
           <div class="dialog-subtitle">{{ dialogUser?.username }}</div>
@@ -323,9 +306,7 @@ onMounted(refresh);
       <div class="db">
         <template v-if="dialogMode === 'password'"
           ><div class="field">
-            <label for="reset-user-password">{{
-              i18n.t("users.new_password")
-            }}</label>
+            <label for="reset-user-password">{{ i18n.t("users.new_password") }}</label>
             <input
               id="reset-user-password"
               v-model="newPassword"
@@ -339,9 +320,7 @@ onMounted(refresh);
           </div></template
         >
         <div v-else class="info error">
-          {{
-            i18n.t("users.delete_help")
-          }}
+          {{ i18n.t("users.delete_help") }}
         </div>
       </div>
       <div class="da">

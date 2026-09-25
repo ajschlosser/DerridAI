@@ -23,22 +23,17 @@ export function createRecordDialogCopy(translate: Tr, interpolate: Trf) {
       trf("records.toast.bulk_message", { field, count }),
     bulkConfirm: tr("records.toast.bulk_confirm"),
     bulkUpdated: (field: string, records: string, changes: string) =>
-      trf("records.toast.bulk_updated",
-        { field, records, changes },
-      ),
+      trf("records.toast.bulk_updated", { field, records, changes }),
     noScopeOcr: tr("records.toast.no_scope_ocr"),
     ocrTitle: tr("records.toast.ocr_title"),
-    ocrMessage: (count: string) =>
-      trf("records.toast.ocr_message", { count }),
+    ocrMessage: (count: string) => trf("records.toast.ocr_message", { count }),
     ocrConfirm: tr("records.toast.ocr_confirm"),
     saveFailed: tr("records.toast.save_failed"),
-    saved: (count: number) =>
-      trf("records.toast.saved", { count }),
+    saved: (count: number) => trf("records.toast.saved", { count }),
     noChanges: tr("records.toast.no_changes"),
     parseFailed: tr("records.toast.parse_failed"),
     chromaUpdated: tr("records.toast.chroma_updated"),
-    chromaFailed: (error: string) =>
-      trf("records.toast.chroma_failed", { error }),
+    chromaFailed: (error: string) => trf("records.toast.chroma_failed", { error }),
     noHistory: tr("records.toast.no_history"),
     nothingToRestore: tr("records.toast.nothing_to_restore"),
     restoredFields: (count: number, label: string) =>

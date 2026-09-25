@@ -35,9 +35,7 @@ const loadedDisabledReason = useDisabledReason(loadedDisabled, loadedUnavailable
     class="search-workspace-header"
     :kicker="i18n.t('search.kicker')"
     :title="i18n.t('search.title')"
-    :description="
-      i18n.t('search.subtitle')
-    "
+    :description="i18n.t('search.subtitle')"
     title-id="search-page-title"
     :actions-label="i18n.t('search.view_actions')"
   >
@@ -56,11 +54,7 @@ const loadedDisabledReason = useDisabledReason(loadedDisabled, loadedUnavailable
     </template>
     <template #meta>
       <div class="search-scope-row">
-        <div
-          class="search-scope-switch"
-          role="group"
-          :aria-label="i18n.t('search.scope')"
-        >
+        <div class="search-scope-switch" role="group" :aria-label="i18n.t('search.scope')">
           <button
             type="button"
             :class="{ active: scope === 'loaded' }"

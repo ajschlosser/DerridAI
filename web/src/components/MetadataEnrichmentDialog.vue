@@ -1,4 +1,209 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'; import type { ProviderProfile } from '../api/system'; import UiDialog from './ui/UiDialog.vue'; import UiButton from './ui/UiButton.vue'; import LlmExecutionControl from './LlmExecutionControl.vue'; import { useI18nStore } from '../stores/i18n';
-const props=defineProps<{open:boolean;profiles:ProviderProfile[];providerProfileId:string;modelOverride?:string;busy?:boolean;recordCount?:number;acceptedCount?:number;selectedCount?:number;selectedRecordIds?:string[];groups?:{key:string;label:string}[]}>(); const emit=defineEmits<{close:[];run:[payload:{providerProfileId:string;model:string;families:string[];scope:string;passes:number;recordIds:string[]}];"update:providerProfileId":[value:string];"update:modelOverride":[value:string]}>(); const i18n=useI18nStore(); const scope=ref('all');const chain=ref(false);const passes=ref(3);const shownGroups=computed(()=>props.groups?.length?props.groups:[{key:'discourse',label:''},{key:'quotation',label:''},{key:'indexing',label:''}]);const chosen=ref<Record<string,boolean>>({});const groupLabel=(g:{key:string;label:string})=>g.label||i18n.t(`pdf_corpus.metadata_family.${g.key}`,g.key.replace(/_/g,' ')); watch(()=>props.open,open=>{if(open){scope.value=props.selectedCount?'selected':'all';chain.value=false;passes.value=3;chosen.value=Object.fromEntries(shownGroups.value.map(g=>[g.key,true]))}},{immediate:true}); function run(){const families=shownGroups.value.map(g=>g.key).filter(key=>chosen.value[key]);if(!families.length||!props.providerProfileId)return;emit('run',{providerProfileId:props.providerProfileId,model:String(props.modelOverride||''),families,scope:scope.value,passes:chain.value?Math.max(2,Math.min(10,Math.round(Number(passes.value)||2))):1,recordIds:scope.value==='selected'?(props.selectedRecordIds||[]):[]})}
-</script><template><UiDialog :open="open" size="large" :title="i18n.t('pdf_corpus.metadata_enrichment_again')" :description="i18n.t('pdf_corpus.metadata_enrichment_again_help')" :close-label="i18n.t('ui.close')" @close="emit('close')"><LlmExecutionControl :model-value="providerProfileId" :model-override="modelOverride" :profiles="profiles" :disabled="busy" :task="i18n.t('pdf_corpus.metadata_enrichment_provider_help')" @update:model-value="value=>emit('update:providerProfileId',value)" @update:model-override="value=>emit('update:modelOverride',value)"/><div class="enrichment-options"><fieldset><legend>{{i18n.t('pdf_corpus.enrichment_scope')}}</legend><label><input v-model="scope" type="radio" value="all"> {{i18n.tf('pdf_corpus.scope_all_records', {count:recordCount||0})}}</label><label><input v-model="scope" type="radio" value="accepted"> {{i18n.tf('pdf_corpus.scope_accepted_records', {count:acceptedCount||0})}}</label><label><input v-model="scope" type="radio" value="pending"> {{i18n.t('pdf_corpus.scope_pending_records')}}</label><label v-if="(props.selectedCount||0)>0"><input v-model="scope" type="radio" value="selected"> {{i18n.tf('pdf_corpus.scope_selected_records', {count:props.selectedCount||0})}}</label></fieldset><fieldset><legend>{{i18n.t('pdf_corpus.metadata_families')}}</legend><label v-for="g in shownGroups" :key="g.key"><input v-model="chosen[g.key]" type="checkbox"> {{groupLabel(g)}}</label></fieldset><fieldset class="passes"><legend>{{i18n.t('pdf_corpus.enrichment_passes')}}</legend><label><input v-model="chain" type="radio" :value="false"> {{i18n.t('pdf_corpus.enrichment_passes_single')}}</label><label><input v-model="chain" type="radio" :value="true"> {{i18n.t('pdf_corpus.enrichment_passes_chain')}}</label><label v-if="chain" class="passes-count">{{i18n.t('pdf_corpus.enrichment_passes_count')}}<input v-model.number="passes" type="number" min="2" max="10" inputmode="numeric"></label><small>{{i18n.t('pdf_corpus.enrichment_passes_help')}}</small></fieldset></div><p class="policy-note">{{i18n.t('pdf_corpus.metadata_enrichment_reopen_policy')}}</p><template #footer><UiButton :label="i18n.t('ui.cancel')" @click="emit('close')"/><UiButton variant="primary" :disabled="busy||!providerProfileId||!shownGroups.some(g=>chosen[g.key])" :label="busy?i18n.t('pdf_corpus.starting_enrichment'):i18n.t('pdf_corpus.run_enrichment')" @click="run"/></template></UiDialog></template><style scoped>.enrichment-options{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}.enrichment-options fieldset{display:grid;gap:9px;margin:0;padding:12px;border:1px solid var(--line);border-radius:10px}.enrichment-options legend{padding:0 5px;font-size:.875rem;font-weight:800}.enrichment-options label{display:flex;gap:8px;align-items:flex-start;font-size:.875rem;line-height:1.45}.enrichment-options input{inline-size:18px;block-size:18px;flex:none}.enrichment-options .passes{grid-column:1/-1}.enrichment-options .passes small{color:var(--muted);line-height:1.5}.enrichment-options .passes-count{align-items:center}.enrichment-options .passes-count input[type=number]{inline-size:5rem;block-size:auto;padding:4px 8px}.policy-note{margin:14px 0 0;color:var(--muted);font-size:.875rem;line-height:1.5}:is(input):focus-visible{outline:3px solid var(--accent);outline-offset:2px}@media(max-width:720px){.enrichment-options{grid-template-columns:1fr}}</style>
+import { computed, ref, watch } from "vue";
+import type { ProviderProfile } from "../api/system";
+import UiDialog from "./ui/UiDialog.vue";
+import UiButton from "./ui/UiButton.vue";
+import LlmExecutionControl from "./LlmExecutionControl.vue";
+import { useI18nStore } from "../stores/i18n";
+const props = defineProps<{
+  open: boolean;
+  profiles: ProviderProfile[];
+  providerProfileId: string;
+  modelOverride?: string;
+  busy?: boolean;
+  recordCount?: number;
+  acceptedCount?: number;
+  selectedCount?: number;
+  selectedRecordIds?: string[];
+  groups?: { key: string; label: string }[];
+}>();
+const emit = defineEmits<{
+  close: [];
+  run: [
+    payload: {
+      providerProfileId: string;
+      model: string;
+      families: string[];
+      scope: string;
+      passes: number;
+      recordIds: string[];
+    },
+  ];
+  "update:providerProfileId": [value: string];
+  "update:modelOverride": [value: string];
+}>();
+const i18n = useI18nStore();
+const scope = ref("all");
+const chain = ref(false);
+const passes = ref(3);
+const shownGroups = computed(() =>
+  props.groups?.length
+    ? props.groups
+    : [
+        { key: "discourse", label: "" },
+        { key: "quotation", label: "" },
+        { key: "indexing", label: "" },
+      ],
+);
+const chosen = ref<Record<string, boolean>>({});
+const groupLabel = (g: { key: string; label: string }) =>
+  g.label || i18n.t(`pdf_corpus.metadata_family.${g.key}`, g.key.replace(/_/g, " "));
+watch(
+  () => props.open,
+  (open) => {
+    if (open) {
+      scope.value = props.selectedCount ? "selected" : "all";
+      chain.value = false;
+      passes.value = 3;
+      chosen.value = Object.fromEntries(shownGroups.value.map((g) => [g.key, true]));
+    }
+  },
+  { immediate: true },
+);
+function run() {
+  const families = shownGroups.value.map((g) => g.key).filter((key) => chosen.value[key]);
+  if (!families.length || !props.providerProfileId) return;
+  emit("run", {
+    providerProfileId: props.providerProfileId,
+    model: String(props.modelOverride || ""),
+    families,
+    scope: scope.value,
+    passes: chain.value ? Math.max(2, Math.min(10, Math.round(Number(passes.value) || 2))) : 1,
+    recordIds: scope.value === "selected" ? props.selectedRecordIds || [] : [],
+  });
+}
+</script>
+<template>
+  <UiDialog
+    :open="open"
+    size="large"
+    :title="i18n.t('pdf_corpus.metadata_enrichment_again')"
+    :description="i18n.t('pdf_corpus.metadata_enrichment_again_help')"
+    :close-label="i18n.t('ui.close')"
+    @close="emit('close')"
+    ><LlmExecutionControl
+      :model-value="providerProfileId"
+      :model-override="modelOverride"
+      :profiles="profiles"
+      :disabled="busy"
+      :task="i18n.t('pdf_corpus.metadata_enrichment_provider_help')"
+      @update:model-value="(value) => emit('update:providerProfileId', value)"
+      @update:model-override="(value) => emit('update:modelOverride', value)" />
+    <div class="enrichment-options">
+      <fieldset>
+        <legend>{{ i18n.t("pdf_corpus.enrichment_scope") }}</legend>
+        <label
+          ><input v-model="scope" type="radio" value="all" />
+          {{ i18n.tf("pdf_corpus.scope_all_records", { count: recordCount || 0 }) }}</label
+        ><label
+          ><input v-model="scope" type="radio" value="accepted" />
+          {{ i18n.tf("pdf_corpus.scope_accepted_records", { count: acceptedCount || 0 }) }}</label
+        ><label
+          ><input v-model="scope" type="radio" value="pending" />
+          {{ i18n.t("pdf_corpus.scope_pending_records") }}</label
+        ><label v-if="(props.selectedCount || 0) > 0"
+          ><input v-model="scope" type="radio" value="selected" />
+          {{
+            i18n.tf("pdf_corpus.scope_selected_records", { count: props.selectedCount || 0 })
+          }}</label
+        >
+      </fieldset>
+      <fieldset>
+        <legend>{{ i18n.t("pdf_corpus.metadata_families") }}</legend>
+        <label v-for="g in shownGroups" :key="g.key"
+          ><input v-model="chosen[g.key]" type="checkbox" /> {{ groupLabel(g) }}</label
+        >
+      </fieldset>
+      <fieldset class="passes">
+        <legend>{{ i18n.t("pdf_corpus.enrichment_passes") }}</legend>
+        <label
+          ><input v-model="chain" type="radio" :value="false" />
+          {{ i18n.t("pdf_corpus.enrichment_passes_single") }}</label
+        ><label
+          ><input v-model="chain" type="radio" :value="true" />
+          {{ i18n.t("pdf_corpus.enrichment_passes_chain") }}</label
+        ><label v-if="chain" class="passes-count"
+          >{{ i18n.t("pdf_corpus.enrichment_passes_count")
+          }}<input
+            v-model.number="passes"
+            type="number"
+            min="2"
+            max="10"
+            inputmode="numeric" /></label
+        ><small>{{ i18n.t("pdf_corpus.enrichment_passes_help") }}</small>
+      </fieldset>
+    </div>
+    <p class="policy-note">{{ i18n.t("pdf_corpus.metadata_enrichment_reopen_policy") }}</p>
+    <template #footer
+      ><UiButton :label="i18n.t('ui.cancel')" @click="emit('close')" /><UiButton
+        variant="primary"
+        :disabled="busy || !providerProfileId || !shownGroups.some((g) => chosen[g.key])"
+        :label="
+          busy ? i18n.t('pdf_corpus.starting_enrichment') : i18n.t('pdf_corpus.run_enrichment')
+        "
+        @click="run" /></template
+  ></UiDialog>
+</template>
+<style scoped>
+.enrichment-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 14px;
+}
+.enrichment-options fieldset {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.enrichment-options legend {
+  padding: 0 5px;
+  font-size: 0.875rem;
+  font-weight: 800;
+}
+.enrichment-options label {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+.enrichment-options input {
+  inline-size: 18px;
+  block-size: 18px;
+  flex: none;
+}
+.enrichment-options .passes {
+  grid-column: 1/-1;
+}
+.enrichment-options .passes small {
+  color: var(--muted);
+  line-height: 1.5;
+}
+.enrichment-options .passes-count {
+  align-items: center;
+}
+.enrichment-options .passes-count input[type="number"] {
+  inline-size: 5rem;
+  block-size: auto;
+  padding: 4px 8px;
+}
+.policy-note {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+:is(input):focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+@media (max-width: 720px) {
+  .enrichment-options {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

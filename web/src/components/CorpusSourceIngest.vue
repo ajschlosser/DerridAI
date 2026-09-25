@@ -103,11 +103,11 @@ function onFile(event: Event) {
 
 function importLabel(hit: GutenbergHit) {
   return i18n.tf("pdf_corpus.import_gutenberg_hit", {
-      title: hit.title,
-      author: hit.author || unset(),
-      id: hit.etext_id,
-      language: hit.language,
-    });
+    title: hit.title,
+    author: hit.author || unset(),
+    id: hit.etext_id,
+    language: hit.language,
+  });
 }
 </script>
 
@@ -135,17 +135,20 @@ function importLabel(hit: GutenbergHit) {
       <div class="ingest-actions">
         <label for="source-format"
           ><span>{{ i18n.t("pdf_corpus.media_kind") }}</span>
-          <select id="source-format" v-model="chosenKind" class="control" :disabled="disabled"
-            :aria-describedby="chosenKind === 'audio' ? 'source-format-help' : undefined">
+          <select
+            id="source-format"
+            v-model="chosenKind"
+            class="control"
+            :disabled="disabled"
+            :aria-describedby="chosenKind === 'audio' ? 'source-format-help' : undefined"
+          >
             <option v-for="(_, kind) in formats" :key="kind" :value="kind">
               {{ mediaKind(String(kind)) }}
             </option>
           </select>
         </label>
         <p v-if="chosenKind === 'audio'" id="source-format-help">
-          {{
-            i18n.t("pdf_corpus.audio_help")
-          }}
+          {{ i18n.t("pdf_corpus.audio_help") }}
         </p>
         <fieldset v-if="hasPages(chosenKind)" class="illegibility-field" :disabled="disabled">
           <legend>{{ i18n.t("pdf_corpus.source_illegibility") }}</legend>
@@ -200,9 +203,7 @@ function importLabel(hit: GutenbergHit) {
             @click="uploadInput?.click()"
           >
             {{
-              busy === "upload"
-                ? i18n.t("pdf_corpus.extracting")
-                : i18n.t("pdf_corpus.choose_pdf")
+              busy === "upload" ? i18n.t("pdf_corpus.extracting") : i18n.t("pdf_corpus.choose_pdf")
             }}
           </button>
           <input

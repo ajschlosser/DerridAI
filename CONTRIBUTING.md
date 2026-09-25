@@ -1,4 +1,5 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+
 # Contributing
 
 This is the human-developer entry point for working on DerridAI. Read [AGENTS.md](AGENTS.md) when using coding agents, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before changing subsystem boundaries, and [docs/PROJECT_CONTEXT.md](docs/PROJECT_CONTEXT.md) before changing provenance, metadata, evidence, or scholarly semantics.
@@ -119,18 +120,18 @@ See [tests/README.md](tests/README.md) for pytest markers, test taxonomy, and fo
 
 `.github/workflows/frontend.yml` keeps the historical `frontend` aggregate check while dispatching independent work in parallel.
 
-| Gate | Command / responsibility |
-| --- | --- |
-| Repository format | `cd web && npm run format:repo:check` for Prettier-supported tracked source/docs/config |
-| Backend lint | `ruff check api/app tests scripts/check_frontend_api_contract.py` |
-| Backend types | `mypy` using `mypy.ini` |
-| Frontend lint | `cd web && npm run lint` |
-| Backend tests | compile Python, then parallel pytest excluding the focused contract test |
-| Frontend / FastAPI contract | live FastAPI OpenAPI routes versus frontend requests |
-| Frontend static | typecheck app/tests, unit tests, production build, Storybook build |
-| Legacy DOM regression | sharded characterization suite |
-| Composed UI / app E2E | sharded production/Storybook Playwright coverage |
-| WCAG 2.2 AA sweep | focused Playwright/axe accessibility coverage |
+| Gate                        | Command / responsibility                                                                |
+| --------------------------- | --------------------------------------------------------------------------------------- |
+| Repository format           | `cd web && npm run format:repo:check` for Prettier-supported tracked source/docs/config |
+| Backend lint                | `ruff check api/app tests scripts/check_frontend_api_contract.py`                       |
+| Backend types               | `mypy` using `mypy.ini`                                                                 |
+| Frontend lint               | `cd web && npm run lint`                                                                |
+| Backend tests               | compile Python, then parallel pytest excluding the focused contract test                |
+| Frontend / FastAPI contract | live FastAPI OpenAPI routes versus frontend requests                                    |
+| Frontend static             | typecheck app/tests, unit tests, production build, Storybook build                      |
+| Legacy DOM regression       | sharded characterization suite                                                          |
+| Composed UI / app E2E       | sharded production/Storybook Playwright coverage                                        |
+| WCAG 2.2 AA sweep           | focused Playwright/axe accessibility coverage                                           |
 
 Browser jobs share the Chromium cache while avoiding concurrent writes. Composed coverage runs against built artifacts rather than development servers so CI tests what is actually shipped.
 

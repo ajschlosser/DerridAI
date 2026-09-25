@@ -3,8 +3,20 @@ import { describe, expect, it } from "vitest";
 import { applyProfileFieldValues, mergeSavedProfile } from "../../src/domain/providerBulkFields";
 import type { ProviderProfile } from "../../src/api/system";
 
-const ollama = { id: "o1", name: "Local", type: "ollama", num_ctx: 4096, temperature: 0 } as ProviderProfile;
-const openai = { id: "p1", name: "Cloud", type: "openai", num_predict: 512, temperature: 0.2 } as ProviderProfile;
+const ollama = {
+  id: "o1",
+  name: "Local",
+  type: "ollama",
+  num_ctx: 4096,
+  temperature: 0,
+} as ProviderProfile;
+const openai = {
+  id: "p1",
+  name: "Cloud",
+  type: "openai",
+  num_predict: 512,
+  temperature: 0.2,
+} as ProviderProfile;
 
 describe("provider bulk fields", () => {
   it("merges one saved profile without rewriting the others", () => {

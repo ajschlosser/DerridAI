@@ -10,7 +10,11 @@ function presenters(locale: "en" | "fr") {
       : locale === "fr" && key === "rag.empty"
         ? "Aucune opération RAG pour le moment. Lancez-en une ci-dessous."
         : fallback || englishDefault(key) || key;
-  const trf = (key: string, fallback: string | Record<string, unknown> = "", values: Record<string, unknown> = {}) => {
+  const trf = (
+    key: string,
+    fallback: string | Record<string, unknown> = "",
+    values: Record<string, unknown> = {},
+  ) => {
     if (fallback && typeof fallback === "object") {
       values = fallback;
       fallback = "";

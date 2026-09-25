@@ -59,7 +59,7 @@ export interface RecordsListSnapshot {
   rows: RecordsRow[];
   columns: RecordsColumn[];
   available_columns: RecordsColumn[];
-  sort: {key: string; dir: number};
+  sort: { key: string; dir: number };
   filters: Record<string, string>;
   page: number;
   pages: number;

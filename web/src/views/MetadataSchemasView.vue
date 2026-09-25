@@ -29,10 +29,7 @@ onMounted(() => refreshProviders());
       title-id="schemas-page-title"
       :description="i18n.t('schemas.manage_help')"
     />
-    <MetadataSchemaEditor
-      :provider-profiles="previewProfiles"
-      :default-provider-id="defaultId"
-    />
+    <MetadataSchemaEditor :provider-profiles="previewProfiles" :default-provider-id="defaultId" />
   </main>
 </template>
 

@@ -9,7 +9,11 @@ const models = [
   { name: "hf.co/x/Qwen3.6-14B:Q6_K", parameter_size: "14B", quantization_level: "Q6_K" },
   { name: "deepseek-r1:8b", parameter_size: "8B" },
 ];
-const mountPicker = (props = {}) => mount(ProviderModelPicker, { props: { profileName: "Local", modelValue: "qwen3.5:4b", models, ...props }, attachTo: document.body });
+const mountPicker = (props = {}) =>
+  mount(ProviderModelPicker, {
+    props: { profileName: "Local", modelValue: "qwen3.5:4b", models, ...props },
+    attachTo: document.body,
+  });
 
 describe("provider model picker", () => {
   beforeEach(() => setActivePinia(createPinia()));
@@ -52,7 +56,9 @@ describe("provider model picker", () => {
     expect(modelMatchesKind("qwen3.5:4b", "coding")).toBe(false);
     expect(modelMatchesKind("anything", "any")).toBe(true);
     const wrapper = mountPicker({ kind: "reasoning" });
-    expect(wrapper.findAll("datalist option").map(o => o.attributes("value"))).toEqual(["deepseek-r1:8b"]);
+    expect(wrapper.findAll("datalist option").map((o) => o.attributes("value"))).toEqual([
+      "deepseek-r1:8b",
+    ]);
     wrapper.unmount();
   });
 });

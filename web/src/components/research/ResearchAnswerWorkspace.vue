@@ -175,13 +175,8 @@ const statusLabel = computed(() => {
         </template>
       </article>
       <footer class="research-answer-footer">
-        <span
-          >{{ result.evidence?.length || 0 }}
-          {{ i18n.t("research.evidence_records") }}</span
-        >
-        <span v-if="result.response_cache?.record_id">{{
-          i18n.t("research.cached")
-        }}</span>
+        <span>{{ result.evidence?.length || 0 }} {{ i18n.t("research.evidence_records") }}</span>
+        <span v-if="result.response_cache?.record_id">{{ i18n.t("research.cached") }}</span>
         <button class="research-text-action" type="button" @click="emit('rerun')">
           {{ i18n.t("research.rerun") }}
         </button>
@@ -209,9 +204,7 @@ const statusLabel = computed(() => {
         <div aria-hidden="true">∴</div>
         <h2>{{ i18n.t("research.answer_waiting") }}</h2>
         <p>
-          {{
-            i18n.t("research.answer_waiting_help")
-          }}
+          {{ i18n.t("research.answer_waiting_help") }}
         </p>
       </div>
     </template>

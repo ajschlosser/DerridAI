@@ -349,14 +349,9 @@ async function monitorPolicy(jobId: string) {
       if (job.status === "completed") {
         await refreshLanguages();
         await loadContentPolicy(String(job.result?.code || selectedCode.value));
-        runtime.notifyToast?.(
-          i18n.t("language.content_policy_generated"),
-          { tone: "success" },
-        );
+        runtime.notifyToast?.(i18n.t("language.content_policy_generated"), { tone: "success" });
       } else if (job.status === "failed") {
-        error.value =
-          job.stage_detail ||
-          i18n.t("language.content_policy_missing_help");
+        error.value = job.stage_detail || i18n.t("language.content_policy_missing_help");
       }
       return;
     }
@@ -393,10 +388,7 @@ async function generateContentPolicy() {
     });
     policyJob.value = created;
     runtime.registerExternalJob?.(created);
-    runtime.notifyToast?.(
-      i18n.t("language.content_policy_generating"),
-      { tone: "info" },
-    );
+    runtime.notifyToast?.(i18n.t("language.content_policy_generating"), { tone: "info" });
     void monitorPolicy(created.id);
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);
@@ -427,10 +419,7 @@ async function saveContentPolicy() {
       contextual_terms: contentPolicy.value.contextual_terms || [],
     });
     await refreshLanguages();
-    runtime.notifyToast?.(
-      i18n.t("language.content_policy_saved"),
-      { tone: "success" },
-    );
+    runtime.notifyToast?.(i18n.t("language.content_policy_saved"), { tone: "success" });
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);
   } finally {
@@ -511,9 +500,7 @@ async function importDictionary(event: Event) {
   try {
     const parsed = JSON.parse(await file.text()) as { code?: string; dictionary?: unknown };
     if (parsed.code && parsed.code !== current.value.code)
-      throw new Error(
-        i18n.t("language.import_locale_mismatch"),
-      );
+      throw new Error(i18n.t("language.import_locale_mismatch"));
     if (
       !parsed.dictionary ||
       typeof parsed.dictionary !== "object" ||
@@ -524,18 +511,14 @@ async function importDictionary(event: Event) {
       (entry): entry is [string, string] =>
         Boolean(entry[0].trim()) && typeof entry[1] === "string",
     );
-    if (!entries.length)
-      throw new Error(
-        i18n.t("language.import_empty"),
-      );
+    if (!entries.length) throw new Error(i18n.t("language.import_empty"));
     current.value = {
       ...current.value,
       dictionary: { ...current.value.dictionary, ...Object.fromEntries(entries) },
     };
-    runtime.notifyToast?.(
-      i18n.tf("language.imported", { count: entries.length }),
-      { tone: "success" },
-    );
+    runtime.notifyToast?.(i18n.tf("language.imported", { count: entries.length }), {
+      tone: "success",
+    });
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);
   }
@@ -630,26 +613,21 @@ async function monitorInstall(jobId: string) {
         if (fallbackCount > 0) {
           statusFilter.value = "review";
           runtime.notifyToast?.(
-            i18n.tf("language.installed_with_fallbacks", { count: fallbackCount.toLocaleString(i18n.locale) }),
+            i18n.tf("language.installed_with_fallbacks", {
+              count: fallbackCount.toLocaleString(i18n.locale),
+            }),
             { tone: "warning" },
           );
         } else {
-          runtime.notifyToast?.(
-            i18n.t("language.translation_complete"),
-            { tone: "success" },
-          );
+          runtime.notifyToast?.(i18n.t("language.translation_complete"), { tone: "success" });
         }
         resumeJobId.value = "";
       } else if (job.status === "failed") {
         error.value = i18n.tf("language.translation_failed_detail", {
-            message:
-              job.stage_detail || i18n.t("language.translation_failed"),
-          });
+          message: job.stage_detail || i18n.t("language.translation_failed"),
+        });
       } else if (job.result?.resumable) {
-        runtime.notifyToast?.(
-          i18n.t("language.partial_translation_restored"),
-          { tone: "info" },
-        );
+        runtime.notifyToast?.(i18n.t("language.partial_translation_restored"), { tone: "info" });
       }
       return;
     }
@@ -770,10 +748,7 @@ async function installLanguage() {
   error.value = "";
   try {
     const model = String(profile.model || "").trim();
-    if (!model)
-      throw new Error(
-        i18n.t("language.provider_model_required"),
-      );
+    if (!model) throw new Error(i18n.t("language.provider_model_required"));
     const status = await systemApi.researcherProviderStatus({
       id: profile.id,
       type: profile.type,
@@ -783,9 +758,8 @@ async function installLanguage() {
     if (!status.available)
       throw new Error(
         i18n.tf("language.provider_unavailable", {
-            message:
-              status.error || i18n.t("language.provider_unavailable_short"),
-          }),
+          message: status.error || i18n.t("language.provider_unavailable_short"),
+        }),
       );
     const created = await systemApi.installLanguage({
       code: install.value.code.trim(),
@@ -966,14 +940,14 @@ onUnmounted(() => {
 
     <div v-if="error" class="language-alert error" role="alert">
       <AppIcon name="warning" /><span>{{ error }}</span
-      ><button type="button" :aria-label="i18n.t('ui.close')" @click="error = ''">
-        ×
-      </button>
+      ><button type="button" :aria-label="i18n.t('ui.close')" @click="error = ''">×</button>
     </div>
     <section v-if="pendingPolicyCount" class="language-policy-banner" role="status">
       <AppIcon name="warning" />
       <span>{{
-        i18n.tf("language.content_policy_missing_banner", { count: pendingPolicyCount.toLocaleString(i18n.locale) })
+        i18n.tf("language.content_policy_missing_banner", {
+          count: pendingPolicyCount.toLocaleString(i18n.locale),
+        })
       }}</span>
     </section>
     <section
@@ -984,10 +958,7 @@ onUnmounted(() => {
       <div class="translation-progress-icon"><span class="spinner"></span></div>
       <div>
         <b>{{ i18n.t("language.translating_install") }}</b
-        ><span>{{
-          installJob.stage_detail ||
-          i18n.t("language.translation_in_progress")
-        }}</span>
+        ><span>{{ installJob.stage_detail || i18n.t("language.translation_in_progress") }}</span>
         <div class="translation-progress-track">
           <i :style="{ width: `${installProgress}%` }"></i>
         </div>
@@ -1005,9 +976,9 @@ onUnmounted(() => {
         <b>{{ i18n.t("language.translation_incomplete_title") }}</b>
         <span>{{
           i18n.tf("language.translation_incomplete_help", {
-              done: installPartialCount.toLocaleString(i18n.locale),
-              failed: installFailureCount.toLocaleString(i18n.locale),
-            })
+            done: installPartialCount.toLocaleString(i18n.locale),
+            failed: installFailureCount.toLocaleString(i18n.locale),
+          })
         }}</span>
       </div>
       <div class="translation-recovery-actions">
@@ -1021,10 +992,7 @@ onUnmounted(() => {
     </section>
 
     <section class="language-studio-grid">
-      <aside
-        class="language-locale-rail"
-        :aria-label="i18n.t('language.installed')"
-      >
+      <aside class="language-locale-rail" :aria-label="i18n.t('language.installed')">
         <div class="language-rail-head">
           <div>
             <p>{{ i18n.t("language.locale_library") }}</p>
@@ -1115,23 +1083,14 @@ onUnmounted(() => {
               >
             </div>
             <div class="language-editor-save">
-              <span v-if="dirty" class="unsaved-dot">{{
-                i18n.t("language.unsaved_changes")
-              }}</span
+              <span v-if="dirty" class="unsaved-dot">{{ i18n.t("language.unsaved_changes") }}</span
               ><button class="btn primary" type="button" :disabled="saving || !dirty" @click="save">
-                {{
-                  saving
-                    ? i18n.t("ui.saving")
-                    : i18n.t("language.save_dictionary")
-                }}
+                {{ saving ? i18n.t("ui.saving") : i18n.t("language.save_dictionary") }}
               </button>
             </div>
           </header>
 
-          <section
-            class="language-identity-card"
-            :aria-label="i18n.t('language.locale_identity')"
-          >
+          <section class="language-identity-card" :aria-label="i18n.t('language.locale_identity')">
             <label class="language-meta-field"
               ><span>{{ i18n.t("language.name") }}</span
               ><input v-model="current.name" class="control" /><small>{{
@@ -1142,16 +1101,12 @@ onUnmounted(() => {
               v-model="current.flag"
               :locale-code="current.code"
               :label="i18n.t('language.locale_icon')"
-              :help="
-                i18n.t('language.flag_library_help')
-              "
+              :help="i18n.t('language.flag_library_help')"
             />
             <div class="language-source-card">
               <span>{{ i18n.t("language.source_language") }}</span
               ><b>🇺🇸 {{ i18n.t("language.english_us") }}</b
-              ><small>{{
-                i18n.t("language.source_language_help")
-              }}</small>
+              ><small>{{ i18n.t("language.source_language_help") }}</small>
             </div>
             <button
               v-if="!['en-US', 'fr-CA'].includes(current.code)"
@@ -1188,9 +1143,9 @@ onUnmounted(() => {
                 class="language-policy-report"
                 >{{
                   i18n.tf("language.content_policy_report", {
-                      attempts: contentPolicy.generation_report.attempts,
-                      removed: contentPolicy.generation_report.removed_as_wrong_language,
-                    })
+                    attempts: contentPolicy.generation_report.attempts,
+                    removed: contentPolicy.generation_report.removed_as_wrong_language,
+                  })
                 }}</span
               >
               <span
@@ -1199,26 +1154,21 @@ onUnmounted(() => {
                 role="status"
                 >{{
                   i18n.tf("language.content_policy_short", {
-                      categories: contentPolicy.generation_report.short_categories
-                        .map((id) =>
-                          i18n.t(`language.policy_category.${id}`, id.replaceAll("_", " ")),
-                        )
-                        .join(", "),
-                    })
+                    categories: contentPolicy.generation_report.short_categories
+                      .map((id) =>
+                        i18n.t(`language.policy_category.${id}`, id.replaceAll("_", " ")),
+                      )
+                      .join(", "),
+                  })
                 }}</span
               >
-              <small>{{
-                i18n.t("language.content_policy_help")
-              }}</small>
+              <small>{{ i18n.t("language.content_policy_help") }}</small>
               <details v-if="policyReady" class="language-policy-terms">
                 <summary>
                   {{ i18n.t("language.content_policy_show_terms") }}
                 </summary>
                 <span>{{ i18n.t("language.content_policy_blocked") }}</span>
-                <ul
-                  tabindex="0"
-                  :aria-label="i18n.t('language.content_policy_blocked')"
-                >
+                <ul tabindex="0" :aria-label="i18n.t('language.content_policy_blocked')">
                   <li v-for="term in contentPolicy?.blocked_terms || []" :key="term">
                     <code>{{ term }}</code>
                     <button
@@ -1233,15 +1183,11 @@ onUnmounted(() => {
                 </ul>
                 <form class="language-policy-add" @submit.prevent="addPolicyTerm">
                   <label
-                    ><span class="sr-only">{{
-                      i18n.t("language.content_policy_term")
-                    }}</span
+                    ><span class="sr-only">{{ i18n.t("language.content_policy_term") }}</span
                     ><input
                       v-model="newPolicyTerm"
                       class="control"
-                      :placeholder="
-                        i18n.t('language.content_policy_add_placeholder')
-                      "
+                      :placeholder="i18n.t('language.content_policy_add_placeholder')"
                   /></label>
                   <button class="btn small" type="submit" :disabled="!newPolicyTerm.trim()">
                     {{ i18n.t("language.content_policy_add") }}
@@ -1253,9 +1199,7 @@ onUnmounted(() => {
                     @click="saveContentPolicy"
                   >
                     {{
-                      savingPolicy
-                        ? i18n.t("ui.saving")
-                        : i18n.t("language.content_policy_save")
+                      savingPolicy ? i18n.t("ui.saving") : i18n.t("language.content_policy_save")
                     }}
                   </button>
                 </form>
@@ -1263,9 +1207,7 @@ onUnmounted(() => {
                   v-if="contentPolicy?.contextual_terms?.length"
                   class="language-policy-contextual"
                   >{{ i18n.t("language.content_policy_contextual") }} ·
-                  {{
-                    i18n.t("language.content_policy_contextual_help")
-                  }}</small
+                  {{ i18n.t("language.content_policy_contextual_help") }}</small
                 >
               </details>
             </div>
@@ -1275,21 +1217,13 @@ onUnmounted(() => {
                 :profiles="providerProfiles"
                 :default-profile-id="runtime.getDefaultProviderProfileId?.() || ''"
                 :label="i18n.t('language.provider_profile')"
-                :help="
-                  i18n.t('language.content_policy_generate_help')
-                "
-                :empty-title="
-                  i18n.t('language.no_provider_profiles')
-                "
-                :empty-help="
-                  i18n.t('language.no_provider_profiles_help')
-                "
+                :help="i18n.t('language.content_policy_generate_help')"
+                :empty-title="i18n.t('language.no_provider_profiles')"
+                :empty-help="i18n.t('language.no_provider_profiles_help')"
                 :manage-label="i18n.t('language.manage_providers')"
                 :model-not-set-label="i18n.t('language.model_not_set')"
                 :default-label="i18n.t('ui.default')"
-                :concurrent-label="
-                  i18n.t('language.concurrent_requests')
-                "
+                :concurrent-label="i18n.t('language.concurrent_requests')"
                 :context-label="i18n.t('providers.context_tokens')"
                 @manage="requestManageProviders"
               />
@@ -1319,11 +1253,11 @@ onUnmounted(() => {
               <AppIcon name="warning" />
               <div>
                 <b>{{
-                  i18n.tf("language.tracked_fallbacks_title", { count: trackedFallbackCount.toLocaleString(i18n.locale) })
+                  i18n.tf("language.tracked_fallbacks_title", {
+                    count: trackedFallbackCount.toLocaleString(i18n.locale),
+                  })
                 }}</b
-                ><span>{{
-                  i18n.t("language.tracked_fallbacks_help")
-                }}</span>
+                ><span>{{ i18n.t("language.tracked_fallbacks_help") }}</span>
               </div>
             </div>
             <div class="language-fallback-report-actions">
@@ -1351,25 +1285,17 @@ onUnmounted(() => {
 
           <section class="language-translation-toolbar">
             <label class="language-key-search"
-              ><span class="sr-only">{{
-                i18n.t("language.search_strings")
-              }}</span
+              ><span class="sr-only">{{ i18n.t("language.search_strings") }}</span
               ><AppIcon name="search" /><input
                 v-model="keyQuery"
                 type="search"
-                :placeholder="
-                  i18n.t('language.search_strings')
-                "
+                :placeholder="i18n.t('language.search_strings')"
             /></label>
             <label class="language-category-select"
               ><span class="sr-only">{{ i18n.t("language.category") }}</span
               ><select v-model="activeCategory" class="control">
                 <option v-for="category in categories" :key="category.id" :value="category.id">
-                  {{
-                    category.id === "all"
-                      ? i18n.t("language.all_categories")
-                      : category.id
-                  }}
+                  {{ category.id === "all" ? i18n.t("language.all_categories") : category.id }}
                   · {{ category.count }}
                 </option>
               </select></label
@@ -1393,10 +1319,7 @@ onUnmounted(() => {
                 @change="importDictionary"
               />
             </div>
-            <div
-              class="language-filter-tabs"
-              :aria-label="i18n.t('language.translation_filters')"
-            >
+            <div class="language-filter-tabs" :aria-label="i18n.t('language.translation_filters')">
               <button
                 type="button"
                 :aria-pressed="statusFilter === 'all'"
@@ -1409,11 +1332,7 @@ onUnmounted(() => {
                 :aria-pressed="statusFilter === 'localized'"
                 @click="statusFilter = 'localized'"
               >
-                {{
-                  isCanonical
-                    ? i18n.t("language.filled")
-                    : i18n.t("language.localized")
-                }}
+                {{ isCanonical ? i18n.t("language.filled") : i18n.t("language.localized") }}
                 <span>{{ stats.localized }}</span>
               </button>
               <button
@@ -1450,13 +1369,9 @@ onUnmounted(() => {
           >
             <div class="language-string-head" :class="{ canonical: isCanonical }">
               <span>{{ i18n.t("language.key_context") }}</span
-              ><span v-if="!isCanonical">{{
-                i18n.t("language.english_source")
-              }}</span
+              ><span v-if="!isCanonical">{{ i18n.t("language.english_source") }}</span
               ><span>{{
-                isCanonical
-                  ? i18n.t("language.english_value")
-                  : i18n.t("language.translation")
+                isCanonical ? i18n.t("language.english_value") : i18n.t("language.translation")
               }}</span>
             </div>
             <article
@@ -1475,15 +1390,11 @@ onUnmounted(() => {
                 ><small>{{ describeKey(key) }}</small>
               </div>
               <div v-if="!isCanonical" class="language-source-cell" :lang="'en-US'">
-                <span class="mobile-column-label">{{
-                  i18n.t("language.english_source")
-                }}</span
+                <span class="mobile-column-label">{{ i18n.t("language.english_source") }}</span
                 >{{ sourceValue(key) }}
               </div>
               <label class="language-target-cell"
-                ><span class="sr-only">{{
-                  `${i18n.t("language.translation")}: ${key}`
-                }}</span
+                ><span class="sr-only">{{ `${i18n.t("language.translation")}: ${key}` }}</span
                 ><textarea
                   class="control"
                   rows="2"
@@ -1498,9 +1409,7 @@ onUnmounted(() => {
                     value.trim() === sourceValue(key).trim() &&
                     Boolean(value.trim())
                   "
-                  >{{
-                    i18n.t("language.english_fallback_note")
-                  }}</small
+                  >{{ i18n.t("language.english_fallback_note") }}</small
                 ></label
               >
               <button
@@ -1515,9 +1424,7 @@ onUnmounted(() => {
               </button>
             </article>
             <div v-if="!filteredRows.length" class="language-no-results">
-              <AppIcon name="search" /><b>{{
-                i18n.t("language.no_string_matches")
-              }}</b
+              <AppIcon name="search" /><b>{{ i18n.t("language.no_string_matches") }}</b
               ><button
                 type="button"
                 class="btn small"
@@ -1545,9 +1452,7 @@ onUnmounted(() => {
               </button>
             </form>
             <p>
-              {{
-                i18n.t("language.add_source_key_help")
-              }}
+              {{ i18n.t("language.add_source_key_help") }}
             </p>
           </details>
         </template>
@@ -1600,7 +1505,9 @@ onUnmounted(() => {
               <div>
                 <b>{{ i18n.t("language.english_source_set") }}</b
                 ><small>{{
-                  i18n.tf("language.source_key_count", { count: Object.keys(referenceDictionary).length.toLocaleString(i18n.locale) })
+                  i18n.tf("language.source_key_count", {
+                    count: Object.keys(referenceDictionary).length.toLocaleString(i18n.locale),
+                  })
                 }}</small>
               </div>
               <span class="source-lock"
@@ -1610,9 +1517,7 @@ onUnmounted(() => {
             <section class="workflow-section">
               <div class="workflow-section-copy">
                 <b>{{ i18n.t("language.identity_section") }}</b
-                ><span>{{
-                  i18n.t("language.identity_section_help_modern")
-                }}</span>
+                ><span>{{ i18n.t("language.identity_section_help_modern") }}</span>
               </div>
               <div class="workflow-fields workflow-identity-fields">
                 <label class="workflow-field"
@@ -1637,16 +1542,12 @@ onUnmounted(() => {
                     class="control"
                     autocomplete="off"
                     placeholder="Deutsch (Deutschland)"
-                  /><small>{{
-                    i18n.t("language.name_help")
-                  }}</small></label
+                  /><small>{{ i18n.t("language.name_help") }}</small></label
                 ><CountryFlagPicker
                   :model-value="install.flag"
                   :locale-code="install.code"
                   :label="i18n.t('language.locale_icon')"
-                  :help="
-                    i18n.t('language.flag_library_help')
-                  "
+                  :help="i18n.t('language.flag_library_help')"
                   @update:model-value="setInstallFlag"
                 />
               </div>
@@ -1655,16 +1556,16 @@ onUnmounted(() => {
               <AppIcon name="history" /><span
                 ><b>{{ i18n.t("language.resuming_partial") }}</b
                 ><small>{{
-                  i18n.tf("language.resuming_partial_help", { count: installPartialCount.toLocaleString(i18n.locale) })
+                  i18n.tf("language.resuming_partial_help", {
+                    count: installPartialCount.toLocaleString(i18n.locale),
+                  })
                 }}</small></span
               >
             </section>
             <section class="workflow-section">
               <div class="workflow-section-copy">
                 <b>{{ i18n.t("language.translation_section") }}</b
-                ><span>{{
-                  i18n.t("language.translation_section_help_modern")
-                }}</span>
+                ><span>{{ i18n.t("language.translation_section_help_modern") }}</span>
               </div>
               <div class="workflow-provider-area">
                 <ProviderProfileSelect
@@ -1672,21 +1573,13 @@ onUnmounted(() => {
                   :profiles="providerProfiles"
                   :default-profile-id="runtime.getDefaultProviderProfileId?.() || ''"
                   :label="i18n.t('language.provider_profile')"
-                  :help="
-                    i18n.t('language.provider_profile_help')
-                  "
-                  :empty-title="
-                    i18n.t('language.no_provider_profiles')
-                  "
-                  :empty-help="
-                    i18n.t('language.no_provider_profiles_help')
-                  "
+                  :help="i18n.t('language.provider_profile_help')"
+                  :empty-title="i18n.t('language.no_provider_profiles')"
+                  :empty-help="i18n.t('language.no_provider_profiles_help')"
                   :manage-label="i18n.t('language.manage_providers')"
                   :model-not-set-label="i18n.t('language.model_not_set')"
                   :default-label="i18n.t('ui.default')"
-                  :concurrent-label="
-                    i18n.t('language.concurrent_requests')
-                  "
+                  :concurrent-label="i18n.t('language.concurrent_requests')"
                   :context-label="i18n.t('providers.context_tokens')"
                   @manage="requestManageProviders"
                 />
@@ -1698,9 +1591,7 @@ onUnmounted(() => {
                 >
                   <AppIcon name="warning" />
                   <div>
-                    <b>{{
-                      i18n.t("language.model_translation_risk_title")
-                    }}</b>
+                    <b>{{ i18n.t("language.model_translation_risk_title") }}</b>
                     <p>{{ modelTranslationRiskMessage }}</p>
                     <label
                       ><input v-model="translationRiskAcknowledged" type="checkbox" /><span>{{
@@ -1715,17 +1606,13 @@ onUnmounted(() => {
               <div>
                 <AppIcon name="check" /><span
                   ><b>{{ i18n.t("language.atomic_install") }}</b
-                  ><small>{{
-                    i18n.t("language.atomic_install_help")
-                  }}</small></span
+                  ><small>{{ i18n.t("language.atomic_install_help") }}</small></span
                 >
               </div>
               <div>
                 <AppIcon name="history" /><span
                   ><b>{{ i18n.t("language.background_translation") }}</b
-                  ><small>{{
-                    i18n.t("language.background_translation_help_modern")
-                  }}</small></span
+                  ><small>{{ i18n.t("language.background_translation_help_modern") }}</small></span
                 >
               </div>
             </section>
@@ -1772,13 +1659,9 @@ onUnmounted(() => {
         >
           <div class="cardhead">
             <div>
-              <b id="discard-install-title">{{
-                i18n.t("language.discard_install_title")
-              }}</b>
+              <b id="discard-install-title">{{ i18n.t("language.discard_install_title") }}</b>
               <div class="note">
-                {{
-                  i18n.t("language.discard_install_help")
-                }}
+                {{ i18n.t("language.discard_install_help") }}
               </div>
             </div>
           </div>
@@ -1809,13 +1692,9 @@ onUnmounted(() => {
         >
           <div class="cardhead">
             <div>
-              <b id="manage-provider-warning">{{
-                i18n.t("language.leave_install_title")
-              }}</b>
+              <b id="manage-provider-warning">{{ i18n.t("language.leave_install_title") }}</b>
               <div class="note">
-                {{
-                  i18n.t("language.leave_install_help")
-                }}
+                {{ i18n.t("language.leave_install_help") }}
               </div>
             </div>
           </div>
@@ -1846,13 +1725,9 @@ onUnmounted(() => {
         >
           <div class="cardhead">
             <div>
-              <b id="unsaved-language-title">{{
-                i18n.t("language.unsaved_title")
-              }}</b>
+              <b id="unsaved-language-title">{{ i18n.t("language.unsaved_title") }}</b>
               <div class="note">
-                {{
-                  i18n.t("language.unsaved_help")
-                }}
+                {{ i18n.t("language.unsaved_help") }}
               </div>
             </div>
           </div>
@@ -1885,16 +1760,12 @@ onUnmounted(() => {
         >
           <div class="cardhead">
             <div>
-              <b id="remove-language-title">{{
-                i18n.t("language.remove_confirm")
-              }}</b>
+              <b id="remove-language-title">{{ i18n.t("language.remove_confirm") }}</b>
               <div class="note">{{ pendingDelete.name }} · {{ pendingDelete.code }}</div>
             </div>
           </div>
           <p>
-            {{
-              i18n.t("language.remove_help")
-            }}
+            {{ i18n.t("language.remove_help") }}
           </p>
           <div class="actions">
             <button class="btn" type="button" @click="pendingDelete = null">

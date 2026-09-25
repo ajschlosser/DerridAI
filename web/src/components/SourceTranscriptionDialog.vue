@@ -45,9 +45,7 @@ function move(delta: number) {
     :close-label="i18n.t('ui.close')"
     size="xlarge"
     :title="i18n.t('pdf_corpus.source_transcription_title')"
-    :description="
-      i18n.t('pdf_corpus.source_transcription_help')
-    "
+    :description="i18n.t('pdf_corpus.source_transcription_help')"
     @close="emit('close')"
   >
     <div v-if="hasPages(mediaKind)" class="source-toolbar">
@@ -55,30 +53,18 @@ function move(delta: number) {
         <b>{{ i18n.tf("pdf_corpus.pdf_page", { page }) }}</b
         ><span v-if="printedPage !== null && printedPage !== undefined">
           ·
-          {{
-            i18n.tf("pdf_corpus.printed_page_value", { page: printedPage })
-          }}</span
+          {{ i18n.tf("pdf_corpus.printed_page_value", { page: printedPage }) }}</span
         >
       </div>
       <div>
-        <UiButton
-          :label="i18n.t('ui.previous')"
-          :disabled="page <= 1"
-          @click="move(-1)"
-        /><span aria-live="polite">{{ page }} / {{ pageCount }}</span
-        ><UiButton
-          :label="i18n.t('ui.next')"
-          :disabled="page >= pageCount"
-          @click="move(1)"
-        />
+        <UiButton :label="i18n.t('ui.previous')" :disabled="page <= 1" @click="move(-1)" /><span
+          aria-live="polite"
+          >{{ page }} / {{ pageCount }}</span
+        ><UiButton :label="i18n.t('ui.next')" :disabled="page >= pageCount" @click="move(1)" />
       </div>
     </div>
     <div class="transcription-grid">
-      <section
-        class="source-pane"
-        tabindex="0"
-        :aria-label="i18n.t('pdf_corpus.source_context')"
-      >
+      <section class="source-pane" tabindex="0" :aria-label="i18n.t('pdf_corpus.source_context')">
         <PdfEvidenceViewer
           v-if="pdfUrl"
           :pdf-url="pdfUrl"
@@ -89,11 +75,7 @@ function move(delta: number) {
           :evidence-block-ids="blocks.map((b) => b.block_id)"
           :zoomable="true"
         />
-        <img
-          v-if="imageUrl"
-          :src="imageUrl"
-          :alt="i18n.t('pdf_corpus.source_context')"
-        />
+        <img v-if="imageUrl" :src="imageUrl" :alt="i18n.t('pdf_corpus.source_context')" />
         <audio
           v-if="audioUrl"
           controls
@@ -120,17 +102,13 @@ function move(delta: number) {
             <pre>{{ block.text }}</pre>
           </article>
           <p v-if="!blocks.length">
-            {{
-              i18n.t("pdf_corpus.source_loading_or_unavailable")
-            }}
+            {{ i18n.t("pdf_corpus.source_loading_or_unavailable") }}
           </p>
         </details>
       </section>
     </div>
     <template #footer
-      ><span>{{
-        i18n.t("pdf_corpus.manual_transcription_source_preserved")
-      }}</span>
+      ><span>{{ i18n.t("pdf_corpus.manual_transcription_source_preserved") }}</span>
       <div class="footer-actions">
         <UiButton :label="i18n.t('ui.cancel')" @click="emit('close')" /><UiButton
           variant="primary"

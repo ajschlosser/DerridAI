@@ -27,17 +27,11 @@ defineExpose({ focusInstall: () => installButton.value?.focus() });
     :kicker="`${i18n.t('section.system')} · ${i18n.t('language.workspace_kicker')}`"
     :title="props.title || i18n.t('language.page_title')"
     title-id="language-page-title"
-    :description="
-      props.description ||
-      i18n.t('language.page_description_modern')
-    "
+    :description="props.description || i18n.t('language.page_description_modern')"
     :actions-label="i18n.t('language.page_actions')"
   >
     <template #actions>
-      <div
-        class="language-workspace-stats"
-        :aria-label="i18n.t('language.localization_summary')"
-      >
+      <div class="language-workspace-stats" :aria-label="i18n.t('language.localization_summary')">
         <span
           ><b>{{ props.languageCount }}</b
           >{{ i18n.t("language.locales") }}</span

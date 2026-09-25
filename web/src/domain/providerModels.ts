@@ -11,6 +11,10 @@ const PATTERNS: Record<Exclude<ModelKind, "any">, string[]> = {
 export function modelMatchesKind(name: string, kind: string | undefined): boolean {
   if (!kind || kind === "any") return true;
   const value = name.toLocaleLowerCase();
-  return (PATTERNS[kind as Exclude<ModelKind, "any">] ?? []).some(token => value.includes(token));
+  return (PATTERNS[kind as Exclude<ModelKind, "any">] ?? []).some((token) => value.includes(token));
 }
-export interface DiscoveredModel { name?: string; parameter_size?: string; quantization_level?: string }
+export interface DiscoveredModel {
+  name?: string;
+  parameter_size?: string;
+  quantization_level?: string;
+}

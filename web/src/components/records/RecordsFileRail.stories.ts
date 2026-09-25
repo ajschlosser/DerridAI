@@ -36,14 +36,18 @@ const files: RecordsFileTab[] = [
 const meta = {
   title: "Records/File Rail",
   component: RecordsFileRail,
-  args: {files, canManage: true},
+  args: { files, canManage: true },
 } satisfies Meta<typeof RecordsFileRail>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Populated: Story = {};
 export const EditedSubset: Story = {
-  args: {files: files.map((file) => (file.origin === "subset" ? {...file, active: true} : {...file, active: false}))},
+  args: {
+    files: files.map((file) =>
+      file.origin === "subset" ? { ...file, active: true } : { ...file, active: false },
+    ),
+  },
 };
 export const SingleImported: Story = {
-  args: {files: [files[0]]},
+  args: { files: [files[0]] },
 };

@@ -50,9 +50,7 @@ onBeforeUnmount(() => window.removeEventListener("derridai:pdf-builder", openBui
       >
         {{ i18n.t("pdf_workspace.explorer") }}
       </button>
-      <span>{{
-        i18n.t("pdf_workspace.help")
-      }}</span>
+      <span>{{ i18n.t("pdf_workspace.help") }}</span>
     </nav>
     <PdfCorpusBuilder v-if="mode === 'builder'" />
     <PdfExplorerSurface v-else />

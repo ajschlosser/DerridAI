@@ -22,7 +22,11 @@ defineEmits<{ navigate: [string] }>();
       :aria-describedby="disabledReason ? `sidebar-nav-reason-${id}` : undefined"
       :title="disabledReason || label"
       @click="$emit('navigate', id)"
-    ><AppIcon :name="icon" aria-hidden="true" /><span>{{ label }}</span></button>
-    <span v-if="disabledReason" :id="`sidebar-nav-reason-${id}`" class="sr-only">{{ disabledReason }}</span>
+    >
+      <AppIcon :name="icon" aria-hidden="true" /><span>{{ label }}</span>
+    </button>
+    <span v-if="disabledReason" :id="`sidebar-nav-reason-${id}`" class="sr-only">{{
+      disabledReason
+    }}</span>
   </span>
 </template>

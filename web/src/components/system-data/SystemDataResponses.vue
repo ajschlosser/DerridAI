@@ -3,10 +3,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import AppIcon from "../AppIcon.vue";
-import {
-  systemApi,
-  type SystemResponseCachePage,
-} from "../../api/system";
+import { systemApi, type SystemResponseCachePage } from "../../api/system";
 import * as runtime from "../../runtime/runtimeBridge";
 import { useI18nStore } from "../../stores/i18n";
 
@@ -24,7 +21,9 @@ const page = ref<SystemResponseCachePage>({
 const loading = ref(false);
 const error = ref("");
 const query = ref("");
-const resultCount = computed(() => page.value.query?.trim() ? Number(page.value.count ?? 0) : Number(page.value.total || 0));
+const resultCount = computed(() =>
+  page.value.query?.trim() ? Number(page.value.count ?? 0) : Number(page.value.total || 0),
+);
 
 function t(key: string, fallback: string) {
   return i18n.t(key, fallback);
@@ -142,7 +141,8 @@ onMounted(() => void load(0));
         <details v-if="page.total > 0" class="maintenance-menu">
           <summary class="btn">{{ t("runtime.system_maintenance", "Maintenance") }}</summary>
           <button type="button" @click="clearAll">
-            <AppIcon name="trash" /> {{ t("runtime.system_clear_response_cache", "Clear saved responses") }}
+            <AppIcon name="trash" />
+            {{ t("runtime.system_clear_response_cache", "Clear saved responses") }}
           </button>
         </details>
       </div>
@@ -150,7 +150,9 @@ onMounted(() => void load(0));
 
     <form class="toolbar" role="search" @submit.prevent="load(0)">
       <label class="search-field">
-        <span class="sr-only">{{ t("runtime.system_search_responses", "Search saved responses") }}</span>
+        <span class="sr-only">{{
+          t("runtime.system_search_responses", "Search saved responses")
+        }}</span>
         <AppIcon name="search" />
         <input
           v-model="query"
@@ -158,8 +160,19 @@ onMounted(() => void load(0));
           :placeholder="t('runtime.system_search_responses', 'Search questions and responses')"
         />
       </label>
-      <button class="btn" type="submit" :disabled="loading">{{ t("common.search", "Search") }}</button>
-      <button v-if="query" class="btn" type="button" :disabled="loading" @click="query = ''; load(0)">
+      <button class="btn" type="submit" :disabled="loading">
+        {{ t("common.search", "Search") }}
+      </button>
+      <button
+        v-if="query"
+        class="btn"
+        type="button"
+        :disabled="loading"
+        @click="
+          query = '';
+          load(0);
+        "
+      >
         {{ t("common.clear", "Clear") }}
       </button>
     </form>
@@ -167,7 +180,9 @@ onMounted(() => void load(0));
     <div v-if="error" class="state error" role="alert">
       <strong>{{ t("runtime.system_responses_failed", "Could not load saved responses.") }}</strong>
       <span>{{ error }}</span>
-      <button class="btn tiny" type="button" @click="load(page.offset)">{{ t("common.retry", "Retry") }}</button>
+      <button class="btn tiny" type="button" @click="load(page.offset)">
+        {{ t("common.retry", "Retry") }}
+      </button>
     </div>
     <div v-else-if="loading" class="state" role="status">
       {{ t("runtime.system_responses_loading", "Loading saved responses…") }}
@@ -185,15 +200,11 @@ onMounted(() => void load(0));
     <template v-else>
       <div class="result-summary">
         {{
-          i18n.tf(
-            "runtime.system_response_range",
-            "{start}–{end} of {total} saved responses",
-            {
-              start: page.offset + 1,
-              end: Math.min(page.offset + page.records.length, resultCount),
-              total: resultCount.toLocaleString(),
-            },
-          )
+          i18n.tf("runtime.system_response_range", "{start}–{end} of {total} saved responses", {
+            start: page.offset + 1,
+            end: Math.min(page.offset + page.records.length, resultCount),
+            total: resultCount.toLocaleString(),
+          })
         }}
       </div>
       <div class="data-table-wrap">
@@ -204,7 +215,9 @@ onMounted(() => void load(0));
               <th>{{ t("runtime.system_created", "Created") }}</th>
               <th>{{ t("runtime.system_provider_model", "Provider / model") }}</th>
               <th>{{ t("runtime.system_grade", "Grade") }}</th>
-              <th><span class="sr-only">{{ t("common.actions", "Actions") }}</span></th>
+              <th>
+                <span class="sr-only">{{ t("common.actions", "Actions") }}</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -212,7 +225,9 @@ onMounted(() => void load(0));
               <td class="question-cell">{{ formatValue(record.question) }}</td>
               <td>{{ formatDate(record.created_at || record.timestamp) }}</td>
               <td>{{ provider(record) }}</td>
-              <td><span class="status-pill">{{ grade(record) }}</span></td>
+              <td>
+                <span class="status-pill">{{ grade(record) }}</span>
+              </td>
               <td class="row-actions">
                 <button class="btn tiny" type="button" @click="openLibrary(record)">
                   {{ t("runtime.system_library", "Library") }}
@@ -253,14 +268,42 @@ onMounted(() => void load(0));
 </template>
 
 <style scoped>
-.responses-workspace { display: grid; gap: 16px; }
-.workspace-heading { display: flex; justify-content: space-between; align-items: start; gap: 16px; }
-.workspace-heading h2 { margin: 0; font-size: 1.25rem; }
-.workspace-heading p { margin: 5px 0 0; color: var(--muted); line-height: 1.5; max-width: 720px; }
-.heading-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-.maintenance-menu { position: relative; }
-.maintenance-menu summary { list-style: none; cursor: pointer; }
-.maintenance-menu summary::-webkit-details-marker { display: none; }
+.responses-workspace {
+  display: grid;
+  gap: 16px;
+}
+.workspace-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 16px;
+}
+.workspace-heading h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+.workspace-heading p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+  max-width: 720px;
+}
+.heading-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.maintenance-menu {
+  position: relative;
+}
+.maintenance-menu summary {
+  list-style: none;
+  cursor: pointer;
+}
+.maintenance-menu summary::-webkit-details-marker {
+  display: none;
+}
 .maintenance-menu button {
   position: absolute;
   z-index: 5;
@@ -280,8 +323,15 @@ onMounted(() => void load(0));
   cursor: pointer;
   box-shadow: 0 8px 28px color-mix(in srgb, currentColor 12%, transparent);
 }
-.maintenance-menu :deep(svg) { width: 16px; height: 16px; }
-.toolbar { display: flex; gap: 8px; align-items: center; }
+.maintenance-menu :deep(svg) {
+  width: 16px;
+  height: 16px;
+}
+.toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
 .search-field {
   display: flex;
   gap: 8px;
@@ -292,27 +342,129 @@ onMounted(() => void load(0));
   border-radius: 9px;
   background: var(--card);
 }
-.search-field :deep(svg) { width: 17px; height: 17px; color: var(--muted); }
-.search-field input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: inherit; font: inherit; }
-.state { display: grid; gap: 6px; justify-items: start; padding: 22px; border: 1px solid var(--line); border-radius: 12px; background: var(--soft); color: var(--muted); }
-.state.error { color: var(--tone-danger-fg); }
-.result-summary { color: var(--muted); font-size: .82rem; }
-.data-table-wrap { max-width: 100%; overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
-.data-table { width: 100%; min-width: 760px; border-collapse: collapse; background: var(--card); }
-.data-table th, .data-table td { padding: 11px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; font-size: .84rem; }
-.data-table th { background: var(--soft); color: var(--muted); font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; }
-.data-table tbody tr:last-child td { border-bottom: 0; }
-.question-cell { min-width: 260px; font-weight: 650; line-height: 1.4; }
-.status-pill { display: inline-flex; padding: 3px 7px; border: 1px solid var(--line); border-radius: 999px; font-size: .75rem; white-space: nowrap; }
-.row-actions { display: flex; justify-content: flex-end; gap: 6px; }
-.icon-btn { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: inherit; cursor: pointer; }
-.icon-btn :deep(svg) { width: 15px; height: 15px; }
-.danger-text { color: var(--tone-danger-fg); }
-.pagination { display: flex; justify-content: flex-end; gap: 6px; }
-.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.search-field :deep(svg) {
+  width: 17px;
+  height: 17px;
+  color: var(--muted);
+}
+.search-field input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.state {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--soft);
+  color: var(--muted);
+}
+.state.error {
+  color: var(--tone-danger-fg);
+}
+.result-summary {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.data-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.data-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  background: var(--card);
+}
+.data-table th,
+.data-table td {
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+  font-size: 0.84rem;
+}
+.data-table th {
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.data-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.question-cell {
+  min-width: 260px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+.status-pill {
+  display: inline-flex;
+  padding: 3px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.icon-btn :deep(svg) {
+  width: 15px;
+  height: 15px;
+}
+.danger-text {
+  color: var(--tone-danger-fg);
+}
+.pagination {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 @media (max-width: 700px) {
-  .workspace-heading, .toolbar { display: grid; }
-  .heading-actions { justify-content: start; }
-  .search-field { min-width: 0; }
+  .workspace-heading,
+  .toolbar {
+    display: grid;
+  }
+  .heading-actions {
+    justify-content: start;
+  }
+  .search-field {
+    min-width: 0;
+  }
 }
 </style>

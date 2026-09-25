@@ -1,7 +1,10 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
 export function userInitials(username: string): string {
-  const parts = String(username || "U").split(/\s+/).filter(Boolean).slice(0, 2);
+  const parts = String(username || "U")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2);
   return parts.map((part) => part[0]?.toUpperCase() || "").join("") || "U";
 }
 

@@ -85,10 +85,7 @@ const runMetrics = computed(() => {
   add(i18n.t("faq.evidence_bound"), evidenceCount.value);
   add(i18n.t("faq.retrieved"), retrieval.raw_count);
   add(i18n.t("faq.deduplicated"), retrieval.deduplicated_count);
-  add(
-    i18n.t("faq.reranked"),
-    retrieval.reranked_count ?? retrieval.effective_rerank_top_n,
-  );
+  add(i18n.t("faq.reranked"), retrieval.reranked_count ?? retrieval.effective_rerank_top_n);
   return items;
 });
 
@@ -164,8 +161,7 @@ function gradeOverall(entry: Record<string, unknown>) {
 }
 function formatMetaValue(value: unknown) {
   if (Array.isArray(value)) return value.map((item) => String(item)).join(", ");
-  if (typeof value === "boolean")
-    return value ? i18n.t("research.on") : i18n.t("research.off");
+  if (typeof value === "boolean") return value ? i18n.t("research.on") : i18n.t("research.off");
   if (value && typeof value === "object") return JSON.stringify(value);
   return String(value ?? "");
 }
@@ -332,9 +328,7 @@ onMounted(() => void load({ chooseFirst: true }));
       :kicker="i18n.t('faq.page_kicker')"
       :title="i18n.t('nav.faq')"
       title-id="response-faq-title"
-      :description="
-        i18n.t('faq.page_subtitle')
-      "
+      :description="i18n.t('faq.page_subtitle')"
       :actions-label="i18n.t('faq.page_actions')"
     >
       <template #actions>
@@ -365,9 +359,7 @@ onMounted(() => void load({ chooseFirst: true }));
       icon="spark"
       icon-tone="neutral"
       :title="i18n.t('faq.empty_title')"
-      :description="
-        i18n.t('faq.empty_help')
-      "
+      :description="i18n.t('faq.empty_help')"
     />
 
     <section v-else-if="selected && result" class="response-faq-workspace" aria-live="polite">
@@ -407,9 +399,7 @@ onMounted(() => void load({ chooseFirst: true }));
           <span><AppIcon name="history" aria-hidden="true" /></span>
           <div>
             <strong>{{ i18n.t("faq.run_provenance") }}</strong
-            ><small>{{
-              i18n.t("faq.run_provenance_help")
-            }}</small>
+            ><small>{{ i18n.t("faq.run_provenance_help") }}</small>
           </div>
           <b aria-hidden="true">⌄</b>
         </summary>
@@ -418,9 +408,7 @@ onMounted(() => void load({ chooseFirst: true }));
             <header>
               <h2>{{ i18n.t("faq.run_summary") }}</h2>
               <p>
-                {{
-                  i18n.t("faq.run_summary_help")
-                }}
+                {{ i18n.t("faq.run_summary_help") }}
               </p>
             </header>
             <div class="response-faq-metrics">
@@ -436,9 +424,7 @@ onMounted(() => void load({ chooseFirst: true }));
               <header>
                 <h2>{{ i18n.t("research.retrieval_diagnostics") }}</h2>
                 <p>
-                  {{
-                    i18n.t("faq.retrieval_help")
-                  }}
+                  {{ i18n.t("faq.retrieval_help") }}
                 </p>
               </header>
               <dl>
@@ -452,9 +438,7 @@ onMounted(() => void load({ chooseFirst: true }));
               <header>
                 <h2>{{ i18n.t("research.query_metadata") }}</h2>
                 <p>
-                  {{
-                    i18n.t("faq.query_help")
-                  }}
+                  {{ i18n.t("faq.query_help") }}
                 </p>
               </header>
               <dl>
@@ -470,9 +454,7 @@ onMounted(() => void load({ chooseFirst: true }));
             <header>
               <h2>{{ i18n.t("faq.saved_grades") }}</h2>
               <p>
-                {{
-                  i18n.t("faq.saved_grades_help")
-                }}
+                {{ i18n.t("faq.saved_grades_help") }}
               </p>
             </header>
             <div>

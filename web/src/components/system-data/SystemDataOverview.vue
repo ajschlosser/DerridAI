@@ -108,48 +108,82 @@ onMounted(refresh);
       <SystemDataStoreCard
         icon="database"
         :title="t('runtime.system_application_data', 'Application data')"
-        :detail="t('runtime.system_application_data_help', 'Durable application information such as provider profiles, annotations, languages, and jobs.')"
+        :detail="
+          t(
+            'runtime.system_application_data_help',
+            'Durable application information such as provider profiles, annotations, languages, and jobs.',
+          )
+        "
         technical="system · durable SQLite"
         :status="stateLabel(databaseState, database('system')?.tables.length === 0)"
         :count="`${database('system')?.tables.length || 0} ${t('runtime.system_tables', 'tables')}`"
-         :action-label="t('runtime.system_open', 'Open')" @open="$emit('open-section', 'databases')"
+        :action-label="t('runtime.system_open', 'Open')"
+        @open="$emit('open-section', 'databases')"
       />
       <SystemDataStoreCard
         icon="lock"
         :title="t('runtime.system_identity_access', 'Identity and access')"
-        :detail="t('runtime.system_identity_access_help', 'Sensitive identity state including users, roles or permissions, sessions, and login security.')"
+        :detail="
+          t(
+            'runtime.system_identity_access_help',
+            'Sensitive identity state including users, roles or permissions, sessions, and login security.',
+          )
+        "
         technical="auth · sensitive durable SQLite"
         sensitive
         :status="stateLabel(databaseState, database('auth')?.tables.length === 0)"
         :count="`${database('auth')?.tables.length || 0} ${t('runtime.system_tables', 'tables')}`"
-         :action-label="t('runtime.system_open', 'Open')" @open="$emit('open-section', 'databases')"
+        :action-label="t('runtime.system_open', 'Open')"
+        @open="$emit('open-section', 'databases')"
       />
       <SystemDataStoreCard
         icon="record"
         :title="t('runtime.system_saved_responses', 'Saved responses')"
-        :detail="t('runtime.system_saved_responses_help', 'Generated research responses and grades. This operational history is not a research source or corpus collection.')"
+        :detail="
+          t(
+            'runtime.system_saved_responses_help',
+            'Generated research responses and grades. This operational history is not a research source or corpus collection.',
+          )
+        "
         technical="_response_cache"
         :status="stateLabel(cacheState, cache?.total === 0)"
         :count="`${Number(cache?.total || 0).toLocaleString()} ${t('runtime.system_responses_count', 'responses')}`"
-         :action-label="t('runtime.system_open', 'Open')" @open="$emit('open-section', 'responses')"
+        :action-label="t('runtime.system_open', 'Open')"
+        @open="$emit('open-section', 'responses')"
       />
       <SystemDataStoreCard
         icon="spark"
         :title="t('runtime.system_metadata_examples', 'Metadata examples')"
-        :detail="t('runtime.system_metadata_examples_help', 'Evidence-bound examples projected from reviewed corpus metadata for progressive enrichment.')"
+        :detail="
+          t(
+            'runtime.system_metadata_examples_help',
+            'Evidence-bound examples projected from reviewed corpus metadata for progressive enrichment.',
+          )
+        "
         technical="derived · rebuildable projection"
-        :status="exemplarState === 'available' && exemplars?.exists === false ? t('runtime.system_not_built', 'Not built') : stateLabel(exemplarState, exemplars?.count === 0)"
+        :status="
+          exemplarState === 'available' && exemplars?.exists === false
+            ? t('runtime.system_not_built', 'Not built')
+            : stateLabel(exemplarState, exemplars?.count === 0)
+        "
         :count="`${Number(exemplars?.count || 0).toLocaleString()} ${t('runtime.system_examples_count', 'examples')}`"
-         :action-label="t('runtime.system_open', 'Open')" @open="$emit('open-section', 'metadata')"
+        :action-label="t('runtime.system_open', 'Open')"
+        @open="$emit('open-section', 'metadata')"
       />
       <SystemDataStoreCard
         icon="search"
         :title="t('runtime.system_internal_vectors', 'Internal vector collections')"
-        :detail="t('runtime.system_internal_vectors_help', 'Application-owned projections for advanced read-only inspection, distinct from corpus vector collections.')"
+        :detail="
+          t(
+            'runtime.system_internal_vectors_help',
+            'Application-owned projections for advanced read-only inspection, distinct from corpus vector collections.',
+          )
+        "
         technical="system Chroma · derived"
         :status="stateLabel(chromaState, collections.length === 0)"
         :count="`${collections.length} ${t('runtime.system_collections', 'collections')}`"
-         :action-label="t('runtime.system_open', 'Open')" @open="$emit('open-section', 'advanced')"
+        :action-label="t('runtime.system_open', 'Open')"
+        @open="$emit('open-section', 'advanced')"
       />
     </div>
 
@@ -171,17 +205,33 @@ onMounted(refresh);
 </template>
 
 <style scoped>
-.overview { display: grid; gap: 18px; }
+.overview {
+  display: grid;
+  gap: 18px;
+}
 .workspace-heading {
   display: flex;
   gap: 16px;
   align-items: start;
   justify-content: space-between;
 }
-.workspace-heading h2 { margin: 0; font-size: 1.25rem; }
-.workspace-heading p { margin: 5px 0 0; color: var(--muted); line-height: 1.5; }
-.workspace-heading :deep(svg) { width: 16px; height: 16px; }
-.store-grid { display: grid; gap: 10px; }
+.workspace-heading h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+.workspace-heading p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.workspace-heading :deep(svg) {
+  width: 16px;
+  height: 16px;
+}
+.store-grid {
+  display: grid;
+  gap: 10px;
+}
 .context-note {
   display: flex;
   gap: 12px;
@@ -190,10 +240,24 @@ onMounted(refresh);
   border-radius: 12px;
   background: var(--soft);
 }
-.context-note > :deep(svg) { flex: 0 0 auto; width: 18px; height: 18px; margin-top: 1px; }
-.context-note strong { font-size: .88rem; }
-.context-note p { margin: 3px 0 0; color: var(--muted); font-size: .84rem; line-height: 1.5; }
+.context-note > :deep(svg) {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+}
+.context-note strong {
+  font-size: 0.88rem;
+}
+.context-note p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
 @media (max-width: 640px) {
-  .workspace-heading { display: grid; }
+  .workspace-heading {
+    display: grid;
+  }
 }
 </style>

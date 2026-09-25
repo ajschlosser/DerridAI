@@ -17,9 +17,7 @@ const confirmPassword = ref("");
 const busy = ref(false);
 const error = ref("");
 const title = computed(() =>
-  auth.bootstrapRequired
-    ? i18n.t("auth.create_first_admin")
-    : i18n.t("auth.sign_in_title"),
+  auth.bootstrapRequired ? i18n.t("auth.create_first_admin") : i18n.t("auth.sign_in_title"),
 );
 const currentLocaleInfo = computed(() =>
   i18n.languages.find((language) => language.code === i18n.locale),
@@ -80,19 +78,11 @@ async function submit() {
       </div>
       <div class="auth-heading">
         <p>
-          {{
-            auth.bootstrapRequired
-              ? i18n.t("auth.first_run")
-              : i18n.t("auth.required")
-          }}
+          {{ auth.bootstrapRequired ? i18n.t("auth.first_run") : i18n.t("auth.required") }}
         </p>
         <h1>{{ title }}</h1>
-        <span v-if="auth.bootstrapRequired">{{
-          i18n.t("auth.first_admin_help")
-        }}</span
-        ><span v-else>{{
-          i18n.t("auth.assigned_account")
-        }}</span>
+        <span v-if="auth.bootstrapRequired">{{ i18n.t("auth.first_admin_help") }}</span
+        ><span v-else>{{ i18n.t("auth.assigned_account") }}</span>
       </div>
       <div v-if="auth.error" class="auth-error auth-connect-error" role="alert">
         {{ auth.error }}
@@ -137,9 +127,7 @@ async function submit() {
         </button>
       </form>
       <div v-if="auth.bootstrapRequired" class="auth-note">
-        {{
-          i18n.t("auth.password_note")
-        }}
+        {{ i18n.t("auth.password_note") }}
       </div>
     </main>
     <AppBuildInfo class="auth-build" landmark show-commit />

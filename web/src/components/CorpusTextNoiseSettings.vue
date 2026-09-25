@@ -5,7 +5,10 @@ import { useI18nStore } from "../stores/i18n";
 withDefaults(defineProps<{ threshold: number; llmAssist: boolean; disabled?: boolean }>(), {
   disabled: false,
 });
-const emit = defineEmits<{ "update:threshold": [value: number]; "update:llmAssist": [value: boolean] }>();
+const emit = defineEmits<{
+  "update:threshold": [value: number];
+  "update:llmAssist": [value: boolean];
+}>();
 const i18n = useI18nStore();
 const id = useId();
 const percent = (value: number) => `${Math.round(value)}%`;
@@ -15,9 +18,7 @@ const percent = (value: number) => `${Math.round(value)}%`;
   <fieldset class="text-noise" :disabled="disabled">
     <legend>{{ i18n.t("pdf_corpus.text_noise.title") }}</legend>
     <p>
-      {{
-        i18n.t("pdf_corpus.text_noise.help")
-      }}
+      {{ i18n.t("pdf_corpus.text_noise.help") }}
     </p>
     <label class="noise-field" :for="`${id}-threshold`">
       <span>{{
@@ -38,9 +39,7 @@ const percent = (value: number) => `${Math.round(value)}%`;
         :aria-valuetext="percent(threshold)"
         @input="emit('update:threshold', Number(($event.target as HTMLInputElement).value))"
       />
-      <small>{{
-        i18n.t("pdf_corpus.text_noise.threshold_help")
-      }}</small>
+      <small>{{ i18n.t("pdf_corpus.text_noise.threshold_help") }}</small>
     </label>
     <label class="noise-check">
       <input
@@ -50,9 +49,7 @@ const percent = (value: number) => `${Math.round(value)}%`;
       />
       <span>
         <b>{{ i18n.t("pdf_corpus.text_noise.llm") }}</b>
-        <small>{{
-          i18n.t("pdf_corpus.text_noise.llm_help")
-        }}</small>
+        <small>{{ i18n.t("pdf_corpus.text_noise.llm_help") }}</small>
       </span>
     </label>
   </fieldset>

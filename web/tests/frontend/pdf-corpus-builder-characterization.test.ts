@@ -19,9 +19,8 @@ const pdfCorpusApi = vi.hoisted(() => ({
 }));
 
 vi.mock("../../src/api/pdfCorpus", async () => {
-  const actual = await vi.importActual<typeof import("../../src/api/pdfCorpus")>(
-    "../../src/api/pdfCorpus",
-  );
+  const actual =
+    await vi.importActual<typeof import("../../src/api/pdfCorpus")>("../../src/api/pdfCorpus");
   return { ...actual, pdfCorpusApi };
 });
 
@@ -31,7 +30,8 @@ const systemApi = vi.hoisted(() => ({
 }));
 
 vi.mock("../../src/api/system", async () => {
-  const actual = await vi.importActual<typeof import("../../src/api/system")>("../../src/api/system");
+  const actual =
+    await vi.importActual<typeof import("../../src/api/system")>("../../src/api/system");
   return { ...actual, systemApi };
 });
 

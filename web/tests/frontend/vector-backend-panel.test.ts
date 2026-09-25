@@ -25,7 +25,10 @@ const health: ChromaHealth = {
 function mountPanel(props: Record<string, unknown> = {}) {
   const pinia = createPinia();
   setActivePinia(pinia);
-  return mount(VectorBackendPanel, { props: {health, probing: false, applying: false, probeResult: null, error: "", ...props}, global: {plugins: [pinia]} });
+  return mount(VectorBackendPanel, {
+    props: { health, probing: false, applying: false, probeResult: null, error: "", ...props },
+    global: { plugins: [pinia] },
+  });
 }
 
 describe("VectorBackendPanel", () => {
@@ -34,11 +37,16 @@ describe("VectorBackendPanel", () => {
     expect(wrapper.find("#chroma-url").exists()).toBe(false);
     await wrapper.get("#chroma-path").setValue("/data/chroma-lab");
     await wrapper.get("form").trigger("submit");
-    expect(wrapper.emitted("apply")?.[0]?.[0]).toEqual({mode: "embedded", path: "/data/chroma-lab"});
+    expect(wrapper.emitted("apply")?.[0]?.[0]).toEqual({
+      mode: "embedded",
+      path: "/data/chroma-lab",
+    });
   });
 
   it("rejects credentials in the Chroma URL instead of probing", async () => {
-    const wrapper = mountPanel({health: {...health, mode: "http", path: null, url: "http://chroma:8000"}});
+    const wrapper = mountPanel({
+      health: { ...health, mode: "http", path: null, url: "http://chroma:8000" },
+    });
     await flushPromises();
     await wrapper.get("#chroma-url").setValue("http://user:secret@chroma:8000");
     await wrapper.get("button[type=button]").trigger("click");

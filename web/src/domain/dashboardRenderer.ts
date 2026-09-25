@@ -425,10 +425,7 @@ export function createDashboardRenderer(deps: Deps) {
         if (!state.activeStore) {
           persistPrefs();
           if (canAccessPage("vector")) {
-            toast(
-              tr("search.redirect_database"),
-              { tone: "info" },
-            );
+            toast(tr("search.redirect_database"), { tone: "info" });
             openDatabaseCreationFromResearch();
           } else {
             navigateTo("global");

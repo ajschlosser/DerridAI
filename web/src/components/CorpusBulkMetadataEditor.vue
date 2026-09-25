@@ -240,16 +240,12 @@ onBeforeUnmount(() => window.removeEventListener("keydown", keydown));
       >
         <header class="bulk-head">
           <div>
-            <span class="eyebrow">{{
-              i18n.t("pdf_corpus.bulk_edit_eyebrow")
-            }}</span>
+            <span class="eyebrow">{{ i18n.t("pdf_corpus.bulk_edit_eyebrow") }}</span>
             <h2 id="bulk-metadata-title" ref="titleEl" tabindex="-1">
               {{ i18n.t("pdf_corpus.bulk_metadata_title") }}
             </h2>
             <p id="bulk-metadata-help">
-              {{
-                i18n.t("pdf_corpus.bulk_metadata_help_v482")
-              }}
+              {{ i18n.t("pdf_corpus.bulk_metadata_help_v482") }}
             </p>
           </div>
           <button
@@ -264,9 +260,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", keydown));
         <div class="bulk-scroll">
           <MetadataFormSection
             :title="i18n.t('pdf_corpus.bulk_scope')"
-            :description="
-              i18n.t('pdf_corpus.bulk_scope_help')
-            "
+            :description="i18n.t('pdf_corpus.bulk_scope_help')"
           >
             <fieldset class="bulk-scope wide">
               <label

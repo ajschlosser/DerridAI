@@ -126,9 +126,7 @@ function normaliseImportedGuidance(payload: unknown): Record<string, RunGuidance
       ? (payload as { guidance?: unknown }).guidance
       : payload;
   if (!source || typeof source !== "object" || Array.isArray(source)) {
-    throw new Error(
-      i18n.t("pdf_corpus.run_guidance_import_invalid"),
-    );
+    throw new Error(i18n.t("pdf_corpus.run_guidance_import_invalid"));
   }
   const fields = new Map(props.fields.map((field) => [field.name, field]));
   const imported: Record<string, RunGuidanceEntry> = {};
@@ -161,9 +159,7 @@ function normaliseImportedGuidance(payload: unknown): Record<string, RunGuidance
       };
   }
   if (!Object.keys(imported).length) {
-    throw new Error(
-      i18n.t("pdf_corpus.run_guidance_import_no_fields"),
-    );
+    throw new Error(i18n.t("pdf_corpus.run_guidance_import_no_fields"));
   }
   return imported;
 }
@@ -192,9 +188,7 @@ async function importGuidance(event: Event) {
     aria-describedby="run-guidance-help"
   >
     <p id="run-guidance-help" class="run-guidance-help">
-      {{
-        i18n.t("pdf_corpus.run_guidance_help")
-      }}
+      {{ i18n.t("pdf_corpus.run_guidance_help") }}
     </p>
     <p class="run-guidance-count" aria-live="polite">
       {{
@@ -204,9 +198,7 @@ async function importGuidance(event: Event) {
       }}
     </p>
     <p class="run-guidance-file-help">
-      {{
-        i18n.t("pdf_corpus.run_guidance_file_help")
-      }}
+      {{ i18n.t("pdf_corpus.run_guidance_file_help") }}
     </p>
     <div class="run-guidance-actions">
       <UiButton
@@ -285,9 +277,7 @@ async function importGuidance(event: Event) {
           }}</small>
         </label>
         <label :for="`run-guidance-instructions-${field.name}`">
-          <span>{{
-            i18n.t("pdf_corpus.run_guidance_instruction_label")
-          }}</span>
+          <span>{{ i18n.t("pdf_corpus.run_guidance_instruction_label") }}</span>
           <textarea
             :id="`run-guidance-instructions-${field.name}`"
             class="control"
@@ -295,33 +285,25 @@ async function importGuidance(event: Event) {
             maxlength="1200"
             :disabled="disabled"
             :value="modelValue[field.name]?.instructions || ''"
-            :placeholder="
-              i18n.t('pdf_corpus.run_guidance_instruction_placeholder')
-            "
+            :placeholder="i18n.t('pdf_corpus.run_guidance_instruction_placeholder')"
             @input="
               update(field.name, { instructions: ($event.target as HTMLTextAreaElement).value })
             "
           />
         </label>
         <label :for="`run-guidance-terms-${field.name}`">
-          <span>{{
-            i18n.t("pdf_corpus.run_guidance_terms_label")
-          }}</span>
+          <span>{{ i18n.t("pdf_corpus.run_guidance_terms_label") }}</span>
           <textarea
             :id="`run-guidance-terms-${field.name}`"
             class="control"
             rows="3"
             :disabled="disabled"
             :value="termText(field.name)"
-            :placeholder="
-              i18n.t('pdf_corpus.run_guidance_terms_placeholder')
-            "
+            :placeholder="i18n.t('pdf_corpus.run_guidance_terms_placeholder')"
             @input="editTerms(field.name, ($event.target as HTMLTextAreaElement).value)"
             @blur="commitTerms(field.name)"
           />
-          <small>{{
-            i18n.t("pdf_corpus.run_guidance_terms_help")
-          }}</small>
+          <small>{{ i18n.t("pdf_corpus.run_guidance_terms_help") }}</small>
         </label>
       </div>
     </details>

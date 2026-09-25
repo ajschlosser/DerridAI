@@ -5,25 +5,26 @@ import SidebarMoreTools from "./SidebarMoreTools.vue";
 import type { SidebarNavEntry } from "./sidebarNav";
 
 const items: SidebarNavEntry[] = [
-  {id: "list", label: "Records", icon: "list", active: false},
-  {id: "pdf", label: "Corpus Builder", icon: "pdf", active: false},
-  {id: "vector", label: "Corpus Data", icon: "database", active: false},
+  { id: "list", label: "Records", icon: "list", active: false },
+  { id: "pdf", label: "Corpus Builder", icon: "pdf", active: false },
+  { id: "vector", label: "Corpus Data", icon: "database", active: false },
 ];
 
 const meta = {
   title: "Shell/Sidebar More Tools",
   component: SidebarMoreTools,
   render: (args) => ({
-    components: {SidebarMoreTools},
+    components: { SidebarMoreTools },
     setup: () => {
       const open = ref(args.open);
-      return {args, open};
+      return { args, open };
     },
-    template: '<div style="width:220px;background:var(--card);padding:8px"><SidebarMoreTools v-bind="args" v-model:open="open" /></div>',
+    template:
+      '<div style="width:220px;background:var(--card);padding:8px"><SidebarMoreTools v-bind="args" v-model:open="open" /></div>',
   }),
-  args: {items, open: true},
+  args: { items, open: true },
 } satisfies Meta<typeof SidebarMoreTools>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Open: Story = {};
-export const Closed: Story = {args: {open: false}};
+export const Closed: Story = { args: { open: false } };

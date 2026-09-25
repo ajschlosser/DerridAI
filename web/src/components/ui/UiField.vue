@@ -2,22 +2,29 @@
 <script setup lang="ts">
 import { computed, useId } from "vue";
 
-const props = withDefaults(defineProps<{
-  label: string;
-  hint?: string;
-  error?: string;
-  wide?: boolean;
-  required?: boolean;
-  persistence?: string;
-}>(), {hint: "", error: "", wide: false, required: false, persistence: ""});
+const props = withDefaults(
+  defineProps<{
+    label: string;
+    hint?: string;
+    error?: string;
+    wide?: boolean;
+    required?: boolean;
+    persistence?: string;
+  }>(),
+  { hint: "", error: "", wide: false, required: false, persistence: "" },
+);
 
 const generatedId = useId();
 const hintId = computed(() => `${generatedId}-hint`);
 const errorId = computed(() => `${generatedId}-error`);
-const describedby = computed(() => [props.hint ? hintId.value : "", props.error ? errorId.value : ""].filter(Boolean).join(" ") || undefined);
+const describedby = computed(
+  () =>
+    [props.hint ? hintId.value : "", props.error ? errorId.value : ""].filter(Boolean).join(" ") ||
+    undefined,
+);
 </script>
 <template>
-  <label class="ui-field" :class="{wide, invalid: Boolean(error)}">
+  <label class="ui-field" :class="{ wide, invalid: Boolean(error) }">
     <span class="ui-field-label">
       {{ label }}
       <span v-if="required" class="ui-field-required" aria-hidden="true"> *</span>
@@ -29,12 +36,48 @@ const describedby = computed(() => [props.hint ? hintId.value : "", props.error 
   </label>
 </template>
 <style scoped>
-.ui-field{display:grid;gap:6px;min-width:0}
-.ui-field.wide{grid-column:1/-1}
-.ui-field-label{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;font-size:.8125rem;font-weight:700;color:var(--text-primary)}
-.ui-field-required{color:var(--tone-danger-fg)}
-.ui-field-persist{margin-left:auto;font-weight:650;color:var(--text-tertiary);font-size:.8125rem;letter-spacing:.02em;text-transform:uppercase}
-.ui-field-hint{font-size:.8125rem;line-height:1.45;color:var(--text-tertiary)}
-.ui-field-error{font-size:.8125rem;line-height:1.45;color:var(--tone-danger-fg);font-weight:700}
-.ui-field.invalid :deep(input),.ui-field.invalid :deep(select),.ui-field.invalid :deep(textarea){border-color:var(--tone-danger-border)}
+.ui-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.ui-field.wide {
+  grid-column: 1/-1;
+}
+.ui-field-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.ui-field-required {
+  color: var(--tone-danger-fg);
+}
+.ui-field-persist {
+  margin-left: auto;
+  font-weight: 650;
+  color: var(--text-tertiary);
+  font-size: 0.8125rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.ui-field-hint {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--text-tertiary);
+}
+.ui-field-error {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--tone-danger-fg);
+  font-weight: 700;
+}
+.ui-field.invalid :deep(input),
+.ui-field.invalid :deep(select),
+.ui-field.invalid :deep(textarea) {
+  border-color: var(--tone-danger-border);
+}
 </style>

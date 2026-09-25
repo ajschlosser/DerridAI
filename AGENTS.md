@@ -1,4 +1,5 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+
 # AGENTS.md
 
 Guidance for coding agents and contributors working on DerridAI. See [README.md](README.md) for the project overview, [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for feature behavior, and [docs/PROJECT_CONTEXT.md](docs/PROJECT_CONTEXT.md) for the scholarly rationale and which capabilities are implemented versus intended.
@@ -74,7 +75,7 @@ Backend tests stub `chromadb` and put `api/` on `sys.path`; they do not need Doc
   - LLM output is untrusted until validated. Deterministic code owns IDs, citations, page lookup, exact-quote checks, schema checks, dedup, and embedding compatibility; prefer it over another LLM prompt.
   - Unresolved or uncertain results (segmentation, metadata, attribution, thin evidence) stay visible and marked for review. Never manufacture certainty, and never silently swallow errors that can affect correctness.
   - Segmentation must conserve text: no text lost, invented, duplicated, or reordered.
-  - Preprocessing is conservative. Do not strip stopwords or aggressively normalize; negations and qualifiers (*not, without, if, only*) can carry the proposition.
+  - Preprocessing is conservative. Do not strip stopwords or aggressively normalize; negations and qualifiers (_not, without, if, only_) can carry the proposition.
   - Bump the contract or prompt version identifiers (for example `derrida-scholarly-v12`, `derridai-record-metadata-v9`) when their semantics change.
 - **Source ingestion and media fidelity:**
   - Treat uploaded/remote source content as inert data. Never execute embedded document content, macros, scripts, fields, external relationships, or active objects.

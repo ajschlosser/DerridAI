@@ -6,8 +6,8 @@ import TopbarHelp from "../../src/components/shell/TopbarHelp.vue";
 import TopbarAccount from "../../src/components/shell/TopbarAccount.vue";
 
 const languages = [
-  {code: "en-US", name: "English", flag: "🇺🇸"},
-  {code: "fr-CA", name: "Français", flag: "🇨🇦"},
+  { code: "en-US", name: "English", flag: "🇺🇸" },
+  { code: "fr-CA", name: "Français", flag: "🇨🇦" },
 ];
 
 function stubViewport(compact: boolean) {
@@ -19,7 +19,9 @@ function stubViewport(compact: boolean) {
     removeEventListener() {},
     addListener() {},
     removeListener() {},
-    dispatchEvent() { return false; },
+    dispatchEvent() {
+      return false;
+    },
   }));
 }
 
@@ -44,9 +46,18 @@ describe("TopbarChrome", () => {
     });
     await flushPromises();
     expect(wrapper.find("button[aria-label='Help']").exists()).toBe(true);
-    expect(wrapper.get("button[aria-label='Interface language, English']").text()).toContain("English");
-    expect(wrapper.findAll("button[aria-haspopup='menu']").map((button) => button.text()).join(" ")).not.toContain("Workspace");
-    expect(wrapper.get("button[aria-haspopup='dialog']").attributes("aria-label")).toBe("Account menu for aaron");
+    expect(wrapper.get("button[aria-label='Interface language, English']").text()).toContain(
+      "English",
+    );
+    expect(
+      wrapper
+        .findAll("button[aria-haspopup='menu']")
+        .map((button) => button.text())
+        .join(" "),
+    ).not.toContain("Workspace");
+    expect(wrapper.get("button[aria-haspopup='dialog']").attributes("aria-label")).toBe(
+      "Account menu for aaron",
+    );
     wrapper.unmount();
   });
 
@@ -89,7 +100,12 @@ describe("TopbarChrome", () => {
       attachTo: document.body,
     });
     await flushPromises();
-    expect(wrapper.findAll("button[aria-haspopup='menu']").map((button) => button.text()).join(" ")).not.toContain("Workspace");
+    expect(
+      wrapper
+        .findAll("button[aria-haspopup='menu']")
+        .map((button) => button.text())
+        .join(" "),
+    ).not.toContain("Workspace");
     wrapper.unmount();
   });
 });
@@ -97,12 +113,12 @@ describe("TopbarChrome", () => {
 describe("TopbarHelp", () => {
   it("opens a help dialog instead of sending a researcher to Response Library", async () => {
     const wrapper = mount(TopbarHelp, {
-      props: {open: false, canFaq: false, canSettings: true},
+      props: { open: false, canFaq: false, canSettings: true },
       attachTo: document.body,
     });
     await wrapper.get("button[aria-label='Help']").trigger("click");
     expect(wrapper.emitted("update:open")).toEqual([[true]]);
-    await wrapper.setProps({open: true});
+    await wrapper.setProps({ open: true });
     expect(document.body.textContent).toContain("Using DerridAI");
     expect(document.body.textContent).not.toContain("Open Response Library");
     expect(document.body.textContent).toContain("Open Settings");
@@ -111,7 +127,7 @@ describe("TopbarHelp", () => {
 
   it("offers Response Library only when that page is allowed", async () => {
     const wrapper = mount(TopbarHelp, {
-      props: {open: true, canFaq: true, showTrigger: false},
+      props: { open: true, canFaq: true, showTrigger: false },
       attachTo: document.body,
     });
     expect(document.body.textContent).toContain("Open Response Library");
@@ -122,7 +138,7 @@ describe("TopbarHelp", () => {
 describe("TopbarAccount", () => {
   it("shows the translated built-in role and signs out with UiButton", async () => {
     const wrapper = mount(TopbarAccount, {
-      props: {username: "aaron", role: "admin", isAdmin: true},
+      props: { username: "aaron", role: "admin", isAdmin: true },
       attachTo: document.body,
     });
     expect(wrapper.get("button[aria-haspopup='dialog']").text()).toContain("Administrator");

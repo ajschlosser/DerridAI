@@ -345,9 +345,7 @@ function close() {
         <div>
           <button type="button" class="record-reset" :disabled="!dirtyCount" @click="reset">
             <AppIcon name="refresh" />{{ i18n.t("ui.reset") }}</button
-          ><span>{{
-            i18n.t("record.sparse_save_help")
-          }}</span>
+          ><span>{{ i18n.t("record.sparse_save_help") }}</span>
         </div>
         <div>
           <button type="button" class="record-cancel" @click="close">

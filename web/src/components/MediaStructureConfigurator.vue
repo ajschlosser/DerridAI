@@ -62,7 +62,10 @@ const copy = computed(() => {
           "Review how this source should be interpreted before records are built.",
         ),
         label: i18n.t("pdf_corpus.source_structure_label", "Source"),
-        detail: i18n.t("pdf_corpus.source_structure_detail", "Source-specific controls are shown when applicable."),
+        detail: i18n.t(
+          "pdf_corpus.source_structure_detail",
+          "Source-specific controls are shown when applicable.",
+        ),
       };
   }
 });
@@ -79,8 +82,12 @@ const copy = computed(() => {
       <span class="media-badge">{{ mediaKind || "source" }}</span>
     </header>
     <div class="media-facts">
-      <span><b>{{ filename }}</b></span>
-      <span v-if="pageCount">{{ pageCount }} {{ i18n.t("pdf_corpus.source_units", "source units") }}</span>
+      <span
+        ><b>{{ filename }}</b></span
+      >
+      <span v-if="pageCount"
+        >{{ pageCount }} {{ i18n.t("pdf_corpus.source_units", "source units") }}</span
+      >
       <span v-if="blockCount">{{ blockCount }} {{ i18n.t("pdf_corpus.blocks", "blocks") }}</span>
     </div>
     <p class="media-detail">{{ copy.detail }}</p>

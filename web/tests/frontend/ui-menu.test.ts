@@ -4,13 +4,14 @@ import { describe, expect, it } from "vitest";
 import UiMenu from "../../src/components/ui/UiMenu.vue";
 
 const items = [
-  {id: "open", label: "Open JSONL"},
-  {id: "merge", label: "Merge files", reason: "Load at least two JSONL files to merge them."},
-  {id: "export", label: "Export"},
+  { id: "open", label: "Open JSONL" },
+  { id: "merge", label: "Merge files", reason: "Load at least two JSONL files to merge them." },
+  { id: "export", label: "Export" },
 ];
-const mountMenu = () => mount(UiMenu, {props: {label: "Workspace", items}, attachTo: document.body});
+const mountMenu = () =>
+  mount(UiMenu, { props: { label: "Workspace", items }, attachTo: document.body });
 const key = (wrapper: ReturnType<typeof mount>, selector: string, k: string) =>
-  wrapper.get(selector).trigger("keydown", {key: k});
+  wrapper.get(selector).trigger("keydown", { key: k });
 
 describe("UiMenu", () => {
   it("is a menu button that opens with a click and focuses an item", async () => {
@@ -53,13 +54,15 @@ describe("UiMenu", () => {
         label: "English",
         ariaLabel: "Interface language, English",
         items: [
-          {id: "en-US", label: "English", checked: true},
-          {id: "fr-CA", label: "Français", checked: false},
+          { id: "en-US", label: "English", checked: true },
+          { id: "fr-CA", label: "Français", checked: false },
         ],
       },
       attachTo: document.body,
     });
-    expect(wrapper.get("button[aria-haspopup='menu']").attributes("aria-label")).toBe("Interface language, English");
+    expect(wrapper.get("button[aria-haspopup='menu']").attributes("aria-label")).toBe(
+      "Interface language, English",
+    );
     await wrapper.get("button[aria-haspopup='menu']").trigger("click");
     const radios = wrapper.findAll("[role=menuitemradio]");
     expect(radios).toHaveLength(2);

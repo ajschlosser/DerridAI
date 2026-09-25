@@ -14,7 +14,7 @@ const STORIES = [
 async function scan(page: Page, include: string) {
   for (let attempt = 0; ; attempt++) {
     try {
-      return await new AxeBuilder({page}).include(include).withTags(TAGS).analyze();
+      return await new AxeBuilder({ page }).include(include).withTags(TAGS).analyze();
     } catch (error) {
       if (attempt >= 10 || !String(error).includes("already running")) throw error;
       await page.waitForTimeout(400);
@@ -23,7 +23,7 @@ async function scan(page: Page, include: string) {
 }
 
 for (const [id, story, include] of STORIES) {
-  test(`Settings ${id}/${story} has no WCAG 2.2 AA violations`, async ({page}) => {
+  test(`Settings ${id}/${story} has no WCAG 2.2 AA violations`, async ({ page }) => {
     await page.goto(`/iframe.html?id=${id}--${story}&viewMode=story`);
     await expect(page.locator(include).first()).toBeVisible();
     const results = await scan(page, include);
@@ -31,13 +31,15 @@ for (const [id, story, include] of STORIES) {
   });
 }
 
-test("keyboard: Settings contents rail is operable with arrows and shows a visible focus ring", async ({page}) => {
+test("keyboard: Settings contents rail is operable with arrows and shows a visible focus ring", async ({
+  page,
+}) => {
   await page.goto("/iframe.html?id=settings-navigation--default&viewMode=story");
   const first = page.getByRole("tab").first();
   await first.focus();
-  const outline = await first.evaluate(el => {
+  const outline = await first.evaluate((el) => {
     const style = getComputedStyle(el);
-    return {width: parseFloat(style.outlineWidth), style: style.outlineStyle};
+    return { width: parseFloat(style.outlineWidth), style: style.outlineStyle };
   });
   expect(outline.style).not.toBe("none");
   expect(outline.width).toBeGreaterThanOrEqual(2);

@@ -17,18 +17,14 @@ const props = withDefaults(
 );
 const emit = defineEmits<{ share: []; columns: []; import: [] }>();
 const i18n = useI18nStore();
-const copyLinkHelp = computed(() =>
-  i18n.t("records.copy_view_link_help"),
-);
+const copyLinkHelp = computed(() => i18n.t("records.copy_view_link_help"));
 </script>
 <template>
   <UiPageHeader
     class="records-hero"
     :kicker="i18n.t('section.corpus')"
     :title="i18n.t('nav.records')"
-    :description="
-      i18n.t('records.page_help')
-    "
+    :description="i18n.t('records.page_help')"
     title-id="records-page-title"
     :actions-label="i18n.t('records.view_actions')"
   >
@@ -52,10 +48,7 @@ const copyLinkHelp = computed(() =>
       </div>
     </template>
     <template #meta>
-      <ul
-        class="records-stats"
-        :aria-label="i18n.t('records.workspace_stats')"
-      >
+      <ul class="records-stats" :aria-label="i18n.t('records.workspace_stats')">
         <li>
           <b>{{ props.fileName || i18n.t("records.no_file") }}</b
           ><span>{{ i18n.t("records.active_tab") }}</span>

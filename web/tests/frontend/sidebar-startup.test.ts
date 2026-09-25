@@ -6,10 +6,18 @@ import { createMemoryHistory, createRouter } from "vue-router";
 // The runtime's bootstrap (IndexedDB restore, provider fetch, health, jobs) can take seconds.
 // The sidebar must be complete from the moment a user signs in, not after that finishes.
 const NAV = [
-  ["home", "Home", "Overview"], ["global", "Search", "Corpus"], ["works", "Works", "Corpus"],
-  ["record", "Record View", "Corpus"], ["rag", "Research", "Research"], ["annotations", "Annotations", "Corpus"],
-  ["config", "Settings", "System"], ["list", "Records", "Corpus"], ["pdf", "Corpus Builder", "Tools"],
-  ["compare", "Compare", "Tools"], ["vector", "Corpus Data", "Tools"], ["faq", "Response Library", "Research"],
+  ["home", "Home", "Overview"],
+  ["global", "Search", "Corpus"],
+  ["works", "Works", "Corpus"],
+  ["record", "Record View", "Corpus"],
+  ["rag", "Research", "Research"],
+  ["annotations", "Annotations", "Corpus"],
+  ["config", "Settings", "System"],
+  ["list", "Records", "Corpus"],
+  ["pdf", "Corpus Builder", "Tools"],
+  ["compare", "Compare", "Tools"],
+  ["vector", "Corpus Data", "Tools"],
+  ["faq", "Response Library", "Research"],
   ["providers", "LLM Providers", "System"],
 ].map(([id, label, section]) => ({ id, label, icon: "record", section }));
 
@@ -25,7 +33,14 @@ const runtime = vi.hoisted(() => ({
   navigateView: vi.fn(),
   state: {},
 }));
-vi.mock("../../src/runtime/runtime.js", () => ({ ...runtime, __v_isRef: false, __v_isReadonly: false, __v_isShallow: false, __v_skip: true, __v_raw: undefined }));
+vi.mock("../../src/runtime/runtime.js", () => ({
+  ...runtime,
+  __v_isRef: false,
+  __v_isReadonly: false,
+  __v_isShallow: false,
+  __v_skip: true,
+  __v_raw: undefined,
+}));
 
 import App from "../../src/App.vue";
 import { useAuthStore } from "../../src/stores/auth";
@@ -39,18 +54,26 @@ async function signIn(role: "admin" | "researcher" = "admin") {
   const i18n = useI18nStore();
   i18n.languages = [{ code: "en-US", name: "English", flag: "🇺🇸" }] as never;
   auth.initialized = true;
-  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/:rest(.*)*", component: { template: "<div/>" } }] });
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: "/:rest(.*)*", component: { template: "<div/>" } }],
+  });
   await router.push("/");
   await router.isReady();
   const wrapper = mount(App, { global: { plugins: [pinia, router], stubs: { RouterView: true } } });
-  auth.user = { id: 1, username: "u", role, capabilities: role === "admin" ? [] : ["page.research", "page.search"] } as never;
+  auth.user = {
+    id: 1,
+    username: "u",
+    role,
+    capabilities: role === "admin" ? [] : ["page.research", "page.search"],
+  } as never;
   await flushPromises();
   return { wrapper, auth, shell: useShellStore() };
 }
 
 const sidebarLabels = (wrapper: ReturnType<typeof mount>) => ({
-  primary: wrapper.findAll(".shell-primary-nav button").map(b => b.text()),
-  more: wrapper.findAll(".shell-more-tools-list button").map(b => b.text()),
+  primary: wrapper.findAll(".shell-primary-nav button").map((b) => b.text()),
+  more: wrapper.findAll(".shell-more-tools-list button").map((b) => b.text()),
 });
 
 describe("sidebar at sign-in", () => {
@@ -70,8 +93,24 @@ describe("sidebar at sign-in", () => {
     const { primary, more } = sidebarLabels(wrapper);
     expect(primary).toContain("Home");
     expect(primary).toContain("Research");
-    expect(more).toEqual(expect.arrayContaining(["Records", "Corpus Builder", "Compare", "Corpus Data", "Response Library", "LLM Providers"]));
-    expect(more).toEqual(expect.arrayContaining(["Users & roles", "Roles & permissions", "Manage languages", "Metadata memory"]));
+    expect(more).toEqual(
+      expect.arrayContaining([
+        "Records",
+        "Corpus Builder",
+        "Compare",
+        "Corpus Data",
+        "Response Library",
+        "LLM Providers",
+      ]),
+    );
+    expect(more).toEqual(
+      expect.arrayContaining([
+        "Users & roles",
+        "Roles & permissions",
+        "Manage languages",
+        "Metadata memory",
+      ]),
+    );
   });
 
   it("forgets the menu on sign-out so the next user never sees a stale or partial one", async () => {
@@ -90,10 +129,15 @@ describe("sidebar at sign-in", () => {
     useI18nStore().languages = [{ code: "en-US", name: "English", flag: "🇺🇸" }] as never;
     auth.initialized = true;
     auth.user = { id: 1, username: "u", role: "admin", capabilities: [] } as never;
-    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/:rest(.*)*", component: { template: "<div/>" } }] });
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: "/:rest(.*)*", component: { template: "<div/>" } }],
+    });
     await router.push("/");
     await router.isReady();
-    const wrapper = mount(App, { global: { plugins: [pinia, router], stubs: { RouterView: true } } });
+    const wrapper = mount(App, {
+      global: { plugins: [pinia, router], stubs: { RouterView: true } },
+    });
     await flushPromises();
     expect(sidebarLabels(wrapper).more).toContain("Corpus Builder");
     expect(runtime.bootstrapRuntime).toHaveBeenCalled();
@@ -112,7 +156,9 @@ describe("sidebar at sign-in", () => {
     expect(localStorage.getItem("derridai.ui.moreToolsOpen")).toBe("0");
 
     const second = await signIn("admin");
-    expect((second.wrapper.get(".shell-more-tools").element as HTMLDetailsElement).open).toBe(false);
+    expect((second.wrapper.get(".shell-more-tools").element as HTMLDetailsElement).open).toBe(
+      false,
+    );
   });
 
   it("does not store a preference when the menu opens by default", async () => {
@@ -123,8 +169,8 @@ describe("sidebar at sign-in", () => {
   it("marks the active nav item for assistive tech and gives every item an accessible name", async () => {
     const { wrapper } = await signIn();
     const buttons = wrapper.findAll(".shell-primary-nav button");
-    const home = buttons.find(b => b.text() === "Home");
-    const research = buttons.find(b => b.text() === "Research");
+    const home = buttons.find((b) => b.text() === "Home");
+    const research = buttons.find((b) => b.text() === "Research");
     expect(home?.attributes("aria-current")).toBe("page");
     expect(research?.attributes("aria-current")).toBeUndefined();
     for (const button of buttons) expect(button.attributes("aria-label")).toBe(button.text());

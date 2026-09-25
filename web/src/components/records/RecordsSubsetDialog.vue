@@ -104,8 +104,7 @@ function suggestions(field: string) {
   return suggestionCache.get(key) || [];
 }
 const createBlocker = computed(() => {
-  if (!expression.value.length)
-    return i18n.t("subset.need_condition");
+  if (!expression.value.length) return i18n.t("subset.need_condition");
   if (!matchCount.value) return i18n.t("subset.no_matches");
   return "";
 });
@@ -134,10 +133,8 @@ function removeGroupRule(group: DraftItem & { type: "group" }, ruleId: number) {
 }
 function sourceLabel(item: SubsetSource) {
   const count = item.count.toLocaleString(i18n.locale);
-  if (item.id === "active")
-    return i18n.tf("subset.source_active", { name: item.name });
-  if (item.id === "all")
-    return i18n.tf("subset.source_all", { count });
+  if (item.id === "active") return i18n.tf("subset.source_active", { name: item.name });
+  if (item.id === "all") return i18n.tf("subset.source_all", { count });
   return i18n.tf("subset.source_file", { name: item.name, count });
 }
 
@@ -183,10 +180,7 @@ function saveProfile() {
     result.profiles.find((item) => item.name.toLocaleLowerCase() === trimmed.toLocaleLowerCase())
       ?.id || "";
   savingProfile.value = false;
-  notify(
-    i18n.tf("subset.profile_saved", { name: trimmed }),
-    "success",
-  );
+  notify(i18n.tf("subset.profile_saved", { name: trimmed }), "success");
 }
 function deleteProfile() {
   const profile = profiles.value.find((item) => item.id === profileId.value);
@@ -194,10 +188,7 @@ function deleteProfile() {
   profiles.value = profiles.value.filter((item) => item.id !== profile.id);
   saveSubsetProfiles(profiles.value);
   profileId.value = "";
-  notify(
-    i18n.tf("subset.profile_deleted", { name: profile.name }),
-    "info",
-  );
+  notify(i18n.tf("subset.profile_deleted", { name: profile.name }), "info");
 }
 function exportProfiles() {
   const count = profiles.value.length;
@@ -246,22 +237,22 @@ async function importProfiles(event: Event) {
     profiles.value = result.profiles;
     const parts = [
       i18n.tf("subset.profiles_imported", {
-          added: result.added.toLocaleString(i18n.locale),
-          replaced: result.replaced.toLocaleString(i18n.locale),
-        }),
+        added: result.added.toLocaleString(i18n.locale),
+        replaced: result.replaced.toLocaleString(i18n.locale),
+      }),
     ];
     if (skipped)
       parts.push(
         i18n.tf("subset.profiles_import_skipped", {
-            count: skipped.toLocaleString(i18n.locale),
-          }),
+          count: skipped.toLocaleString(i18n.locale),
+        }),
       );
     if (result.dropped)
       parts.push(
         i18n.tf("subset.profiles_import_dropped", {
-            count: result.dropped.toLocaleString(i18n.locale),
-            limit: SUBSET_PROFILES_LIMIT,
-          }),
+          count: result.dropped.toLocaleString(i18n.locale),
+          limit: SUBSET_PROFILES_LIMIT,
+        }),
       );
     notify(parts.join(" · "), skipped || result.dropped ? "warning" : "success");
   } catch (error) {
@@ -328,9 +319,7 @@ defineExpose({ open, close, finish });
     :open="isOpen"
     size="xlarge"
     :title="i18n.t('runtime.help.create_jsonl_subset')"
-    :description="
-      i18n.t('subset.dialog_help')
-    "
+    :description="i18n.t('subset.dialog_help')"
     :close-label="i18n.t('common.close')"
     @close="close"
   >
@@ -357,9 +346,7 @@ defineExpose({ open, close, finish });
             <span>{{ i18n.t("runtime.case_sensitive") }}</span>
           </label>
           <p :id="`${id}-case-help`" class="subset-help">
-            {{
-              i18n.t("subset.case_sensitive_help")
-            }}
+            {{ i18n.t("subset.case_sensitive_help") }}
           </p>
         </div>
       </section>
@@ -369,9 +356,7 @@ defineExpose({ open, close, finish });
           {{ i18n.t("subset.saved_profiles") }}
         </h3>
         <p class="subset-help">
-          {{
-            i18n.t("subset.profiles_help")
-          }}
+          {{ i18n.t("subset.profiles_help") }}
         </p>
         <div class="subset-row">
           <label class="subset-field subset-grow">
@@ -429,9 +414,7 @@ defineExpose({ open, close, finish });
       <section class="subset-card" :aria-labelledby="`${id}-filter`">
         <h3 :id="`${id}-filter`">{{ i18n.t("subset.filter") }}</h3>
         <p class="subset-help">
-          {{
-            i18n.t("subset.filter_help")
-          }}
+          {{ i18n.t("subset.filter_help") }}
         </p>
         <ol class="subset-items">
           <li v-for="(item, index) in items" :key="item.id" class="subset-item">
@@ -448,9 +431,7 @@ defineExpose({ open, close, finish });
               <option value="AND">{{ i18n.t("subset.and") }}</option>
               <option value="OR">{{ i18n.t("subset.or") }}</option>
             </select>
-            <span v-else class="subset-join subset-where">{{
-              i18n.t("subset.where")
-            }}</span>
+            <span v-else class="subset-join subset-where">{{ i18n.t("subset.where") }}</span>
 
             <SubsetCondition
               v-if="item.type === 'rule'"

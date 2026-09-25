@@ -14,7 +14,11 @@ type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-e
 
 interface Deps {
   tr: (key: string, fallback?: string) => string;
-  trf: (key: string, fallbackOrValues?: string | Record<string, unknown>, values?: Record<string, unknown>) => string;
+  trf: (
+    key: string,
+    fallbackOrValues?: string | Record<string, unknown>,
+    values?: Record<string, unknown>,
+  ) => string;
   pages: (record: Loose) => string;
   recordDbStatus: (file: Loose, index: number, record: Loose) => Loose;
   allAnnotations: () => Loose[];
@@ -55,9 +59,7 @@ export function createRecordPresenters(deps: Deps) {
       quote: String(item?.quote || ""),
       note: String(item?.note || ""),
       tags: Array.isArray(item?.tags) ? item.tags.map(String) : [],
-      author: String(
-        item?.initiated_by || item?.author || tr("annotations.unknown_author"),
-      ),
+      author: String(item?.initiated_by || item?.author || tr("annotations.unknown_author")),
       created_at: item?.created_at || null,
       removable: Boolean(removable),
       shared_annotation_id: item?.shared_annotation_id || null,
@@ -68,8 +70,7 @@ export function createRecordPresenters(deps: Deps) {
       (sum: number, item: Loose) => sum + Number(item.value || 0),
       0,
     );
-    if (!total)
-      return `<p class="note">${esc(tr("works.no_indexed_values"))}</p>`;
+    if (!total) return `<p class="note">${esc(tr("works.no_indexed_values"))}</p>`;
     const colors = [
       "var(--chart-1)",
       "var(--chart-2)",
@@ -228,8 +229,7 @@ export function createRecordPresenters(deps: Deps) {
     return `<div class="dashboard-pie-layout"><div class="dashboard-pie" style="background:conic-gradient(${stops})" role="img" aria-label="${esc(title)}"></div><div class="dashboard-pie-legend">${series
       .map((item: Loose, index: number) => {
         const pct = (Number(item.value || 0) / total) * 100;
-        const other =
-          Boolean(item.other) || item.key === tr("dashboard.other_works");
+        const other = Boolean(item.other) || item.key === tr("dashboard.other_works");
         const action = searchField
           ? `data-dashboard-search-field="${esc(searchField)}" data-dashboard-search-value="${esc(item.key)}"`
           : `data-dashboard-work="${esc(item.key)}"`;

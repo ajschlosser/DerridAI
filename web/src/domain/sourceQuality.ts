@@ -27,7 +27,9 @@ export function assetHasExtractionWarning(asset?: AssetQualityHint | null): bool
   return blocking > 0 || warning > 0;
 }
 
-export function recordHasSourceWarning(record?: { source_quality_issues?: unknown[] } | null): boolean {
+export function recordHasSourceWarning(
+  record?: { source_quality_issues?: unknown[] } | null,
+): boolean {
   return Boolean(record?.source_quality_issues?.length);
 }
 

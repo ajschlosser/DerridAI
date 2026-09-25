@@ -64,21 +64,43 @@ function apply() {
     </div>
     <fieldset class="provider-bulk-target">
       <legend>{{ i18n.t("providers.bulk_target") }}</legend>
-      <label><input v-model="target" type="radio" value="all" /> {{ i18n.t("providers.apply_to_all") }}</label>
-      <label><input v-model="target" type="radio" value="selected" /> {{ i18n.t("providers.apply_to_selected") }}</label>
+      <label
+        ><input v-model="target" type="radio" value="all" />
+        {{ i18n.t("providers.apply_to_all") }}</label
+      >
+      <label
+        ><input v-model="target" type="radio" value="selected" />
+        {{ i18n.t("providers.apply_to_selected") }}</label
+      >
     </fieldset>
     <div v-if="target === 'selected'" class="provider-bulk-pick">
       <label v-for="profile in profiles" :key="profile.id">
-        <input type="checkbox" :checked="selected.has(profile.id)" @change="toggle(profile.id, ($event.target as HTMLInputElement).checked)" />
+        <input
+          type="checkbox"
+          :checked="selected.has(profile.id)"
+          @change="toggle(profile.id, ($event.target as HTMLInputElement).checked)"
+        />
         {{ profile.name || profile.id }}
       </label>
     </div>
     <div class="provider-bulk-fields">
       <label v-for="field in PROVIDER_BULK_FIELDS" :key="field.key" class="field">
-        <span>{{ i18n.t(fieldLabels[field.key]?.[0] || `providers.${field.key}`, fieldLabels[field.key]?.[1] || field.key) }}</span>
-        <select v-if="field.input === 'select'" class="control" :value="values[field.key] || ''" @change="values[field.key] = ($event.target as HTMLSelectElement).value">
+        <span>{{
+          i18n.t(
+            fieldLabels[field.key]?.[0] || `providers.${field.key}`,
+            fieldLabels[field.key]?.[1] || field.key,
+          )
+        }}</span>
+        <select
+          v-if="field.input === 'select'"
+          class="control"
+          :value="values[field.key] || ''"
+          @change="values[field.key] = ($event.target as HTMLSelectElement).value"
+        >
           <option value="">{{ i18n.t("providers.leave_unchanged") }}</option>
-          <option v-for="option in field.options" :key="option.value" :value="option.value">{{ option.label }}</option>
+          <option v-for="option in field.options" :key="option.value" :value="option.value">
+            {{ option.label }}
+          </option>
         </select>
         <input
           v-else
@@ -93,7 +115,12 @@ function apply() {
         />
       </label>
     </div>
-    <button type="button" class="btn primary" :disabled="!Object.keys(parsedValues).length || (target === 'selected' && !selected.size)" @click="apply">
+    <button
+      type="button"
+      class="btn primary"
+      :disabled="!Object.keys(parsedValues).length || (target === 'selected' && !selected.size)"
+      @click="apply"
+    >
       {{ i18n.t("providers.apply_values") }}
     </button>
   </section>

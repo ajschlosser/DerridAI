@@ -21,9 +21,7 @@ const dontShowAgain = ref(false);
     v-if="open"
     size="large"
     :title="i18n.t('pdf_corpus.source_issue_title')"
-    :description="
-      i18n.t('pdf_corpus.source_warning_ingest_help')
-    "
+    :description="i18n.t('pdf_corpus.source_warning_ingest_help')"
     :close-label="i18n.t('ui.close')"
     @close="emit('close', dontShowAgain)"
   >
@@ -33,14 +31,14 @@ const dontShowAgain = ref(false);
         <p>
           {{
             i18n.tf("pdf_corpus.source_warning_ingest_summary", {
-                unusable: Number(extractionNoise.unusable_page_count || 0),
-                pages: Number(extractionNoise.page_count || 0),
-                median:
-                  extractionNoise.median_noise == null
-                    ? "—"
-                    : Math.round(Number(extractionNoise.median_noise)),
-                threshold: Math.round(Number(extractionNoise.threshold || 45)),
-              })
+              unusable: Number(extractionNoise.unusable_page_count || 0),
+              pages: Number(extractionNoise.page_count || 0),
+              median:
+                extractionNoise.median_noise == null
+                  ? "—"
+                  : Math.round(Number(extractionNoise.median_noise)),
+              threshold: Math.round(Number(extractionNoise.threshold || 45)),
+            })
           }}
         </p>
       </div>

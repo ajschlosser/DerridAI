@@ -7,14 +7,29 @@ const meta = {
   component: SearchAdvancedFilters,
   args: {
     filters: [
-      { id: "f1", field: "work", field_label: "Work", op: "eq", op_label: "is", value: "Of Grammatology" },
+      {
+        id: "f1",
+        field: "work",
+        field_label: "Work",
+        op: "eq",
+        op_label: "is",
+        value: "Of Grammatology",
+      },
     ],
     fields: [
       { key: "work", label: "Work", kind: "text" },
       { key: "speaker", label: "Speaker", kind: "text" },
     ],
     schemas: [
-      { id: "default", name: "Default", description: "", builtin: true, field_count: 12, groups: [], hash: "h" },
+      {
+        id: "default",
+        name: "Default",
+        description: "",
+        builtin: true,
+        field_count: 12,
+        groups: [],
+        hash: "h",
+      },
     ],
     schemaId: "default",
     associatedSchemaId: "default",

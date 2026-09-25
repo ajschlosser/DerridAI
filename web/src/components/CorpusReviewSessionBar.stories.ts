@@ -1,2 +1,24 @@
-import type { Meta,StoryObj } from "@storybook/vue3-vite";import CorpusReviewSessionBar from "./CorpusReviewSessionBar.vue";
-const meta={title:"Corpus Builder/Review/Session Header",component:CorpusReviewSessionBar,args:{sourceFilename:"On Cosmopolitanism and Forgiveness.pdf",model:"Gemma 4 26B",buildId:"build-20260918",accepted:18,reviewable:11,remaining:42,issues:7}} satisfies Meta<typeof CorpusReviewSessionBar>;export default meta;type Story=StoryObj<typeof meta>;export const Default:Story={};export const FrenchLengthStress:Story={parameters:{locale:"fr-CA"},args:{sourceFilename:"Cosmopolites de tous les pays, encore un effort ! — édition commentée.pdf"}};
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
+import CorpusReviewSessionBar from "./CorpusReviewSessionBar.vue";
+const meta = {
+  title: "Corpus Builder/Review/Session Header",
+  component: CorpusReviewSessionBar,
+  args: {
+    sourceFilename: "On Cosmopolitanism and Forgiveness.pdf",
+    model: "Gemma 4 26B",
+    buildId: "build-20260918",
+    accepted: 18,
+    reviewable: 11,
+    remaining: 42,
+    issues: 7,
+  },
+} satisfies Meta<typeof CorpusReviewSessionBar>;
+export default meta;
+type Story = StoryObj<typeof meta>;
+export const Default: Story = {};
+export const FrenchLengthStress: Story = {
+  parameters: { locale: "fr-CA" },
+  args: {
+    sourceFilename: "Cosmopolites de tous les pays, encore un effort ! — édition commentée.pdf",
+  },
+};

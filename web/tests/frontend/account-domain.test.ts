@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { roleLabel, userInitials } from "../../src/domain/account";
 
 const t = (key: string, fallback: string) =>
-  ({"role.admin": "Administrateur", "role.researcher": "Chercheur"}[key] || fallback);
+  ({ "role.admin": "Administrateur", "role.researcher": "Chercheur" })[key] || fallback;
 
 describe("account display", () => {
   it("builds initials from the username", () => {

@@ -207,25 +207,26 @@ export function createJobDialogs(deps: Deps) {
   </div>
   <div class="db job-details-body">
     <section class="job-detail-summary">
-      ${
+      ${[
+        [tr("operations.fact.operation"), job.type],
+        [tr("operations.fact.started_by"), job.owner || "—"],
         [
-          [tr("operations.fact.operation"), job.type],
-          [tr("operations.fact.started_by"), job.owner || "—"],
-          [tr("operations.fact.status"), tr(`operations.status.${job.status}`, String(job.status || ""))],
-          [tr("operations.fact.provider"), job.provider],
-          [tr("operations.fact.model"), job.model],
-          [tr("operations.fact.progress"), `${job.completed}/${job.total}`],
-          [tr("operations.fact.failed"), job.failed || 0],
-          [tr("operations.fact.started"), job.started_at ? formatTimestamp(job.started_at) : "—"],
-          [tr("operations.fact.finished"), job.finished_at ? formatTimestamp(job.finished_at) : "—"],
-          [
-            tr("operations.fact.cancel_requested"),
-            job.cancel_requested_at ? formatTimestamp(job.cancel_requested_at) : "—",
-          ],
-        ]
-          .map(([name, value]) => `<div><span>${esc(name)}</span><b>${esc(value ?? "—")}</b></div>`)
-          .join("")
-      }
+          tr("operations.fact.status"),
+          tr(`operations.status.${job.status}`, String(job.status || "")),
+        ],
+        [tr("operations.fact.provider"), job.provider],
+        [tr("operations.fact.model"), job.model],
+        [tr("operations.fact.progress"), `${job.completed}/${job.total}`],
+        [tr("operations.fact.failed"), job.failed || 0],
+        [tr("operations.fact.started"), job.started_at ? formatTimestamp(job.started_at) : "—"],
+        [tr("operations.fact.finished"), job.finished_at ? formatTimestamp(job.finished_at) : "—"],
+        [
+          tr("operations.fact.cancel_requested"),
+          job.cancel_requested_at ? formatTimestamp(job.cancel_requested_at) : "—",
+        ],
+      ]
+        .map(([name, value]) => `<div><span>${esc(name)}</span><b>${esc(value ?? "—")}</b></div>`)
+        .join("")}
     </section>
     ${job.fatal_error ? `<div class="info error">${esc(job.fatal_error)}</div>` : ""}
     <section class="card-inset">
@@ -527,13 +528,7 @@ export function createJobDialogs(deps: Deps) {
         await refreshJobs({ rerender: state.view === "home" });
         selections.clear();
         render({ preserveScroll: true });
-        toast(
-          copy.accepted(
-            resolveItems.length,
-            fieldsApplied,
-            job.pending_result_count || 0,
-          ),
-        );
+        toast(copy.accepted(resolveItems.length, fieldsApplied, job.pending_result_count || 0));
       } catch (error: Any) {
         toast(copy.localAppliedQueueFailed(error.message));
       }
@@ -578,9 +573,7 @@ export function createJobDialogs(deps: Deps) {
       const noChangeCount = unchanged.length;
       const active = ["queued", "running", "cancelling"].includes(job.status);
       const statusText =
-        job.status === "cancelled"
-          ? tr("jobs.review.cancelled_partial")
-          : job.status;
+        job.status === "cancelled" ? tr("jobs.review.cancelled_partial") : job.status;
       const pendingResults = job.pending_result_count ?? successful.length;
       const pendingChanges = job.pending_change_count ?? flattened.length;
       const remaining =
@@ -696,16 +689,9 @@ export function createJobDialogs(deps: Deps) {
     }
   }
   async function openRagResult(job: Any) {
-    if (!job?.id)
-      return toast(
-        tr("research.result_unavailable"),
-        { tone: "warn" },
-      );
+    if (!job?.id) return toast(tr("research.result_unavailable"), { tone: "warn" });
     if (!canAccessPage("rag"))
-      return toast(
-        tr("permissions.research_result_denied"),
-        { tone: "warn" },
-      );
+      return toast(tr("permissions.research_result_denied"), { tone: "warn" });
     // v0.35.5: a RAG result is a research object, not a legacy modal. Open it in
     // the same native result workspace used by Research so typography, source
     // binding, evidence inspection, accessibility, and i18n stay identical no
@@ -904,7 +890,8 @@ export function createJobDialogs(deps: Deps) {
         const el = dialog.querySelector("#toolStatus");
         el.textContent = tr("providers.warming");
         await warmupProviderProfile(profileId);
-        el.textContent = state.providerWarmups?.[profileId]?.message || tr("jobs.tool.warmup_requested");
+        el.textContent =
+          state.providerWarmups?.[profileId]?.message || tr("jobs.tool.warmup_requested");
       };
       dialog.querySelector("#runLlmTask").onclick = async () => {
         const active = providerProfile(profileId);
@@ -961,7 +948,8 @@ export function createJobDialogs(deps: Deps) {
         };
         const button = dialog.querySelector("#runLlmTask");
         button.disabled = true;
-        button.textContent = runMode === "background" ? tr("jobs.tool.starting") : tr("jobs.tool.running");
+        button.textContent =
+          runMode === "background" ? tr("jobs.tool.starting") : tr("jobs.tool.running");
         try {
           if (runMode === "background") {
             const body = {

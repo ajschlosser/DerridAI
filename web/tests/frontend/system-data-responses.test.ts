@@ -31,12 +31,14 @@ describe("System Data saved responses", () => {
       total: 1,
       limit: 25,
       offset: 0,
-      records: [{
-        record_id: "rag-1",
-        question: "What is différance?",
-        created_at: "2026-09-24T12:00:00Z",
-        generation_model: "qwen",
-      }],
+      records: [
+        {
+          record_id: "rag-1",
+          question: "What is différance?",
+          created_at: "2026-09-24T12:00:00Z",
+          generation_model: "qwen",
+        },
+      ],
     });
   });
 

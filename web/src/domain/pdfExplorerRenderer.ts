@@ -59,8 +59,7 @@ export function createPdfExplorerRenderer(deps: Deps) {
       .trim();
   }
   async function extractPdfApi(page = null) {
-    if (!state.pdf.file)
-      throw new Error(copy.fileGone);
+    if (!state.pdf.file) throw new Error(copy.fileGone);
     const form = new FormData();
     form.append("file", state.pdf.file, state.pdf.name || "document.pdf");
     const url = page ? `/api/pdf/extract?page=${page}` : "/api/pdf/extract";
@@ -114,8 +113,7 @@ export function createPdfExplorerRenderer(deps: Deps) {
           if (text.trim()) nonempty++;
           parts.push(`${copy.pageMarker(p)}\n${text}`);
         }
-        if (nonempty)
-          return { text: parts.join("\n\n"), source: copy.sourcePdfJsAll, warning: "" };
+        if (nonempty) return { text: parts.join("\n\n"), source: copy.sourcePdfJsAll, warning: "" };
       } catch (error: Any) {
         browserError = error.message;
       }

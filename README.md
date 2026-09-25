@@ -1,4 +1,5 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+
 # DerridAI
 
 DerridAI is a local-first Docker application for building, auditing, and querying scholarly corpora of philosophical texts. It ingests PDF, text/RTF/DOCX, image, audio, URL, and Project Gutenberg sources into provenance-preserving scholarly records; supports human/LLM review and evidence-bound metadata enrichment; builds derived ChromaDB search projections; and runs an evidence-grounded retrieval-augmented generation (RAG) pipeline over the result.
@@ -20,11 +21,11 @@ See the [User Guide](docs/USER_GUIDE.md) for the full feature reference.
 
 ## Architecture
 
-| Service | Stack | Notes |
-| --- | --- | --- |
-| `web` | Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js, served by nginx | Proxies `/api/` to the API; Storybook is available as an opt-in dev service |
-| `api` | Python 3.12, FastAPI, ChromaDB, PyMuPDF, sentence-transformers | Authoritative corpus/build files and SQLite auth/system/provenance state live under `./data`; Chroma holds derived search/result projections |
-| LLM backend | Ollama (default) or any OpenAI-compatible endpoint | Runs on the host or elsewhere; not part of the default compose stack |
+| Service     | Stack                                                               | Notes                                                                                                                                        |
+| ----------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `web`       | Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js, served by nginx | Proxies `/api/` to the API; Storybook is available as an opt-in dev service                                                                  |
+| `api`       | Python 3.12, FastAPI, ChromaDB, PyMuPDF, sentence-transformers      | Authoritative corpus/build files and SQLite auth/system/provenance state live under `./data`; Chroma holds derived search/result projections |
+| LLM backend | Ollama (default) or any OpenAI-compatible endpoint                  | Runs on the host or elsewhere; not part of the default compose stack                                                                         |
 
 For code ownership and persistence boundaries, see [Architecture](docs/ARCHITECTURE.md).
 

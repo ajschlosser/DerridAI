@@ -16,7 +16,13 @@ const i18n = useI18nStore();
       :title="i18n.t('nav.home')"
       :aria-label="collapsed ? i18n.t('nav.home') : undefined"
       @click="$emit('navigate-home')"
-    ><BrandMark :size="collapsed ? 34 : 46" compact /><span v-if="!collapsed" class="shell-brand-word">DerridAI</span></button>
+    >
+      <BrandMark :size="collapsed ? 34 : 46" compact /><span
+        v-if="!collapsed"
+        class="shell-brand-word"
+        >DerridAI</span
+      >
+    </button>
     <button
       class="sidebar-toggle"
       type="button"
@@ -24,6 +30,8 @@ const i18n = useI18nStore();
       :aria-label="collapsed ? i18n.t('ui.expand_sidebar') : i18n.t('ui.collapse_sidebar')"
       :aria-pressed="collapsed"
       @click="$emit('toggle')"
-    ><AppIcon :name="collapsed ? 'chevron-right' : 'chevron-left'" aria-hidden="true" /></button>
+    >
+      <AppIcon :name="collapsed ? 'chevron-right' : 'chevron-left'" aria-hidden="true" />
+    </button>
   </div>
 </template>

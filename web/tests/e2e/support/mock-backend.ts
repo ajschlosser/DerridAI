@@ -278,17 +278,61 @@ function defaults(url: URL, method: string, role: Role): unknown {
   if (path === "/api/auth/users") return { users: [user] };
   if (path === "/api/auth/roles") {
     const capabilities = [
-      { id: "page.dashboard", category: "Pages", label: "Dashboard", description: "Open the dashboard.", configurable: true },
-      { id: "page.research", category: "Pages", label: "Research", description: "Open Research.", configurable: true },
-      { id: "corpus.read", category: "Corpus", label: "Read corpus", description: "Read corpus records.", configurable: true },
-      { id: "rag.run", category: "Research", label: "Run RAG", description: "Start RAG jobs.", configurable: true },
-      { id: "users.manage", category: "Administration", label: "Manage users", description: "Administrator-only.", configurable: false },
+      {
+        id: "page.dashboard",
+        category: "Pages",
+        label: "Dashboard",
+        description: "Open the dashboard.",
+        configurable: true,
+      },
+      {
+        id: "page.research",
+        category: "Pages",
+        label: "Research",
+        description: "Open Research.",
+        configurable: true,
+      },
+      {
+        id: "corpus.read",
+        category: "Corpus",
+        label: "Read corpus",
+        description: "Read corpus records.",
+        configurable: true,
+      },
+      {
+        id: "rag.run",
+        category: "Research",
+        label: "Run RAG",
+        description: "Start RAG jobs.",
+        configurable: true,
+      },
+      {
+        id: "users.manage",
+        category: "Administration",
+        label: "Manage users",
+        description: "Administrator-only.",
+        configurable: false,
+      },
     ];
     return {
       capabilities,
       roles: [
-        { id: "admin", name: "Administrator", description: "Full application access.", locked: true, builtin: true, permissions: ["*"] },
-        { id: "researcher", name: "Researcher", description: "Default non-admin research role.", locked: false, builtin: true, permissions: ["page.dashboard", "page.research", "corpus.read", "rag.run"] },
+        {
+          id: "admin",
+          name: "Administrator",
+          description: "Full application access.",
+          locked: true,
+          builtin: true,
+          permissions: ["*"],
+        },
+        {
+          id: "researcher",
+          name: "Researcher",
+          description: "Default non-admin research role.",
+          locked: false,
+          builtin: true,
+          permissions: ["page.dashboard", "page.research", "corpus.read", "rag.run"],
+        },
       ],
     };
   }

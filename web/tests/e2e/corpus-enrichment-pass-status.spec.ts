@@ -76,7 +76,9 @@ test("keyboard: the actions are reachable with a visible focus ring", async ({ p
   await expect(page.getByRole("button", { name: "Dismiss" })).toBeFocused();
 });
 
-test("idle after the first pass offers another pass without a dismiss-only trap", async ({ page }) => {
+test("idle after the first pass offers another pass without a dismiss-only trap", async ({
+  page,
+}) => {
   await page.goto(url("idle-after-initial"));
   const region = page.getByRole("status");
   await expect(region).toContainText("without reviewing every record");
