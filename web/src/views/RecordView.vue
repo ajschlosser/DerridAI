@@ -9,6 +9,7 @@ import RecordReadingPane from "../components/record/RecordReadingPane.vue";
 import RecordInspector from "../components/record/RecordInspector.vue";
 import RecordEditSheet from "../components/record/RecordEditSheet.vue";
 import type { RecordWorkspaceSnapshot } from "../types/record";
+import type { DerridaiNormativeModel, ResearchObjectGraph } from "../types/researchObjectGraph";
 import { annotationsService } from "../services/annotations";
 
 const i18n = useI18nStore();
@@ -17,6 +18,11 @@ const route = useRoute();
 const snapshot = ref<RecordWorkspaceSnapshot>({ available: false, mode: "workspace" });
 const loading = ref(true);
 const error = ref("");
+const objectGraph = ref<ResearchObjectGraph | null>(null);
+const normativeModel = ref<DerridaiNormativeModel | null>(null);
+const graphLoading = ref(false);
+const graphError = ref("");
+let graphRequest = 0;
 const editOpen = ref(false);
 const inspectorCollapsed = ref(false);
 const inspectorWidth = ref(
@@ -62,11 +68,40 @@ const badges = computed(() => {
   return out;
 });
 
+async function loadTraceability(current: RecordWorkspaceSnapshot) {
+  const request = ++graphRequest;
+  objectGraph.value = null;
+  graphError.value = "";
+  if (!current.available || !current.record) return;
+  if (!String(current.record.record_id || "").trim()) {
+    graphError.value = i18n.t(
+      "traceability.missing_record_id",
+      "This record does not yet have a durable record ID, so its traceability graph cannot be resolved.",
+    );
+    return;
+  }
+  graphLoading.value = true;
+  try {
+    const [graph, model] = await Promise.all([
+      runtime.getRecordObjectGraph(current.record),
+      runtime.getDerridaiNormativeModel(),
+    ]);
+    if (request !== graphRequest) return;
+    objectGraph.value = graph as ResearchObjectGraph;
+    normativeModel.value = model as DerridaiNormativeModel;
+  } catch (exc) {
+    if (request !== graphRequest) return;
+    graphError.value = exc instanceof Error ? exc.message : String(exc);
+  } finally {
+    if (request === graphRequest) graphLoading.value = false;
+  }
+}
 async function load() {
   loading.value = true;
   error.value = "";
   try {
     snapshot.value = (await runtime.getRecordWorkspaceSnapshot()) as RecordWorkspaceSnapshot;
+    void loadTraceability(snapshot.value);
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);
   } finally {
@@ -338,6 +373,10 @@ onBeforeUnmount(() => {
         <RecordInspector
           v-if="!inspectorCollapsed"
           :snapshot="snapshot"
+          :object-graph="objectGraph"
+          :normative-model="normativeModel"
+          :graph-loading="graphLoading"
+          :graph-error="graphError"
           @search="metadataSearch"
           @change="quickChange"
           @add-annotation="openAnnotation()"

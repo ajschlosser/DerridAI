@@ -12,6 +12,7 @@ from .routers.annotations import router as annotations_router
 from .routers.auth import router as auth_router
 from .routers.chroma import router as chroma_router
 from .routers.corpus import router as corpus_router
+from .routers.derridai import router as derridai_router
 from .routers.health import router as health_router
 from .routers.i18n import router as i18n_router
 from .routers.jobs import router as jobs_router
@@ -33,6 +34,7 @@ ROUTERS = (
     chroma_router,
     admin_router,
     corpus_router,
+    derridai_router,
     stores_router,
 )
 

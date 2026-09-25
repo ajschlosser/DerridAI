@@ -196,6 +196,29 @@ class SystemStore:
         with self._lock:
             return self.repository.list_claim_support_bindings(claim_id, owner=owner)
 
+    def list_claim_support_bindings_for_record(
+        self,
+        record_id: str,
+        *,
+        owner: str | None = None,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        with self._lock:
+            return self.repository.list_claim_support_bindings_for_record(
+                record_id,
+                owner=owner,
+                limit=limit,
+            )
+
+    def get_generated_claim(
+        self,
+        claim_id: str,
+        *,
+        owner: str | None = None,
+    ) -> dict[str, Any] | None:
+        with self._lock:
+            return self.repository.get_generated_claim(claim_id, owner=owner)
+
     def researcher_profiles(self, *, include_secrets: bool = False) -> list[dict[str, Any]]:
         with self._lock:
             profiles = copy.deepcopy(self.repository.list_provider_profiles())
