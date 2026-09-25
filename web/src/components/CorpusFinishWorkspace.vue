@@ -7,6 +7,7 @@ const props = defineProps<{ build: CorpusBuild; busy?: boolean }>();
 const emit = defineEmits<{
   retryMetadata: [];
   reviewMetadata: [];
+  reviewValidation: [];
   reviewRejected: [];
   reviewRecords: [];
   reviewSource: [];
@@ -42,7 +43,7 @@ function act() {
   }
   if (next.value === "review_records") emit("reviewRecords");
   else if (next.value === "resolve_document_metadata") emit("editDocumentMetadata");
-  else if (next.value === "resolve_validation") emit("reviewRecords");
+  else if (next.value === "resolve_validation") emit("reviewValidation");
   else if (next.value === "publish") emit("publish");
 }
 function blockerLabel(code?: string) {
