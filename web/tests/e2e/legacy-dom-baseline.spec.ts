@@ -338,8 +338,6 @@ const inPdfExplorer = async (page: Page, { open = true } = {}) => {
   await expect(page.locator("#pdfCanvas")).toBeAttached();
 };
 
-const CHROMA_UP = { "/api/health": { ok: true, chroma: { available: true } } };
-
 const FAQ_PAGE = {
   records: FAQ_RECORDS,
   count: FAQ_RECORDS.length,
