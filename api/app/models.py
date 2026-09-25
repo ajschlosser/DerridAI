@@ -322,6 +322,66 @@ class LLMResultResolutionRequest(BaseModel):
 class LLMJobRejectRequest(BaseModel):
     dismiss: bool = True
 
+LEGACY_RAG_PROMPT_METADATA_FIELDS = [
+    "speaker",
+    "quoted_speaker",
+    "quoted_author",
+    "quoted_work",
+    "quoted_position_holder",
+    "position_holder",
+    "stance",
+    "proposition_status",
+    "target",
+    "discourse_role",
+]
+
+
+def _default_rag_prompt_metadata_fields() -> list[str]:
+    return list(LEGACY_RAG_PROMPT_METADATA_FIELDS)
+
+
+class RAGPromptMetadataPolicy(BaseModel):
+    """Metadata explicitly allowed into each Research generation-prompt channel.
+
+    Source identity, citation data, evidence text, and record IDs remain part of
+    the deterministic evidence envelope. These selectors control scholarly
+    metadata only and may use either a field name or stable FieldAssertion
+    field_id.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    evidence: list[str] = Field(default_factory=_default_rag_prompt_metadata_fields, max_length=120)
+    context: list[str] = Field(default_factory=list, max_length=120)
+    record: list[str] = Field(default_factory=list, max_length=120)
+
+    @field_validator("evidence", "context", "record", mode="before")
+    @classmethod
+    def clean_prompt_metadata_fields(cls, value: Any) -> list[str]:
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise ValueError("Research prompt metadata fields must be a list.")
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        reserved = {
+            "text", "updates", "activity", "field_assertions", "current_field_assertions",
+            "metadata_field_status", "metadata_evidence", "metadata_decisions",
+            "metadata_execution_ledger", "source_spans", "source_units",
+            "source_block_ids", "source_unit_ids",
+        }
+        for raw in value:
+            field = str(raw or "").strip()
+            if not field:
+                continue
+            if len(field) > 120:
+                raise ValueError("Research prompt metadata field identifiers must be 120 characters or fewer.")
+            if field in reserved or field.startswith("_"):
+                raise ValueError(f"Internal field '{field}' cannot be included in a Research prompt.")
+            if field not in seen:
+                cleaned.append(field)
+                seen.add(field)
+        return cleaned
+
 class RAGEvidenceSelection(BaseModel):
     """A user-selected evidence item supplied to a RAG run.
 
@@ -365,6 +425,7 @@ class RAGRunRequest(BaseModel):
     ollama_concurrency_limit: int | None = Field(default=None, ge=1, le=32)
     bind_citations: bool = True
     include_works_cited: bool = True
+    prompt_metadata: RAGPromptMetadataPolicy = Field(default_factory=RAGPromptMetadataPolicy)
     selected_evidence: list[RAGEvidenceSelection] = Field(default_factory=list, max_length=500)
     skip_retrieval: bool = False
     # These are independent steering channels.  Neither may silently become
