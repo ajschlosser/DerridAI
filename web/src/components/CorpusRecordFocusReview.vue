@@ -8,7 +8,6 @@ import type { ProviderProfile } from "../api/system";
 import CorpusSourceIssuePanel from "./CorpusSourceIssuePanel.vue";
 import CorpusSourceQualityDialog from "./CorpusSourceQualityDialog.vue";
 import CorpusMetadataResolutionPanel from "./CorpusMetadataResolutionPanel.vue";
-import CorpusTextCleanupDialog from "./CorpusTextCleanupDialog.vue";
 import CorpusRevisionHistory from "./CorpusRevisionHistory.vue";
 import CorpusBoundarySliceDialog from "./CorpusBoundarySliceDialog.vue";
 import CorpusBoundaryAdjudication from "./CorpusBoundaryAdjudication.vue";
@@ -32,8 +31,6 @@ const props = defineProps<{
   canAccept?: boolean;
   regionTypes?: string[];
   discourseRoles?: string[];
-  recurringLines?: string[];
-  documentTerms?: string[];
   confidenceCalibration?: Record<string, Record<string, Record<string, number>>>;
   canHistoryBack?: boolean;
   canHistoryForward?: boolean;
@@ -46,6 +43,9 @@ const props = defineProps<{
   nextRecordId?: string;
   selectedEvidenceField?: string;
   evidenceBlockIds?: string[];
+  editingText?: boolean;
+  textDraft?: string;
+  resolveSourceIssues?: boolean;
 }>();
 const emit = defineEmits<{
   close: [];
@@ -65,7 +65,12 @@ const emit = defineEmits<{
   openSourceViewer: [];
   updateLlmProviderProfile: [value: string];
   updateLlmModel: [value: string];
-  saveText: [text: string, resolveSourceIssues: boolean];
+  beginTextEdit: [proposal?: boolean];
+  cancelTextEdit: [];
+  saveText: [];
+  textDraftChange: [value: string];
+  resolveSourceIssuesChange: [value: boolean];
+  openTextCleanup: [];
   resolveMetadata: [field: string, value: unknown];
   confirmNoMetadataValue: [field: string];
   metadataDirty: [dirty: boolean];
@@ -81,10 +86,6 @@ const dialog = ref<HTMLElement | null>(null);
 const closeButton = ref<HTMLButtonElement | null>(null);
 const tab = ref<"metadata" | "evidence" | "source">("metadata");
 const priorActive = ref<HTMLElement | null>(null);
-const editingText = ref(false);
-const textDraft = ref("");
-const resolveSourceIssues = ref(false);
-const cleanupOpen = ref(false);
 const sourceIssueOpen = ref(false);
 const sliceOpen = ref(false);
 const tabOrder = ["metadata", "evidence", "source"] as const;
@@ -119,9 +120,9 @@ function focusables() {
   ).filter((node) => node.offsetParent !== null);
 }
 function handleKeydown(event: KeyboardEvent) {
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s" && editingText.value) {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s" && props.editingText) {
     event.preventDefault();
-    saveText();
+    requestSaveText();
     return;
   }
   if (event.altKey && event.key === "ArrowLeft" && props.canPreviousRecord) {
@@ -166,20 +167,18 @@ function handleTabKeydown(event: KeyboardEvent) {
     dialog.value?.querySelector<HTMLButtonElement>(`#focus-tab-${tab.value}`)?.focus(),
   );
 }
-function beginTextEdit(proposal = false) {
-  textDraft.value = proposal
-    ? String(props.record.text_touchup_proposal?.proposed_text || props.record.text || "")
-    : String(props.record.text || "");
-  resolveSourceIssues.value = Boolean(props.record.source_quality_issues?.length);
-  editingText.value = true;
-  void nextTick(() =>
-    dialog.value?.querySelector<HTMLTextAreaElement>(".focus-text-editor")?.focus(),
-  );
+function requestBeginTextEdit(proposal = false) {
+  emit("beginTextEdit", proposal);
 }
-function saveText() {
-  if (!textDraft.value.trim()) return;
-  emit("saveText", textDraft.value, resolveSourceIssues.value);
-  editingText.value = false;
+function requestSaveText() {
+  if (!String(props.textDraft || "").trim()) return;
+  emit("saveText");
+}
+function updateTextDraft(event: Event) {
+  emit("textDraftChange", (event.target as HTMLTextAreaElement).value);
+}
+function updateResolveSourceIssues(event: Event) {
+  emit("resolveSourceIssuesChange", (event.target as HTMLInputElement).checked);
 }
 function acknowledgeSourceIssue(dontShowAgain = false) {
   if (dontShowAgain) hideSourceWarnings();
@@ -244,7 +243,6 @@ function restoreBackgroundScroll() {
 onMounted(() => {
   priorActive.value = document.activeElement as HTMLElement | null;
   preventBackgroundScroll();
-  textDraft.value = String(props.record.text || "");
   void nextTick(() => closeButton.value?.focus({ preventScroll: true }));
 });
 onBeforeUnmount(() => {
@@ -255,8 +253,6 @@ watch(
   () => props.record.record_id,
   () => {
     tab.value = "metadata";
-    editingText.value = false;
-    textDraft.value = String(props.record.text || "");
     void nextTick(() =>
       dialog.value
         ?.querySelector<HTMLElement>(".focus-record-text")
@@ -388,7 +384,7 @@ watch(
             ><button
               class="btn"
               type="button"
-              @click="editingText ? (editingText = false) : beginTextEdit()"
+              @click="editingText ? emit('cancelTextEdit') : requestBeginTextEdit()"
               :disabled="busy"
             >
               {{ editingText ? i18n.t("ui.cancel") : i18n.t("pdf_corpus.edit_text") }}
@@ -419,13 +415,13 @@ watch(
         >
           <b>{{ i18n.t("pdf_corpus.llm_touchup_proposal_available") }}</b
           ><span>{{ i18n.t("pdf_corpus.llm_touchup_proposal_help") }}</span
-          ><button class="btn small" type="button" :disabled="busy" @click="beginTextEdit(true)">
+          ><button class="btn small" type="button" :disabled="busy" @click="requestBeginTextEdit(true)">
             {{ i18n.t("pdf_corpus.review_touchup_proposal") }}
           </button>
         </div>
         <div v-if="editingText" class="focus-text-edit">
           <div class="focus-text-tools">
-            <button class="btn" type="button" @click="cleanupOpen = true" :disabled="busy">
+            <button class="btn" type="button" @click="emit('openTextCleanup')" :disabled="busy">
               {{ i18n.t("pdf_corpus.clean_text") }}</button
             ><button
               class="btn"
@@ -437,23 +433,24 @@ watch(
             </button>
           </div>
           <textarea
-            v-model="textDraft"
+             :value="textDraft || ''"
+            @input="updateTextDraft"
             class="focus-text-editor"
             :aria-label="i18n.t('pdf_corpus.reviewed_record_text')"
           ></textarea
           ><label v-if="record.source_quality_issues?.length" class="resolve-check"
-            ><input v-model="resolveSourceIssues" type="checkbox" /><span>{{
+            ><input :checked="resolveSourceIssues" type="checkbox" @change="updateResolveSourceIssues" /><span>{{
               i18n.t("pdf_corpus.resolve_source_with_correction")
             }}</span></label
           >
           <div class="edit-actions">
-            <button class="btn" type="button" @click="editingText = false">
+            <button class="btn" type="button" @click="emit('cancelTextEdit')">
               {{ i18n.t("ui.cancel") }}</button
             ><button
               class="btn primary"
               type="button"
-              @click="saveText"
-              :disabled="busy || !textDraft.trim()"
+              @click="requestSaveText"
+              :disabled="busy || !String(textDraft || '').trim()"
             >
               {{ i18n.t("pdf_corpus.save_reviewed_text") }}
             </button>
@@ -734,26 +731,13 @@ watch(
         }
       "
     />
-    <CorpusTextCleanupDialog
-      v-if="cleanupOpen"
-      :text="textDraft"
-      :recurring-lines="recurringLines || []"
-      :document-terms="documentTerms || []"
-      @close="cleanupOpen = false"
-      @apply="
-        (value) => {
-          textDraft = value;
-          cleanupOpen = false;
-        }
-      "
-    />
     <CorpusSourceQualityDialog
       :open="sourceIssueOpen && Boolean(record.source_quality_issues?.length)"
       :issues="record.source_quality_issues"
       @close="acknowledgeSourceIssue"
       @edit-text="
         sourceIssueOpen = false;
-        beginTextEdit();
+        requestBeginTextEdit();
       "
       @open-source="
         sourceIssueOpen = false;
