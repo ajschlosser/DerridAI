@@ -31,6 +31,7 @@ const emit = defineEmits<{
 }>();
 const i18n = useI18nStore();
 const dialog = ref<HTMLDialogElement | null>(null);
+const isOpen = ref(false);
 const activeSection = ref<SettingsSection>("retrieval");
 const draft = ref<Partial<ResearchConfig>>({});
 const generationDraft = ref<Record<string, unknown>>({});
@@ -86,12 +87,14 @@ function sync() {
 function open() {
   sync();
   activeSection.value = "retrieval";
+  isOpen.value = true;
   dialog.value?.showModal();
   void nextTick(() =>
     dialog.value?.querySelector<HTMLElement>('[data-settings-tab="retrieval"]')?.focus(),
   );
 }
 function close() {
+  isOpen.value = false;
   dialog.value?.close();
 }
 function toggleList(key: "locales" | "search_types", value: string, checked: boolean) {
@@ -509,7 +512,10 @@ defineExpose({ open, close });
                   >
                 </div>
               </fieldset>
-              <fieldset class="research-settings-card wide research-prompt-metadata">
+              <fieldset
+                v-if="isOpen && activeSection === 'evidence'"
+                class="research-settings-card wide research-prompt-metadata"
+              >
                 <legend>{{ i18n.t("research.prompt_metadata", "Prompt metadata") }}</legend>
                 <p>
                   {{
