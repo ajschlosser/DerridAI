@@ -212,4 +212,4 @@ A kiadási előzmények a [CHANGELOG.md](CHANGELOG.md) fájlban és a `docs/note
 
 ## Licenc
 
-Jelenleg nincs licencfájl a repositoryban. A forrásfájlok a `Copyright 2026 Aaron John Schlosser, PhD.` jelölést viselik. A bejelentkezési képernyő, a fiókmenü és a Beállítások → A DerridAI névjegye felület a `© 2026 The New England Transcendental Club of California` szöveget jeleníti meg.
+Copyright © 2026 Aaron John Schlosser, PhD. A DerridAI a [GNU Affero General Public License 3. verziója](LICENSE) (`AGPL-3.0-only`) alatt kerül terjesztésre. A bejelentkezési képernyő, a fiókmenü és a Beállítások → A DerridAI névjegye felület a `© 2026 The New England Transcendental Club of California` szöveget jeleníti meg.
