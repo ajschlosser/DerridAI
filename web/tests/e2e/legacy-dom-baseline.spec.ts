@@ -1380,50 +1380,7 @@ const scenarios: Scenario[] = [
     fixtures: jobFixtures(RAG_JOBS),
     steps: researchWithEvidence,
   },
-  // The response cache page is the one Research-area page the runtime still draws.
-  {
-    name: "response-cache-empty",
-    nav: "System Data",
-    fixtures: {
-      ...CHROMA_UP,
-      "/api/response-cache/records": { records: [], total: 0, exists: false },
-    },
-  },
-  {
-    name: "response-cache-records",
-    nav: "System Data",
-    fixtures: { ...CHROMA_UP, "/api/response-cache/records": FAQ_PAGE },
-  },
-  {
-    name: "response-cache-clear-confirm",
-    nav: "System Data",
-    target: "dialog",
-    fixtures: { ...CHROMA_UP, "/api/response-cache/records": FAQ_PAGE },
-    steps: async (page) => {
-      await page.getByRole("button", { name: "Clear response cache", exact: true }).click();
-      await expect(page.locator("dialog[open], [role=dialog]").last()).toBeVisible();
-    },
-  },
-  {
-    name: "response-cache-cleared",
-    nav: "System Data",
-    fixtures: {
-      ...CHROMA_UP,
-      "/api/response-cache/records": FAQ_PAGE,
-      "DELETE /api/stores/_response_cache": () => ({ ok: true }),
-    },
-    steps: async (page) => {
-      await page
-        .locator("#main")
-        .getByRole("button", { name: "Clear response cache", exact: true })
-        .click();
-      await page
-        .getByRole("dialog")
-        .getByRole("button", { name: "Clear response cache", exact: true })
-        .click();
-      await page.waitForTimeout(700);
-    },
-  },
+  // System Data is Vue-native and covered by component/E2E tests rather than the legacy runtime DOM baseline.
   // The Response Library is Vue too; it reads cached research answers through the runtime.
   { name: "faq-records", path: "/faq", fixtures: { "/api/response-cache/records": FAQ_PAGE } },
   {
