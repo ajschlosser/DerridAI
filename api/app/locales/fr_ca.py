@@ -6569,26 +6569,26 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'runtime.system_row_details': "Détails de la ligne",
  'runtime.system_sensitive': "sensible",
  'runtime.system_checking_vectors': "Vérification des collections vectorielles internes…",
- 'runtime.system_embedding': "Plongement vectoriel"
-, 'pdf_corpus.field_configuration': 'Configuration du champ'
-, 'pdf_corpus.field_required': 'Obligatoire'
-, 'pdf_corpus.field_optional': 'Facultatif'
-, 'pdf_corpus.field_human_decision': 'Décision humaine'
-, 'pdf_corpus.field_evidence_required': 'Preuve requise'
-, 'pdf_corpus.field_confidence_assessed': 'Confiance évaluée'
-, 'pdf_corpus.field_memory_on': 'Mémoire activée'
-, 'pdf_corpus.field_memory_details': 'Détails de la mémoire et de la récupération'
-, 'pdf_corpus.field_memory_max': 'Jusqu’à {count} précédents révisés'
-, 'pdf_corpus.field_memory_similarity': 'similarité minimale {value}'
-, 'pdf_corpus.field_memory_corrections': 'inclut les corrections'
-, 'pdf_corpus.field_memory_absence': 'inclut les absences confirmées'
-, 'pdf_corpus.validation_issue_count': '{count} problèmes de validation'
-, 'pdf_corpus.validation_more_issues': '{count} autres problèmes'
-, 'research.prompt_metadata': 'Métadonnées d’invite'
-, 'research.prompt_metadata_help': 'Choisissez les champs de métadonnées savantes qui entrent dans l’invite de génération. L’identité de la source, les citations, les identifiants de fiches et le texte de preuve restent dans l’enveloppe de preuve déterministe.'
-, 'research.metadata_field': 'Champ'
-, 'research.metadata_with_evidence': 'Preuve'
-, 'research.metadata_as_context': 'Contexte'
-, 'research.metadata_with_record': 'Fiche'
-, 'research.prompt_metadata_reproducible': 'Ces choix sont conservés avec l’exécution et rétablis lors des réexécutions.'
+ 'runtime.system_embedding': 'Plongement vectoriel',
+ 'pdf_corpus.field_configuration': 'Configuration du champ',
+ 'pdf_corpus.field_required': 'Obligatoire',
+ 'pdf_corpus.field_optional': 'Facultatif',
+ 'pdf_corpus.field_human_decision': 'Décision humaine',
+ 'pdf_corpus.field_evidence_required': 'Preuve requise',
+ 'pdf_corpus.field_confidence_assessed': 'Confiance évaluée',
+ 'pdf_corpus.field_memory_on': 'Mémoire activée',
+ 'pdf_corpus.field_memory_details': 'Détails de la mémoire et de la récupération',
+ 'pdf_corpus.field_memory_max': 'Jusqu’à {count} précédents révisés',
+ 'pdf_corpus.field_memory_similarity': 'similarité minimale {value}',
+ 'pdf_corpus.field_memory_corrections': 'inclut les corrections',
+ 'pdf_corpus.field_memory_absence': 'inclut les absences confirmées',
+ 'pdf_corpus.validation_issue_count': '{count} problèmes de validation',
+ 'pdf_corpus.validation_more_issues': '{count} autres problèmes',
+ 'research.prompt_metadata': 'Métadonnées d’invite',
+ 'research.prompt_metadata_help': 'Choisissez les champs de métadonnées savantes qui entrent dans l’invite de génération. L’identité de la source, les citations, les identifiants de fiches et le texte de preuve restent dans l’enveloppe de preuve déterministe.',
+ 'research.metadata_field': 'Champ',
+ 'research.metadata_with_evidence': 'Preuve',
+ 'research.metadata_as_context': 'Contexte',
+ 'research.metadata_with_record': 'Fiche',
+ 'research.prompt_metadata_reproducible': 'Ces choix sont conservés avec l’exécution et rétablis lors des réexécutions.'
 }
