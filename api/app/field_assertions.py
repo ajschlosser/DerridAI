@@ -640,7 +640,7 @@ def project_record_assertions(record: dict[str, Any]) -> dict[str, Any]:
             # A legacy status has no assertion identity yet. Keep its public
             # vocabulary during the first read, even when the canonical state
             # distinguishes a proposed value from an unresolved absence.
-            if not prior.get("assertion_id"):
+            if not prior.get("assertion_id") and current.supersedes_assertion_id is None:
                 for key in ("status", "method", "confidence", "reason"):
                     if key in prior:
                         status[key] = copy.deepcopy(prior[key])
@@ -661,8 +661,7 @@ def project_record_assertions(record: dict[str, Any]) -> dict[str, Any]:
                         if key not in status and key not in {"status", "method", "confidence", "reason"}:
                             status[key] = value
         record["metadata_field_status"] = status_map
-    if evidence_map:
-        record["metadata_evidence"] = evidence_map
+    record["metadata_evidence"] = evidence_map
     return record
 
 
@@ -775,7 +774,10 @@ def migrate_record_assertions(record: dict[str, Any], schema: Any | None = None)
     for name in sorted(str(item) for item in names):
         if not name or name in _NON_ASSERTION_FIELDS:
             continue
-        existing_named = current_assertion_by_name(record, name) if schema is None else None
+        existing_current = current_assertion_by_name(record, name)
+        if existing_current is not None:
+            continue
+        existing_named = existing_current if schema is None else None
         field_id = existing_named.field_id if existing_named is not None else field_identity(name, schema)
         status = statuses.get(name) if isinstance(statuses.get(name), dict) else {}
         value = record.get(name)
