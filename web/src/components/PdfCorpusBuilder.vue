@@ -5,9 +5,7 @@ import {
   pdfCorpusApi,
   type CorpusBuild,
   type CorpusRecord,
-  type PdfAsset,
   type SourceBlock,
-  type DocumentLayoutPlan,
   type AutonomousPolicy,
 } from "../api/pdfCorpus";
 import { systemApi, type ProviderProfile } from "../api/system";
@@ -74,6 +72,7 @@ import { usePdfCorpusPaneSizing } from "../composables/usePdfCorpusPaneSizing";
 import { useCorpusIngestWarning } from "../composables/useCorpusIngestWarning";
 import { useCorpusRunGuidance } from "../composables/useCorpusRunGuidance";
 import { useCorpusReviewWorkspace } from "../features/corpus-builder/composables/useCorpusReviewWorkspace";
+import { useCorpusSourceConfiguration } from "../features/corpus-builder/composables/useCorpusSourceConfiguration";
 import { corpusReviewCommandFromKeydown } from "../features/corpus-builder/domain/reviewCommands";
 import { editableRecordMetadata } from "../features/corpus-builder/domain/recordMetadata";
 import AppIcon from "./AppIcon.vue";
@@ -92,7 +91,6 @@ import * as runtime from "../runtime/runtime.js";
 const i18n = useI18nStore();
 const route = useRoute();
 const router = useRouter();
-const assets = ref<PdfAsset[]>([]);
 const builds = ref<CorpusBuild[]>([]);
 const buildsTotal = ref(0);
 const providerProfiles = ref<ProviderProfile[]>([]);
@@ -100,7 +98,6 @@ const corpusProfiles = ref<Array<Record<string, unknown>>>([]);
 const serverProviderIds = ref<Set<string>>(new Set());
 const selectedProviderId = ref("");
 const selectedReviewProviderId = ref("");
-const selectedAssetId = ref("");
 const recordSourceWarningOpen = ref(false);
 const sourceProblemDialogBuildId = ref("");
 const selectedBuildId = ref("");
@@ -218,16 +215,27 @@ const hydratedTopologyCount = ref(0);
 const hydratedMetadataCount = ref(0);
 let recordRequestSerial = 0;
 const busy = ref("");
+const {
+  assets,
+  selectedAssetId,
+  selectedAsset,
+  sourceIllegibility,
+  sourceUrl,
+  gutenbergQuery,
+  gutenbergHits,
+  lastIngestedAsset,
+  refreshAssets,
+  upload,
+  loadSourceUrl,
+  searchGutenberg,
+  importGutenberg,
+  savePageLabels,
+  saveDocumentLayout,
+} = useCorpusSourceConfiguration(busy, setMessage);
 const metadataSavingField = ref("");
 const metadataSavedField = ref("");
 const error = ref("");
 const notice = ref("");
-const sourceIllegibility = ref(0);
-const sourceUrl = ref("");
-const gutenbergQuery = ref("");
-const gutenbergHits = ref<
-  Array<{ etext_id: number; title: string; author: string; language: string }>
->([]);
 const statusRegion = ref<HTMLElement | null>(null);
 const acceptButtonEl = ref<HTMLButtonElement | null>(null);
 const manualProvider = ref<"ollama" | "openai">("ollama");
@@ -477,14 +485,14 @@ function recordLlmProcessed(record: CorpusRecord) {
   );
 }
 
-const selectedAsset = computed(
-  () => assets.value.find((item) => item.asset_id === selectedAssetId.value) || null,
-);
 const {
   open: ingestWarningOpen,
   maybeOpen: maybeOpenIngestWarning,
   acknowledge: acknowledgeIngestWarning,
 } = useCorpusIngestWarning(selectedAsset);
+watch(lastIngestedAsset, (asset) => {
+  if (asset) maybeOpenIngestWarning(asset);
+});
 
 function openRecordSourceWarning(record: CorpusRecord) {
   selectRecord(record);
@@ -1351,11 +1359,6 @@ async function refreshCorpusProfiles() {
     corpusProfiles.value = [];
   }
 }
-async function refreshAssets() {
-  const result = await pdfCorpusApi.listAssets();
-  assets.value = result.items;
-  if (!selectedAssetId.value && assets.value[0]) selectedAssetId.value = assets.value[0].asset_id;
-}
 async function refreshBuilds() {
   const result = await pdfCorpusApi.listBuilds(0, 100);
   builds.value = result.items;
@@ -1754,117 +1757,6 @@ function previousSourcePage() {
 function nextSourcePage() {
   if (selectedPdfPageIndex.value < recordPdfPages.value.length - 1)
     selectedPdfPage.value = recordPdfPages.value[selectedPdfPageIndex.value + 1];
-}
-
-async function upload(file?: File | null) {
-  if (!file) return;
-  busy.value = "upload";
-  setMessage("");
-  try {
-    const asset = await pdfCorpusApi.uploadAsset(file, "auto", sourceIllegibility.value);
-    await refreshAssets();
-    selectedAssetId.value = asset.asset_id;
-    maybeOpenIngestWarning(asset);
-    setMessage(
-      i18n.tf("pdf_corpus.source_ingested_blocks", {
-        blocks: asset.block_count,
-      }),
-    );
-  } catch (exc) {
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
-}
-async function loadSourceUrl() {
-  const url = sourceUrl.value.trim();
-  if (!url) return;
-  busy.value = "upload";
-  setMessage("");
-  try {
-    const asset = await pdfCorpusApi.importUrl(url, sourceIllegibility.value);
-    await refreshAssets();
-    selectedAssetId.value = asset.asset_id;
-    maybeOpenIngestWarning(asset);
-  } catch (exc) {
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
-}
-async function searchGutenberg() {
-  const query = gutenbergQuery.value.trim();
-  if (!query) {
-    gutenbergHits.value = [];
-    return;
-  }
-  busy.value = "gutenberg";
-  setMessage("");
-  try {
-    const result = await pdfCorpusApi.searchGutenberg(query);
-    gutenbergHits.value = result.items || [];
-    if (!gutenbergHits.value.length) setMessage(i18n.t("pdf_corpus.gutenberg_empty"));
-  } catch (exc) {
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
-}
-async function importGutenberg(etextId: number) {
-  busy.value = "upload";
-  setMessage("");
-  try {
-    const asset = await pdfCorpusApi.importGutenberg(etextId, sourceIllegibility.value);
-    await refreshAssets();
-    selectedAssetId.value = asset.asset_id;
-    maybeOpenIngestWarning(asset);
-  } catch (exc) {
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
-}
-async function savePageLabels(labels: Record<number, string | null>) {
-  if (!selectedAssetId.value || !Object.keys(labels).length) return;
-  busy.value = "page-labels";
-  try {
-    const asset = await pdfCorpusApi.updatePageLabels(selectedAssetId.value, labels);
-    assets.value = assets.value.map((item) => (item.asset_id === asset.asset_id ? asset : item));
-    setMessage(i18n.t("pdf_corpus.page_mapping_saved"));
-  } catch (exc) {
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
-}
-async function saveDocumentLayout(plan: DocumentLayoutPlan) {
-  if (!selectedAssetId.value) return;
-  busy.value = "document-layout";
-  try {
-    const asset = await pdfCorpusApi.updateDocumentLayout(selectedAssetId.value, plan);
-    assets.value = assets.value.map((item) => (item.asset_id === asset.asset_id ? asset : item));
-    const mapped = (asset.pages || []).filter(
-      (page) =>
-        Boolean(String(page.printed_page_label ?? "").trim()) ||
-        (page.logical_pages || []).some((item) =>
-          Boolean(String(item.printed_page_label ?? "").trim()),
-        ),
-    ).length;
-    const exceptions = (asset.pages || []).filter((page) =>
-      String(page.printed_page_label_source || "").includes("override"),
-    ).length;
-    setMessage(
-      i18n.tf("pdf_corpus.document_structure_saved_impact", {
-        mapped,
-        total: asset.page_count,
-        exceptions,
-      }),
-    );
-  } catch (exc) {
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
 }
 
 async function useCurrentPdf() {
