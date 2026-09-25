@@ -44,6 +44,8 @@ function load(schema: MetadataSchema, fresh = false) {
   const next = JSON.parse(JSON.stringify(schema)) as MetadataSchema;
   for (const field of next.fields) {
     field.retrieval_profile ||= blankField().retrieval_profile;
+    field.pos_tags ||= [];
+    field.ner_tags ||= [];
   }
   draft.value = next;
   savedHash.value = JSON.stringify(draft.value);
