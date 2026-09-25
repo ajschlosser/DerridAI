@@ -9,6 +9,8 @@ import {
 import type { ProviderProfile } from "../../../api/system";
 import type { ReviewQueue } from "../../../types/corpus";
 import type { ReviewViewport } from "./useCorpusReviewWorkspace";
+import { reviewableMetadataFieldNames } from "../domain/recordMetadata";
+import { isUsableMetadataSuggestion } from "../../../domain/metadataValues";
 
 type MessageTone = "error" | "notice";
 type I18nValues = Record<string, string | number>;
@@ -94,10 +96,15 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
       for (const value of values) (out[field] ??= new Set()).add(value);
     }
     for (const row of options.records.value) {
-      for (const [field, value] of Object.entries(row as Record<string, unknown>)) {
+      const source = row as unknown as Record<string, unknown>;
+      const allowed = new Set(
+        reviewableMetadataFieldNames(source, options.currentBuild.value?.schema || null),
+      );
+      for (const field of allowed) {
+        const value = source[field];
         const values = Array.isArray(value) ? value : [value];
         for (const item of values) {
-          if (typeof item !== "string" || !item.trim()) continue;
+          if (!isUsableMetadataSuggestion(item)) continue;
           (out[field] ??= new Set()).add(item.trim());
         }
       }
@@ -116,7 +123,7 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
   function rememberMetadataValues(field: string, value: unknown) {
     const values = Array.isArray(value) ? value : [value];
     for (const item of values) {
-      if (typeof item !== "string" || !item.trim()) continue;
+      if (!isUsableMetadataSuggestion(item)) continue;
       (metadataHumanValues.value[field] ??= new Set()).add(item.trim());
     }
   }
