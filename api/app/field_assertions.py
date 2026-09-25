@@ -709,23 +709,20 @@ def migrate_record_assertions(record: dict[str, Any], schema: Any | None = None)
         value = record.get(name)
         assertion = _legacy_assertion(record, name, value, status, schema=schema, evidence=evidence_map.get(name))
         current = current_assertion(record, field_id)
-        if assertion is not None and (
+        projected_current = bool(
+            current is not None
+            and str(status.get("assertion_id") or "") == current.assertion_id
+        )
+        if assertion is not None and not projected_current and (
             current is None
             or (
-                current.record_revision != int(record.get("record_revision") or 1)
-                or
                 str(status.get("status") or "") not in {"", _compatibility_status(current)}
                 or (current.value_status == "present" and current.value != value)
                 or (current.value_status == "confirmed_absent" and value is not None)
                 or (assertion.evidence != current.evidence)
             )
         ):
-            if current is not None and (
-                current.record_revision != int(record.get("record_revision") or 1)
-                or str(status.get("status") or "") in {
-                "human_confirmed", "human_override", "confirmed_absent", "human_confirmed_absent",
-                }
-            ):
+            if current is not None:
                 assertion = assertion.model_copy(update={"supersedes_assertion_id": current.assertion_id})
             store_assertion(record, assertion)
     return project_record_assertions(record)
