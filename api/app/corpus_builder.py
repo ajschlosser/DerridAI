@@ -187,7 +187,6 @@ from .corpus_review_state import (
     _settle_enrichment_review_reason as _settle_enrichment_review_reason,
 )
 from .corpus_reviewer_helpers import (
-    _metadata_issue_type,
     _metadata_issue_type_for_field,
     _present_for_reviewer,
     _scrub_canonical_transport,
