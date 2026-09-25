@@ -23,6 +23,12 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'api'))
 from app import corpus_builder as cb
 from app.config import APP_VERSION
+from app.field_assertions import (
+    create_human_assertion,
+    create_model_assertion,
+    current_assertion_by_name,
+    project_record_assertions,
+)
 
 
 def install(tmp_path:Path, records:list[dict], *, status='running', stage='enriching'):
@@ -96,6 +102,44 @@ def test_worker_merge_preserves_human_owned_fields_and_discards_frozen_record_re
     merged2=cb._merge_enrichment_snapshot(frozen,worker)
     assert merged2['target']=='Human target'
     assert merged2['metadata_stage_status']['discourse']=='skipped'
+
+
+
+
+def test_worker_merge_uses_canonical_human_authority_not_legacy_status():
+    """A human-owned FieldAssertion is sufficient to seal a field against worker output."""
+    live = {
+        "record_id": "canonical-live",
+        "record_revision": 1,
+        "text": "reviewed",
+        "metadata_stage_status": {},
+        "metadata_execution_ledger": {},
+    }
+    create_human_assertion(live, "speaker", "Human", reason="Reviewed by a person.")
+    project_record_assertions(live)
+    # Deliberately corrupt the compatibility token. The canonical assertion,
+    # not this projection, must decide whether the worker may overwrite it.
+    live["metadata_field_status"]["speaker"]["status"] = "model_inferred"
+
+    worker = {
+        "record_id": "canonical-live",
+        "record_revision": 1,
+        "text": "reviewed",
+        "metadata_stage_status": {"discourse": "complete"},
+        "metadata_execution_ledger": {"discourse": {"state": "complete"}},
+    }
+    create_model_assertion(worker, "speaker", "Model", confidence=0.99)
+    create_model_assertion(worker, "target", "Kant", confidence=0.91)
+    project_record_assertions(worker)
+
+    merged = cb._merge_enrichment_snapshot(live, worker)
+    speaker = current_assertion_by_name(merged, "speaker")
+    target = current_assertion_by_name(merged, "target")
+
+    assert merged["speaker"] == "Human"
+    assert speaker is not None and speaker.authority_status == "human_confirmed"
+    assert merged["target"] == "Kant"
+    assert target is not None and target.derivation_method == "model"
 
 
 def test_editorial_context_only_generalizes_repeated_human_choices(tmp_path:Path):
