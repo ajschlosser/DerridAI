@@ -18,6 +18,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .field_assertions import current_assertion_by_name, field_identity, migrate_record_assertions
 from .system_store import system_store
 
 DecisionKind = Literal["value", "absence", "correction"]
@@ -107,11 +108,24 @@ def persist_record_decision(
     rejected_value: Any = None,
 ) -> MetadataMemoryBinding:
     """Create a binding from the canonical record's reviewed evidence."""
+    migrate_record_assertions(record, schema)
     spans: list[EvidenceSpan] = []
     evidence = record.get("metadata_evidence") or {}
     field_evidence = evidence.get(field_name) if isinstance(evidence, dict) else None
-    block_ids = field_evidence.get("block_ids") if isinstance(field_evidence, dict) else []
-    source_document_id = str(record.get("source_document_id") or "").strip()
+    if not isinstance(field_evidence, dict):
+        assertion = current_assertion_by_name(record, field_name)
+        if assertion and assertion.evidence:
+            candidate = assertion.evidence[0]
+            field_evidence = candidate if isinstance(candidate, dict) else None
+    block_ids = (
+        field_evidence.get("block_ids") or field_evidence.get("source_unit_ids")
+        if isinstance(field_evidence, dict) else []
+    )
+    source_document_id = str(
+        (field_evidence.get("source_document_id") if isinstance(field_evidence, dict) else None)
+        or record.get("source_document_id")
+        or ""
+    ).strip()
     if block_ids and source_document_id:
         spans.append(EvidenceSpan(
             source_document_id=source_document_id,
@@ -119,12 +133,7 @@ def persist_record_decision(
         ))
     if decision_kind == "correction":
         value = {"accepted": value, "rejected": rejected_value}
-    try:
-        field_id = schema.field_id(field_name)
-    except KeyError:
-        # Source/document fields predate user-schema identities. They remain
-        # eligible for audit memory under a deterministic compatibility ID.
-        field_id = f"legacy.{uuid.uuid5(uuid.NAMESPACE_URL, 'derridai:field:' + field_name)}"
+    field_id = field_identity(field_name, schema)
     binding = MetadataMemoryBinding(
         record_id=str(record.get("record_id") or ""),
         record_revision=int(record.get("record_revision") or 1),
