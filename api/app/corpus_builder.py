@@ -224,11 +224,11 @@ from .enrichment_ledger import (
 )
 from .error_severity import severity as error_severity
 from .main_text_start import infer_main_text_start
-from .metadata_exemplar_retrieval import ChromaMetadataExemplarIndex
 from .metadata_exemplar_projection import (
     dirty_metadata_exemplar_build_ids,
     project_build_metadata_exemplars,
 )
+from .metadata_exemplar_retrieval import ChromaMetadataExemplarIndex
 from .metadata_schema import (
     MetadataSchema,
 )
