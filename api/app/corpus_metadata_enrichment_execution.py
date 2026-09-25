@@ -1199,6 +1199,7 @@ CURRENT REVIEWED RECORD TEXT:
                     normalized[field_name] = (
                         [] if isinstance(normalized.get(field_name), list) else None
                     )
+                    _scrub_sealed_field(normalized, field_name)
                     status = normalized_status.get(field_name)
                     if not isinstance(status, dict):
                         continue
