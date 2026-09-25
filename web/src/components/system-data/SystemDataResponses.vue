@@ -24,7 +24,7 @@ const page = ref<SystemResponseCachePage>({
 const loading = ref(false);
 const error = ref("");
 const query = ref("");
-const resultCount = computed(() => query.value.trim() ? Number(page.value.count ?? 0) : Number(page.value.total || 0));
+const resultCount = computed(() => page.value.query?.trim() ? Number(page.value.count ?? 0) : Number(page.value.total || 0));
 
 function t(key: string, fallback: string) {
   return i18n.t(key, fallback);
@@ -186,7 +186,7 @@ onMounted(() => void load(0));
             "{start}–{end} of {total} saved responses",
             {
               start: page.offset + 1,
-              end: Math.min(page.offset + page.records.length, page.total),
+              end: Math.min(page.offset + page.records.length, resultCount),
               total: resultCount.toLocaleString(),
             },
           )
