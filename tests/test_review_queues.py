@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
 
 from app import corpus_builder as cb
+from app.field_assertions import current_assertion_by_name
 from app.models import PdfCorpusBuildCreate
 
 
@@ -89,6 +90,10 @@ def test_false_primary_text_is_complete_and_human_decision_survives_manifest(tmp
     updated = manager.patch_metadata(build["build_id"], "r1", {"primary_text":False}, expected_revision=1)
     assert updated["primary_text"] is False
     assert updated["metadata_field_status"]["primary_text"]["status"] == "human_confirmed"
+    primary_assertion = current_assertion_by_name(updated, "primary_text")
+    assert primary_assertion is not None
+    assert primary_assertion.authority_status == "human_confirmed"
+    assert primary_assertion.derivation_method == "human"
     assert updated["metadata_incomplete_fields"] == []
     assert updated["metadata_review_fields"] == []
     assert updated["metadata_decisions"][-1]["value"] is False
@@ -131,6 +136,10 @@ def test_review_decision_returns_next_record_and_authoritative_queue_counts(tmp_
     assert result["queue_counts"]["accepted"] == 1
     assert result["queue_counts"]["ready"] == 1
     assert result["record"]["metadata_field_status"]["discourse_role"]["status"] == "human_confirmed"
+    discourse_assertion = current_assertion_by_name(result["record"], "discourse_role")
+    assert discourse_assertion is not None
+    assert discourse_assertion.derivation_method == "model"
+    assert discourse_assertion.authority_status == "human_confirmed"
 
 
 def test_queue_counts_follow_search_filter_without_being_limited_to_selected_queue(tmp_path: Path):

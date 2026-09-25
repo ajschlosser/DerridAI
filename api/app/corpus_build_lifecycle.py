@@ -40,6 +40,11 @@ from .corpus_review_state import _sync_record_metadata_state
 from .corpus_reviewer_helpers import _human_touched
 from .enrichment_ledger import RECHECK, RECHECK_SEAL
 from .error_severity import severity as error_severity
+from .field_assertions import (
+    create_unresolved_assertion,
+    project_record_assertions,
+    reset_fields_for_evaluation,
+)
 from .reviewer_context import current_reviewer
 
 
@@ -85,6 +90,7 @@ class BuildLifecycleMixin:
         def _increment_metric(self, build_id: str, key: str, amount: int = 1) -> None: ...
         def _rewrite_and_validate(self, build_id: str, records: list[dict[str, Any]], *, persist_records: bool = True) -> dict[str, Any]: ...
         def _profile_for(self, build_id: str) -> dict[str, Any]: ...
+        def _schema_for(self, build_id: str) -> Any: ...
         def _run(self, build_id: str, request: dict[str, Any], resume: bool = False) -> None: ...
         def publish(self, build_id: str, *, require_acceptance: bool = True) -> dict[str, Any]: ...
         def rerun_metadata_enrichment(self, build_id: str, request: dict[str, Any]) -> dict[str, Any]: ...
@@ -353,11 +359,30 @@ class BuildLifecycleMixin:
                     if isinstance(entry, dict) and entry.get("field") == field:
                         entry["value"] = None  # the earlier answer must not travel with the record
                         entry["sealed"] = True
-                record[field] = [] if isinstance(record.get(field), list) else None
-                record.setdefault("metadata_field_status", {})[field] = {
-                    "status": "unresolved", "method": "human_recheck", "recheck": True, "reason_code": "recheck", "auto_populated": False,
-                    "reason": "",
-                }
+                schema = self._schema_for(build_id)
+                reset_fields_for_evaluation(
+                    record,
+                    [field],
+                    schema=schema,
+                    discard_history=True,
+                    method="human_recheck",
+                    reason="",
+                )
+                create_unresolved_assertion(
+                    record,
+                    field,
+                    schema=schema,
+                    derivation_method="other",
+                    evaluation_status="not_evaluated",
+                    method="human_recheck",
+                    reason="",
+                    legacy_metadata={
+                        "recheck": True,
+                        "reason_code": "recheck",
+                        "auto_populated": False,
+                    },
+                )
+                project_record_assertions(record)
                 del scheduled[field]
                 record["accepted"] = False
                 record["needs_review"] = True

@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from .corpus_metadata import FIXED_RECORD_METADATA_FIELDS
+from .field_assertions import current_assertion_by_name
 from .metadata_schema import MetadataSchema
 from .reviewer_context import current_reviewer
 
@@ -194,4 +195,38 @@ def _metadata_issue_type(status: dict[str, Any] | None, record: dict[str, Any]) 
         return "ambiguous"
     if not info:
         return "not_run"
+    return "unresolved"
+
+
+def _metadata_issue_type_for_field(record: dict[str, Any], field: str) -> str:
+    """Classify one unresolved field from canonical assertion state.
+
+    Compatibility metadata contributes workflow-specific reason codes and legacy
+    telemetry, but does not decide epistemic state.
+    """
+    statuses = record.get("metadata_field_status")
+    info = statuses.get(field) if isinstance(statuses, dict) and isinstance(statuses.get(field), dict) else {}
+    explicit = str(info.get("reason_code") or "").strip()
+    if explicit:
+        return explicit
+
+    assertion = current_assertion_by_name(record, field)
+    if assertion is None:
+        return _metadata_issue_type(info, record)
+    reason = str(assertion.reason or info.get("reason") or "").casefold()
+    stage_status = record.get("metadata_stage_status") if isinstance(record.get("metadata_stage_status"), dict) else {}
+    if "source quality" in reason or "extraction" in reason:
+        return "source_quality"
+    if assertion.value_status == "invalid":
+        return "invalid_value"
+    if assertion.evaluation_status == "evaluation_failed":
+        return "llm_failed" if assertion.derivation_method == "model" else "unresolved"
+    if "evidence" in reason or "confidence" in reason:
+        return "evidence_failed"
+    if assertion.authority_status == "disputed" or "ambiguous" in reason or "disagree" in reason:
+        return "ambiguous"
+    if assertion.value_status == "unresolved":
+        if any(value == "needs_review" for value in stage_status.values()) and assertion.derivation_method == "model":
+            return "llm_failed"
+        return "unresolved"
     return "unresolved"

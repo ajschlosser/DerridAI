@@ -47,7 +47,11 @@ from .enrichment_ledger import (
     CALL,
     PROPOSED,
 )
-from .field_assertions import migrate_record_assertions
+from .field_assertions import (
+    current_assertion_by_name,
+    migrate_record_assertions,
+    reopen_assertion,
+)
 from .metadata_adjudication_cache import suggestions as adjudication_suggestions
 from .metadata_schema import (
     CORE_FIELDS,
@@ -119,8 +123,9 @@ class MetadataEnrichmentExecutionMixin:
                 request = {**self._latest_runtime_request(build_id, request), **kept}
         request = experiment.with_arm(request, str(record.get("record_id") or ""))
         off = experiment.disabled(request)
+        schema = self._schema_for(build_id)
         _apply_manifest_metadata(record, manifest)
-        apply_metadata_constraints(record)
+        apply_metadata_constraints(record, schema)
         editorial_memory = self._editorial_memory(
             build_id,
             record,
@@ -199,7 +204,6 @@ class MetadataEnrichmentExecutionMixin:
                 "metadata_rag_packet_tokens",
                 example_token_estimate,
             )
-        schema = self._schema_for(build_id)
         profile = {**CORPUS_PROFILES.get(profile_id, CORPUS_PROFILES[PROFILE_VERSION]), "review_metadata_fields": schema.review_fields()}
         required_metadata_fields = list(profile.get("required_metadata_fields") or [])
         if bool(request.get("llm_touchup_during_enrichment")) and "__text__" not in set(record.get("human_touched_fields") or []):
@@ -238,7 +242,7 @@ class MetadataEnrichmentExecutionMixin:
                         "created_at": iso_now(),
                     }
                     self._append_warning(build_id, f"{record.get('record_id')}: LLM text touch-up failed; metadata enrichment continued.")
-        if _metadata_source_quality_gate(record, required_metadata_fields, stage_callback):
+        if _metadata_source_quality_gate(record, required_metadata_fields, stage_callback, schema=schema):
             return migrate_record_assertions(record, schema)
         tasks, source_ids, obvious_apparatus = self._prepare_metadata_tasks(
             record, manifest, request, profile, editorial_context, editorial_examples,
@@ -281,7 +285,7 @@ class MetadataEnrichmentExecutionMixin:
             record["needs_review"] = True
             record["review_reason"] = "Record exceeds this model's metadata context envelope; metadata was inferred from head/tail context and requires review."
 
-        human_status = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
+        migrate_record_assertions(record, schema)
         cached_prefills: dict[str, Any] = {}
         for field in schema.fields:
             cached = adjudication_suggestions(
@@ -297,8 +301,12 @@ class MetadataEnrichmentExecutionMixin:
         if cached_prefills:
             record["metadata_adjudication_prefills"] = cached_prefills
         human_locked_fields = sorted(
-            field for field, info in human_status.items()
-            if isinstance(info, dict) and str(info.get("status") or "") in {"human_confirmed", "human_override"}
+            field.name
+            for field in schema.fields
+            if (
+                (assertion := current_assertion_by_name(record, field.name)) is not None
+                and assertion.authority_status in {"human_confirmed", "human_override"}
+            )
         )
         def base_context_for(group_fields: list[str]) -> str:
             # Each LLM family receives only precedents for fields it can actually
@@ -443,11 +451,19 @@ CURRENT REVIEWED RECORD TEXT:
                     continue
                 if isinstance(live_record, dict):
                     touched = {str(value) for value in (live_record.get("human_touched_fields") or [])}
-                    live_status = live_record.get("metadata_field_status") if isinstance(live_record.get("metadata_field_status"), dict) else {}
-                    family_fields = self._schema_for(build_id).family_fields().get(task_name, set())
+                    live_schema = self._schema_for(build_id)
+                    migrate_record_assertions(live_record, live_schema)
+                    family_fields = live_schema.family_fields().get(task_name, set())
                     all_owned = bool(family_fields) and all(
-                        isinstance(live_status.get(field), dict) and str(live_status[field].get("status") or "") in {"human_confirmed", "human_override", "deterministic"}
-                        for field in family_fields if field not in {"attribution_confidence", "semantic_classification_confidence"}
+                        (
+                            (assertion := current_assertion_by_name(live_record, field)) is not None
+                            and (
+                                assertion.authority_status in {"human_confirmed", "human_override"}
+                                or assertion.derivation_method == "deterministic"
+                            )
+                        )
+                        for field in family_fields
+                        if field not in {"attribution_confidence", "semantic_classification_confidence"}
                     )
                     if "__text__" in touched or "__review__" in touched or all_owned:
                         reason = "Human reviewed this record before automatic enrichment." if {"__text__", "__review__"} & touched else "All fields in this metadata family are already human-owned or deterministic."
@@ -621,8 +637,14 @@ CURRENT REVIEWED RECORD TEXT:
         if discourse_state in {"skipped", "failed", "needs_review"}:
             skip_reason = str(discourse_ledger.get("error") or f"Discourse metadata stage was {discourse_state}.")
             for structural_field in ("region_type", "primary_text"):
+                assertion = current_assertion_by_name(record, structural_field)
                 structural_status = record.setdefault("metadata_field_status", {}).get(structural_field)
-                if isinstance(structural_status, dict) and structural_status.get("status") == "deterministic" and "llm_checked" not in structural_status:
+                if (
+                    assertion is not None
+                    and assertion.derivation_method == "deterministic"
+                    and isinstance(structural_status, dict)
+                    and "llm_checked" not in structural_status
+                ):
                     structural_status["llm_checked"] = False
                     structural_status["llm_skip_reason"] = skip_reason
 
@@ -667,7 +689,11 @@ CURRENT REVIEWED RECORD TEXT:
                 # Human decisions are authoritative. Background/retry enrichment
                 # may add evidence, but it must never resurrect an already
                 # confirmed review issue or overwrite a human value.
-                if existing_status.get("status") in {"human_confirmed", "human_override"}:
+                existing_assertion = current_assertion_by_name(record, key)
+                if (
+                    existing_assertion is not None
+                    and existing_assertion.authority_status in {"human_confirmed", "human_override"}
+                ):
                     continue
                 prefilled = cached_prefills.get(key)
                 if prefilled not in (None, "", []) and value not in (None, "", []) and value != prefilled:
@@ -757,6 +783,20 @@ CURRENT REVIEWED RECORD TEXT:
                                     existing_status["auto_populated"] = False
                                 else:
                                     existing_status["prefilled_candidate"] = "deterministic"
+                    if (
+                        existing_assertion is not None
+                        and existing_status.get("reason_code") == "deterministic_llm_disagreement"
+                    ):
+                        reopen_assertion(
+                            record,
+                            existing_assertion,
+                            reason=str(existing_status.get("reason") or "Deterministic and model classifications disagree."),
+                            legacy_metadata={
+                                name: item
+                                for name, item in existing_status.items()
+                                if name not in {"status", "method", "reason", "confidence"}
+                            },
+                        )
                     field_status[key] = existing_status
                     continue
                 if key == "region_type" and value is not None and value not in allowed_region_types:
@@ -807,8 +847,8 @@ CURRENT REVIEWED RECORD TEXT:
             value = record.get(field)
             if value in (None, "", []):
                 continue
-            existing_status = (record.get("metadata_field_status") or {}).get(field) if isinstance(record.get("metadata_field_status"), dict) else {}
-            if isinstance(existing_status, dict) and existing_status.get("status") == "deterministic":
+            existing_assertion = current_assertion_by_name(record, field)
+            if existing_assertion is not None and existing_assertion.derivation_method == "deterministic":
                 continue
             info = clean_evidence.get(field)
             if not isinstance(info, dict):
@@ -831,7 +871,17 @@ CURRENT REVIEWED RECORD TEXT:
         # outside REVIEW_METADATA_FIELDS.
         for field in sorted(llm_populated_fields):
             current = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
-            if current.get("status") in {"deterministic", "inherited", "human_confirmed", "human_override"} or current.get("reason_code") in {"deterministic_llm_disagreement", "human_llm_disagreement"}:
+            current_assertion = current_assertion_by_name(record, field)
+            if (
+                (
+                    current_assertion is not None
+                    and (
+                        current_assertion.authority_status in {"human_confirmed", "human_override"}
+                        or current_assertion.derivation_method in {"deterministic", "inherited"}
+                    )
+                )
+                or current.get("reason_code") in {"deterministic_llm_disagreement", "human_llm_disagreement"}
+            ):
                 continue
             assessment = field_assessments.get(field) if isinstance(field_assessments.get(field), dict) else {}
             evidence_info = clean_evidence.get(field) if isinstance(clean_evidence.get(field), dict) else {}
@@ -904,7 +954,23 @@ CURRENT REVIEWED RECORD TEXT:
         for field in review_metadata_fields:
             value = record.get(field)
             current = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
-            if current.get("status") in {"deterministic", "inherited", "human_confirmed", "human_override", "invalid"} or current.get("reason_code") in {"deterministic_llm_disagreement", "human_llm_disagreement", "low_confidence", "confidence_missing"}:
+            current_assertion = current_assertion_by_name(record, field)
+            if (
+                (
+                    current_assertion is not None
+                    and (
+                        current_assertion.authority_status in {"human_confirmed", "human_override"}
+                        or current_assertion.derivation_method in {"deterministic", "inherited"}
+                        or current_assertion.value_status == "invalid"
+                    )
+                )
+                or current.get("reason_code") in {
+                    "deterministic_llm_disagreement",
+                    "human_llm_disagreement",
+                    "low_confidence",
+                    "confidence_missing",
+                }
+            ):
                 continue
             evidence_info = clean_evidence.get(field) if isinstance(clean_evidence.get(field), dict) else {}
             assessment = field_assessments.get(field) if isinstance(field_assessments.get(field), dict) else {}
@@ -1004,7 +1070,7 @@ CURRENT REVIEWED RECORD TEXT:
                     "reason": reason or "Model value was populated, but calibrated autofill did not approve automatic verification.",
                 }
 
-        apply_metadata_constraints(record)
+        apply_metadata_constraints(record, schema)
         for requested_field in llm_requested_fields:
             requested_status = field_status.get(requested_field)
             if isinstance(requested_status, dict):
@@ -1042,11 +1108,18 @@ CURRENT REVIEWED RECORD TEXT:
             )
         record["semantic_classification_confidence"] = round(sum(evidence_confidences) / len(evidence_confidences), 4) if evidence_confidences else None
         record["attribution_confidence"] = round(min(attribution_confidences), 4) if attribution_confidences else 1.0
-        if any(isinstance(info, dict) and info.get("blind") for info in field_status.values()):
-            # These aggregates are the model's own confidence in a record whose values are sealed.
+        blind_review_active = any(
+            isinstance(info, dict) and info.get("blind")
+            for info in field_status.values()
+        )
+        if blind_review_active:
+            # These aggregates and free-form review reasons are model-derived and
+            # can disclose the sealed answer during a blind review.
             record["semantic_classification_confidence"] = None
             record["attribution_confidence"] = None
-        review_reasons.extend(model_review_reasons)
+            review_reasons = ["Blind review requires a human decision."]
+        else:
+            review_reasons.extend(model_review_reasons)
         if review_reasons:
             record["metadata_needs_attention"] = True
             record["metadata_attention_reasons"] = list(dict.fromkeys(value for value in review_reasons if value))[:50]
@@ -1061,7 +1134,7 @@ CURRENT REVIEWED RECORD TEXT:
             ])),
             "review_metadata_fields": review_metadata_fields,
         }
-        _sync_record_metadata_state(record, state_profile)
+        _sync_record_metadata_state(record, state_profile, schema)
         incomplete_fields = list(record.get("metadata_incomplete_fields") or [])
         review_fields = list(record.get("metadata_review_fields") or [])
         # Optional indexing/quotation failures remain visible but do not make a structurally
@@ -1069,10 +1142,16 @@ CURRENT REVIEWED RECORD TEXT:
         # the discourse task are the publication-critical metadata gate.
         discourse_ok = any(name == "discourse" and failure is None for name, _result, failure in stage_results)
         if not discourse_ok and str(record.get("metadata_stage_status", {}).get("discourse") or "") == "skipped":
-            status_map = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
             required_discourse = [field for field in required_metadata_fields if field in schema.family_fields()[CORE_GROUP]]
             human_or_deterministic = all(
-                isinstance(status_map.get(field), dict) and str(status_map[field].get("status") or "") in {"human_confirmed", "human_override", "deterministic", "inherited", "model_inferred"}
+                (
+                    (assertion := current_assertion_by_name(record, field)) is not None
+                    and assertion.value_status in {"present", "confirmed_absent"}
+                    and (
+                        assertion.authority_status in {"human_confirmed", "human_override"}
+                        or assertion.derivation_method in {"deterministic", "inherited", "model"}
+                    )
+                )
                 for field in required_discourse
             ) if required_discourse else True
             discourse_ok = obvious_apparatus or human_or_deterministic
@@ -1110,14 +1189,28 @@ CURRENT REVIEWED RECORD TEXT:
                 isinstance(status, dict) and status.get("blind")
                 for status in normalized_status.values()
             ):
+                blind_fields = [
+                    field_name
+                    for field_name, status in normalized_status.items()
+                    if isinstance(status, dict) and status.get("blind")
+                ]
                 _scrub_canonical_transport(normalized)
-                for status in normalized_status.values():
-                    if not isinstance(status, dict) or not status.get("blind"):
+                for field_name in blind_fields:
+                    normalized[field_name] = (
+                        [] if isinstance(normalized.get(field_name), list) else None
+                    )
+                    _scrub_sealed_field(normalized, field_name)
+                    status = normalized_status.get(field_name)
+                    if not isinstance(status, dict):
                         continue
                     for key in (
                         "confidence", "proposed_value", "llm_value", "raw_llm_value",
                         "llm_confidence", "llm_corroboration", "conditions",
                     ):
                         status.pop(key, None)
+                    status["status"] = "unresolved"
+                    status["method"] = "llm"
+                    status["reason_code"] = "blind_review"
+                    status["auto_populated"] = False
                     status["reason"] = ""
         return normalized

@@ -187,7 +187,7 @@ from .corpus_review_state import (
     _settle_enrichment_review_reason as _settle_enrichment_review_reason,
 )
 from .corpus_reviewer_helpers import (
-    _metadata_issue_type,
+    _metadata_issue_type_for_field,
     _present_for_reviewer,
     _scrub_canonical_transport,
 )
@@ -234,7 +234,12 @@ from .enrichment_ledger import (
     EnrichmentLedger,
 )
 from .error_severity import severity as error_severity
-from .field_assertions import migrate_record_assertions
+from .field_assertions import (
+    create_unresolved_assertion,
+    current_assertion_by_name,
+    migrate_record_assertions,
+    project_record_assertions,
+)
 from .main_text_start import infer_main_text_start
 from .metadata_exemplar_projection import (
     dirty_metadata_exemplar_build_ids,
@@ -2605,17 +2610,32 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                         fallback["metadata_needs_attention"] = True
                         profile_for_failure = self._profile_for(build_id)
                         required_failure_fields = list(profile_for_failure.get("required_metadata_fields") or [])
-                        failure_status = fallback.setdefault("metadata_field_status", {})
+                        schema_for_failure = self._schema_for(build_id)
+                        migrate_record_assertions(fallback, schema_for_failure)
                         for field in required_failure_fields:
-                            current = failure_status.get(field) if isinstance(failure_status.get(field), dict) else {}
-                            if current.get("status") == "deterministic":
+                            current = current_assertion_by_name(fallback, field)
+                            if current is not None and current.derivation_method == "deterministic":
                                 continue
-                            failure_status[field] = {
-                                "status": "unresolved", "method": "llm", "confidence": None,
-                                "reason_code": "llm_failed",
-                                "reason": f"Metadata worker failed before this field could be validated: {exc}",
-                            }
-                        fallback["metadata_incomplete_fields"] = [field for field in required_failure_fields if str((failure_status.get(field) or {}).get("status") or "") in {"unresolved", "invalid"} or fallback.get(field) in (None, "", [])]
+                            create_unresolved_assertion(
+                                fallback,
+                                field,
+                                schema=schema_for_failure,
+                                derivation_method="model",
+                                evaluation_status="evaluation_failed",
+                                method="llm",
+                                reason=f"Metadata worker failed before this field could be validated: {exc}",
+                                legacy_metadata={"reason_code": "llm_failed"},
+                            )
+                        project_record_assertions(fallback)
+                        fallback["metadata_incomplete_fields"] = [
+                            field
+                            for field in required_failure_fields
+                            if (
+                                (current_assertion_by_name(fallback, field) is None)
+                                or current_assertion_by_name(fallback, field).value_status in {"unresolved", "invalid"}
+                                or fallback.get(field) in (None, "", [])
+                            )
+                        ]
                         fallback["metadata_stage_status"] = {**(fallback.get("metadata_stage_status") or {}), "worker": "needs_review"}
                         reasons = list(fallback.get("metadata_attention_reasons") or [])
                         reasons.append(f"Metadata worker failed and requires review: {exc}")
@@ -2791,9 +2811,10 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             for field in incomplete:
                 by_field[field] += 1
                 status_info = statuses.get(field) if isinstance(statuses.get(field), dict) else {}
-                if status_info.get("status") == "invalid":
+                assertion = current_assertion_by_name(record, field)
+                if assertion is not None and assertion.value_status == "invalid":
                     invalid_by_field[field] += 1
-                issue_type = _metadata_issue_type(status_info, record)
+                issue_type = _metadata_issue_type_for_field(record, field)
                 by_reason[issue_type] += 1
                 retryable = issue_type in retryable_types
                 row = {
@@ -2839,18 +2860,25 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         llm_family_calls = 0
         for record in records:
             status_map = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
-            for _field, info in status_map.items():
+            for field, info in status_map.items():
                 if not isinstance(info, dict):
                     continue
-                state = str(info.get("status") or "")
-                if state == "inherited": contribution["inherited_fields"] += 1
-                elif state == "deterministic": contribution["deterministic_fields"] += 1
-                elif state == "model_inferred": contribution["llm_fields_usable"] += 1
-                elif state in {"unresolved", "invalid"} and str(info.get("method") or "").startswith("llm"):
-                    contribution["llm_fields_review"] += 1
-                    if info.get("proposed_value") not in (None, "", []):
-                        contribution["llm_fields_proposed"] += 1
-                elif state in {"human_confirmed", "human_override"}: contribution["human_fields"] += 1
+                assertion = current_assertion_by_name(record, str(field))
+                if assertion is None:
+                    continue
+                if assertion.authority_status in {"human_confirmed", "human_override"}:
+                    contribution["human_fields"] += 1
+                elif assertion.derivation_method == "inherited":
+                    contribution["inherited_fields"] += 1
+                elif assertion.derivation_method == "deterministic":
+                    contribution["deterministic_fields"] += 1
+                elif assertion.derivation_method == "model":
+                    if assertion.value_status == "present" and assertion.evaluation_status != "evaluation_failed":
+                        contribution["llm_fields_usable"] += 1
+                    if assertion.value_status in {"unresolved", "invalid"} or assertion.evaluation_status == "evaluation_failed":
+                        contribution["llm_fields_review"] += 1
+                        if info.get("proposed_value") not in (None, "", []):
+                            contribution["llm_fields_proposed"] += 1
             ledger = record.get("metadata_execution_ledger") if isinstance(record.get("metadata_execution_ledger"), dict) else {}
             for family in ("discourse", "quotation", "indexing"):
                 entry = ledger.get(family) if isinstance(ledger.get(family), dict) else {}

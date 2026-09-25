@@ -28,13 +28,21 @@ from .corpus_llm_helpers import _validate_execution_budget
 from .corpus_record_quality import iso_now
 from .corpus_review_actions import _serialize_record_mutation
 from .corpus_review_state import _sync_record_metadata_state
-from .corpus_reviewer_helpers import _metadata_issue_type
+from .corpus_reviewer_helpers import _metadata_issue_type_for_field
 from .enrichment_cycles import (
     CONFIDENCE_FIELDS,
-    HUMAN_OWNED_STATUSES,
     MAX_PASSES,
     resolve_conflict,
     same_value,
+)
+from .field_assertions import (
+    create_model_assertion,
+    current_assertion_by_name,
+    migrate_record_assertions,
+    project_record_assertions,
+    reopen_assertion,
+    reset_fields_for_evaluation,
+    store_assertion,
 )
 from .metadata_schema import MetadataSchema, default_schema
 
@@ -96,8 +104,11 @@ class EnrichmentRerunsMixin:
         target_fields: dict[str, list[str]] = {}
         for index, record in enumerate(records):
             incomplete = [str(value) for value in record.get("metadata_incomplete_fields") or []]
-            statuses = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
-            retry_fields = [field for field in incomplete if _metadata_issue_type(statuses.get(field) if isinstance(statuses.get(field), dict) else {}, record) in retryable_types]
+            retry_fields = [
+                field
+                for field in incomplete
+                if _metadata_issue_type_for_field(record, field) in retryable_types
+            ]
             if retry_fields:
                 target_indices.append(index)
                 target_fields[str(record.get("record_id") or index)] = retry_fields
@@ -153,9 +164,15 @@ class EnrichmentRerunsMixin:
                         updated = future.result()
                     except Exception as exc:
                         updated = dict(records[index])
-                        statuses = updated.setdefault("metadata_field_status", {})
-                        for field in target_fields.get(str(updated.get("record_id") or index), []):
-                            statuses[field] = {"status": "unresolved", "method": "llm", "confidence": None, "reason_code": "llm_failed", "reason": f"Metadata retry failed: {exc}"}
+                        schema = self._schema_for(build_id)
+                        reset_fields_for_evaluation(
+                            updated,
+                            target_fields.get(str(updated.get("record_id") or index), []),
+                            schema=schema,
+                            discard_history=False,
+                            method="metadata_retry_failed",
+                            reason=f"Metadata retry failed: {exc}",
+                        )
                         updated["metadata_needs_attention"] = True
                         updated["metadata_attention_reasons"] = [f"Metadata retry failed: {exc}"]
                     records[index] = updated
@@ -268,8 +285,29 @@ class EnrichmentRerunsMixin:
         self, live: dict[str, Any], candidate: dict[str, Any], families: list[str], run_id: str, request: dict[str, Any], profile: dict[str, Any],
         schema: MetadataSchema | None = None, pass_number: int = 1,
     ) -> dict[str, Any]:
-        """Fold one pass's candidate into the live record. Human-owned fields are never touched."""
-        groups = (schema or default_schema()).family_fields()
+        """Fold one pass's candidate into the live record. Human-owned assertions are never touched."""
+        active_schema = schema or default_schema()
+        groups = active_schema.family_fields()
+        # Provider/test candidates are often shallow copies of the live record.
+        # Canonical migration mutates nested assertion maps, so isolate the
+        # candidate before migration to prevent it from changing live state
+        # before conflict resolution has made a decision.
+        candidate = json.loads(json.dumps(candidate))
+        candidate_values = {
+            field: json.loads(json.dumps(candidate.get(field)))
+            for family in families
+            for field in groups[family]
+            if field in candidate
+        }
+        candidate_status_snapshot = json.loads(
+            json.dumps(
+                candidate.get("metadata_field_status")
+                if isinstance(candidate.get("metadata_field_status"), dict)
+                else {}
+            )
+        )
+        migrate_record_assertions(live, active_schema)
+        migrate_record_assertions(candidate, active_schema)
 
         def candidate_id(field: str, value: Any, source: str, model: str = "", pass_no: int | None = None) -> str:
             payload = json.dumps(
@@ -279,8 +317,6 @@ class EnrichmentRerunsMixin:
             return "cand-" + hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
         live_status = live.setdefault("metadata_field_status", {})
         cand_status = candidate.get("metadata_field_status") if isinstance(candidate.get("metadata_field_status"), dict) else {}
-        cand_evidence = candidate.get("metadata_evidence") if isinstance(candidate.get("metadata_evidence"), dict) else {}
-        live_evidence = live.setdefault("metadata_evidence", {})
         added: list[str] = []
         replaced: list[dict[str, Any]] = []
         kept: list[str] = []
@@ -292,12 +328,51 @@ class EnrichmentRerunsMixin:
 
         for family in families:
             for field in groups[family]:
-                new, old = candidate.get(field), live.get(field)
+                new = candidate_values.get(field, candidate.get(field))
+                old = live.get(field)
+                old_assertion = current_assertion_by_name(live, field)
+                new_assertion = current_assertion_by_name(candidate, field)
                 old_info = live_status.get(field) if isinstance(live_status.get(field), dict) else {}
-                new_info = cand_status.get(field) if isinstance(cand_status.get(field), dict) else {}
+                snapshot_info = candidate_status_snapshot.get(field)
+                new_info = (
+                    snapshot_info
+                    if isinstance(snapshot_info, dict)
+                    else (cand_status.get(field) if isinstance(cand_status.get(field), dict) else {})
+                )
+                # Some provider/test candidates are shallow derivatives of the live
+                # record: their top-level proposal and compatibility status are new,
+                # but the copied canonical assertion still describes the old value.
+                # Normalize that mismatch into a fresh model assertion before
+                # conflict resolution so canonical state follows the proposal.
+                if new not in (None, "", []) and (
+                    new_assertion is None or not same_value(new_assertion.value, new)
+                ):
+                    evidence_map = (
+                        candidate.get("metadata_evidence")
+                        if isinstance(candidate.get("metadata_evidence"), dict)
+                        else {}
+                    )
+                    evidence_item = evidence_map.get(field) if isinstance(evidence_map.get(field), dict) else None
+                    new_assertion = create_model_assertion(
+                        candidate,
+                        field,
+                        new,
+                        schema=active_schema,
+                        confidence=(
+                            float(new_info["confidence"])
+                            if isinstance(new_info.get("confidence"), (int, float))
+                            and not isinstance(new_info.get("confidence"), bool)
+                            else None
+                        ),
+                        method=str(new_info.get("method") or "llm"),
+                        reason=str(new_info.get("reason") or ""),
+                        evidence=[dict(evidence_item)] if evidence_item else [],
+                        model=str(new_info.get("model") or request.get("model") or "") or None,
+                        run_id=str(new_info.get("run_id") or run_id or "") or None,
+                    )
                 if new in (None, "", []):
                     continue
-                if str(old_info.get("status") or "") in HUMAN_OWNED_STATUSES:
+                if old_assertion is not None and old_assertion.authority_status in {"human_confirmed", "human_override"}:
                     informational.append(enrichment_informational_event(
                         "agreement" if same_value(old, new) else "protected_suggestion",
                         field,
@@ -315,10 +390,10 @@ class EnrichmentRerunsMixin:
                     ))
                     continue
                 if old in (None, "", []):
-                    live[field] = new
-                    live_status[field] = new_info
-                    if field in cand_evidence:
-                        live_evidence[field] = cand_evidence[field]
+                    if new_assertion is not None:
+                        store_assertion(live, new_assertion)
+                    else:
+                        live[field] = new
                     added.append(field)
                     continue
                 if field in CONFIDENCE_FIELDS:
@@ -335,8 +410,8 @@ class EnrichmentRerunsMixin:
                         confidence=new_info.get("confidence"),
                         reason="The model found no new supported value.",
                     ))
-                    if field in cand_evidence:
-                        live_evidence[field] = cand_evidence[field]
+                    if new_assertion is not None:
+                        store_assertion(live, new_assertion, select=False)
                     continue
                 if (field, json.dumps(new, sort_keys=True, default=str)) in known:
                     informational.append(enrichment_informational_event(
@@ -365,10 +440,10 @@ class EnrichmentRerunsMixin:
                 decision = "keep_both" if both_pending_llm else resolve_conflict(old_info, new_info)
                 if decision == "replace":
                     replaced.append({"field": field, "previous": old, "value": new, "confidence": new_info.get("confidence")})
-                    live[field] = new
-                    live_status[field] = new_info
-                    if field in cand_evidence:
-                        live_evidence[field] = cand_evidence[field]
+                    if new_assertion is not None:
+                        store_assertion(live, new_assertion)
+                    else:
+                        live[field] = new
                 elif decision == "keep_existing":
                     kept.append(field)
                 else:
@@ -431,7 +506,16 @@ class EnrichmentRerunsMixin:
                         }
                         disputes.append(dispute)
                         history_disputes.append(json.loads(json.dumps(dispute)))
-                    live_status[field] = {**old_info, "status": "unresolved", "reason_code": "llm_disagreement", "reason": "A later metadata enrichment pass proposed a different value and neither was confident enough to decide."}
+                    if new_assertion is not None:
+                        store_assertion(live, new_assertion, select=False)
+                    if old_assertion is not None:
+                        reopen_assertion(
+                            live,
+                            old_assertion,
+                            reason="A later metadata enrichment pass proposed a different value and neither was confident enough to decide.",
+                            legacy_metadata={"reason_code": "llm_disagreement"},
+                        )
+        project_record_assertions(live)
         live["metadata_disputes"] = (list(live.get("metadata_disputes") or []) + disputes)[-100:]
         outcome = "enriched" if added or replaced else "disputed" if history_disputes else "unchanged"
         history = list(live.get("metadata_enrichment_history") or [])
@@ -501,14 +585,21 @@ class EnrichmentRerunsMixin:
 
         def candidate_for(index: int) -> tuple[dict[str, Any], dict[str, Any]]:
             candidate = json.loads(json.dumps(snapshot[index]))
-            status = candidate.get("metadata_field_status") if isinstance(candidate.get("metadata_field_status"), dict) else {}
+            reset_fields = {
+                field
+                for family in families
+                for field in pass_schema.family_fields()[family]
+            }
+            reset_fields_for_evaluation(
+                candidate,
+                reset_fields,
+                schema=pass_schema,
+                discard_history=True,
+                method="metadata_rerun_worker",
+            )
             for family in families:
-                for field in pass_schema.family_fields()[family]:
-                    candidate.pop(field, None)
-                    status.pop(field, None)
                 candidate.setdefault("metadata_stage_status", {}).pop(family, None)
                 candidate.setdefault("metadata_execution_ledger", {}).pop(family, None)
-            candidate["metadata_field_status"] = status
             neighbors = {
                 "previous_text": str(snapshot[index - 1].get("text") or "") if index > 0 else "",
                 "next_text": str(snapshot[index + 1].get("text") or "") if index + 1 < len(snapshot) else "",
@@ -688,22 +779,31 @@ class EnrichmentRerunsMixin:
         families = [str(value) for value in requested_families or [] if str(value) in rerun_groups]
         if not families:
             families = list(rerun_groups)
-        # Clear only values owned by the selected LLM family. Inherited,
-        # deterministic, human-confirmed, and human-override values are
-        # authoritative and survive reruns.
-        status_map = target.get("metadata_field_status") if isinstance(target.get("metadata_field_status"), dict) else {}
+        # Clear only non-authoritative fields in the selected families. Human,
+        # inherited, and deterministic assertions survive reruns.
+        schema = self._schema_for(build_id)
+        migrate_record_assertions(target, schema)
+        fields_to_reset: set[str] = set()
         for family in families:
             for key in rerun_groups[family]:
-                info = status_map.get(key) if isinstance(status_map.get(key), dict) else {}
-                if str(info.get("status") or "") in {"human_confirmed", "human_override", "inherited", "deterministic"}:
+                assertion = current_assertion_by_name(target, key)
+                if assertion is not None and (
+                    assertion.authority_status in {"human_confirmed", "human_override"}
+                    or assertion.derivation_method in {"inherited", "deterministic"}
+                ):
                     continue
-                if str(info.get("method") or "").startswith("llm") or str(info.get("status") or "") in {"model_inferred", "unresolved", "invalid"}:
-                    target.pop(key, None)
-                    status_map.pop(key, None)
+                fields_to_reset.add(key)
             target.setdefault("metadata_stage_status", {}).pop(family, None)
             target.setdefault("metadata_stage_results", {}).pop(family, None)
             target.setdefault("metadata_execution_ledger", {}).pop(family, None)
-        target["metadata_field_status"] = status_map
+        reset_fields_for_evaluation(
+            target,
+            fields_to_reset,
+            schema=schema,
+            discard_history=False,
+            method="human_requeue",
+            reason="Reviewer requested a fresh metadata evaluation.",
+        )
         rerun_request = dict(request)
         rerun_request["families"] = families
         rerun_request["_interactive_provider_override"] = True

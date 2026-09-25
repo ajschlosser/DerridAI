@@ -40,7 +40,13 @@ from .corpus_segmentation import (
     _normalize_text,
     _scholarly_page_range,
 )
-from .field_assertions import current_assertion_by_name
+from .field_assertions import (
+    create_inherited_assertion,
+    create_unresolved_assertion,
+    current_assertion_by_name,
+    migrate_record_assertions,
+    project_record_assertions,
+)
 from .metadata_schema import (
     DEFAULT_SCHEMA_ID,
     MetadataSchema,
@@ -383,19 +389,20 @@ CURRENT REVIEWED RECORD TEXT:
             if str(record.get("discourse_role") or "") == "reported_position" and "position_holder" in (profile.get("schema_field_names") or ["position_holder"]) and not record.get("position_holder"):
                 relationship_errors.append({"record_id": record_id, "reason": "reported_position requires a position_holder"})
             touched = {str(value) for value in (record.get("human_touched_fields") or [])}
-            status_map = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
+            migrate_record_assertions(record)
             for field in touched:
                 if field.startswith("__"):
                     continue
                 assertion = current_assertion_by_name(record, field)
-                if assertion is not None and assertion.authority_status in {"human_confirmed", "human_override"}:
-                    continue
-                info = status_map.get(field) if isinstance(status_map.get(field), dict) else {}
-                if str(info.get("status") or "") == "model_inferred":
+                if (
+                    assertion is not None
+                    and assertion.derivation_method == "model"
+                    and assertion.authority_status == "unreviewed"
+                ):
                     human_ownership_errors.append({
                         "record_id": record_id,
                         "field": field,
-                        "reason": f"{field} is human-touched but still marked model_inferred",
+                        "reason": f"{field} is human-touched but its current model assertion remains unreviewed",
                     })
 
             evidence = record.get("metadata_evidence") if isinstance(record.get("metadata_evidence"), dict) else {}
@@ -572,21 +579,42 @@ CURRENT REVIEWED RECORD TEXT:
                 # The page range also classifies the record (main text, front matter, back matter), so a change to it
                 # must count as a change here even though those fields are not inherited from the manifest.
                 before = ({field: record.get(field) for field in MANIFEST_INHERITED_FIELDS}, record.get("inline_citation"), record.get("full_citation"), record.get("primary_text"), record.get("region_type"))
-                field_status = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
+                schema = self._schema_for(build_id)
+                migrate_record_assertions(record, schema)
                 if start_changed:
-                    # The layout plan labelled these records from the old start page; the new one relabels them.
+                    # A changed reviewed page range supersedes prior layout-derived
+                    # structural assertions; human-owned record decisions remain sealed.
                     for field in ("region_type", "primary_text"):
-                        info = field_status.get(field)
-                        if isinstance(info, dict) and info.get("method") == "human_document_layout":
-                            field_status.pop(field, None)
+                        assertion = current_assertion_by_name(record, field)
+                        if (
+                            assertion is not None
+                            and assertion.authority_status not in {"human_confirmed", "human_override"}
+                            and assertion.method == "human_document_layout"
+                        ):
+                            create_unresolved_assertion(
+                                record,
+                                field,
+                                schema=schema,
+                                derivation_method="other",
+                                evaluation_status="not_evaluated",
+                                method="manifest_relayout",
+                                reason="The reviewed document page range changed; structural classification must be regenerated.",
+                            )
+                            record.pop(field, None)
                 for field in MANIFEST_INHERITED_FIELDS:
-                    info = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
-                    if str(info.get("status") or "") in {"human_override", "human_confirmed"}:
+                    assertion = current_assertion_by_name(record, field)
+                    if assertion is not None and assertion.authority_status in {"human_override", "human_confirmed"}:
                         continue
                     record.pop(field, None)
-                    if str(info.get("status") or "") == "inherited":
-                        field_status.pop(field, None)
-                record["metadata_field_status"] = field_status
+                    create_inherited_assertion(
+                        record,
+                        field,
+                        None,
+                        schema=schema,
+                        method="document_manifest",
+                        reason="The current reviewed document manifest does not supply this value.",
+                    )
+                project_record_assertions(record)
                 _apply_manifest_metadata(record, manifest)
                 inline, full = _citation_strings(record)
                 record["inline_citation"] = inline

@@ -16,6 +16,7 @@ sys.modules.setdefault("chromadb", types.SimpleNamespace())
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"api"))
 from app import corpus_builder as cb
+from app.field_assertions import reset_fields_for_evaluation
 
 
 def _install_publishable(repo: cb.PdfCorpusRepository):
@@ -102,9 +103,12 @@ def test_metadata_incomplete_creates_explicit_attention_state_and_blocks_publish
     build=_install_publishable(repo)
     build=repo.get_build(build["build_id"])
     rows=repo.load_records(build["build_id"])
-    rows[0]["metadata_complete"]=False
-    rows[0]["metadata_incomplete_fields"]=["discourse_role"]
-    rows[0].pop("discourse_role",None)
+    reset_fields_for_evaluation(
+        rows[0],
+        ["discourse_role"],
+        schema=manager._schema_for(build["build_id"]),
+        method="publication_incomplete_test",
+    )
     manager._rewrite_and_validate(build["build_id"],rows)
     refreshed=repo.get_build(build["build_id"])
     assert refreshed["status"]=="awaiting_review"

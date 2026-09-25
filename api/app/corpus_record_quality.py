@@ -15,6 +15,12 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
+from .field_assertions import (
+    create_unresolved_assertion,
+    current_assertion_by_name,
+    migrate_record_assertions,
+    project_record_assertions,
+)
 from .rag import _citation_strings
 from .text_noise import DEFAULT_NOISE_THRESHOLD
 from .text_noise import median_score as median_text_noise
@@ -29,6 +35,8 @@ def iso_now() -> str:
 def _metadata_source_quality_gate(
     record: dict[str, Any], required_metadata_fields: list[str],
     stage_callback: Callable[[dict[str, Any], str, str, str | None], None] | None,
+    *,
+    schema: Any | None = None,
 ) -> bool:
     """Settle unsafe source records without asking a model to interpret corruption."""
     # Do not ask a model to interpret source text that deterministic extraction
@@ -40,17 +48,35 @@ def _metadata_source_quality_gate(
         if str(item.get("severity") or "blocking") == "blocking"
     ]
     if blocking_source_issues and record.get("text_review_status") != "human_corrected":
-        field_status = record.setdefault("metadata_field_status", {})
+        migrate_record_assertions(record, schema)
+        reason = "Automatic enrichment was skipped because this record touches a source page with blocking extraction-quality findings."
         for field in required_metadata_fields:
-            current = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
-            if current.get("status") in {"deterministic", "human_confirmed"}:
+            current = current_assertion_by_name(record, field)
+            if current is not None and (
+                current.authority_status in {"human_confirmed", "human_override"}
+                or current.derivation_method == "deterministic"
+            ):
                 continue
-            field_status[field] = {
-                "status": "unresolved", "method": "source_quality_gate",
-                "confidence": None, "reason_code": "source_quality",
-                "reason": "Automatic enrichment was skipped because this record touches a source page with blocking extraction-quality findings.",
-            }
-        incomplete_fields = [field for field in required_metadata_fields if str((field_status.get(field) or {}).get("status") or "") in {"unresolved", "invalid"} or record.get(field) in (None, "", [])]
+            create_unresolved_assertion(
+                record,
+                field,
+                schema=schema,
+                derivation_method="other",
+                evaluation_status="not_evaluated",
+                method="source_quality_gate",
+                reason=reason,
+                legacy_metadata={"reason_code": "source_quality"},
+            )
+        project_record_assertions(record)
+        incomplete_fields = [
+            field
+            for field in required_metadata_fields
+            if (
+                current_assertion_by_name(record, field) is None
+                or current_assertion_by_name(record, field).value_status in {"unresolved", "invalid"}
+                or record.get(field) in (None, "", [])
+            )
+        ]
         record["metadata_incomplete_fields"] = incomplete_fields
         record["metadata_complete"] = not incomplete_fields
         record["metadata_stage_status"] = {"discourse": "skipped", "quotation": "skipped", "indexing": "skipped", "source_quality": "needs_review"}

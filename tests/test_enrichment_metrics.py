@@ -1,4 +1,9 @@
 from app.enrichment_metrics import compute
+from app.field_assertions import (
+    create_model_assertion,
+    project_record_assertions,
+    reopen_assertion,
+)
 
 
 def ev(kind, **kw):
@@ -56,6 +61,23 @@ def test_slicing_by_run_and_unresolved_count():
     assert compute(rows, run_id="run2")["models"]["m"]["acceptance_rate"] == 0.0
     records = [{"metadata_field_status": {"a": {"status": "unresolved"}, "b": {"status": "model_inferred"}}}]
     assert compute(rows, records)["unresolved_remaining"] == 1
+
+
+
+
+def test_unresolved_metric_uses_assertions_not_flat_status_tokens():
+    record = {"record_id": "assertion-metric", "record_revision": 1}
+    model = create_model_assertion(record, "stance", "critical", confidence=0.8)
+    project_record_assertions(record)
+    # Compatibility can be stale or intentionally transformed for an old client.
+    record["metadata_field_status"]["stance"]["status"] = "unresolved"
+    assert compute([], [record])["unresolved_remaining"] == 0
+
+    reopened = reopen_assertion(record, model, reason="Conflicting later proposal.")
+    project_record_assertions(record)
+    record["metadata_field_status"]["stance"]["status"] = "model_inferred"
+    assert reopened.authority_status == "disputed"
+    assert compute([], [record])["unresolved_remaining"] == 1
 
 
 def test_no_data_is_none_not_zero():

@@ -3,6 +3,11 @@ from __future__ import annotations
 
 from app import corpus_builder as cb
 from app import metadata_exemplar_projection as projection
+from app.field_assertions import (
+    confirm_assertion,
+    create_model_assertion,
+    project_record_assertions,
+)
 
 
 class FakeRepo:
@@ -90,6 +95,41 @@ def test_derivation_embeds_evidence_context_not_whole_record(monkeypatch):
         "For Levinas, responsibility precedes freedom.\n\n"
         "Context after."
     )
+
+
+
+
+def test_confirmed_model_assertion_remains_eligible_without_rewriting_method(monkeypatch):
+    repo = FakeRepo()
+    record = repo.records[0]
+    record.pop("metadata_field_status", None)
+    record.pop("metadata_evidence", None)
+    record.pop("position_holder", None)
+    model = create_model_assertion(
+        record,
+        "position_holder",
+        "Levinas",
+        confidence=0.87,
+        method="llm",
+        evidence=[{
+            "block_ids": ["b2"],
+            "confidence": 0.87,
+            "reason": "Explicit attribution.",
+        }],
+    )
+    confirmed = confirm_assertion(record, model, actor="reviewer")
+    project_record_assertions(record)
+    assert confirmed.method == "llm"
+    assert confirmed.derivation_method == "model"
+    assert confirmed.authority_status == "human_confirmed"
+
+    monkeypatch.setattr(projection.experiment, "is_gold", lambda record_id: False)
+    monkeypatch.setattr(projection, "_second_opinion_owed", lambda row, field: False)
+    rows = projection.derive_build_metadata_exemplars(repo, "build-1")
+
+    assert len(rows) == 1
+    assert rows[0]["field_value"] == "Levinas"
+    assert rows[0]["evidence_ref"]["block_ids"] == ["b2"]
 
 
 def test_derivation_includes_evidence_bound_confirmed_absence(monkeypatch):

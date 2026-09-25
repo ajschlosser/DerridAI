@@ -25,8 +25,12 @@ def _metadata_value_missing(field: str, value: Any) -> bool:
     return value is None or value == "" or value == []
 
 
-def _sync_record_metadata_state(record: dict[str, Any], profile: dict[str, Any]) -> None:
-    migrate_record_assertions(record)
+def _sync_record_metadata_state(
+    record: dict[str, Any],
+    profile: dict[str, Any],
+    schema: Any | None = None,
+) -> None:
+    migrate_record_assertions(record, schema)
     required = list(profile.get("required_metadata_fields") or [])
     reviewable = list(profile.get("review_metadata_fields") or REVIEW_METADATA_FIELDS)
     incomplete: list[str] = []

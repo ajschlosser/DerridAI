@@ -55,6 +55,28 @@ Schema-defined assertion fields can now flow without production code changes thr
 
 Built-in field lists remain as useful ordering and presentation defaults. They are no longer closed whitelists for ordinary custom metadata.
 
+## Canonical policy reads
+
+Backend policy now reads FieldAssertions directly for:
+
+- record acceptance and implicit confirmation;
+- human edits and confirmed absence;
+- reviewed evidence changes;
+- source-quality gating;
+- manifest inheritance and deterministic structural ownership;
+- enrichment ownership/protection;
+- enrichment-pass disagreement and rerun resets;
+- metadata exemplar/editorial-memory trust;
+- hands-free settlement;
+- metadata retry eligibility;
+- metadata issue summaries and enrichment contribution metrics.
+
+`metadata_field_status` may still be written or read while constructing compatibility projections, preserving blind-review/recheck and model-run telemetry, formatting legacy API/UI output, or normalizing an in-flight model response before it is converted to assertions. New scholarly authority decisions must not originate from that flattened status token.
+
+Persistent scholarly mutation paths are assertion-native. This includes initial deterministic segmentation metadata, manifest inheritance/reclassification, source-quality and worker failures, human confirmation/override/confirmed absence, evidence edits, record acceptance, hands-free settlement, enrichment merges, multi-pass disagreements, rerun resets, blind rechecks, editorial memory, exemplar trust, retry classification, and unresolved-field metrics.
+
+A useful maintenance test is intentional projection corruption: changing only a compatibility `status` token must not change which value is authoritative, whether automatic enrichment may overwrite it, whether a field is epistemically unresolved, or whether reviewed evidence is eligible as precedent.
+
 ## Canary coverage
 
 The regression suite uses the custom field `conceptual_tension` without adding it to production field constants.
