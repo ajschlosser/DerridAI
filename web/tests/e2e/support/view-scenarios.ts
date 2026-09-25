@@ -214,9 +214,9 @@ export const scenarios: Scenario[] = [
     id: "record-provenance",
     path: "/record",
     role: "researcher",
-    ready: (p) => p.getByRole("tab", { name: "Provenance", selected: true }),
+    ready: (p) => p.getByRole("tab", { name: "Attribution", selected: true }),
     steps: async (p) => {
-      await p.getByRole("tab", { name: "Provenance" }).click();
+      await p.getByRole("tab", { name: "Attribution" }).click();
     },
   },
   {
