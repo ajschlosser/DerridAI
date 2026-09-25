@@ -20,6 +20,20 @@ const graph = {
   ],
 };
 
+
+const model = {
+  specification_version: "1.0",
+  nodes: [
+    { type: "Record", label: "Record", profile: "Core", persistence: "durable", normative: true },
+    { type: "SourceSpan", label: "Source span", profile: "Core", persistence: "durable_locator", normative: true },
+    { type: "FieldAssertion", label: "Field assertion", profile: "Core", persistence: "durable_when_retained", normative: true },
+  ],
+  edges: [
+    { id: "record_spans", source_type: "Record", target_type: "SourceSpan", relation: "derives from", inverse_relation: "contributes to", source_cardinality: "1..*", target_cardinality: "0..*", profile: "Core", normative: true },
+    { id: "record_assertions", source_type: "Record", target_type: "FieldAssertion", relation: "has assertion", inverse_relation: "assertion in context of", source_cardinality: "0..*", target_cardinality: "1", profile: "Core", normative: true },
+  ],
+};
+
 describe("RecordTraceabilityExplorer", () => {
   beforeEach(() => setActivePinia(createPinia()));
 
@@ -33,6 +47,20 @@ describe("RecordTraceabilityExplorer", () => {
 
     expect(wrapper.get(".object-graph-focus").attributes("data-object-id")).toBe("FieldAssertion:a1");
     expect(wrapper.text()).toContain("assertion in context of");
+  });
+
+  it("walks the normative model independently from the selected instance path", async () => {
+    const wrapper = mount(RecordTraceabilityExplorer, { props: { graph, model } });
+
+    const modeButtons = wrapper.findAll(".object-graph-modes button");
+    await modeButtons[1].trigger("click");
+
+    expect(wrapper.get(".object-graph-focus").attributes("data-object-id")).toBe("model:Record");
+    expect(wrapper.findAll(".object-graph-neighbors li")).toHaveLength(2);
+
+    await wrapper.get('button[data-object-id="model:SourceSpan"]').trigger("click");
+    expect(wrapper.get(".object-graph-focus").attributes("data-object-id")).toBe("model:SourceSpan");
+    expect(wrapper.text()).toContain("contributes to");
   });
 
   it("keeps traversal history separate from the graph and supports back navigation", async () => {
