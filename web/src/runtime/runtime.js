@@ -748,7 +748,7 @@ function currentContext(){
     vector:["Storage","Vector Stores","Persistent local ChromaDB collections"],
     rag:["Research","Research","Run the evidence-grounded DerridAI retrieval and synthesis pipeline"],
     faq:["Research","Response Library","Browse saved RAG questions, answers, evidence, reruns, and grades"],
-    responsecache:["Research","Response Cache","Manage cached RAG queries, answers, evidence, and LLM grades separately from corpus vector stores"],
+    responsecache:["System","System Data","Inspect application storage, trace derived metadata, and manage saved research responses."],
     providers:["System","LLM Providers","Create, configure, test, warm, and reuse LLM provider profiles across every LLM workflow"],
     config:["System","Settings","Application behavior, retrieval defaults, storage, backup, and reset controls"],
   };
@@ -922,7 +922,6 @@ function viewDisabledReason(view){
   if(!canAccessPage(view))return "This workspace is available to administrators only.";
   if(view==="vector"&&isResearcher()&&!hasChromaService())return dbUnavailableReason();
   if(view==="faq"&&!hasChromaService())return "ChromaDB is unavailable, so the Response Library cannot be opened.";
-  if(view==="responsecache"&&!hasChromaService())return "ChromaDB is unavailable, so the response cache cannot be opened.";
   return "";
 }
 /** @param {Document | Element} [root=document] */
