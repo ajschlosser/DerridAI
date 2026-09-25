@@ -35,6 +35,7 @@ from .corpus_models import (
     RecordMetadataModel,
 )
 from .corpus_record_quality import iso_now
+from .field_assertions import current_assertion_by_name
 from .corpus_segmentation import (
     _apply_manifest_metadata,
     _normalize_text,
@@ -222,7 +223,23 @@ CURRENT REVIEWED RECORD TEXT:
         if validation and not bool(validation.get("source_valid", validation.get("valid", True))):
             blockers.append({"code": "source_validation", "count": len(validation.get("missing_block_ids") or []) + len(validation.get("text_fidelity_errors") or []) + len(validation.get("source_order_errors") or [])})
         if validation and not bool(validation.get("metadata_valid", validation.get("valid", True))):
-            blockers.append({"code": "metadata_validation", "count": sum(len(validation.get(key) or []) for key in ("metadata_evidence_errors", "metadata_schema_errors", "citation_errors", "relationship_errors", "human_ownership_errors", "record_content_errors"))})
+            validation_issues = validation.get("validation_issues")
+            if isinstance(validation_issues, list):
+                validation_count = len(validation_issues)
+            else:
+                validation_count = sum(
+                    len(validation.get(key) or [])
+                    for key in (
+                        "metadata_evidence_errors",
+                        "metadata_schema_errors",
+                        "citation_errors",
+                        "relationship_errors",
+                        "human_ownership_errors",
+                        "record_content_errors",
+                        "printed_page_label_errors",
+                    )
+                )
+            blockers.append({"code": "metadata_validation", "count": validation_count})
         # Raw PDF extraction findings remain in build.source_quality for audit,
         # but a reviewer may resolve a record-level extraction problem by
         # correcting the reviewed text while preserving source_extracted_text.
@@ -370,9 +387,16 @@ CURRENT REVIEWED RECORD TEXT:
             for field in touched:
                 if field.startswith("__"):
                     continue
+                assertion = current_assertion_by_name(record, field)
+                if assertion is not None and assertion.authority_status in {"human_confirmed", "human_override"}:
+                    continue
                 info = status_map.get(field) if isinstance(status_map.get(field), dict) else {}
                 if str(info.get("status") or "") == "model_inferred":
-                    human_ownership_errors.append({"record_id": record_id, "reason": f"{field} is human-touched but still marked model_inferred"})
+                    human_ownership_errors.append({
+                        "record_id": record_id,
+                        "field": field,
+                        "reason": f"{field} is human-touched but still marked model_inferred",
+                    })
 
             evidence = record.get("metadata_evidence") if isinstance(record.get("metadata_evidence"), dict) else {}
             valid_ids = set(ids)
@@ -408,6 +432,49 @@ CURRENT REVIEWED RECORD TEXT:
 
         source_valid = not missing and not duplicates and not fidelity_errors and not order_errors and not page_errors
         metadata_valid = not evidence_errors and not citation_errors and not printed_page_errors and not metadata_schema_errors and not relationship_errors and not human_ownership_errors and not record_content_errors
+
+        validation_issues: list[dict[str, str]] = []
+        seen_issues: set[tuple[str, str, str, str]] = set()
+
+        def add_issue(code: str, item: Any, *, default_reason: str = "") -> None:
+            if isinstance(item, dict):
+                record_value = str(item.get("record_id") or "")
+                field_value = str(item.get("field") or "")
+                reason_value = str(item.get("reason") or default_reason or code.replace("_", " "))
+            else:
+                record_value = str(item or "")
+                field_value = ""
+                reason_value = default_reason or code.replace("_", " ")
+            key = (code, record_value, field_value, reason_value)
+            if key in seen_issues:
+                return
+            seen_issues.add(key)
+            validation_issues.append({
+                "code": code,
+                "record_id": record_value,
+                "field": field_value,
+                "reason": reason_value,
+            })
+
+        for item in evidence_errors:
+            add_issue("metadata_evidence", item)
+        for item in metadata_schema_errors:
+            add_issue("metadata_schema", item)
+        for item in relationship_errors:
+            add_issue("metadata_relationship", item)
+        for item in human_ownership_errors:
+            add_issue("metadata_human_ownership", item)
+        for item in record_content_errors:
+            add_issue("record_content", item)
+        for record_value in sorted(set(citation_errors)):
+            add_issue("citation", record_value, default_reason="citation is missing or incomplete")
+        for record_value in sorted(set(printed_page_errors)):
+            add_issue(
+                "printed_page_label",
+                record_value,
+                default_reason="printed page label is missing",
+            )
+
         return {
             "source_block_count": len(source_ids),
             "used_block_count": len(used_ids),
@@ -424,6 +491,7 @@ CURRENT REVIEWED RECORD TEXT:
             "human_ownership_errors": human_ownership_errors,
             "record_content_errors": record_content_errors,
             "citation_errors": sorted(set(citation_errors)),
+            "validation_issues": validation_issues,
             "suspicious_record_sizes": suspicious,
             "source_valid": source_valid,
             "metadata_valid": metadata_valid,
