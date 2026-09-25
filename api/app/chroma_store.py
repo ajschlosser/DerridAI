@@ -148,10 +148,39 @@ class Embeddings:
                 model=(model or settings.ollama_embed_model).strip(),
             )
 
+        if provider.startswith("profile:"):
+            profile_id = provider.split(":", 1)[1].strip()
+            if not profile_id:
+                raise ValueError("The embedding provider profile ID is empty.")
+            from .system_store import system_store
+
+            profile = system_store.researcher_profile(profile_id)
+            if not profile:
+                raise ValueError(f"Embedding provider profile {profile_id!r} was not found.")
+            profile_type = str(profile.get("type") or "").strip().lower()
+            chosen_model = str(model or profile.get("model") or "").strip()
+            base_url = str(profile.get("base_url") or "").strip()
+            if profile_type == "ollama":
+                return self._ollama(
+                    texts,
+                    model=chosen_model,
+                    base_url=base_url or settings.ollama_base_url,
+                )
+            if profile_type == "openai":
+                return self._openai_compatible(
+                    texts,
+                    model=chosen_model,
+                    base_url=base_url,
+                    api_key=str(profile.get("api_key") or ""),
+                )
+            raise ValueError(
+                f"Provider profile {profile_id!r} has unsupported type {profile_type!r} for embeddings."
+            )
+
         if provider != "chroma":
             raise ValueError(
                 f"Unsupported embedding provider {provider!r}. "
-                "Use chroma, ollama, or precomputed."
+                "Use chroma, precomputed, or profile:<provider-id>."
             )
 
         if self._default is None:
@@ -187,19 +216,20 @@ class Embeddings:
         texts: list[str],
         *,
         model: str,
+        base_url: str | None = None,
     ) -> list[list[float]]:
         if not model:
             raise ValueError("An Ollama embedding model is required.")
         with httpx.Client(timeout=180.0) as client:
             response = client.post(
-                f"{settings.ollama_base_url}/api/embed",
+                f"{str(base_url or settings.ollama_base_url).rstrip('/')}/api/embed",
                 json={"model": model, "input": texts},
             )
             if response.status_code == 404:
                 vectors: list[list[float]] = []
                 for text in texts:
                     legacy = client.post(
-                        f"{settings.ollama_base_url}/api/embeddings",
+                        f"{str(base_url or settings.ollama_base_url).rstrip('/')}/api/embeddings",
                         json={"model": model, "prompt": text},
                     )
                     legacy.raise_for_status()
@@ -216,6 +246,42 @@ class Embeddings:
             vectors = [payload["embedding"]]
         if not isinstance(vectors, list) or len(vectors) != len(texts):
             raise RuntimeError("Ollama returned an unexpected embedding response.")
+        return [list(map(float, vector)) for vector in vectors]
+
+    def _openai_compatible(
+        self,
+        texts: list[str],
+        *,
+        model: str,
+        base_url: str,
+        api_key: str = "",
+    ) -> list[list[float]]:
+        if not model:
+            raise ValueError("An embedding model is required for this provider profile.")
+        if not base_url:
+            raise ValueError("The provider profile needs a base URL for embeddings.")
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        endpoint = f"{base_url.rstrip('/')}/embeddings"
+        with httpx.Client(timeout=180.0) as client:
+            response = client.post(
+                endpoint,
+                headers=headers,
+                json={"model": model, "input": texts},
+            )
+            response.raise_for_status()
+            payload = response.json()
+        data = payload.get("data")
+        if not isinstance(data, list):
+            raise RuntimeError("The provider returned an unexpected embeddings response.")
+        ordered = sorted(
+            [item for item in data if isinstance(item, dict)],
+            key=lambda item: int(item.get("index") or 0),
+        )
+        vectors = [item.get("embedding") for item in ordered]
+        if len(vectors) != len(texts) or any(not isinstance(vector, list) for vector in vectors):
+            raise RuntimeError("The provider returned an unexpected number of embeddings.")
         return [list(map(float, vector)) for vector in vectors]
 
 
@@ -538,14 +604,27 @@ class ChromaStore:
         dimension so dimension mismatches fail before a collection is populated.
         """
         provider = str(provider or settings.embedding_provider).strip().lower()
-        if provider not in {"chroma", "ollama", "precomputed"}:
-            raise ValueError("Embedding provider must be chroma, ollama, or precomputed.")
+        if provider not in {"chroma", "ollama", "precomputed"} and not provider.startswith("profile:"):
+            raise ValueError(
+                "Embedding provider must be chroma, precomputed, or profile:<provider-id>."
+            )
         metric = str(distance_metric or "cosine").strip().lower()
         if metric not in {"cosine", "l2", "ip"}:
             raise ValueError("Distance metric must be cosine, l2, or ip.")
         normalized_model = str(model or "").strip() or None
         if provider == "ollama" and not normalized_model:
             normalized_model = settings.ollama_embed_model
+        if provider.startswith("profile:"):
+            profile_id = provider.split(":", 1)[1].strip()
+            from .system_store import system_store
+
+            profile = system_store.researcher_profile(profile_id)
+            if not profile:
+                raise ValueError(f"Embedding provider profile {profile_id!r} was not found.")
+            if not normalized_model:
+                normalized_model = str(profile.get("model") or "").strip() or None
+            if not normalized_model:
+                raise ValueError("Select an embedding model for the provider profile.")
 
         revision: str | None = None
         if provider == "precomputed":
@@ -589,6 +668,8 @@ class ChromaStore:
                 # Revision discovery is provenance enrichment, not a prerequisite
                 # for a successful embedding probe.
                 revision = None
+        elif provider.startswith("profile:"):
+            revision = provider
         elif provider == "chroma":
             revision = f"chromadb-{getattr(chromadb, '__version__', 'unknown')}"
 
