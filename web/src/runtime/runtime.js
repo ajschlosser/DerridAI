@@ -1,4 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
+// Compatibility composition root for workflows that have not yet moved fully into Vue/domain modules.
+// Prefer adding new behavior to the focused imports below and expose only the narrow bridge needed here;
+// moving logic back into this file makes the remaining runtime migration harder to reason about and test.
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import PdfWorker from "pdfjs-dist/legacy/build/pdf.worker.mjs?worker";
 import { diffWordsWithSpace } from "diff";
