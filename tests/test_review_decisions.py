@@ -154,6 +154,51 @@ def test_human_evidence_edit_reprojects_trusted_metadata_memory(tmp_path: Path, 
     assert scheduled == [build["build_id"]]
 
 
+def test_human_evidence_edit_persists_confirmed_absence_as_absence_binding(tmp_path: Path, monkeypatch):
+    """Evidence-bound no-value decisions remain absence audit events, not null positives."""
+
+    record = rec("r1", "b1")
+    record["position_holder"] = None
+    record["metadata_field_status"]["position_holder"] = {
+        "status": "confirmed_absent",
+        "method": "human",
+        "confidence": 1.0,
+    }
+    repo, build = install_repo(tmp_path, [record])
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    persisted: list[tuple[str, str, object, str]] = []
+    scheduled: list[str] = []
+    monkeypatch.setattr(
+        review_actions,
+        "persist_record_decision",
+        lambda **kwargs: persisted.append(
+            (
+                str(kwargs["record"].get("record_id") or ""),
+                str(kwargs["field_name"]),
+                kwargs["value"],
+                str(kwargs["decision_kind"]),
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        manager,
+        "_schedule_metadata_exemplar_projection",
+        lambda build_id: scheduled.append(build_id),
+    )
+
+    result = manager.patch_evidence(
+        build["build_id"],
+        "r1",
+        "position_holder",
+        ["b1"],
+        expected_revision=1,
+    )
+
+    assert result["metadata_field_status"]["position_holder"]["status"] == "confirmed_absent"
+    assert persisted == [("r1", "position_holder", None, "absence")]
+    assert scheduled == [build["build_id"]]
+
+
 def test_review_decision_returns_structured_metadata_blocker(tmp_path: Path):
     """Accepting a record with unresolved required metadata is refused with details.
 
