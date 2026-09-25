@@ -26,7 +26,8 @@ export const NarrowLongStage: Story = {
       "Validation de la provenance, des limites sémantiques et des métadonnées attribuées aux passages",
   },
   decorators: [
-    () => ({
+    (story) => ({
+      components: { story },
       template: '<div style="max-width: 320px"><story /></div>',
     }),
   ],
