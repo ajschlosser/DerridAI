@@ -52,8 +52,8 @@ STRONG_STRUCTURAL_METHODS = {
 }
 
 _LLM_TRANSPORT_SUFFIX = re.compile(
-    r"\\s*,?\\s*(?:field[_ -]?evidence|field[_ -]?assessments)"
-    r"(?:-[A-Za-z0-9_.:-]+)?\\s*:",
+    r"\s*,?\s*(?:field[_ -]?evidence|field[_ -]?assessments)"
+    r"(?:-[A-Za-z0-9_.:-]+)?\s*:",
     re.IGNORECASE,
 )
 
