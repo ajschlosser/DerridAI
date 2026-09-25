@@ -92,7 +92,7 @@ def derive_build_metadata_exemplars(
             if (
                 not field
                 or not isinstance(info, dict)
-                or str(info.get("status") or "") not in {"human_confirmed", "human_override"}
+                or str(info.get("status") or "") not in {"human_confirmed", "human_override", "confirmed_absent"}
                 or _second_opinion_owed(row, field)
             ):
                 continue
