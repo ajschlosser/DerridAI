@@ -281,6 +281,7 @@ const recordSizing = ref<RecordSizingPolicy>({
   absolute_record_chars: 6000,
 });
 const metadataDraft = ref("{}");
+const metadataSaveQueues = new Map<string, Promise<void>>();
 const textDraft = ref("");
 const editingText = ref(false);
 const bulkMetadataOpen = ref(false);
@@ -2594,34 +2595,48 @@ async function saveMetadata() {
     );
     return;
   }
-  busy.value = "record";
+  const buildId = currentBuild.value.build_id;
+  const recordId = selectedRecord.value.record_id;
+  const expectedRevision = Number(selectedRecord.value.record_revision || 1);
+  const optimisticRow: CorpusRecord = {
+    ...selectedRecord.value,
+    ...changes,
+    record_revision: expectedRevision + 1,
+  } as CorpusRecord;
+  selectedRecord.value = optimisticRow;
+  metadataDraft.value = JSON.stringify(recordMetadata(optimisticRow), null, 2);
+  const idx = records.value.findIndex((item) => item.record_id === recordId);
+  if (idx >= 0) records.value.splice(idx, 1, optimisticRow);
+  metadataEditorDirty.value = false;
   try {
-    const result = await pdfCorpusApi.patchMetadata(
-      currentBuild.value.build_id,
-      selectedRecord.value.record_id,
-      changes,
-      Number(selectedRecord.value.record_revision || 1),
-    );
-    const row = isMetadataPatchState(result) ? result.record : result;
-    selectedRecord.value = row;
-    metadataDraft.value = JSON.stringify(recordMetadata(row), null, 2);
     try {
-      localStorage.removeItem(metadataDraftKey(currentBuild.value.build_id, row.record_id));
+      localStorage.removeItem(metadataDraftKey(buildId, recordId));
     } catch {
       // Best effort: a missing stored preference uses the default.
     }
-    await refreshBuild();
-    await refreshRecords(false, row.record_id);
     await restoreReviewViewport(viewport);
-    setMessage(
-      i18n.t("pdf_corpus.metadata_saved"),
-    );
-  } catch (exc) {
-    await restoreReviewViewport(viewport);
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
+  } catch {
+    // Viewport restoration is best effort and must not delay the optimistic save.
   }
+
+  const prior = metadataSaveQueues.get(recordId) || Promise.resolve();
+  const save = prior
+    .catch(() => undefined)
+    .then(async () => {
+      try {
+        await pdfCorpusApi.patchMetadata(buildId, recordId, changes, expectedRevision);
+      } catch (exc) {
+        const fields = Object.keys(changes).join(", ");
+        setMessage(
+          `${fields}: ${exc instanceof Error ? exc.message : String(exc)}`,
+          "error",
+        );
+      }
+    });
+  metadataSaveQueues.set(recordId, save);
+  void save.finally(() => {
+    if (metadataSaveQueues.get(recordId) === save) metadataSaveQueues.delete(recordId);
+  });
 }
 async function toggleEvidenceBlock(blockId: string) {
   if (!currentBuild.value || !selectedRecord.value || !selectedEvidenceField.value) return;
