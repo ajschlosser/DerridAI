@@ -23,7 +23,7 @@ EvaluationStatus = Literal["not_evaluated", "value_supported", "no_supported_val
 AuthorityStatus = Literal["unreviewed", "human_confirmed", "human_override", "disputed"]
 ValueStatus = Literal["present", "confirmed_absent", "invalid", "unresolved"]
 
-_STATUS_TO_CANONICAL = {
+_STATUS_TO_CANONICAL: dict[str, tuple[DerivationMethod, EvaluationStatus, AuthorityStatus, ValueStatus]] = {
     "model_inferred": ("model", "value_supported", "unreviewed", "present"),
     "llm_inferred": ("model", "value_supported", "unreviewed", "present"),
     "human_confirmed": ("model", "value_supported", "human_confirmed", "present"),
