@@ -84,7 +84,7 @@ function field(name: string): InspectorLayoutRow {
 }
 
 export function defaultInspectorLayout(record?: Record<string, unknown> | null): InspectorLayout {
-  const catalog = inspectorFieldCatalog(record);
+  const asserted = assertionFieldsByTab(record || {});
   const base: InspectorLayout = {
     overview: [
       heading("Record context"),
@@ -137,14 +137,14 @@ export function defaultInspectorLayout(record?: Record<string, unknown> | null):
       .filter((row): row is Extract<InspectorLayoutRow, { kind: "field" }> => row.kind === "field")
       .map((row) => row.field),
   );
-  const appendMissing = (tab: InspectorTabKey, headingLabel: string) => {
-    const missing = catalog[tab].filter((name) => !used.has(name));
+  const appendMissing = (tab: InspectorTabKey) => {
+    const missing = asserted[tab].filter((name) => !used.has(name));
     if (!missing.length) return;
-    base[tab].push(heading(headingLabel), ...missing.map(field));
+    base[tab].push(...missing.map(field));
   };
-  appendMissing("overview", "Additional metadata");
-  appendMissing("provenance", "Schema metadata");
-  appendMissing("indexing", "Schema indexing");
+  appendMissing("overview");
+  appendMissing("provenance");
+  appendMissing("indexing");
   return base;
 }
 
