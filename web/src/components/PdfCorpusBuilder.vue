@@ -18,7 +18,7 @@ import FieldEvidenceList from "./FieldEvidenceList.vue";
 import DocumentStructureConfigurator from "./DocumentStructureConfigurator.vue";
 import MediaStructureConfigurator from "./MediaStructureConfigurator.vue";
 import SourceTranscriptionDialog from "./SourceTranscriptionDialog.vue";
-import { timeLabel } from "../domain/sourceMedia";
+import { sourceMediaCapabilities, timeLabel } from "../domain/sourceMedia";
 import CorpusSourceSummary from "./CorpusSourceSummary.vue";
 import DocumentManifestEditor from "./DocumentManifestEditor.vue";
 import DocumentManifestDialog from "./DocumentManifestDialog.vue";
@@ -743,26 +743,26 @@ const activeBuildProfileId = computed<string>(() => {
 const activeModelLabel = computed<string>(() => String(currentBuild.value?.model || "—"));
 const pageNumber = computed(() => Math.floor(recordOffset.value / pageSize) + 1);
 const pageCount = computed(() => Math.max(1, Math.ceil(recordTotal.value / pageSize)));
-// Only PDFs expose physical-to-printed pagination controls. Images, text, and
-// audio use source-specific interpretation panes instead of pretending to have
-// document pages.
-const paginatedSource = computed(() => selectedAsset.value?.media_kind === "pdf");
+const selectedSourceCapabilities = computed(() =>
+  sourceMediaCapabilities(selectedAsset.value?.media_kind),
+);
+// Printed-page mapping is a source capability, not a synonym for "has pages".
+const paginatedSource = computed(() => selectedSourceCapabilities.value.printedPagination);
 const imageSourceUrl = computed(() =>
-  selectedAsset.value?.media_kind === "image" && selectedAssetId.value
+  selectedSourceCapabilities.value.imageViewer && selectedAssetId.value
     ? pdfCorpusApi.assetContentUrl(selectedAssetId.value)
     : "",
 );
 const audioSourceUrl = computed(() =>
-  selectedAsset.value?.media_kind === "audio" && selectedAssetId.value
+  selectedSourceCapabilities.value.audioPlayer && selectedAssetId.value
     ? pdfCorpusApi.assetContentUrl(selectedAssetId.value)
     : "",
 );
-const sourcePdfUrl = computed(() => {
-  if (!selectedAssetId.value) return "";
-  const kind = selectedAsset.value?.media_kind;
-  if (kind && kind !== "pdf") return "";
-  return pdfCorpusApi.assetContentUrl(selectedAssetId.value);
-});
+const sourcePdfUrl = computed(() =>
+  selectedSourceCapabilities.value.pdfViewer && selectedAssetId.value
+    ? pdfCorpusApi.assetContentUrl(selectedAssetId.value)
+    : "",
+);
 const recordPdfPages = computed(() =>
   Array.from(
     new Set((selectedRecord.value?.pdf_pages || []).map(Number).filter((value) => value > 0)),
@@ -5530,7 +5530,7 @@ defineExpose({
                     :media-kind="selectedAsset?.media_kind"
                     :audio-url="audioSourceUrl"
                     :image-url="imageSourceUrl"
-                    :show-pdf-explorer="selectedAsset?.media_kind === 'pdf'"
+                    :show-pdf-explorer="selectedSourceCapabilities.pdfViewer"
                     :pdf-url="sourcePdfUrl"
                     :page="selectedPdfPage"
                     :page-count="selectedAsset?.page_count || 0"
