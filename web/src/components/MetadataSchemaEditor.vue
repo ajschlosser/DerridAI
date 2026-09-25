@@ -474,7 +474,8 @@ defineExpose({ select, draft });
                   v-model="item.field.pos_tags"
                   :options="UNIVERSAL_POS_TAGS"
                   :label="t('pos_tags', 'POS tags (optional)')"
-                  placeholder="Search POS tags…"
+                  :placeholder="t('pos_tags_placeholder', 'Search POS tags…')"
+                  :remove-label="t('remove_tag', 'Remove {value}')"
                 />
                 <small class="hint">{{
                   t("pos_tags_help", "Autocomplete uses the Universal POS tag set. These are advisory enrichment hints, not additional output fields.")
@@ -488,7 +489,8 @@ defineExpose({ select, draft });
                   v-model="item.field.ner_tags"
                   :options="NER_TAGS"
                   :label="t('ner_tags', 'NER tags (optional)')"
-                  placeholder="Search NER tags…"
+                  :placeholder="t('ner_tags_placeholder', 'Search NER tags…')"
+                  :remove-label="t('remove_tag', 'Remove {value}')"
                 />
                 <small class="hint">{{
                   t("ner_tags_help", "Autocomplete uses DerridAI's supported NER vocabulary. These are advisory enrichment hints and do not change the field type.")
