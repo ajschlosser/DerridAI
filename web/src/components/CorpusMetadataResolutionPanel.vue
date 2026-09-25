@@ -25,6 +25,7 @@ const props = defineProps<{
   regionTypes: string[];
   discourseRoles: string[];
   busy?: boolean;
+  batchSaving?: boolean;
   savingField?: string;
   savedField?: string;
   confidenceCalibration?: Record<string, Record<string, Record<string, number>>>;
@@ -317,7 +318,7 @@ function displayValue(field: string) {
       <button
         type="button"
         class="btn primary"
-        :disabled="busy"
+        :disabled="busy || batchSaving"
         @click="emit('resolveMany', llmSuggestions)"
       >
         {{ i18n.t("pdf_corpus.accept_all_suggestions") }}
