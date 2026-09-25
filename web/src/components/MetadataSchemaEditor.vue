@@ -41,6 +41,32 @@ const isNew = ref(false);
 const builtin = computed(() => selectedId.value === "default" && !isNew.value);
 const dirty = computed(() => JSON.stringify(draft.value) !== savedHash.value);
 const t = (key: string, fallback: string) => i18n.t(`schemas.${key}`, fallback);
+const schemaHelp = {
+  memory:
+    "Controls evidence-bound human-reviewed precedents used as few-shot guidance for this metadata field. These settings never change the reviewed source record itself.",
+  memoryEnabled:
+    "When enabled, DerridAI may retrieve human-reviewed evidence-bound examples for this field during metadata enrichment.",
+  memoryCorrections:
+    "Include reviewed cases where a model value was rejected and replaced. The rejected value remains negative evidence; it is never taught as a correct answer.",
+  memoryAbsence:
+    "Include reviewer-confirmed no-value examples only when that absence has explicit reviewed source evidence.",
+  memoryLimit:
+    "Maximum number of reviewed precedents for this field that may enter the bounded prompt packet. Set 0 to disable retrieval for this field without deleting its reviewed history.",
+  memorySimilarity:
+    "Discard semantic matches below this similarity threshold. 0 accepts any semantic similarity; 1 requires the strongest possible match.",
+  posTags:
+    "POS tags are retrieval/model hints. They do not write metadata by themselves; they tell enrichment to prefer values grounded in tokens with these grammatical roles.",
+  nerTags:
+    "NER tags are entity-type hints. They do not add entities automatically; they tell enrichment which named-entity classes are especially relevant to this field.",
+  strict:
+    "When enabled, values outside this list fail schema validation instead of being accepted as free text.",
+  evidence:
+    "Supported values are expected to bind to source blocks. Missing or invalid evidence keeps the field reviewable instead of discarding the whole LLM response.",
+  assess:
+    "Requires the model to return a structured assessment for this field, including confidence, outcome, and review need.",
+  review:
+    "If this field remains unresolved or model-inferred, record acceptance requires a human decision according to the review workflow.",
+} as const;
 const posTagOptions = computed(() =>
   UNIVERSAL_POS_TAG_OPTIONS.map((option) => ({
     ...option,
@@ -458,58 +484,69 @@ defineExpose({ select, draft });
                 </select></label
               >
               <fieldset class="schema-field schema-memory">
-                <legend
-                >
-                  {{ t("memory", "Memory & retrieval") }} <UiTooltip :text="t('memory_help', 'Controls evidence-bound human-reviewed precedents used as few-shot guidance for this metadata field. These settings never change the reviewed source record itself.')" />
+                <legend>
+                  {{ t("memory", "Memory & retrieval") }}
+                  <UiTooltip :text="t('memory_help', schemaHelp.memory)" />
                 </legend>
-                <label class="check"
-                  ><input v-model="item.field.retrieval_profile.enabled" type="checkbox" /><span
-                    >{{ t("memory_enabled", "Use reviewed precedents") }}
-                    <UiTooltip :text="t('memory_enabled_help', 'When enabled, DerridAI may retrieve human-reviewed evidence-bound examples for this field during metadata enrichment.')" /></span
-                  ></label
-                >
-                <label class="check"
-                  ><input
+                <label class="check">
+                  <input v-model="item.field.retrieval_profile.enabled" type="checkbox" />
+                  <span>
+                    {{ t("memory_enabled", "Use reviewed precedents") }}
+                    <UiTooltip :text="t('memory_enabled_help', schemaHelp.memoryEnabled)" />
+                  </span>
+                </label>
+                <label class="check">
+                  <input
                     v-model="item.field.retrieval_profile.include_corrections"
                     type="checkbox"
-                  /><span
-                    >{{ t("memory_corrections", "Include corrections") }}
-                    <UiTooltip :text="t('memory_corrections_help', 'Include reviewed cases where a model value was rejected and replaced. The rejected value remains negative evidence; it is never taught as a correct answer.')" /></span
-                  ></label
-                >
-                <label class="check"
-                  ><input
+                  />
+                  <span>
+                    {{ t("memory_corrections", "Include corrections") }}
+                    <UiTooltip
+                      :text="t('memory_corrections_help', schemaHelp.memoryCorrections)"
+                    />
+                  </span>
+                </label>
+                <label class="check">
+                  <input
                     v-model="item.field.retrieval_profile.include_confirmed_absence"
                     type="checkbox"
-                  /><span
-                    >{{ t("memory_absence", "Include confirmed absence") }}
-                    <UiTooltip :text="t('memory_absence_help', 'Include reviewer-confirmed no-value examples only when that absence has explicit reviewed source evidence.')" /></span
-                  ></label
-                >
+                  />
+                  <span>
+                    {{ t("memory_absence", "Include confirmed absence") }}
+                    <UiTooltip :text="t('memory_absence_help', schemaHelp.memoryAbsence)" />
+                  </span>
+                </label>
                 <div class="schema-memory-numbers">
-                  <label
-                    ><span
-                      >{{ t("memory_limit", "Maximum precedents") }}
-                      <UiTooltip :text="t('memory_limit_help', 'Maximum number of reviewed precedents for this field that may enter the bounded prompt packet. Set 0 to disable retrieval for this field without deleting its reviewed history.')" /></span
-                    ><input
+                  <label>
+                    <span>
+                      {{ t("memory_limit", "Maximum precedents") }}
+                      <UiTooltip :text="t('memory_limit_help', schemaHelp.memoryLimit)" />
+                    </span>
+                    <input
                       v-model.number="item.field.retrieval_profile.max_items"
                       class="control"
                       type="number"
                       min="0"
                       max="50"
-                  /></label>
-                  <label
-                    ><span
-                      >{{ t("memory_similarity", "Minimum similarity") }}
-                      <UiTooltip :text="t('memory_similarity_help', 'Discard semantic matches below this similarity threshold. 0 accepts any semantic similarity; 1 requires the strongest possible match.')" /></span
-                    ><input
+                    />
+                  </label>
+                  <label>
+                    <span>
+                      {{ t("memory_similarity", "Minimum similarity") }}
+                      <UiTooltip
+                        :text="t('memory_similarity_help', schemaHelp.memorySimilarity)"
+                      />
+                    </span>
+                    <input
                       v-model.number="item.field.retrieval_profile.min_similarity"
                       class="control"
                       type="number"
                       min="0"
                       max="1"
                       step="0.05"
-                  /></label>
+                    />
+                  </label>
                 </div>
                 <small class="hint">{{
                   t(
@@ -531,9 +568,9 @@ defineExpose({ select, draft });
             >
             <div class="row nlp-hints">
               <label class="schema-field"
-                ><span
-                  >{{ t("pos_tags", "POS tags (optional)") }}
-                  <UiTooltip :text="t('pos_tags_help', 'POS tags are retrieval/model hints. They do not write metadata by themselves; they tell enrichment to prefer values grounded in tokens with these grammatical roles.')" /></span
+                ><span>
+                  {{ t("pos_tags", "POS tags (optional)") }}
+                  <UiTooltip :text="t('pos_tags_help', schemaHelp.posTags)" /> </span
                 ><UiTagPicker
                   v-model="item.field.pos_tags"
                   :options="posTagOptions"
@@ -549,9 +586,9 @@ defineExpose({ select, draft });
                 }}</small>
               </label>
               <label class="schema-field"
-                ><span
-                  >{{ t("ner_tags", "NER tags (optional)") }}
-                  <UiTooltip :text="t('ner_tags_help', 'NER tags are entity-type hints. They do not add entities automatically; they tell enrichment which named-entity classes are especially relevant to this field.')" /></span
+                ><span>
+                  {{ t("ner_tags", "NER tags (optional)") }}
+                  <UiTooltip :text="t('ner_tags_help', schemaHelp.nerTags)" /> </span
                 ><UiTagPicker
                   v-model="item.field.ner_tags"
                   :options="nerTagOptions"
@@ -589,29 +626,29 @@ defineExpose({ select, draft });
                 {{ t("add_value", "Add a value") }}
               </button>
               <label class="check"
-                ><input v-model="item.field.strict" type="checkbox" /><span
-                  >{{ t("strict", "The model may only return these values") }}
-                  <UiTooltip :text="t('strict_help', 'When enabled, values outside this list fail schema validation instead of being accepted as free text.')" /></span
+                ><input v-model="item.field.strict" type="checkbox" /><span>
+                  {{ t("strict", "The model may only return these values") }}
+                  <UiTooltip :text="t('strict_help', schemaHelp.strict)" /> </span
                 ></label
               >
             </div>
             <div class="flags">
               <label class="check"
-                ><input v-model="item.field.evidence" type="checkbox" /><span
-                  >{{ t("evidence", "Must cite the source") }}
-                  <UiTooltip :text="t('evidence_help', 'Supported values are expected to bind to source blocks. Missing or invalid evidence keeps the field reviewable instead of discarding the whole LLM response.')" /></span
+                ><input v-model="item.field.evidence" type="checkbox" /><span>
+                  {{ t("evidence", "Must cite the source") }}
+                  <UiTooltip :text="t('evidence_help', schemaHelp.evidence)" /> </span
                 ></label
               >
               <label class="check"
-                ><input v-model="item.field.assess" type="checkbox" /><span
-                  >{{ t("assess", "Report its confidence") }}
-                  <UiTooltip :text="t('assess_help', 'Requires the model to return a structured assessment for this field, including confidence, outcome, and review need.')" /></span
+                ><input v-model="item.field.assess" type="checkbox" /><span>
+                  {{ t("assess", "Report its confidence") }}
+                  <UiTooltip :text="t('assess_help', schemaHelp.assess)" /> </span
                 ></label
               >
               <label class="check"
-                ><input v-model="item.field.review" type="checkbox" /><span
-                  >{{ t("review", "A person must settle it before accepting") }}
-                  <UiTooltip :text="t('review_help', 'If this field remains unresolved or model-inferred, record acceptance requires a human decision according to the review workflow.')" /></span
+                ><input v-model="item.field.review" type="checkbox" /><span>
+                  {{ t("review", "A person must settle it before accepting") }}
+                  <UiTooltip :text="t('review_help', schemaHelp.review)" /> </span
                 ></label
               >
               <span class="grow"></span>
