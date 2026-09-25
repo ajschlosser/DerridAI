@@ -125,16 +125,19 @@ export function useCorpusReviewDecisions(options: CorpusReviewDecisionsOptions) 
     };
     const optimisticIndex = options.records.value.findIndex((row) => row.record_id === id);
 
-    if (options.reviewQueue.value === "all" || options.reviewQueue.value === disposition) {
+    const currentRemainsVisible =
+      options.reviewQueue.value === "all" || options.reviewQueue.value === disposition;
+    if (currentRemainsVisible) {
       if (optimisticIndex >= 0) options.records.value.splice(optimisticIndex, 1, optimistic);
     } else if (optimisticIndex >= 0) {
       options.records.value.splice(optimisticIndex, 1);
       options.recordTotal.value = Math.max(0, options.recordTotal.value - 1);
     }
 
-    const nextLocal =
-      options.records.value[optimisticIndex] || options.records.value[optimisticIndex - 1];
-    if (nextLocal) options.selectRecord(nextLocal);
+    const nextLocal = currentRemainsVisible
+      ? options.records.value[optimisticIndex + 1] || options.records.value[optimisticIndex - 1]
+      : options.records.value[optimisticIndex] || options.records.value[optimisticIndex - 1];
+    if (nextLocal && nextLocal.record_id !== id) options.selectRecord(nextLocal);
     await options.restoreReviewViewport(viewport, { record: true, inspector: true });
 
     options.queueRecordRequest(
@@ -183,6 +186,8 @@ export function useCorpusReviewDecisions(options: CorpusReviewDecisionsOptions) 
               (row) => row.record_id === result.next_record?.record_id,
             );
             options.selectRecord(existing || result.next_record);
+          } else if (options.selectedRecordId.value === id) {
+            await options.advanceFrom(id);
           }
           options.setMessage(options.t("pdf_corpus.accepted_notice"));
         }
