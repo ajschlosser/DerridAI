@@ -6,7 +6,9 @@ import { LEGACY_CORPUS_BASE, legacyCorpusUrl } from "./compatibility";
 export const corpusBuildsApi = {
   listBuilds: (offset = 0, limit = 50, assetId = "") =>
     apiRequest<{ items: CorpusBuild[]; total: number; offset: number; limit: number }>(
-      `${LEGACY_CORPUS_BASE}/corpus-builds?offset=${offset}&limit=${limit}${assetId ? `&asset_id=${encodeURIComponent(assetId)}` : ""}`,
+      `${LEGACY_CORPUS_BASE}/corpus-builds?offset=${offset}&limit=${limit}${
+        assetId ? `&asset_id=${encodeURIComponent(assetId)}` : ""
+      }`,
     ),
   build: (buildId: string) =>
     apiRequest<CorpusBuild>(`${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}`),
@@ -20,11 +22,18 @@ export const corpusBuildsApi = {
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/manifest/regenerate`,
       { method: "POST", body: JSON.stringify(payload) },
     ),
-  patchManifest: (buildId: string, changes: Record<string, unknown>, expectedRevision?: number) =>
-    apiRequest<CorpusBuild>(`${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/manifest`, {
-      method: "PATCH",
-      body: JSON.stringify({ changes, expected_revision: expectedRevision }),
-    }),
+  patchManifest: (
+    buildId: string,
+    changes: Record<string, unknown>,
+    expectedRevision?: number,
+  ) =>
+    apiRequest<CorpusBuild>(
+      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/manifest`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ changes, expected_revision: expectedRevision }),
+      },
+    ),
   switchProviderProfile: (buildId: string, payload: Record<string, unknown>) =>
     apiRequest<CorpusBuild>(
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/provider-profile`,
@@ -41,17 +50,23 @@ export const corpusBuildsApi = {
       { method: "POST", body: JSON.stringify(payload) },
     ),
   cancel: (buildId: string) =>
-    apiRequest<CorpusBuild>(`${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/cancel`, {
-      method: "POST",
-    }),
+    apiRequest<CorpusBuild>(
+      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/cancel`,
+      {
+        method: "POST",
+      },
+    ),
   settleMetadata: (buildId: string) =>
     apiRequest<CorpusBuild>(
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/settle-metadata`,
       { method: "POST" },
     ),
   resume: (buildId: string, payload: Record<string, unknown>) =>
-    apiRequest<CorpusBuild>(`${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/resume`, {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
+    apiRequest<CorpusBuild>(
+      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/resume`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+    ),
 };
