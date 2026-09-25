@@ -76,7 +76,12 @@ import { useCorpusRunGuidance } from "../composables/useCorpusRunGuidance";
 import AppIcon from "./AppIcon.vue";
 import CorpusActionMenu, { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
 import { recordState, recordIssueKinds } from "../domain/corpusReview";
-import { firstRecordWithSourceWarning, recordHasSourceWarning } from "../domain/sourceQuality";
+import {
+  firstRecordWithSourceWarning,
+  hideSourceWarnings,
+  recordHasSourceWarning,
+  sourceWarningsHidden,
+} from "../domain/sourceQuality";
 import { recurringShortLines } from "../domain/textCleanup";
 import * as runtime from "../runtime/runtime.js";
 
@@ -498,8 +503,13 @@ const {
 } = useCorpusIngestWarning(selectedAsset);
 
 function openRecordSourceWarning(record: CorpusRecord) {
+  if (sourceWarningsHidden()) return;
   selectRecord(record);
   recordSourceWarningOpen.value = true;
+}
+function acknowledgeRecordSourceWarning(dontShowAgain = false) {
+  if (dontShowAgain) hideSourceWarnings();
+  recordSourceWarningOpen.value = false;
 }
 const evidenceBlockIds = computed(() => {
   if (!selectedRecord.value) return new Set<string>();
@@ -1550,6 +1560,7 @@ async function refreshRecords(reset = false, preferredId = "") {
     const firstSourceProblem = firstRecordWithSourceWarning(result.items);
     if (
       firstSourceProblem &&
+      !sourceWarningsHidden() &&
       sourceProblemDialogBuildId.value !== selectedBuildId.value &&
       !recordSourceWarningOpen.value
     ) {
@@ -5595,7 +5606,7 @@ onBeforeUnmount(() => {
     <CorpusSourceQualityDialog
       :open="recordSourceWarningOpen && Boolean(selectedRecord?.source_quality_issues?.length)"
       :issues="selectedRecord?.source_quality_issues"
-      @close="recordSourceWarningOpen = false"
+      @close="acknowledgeRecordSourceWarning"
       @edit-text="
         recordSourceWarningOpen = false;
         beginTextEdit();
