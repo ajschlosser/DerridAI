@@ -24,6 +24,19 @@ system_data = SystemDataService(
 metadata_exemplars = MetadataExemplarInspector(store)
 
 
+@router.delete("/api/system/data/response-cache-records")
+def clear_system_response_cache(request: Request) -> dict[str, Any]:
+    """Clear saved responses through an administrator-only maintenance endpoint."""
+    require_admin(request)
+    try:
+        total = int(store.get_response_cache_records(limit=1).get("total") or 0)
+        if total:
+            store.delete_store("_response_cache", force=True)
+        return {"deleted": total}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.delete("/api/system/data/response-cache-records/{record_id}")
 def delete_system_response_cache_record(record_id: str, request: Request) -> dict[str, Any]:
     require_admin(request)
