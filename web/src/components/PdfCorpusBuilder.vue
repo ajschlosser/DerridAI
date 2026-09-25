@@ -1250,6 +1250,63 @@ function recordMetadata(record: CorpusRecord) {
     editableFields.filter((key) => record[key] !== undefined).map((key) => [key, record[key]]),
   );
 }
+
+function applyOptimisticMetadata(changes: Record<string, unknown>) {
+  if (!currentBuild.value || !selectedRecord.value) return null;
+  const buildId = currentBuild.value.build_id;
+  const recordId = selectedRecord.value.record_id;
+  const expectedRevision = Number(selectedRecord.value.record_revision || 1);
+  const row: CorpusRecord = {
+    ...selectedRecord.value,
+    ...changes,
+    record_revision: expectedRevision + 1,
+  } as CorpusRecord;
+  const status = { ...(row.metadata_field_status || {}) };
+  for (const field of Object.keys(changes)) {
+    status[field] = {
+      status: changes[field] === null ? "confirmed_absent" : "human_confirmed",
+      method: "human",
+      confidence: 1,
+      reason: "Saved locally; server confirmation pending.",
+    };
+  }
+  row.metadata_field_status = status;
+  selectedRecord.value = row;
+  metadataDraft.value = JSON.stringify(recordMetadata(row), null, 2);
+  const index = records.value.findIndex((item) => item.record_id === recordId);
+  if (index >= 0) records.value.splice(index, 1, row);
+  metadataEditorDirty.value = false;
+  try {
+    localStorage.removeItem(metadataDraftKey(buildId, recordId));
+  } catch {
+    // Best effort: browser storage must not block review.
+  }
+  return { buildId, recordId, expectedRevision };
+}
+
+function queueMetadataRequest(
+  recordId: string,
+  fields: string[],
+  request: () => Promise<unknown>,
+) {
+  const prior = metadataSaveQueues.get(recordId) || Promise.resolve();
+  const save = prior
+    .catch(() => undefined)
+    .then(async () => {
+      try {
+        await request();
+      } catch (exc) {
+        setMessage(
+          `${fields.join(", ")}: ${exc instanceof Error ? exc.message : String(exc)}`,
+          "error",
+        );
+      }
+    });
+  metadataSaveQueues.set(recordId, save);
+  void save.finally(() => {
+    if (metadataSaveQueues.get(recordId) === save) metadataSaveQueues.delete(recordId);
+  });
+}
 function manageProviders() {
   window.dispatchEvent(
     new CustomEvent("derridai:navigate-native", {
@@ -2595,48 +2652,12 @@ async function saveMetadata() {
     );
     return;
   }
-  const buildId = currentBuild.value.build_id;
-  const recordId = selectedRecord.value.record_id;
-  const expectedRevision = Number(selectedRecord.value.record_revision || 1);
-  const optimisticRow: CorpusRecord = {
-    ...selectedRecord.value,
-    ...changes,
-    record_revision: expectedRevision + 1,
-  } as CorpusRecord;
-  selectedRecord.value = optimisticRow;
-  metadataDraft.value = JSON.stringify(recordMetadata(optimisticRow), null, 2);
-  const idx = records.value.findIndex((item) => item.record_id === recordId);
-  if (idx >= 0) records.value.splice(idx, 1, optimisticRow);
-  metadataEditorDirty.value = false;
-  try {
-    try {
-      localStorage.removeItem(metadataDraftKey(buildId, recordId));
-    } catch {
-      // Best effort: a missing stored preference uses the default.
-    }
-    await restoreReviewViewport(viewport);
-  } catch {
-    // Viewport restoration is best effort and must not delay the optimistic save.
-  }
-
-  const prior = metadataSaveQueues.get(recordId) || Promise.resolve();
-  const save = prior
-    .catch(() => undefined)
-    .then(async () => {
-      try {
-        await pdfCorpusApi.patchMetadata(buildId, recordId, changes, expectedRevision);
-      } catch (exc) {
-        const fields = Object.keys(changes).join(", ");
-        setMessage(
-          `${fields}: ${exc instanceof Error ? exc.message : String(exc)}`,
-          "error",
-        );
-      }
-    });
-  metadataSaveQueues.set(recordId, save);
-  void save.finally(() => {
-    if (metadataSaveQueues.get(recordId) === save) metadataSaveQueues.delete(recordId);
-  });
+  const context = applyOptimisticMetadata(changes);
+  if (!context) return;
+  await restoreReviewViewport(viewport);
+  queueMetadataRequest(context.recordId, Object.keys(changes), () =>
+    pdfCorpusApi.patchMetadata(context.buildId, context.recordId, changes, context.expectedRevision),
+  );
 }
 async function toggleEvidenceBlock(blockId: string) {
   if (!currentBuild.value || !selectedRecord.value || !selectedEvidenceField.value) return;
@@ -2828,79 +2849,37 @@ async function resolveMetadataField(field: string, value: unknown) {
   const viewport = captureReviewViewport();
   metadataSavingField.value = field;
   metadataSavedField.value = "";
-  busy.value = "metadata-field";
-  const recordId = selectedRecord.value.record_id;
-  try {
-    const result = await pdfCorpusApi.metadataDecision(
-      currentBuild.value.build_id,
-      recordId,
+  const context = applyOptimisticMetadata({ [field]: value });
+  if (!context) return;
+  metadataSavedField.value = field;
+  await restoreReviewViewport(viewport, { inspector: true });
+  queueMetadataRequest(context.recordId, [field], () =>
+    pdfCorpusApi.metadataDecision(
+      context.buildId,
+      context.recordId,
       field,
       value,
-      Number(selectedRecord.value.record_revision || 1),
-    );
-    selectedRecord.value = result.record;
-    currentBuild.value = result.build;
-    syncBuildInRail(result.build);
-    if (result.queue_counts) currentBuild.value.review_queue_counts = result.queue_counts;
-    metadataDraft.value = JSON.stringify(recordMetadata(result.record), null, 2);
-    const idx = records.value.findIndex((row) => row.record_id === recordId);
-    if (idx >= 0) records.value.splice(idx, 1, result.record);
-    metadataSavedField.value = field;
-    metadataEditorDirty.value = false;
-    const remaining = result.remaining_fields || [];
-    if (remaining.length === 0) {
-      // Keep the resolved record on screen even if the active exception queue no
-      // longer contains it. The reviewer should make one final record-level
-      // decision instead of hunting for the same record in another queue.
-      setMessage(
-        i18n.t("pdf_corpus.metadata_resolved_ready"),
-      );
-      await nextTick();
-      acceptButtonEl.value?.focus({ preventScroll: true });
-    } else {
-      setMessage(
-        i18n.tf("pdf_corpus.metadata_field_confirmed", { field: i18n.t(`record.${field}`, field.replace(/_/g, " ")), count: remaining.length }),
-      );
-    }
-    await restoreReviewViewport(viewport, { inspector: true });
-  } catch (exc) {
-    await restoreReviewViewport(viewport);
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-    metadataSavingField.value = "";
-  }
+      context.expectedRevision,
+    ),
+  );
+  metadataSavingField.value = "";
 }
 
 async function resolveMetadataSuggestions(changes: Record<string, unknown>) {
   if (!currentBuild.value || !selectedRecord.value || !Object.keys(changes).length) return;
   for (const [field, value] of Object.entries(changes)) rememberMetadataValues(field, value);
   const viewport = captureReviewViewport();
-  busy.value = "metadata-suggestions";
-  try {
-    const result = await pdfCorpusApi.metadataDecisionBatch(
-      currentBuild.value.build_id,
-      selectedRecord.value.record_id,
+  const context = applyOptimisticMetadata(changes);
+  if (!context) return;
+  await restoreReviewViewport(viewport, { inspector: true });
+  queueMetadataRequest(context.recordId, Object.keys(changes), () =>
+    pdfCorpusApi.metadataDecisionBatch(
+      context.buildId,
+      context.recordId,
       changes,
-      Number(selectedRecord.value.record_revision || 1),
-    );
-    const row = result.record;
-    currentBuild.value = result.build;
-    selectedRecord.value = row;
-    const idx = records.value.findIndex((item) => item.record_id === row.record_id);
-    if (idx >= 0) records.value.splice(idx, 1, row);
-    metadataDraft.value = JSON.stringify(recordMetadata(row), null, 2);
-    metadataEditorDirty.value = false;
-    await restoreReviewViewport(viewport, { inspector: true });
-    setMessage(
-      i18n.tf("pdf_corpus.llm_suggestions_saved", { count: Object.keys(changes).length }),
-    );
-  } catch (exc) {
-    await restoreReviewViewport(viewport);
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
+      context.expectedRevision,
+    ),
+  );
 }
 
 function rememberMetadataValues(field: string, value: unknown) {
@@ -2915,34 +2894,20 @@ async function resolveMetadataNoValue(field: string) {
   if (!currentBuild.value || !selectedRecord.value) return;
   const viewport = captureReviewViewport();
   metadataSavingField.value = field;
-  busy.value = "metadata-field";
-  try {
-    const result = await pdfCorpusApi.metadataDecision(
-      currentBuild.value.build_id,
-      selectedRecord.value.record_id,
+  const context = applyOptimisticMetadata({ [field]: null });
+  if (!context) return;
+  await restoreReviewViewport(viewport, { inspector: true });
+  queueMetadataRequest(context.recordId, [field], () =>
+    pdfCorpusApi.metadataDecision(
+      context.buildId,
+      context.recordId,
       field,
       null,
-      Number(selectedRecord.value.record_revision || 1),
+      context.expectedRevision,
       true,
-    );
-    selectedRecord.value = result.record;
-    currentBuild.value = result.build;
-    syncBuildInRail(result.build);
-    metadataDraft.value = JSON.stringify(recordMetadata(result.record), null, 2);
-    const idx = records.value.findIndex((row) => row.record_id === result.record.record_id);
-    if (idx >= 0) records.value.splice(idx, 1, result.record);
-    metadataEditorDirty.value = false;
-    setMessage(
-      i18n.t("pdf_corpus.no_supported_value_confirmed"),
-    );
-    await restoreReviewViewport(viewport, { inspector: true });
-  } catch (exc) {
-    await restoreReviewViewport(viewport);
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-    metadataSavingField.value = "";
-  }
+    ),
+  );
+  metadataSavingField.value = "";
 }
 async function clearMetadataSuggestionCache() {
   if (
