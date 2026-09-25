@@ -5739,6 +5739,8 @@ defineExpose({
         @previous-record="focusQueueMove(-1)"
         @next-record="focusQueueMove(1)"
         @requeue-metadata="requeueCurrentRecord"
+        @request-slice="boundarySliceOpen = true"
+        @open-source-issue="recordSourceWarningOpen = true"
         @begin-text-edit="beginTextEdit"
         @cancel-text-edit="cancelTextEdit"
         @save-text="saveReviewedText"
