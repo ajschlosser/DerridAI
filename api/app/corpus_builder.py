@@ -2534,8 +2534,6 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         build["source_quality"] = page_source_quality_report(blocks)
         profile = self._profile_of_build(build)
         validation = self.validate_records(blocks, records, profile)
-        if persist_records:
-            self.repo.save_records(build_id, records)
         build["record_count"] = len(records)
         build["validation"] = validation
         # Metadata completion is derived from persisted record state, never from a
