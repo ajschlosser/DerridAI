@@ -333,13 +333,13 @@ const autoResolved = computed(
         <b>{{ i18n.t("pdf_corpus.metadata_disagreement") }}</b
         ><span>{{
           i18n.tf("pdf_corpus.deterministic_value", {
-            value: String(status?.deterministic_value ?? "—"),
+            value: display(status?.deterministic_value),
           })
         }}</span
         ><span
           >{{
             i18n.tf("pdf_corpus.llm_value", {
-              value: String(status?.llm_value ?? value ?? "—"),
+              value: display(status?.llm_value ?? value),
             })
           }}<template v-if="typeof status?.llm_confidence === 'number'">
             · {{ Math.round(Number(status.llm_confidence) * 100) }}%</template
@@ -496,8 +496,8 @@ const autoResolved = computed(
         }}</span>
         <span v-if="status?.raw_llm_value && status?.raw_llm_value !== resolvedValue">{{
           i18n.tf("pdf_corpus.llm_value_normalized", {
-            raw: String(status?.raw_llm_value),
-            value: String(resolvedValue),
+            raw: display(status?.raw_llm_value),
+            value: display(resolvedValue),
           })
         }}</span>
         <span>{{ confidenceLabel }}</span>
