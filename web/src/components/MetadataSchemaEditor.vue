@@ -41,6 +41,18 @@ const isNew = ref(false);
 const builtin = computed(() => selectedId.value === "default" && !isNew.value);
 const dirty = computed(() => JSON.stringify(draft.value) !== savedHash.value);
 const t = (key: string, fallback: string) => i18n.t(`schemas.${key}`, fallback);
+const posTagOptions = computed(() =>
+  UNIVERSAL_POS_TAG_OPTIONS.map((option) => ({
+    ...option,
+    label: t(`pos_tag.${option.value.toLowerCase()}`, option.label),
+  })),
+);
+const nerTagOptions = computed(() =>
+  NER_TAG_OPTIONS.map((option) => ({
+    ...option,
+    label: t(`ner_tag.${option.value.toLowerCase()}`, option.label),
+  })),
+);
 
 function load(schema: MetadataSchema, fresh = false) {
   const next = JSON.parse(JSON.stringify(schema)) as MetadataSchema;
@@ -57,9 +69,16 @@ function load(schema: MetadataSchema, fresh = false) {
 async function refresh(keep?: string) {
   summaries.value = (await metadataSchemasApi.list()).items;
   const id = keep && summaries.value.some((s) => s.id === keep) ? keep : selectedId.value;
-  await select(summaries.value.some((s) => s.id === id) ? id : "default");
+  await select(summaries.value.some((s) => s.id === id) ? id : "default", true);
 }
-async function select(id: string) {
+async function select(id: string, force = false) {
+  if (
+    !force &&
+    dirty.value &&
+    id !== selectedId.value &&
+    !window.confirm(t("discard_changes", "Discard unsaved schema changes?"))
+  )
+    return;
   selectedId.value = id;
   notice.value = "";
   load(await metadataSchemasApi.get(id));
@@ -517,7 +536,7 @@ defineExpose({ select, draft });
                   <UiTooltip :text="t('pos_tags_help', 'POS tags are retrieval/model hints. They do not write metadata by themselves; they tell enrichment to prefer values grounded in tokens with these grammatical roles.')" /></span
                 ><UiTagPicker
                   v-model="item.field.pos_tags"
-                  :options="UNIVERSAL_POS_TAG_OPTIONS"
+                  :options="posTagOptions"
                   :label="t('pos_tags', 'POS tags (optional)')"
                   :placeholder="t('pos_tags_placeholder', 'Search POS tags…')"
                   :remove-label="t('remove_tag', 'Remove {value}')"
@@ -535,7 +554,7 @@ defineExpose({ select, draft });
                   <UiTooltip :text="t('ner_tags_help', 'NER tags are entity-type hints. They do not add entities automatically; they tell enrichment which named-entity classes are especially relevant to this field.')" /></span
                 ><UiTagPicker
                   v-model="item.field.ner_tags"
-                  :options="NER_TAG_OPTIONS"
+                  :options="nerTagOptions"
                   :label="t('ner_tags', 'NER tags (optional)')"
                   :placeholder="t('ner_tags_placeholder', 'Search NER tags…')"
                   :remove-label="t('remove_tag', 'Remove {value}')"
