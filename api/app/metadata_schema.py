@@ -48,6 +48,28 @@ FORMAT_VERSION = 1
 DEFAULT_SCHEMA_ID = "default"
 CORE_FIELDS = ("region_type", "primary_text", "discourse_role")
 CORE_GROUP = "discourse"
+SEMANTIC_COMPATIBILITY_IDS = {
+    "region_type": "derridai.region_type",
+    "primary_text": "derridai.primary_text",
+    "discourse_role": "derridai.discourse_role",
+    "speaker": "derridai.speaker",
+    "position_holder": "derridai.position_holder",
+    "target": "derridai.target",
+    "stance": "derridai.stance",
+    "proposition_status": "derridai.proposition_status",
+    "claim_scope": "derridai.claim_scope",
+    "quoted_speaker": "derridai.quotation.speaker",
+    "quoted_author": "derridai.quotation.author",
+    "quoted_work": "derridai.quotation.work",
+    "quoted_position_holder": "derridai.quotation.position_holder",
+    "quoted_addressee": "derridai.quotation.addressee",
+    "quoted_referent": "derridai.quotation.referent",
+    "quotation_chain": "derridai.quotation.chain",
+    "topics": "derridai.indexing.topics",
+    "concepts": "derridai.indexing.concepts",
+    "persons": "derridai.indexing.persons",
+    "works_referenced": "derridai.indexing.works_referenced",
+}
 # Names a schema may not use: the core, the record's own source fields, the document-level fields records inherit, and
 # fields DerridAI computes itself.
 RESERVED_NAMES = (
@@ -122,6 +144,8 @@ class SchemaField(BaseModel):
             # Deterministic migration for format-v1 schemas.  A deliberate
             # rename can retain identity by sending the previous field_id.
             result["field_id"] = f"field-{uuid.uuid5(uuid.NAMESPACE_URL, 'derridai:field:' + name)}"
+        if not str(result.get("semantic_compatibility_id") or "").strip() and name in SEMANTIC_COMPATIBILITY_IDS:
+            result["semantic_compatibility_id"] = SEMANTIC_COMPATIBILITY_IDS[name]
         return result
 
     @field_validator("field_id")
@@ -232,6 +256,12 @@ class MetadataSchema(BaseModel):
         if field is None:
             raise KeyError(name)
         return field.field_id
+
+    def semantic_compatibility_id(self, name: str) -> str | None:
+        if name in SEMANTIC_COMPATIBILITY_IDS:
+            return SEMANTIC_COMPATIBILITY_IDS[name]
+        field = next((item for item in self.fields if item.name == name), None)
+        return field.semantic_compatibility_id if field else None
 
     def field_identity_map(self) -> dict[str, str]:
         return {name: self.field_id(name) for name in self.field_names()}
@@ -569,6 +599,7 @@ _INDEXING_FOOTER = (
 def _f(name: str, label: str, type_: FieldType, group: str, **kw: Any) -> SchemaField:
     return SchemaField(
         name=name, label=label, type=type_, group=group,
+        semantic_compatibility_id=SEMANTIC_COMPATIBILITY_IDS.get(name),
         evidence=name in ATTRIBUTION_EVIDENCE_FIELDS, review=name in REVIEW_METADATA_FIELDS, **kw,
     )
 

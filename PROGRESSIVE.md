@@ -142,6 +142,16 @@ If exemplar retrieval fails, enrichment may continue without it, but the failure
 
 If an exemplar cannot be resolved to its evidence/source identity, it must not be silently supplied to the model.
 
+### 3.8 Canonical assertion migration
+
+The reference implementation now uses `api/app/field_assertions.py` as the
+canonical metadata state boundary. Each assertion keeps derivation, evaluation,
+authority, value state, confidence, evidence, record revision, and stable field
+identity separate. Legacy top-level values, `metadata_field_status`, and
+`metadata_evidence` remain compatibility projections and are migrated lazily on
+record load and normalized again on save. This preserves existing clients while
+ensuring review-state derivation and publication retain the assertion history.
+
 ## 4. Proposed data model
 
 The implementation should align with the DERRIDAI Core concepts already present in `SPECIFICATION.md`, especially `FieldAssertion`, `RecordRevision`, `EvidenceRef`, `StorageProjection`, and the rule that vector storage is derived.

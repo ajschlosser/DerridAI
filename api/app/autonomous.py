@@ -15,6 +15,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from .field_assertions import migrate_record_assertions
+
 # Statuses a person set. The policy never overrides them.
 HUMAN_STATUSES = {"human_confirmed", "human_override", "confirmed_absent"}
 # Why a field is waiting on a person, when a model proposed something for it.
@@ -91,6 +93,7 @@ def settle_record(record: dict[str, Any], policy: Policy) -> dict[str, Any]:
             "reason": f"Taken automatically in hands-free mode (model confidence {pct}); no person reviewed it.",
         }
         filled.append({"field": field, "value": proposed, "confidence": confidence})
+    migrate_record_assertions(record)
     return {"filled": filled, "left": left}
 
 

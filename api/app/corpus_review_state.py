@@ -14,6 +14,7 @@ from typing import Any
 
 from .corpus_metadata import REVIEW_METADATA_FIELDS
 from .corpus_record_quality import iso_now
+from .field_assertions import current_assertion_by_name, migrate_record_assertions
 
 
 def _metadata_value_missing(field: str, value: Any) -> bool:
@@ -25,21 +26,29 @@ def _metadata_value_missing(field: str, value: Any) -> bool:
 
 
 def _sync_record_metadata_state(record: dict[str, Any], profile: dict[str, Any]) -> None:
-    statuses = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
+    migrate_record_assertions(record)
     required = list(profile.get("required_metadata_fields") or [])
     reviewable = list(profile.get("review_metadata_fields") or REVIEW_METADATA_FIELDS)
     incomplete: list[str] = []
     review_fields: list[str] = []
     for field in required:
-        info = statuses.get(field) if isinstance(statuses.get(field), dict) else {}
-        state = str(info.get("status") or "")
+        assertion = current_assertion_by_name(record, field)
+        state = ""
+        if assertion is not None:
+            state = "confirmed_absent" if assertion.value_status == "confirmed_absent" else (
+                "invalid" if assertion.value_status == "invalid" else (
+                    "unresolved" if assertion.value_status == "unresolved" or assertion.evaluation_status == "evaluation_failed" else ""
+                )
+            )
         if state == "confirmed_absent":
             continue
         if _metadata_value_missing(field, record.get(field)) or state in {"unresolved", "invalid"}:
             incomplete.append(field)
     for field in reviewable:
-        info = statuses.get(field) if isinstance(statuses.get(field), dict) else {}
-        if str(info.get("status") or "") in {"unresolved", "invalid"}:
+        assertion = current_assertion_by_name(record, field)
+        if assertion is not None and (
+            assertion.value_status in {"unresolved", "invalid"} or assertion.evaluation_status == "evaluation_failed"
+        ):
             review_fields.append(field)
     record["metadata_incomplete_fields"] = list(dict.fromkeys(incomplete))
     record["metadata_review_fields"] = list(dict.fromkeys(review_fields))
@@ -188,4 +197,3 @@ def _enforce_review_invariants(record: dict[str, Any]) -> None:
     audit = list(record.get("review_events") or [])
     audit.append({"at": iso_now(), "event": "acceptance_reopened", "issues": issues})
     record["review_events"] = audit[-100:]
-

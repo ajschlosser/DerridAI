@@ -223,6 +223,7 @@ from .enrichment_ledger import (
     EnrichmentLedger,
 )
 from .error_severity import severity as error_severity
+from .field_assertions import migrate_record_assertions
 from .main_text_start import infer_main_text_start
 from .metadata_exemplar_retrieval import ChromaMetadataExemplarIndex
 from .metadata_schema import (
@@ -1140,6 +1141,19 @@ class PdfCorpusRepository:
         """
         path = self.build_records_path(build_id)
         path.parent.mkdir(parents=True, exist_ok=True)
+        schema = None
+        try:
+            build = self.get_build(build_id)
+            raw_schema = build.get("schema")
+            if isinstance(raw_schema, dict):
+                schema = MetadataSchema.model_validate(raw_schema)
+        except (KeyError, ValidationError):
+            # Legacy builds may not have a pinned schema.  The migration then
+            # uses deterministic compatibility identities until an active
+            # schema can resolve them.
+            schema = None
+        for record in records:
+            migrate_record_assertions(record, schema)
         with self._lock:
             fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
             tmp = Path(tmp_name)
@@ -1158,19 +1172,35 @@ class PdfCorpusRepository:
                     pass
 
     def load_records(self, build_id: str) -> list[dict[str, Any]]:
-        self.get_build(build_id)
+        build = self.get_build(build_id)
+        schema = None
+        raw_schema = build.get("schema") if isinstance(build, dict) else None
+        if isinstance(raw_schema, dict):
+            try:
+                schema = MetadataSchema.model_validate(raw_schema)
+            except ValidationError:
+                schema = None
         path = self.build_records_path(build_id)
         if not path.exists():
             return []
         with self._lock:
             with path.open("r", encoding="utf-8") as handle:
-                return [_migrate_status_vocabulary(json.loads(line)) for line in handle if line.strip()]
+                return [
+                    migrate_record_assertions(_migrate_status_vocabulary(json.loads(line)), schema)
+                    for line in handle if line.strip()
+                ]
 
     def page_records(self, build_id: str, *, offset: int = 0, limit: int = 50, needs_review: bool | None = None, disposition: str | None = None, metadata_incomplete: bool | None = None, source_problem: bool | None = None, review_queue: str | None = None, query: str = "") -> dict[str, Any]:
         # Stream the JSONL rather than loading the entire generated corpus for a
         # browse request. Structural edits intentionally use load_records(); read
         # pagination remains bounded no matter how large the generated record set.
-        self.get_build(build_id)
+        build = self.get_build(build_id)
+        schema = None
+        if isinstance(build.get("schema"), dict):
+            try:
+                schema = MetadataSchema.model_validate(build["schema"])
+            except ValidationError:
+                schema = None
         path = self.build_records_path(build_id)
         if not path.exists():
             return {
@@ -1191,7 +1221,7 @@ class PdfCorpusRepository:
             for line in handle:
                 if not line.strip():
                     continue
-                record = _migrate_status_vocabulary(json.loads(line))
+                record = migrate_record_assertions(_migrate_status_vocabulary(json.loads(line)), schema)
                 for field, value in record.items():
                     if field not in metadata_values and not isinstance(value, (str, list, tuple)):
                         continue
