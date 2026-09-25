@@ -250,9 +250,7 @@ describe("RecordTraceabilityExplorer", () => {
     expect(wrapper.text()).toContain("Explore the DERRIDAI model");
     expect(wrapper.text()).toContain("Normative model");
     expect(wrapper.text()).toContain("3 objects · 2 relationships");
-    expect(wrapper.text()).toContain(
-      "This is the finite DERRIDAI 1.0 relationship model.",
-    );
+    expect(wrapper.text()).toContain("This is the finite DERRIDAI 1.0 relationship model.");
   });
 });
 

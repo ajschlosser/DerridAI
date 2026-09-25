@@ -134,7 +134,9 @@ function nodeState(node: ResearchObjectNode) {
 }
 
 function truncate(value: unknown, limit = 32) {
-  const text = String(value || "").replace(/\s+/g, " ").trim();
+  const text = String(value || "")
+    .replace(/\s+/g, " ")
+    .trim();
   if (!text) return "";
   return text.length <= limit ? text : `${text.slice(0, limit - 1).trim()}…`;
 }
@@ -172,7 +174,12 @@ function typeLabel(type: string) {
         :width="canvasWidth"
         :height="canvasHeight"
         role="group"
-        :aria-label="i18n.t('traceability.diagram_help', 'Objects are grouped from source material through research output. Select a node to inspect its direct relationships.')"
+        :aria-label="
+          i18n.t(
+            'traceability.diagram_help',
+            'Objects are grouped from source material through research output. Select a node to inspect its direct relationships.',
+          )
+        "
       >
         <g class="diagram-lanes" aria-hidden="true">
           <g v-for="(lane, index) in laneOrder" :key="lane">
@@ -183,11 +190,7 @@ function typeLabel(type: string) {
               :height="canvasHeight - 16"
               rx="10"
             />
-            <text
-              :x="24 + index * (laneWidth + laneGap)"
-              y="31"
-              class="diagram-lane-label"
-            >
+            <text :x="24 + index * (laneWidth + laneGap)" y="31" class="diagram-lane-label">
               {{ laneLabels[lane] }}
             </text>
           </g>
@@ -301,7 +304,7 @@ function typeLabel(type: string) {
 }
 .diagram-edge-label {
   fill: var(--text-secondary);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 700;
 }
 .diagram-node {
@@ -350,7 +353,7 @@ function typeLabel(type: string) {
 }
 .diagram-node small {
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 750;
 }
 .diagram-node strong {
@@ -360,7 +363,7 @@ function typeLabel(type: string) {
 }
 .diagram-node span {
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: 12px;
 }
 @media (forced-colors: active) {
   .diagram-edge,

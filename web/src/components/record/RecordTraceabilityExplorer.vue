@@ -44,7 +44,8 @@ type RelationshipGroup = {
 
 const modeTabs = computed(() => {
   const tabs = [{ id: "trace", label: i18n.t("traceability.this_record", "This record") }];
-  if (props.model) tabs.push({ id: "model", label: i18n.t("traceability.data_model", "DERRIDAI model") });
+  if (props.model)
+    tabs.push({ id: "model", label: i18n.t("traceability.data_model", "DERRIDAI model") });
   return tabs;
 });
 
@@ -83,7 +84,9 @@ const edges = computed<ResearchObjectEdge[]>(() => {
 const nodeMap = computed(() => new Map(nodes.value.map((node) => [node.id, node])));
 const focus = computed(() => nodeMap.value.get(focusId.value) || null);
 const rootNode = computed(() =>
-  props.graph?.root_id ? props.graph.nodes.find((node) => node.id === props.graph?.root_id) || null : null,
+  props.graph?.root_id
+    ? props.graph.nodes.find((node) => node.id === props.graph?.root_id) || null
+    : null,
 );
 
 function typeLabel(type: string) {
@@ -107,19 +110,25 @@ function typeLabel(type: string) {
 
 function typeDescription(type: string) {
   const fallback: Record<string, string> = {
-    SourceDocument: "The ingested document or source asset from which this material ultimately comes.",
+    SourceDocument:
+      "The ingested document or source asset from which this material ultimately comes.",
     SourceSpan: "An exact page, passage, region, or source segment connected to the record.",
     Record: "The scholarly corpus record currently being inspected.",
-    RecordRevision: "A specific version of the record, used when evidence must be pinned to an exact state.",
+    RecordRevision:
+      "A specific version of the record, used when evidence must be pinned to an exact state.",
     FieldAssertion: "A metadata value together with how it was derived, evaluated, and reviewed.",
-    CorpusPublication: "An immutable published corpus snapshot that contains or references records.",
+    CorpusPublication:
+      "An immutable published corpus snapshot that contains or references records.",
     RetrievalRun: "A retrieval operation that selected material for possible evidentiary use.",
-    EvidenceRef: "A durable pointer to the exact record revision or source passage used as evidence.",
+    EvidenceRef:
+      "A durable pointer to the exact record revision or source passage used as evidence.",
     EvidencePacket: "The ordered evidence context supplied to a research operation.",
     GenerationRun: "The model-generation operation that produced research output.",
     GeneratedClaim: "A substantive claim identified in generated research output.",
-    SupportBinding: "The explicit link between a generated claim and the evidence said to support, qualify, contrast with, quote, or attribute it.",
-    ResearchRun: "The retained research operation that ties corpus state, evidence, generation, and validation together.",
+    SupportBinding:
+      "The explicit link between a generated claim and the evidence said to support, qualify, contrast with, quote, or attribute it.",
+    ResearchRun:
+      "The retained research operation that ties corpus state, evidence, generation, and validation together.",
   };
   return i18n.t(`traceability.description.${type}`, fallback[type] || "");
 }
@@ -184,19 +193,31 @@ const relationshipGroups = computed<RelationshipGroup[]>(() => {
 });
 
 const sourceNodes = computed(() =>
-  nodes.value.filter((node) => ["SourceDocument", "SourceSpan", "CorpusPublication"].includes(node.object_type)),
+  nodes.value.filter((node) =>
+    ["SourceDocument", "SourceSpan", "CorpusPublication"].includes(node.object_type),
+  ),
 );
-const assertionNodes = computed(() => nodes.value.filter((node) => node.object_type === "FieldAssertion"));
+const assertionNodes = computed(() =>
+  nodes.value.filter((node) => node.object_type === "FieldAssertion"),
+);
 const researchNodes = computed(() =>
   nodes.value.filter((node) =>
-    ["RetrievalRun", "EvidenceRef", "EvidencePacket", "SupportBinding", "GenerationRun", "GeneratedClaim", "ResearchRun"].includes(
-      node.object_type,
-    ),
+    [
+      "RetrievalRun",
+      "EvidenceRef",
+      "EvidencePacket",
+      "SupportBinding",
+      "GenerationRun",
+      "GeneratedClaim",
+      "ResearchRun",
+    ].includes(node.object_type),
   ),
 );
 
 const sourceSummary = computed(() => {
-  const documents = sourceNodes.value.filter((node) => node.object_type === "SourceDocument").length;
+  const documents = sourceNodes.value.filter(
+    (node) => node.object_type === "SourceDocument",
+  ).length;
   const spans = sourceNodes.value.filter((node) => node.object_type === "SourceSpan").length;
   if (!documents && !spans) return i18n.t("traceability.none_retained", "None retained");
   return [
@@ -215,7 +236,9 @@ const metadataSummary = computed(() =>
 
 const researchSummary = computed(() => {
   const claims = researchNodes.value.filter((node) => node.object_type === "GeneratedClaim").length;
-  const bindings = researchNodes.value.filter((node) => node.object_type === "SupportBinding").length;
+  const bindings = researchNodes.value.filter(
+    (node) => node.object_type === "SupportBinding",
+  ).length;
   if (!claims && !bindings) return i18n.t("traceability.no_claim_use", "No retained claim use");
   return [
     claims ? i18n.tf("traceability.claim_count", { count: claims }) : "",
@@ -268,7 +291,9 @@ function detailLabel(key: string) {
   return key.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function statusTone(status: string | null | undefined): "neutral" | "info" | "success" | "warning" | "danger" {
+function statusTone(
+  status: string | null | undefined,
+): "neutral" | "info" | "success" | "warning" | "danger" {
   const value = String(status || "").toLowerCase();
   if (["validated", "human_confirmed", "verified", "present"].includes(value)) return "success";
   if (["stale", "disputed", "unresolved"].includes(value)) return "warning";
@@ -327,7 +352,9 @@ watch(mode, () => resetFocus());
 
     <div v-if="loading" class="traceability-state" role="status">
       <strong>{{ i18n.t("traceability.loading_title", "Building the trace…") }}</strong>
-      <span>{{ i18n.t("traceability.loading", "Loading retained provenance relationships.") }}</span>
+      <span>{{
+        i18n.t("traceability.loading", "Loading retained provenance relationships.")
+      }}</span>
     </div>
     <div v-else-if="error" class="traceability-state error" role="alert">
       <strong>{{ i18n.t("traceability.error_title", "Trace unavailable") }}</strong>
@@ -383,12 +410,12 @@ watch(mode, () => resetFocus());
           <strong>{{ i18n.t("traceability.current_record", "This corpus record") }}</strong>
           <span>{{ rootNode?.summary || rootNode?.label || "—" }}</span>
         </div>
-        <div class="trace-branch" aria-hidden="true">
-          <span>↙</span><span>↘</span>
-        </div>
+        <div class="trace-branch" aria-hidden="true"><span>↙</span><span>↘</span></div>
         <div class="trace-branch-cards">
           <div class="trace-stage">
-            <small>{{ i18n.t("traceability.stage_metadata", "How metadata was established") }}</small>
+            <small>{{
+              i18n.t("traceability.stage_metadata", "How metadata was established")
+            }}</small>
             <strong>{{ i18n.t("traceability.metadata_review", "Metadata & review") }}</strong>
             <span>{{ metadataSummary }}</span>
           </div>
@@ -453,11 +480,15 @@ watch(mode, () => resetFocus());
           <dl>
             <div>
               <dt>{{ i18n.t("traceability.object_type", "Object type") }}</dt>
-              <dd><code>{{ focus.object_type }}</code></dd>
+              <dd>
+                <code>{{ focus.object_type }}</code>
+              </dd>
             </div>
             <div>
               <dt>{{ i18n.t("traceability.object_id", "Object ID") }}</dt>
-              <dd><code>{{ focus.object_id }}</code></dd>
+              <dd>
+                <code>{{ focus.object_id }}</code>
+              </dd>
             </div>
             <div v-if="focus.materialization">
               <dt>{{ i18n.t("traceability.materialization", "Representation") }}</dt>
@@ -555,9 +586,18 @@ watch(mode, () => resetFocus());
           />
         </section>
         <div class="diagram-legend" aria-label="Diagram legend">
-          <span><i class="solid"></i>{{ i18n.t("traceability.legend_normative", "DERRIDAI relationship") }}</span>
-          <span><i class="dashed"></i>{{ i18n.t("traceability.legend_application", "DerridAI application link") }}</span>
-          <span><i class="focus"></i>{{ i18n.t("traceability.legend_focus", "Selected object and direct links") }}</span>
+          <span
+            ><i class="solid"></i
+            >{{ i18n.t("traceability.legend_normative", "DERRIDAI relationship") }}</span
+          >
+          <span
+            ><i class="dashed"></i
+            >{{ i18n.t("traceability.legend_application", "DerridAI application link") }}</span
+          >
+          <span
+            ><i class="focus"></i
+            >{{ i18n.t("traceability.legend_focus", "Selected object and direct links") }}</span
+          >
         </div>
       </div>
     </UiDialog>
