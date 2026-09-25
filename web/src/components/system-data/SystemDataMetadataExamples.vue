@@ -53,13 +53,13 @@ onMounted(() => void load(0));
     </header>
 
     <form class="filters" @submit.prevent="load(0)">
-      <label><span>Field</span><select v-model="filters.field" class="control"><option value="">All</option><option v-for="item in page.facets.fields" :key="item">{{ item }}</option></select></label>
-      <label><span>Kind</span><select v-model="filters.kind" class="control"><option value="">All</option><option v-for="item in page.facets.kinds" :key="item">{{ item }}</option></select></label>
-      <label><span>Language</span><select v-model="filters.language" class="control"><option value="">All</option><option v-for="item in page.facets.languages" :key="item">{{ item }}</option></select></label>
-      <label><span>Build</span><select v-model="filters.scope_id" class="control"><option value="">All</option><option v-for="item in page.facets.scopes" :key="item">{{ item }}</option></select></label>
-      <label><span>Schema</span><select v-model="filters.schema_id" class="control"><option value="">All</option><option v-for="item in page.facets.schemas" :key="item">{{ item }}</option></select></label>
-      <label><span>Record ID</span><input v-model="filters.record_id" class="control" type="search" /></label>
-      <div class="filter-actions"><button class="btn" type="submit">Apply</button><button class="btn" type="button" @click="clearAll">Clear all</button></div>
+      <label><span>{{ t("runtime.system_exemplar_field", "Field") }}</span><select v-model="filters.field" class="control"><option value="">{{ t("runtime.system_all", "All") }}</option><option v-for="item in page.facets.fields" :key="item">{{ item }}</option></select></label>
+      <label><span>{{ t("runtime.system_exemplar_kind", "Kind") }}</span><select v-model="filters.kind" class="control"><option value="">{{ t("runtime.system_all", "All") }}</option><option v-for="item in page.facets.kinds" :key="item">{{ item }}</option></select></label>
+      <label><span>{{ t("runtime.system_exemplar_language", "Language") }}</span><select v-model="filters.language" class="control"><option value="">{{ t("runtime.system_all", "All") }}</option><option v-for="item in page.facets.languages" :key="item">{{ item }}</option></select></label>
+      <label><span>{{ t("runtime.system_exemplar_build", "Build") }}</span><select v-model="filters.scope_id" class="control"><option value="">{{ t("runtime.system_all", "All") }}</option><option v-for="item in page.facets.scopes" :key="item">{{ item }}</option></select></label>
+      <label><span>{{ t("runtime.system_exemplar_schema", "Schema") }}</span><select v-model="filters.schema_id" class="control"><option value="">{{ t("runtime.system_all", "All") }}</option><option v-for="item in page.facets.schemas" :key="item">{{ item }}</option></select></label>
+      <label><span>{{ t("runtime.system_exemplar_record", "Record ID") }}</span><input v-model="filters.record_id" class="control" type="search" /></label>
+      <div class="filter-actions"><button class="btn" type="submit">{{ t("common.apply", "Apply") }}</button><button class="btn" type="button" @click="clearAll">{{ t("runtime.system_clear_all", "Clear all") }}</button></div>
     </form>
 
     <div v-if="activeFilters.length" class="chips" aria-label="Active filters">
@@ -68,10 +68,10 @@ onMounted(() => void load(0));
       </button>
     </div>
 
-    <div v-if="error" class="state error" role="alert"><strong>Could not load metadata examples.</strong><span>{{ error }}</span></div>
-    <div v-else-if="loading" class="state" role="status">Loading metadata examples…</div>
-    <div v-else-if="!page.exists" class="state">The metadata exemplar index has not been built yet.</div>
-    <div v-else-if="!page.rows.length" class="state">The index is built, but no examples match these filters.</div>
+    <div v-if="error" class="state error" role="alert"><strong>{{ t("runtime.system_metadata_failed", "Could not load metadata examples.") }}</strong><span>{{ error }}</span></div>
+    <div v-else-if="loading" class="state" role="status">{{ t("runtime.system_metadata_loading", "Loading metadata examples…") }}</div>
+    <div v-else-if="!page.exists" class="state">{{ t("runtime.system_metadata_not_built", "The metadata exemplar index has not been built yet.") }}</div>
+    <div v-else-if="!page.rows.length" class="state">{{ t("runtime.system_metadata_no_matches", "The index is built, but no examples match these filters.") }}</div>
     <template v-else>
       <div class="example-list">
         <button v-for="item in page.rows" :key="item.exemplar_id" type="button" class="example-row" @click="detail = item">
@@ -86,25 +86,25 @@ onMounted(() => void load(0));
       <footer class="pagination">
         <span>{{ page.offset + 1 }}–{{ Math.min(page.offset + page.rows.length, page.count) }} of {{ page.count }}</span>
         <div>
-          <button class="btn tiny" type="button" :disabled="page.offset <= 0" @click="load(Math.max(0, page.offset - page.limit))">Previous</button>
-          <button class="btn tiny" type="button" :disabled="page.offset + page.rows.length >= page.count" @click="load(page.offset + page.limit)">Next</button>
+          <button class="btn tiny" type="button" :disabled="page.offset <= 0" @click="load(Math.max(0, page.offset - page.limit))">{{ t("common.previous", "Previous") }}</button>
+          <button class="btn tiny" type="button" :disabled="page.offset + page.rows.length >= page.count" @click="load(page.offset + page.limit)">{{ t("common.next", "Next") }}</button>
         </div>
       </footer>
     </template>
 
     <aside v-if="detail" class="detail-panel" aria-label="Metadata example details">
-      <header><div><small>Metadata example</small><h3>{{ detail.field_name }} → {{ valueText(detail.field_value) }}</h3></div><button class="icon-btn" type="button" aria-label="Close details" @click="detail = null"><AppIcon name="close" /></button></header>
+      <header><div><small>{{ t("runtime.system_metadata_example", "Metadata example") }}</small><h3>{{ detail.field_name }} → {{ valueText(detail.field_value) }}</h3></div><button class="icon-btn" type="button"  :aria-label="t('runtime.system_close_details', 'Close details')" @click="detail = null"><AppIcon name="close" /></button></header>
       <dl>
-        <div><dt>Status</dt><dd>{{ detail.assertion_status || detail.kind }}</dd></div>
-        <div><dt>Source record</dt><dd>{{ detail.record_id }}</dd></div>
-        <div><dt>Source revision</dt><dd>{{ detail.record_revision ?? "—" }}</dd></div>
-        <div><dt>Build / scope</dt><dd>{{ detail.scope_id || "—" }}</dd></div>
-        <div><dt>Schema</dt><dd>{{ detail.schema_id || "—" }} {{ detail.schema_version || "" }}</dd></div>
-        <div><dt>Region</dt><dd>{{ detail.region_type || "—" }}</dd></div>
-        <div><dt>Evidence blocks</dt><dd>{{ (detail.evidence_block_ids || []).join(", ") || "—" }}</dd></div>
-        <div><dt>Evidence hash</dt><dd class="mono">{{ detail.evidence_hash || "—" }}</dd></div>
+        <div><dt>{{ t("runtime.system_status", "Status") }}</dt><dd>{{ detail.assertion_status || detail.kind }}</dd></div>
+        <div><dt>{{ t("runtime.system_source_record", "Source record") }}</dt><dd>{{ detail.record_id }}</dd></div>
+        <div><dt>{{ t("runtime.system_source_revision", "Source revision") }}</dt><dd>{{ detail.record_revision ?? "—" }}</dd></div>
+        <div><dt>{{ t("runtime.system_build_scope", "Build / scope") }}</dt><dd>{{ detail.scope_id || "—" }}</dd></div>
+        <div><dt>{{ t("runtime.system_exemplar_schema", "Schema") }}</dt><dd>{{ detail.schema_id || "—" }} {{ detail.schema_version || "" }}</dd></div>
+        <div><dt>{{ t("runtime.system_exemplar_region", "Region") }}</dt><dd>{{ detail.region_type || "—" }}</dd></div>
+        <div><dt>{{ t("runtime.system_exemplar_evidence_blocks", "Evidence blocks") }}</dt><dd>{{ (detail.evidence_block_ids || []).join(", ") || "—" }}</dd></div>
+        <div><dt>{{ t("runtime.system_exemplar_evidence_hash", "Evidence hash") }}</dt><dd class="mono">{{ detail.evidence_hash || "—" }}</dd></div>
       </dl>
-      <section><h4>Evidence context</h4><p>{{ detail.context_text || "—" }}</p></section>
+      <section><h4>{{ t("runtime.system_exemplar_context", "Evidence context") }}</h4><p>{{ detail.context_text || "—" }}</p></section>
     </aside>
   </div>
 </template>
