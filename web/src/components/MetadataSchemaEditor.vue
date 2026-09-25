@@ -392,6 +392,27 @@ defineExpose({ select, draft });
 
           <h4>{{ t("fields", "Fields") }}</h4>
           <article v-for="item in fieldsOf(group.key)" :key="item.index" class="schema-field-card">
+            <header class="schema-field-card-head">
+              <div>
+                <strong>{{
+                  item.field.label || item.field.name || t("new_field", "New metadata field")
+                }}</strong>
+                <code v-if="item.field.name">{{ item.field.name }}</code>
+              </div>
+              <div class="schema-field-policy" :aria-label="t('field_policy', 'Field policy')">
+                <span>{{ item.field.type }}</span>
+                <span v-if="item.field.evidence">{{ t("evidence_short", "Evidence") }}</span>
+                <span v-if="item.field.assess">{{ t("assess_short", "Confidence") }}</span>
+                <span v-if="item.field.review">{{ t("review_short", "Human review") }}</span>
+                <span
+                  v-if="
+                    item.field.retrieval_profile.enabled &&
+                    Number(item.field.retrieval_profile.max_items || 0) > 0
+                  "
+                  >{{ t("memory_short", "Memory") }}</span
+                >
+              </div>
+            </header>
             <div class="row">
               <label class="schema-field"
                 ><span>{{ t("field_name", "Field name") }}</span
@@ -852,6 +873,43 @@ h4 {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--bg);
+}
+.schema-field-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.schema-field-card-head > div:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.schema-field-card-head strong {
+  font-size: 0.9375rem;
+}
+.schema-field-card-head code {
+  justify-self: start;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.schema-field-policy {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+}
+.schema-field-policy span {
+  padding: 3px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.3;
 }
 .values {
   display: grid;
