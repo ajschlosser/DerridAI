@@ -85,7 +85,10 @@ const providerSummary = computed(() =>
       </div>
     </div>
 
-    <div class="build-command-summary" aria-label="Build configuration summary">
+    <div
+      class="build-command-summary"
+      :aria-label="i18n.t('pdf_corpus.readiness.configuration_summary')"
+    >
       <span>{{ modeLabel }}</span>
       <span>{{ providerSummary }}</span>
       <span>{{ sizing }}</span>
