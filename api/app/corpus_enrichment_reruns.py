@@ -282,8 +282,11 @@ class EnrichmentRerunsMixin:
         self, live: dict[str, Any], candidate: dict[str, Any], families: list[str], run_id: str, request: dict[str, Any], profile: dict[str, Any],
         schema: MetadataSchema | None = None, pass_number: int = 1,
     ) -> dict[str, Any]:
-        """Fold one pass's candidate into the live record. Human-owned fields are never touched."""
-        groups = (schema or default_schema()).family_fields()
+        """Fold one pass's candidate into the live record. Human-owned assertions are never touched."""
+        active_schema = schema or default_schema()
+        groups = active_schema.family_fields()
+        migrate_record_assertions(live, active_schema)
+        migrate_record_assertions(candidate, active_schema)
 
         def candidate_id(field: str, value: Any, source: str, model: str = "", pass_no: int | None = None) -> str:
             payload = json.dumps(
@@ -293,8 +296,6 @@ class EnrichmentRerunsMixin:
             return "cand-" + hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
         live_status = live.setdefault("metadata_field_status", {})
         cand_status = candidate.get("metadata_field_status") if isinstance(candidate.get("metadata_field_status"), dict) else {}
-        cand_evidence = candidate.get("metadata_evidence") if isinstance(candidate.get("metadata_evidence"), dict) else {}
-        live_evidence = live.setdefault("metadata_evidence", {})
         added: list[str] = []
         replaced: list[dict[str, Any]] = []
         kept: list[str] = []
@@ -307,11 +308,13 @@ class EnrichmentRerunsMixin:
         for family in families:
             for field in groups[family]:
                 new, old = candidate.get(field), live.get(field)
+                old_assertion = current_assertion_by_name(live, field)
+                new_assertion = current_assertion_by_name(candidate, field)
                 old_info = live_status.get(field) if isinstance(live_status.get(field), dict) else {}
                 new_info = cand_status.get(field) if isinstance(cand_status.get(field), dict) else {}
                 if new in (None, "", []):
                     continue
-                if str(old_info.get("status") or "") in HUMAN_OWNED_STATUSES:
+                if old_assertion is not None and old_assertion.authority_status in {"human_confirmed", "human_override"}:
                     informational.append(enrichment_informational_event(
                         "agreement" if same_value(old, new) else "protected_suggestion",
                         field,
@@ -329,10 +332,10 @@ class EnrichmentRerunsMixin:
                     ))
                     continue
                 if old in (None, "", []):
-                    live[field] = new
-                    live_status[field] = new_info
-                    if field in cand_evidence:
-                        live_evidence[field] = cand_evidence[field]
+                    if new_assertion is not None:
+                        store_assertion(live, new_assertion)
+                    else:
+                        live[field] = new
                     added.append(field)
                     continue
                 if field in CONFIDENCE_FIELDS:
@@ -349,8 +352,8 @@ class EnrichmentRerunsMixin:
                         confidence=new_info.get("confidence"),
                         reason="The model found no new supported value.",
                     ))
-                    if field in cand_evidence:
-                        live_evidence[field] = cand_evidence[field]
+                    if new_assertion is not None:
+                        store_assertion(live, new_assertion)
                     continue
                 if (field, json.dumps(new, sort_keys=True, default=str)) in known:
                     informational.append(enrichment_informational_event(
@@ -379,10 +382,10 @@ class EnrichmentRerunsMixin:
                 decision = "keep_both" if both_pending_llm else resolve_conflict(old_info, new_info)
                 if decision == "replace":
                     replaced.append({"field": field, "previous": old, "value": new, "confidence": new_info.get("confidence")})
-                    live[field] = new
-                    live_status[field] = new_info
-                    if field in cand_evidence:
-                        live_evidence[field] = cand_evidence[field]
+                    if new_assertion is not None:
+                        store_assertion(live, new_assertion)
+                    else:
+                        live[field] = new
                 elif decision == "keep_existing":
                     kept.append(field)
                 else:
@@ -445,7 +448,19 @@ class EnrichmentRerunsMixin:
                         }
                         disputes.append(dispute)
                         history_disputes.append(json.loads(json.dumps(dispute)))
-                    live_status[field] = {**old_info, "status": "unresolved", "reason_code": "llm_disagreement", "reason": "A later metadata enrichment pass proposed a different value and neither was confident enough to decide."}
+                    if new_assertion is not None:
+                        store_assertion(live, new_assertion, select=False)
+                    if old_assertion is not None:
+                        reopen_assertion(
+                            live,
+                            old_assertion,
+                            reason="A later metadata enrichment pass proposed a different value and neither was confident enough to decide.",
+                        )
+                    project_record_assertions(live)
+                    compat = live.setdefault("metadata_field_status", {}).setdefault(field, {})
+                    if isinstance(compat, dict):
+                        compat["reason_code"] = "llm_disagreement"
+        project_record_assertions(live)
         live["metadata_disputes"] = (list(live.get("metadata_disputes") or []) + disputes)[-100:]
         outcome = "enriched" if added or replaced else "disputed" if history_disputes else "unchanged"
         history = list(live.get("metadata_enrichment_history") or [])
