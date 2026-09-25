@@ -169,9 +169,7 @@ export function useCorpusReviewDecisions(options: CorpusReviewDecisionsOptions) 
             const fields = (result.blocking_fields || [])
               .map((field) => options.t(`record.${field}`, field.replace(/_/g, " ")))
               .join(", ");
-            options.setMessage(
-              options.tf("pdf_corpus.accept_blocked_metadata", { fields }),
-            );
+            options.setMessage(options.tf("pdf_corpus.accept_blocked_metadata", { fields }));
             await nextTick();
             options.focusFirstMetadataBlocker();
           }
