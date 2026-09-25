@@ -7,11 +7,13 @@ const props = withDefaults(
     options: string[];
     label: string;
     placeholder?: string;
+    removeLabel?: string;
     disabled?: boolean;
   }>(),
   {
     modelValue: () => [],
     placeholder: "",
+    removeLabel: "Remove {value}",
     disabled: false,
   },
 );
@@ -43,6 +45,10 @@ function commit(value: string) {
 
 function remove(value: string) {
   emit("update:modelValue", (props.modelValue || []).filter((item) => item !== value));
+}
+
+function removeAriaLabel(value: string) {
+  return props.removeLabel.replace("{value}", value);
 }
 
 function scheduleClose() {
@@ -84,7 +90,7 @@ function keydown(event: KeyboardEvent) {
         <button
           type="button"
           :disabled="disabled"
-          :aria-label="`Remove ${value}`"
+          :aria-label="removeAriaLabel(value)"
           @click="remove(value)"
         >
           ×
