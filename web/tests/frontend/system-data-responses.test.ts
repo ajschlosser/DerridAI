@@ -3,8 +3,10 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const { routerPush } = vi.hoisted(() => ({ routerPush: vi.fn() }));
+
 vi.mock("vue-router", () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: routerPush }),
 }));
 
 vi.mock("../../src/runtime/runtimeBridge", () => ({
@@ -23,6 +25,7 @@ describe("System Data saved responses", () => {
     setActivePinia(createPinia());
     useI18nStore().dictionary = {};
     vi.restoreAllMocks();
+    routerPush.mockReset();
     vi.spyOn(systemApi, "responseCacheRecords").mockResolvedValue({
       exists: true,
       total: 1,
@@ -47,6 +50,18 @@ describe("System Data saved responses", () => {
 
     expect(systemApi.responseCacheRecords).toHaveBeenLastCalledWith(25, 0, "différance");
     expect(wrapper.text()).toContain("What is différance?");
+  });
+
+  it("deep-links a row into the selected Response Library response", async () => {
+    const wrapper = mount(SystemDataResponses);
+    await flushPromises();
+
+    await wrapper.get(".row-actions .btn").trigger("click");
+
+    expect(routerPush).toHaveBeenCalledWith({
+      path: "/faq",
+      query: { id: "rag-1" },
+    });
   });
 
   it("requires destructive confirmation before deleting a saved response", async () => {
