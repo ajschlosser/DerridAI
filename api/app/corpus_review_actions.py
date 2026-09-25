@@ -662,10 +662,13 @@ class ReviewActionsMixin:
         self._push_record_review_history(build_id, action="metadata_edit", record_id=record_id, previous_record=previous_record)
         decision_log = list(target.get("metadata_decisions") or [])
         skipped: set[str] = set()
+        schema = self._schema_for(build_id)
+        migrate_record_assertions(target, schema)
         for key, value in changes.items():
             status = target.setdefault("metadata_field_status", {})
             prior_status = dict(status.get(key) or {}) if isinstance(status.get(key), dict) else {}
             prior_value = target.get(key)
+            prior_assertion = current_assertion_by_name(target, key)
             owed = _second_opinion_owed(target, key)
             if owed:
                 # This is the independent second opinion, not an edit: it is compared with the first answer and the record is left alone.
@@ -681,11 +684,7 @@ class ReviewActionsMixin:
                 evidence_map = dict(target.get("metadata_evidence") or {})
                 evidence_map.pop(key, None)
                 target["metadata_evidence"] = evidence_map
-            target[key] = value
             if key in self._editable_fields(build_id):
-                schema = self._schema_for(build_id)
-                migrate_record_assertions(target, schema)
-                prior_assertion = current_assertion_by_name(target, key)
                 is_manifest_override = key in MANIFEST_INHERITED_FIELDS
                 if (
                     prior_assertion is not None
@@ -699,13 +698,18 @@ class ReviewActionsMixin:
                         reason="Confirmed during record review.",
                     )
                 else:
+                    overrides_existing_value = bool(
+                        prior_assertion is not None
+                        and prior_assertion.value_status == "present"
+                        and prior_assertion.value != value
+                    )
                     create_human_assertion(
                         target,
                         key,
                         value,
                         schema=schema,
                         supersedes=prior_assertion,
-                        override=bool(is_manifest_override or (prior_assertion is not None and prior_assertion.value != value)),
+                        override=bool(is_manifest_override or overrides_existing_value),
                         reason=(
                             "Human record-level override of inherited document metadata."
                             if is_manifest_override
@@ -715,7 +719,7 @@ class ReviewActionsMixin:
                     )
                 project_record_assertions(target)
                 decision_log.append({"field": key, "value": value, "at": iso_now(), "source": "human_override" if is_manifest_override else "human"})
-        constraint_changes = apply_metadata_constraints(target)
+        constraint_changes = apply_metadata_constraints(target, schema)
         for item in constraint_changes:
             decision_log.append({"field": item["field"], "value": item["value"], "at": iso_now(), "source": "deterministic_constraint", "reason": item["reason"]})
         target["metadata_decisions"] = decision_log[-100:]
@@ -794,20 +798,21 @@ class ReviewActionsMixin:
             self._assert_human_review_available(build_id, record)
             decisions = list(record.get("metadata_decisions") or [])
             statuses = record.setdefault("metadata_field_status", {})
+            schema = self._schema_for(build_id)
+            migrate_record_assertions(record, schema)
             for key, value in changes.items():
                 prior_status = dict(statuses.get(key) or {}) if isinstance(statuses.get(key), dict) else {}
                 prior_value = record.get(key)
+                prior_assertion = current_assertion_by_name(record, key)
                 self._record_human_llm_feedback(build_id, key, prior_value, value, prior_status, record)
                 if prior_value != value and isinstance(record.get("metadata_evidence"), dict):
                     evidence_map = dict(record.get("metadata_evidence") or {})
                     evidence_map.pop(key, None)
                     record["metadata_evidence"] = evidence_map
-                record[key] = value
-                schema = self._schema_for(build_id)
-                migrate_record_assertions(record, schema)
-                prior_assertion = current_assertion_by_name(record, key)
-                override = key in MANIFEST_INHERITED_FIELDS or (
-                    prior_assertion is not None and prior_assertion.value != value
+                override = key in MANIFEST_INHERITED_FIELDS or bool(
+                    prior_assertion is not None
+                    and prior_assertion.value_status == "present"
+                    and prior_assertion.value != value
                 )
                 if (
                     prior_assertion is not None
@@ -833,7 +838,7 @@ class ReviewActionsMixin:
                     )
                 project_record_assertions(record)
                 decisions.append({"field": key, "value": value, "at": iso_now(), "source": "human_bulk"})
-            constraint_changes = apply_metadata_constraints(record)
+            constraint_changes = apply_metadata_constraints(record, schema)
             for item in constraint_changes:
                 decisions.append({"field": item["field"], "value": item["value"], "at": iso_now(), "source": "deterministic_constraint", "reason": item["reason"]})
             record["metadata_decisions"] = decisions[-100:]
