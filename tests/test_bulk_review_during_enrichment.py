@@ -21,6 +21,7 @@ except ModuleNotFoundError:
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'api'))
 from app import corpus_builder as cb
+from app import corpus_review_actions as review_actions
 from app.config import APP_VERSION
 
 
@@ -60,6 +61,42 @@ def test_bulk_review_is_allowed_during_enrichment_and_marks_human_touch(tmp_path
     rows=repo.load_records(build['build_id'])
     assert all(row['review_disposition']=='rejected' for row in rows)
     assert all('__review__' in row.get('human_touched_fields',[]) for row in rows)
+
+
+def test_bulk_accept_persists_promoted_metadata_memory(tmp_path:Path, monkeypatch):
+    """Bulk acceptance is a human confirmation and must feed semantic-memory projection."""
+
+    repo,build=install(tmp_path)
+    rows=repo.load_records(build['build_id'])
+    for row in rows:
+        row['discourse_role']='analysis'
+        row['metadata_field_status']={'discourse_role':{'status':'model_inferred','method':'llm','confidence':0.9}}
+        row['metadata_incomplete_fields']=[]
+        row['metadata_review_fields']=[]
+        row['metadata_complete']=True
+    repo.save_records(build['build_id'],rows)
+    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
+    persisted=[]
+    scheduled=[]
+    monkeypatch.setattr(
+        review_actions,
+        'persist_record_decision',
+        lambda **kwargs: persisted.append((kwargs['record']['record_id'],kwargs['field_name'],kwargs['value'])),
+    )
+    monkeypatch.setattr(
+        manager,
+        '_schedule_metadata_exemplar_projection',
+        lambda build_id: scheduled.append(build_id),
+    )
+
+    result=manager.bulk_disposition(build['build_id'],'accepted',record_ids=['r1','r2'])
+
+    assert result['changed']==2
+    assert persisted==[
+        ('r1','discourse_role','analysis'),
+        ('r2','discourse_role','analysis'),
+    ]
+    assert scheduled==[build['build_id']]
 
 
 
