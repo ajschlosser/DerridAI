@@ -71,6 +71,7 @@ import { useCorpusReviewNavigation } from "../features/corpus-builder/composable
 import { useCorpusReviewDecisions } from "../features/corpus-builder/composables/useCorpusReviewDecisions";
 import { useCorpusTextReview } from "../features/corpus-builder/composables/useCorpusTextReview";
 import { useCorpusMetadataReview } from "../features/corpus-builder/composables/useCorpusMetadataReview";
+import { useCorpusBoundaryReview } from "../features/corpus-builder/composables/useCorpusBoundaryReview";
 import { corpusReviewCommandFromKeydown } from "../features/corpus-builder/domain/reviewCommands";
 import {
   editableRecordMetadata,
@@ -272,7 +273,6 @@ const advancedOpen = ref(false);
 const recordSaveQueue = new RecordMutationQueue();
 const documentMetadataOpen = ref(false);
 const textCleanupOpen = ref(false);
-const boundarySliceOpen = ref(false);
 const sourceTranscriptionOpen = ref(false);
 const {
   textDraft,
@@ -650,6 +650,42 @@ const selectedRecordIndex = computed(() =>
   records.value.findIndex((row) => row.record_id === selectedRecordId.value),
 );
 const {
+  boundarySliceOpen,
+  canMergePrevious,
+  canMergeNext,
+  mergeUnavailable,
+  sliceUnavailable,
+  merge,
+  split,
+  sliceRecord,
+  adjudicateBoundary,
+} = useCorpusBoundaryReview({
+  currentBuild,
+  selectedRecord,
+  selectedRecordId,
+  records,
+  recordTotal,
+  recordOffset,
+  selectedRecordIndex,
+  visibleBlocks,
+  busy,
+  structuralReviewLocked,
+  editingText,
+  metadataEditorDirty,
+  llmActionProviderId,
+  llmActionModel,
+  selectedProviderId,
+  directProfilePayloadWithModel,
+  captureReviewViewport,
+  restoreReviewViewport,
+  queueRecordRequest,
+  refreshBuild,
+  refreshRecords,
+  setMessage,
+  t: (key, fallback) => i18n.t(key, fallback),
+  tf: (key, values) => i18n.tf(key, values),
+});
+const {
   openFocusView,
   focusHistoryMove,
   focusQueueMove,
@@ -685,17 +721,6 @@ const nextQueueRecordId = computed(() => {
   const index = selectedRecordIndex.value;
   return index >= 0 ? records.value[index + 1]?.record_id || "" : "";
 });
-const canMergePrevious = computed(() => {
-  const topo = Number(selectedRecord.value?.topology_index ?? -1);
-  return topo >= 0 ? topo > 0 : recordOffset.value + Math.max(0, selectedRecordIndex.value) > 0;
-});
-const canMergeNext = computed(() => {
-  const index = Number(selectedRecord.value?.topology_index ?? -1),
-    total = Number(selectedRecord.value?.topology_count ?? recordTotal.value);
-  if (index >= 0 && total > 0) return index < total - 1;
-  const globalIndex = recordOffset.value + selectedRecordIndex.value;
-  return globalIndex >= 0 && globalIndex < recordTotal.value - 1;
-});
 // Review is the point of this screen, so the first time a build's records are ready, bring the workspace to the top.
 let reviewScrolledFor = "";
 watch(
@@ -711,22 +736,6 @@ const reviewFrameEl = ref<HTMLElement | null>(null);
 const { reviewGridEl, queueSplitter, inspectorSplitter, reviewHeightSplitter } =
   usePdfCorpusPaneSizing();
 // Secondary record actions live in a menu. An action that cannot run says why instead of just being dimmed.
-function mergeUnavailable(direction: "previous" | "next"): string | undefined {
-  if (busy.value !== "") return i18n.t("pdf_corpus.reason.busy");
-  if (structuralReviewLocked.value) return i18n.t("pdf_corpus.reason.structure_locked");
-  if (direction === "previous" && !canMergePrevious.value)
-    return i18n.t("pdf_corpus.reason.no_previous");
-  if (direction === "next" && !canMergeNext.value) return i18n.t("pdf_corpus.reason.no_next");
-  return undefined;
-}
-function sliceUnavailable(): string | undefined {
-  if (busy.value !== "") return i18n.t("pdf_corpus.reason.busy");
-  if (editingText.value) return i18n.t("pdf_corpus.reason.finish_text_edit");
-  if (metadataEditorDirty.value) return i18n.t("pdf_corpus.reason.finish_metadata_edit");
-  if (!canMergePrevious.value && !canMergeNext.value)
-    return i18n.t("pdf_corpus.reason.no_neighbour");
-  return undefined;
-}
 const recordActionItems = computed<CorpusActionMenuItem[]>(() => [
   {
     id: "previous",
@@ -1505,407 +1514,6 @@ async function saveManifest(changes: Record<string, unknown>) {
   }
 }
 
-async function merge(direction: "previous" | "next") {
-  if (!currentBuild.value || !selectedRecord.value) return;
-  const id = selectedRecord.value.record_id;
-  const index = records.value.findIndex((row) => row.record_id === id);
-  const neighborIndex = direction === "previous" ? index - 1 : index + 1;
-  if (index < 0 || neighborIndex < 0 || neighborIndex >= records.value.length) return;
-  const before = records.value.slice();
-  const beforeTotal = recordTotal.value;
-  const beforeSelected = selectedRecord.value;
-  const firstIndex = Math.min(index, neighborIndex);
-  const first = records.value[firstIndex];
-  const second = records.value[Math.max(index, neighborIndex)];
-  const merged: CorpusRecord = {
-    ...first,
-    text: [first.text, second.text].filter(Boolean).join("\n\n"),
-    text_length: [first.text, second.text].filter(Boolean).join("\n\n").length,
-    source_block_ids: [...(first.source_block_ids || []), ...(second.source_block_ids || [])],
-    source_unit_ids: [...(first.source_unit_ids || []), ...(second.source_unit_ids || [])],
-    source_spans: [...(first.source_spans || []), ...(second.source_spans || [])],
-    review_disposition: "pending",
-    accepted: false,
-    rejected: false,
-    needs_review: true,
-    record_revision:
-      Math.max(Number(first.record_revision || 1), Number(second.record_revision || 1)) + 1,
-  };
-  const viewport = captureReviewViewport();
-  records.value.splice(firstIndex, 2, merged);
-  recordTotal.value = Math.max(0, recordTotal.value - 1);
-  selectedRecord.value = merged;
-  selectedRecordId.value = merged.record_id;
-  await restoreReviewViewport(viewport, { record: true });
-  queueRecordRequest(
-    [id, second.record_id],
-    ["record boundary"],
-    async () => {
-      const row = await corpusBuilderApi.merge(
-        currentBuild.value!.build_id,
-        id,
-        direction,
-        Number(before.find((item) => item.record_id === id)?.record_revision || 1),
-      );
-      await refreshBuild();
-      await refreshRecords(false, row.record_id);
-      await restoreReviewViewport(viewport, { record: true });
-      setMessage(
-        i18n.tf("pdf_corpus.merged", {
-          direction: i18n.t(`pdf_corpus.${direction}`, direction),
-        }),
-      );
-    },
-    () => {
-      records.value = before;
-      recordTotal.value = beforeTotal;
-      selectedRecord.value = beforeSelected;
-      selectedRecordId.value = beforeSelected.record_id;
-    },
-    false,
-  );
-}
-async function split(afterBlockId: string) {
-  if (!currentBuild.value || !selectedRecord.value) return;
-  const id = selectedRecord.value.record_id;
-  const targetIndex = records.value.findIndex((row) => row.record_id === id);
-  const blockIds = [...(selectedRecord.value.source_block_ids || [])];
-  const cut = blockIds.indexOf(afterBlockId) + 1;
-  if (targetIndex < 0 || cut <= 0 || cut >= blockIds.length) return;
-  const before = records.value.slice();
-  const beforeTotal = recordTotal.value;
-  const beforeSelected = selectedRecord.value;
-  const blockText = new Map(visibleBlocks.value.map((block) => [block.block_id, block.text]));
-  const textFor = (ids: string[]) =>
-    ids
-      .map((blockId) => blockText.get(blockId) || "")
-      .filter(Boolean)
-      .join("\n\n");
-  const leftIds = blockIds.slice(0, cut);
-  const rightIds = blockIds.slice(cut);
-  const leftText = textFor(leftIds);
-  const rightText = textFor(rightIds);
-  if (!leftText || !rightText) return;
-  const nextId = `${id}-split-pending`;
-  const left: CorpusRecord = {
-    ...selectedRecord.value,
-    source_block_ids: leftIds,
-    source_unit_ids: leftIds,
-    source_spans: (selectedRecord.value.source_spans || []).filter((span) =>
-      leftIds.includes(String(span.block_id || "")),
-    ),
-    text: leftText,
-    text_length: leftText.length,
-    record_revision: Number(selectedRecord.value.record_revision || 1) + 1,
-    review_disposition: "pending",
-    accepted: false,
-    rejected: false,
-    needs_review: true,
-  };
-  const right: CorpusRecord = {
-    ...selectedRecord.value,
-    record_id: nextId,
-    source_block_ids: rightIds,
-    source_unit_ids: rightIds,
-    source_spans: (selectedRecord.value.source_spans || []).filter((span) =>
-      rightIds.includes(String(span.block_id || "")),
-    ),
-    text: rightText,
-    text_length: rightText.length,
-    record_revision: 1,
-    review_disposition: "pending",
-    accepted: false,
-    rejected: false,
-    needs_review: true,
-  };
-  const viewport = captureReviewViewport();
-  records.value.splice(targetIndex, 1, left, right);
-  recordTotal.value += 1;
-  selectedRecord.value = left;
-  selectedRecordId.value = left.record_id;
-  await restoreReviewViewport(viewport, { record: true });
-  queueRecordRequest(
-    [id, nextId],
-    ["record boundary"],
-    async () => {
-      const result = await corpusBuilderApi.split(
-        currentBuild.value!.build_id,
-        id,
-        afterBlockId,
-        Number(beforeSelected.record_revision || 1),
-      );
-      await refreshBuild();
-      await refreshRecords(false, result.records[0]?.record_id || id);
-      await restoreReviewViewport(viewport, { record: true });
-      setMessage(i18n.t("pdf_corpus.split_done"));
-    },
-    () => {
-      records.value = before;
-      recordTotal.value = beforeTotal;
-      selectedRecord.value = beforeSelected;
-      selectedRecordId.value = beforeSelected.record_id;
-    },
-    false,
-  );
-}
-async function sliceRecord(
-  direction: "previous" | "next" | "keep" | "new",
-  offset: number,
-  keepEnd?: number,
-) {
-  if (!currentBuild.value || !selectedRecord.value) return;
-  const id = selectedRecord.value.record_id;
-  if (direction === "keep") {
-    const index = records.value.findIndex((row) => row.record_id === id);
-    const targetText = String(selectedRecord.value.text || "");
-    const previous = records.value[index - 1];
-    const following = records.value[index + 1];
-    if (
-      index <= 0 ||
-      index >= records.value.length - 1 ||
-      keepEnd === undefined ||
-      offset <= 0 ||
-      offset >= keepEnd ||
-      keepEnd > targetText.length
-    )
-      return;
-    const prefix = targetText.slice(0, offset).trim();
-    const retained = targetText.slice(offset, keepEnd).trim();
-    const suffix = targetText.slice(keepEnd).trim();
-    if (!prefix || !retained || !suffix) return;
-    const before = records.value.slice();
-    const beforeSelected = selectedRecord.value;
-    const previousText = `${String(previous.text || "").trim()}\n\n${prefix}`.trim();
-    const followingText = `${suffix}\n\n${String(following.text || "").trim()}`.trim();
-    const nextRecord = (row: CorpusRecord, text: string): CorpusRecord => ({
-      ...row,
-      text,
-      text_length: text.length,
-      record_revision: Number(row.record_revision || 1) + 1,
-      review_disposition: "pending",
-      accepted: false,
-      rejected: false,
-      needs_review: true,
-    });
-    const updatedPrevious = nextRecord(previous, previousText);
-    const updatedTarget = nextRecord(selectedRecord.value, retained);
-    const updatedFollowing = nextRecord(following, followingText);
-    const viewport = captureReviewViewport();
-    records.value.splice(index - 1, 3, updatedPrevious, updatedTarget, updatedFollowing);
-    selectedRecord.value = updatedTarget;
-    selectedRecordId.value = id;
-    await restoreReviewViewport(viewport, { record: true });
-    queueRecordRequest(
-      [previous.record_id, id, following.record_id],
-      ["record boundary"],
-      async () => {
-        const result = await corpusBuilderApi.sliceRecord(
-          currentBuild.value!.build_id,
-          id,
-          direction,
-          offset,
-          Number(beforeSelected.record_revision || 1),
-          keepEnd,
-        );
-        boundarySliceOpen.value = false;
-        await refreshBuild();
-        await refreshRecords(false, result.record.record_id);
-        await restoreReviewViewport(viewport, { record: true });
-        setMessage(i18n.t("pdf_corpus.slice_done"));
-      },
-      () => {
-        records.value = before;
-        selectedRecord.value = beforeSelected;
-        selectedRecordId.value = beforeSelected.record_id;
-      },
-      false,
-    );
-    return;
-  }
-  if (direction === "previous" || direction === "next") {
-    const index = records.value.findIndex((row) => row.record_id === id);
-    const neighborIndex = direction === "previous" ? index - 1 : index + 1;
-    const targetText = String(selectedRecord.value.text || "");
-    if (
-      index < 0 ||
-      neighborIndex < 0 ||
-      neighborIndex >= records.value.length ||
-      offset <= 0 ||
-      offset >= targetText.length
-    )
-      return;
-    const before = records.value.slice();
-    const beforeSelected = selectedRecord.value;
-    const neighbor = records.value[neighborIndex];
-    const moved = targetText
-      .slice(direction === "previous" ? 0 : offset, direction === "previous" ? offset : undefined)
-      .trim();
-    const retained = targetText.slice(direction === "previous" ? offset : 0).trim();
-    if (!moved || !retained) return;
-    const target = {
-      ...selectedRecord.value,
-      text: retained,
-      text_length: retained.length,
-      record_revision: Number(selectedRecord.value.record_revision || 1) + 1,
-      review_disposition: "pending" as const,
-      accepted: false,
-      rejected: false,
-      needs_review: true,
-    };
-    const neighborText =
-      direction === "previous"
-        ? `${String(neighbor.text || "").trim()}\n\n${moved}`.trim()
-        : `${moved}\n\n${String(neighbor.text || "").trim()}`.trim();
-    const updatedNeighbor = {
-      ...neighbor,
-      text: neighborText,
-      text_length: neighborText.length,
-      record_revision: Number(neighbor.record_revision || 1) + 1,
-      review_disposition: "pending" as const,
-      accepted: false,
-      rejected: false,
-      needs_review: true,
-    };
-    const viewport = captureReviewViewport();
-    records.value.splice(
-      Math.min(index, neighborIndex),
-      2,
-      ...(direction === "previous" ? [updatedNeighbor, target] : [target, updatedNeighbor]),
-    );
-    selectedRecord.value = target;
-    selectedRecordId.value = id;
-    await restoreReviewViewport(viewport, { record: true });
-    queueRecordRequest(
-      [id, neighbor.record_id],
-      ["record boundary"],
-      async () => {
-        const result = await corpusBuilderApi.sliceRecord(
-          currentBuild.value!.build_id,
-          id,
-          direction,
-          offset,
-          Number(beforeSelected.record_revision || 1),
-          keepEnd,
-        );
-        boundarySliceOpen.value = false;
-        await refreshBuild();
-        await refreshRecords(false, result.record.record_id);
-        await restoreReviewViewport(viewport, { record: true });
-        setMessage(i18n.t("pdf_corpus.slice_done"));
-      },
-      () => {
-        records.value = before;
-        selectedRecord.value = beforeSelected;
-        selectedRecordId.value = beforeSelected.record_id;
-      },
-      false,
-    );
-    return;
-  }
-  if (direction !== "new" || keepEnd === undefined) return;
-  const index = records.value.findIndex((row) => row.record_id === id);
-  const following = records.value[index + 1];
-  const targetText = String(selectedRecord.value.text || "");
-  if (index < 0 || !following || offset <= 0 || offset >= keepEnd || keepEnd > targetText.length)
-    return;
-  const prefix = targetText.slice(0, offset).trim();
-  const retained = targetText.slice(offset, keepEnd).trim();
-  const suffix = targetText.slice(keepEnd).trim();
-  if (!prefix || !retained || !suffix) return;
-  const before = records.value.slice();
-  const beforeTotal = recordTotal.value;
-  const beforeSelected = selectedRecord.value;
-  const provisionalId = `${id}-slice-pending`;
-  const revised = (row: CorpusRecord, text: string, revision: number): CorpusRecord => ({
-    ...row,
-    text,
-    text_length: text.length,
-    record_revision: revision,
-    review_disposition: "pending",
-    accepted: false,
-    rejected: false,
-    needs_review: true,
-  });
-  const target = revised(
-    selectedRecord.value,
-    prefix,
-    Number(selectedRecord.value.record_revision || 1) + 1,
-  );
-  const created = revised({ ...selectedRecord.value, record_id: provisionalId }, retained, 1);
-  const updatedFollowing = revised(
-    following,
-    `${suffix}\n\n${String(following.text || "").trim()}`.trim(),
-    Number(following.record_revision || 1) + 1,
-  );
-  const viewport = captureReviewViewport();
-  records.value.splice(index, 2, target, created, updatedFollowing);
-  recordTotal.value = beforeTotal + 1;
-  selectedRecord.value = created;
-  selectedRecordId.value = provisionalId;
-  await restoreReviewViewport(viewport, { record: true });
-  queueRecordRequest(
-    [id, provisionalId, following.record_id],
-    ["record boundary"],
-    async () => {
-      const result = await corpusBuilderApi.sliceRecord(
-        currentBuild.value!.build_id,
-        id,
-        "new",
-        offset,
-        Number(beforeSelected.record_revision || 1),
-        keepEnd,
-      );
-      boundarySliceOpen.value = false;
-      await refreshBuild();
-      await refreshRecords(false, result.new_record?.record_id || result.record.record_id);
-      await restoreReviewViewport(viewport, { record: true });
-      setMessage(i18n.t("pdf_corpus.slice_done"));
-    },
-    () => {
-      records.value = before;
-      recordTotal.value = beforeTotal;
-      selectedRecord.value = beforeSelected;
-      selectedRecordId.value = beforeSelected.record_id;
-    },
-    false,
-  );
-}
-
-async function adjudicateBoundary(
-  direction: "previous" | "next",
-  profileId = llmActionProviderId.value || selectedProviderId.value,
-  model = llmActionModel.value,
-) {
-  if (!currentBuild.value || !selectedRecord.value) return;
-  const id = selectedRecord.value.record_id;
-  const viewport = captureReviewViewport();
-  busy.value = "boundary";
-  try {
-    const actionPayload = directProfilePayloadWithModel(profileId, model) || {
-      provider_profile_id: profileId,
-      model: model || undefined,
-    };
-    const result = await corpusBuilderApi.adjudicateBoundary(
-      currentBuild.value.build_id,
-      id,
-      direction,
-      actionPayload,
-    );
-    await refreshBuild();
-    await refreshRecords(false, id);
-    await restoreReviewViewport(viewport, { record: true });
-    const decision = String(result.decision?.decision || "uncertain");
-    setMessage(
-      i18n.tf("pdf_corpus.boundary_check_done", {
-        decision: i18n.t(`pdf_corpus.boundary_llm.${decision}`, decision),
-      }),
-    );
-  } catch (exc) {
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
-}
 function startNewBuildSetup() {
   stopPolling();
   selectedBuildId.value = "";
