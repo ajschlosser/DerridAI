@@ -57,7 +57,7 @@ function applyLayout(next: InspectorLayout) {
 function resetLayout() {
   const next = defaultInspectorLayout(record.value);
   layout.value = next;
-  saveInspectorLayout(next);
+  saveInspectorLayout(next, record.value);
 }
 function headingText(label: string) {
   if (label === "Record context") return i18n.t("record.record_context");
