@@ -167,10 +167,16 @@ function clearExemplarFilters() {
 }
 
 async function loadSystemChroma() {
-  const payload = await systemApi.systemChromaCollections();
-  systemChromaCollections.value = payload.collections || [];
-  if (!chromaCommand.value && systemChromaCollections.value[0]) {
-    chromaCommand.value = `get ${systemChromaCollections.value[0].name} --limit 10`;
+  try {
+    const payload = await systemApi.systemChromaCollections();
+    systemChromaCollections.value = payload.collections || [];
+    if (!chromaCommand.value && systemChromaCollections.value[0]) {
+      chromaCommand.value = `get ${systemChromaCollections.value[0].name} --limit 10`;
+    }
+  } catch {
+    // System Chroma inspection is supplemental. A missing/unavailable vector
+    // backend must not prevent administrators from inspecting SQLite/system data.
+    systemChromaCollections.value = [];
   }
 }
 
