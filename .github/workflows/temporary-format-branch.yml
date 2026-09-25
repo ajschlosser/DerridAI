@@ -1,0 +1,40 @@
+name: Temporary branch formatter
+
+on:
+  push:
+    branches:
+      - task/metadata-review-research-ux
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: task/metadata-review-research-ux
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: web
+        run: npm ci --no-audit --no-fund
+      - name: Apply repository formatting
+        working-directory: web
+        run: npm run format:repo
+      - name: Commit formatting only
+        run: |
+          if git diff --quiet; then
+            echo "No formatting changes needed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "style: apply repository formatting"
+          git push origin HEAD:task/metadata-review-research-ux
