@@ -3,7 +3,11 @@ from __future__ import annotations
 
 from app import corpus_builder as cb
 from app import metadata_exemplar_projection as projection
-from app.field_assertions import confirm_assertion, create_model_assertion, project_record_assertions
+from app.field_assertions import (
+    confirm_assertion,
+    create_model_assertion,
+    project_record_assertions,
+)
 
 
 class FakeRepo:
