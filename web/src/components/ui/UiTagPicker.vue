@@ -105,6 +105,9 @@ function keydown(event: KeyboardEvent) {
         aria-autocomplete="list"
         :aria-expanded="open && filtered.length > 0"
         :aria-controls="`${id}-listbox`"
+        :aria-activedescendant="
+          open && active >= 0 && filtered[active] ? `${id}-option-${active}` : undefined
+        "
         :placeholder="(modelValue || []).length ? '' : placeholder"
         :disabled="disabled"
         @focus="open = true"
@@ -121,9 +124,11 @@ function keydown(event: KeyboardEvent) {
       :id="`${id}-listbox`"
       class="tag-options"
       role="listbox"
+      aria-multiselectable="true"
     >
       <li
         v-for="(option, index) in filtered"
+        :id="`${id}-option-${index}`"
         :key="option"
         role="option"
         :aria-selected="false"
