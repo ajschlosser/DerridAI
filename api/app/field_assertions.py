@@ -340,11 +340,14 @@ def create_model_assertion(
 
 
 def confirm_assertion(record: dict[str, Any], assertion: FieldAssertion, *, actor: str | None = None, reason: str = "") -> FieldAssertion:
+    present = assertion.value not in (None, "", [])
     return store_assertion(
         record,
         assertion.model_copy(update={
             "assertion_id": f"assertion-{uuid.uuid4().hex}",
             "authority_status": "human_confirmed",
+            "evaluation_status": "value_supported" if present else assertion.evaluation_status,
+            "value_status": "present" if present else assertion.value_status,
             "actor": actor,
             "reason": reason or assertion.reason,
             "legacy_status": None,
