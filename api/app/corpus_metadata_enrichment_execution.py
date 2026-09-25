@@ -47,7 +47,11 @@ from .enrichment_ledger import (
     CALL,
     PROPOSED,
 )
-from .field_assertions import current_assertion_by_name, migrate_record_assertions
+from .field_assertions import (
+    current_assertion_by_name,
+    migrate_record_assertions,
+    reopen_assertion,
+)
 from .metadata_adjudication_cache import suggestions as adjudication_suggestions
 from .metadata_schema import (
     CORE_FIELDS,
@@ -779,6 +783,20 @@ CURRENT REVIEWED RECORD TEXT:
                                     existing_status["auto_populated"] = False
                                 else:
                                     existing_status["prefilled_candidate"] = "deterministic"
+                    if (
+                        existing_assertion is not None
+                        and existing_status.get("reason_code") == "deterministic_llm_disagreement"
+                    ):
+                        reopen_assertion(
+                            record,
+                            existing_assertion,
+                            reason=str(existing_status.get("reason") or "Deterministic and model classifications disagree."),
+                            legacy_metadata={
+                                name: item
+                                for name, item in existing_status.items()
+                                if name not in {"status", "method", "reason", "confidence"}
+                            },
+                        )
                     field_status[key] = existing_status
                     continue
                 if key == "region_type" and value is not None and value not in allowed_region_types:
