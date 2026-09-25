@@ -1,134 +1,37 @@
-# Static-analysis follow-ups (0.61.0)
+<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+# Static-analysis follow-ups
 
-The initial gates run across `api/app`, `tests/`, and `web/src`; they do not replace any
-runtime tests. These items are tracked debt, not evidence that the underlying
-code is correct. Resolve each with an isolated change and remove its suppression.
+This is the current registry for intentional Ruff, mypy, ESLint, and TypeScript debt that remains visible in source/config suppressions. It is not a snapshot of line numbers from a past release.
 
-Ruff currently enables pyflakes (`F`), selected pycodestyle (`E4`, `E7`, `E9`),
-isort (`I`), pyupgrade (`UP`), bugbear (`B`), and bandit (`S`). Mypy type-checks
-unannotated function bodies (`check_untyped_defs`) but still allows missing
-signatures (`disallow_untyped_defs = False`). Module-specific error-code
-suppressions for models, Chroma, RAG, LLM tools, corpus builder, jobs, and
-`main` have been removed.
+When adding a suppression, give it a narrow reason and either attach it to an existing item below or add a new tracked item. When the underlying debt is removed, remove both the suppression and the registry item.
 
 ## Backend
 
-- [ ] SA-01: expand compact Python statements per module (Ruff E701/E702).
-- [ ] SA-02: enable mypy strict optional checking after typing nullable payloads.
-- [x] SA-03: type Pydantic literal-list default factories (`models`).
-- [x] SA-04: annotate lazy Chroma clients and accumulators; remove branch-local redefinitions.
-- [x] SA-05: give RAG query/evidence payloads TypedDict contracts (`record_types.py`).
-- [x] SA-06: validate and type external catalog/provider JSON in `llm_tools`.
-- [ ] SA-07: type enrichment schema families and checkpoint dictionaries.
-- [x] SA-08: qualify builtin list types shadowed by job-manager methods; type mixin locks.
-- [x] SA-09: use covariant sequence interfaces at language-store boundaries.
-- [ ] SA-17: replace `dict[str, Any]` HTTP returns in `main.py` with operation-specific response models.
-- [ ] SA-18: enable Ruff `B905` (`zip(..., strict=True)`) after proving equal lengths.
-- [ ] SA-19: run `ruff format` per module (paired with SA-01).
-- [x] SA-20: apply Ruff `I`/`UP` to `tests/` (`B`/`S` still deferred).
+- **SA-01 — legacy compact Python statements.** Expand E701/E702-style compact statements module-by-module with behavior-preserving diffs rather than mixing repository-wide formatting into feature work.
+- **SA-02 — strict optional typing.** `mypy.ini` still has `strict_optional = False`; enable it only after nullable dictionary/payload boundaries are explicitly typed.
+- **SA-07 — enrichment/checkpoint contracts.** Continue replacing broad dictionary payloads in enrichment/checkpoint orchestration with precise typed models where doing so clarifies real boundaries.
+- **SA-18 — strict zip checks.** Enable Ruff `B905` only where equal-length invariants have been established; do not mechanically add `strict=True` to code whose truncation semantics are intentional.
+- **SA-19 — Python formatting.** Apply `ruff format` in reviewed module-sized tranches together with SA-01 cleanup rather than as a noisy whole-repository rewrite.
 
-`mypy.ini` no longer disables error codes per module. Undefined names and
-other enabled diagnostics still fail. Missing third-party stubs are ignored.
-Newly extracted modules inherit no module-specific suppressions and should
-opt into strict optional checking. `experiment_stats.bootstrap_ci` uses a
-seeded stdlib RNG (`noqa: S311`) so the same sample yields the same interval;
-it is not cryptographic.
+Completed 0.61-era typing items and the old `main.py`-specific debt are preserved in git/release history and are no longer listed as open work.
 
 ## Frontend
 
-- [ ] SA-10: remove unused helpers from the legacy runtime after tracing exported/event callbacks.
-- [ ] SA-11: repair missing `openSharedAnnotationRecord`, `wireEvidenceButtons`,
-  and stale `selectedPayload`/`scope` references with workflow-level regression tests.
-- [ ] SA-12: audit legacy browser persistence/refresh/clipboard fallbacks; expose
-  actionable failures without turning harmless teardown failures into alerts.
-- [ ] SA-13: remove unused setup bindings as their workflows are extracted.
-- [ ] SA-14: simplify redundant regex/string escapes with matching fixtures.
-- [ ] SA-15: verify OCR Unicode character-class intent against real extraction cases.
-- [ ] SA-16: replace sparse Storybook casts with reusable typed partial-data builders.
+- **SA-10 — remaining runtime compatibility code.** Remove unused runtime exports/callbacks only after tracing bridge/event consumers and preserving characterization coverage.
+- **SA-12 — best-effort browser fallbacks.** Audit persistence/refresh/clipboard/teardown catches. User-relevant failures should be actionable; genuinely harmless cleanup failures may remain suppressed with a local explanation.
+- **SA-13 — unused setup bindings.** Remove compatibility bindings as their owning workflows become Vue/domain-owned instead of disabling the rule broadly.
+- **SA-14 — legacy regex/string escapes.** Simplify only with fixtures that pin matching/serialization semantics.
+- **SA-15 — OCR Unicode character classes.** Verify character-class changes against real extraction/text-cleanup fixtures before changing semantics.
+- **SA-16 — sparse Storybook fixtures.** Replace repeated `as any` story fixtures with reusable typed partial-data builders where that reduces noise without forcing stories to fabricate irrelevant domain state.
 
-Production explicit-any escapes were replaced with typed API results, PDF.js
-handles, the existing DocumentLayoutPlan, direct runtime exports, and unknown
-dictionary values. Storybook's remaining casts deliberately model incomplete
-fixtures; each has a local explanation and lint suppression. Vue's no-undef rule
-is delegated to strict vue-tsc because ESLint otherwise mistakes DOM types for
-runtime variables. Correctness lint remains enabled in the JavaScript runtime.
+The former SA-11 “missing runtime symbol” inventory is retired: those exact names/locations no longer describe current source. A new undefined/stale-reference defect should fail lint/typecheck or receive a new issue tied to its current code path rather than resurrecting the historical item.
 
-## Initial frontend suppression inventory
+## Gate ownership
 
-Line numbers refer to the initial 0.61.0 scan (comments shift later lines).
+- Ruff is configured in `ruff.toml`.
+- mypy is configured in `mypy.ini`.
+- frontend lint/type gates are defined in `web/package.json` and TypeScript/ESLint config.
+- CI orchestration and path/shard behavior live in `.github/workflows/frontend.yml`.
+- Accessibility regressions belong to Playwright/axe and focused semantic tests, not static-analysis suppressions.
 
-| File | Initial line | Rule | Rationale / tracking |
-| --- | ---: | --- | --- |
-| `web/src/components/CorpusBoundaryAdjudication.stories.ts` | 7 | @typescript-eslint/no-explicit-any | SA-16: intentionally sparse Storybook fixture exercises partial/loading data without fabricating unrelated fields. |
-| `web/src/components/CorpusBoundaryAdjudication.stories.ts` | 8 | @typescript-eslint/no-explicit-any | SA-16: intentionally sparse Storybook fixture exercises partial/loading data without fabricating unrelated fields. |
-| `web/src/components/CorpusBuildHistoryMenu.stories.ts` | 3 | @typescript-eslint/no-explicit-any | SA-16: intentionally sparse Storybook fixture exercises partial/loading data without fabricating unrelated fields. |
-| `web/src/components/CorpusBuildHistoryMenu.vue` | 4 | @typescript-eslint/no-unused-vars | SA-13: preserve legacy setup binding until its owning workflow is extracted. |
-| `web/src/components/CorpusBuildLifecycleCard.stories.ts` | 3 | @typescript-eslint/no-explicit-any | SA-16: intentionally sparse Storybook fixture exercises partial/loading data without fabricating unrelated fields. |
-| `web/src/components/CorpusBuildTimeline.stories.ts` | 3 | @typescript-eslint/no-explicit-any | SA-16: intentionally sparse Storybook fixture exercises partial/loading data without fabricating unrelated fields. |
-| `web/src/components/CorpusBulkMetadataEditor.stories.ts` | 3 | @typescript-eslint/no-explicit-any | SA-16: intentionally sparse Storybook fixture exercises partial/loading data without fabricating unrelated fields. |
-| `web/src/components/CorpusFinishWorkspace.stories.ts` | 3 | @typescript-eslint/no-explicit-any | SA-16: intentionally sparse Storybook fixture exercises partial/loading data without fabricating unrelated fields. |
-| `web/src/components/CorpusInitializationDialog.stories.ts` | 15 | @typescript-eslint/no-explicit-any | SA-16: intentionally sparse Storybook fixture exercises partial/loading data without fabricating unrelated fields. |
-| `web/src/components/CorpusInitializationDialog.stories.ts` | 7 | @typescript-eslint/no-explicit-any | SA-16: intentionally sparse Storybook fixture exercises partial/loading data without fabricating unrelated fields. |
-| `web/src/components/CorpusLlmTextTouchupDialog.stories.ts` | 3 | @typescript-eslint/no-explicit-any | SA-16: intentionally sparse Storybook fixture exercises partial/loading data without fabricating unrelated fields. |
-| `web/src/components/CorpusMetadataIssues.stories.ts` | 3 | @typescript-eslint/no-explicit-any | SA-16: intentionally sparse Storybook fixture exercises partial/loading data without fabricating unrelated fields. |
-| `web/src/components/CorpusMetadataResolutionPanel.stories.ts` | 3 | @typescript-eslint/no-explicit-any | SA-16: intentionally sparse Storybook fixture exercises partial/loading data without fabricating unrelated fields. |
-| `web/src/components/CorpusProviderSwitcher.stories.ts` | 4 | @typescript-eslint/no-explicit-any | SA-16: intentionally sparse Storybook fixture exercises partial/loading data without fabricating unrelated fields. |
-| `web/src/components/CorpusSourceSummary.vue` | 5 | @typescript-eslint/no-unused-vars | SA-13: preserve legacy setup binding until its owning workflow is extracted. |
-| `web/src/components/DocumentStructureConfigurator.stories.ts` | 2 | @typescript-eslint/no-explicit-any | SA-16: intentionally sparse Storybook fixture exercises partial/loading data without fabricating unrelated fields. |
-| `web/src/components/LlmExecutionControl.stories.ts` | 3 | @typescript-eslint/no-explicit-any | SA-16: intentionally sparse Storybook fixture exercises partial/loading data without fabricating unrelated fields. |
-| `web/src/components/MetadataEnrichmentDialog.stories.ts` | 1 | @typescript-eslint/no-explicit-any | SA-16: intentionally sparse Storybook fixture exercises partial/loading data without fabricating unrelated fields. |
-| `web/src/components/PdfCorpusBuilder.vue` | 204 | @typescript-eslint/no-unused-vars | SA-13: preserve legacy setup binding until its owning workflow is extracted. |
-| `web/src/components/PdfCorpusBuilder.vue` | 205 | @typescript-eslint/no-unused-vars | SA-13: preserve legacy setup binding until its owning workflow is extracted. |
-| `web/src/components/PdfCorpusBuilder.vue` | 233 | @typescript-eslint/no-unused-vars | SA-13: preserve legacy setup binding until its owning workflow is extracted. |
-| `web/src/components/PdfCorpusBuilder.vue` | 234 | @typescript-eslint/no-unused-vars | SA-13: preserve legacy setup binding until its owning workflow is extracted. |
-| `web/src/components/PdfCorpusBuilder.vue` | 544 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/components/PdfCorpusBuilder.vue` | 550 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/components/PdfCorpusBuilder.vue` | 715 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/components/PdfCorpusBuilder.vue` | 727 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/components/PdfCorpusBuilder.vue` | 869 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/components/PdfCorpusBuilder.vue` | 870 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/components/PdfEvidenceViewer.vue` | 15 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/components/ProviderProfileSelect.stories.ts` | 6 | @typescript-eslint/no-explicit-any | SA-16: intentionally sparse Storybook fixture exercises partial/loading data without fabricating unrelated fields. |
-| `web/src/components/SourceTranscriptionDialog.stories.ts` | 3 | @typescript-eslint/no-explicit-any | SA-16: intentionally sparse Storybook fixture exercises partial/loading data without fabricating unrelated fields. |
-| `web/src/components/record/RecordReadingPane.vue` | 59 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/components/research/ResponseFaqSelectionBar.vue` | 6 | @typescript-eslint/no-unused-vars | SA-13: preserve legacy setup binding until its owning workflow is extracted. |
-| `web/src/domain/textCleanup.ts` | 68 | no-misleading-character-class | SA-15: OCR Unicode matching needs corpus fixtures before changing character semantics. |
-| `web/src/domain/textCleanup.ts` | 7 | no-useless-escape | SA-14: preserve legacy matching/serialization until dedicated text fixtures cover it. |
-| `web/src/runtime/runtime.js` | 10343 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/runtime/runtime.js` | 10345 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/runtime/runtime.js` | 10352 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/runtime/runtime.js` | 1345 | no-useless-escape | SA-14: preserve legacy matching/serialization until dedicated text fixtures cover it. |
-| `web/src/runtime/runtime.js` | 185 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/runtime/runtime.js` | 2469 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/runtime/runtime.js` | 2594 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/runtime/runtime.js` | 2954 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/runtime/runtime.js` | 3076 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/runtime/runtime.js` | 3086 | no-undef | SA-11: existing missing runtime handler or stale variable; repair with workflow regression coverage. |
-| `web/src/runtime/runtime.js` | 4946 | no-undef | SA-11: existing missing runtime handler or stale variable; repair with workflow regression coverage. |
-| `web/src/runtime/runtime.js` | 5144 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/runtime/runtime.js` | 5145 | no-undef | SA-11: existing missing runtime handler or stale variable; repair with workflow regression coverage. |
-| `web/src/runtime/runtime.js` | 6216 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/runtime/runtime.js` | 627 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/runtime/runtime.js` | 6379 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/runtime/runtime.js` | 6387 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/runtime/runtime.js` | 6388 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/runtime/runtime.js` | 6391 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/runtime/runtime.js` | 6401 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/runtime/runtime.js` | 6429 | no-undef | SA-11: existing missing runtime handler or stale variable; repair with workflow regression coverage. |
-| `web/src/runtime/runtime.js` | 6447 | no-undef | SA-11: existing missing runtime handler or stale variable; repair with workflow regression coverage. |
-| `web/src/runtime/runtime.js` | 6788 | no-misleading-character-class | SA-15: OCR Unicode matching needs corpus fixtures before changing character semantics. |
-| `web/src/runtime/runtime.js` | 7720 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/runtime/runtime.js` | 7731 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/runtime/runtime.js` | 8071 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/runtime/runtime.js` | 833 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/runtime/runtime.js` | 8580 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/runtime/runtime.js` | 8952 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/runtime/runtime.js` | 9168 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/runtime/runtime.js` | 9173 | no-useless-escape | SA-14: preserve legacy matching/serialization until dedicated text fixtures cover it. |
-| `web/src/runtime/runtime.js` | 9174 | no-useless-escape | SA-14: preserve legacy matching/serialization until dedicated text fixtures cover it. |
-| `web/src/views/ResearchView.vue` | 43 | @typescript-eslint/no-unused-vars | SA-13: preserve legacy setup binding until its owning workflow is extracted. |
-| `web/src/views/SearchView.vue` | 158 | @typescript-eslint/no-unused-vars | SA-13: preserve legacy setup binding until its owning workflow is extracted. |
-| `web/src/views/SearchView.vue` | 54 | @typescript-eslint/no-unused-vars | SA-13: preserve legacy setup binding until its owning workflow is extracted. |
-| `web/src/views/SearchView.vue` | 63 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/views/SearchView.vue` | 68 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
-| `web/src/views/SearchView.vue` | 69 | no-empty | SA-12: legacy best-effort fallback; audit user-visible failure handling separately. |
+Do not copy the historical suppression/line-number inventory back into this file; source-local comments are the precise location record and git history preserves the original audit.

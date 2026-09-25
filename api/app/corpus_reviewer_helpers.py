@@ -3,7 +3,7 @@
 
 Deterministic operations applied when serving a record to a specific reviewer (blind
 review), and small schema/build utility functions independent of repository state.
-Moved verbatim out of PdfCorpusBuildManager (see PROGRESS.md).
+Moved verbatim out of PdfCorpusBuildManager (extracted during the 0.70 decomposition).
 """
 
 from __future__ import annotations

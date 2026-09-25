@@ -12,7 +12,7 @@ members).
 originally-planned cluster: both reference CORPUS_PROFILES/PROFILE_VERSION (`create`)
 or build_group_prompt/response_model_for/SchemaNotFound in a way still entangled with
 corpus_builder.py's own module-level constants -- left in place for the same
-circular-import reason documented in PROGRESS.md for validate_records/
+circular-import reason documented during the 0.70 decomposition for validate_records/
 _refresh_workflow_fields.
 """
 

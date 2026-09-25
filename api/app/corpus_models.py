@@ -6,7 +6,7 @@ document-manifest inference.
 Moved verbatim out of corpus_builder.py: these definitions have no dependency on
 PdfCorpusRepository or PdfCorpusBuildManager, only on pydantic and corpus_metadata's
 closed vocabularies, so extracting them unblocks every method that was previously
-deferred by the circular import (see PROGRESS.md).
+deferred by the circular import (extracted during the 0.70 decomposition).
 """
 
 from __future__ import annotations

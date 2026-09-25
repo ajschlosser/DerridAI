@@ -3,6 +3,10 @@
 
 Release history for DerridAI, newest first. Each entry links to the full release note in [`docs/notes/`](docs/notes/). The README describes only the current release.
 
+## 0.70.0 — Amesbury
+
+A consolidation release covering the Vue/runtime and Corpus Builder decomposition, specification-aligned assertion status vocabulary, metadata-schema/review improvements, search/provider/theme/internationalization work, and related reliability changes. See [0.70.0](docs/notes/0.70.0.md).
+
 ## 0.62.19 — Configurable Chameleon
 
 Metadata schemas: define which fields JSONL records have, their allowed values and what the model looks for in each; save, share and choose one per build. See [0.62.19](docs/notes/0.62.19.md).

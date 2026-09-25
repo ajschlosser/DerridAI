@@ -3,7 +3,7 @@
 
 Deterministic checks that decide whether a record's source text is safe to hand to
 a model for scholarly enrichment, and whether it is likely unusable at all. Moved
-verbatim out of PdfCorpusBuildManager (see PROGRESS.md); the stateful methods that
+verbatim out of PdfCorpusBuildManager (extracted during the 0.70 decomposition); the stateful methods that
 call these (_prepare_metadata_tasks, _run, regenerate_manifest, etc.) stay on the
 manager.
 """

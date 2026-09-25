@@ -1,5 +1,7 @@
 # DerridAI 0.36.2: shareable state and corpus data model
 
+> Historical release design note. This records the 0.36.2 state/data-model contract. For current behavior, use [ARCHITECTURE.md](ARCHITECTURE.md) and [USER_GUIDE.md](USER_GUIDE.md).
+
 ## URL state
 
 DerridAI treats the URL as the public/shareable description of a view. The `ts`

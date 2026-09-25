@@ -3,7 +3,7 @@
 
 Deterministic candidate detection, seam-quality scoring, topology normalization/sanity
 checks, and record construction from confirmed boundaries. Moved verbatim out of
-PdfCorpusBuildManager (see PROGRESS.md); the LLM-orchestrating methods that call these
+PdfCorpusBuildManager (extracted during the 0.70 decomposition); the LLM-orchestrating methods that call these
 (prompt building, _segment, boundary adjudication via the model) stay on the manager.
 """
 
