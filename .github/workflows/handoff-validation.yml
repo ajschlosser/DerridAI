@@ -1,0 +1,66 @@
+name: Temporary handoff validation
+
+on:
+  push:
+    branches:
+      - "task/handoff-documentation"
+
+jobs:
+  frontend-static:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Repository formatting
+        run: npm run format:repo:check
+      - name: Frontend lint
+        run: npm run lint
+      - name: Application typecheck
+        run: npm run typecheck
+      - name: Test/config typecheck
+        run: npm run typecheck:tests
+      - name: Unit and component tests
+        run: npm run test:unit
+      - name: Production build
+        run: npm run build:ci
+      - name: Storybook build
+        run: npm run build-storybook
+
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install backend validation dependencies
+        run: |
+          grep -vE '^sentence-transformers' api/requirements.txt > /tmp/derridai-handoff-requirements.txt
+          pip install -r /tmp/derridai-handoff-requirements.txt "pytest>=9,<10" "pytest-xdist>=3.8,<4" "ruff==0.16.8" "mypy==2.3.1"
+      - name: Ruff
+        run: ruff check api/app tests scripts/check_frontend_api_contract.py
+      - name: mypy
+        run: mypy
+      - name: Python syntax
+        run: python -m compileall -q api/app
+      - name: Backend regression suite
+        run: pytest -q -n auto --dist=worksteal --ignore=tests/test_frontend_api_contract.py
+      - name: Frontend / FastAPI contract
+        run: pytest -q -m contract tests/test_frontend_api_contract.py
+
+  compose-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate documented Compose configuration
+        run: |
+          cp .env.example .env
+          docker compose config --quiet
