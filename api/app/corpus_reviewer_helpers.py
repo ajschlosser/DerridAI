@@ -24,7 +24,7 @@ def _second_opinion_owed(record: dict[str, Any], field: str) -> dict[str, Any] |
     return None
 
 
-def _present_for_reviewer(record: dict[str, Any]) -> None:
+def _present_for_reviewer(record: dict[str, Any]) -> bool:
     """Hide, from a second reviewer, the answer they are about to independently give.
 
     Applied where records are served, never before saving: it must not reach storage.
@@ -53,6 +53,7 @@ def _present_for_reviewer(record: dict[str, Any]) -> None:
         record.pop("field_assertions", None)
         record.pop("current_field_assertions", None)
         _scrub_canonical_transport(record)
+    return scrubbed
 
 
 def _scrub_canonical_transport(value: Any) -> None:

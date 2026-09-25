@@ -3,14 +3,10 @@ import { apiRequest } from "./http";
 export type SchemaFieldType = "text" | "number" | "boolean" | "choice" | "list";
 export interface RetrievalProfile {
   enabled: boolean;
-  scope: "same_schema" | "same_field" | "all_reviewed";
   max_items: number;
   min_similarity: number;
   include_corrections: boolean;
   include_confirmed_absence: boolean;
-  use_for_metadata_enrichment: boolean;
-  use_for_response_memory: boolean;
-  use_for_claim_memory: boolean;
 }
 export interface SchemaValue {
   value: string;
@@ -114,14 +110,10 @@ export function blankField(group = CORE_GROUP): SchemaField {
     ner_tags: [],
     retrieval_profile: {
       enabled: true,
-      scope: "same_field",
       max_items: 6,
       min_similarity: 0,
       include_corrections: true,
       include_confirmed_absence: true,
-      use_for_metadata_enrichment: true,
-      use_for_response_memory: false,
-      use_for_claim_memory: false,
     },
   };
 }

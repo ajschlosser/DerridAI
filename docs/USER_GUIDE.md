@@ -332,14 +332,13 @@ Chroma is derived data. The corpus JSONL/PDF pipeline is the source of truth; co
 
 Vector Stores → Connection settings can probe and switch backends at runtime. Switching does **not** move collections. Do not point embedded storage and a Chroma server at the same directory (one writer per path). NUKE in HTTP mode deletes collections on that server; it does not empty a leftover local `chroma` folder. Backups always go through the client API and preserve embeddings.
 
-Default embeddings:
+Embedding choices are explicit per collection:
 
-```text
-Provider: Ollama
-Model:    bge-m3:latest
-```
+- **Chroma default** for Chroma-managed embeddings;
+- **Precomputed** when vectors are supplied by the caller;
+- **Configured provider profile + embedding model** when DerridAI should call an Ollama or OpenAI-compatible endpoint.
 
-Collections support Ollama embeddings, Chroma default embeddings, and precomputed vectors. Embedding configuration can change while a collection is empty and is locked once records exist.
+Provider-profile collections persist the profile identity and embedding model as part of the collection contract, so retrieval uses the same configured endpoint/credentials instead of falling back to the global Ollama URL. Embedding configuration can change while a collection is empty and is locked once records exist.
 
 ## English / French vector-store model
 
@@ -473,6 +472,17 @@ identity, redirects, timeouts, and undecodable content fail visibly. The importe
 does not guess another download or substitute another edition. Two editions
 with identical text remain distinct assets.
 
+### Corpus Builder review saves
+
+Review edits are applied to the open record immediately so navigation and
+repetitive review work do not wait for the API response. The changed record
+is then persisted in the background. Saves for the same record remain ordered
+so revision checks are safe, while saves for different records can proceed
+independently. A failed background save leaves the local edit visible and
+reports the affected field or record rather than discarding unrelated edits.
+Acceptance remains server-confirmed because metadata and source-quality rules
+can block it.
+
 ## Corpus Builder metadata population
 
 The LLM returns each metadata field (or `null` when unsupported) together with a per-field confidence. The response schema requires every field, so a model cannot return confidence assessments without values.
@@ -497,7 +507,7 @@ The LLM returns each metadata field (or `null` when unsupported) together with a
 - When embedded PDF metadata contains an author, the builder carries it forward as a deterministic, reviewable document-author assertion. It is not silently treated as an LLM inference.
 - **Clean all Record text before enrichment** is deterministic preprocessing. **Use LLM to touch-up text as part of enrichment** creates a conservative, reviewable proposal for extraction errata, diacritics, formatting, quotations, and line breaks. The proposal does not change authoritative reviewed text until a person reviews and saves it.
 - Metadata schemas are defined at **System → Metadata schemas** (administrators only). Corpus Builder step 5 still chooses which schema a build copies and can open the editor in a dialog. Schemas are semantic-versioned independently of the application and corpus contracts. New schemas start at `1.0.0`; unchanged saves retain their version; adding fields increments the minor version, removing fields increments the major version, and changing existing definitions increments the patch version.
-- Each schema field has a stable identity separate from its display name. A deliberate rename can retain that identity, so reviewed precedents continue to belong to the same semantic field. Field-level **Memory & retrieval** settings control whether reviewed values, corrections, and confirmed absence may guide later enrichment, and bound the number and similarity of advisory precedents.
+- Each schema field has a stable identity separate from its display name. A deliberate rename can retain that identity, so reviewed precedents continue to belong to the same semantic field. Field-level **Memory & retrieval** settings control whether evidence-bound reviewed values, corrections, and confirmed absences may guide later metadata enrichment. **Maximum precedents** bounds the field's contribution to the prompt packet; **Minimum similarity** rejects weaker semantic matches. Corrections retain the rejected model value as negative evidence, and confirmed absence is reusable only when a reviewer has explicitly bound source evidence to that no-value decision. These controls do not alter the canonical reviewed Record or route metadata exemplars into Research response/claim memory.
 - **Run-specific field guidance** is configured beside schema selection and is saved only with that build. For any field, add an instruction and/or names, titles, concepts, or variants to look for. Exact phrase matches are shown as review cues and passed to the corresponding field group's LLM task; they do not change the schema, restrict the allowed values, or count as evidence that the value applies. The model must still use this record's context and bind evidence where the schema requires it.
 
 Records enriched before this behavior existed are not changed automatically. **Retry metadata** skips completed metadata families by design, so it will not repopulate them. To repopulate an affected record, use **Run metadata enrichment again** (or **Rerun** on a family) and choose **Discourse / attribution**; this clears only LLM-owned values in that family and keeps reviewer-owned, deterministic, and inherited values. Rebuilding also works.
@@ -794,7 +804,8 @@ Backups are blocked while background operations are active so the archive is int
 **System Data** is the administrative surface for the response cache,
 progressive metadata exemplars, and durable application databases. Metadata
 exemplars are read-only, evidence-bound precedents derived from reviewed corpus
-metadata; the inspector shows field/value, review authority, source
+metadata, including supported values, human corrections, and explicitly evidenced
+confirmed absences; the inspector shows field/value, review authority, source
 record/revision/build, schema/language, evidence block IDs/hash, and the bounded
 evidence-context window. Their current storage/index technology is an
 implementation detail and is not presented as a research corpus.

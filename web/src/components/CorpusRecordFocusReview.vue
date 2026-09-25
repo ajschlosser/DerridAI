@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import type { CorpusRecord, SourceBlock } from "../api/pdfCorpus";
+import { hideSourceWarnings } from "../domain/sourceQuality";
 import type { ProviderProfile } from "../api/system";
 import CorpusSourceIssuePanel from "./CorpusSourceIssuePanel.vue";
 import CorpusSourceQualityDialog from "./CorpusSourceQualityDialog.vue";
@@ -11,6 +12,7 @@ import CorpusRevisionHistory from "./CorpusRevisionHistory.vue";
 import CorpusBoundarySliceDialog from "./CorpusBoundarySliceDialog.vue";
 import CorpusBoundaryAdjudication from "./CorpusBoundaryAdjudication.vue";
 import CorpusSourceSummary from "./CorpusSourceSummary.vue";
+import FieldEvidenceList from "./FieldEvidenceList.vue";
 import CorpusReviewQueueContext from "./CorpusReviewQueueContext.vue";
 import AppIcon from "./AppIcon.vue";
 
@@ -40,6 +42,8 @@ const props = defineProps<{
   llmModelOverride?: string;
   justProcessedRecordId?: string;
   nextRecordId?: string;
+  selectedEvidenceField?: string;
+  evidenceBlockIds?: string[];
 }>();
 const emit = defineEmits<{
   close: [];
@@ -66,6 +70,9 @@ const emit = defineEmits<{
   previewJsonl: [];
   llmTouchup: [text: string];
   navigateRecord: [recordId: string];
+  selectEvidence: [field: string];
+  toggleEvidence: [blockId: string];
+  assignEvidence: [field: string, blockId: string];
 }>();
 const i18n = useI18nStore();
 const dialog = ref<HTMLElement | null>(null);
@@ -89,7 +96,6 @@ const position = computed(() => {
     total = Number(props.record.topology_count ?? 0);
   return index >= 0 && total > 0 ? `${index + 1} / ${total}` : "—";
 });
-const evidence = computed(() => Object.entries(props.record.metadata_evidence || {}));
 const guidanceMatches = computed(() =>
   Object.entries(props.record.metadata_guidance_matches || {}),
 );
@@ -172,6 +178,54 @@ function saveText() {
   if (!textDraft.value.trim()) return;
   emit("saveText", textDraft.value, resolveSourceIssues.value);
   editingText.value = false;
+}
+function acknowledgeSourceIssue(dontShowAgain = false) {
+  if (dontShowAgain) hideSourceWarnings();
+  sourceIssueOpen.value = false;
+}
+function openFieldEvidence(field: string) {
+  emit("selectEvidence", field);
+  tab.value = "evidence";
+}
+function normalizedWords(value: string) {
+  return new Set(
+    value.toLocaleLowerCase()
+      .split(/[^\p{L}\p{N}]+/u)
+      .map((item) => item.trim())
+      .filter((item) => item.length > 2),
+  );
+}
+function nearestEvidenceBlock(selectedText: string): SourceBlock | null {
+  const selected = selectedText.replace(/\s+/g, " ").trim().toLocaleLowerCase();
+  if (!selected) return null;
+  const exact = blocks.value.find((block) =>
+    String(block.text || "").replace(/\s+/g, " ").toLocaleLowerCase().includes(selected),
+  );
+  if (exact) return exact;
+  const wanted = normalizedWords(selected);
+  if (!wanted.size) return null;
+  let best: SourceBlock | null = null;
+  let bestScore = 0;
+  for (const block of blocks.value) {
+    const words = normalizedWords(String(block.text || ""));
+    const overlap = [...wanted].filter((word) => words.has(word)).length;
+    const score = overlap / wanted.size;
+    if (score > bestScore) {
+      best = block;
+      bestScore = score;
+    }
+  }
+  return bestScore >= 0.45 ? best : null;
+}
+function assignSelectedEvidence(field: string, selectedText: string) {
+  const block = nearestEvidenceBlock(selectedText);
+  if (!block?.block_id) {
+    openFieldEvidence(field);
+    return;
+  }
+  emit("selectEvidence", field);
+  emit("assignEvidence", field, String(block.block_id));
+  tab.value = "evidence";
 }
 function preventBackgroundScroll() {
   document.documentElement.dataset.focusReview = "true";
@@ -473,7 +527,8 @@ watch(
             @resolve="(field, value) => emit('resolveMetadata', field, value)"
             @no-value="(field) => emit('confirmNoMetadataValue', field)"
             @dirty="(value) => emit('metadataDirty', value)"
-            @source="tab = 'source'"
+            @source="openFieldEvidence($event)"
+            @selection-evidence="assignSelectedEvidence"
           />
         </div>
         <div
@@ -510,27 +565,44 @@ watch(
               </li>
             </ul>
           </section>
-          <article v-for="[field, info] in evidence" :key="field" class="evidence-row">
-            <header>
-              <b>{{ i18n.t(`record.${field}`, field.replace(/_/g, " ")) }}</b
-              ><span>{{ Math.round(Number(info.confidence || 0) * 100) }}%</span>
-            </header>
-            <p>
-              {{
-                info.reason ||
-                i18n.t("pdf_corpus.no_evidence_reason")
-              }}
+          <div class="evidence-assignment">
+            <h3>{{ i18n.t("pdf_corpus.evidence_assignment_title", "Evidence for metadata") }}</h3>
+            <p class="empty-note">
+              {{ i18n.t("pdf_corpus.evidence_assignment_help", "Choose a metadata field, then add or remove the source spans that directly support its value. Human-selected evidence becomes reviewed provenance and can support evidence-bound metadata exemplars.") }}
             </p>
-            <small>{{
-              (info.block_ids || []).join(", ") ||
-              i18n.t("pdf_corpus.no_bound_blocks")
-            }}</small>
-          </article>
-          <p v-if="!evidence.length" class="empty-note">
-            {{
-              i18n.t("pdf_corpus.no_field_evidence")
-            }}
-          </p>
+            <FieldEvidenceList
+              :evidence="record.metadata_evidence || {}"
+              :selected-field="selectedEvidenceField || ''"
+              @select="emit('selectEvidence', $event)"
+            />
+            <div v-if="selectedEvidenceField" class="evidence-source-list">
+              <article
+                v-for="block in blocks"
+                :key="block.block_id"
+                class="evidence-row evidence-source-block"
+                :class="{ selected: (evidenceBlockIds || []).includes(String(block.block_id)) }"
+              >
+                <header>
+                  <b>{{ block.block_id }}</b>
+                  <span>{{ block.page ? `p. ${block.page}` : block.type }}</span>
+                </header>
+                <p>{{ block.text }}</p>
+                <button
+                  type="button"
+                  class="btn small"
+                  :aria-pressed="(evidenceBlockIds || []).includes(String(block.block_id))"
+                  :disabled="busy"
+                  @click="emit('toggleEvidence', String(block.block_id))"
+                >
+                  {{
+                    (evidenceBlockIds || []).includes(String(block.block_id))
+                      ? i18n.t("pdf_corpus.remove_evidence")
+                      : i18n.t("pdf_corpus.add_evidence")
+                  }}
+                </button>
+              </article>
+            </div>
+          </div>
         </div>
         <div
           v-else
@@ -689,7 +761,7 @@ watch(
     <CorpusSourceQualityDialog
       :open="sourceIssueOpen && Boolean(record.source_quality_issues?.length)"
       :issues="record.source_quality_issues"
-      @close="sourceIssueOpen = false"
+      @close="acknowledgeSourceIssue"
       @edit-text="
         sourceIssueOpen = false;
         beginTextEdit();

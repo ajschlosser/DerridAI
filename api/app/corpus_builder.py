@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import re
+import sqlite3
 import tempfile
 import threading
 import time
@@ -226,6 +227,10 @@ from .enrichment_ledger import (
 from .error_severity import severity as error_severity
 from .field_assertions import migrate_record_assertions
 from .main_text_start import infer_main_text_start
+from .metadata_exemplar_projection import (
+    dirty_metadata_exemplar_build_ids,
+    project_build_metadata_exemplars,
+)
 from .metadata_exemplar_retrieval import ChromaMetadataExemplarIndex
 from .metadata_schema import (
     MetadataSchema,
@@ -1077,6 +1082,73 @@ class PdfCorpusRepository:
     def build_records_path(self, build_id: str) -> Path:
         return self.root / "builds" / build_id / "records.jsonl"
 
+    def build_records_db_path(self, build_id: str) -> Path:
+        return self.root / "builds" / build_id / "records.sqlite3"
+
+    def _set_records_projection_state(self, build_id: str, *, dirty: bool) -> None:
+        build_path = self.build_path(build_id)
+        build = _json_read(build_path)
+        if not isinstance(build, dict):
+            raise KeyError(build_id)
+        state = dict(build.get("records_projection") or {})
+        revision = int(state.get("revision") or 0) + (1 if dirty else 0)
+        build["records_projection"] = {
+            "revision": revision,
+            "dirty": dirty,
+            "updated_at": iso_now(),
+        }
+        _json_write(build_path, build)
+
+    def records_projection_dirty(self, build_id: str) -> bool:
+        build = self.get_build(build_id)
+        return bool((build.get("records_projection") or {}).get("dirty"))
+
+    def _records_db(self, build_id: str) -> sqlite3.Connection:
+        path = self.build_records_db_path(build_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        connection = sqlite3.connect(path, timeout=30)
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS corpus_records (
+                record_id TEXT PRIMARY KEY,
+                ordinal INTEGER NOT NULL,
+                payload TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_corpus_records_ordinal "
+            "ON corpus_records (ordinal)"
+        )
+        return connection
+
+    def _bootstrap_records_db(self, build_id: str) -> None:
+        if self.build_records_db_path(build_id).exists():
+            return
+        records_path = self.build_records_path(build_id)
+        records: list[dict[str, Any]] = []
+        if records_path.exists():
+            with records_path.open("r", encoding="utf-8") as handle:
+                records = [
+                    _migrate_status_vocabulary(json.loads(line))
+                    for line in handle
+                    if line.strip()
+                ]
+        with self._records_db(build_id) as connection:
+            connection.executemany(
+                "INSERT OR REPLACE INTO corpus_records(record_id, ordinal, payload) VALUES (?, ?, ?)",
+                [
+                    (
+                        str(record.get("record_id") or ""),
+                        ordinal,
+                        json.dumps(record, ensure_ascii=False),
+                    )
+                    for ordinal, record in enumerate(records)
+                    if record.get("record_id")
+                ],
+            )
+            connection.commit()
+
     def build_checkpoint_path(self, build_id: str, name: str) -> Path:
         safe = re.sub(r"[^A-Za-z0-9._-]+", "_", str(name or "checkpoint"))
         return self.root / "builds" / build_id / "checkpoints" / f"{safe}.json"
@@ -1116,6 +1188,16 @@ class PdfCorpusRepository:
     def save_build(self, build: dict[str, Any]) -> None:
         _json_write(self.build_path(str(build["build_id"])), build)
 
+    def _record_schema(self, build_id: str) -> MetadataSchema | None:
+        build = self.get_build(build_id)
+        raw_schema = build.get("schema") if isinstance(build, dict) else None
+        if not isinstance(raw_schema, dict):
+            return None
+        try:
+            return MetadataSchema.model_validate(raw_schema)
+        except ValidationError:
+            return None
+
     def get_build(self, build_id: str) -> dict[str, Any]:
         build = _json_read(self.build_path(build_id))
         if not isinstance(build, dict):
@@ -1140,22 +1222,15 @@ class PdfCorpusRepository:
         file. This is critical while progressive review and metadata checkpoints
         are both active.
         """
+        schema = self._record_schema(build_id)
+        records = [
+            migrate_record_assertions(_migrate_status_vocabulary(record), schema)
+            for record in records
+        ]
         path = self.build_records_path(build_id)
         path.parent.mkdir(parents=True, exist_ok=True)
-        schema = None
-        try:
-            build = self.get_build(build_id)
-            raw_schema = build.get("schema")
-            if isinstance(raw_schema, dict):
-                schema = MetadataSchema.model_validate(raw_schema)
-        except (KeyError, ValidationError):
-            # Legacy builds may not have a pinned schema.  The migration then
-            # uses deterministic compatibility identities until an active
-            # schema can resolve them.
-            schema = None
-        for record in records:
-            migrate_record_assertions(record, schema)
         with self._lock:
+            self._set_records_projection_state(build_id, dirty=True)
             fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
             tmp = Path(tmp_name)
             try:
@@ -1171,46 +1246,124 @@ class PdfCorpusRepository:
                 except OSError:
                     # Safe: best-effort temp-file cleanup; see _json_write.
                     pass
+            with self._records_db(build_id) as connection:
+                connection.execute("DELETE FROM corpus_records")
+                connection.executemany(
+                    "INSERT INTO corpus_records(record_id, ordinal, payload) VALUES (?, ?, ?)",
+                    [
+                        (
+                            str(record.get("record_id") or ""),
+                            ordinal,
+                            json.dumps(record, ensure_ascii=False),
+                        )
+                        for ordinal, record in enumerate(records)
+                        if record.get("record_id")
+                    ],
+                )
+                connection.commit()
+            self._set_records_projection_state(build_id, dirty=False)
+
+    def update_record(self, build_id: str, record: dict[str, Any]) -> None:
+        """Persist one validated record without rebuilding the whole JSONL file.
+
+        The SQLite index is authoritative for interactive reads. JSONL is a
+        publication projection and is marked dirty until an explicit projection
+        refresh completes, so a process crash cannot make divergence invisible.
+        """
+        record = migrate_record_assertions(
+            _migrate_status_vocabulary(record),
+            self._record_schema(build_id),
+        )
+        record_id = str(record.get("record_id") or "")
+        if not record_id:
+            raise ValueError("A record ID is required.")
+        with self._lock:
+            self._bootstrap_records_db(build_id)
+            self._set_records_projection_state(build_id, dirty=True)
+            with self._records_db(build_id) as connection:
+                row = connection.execute(
+                    "SELECT ordinal FROM corpus_records WHERE record_id = ?",
+                    (record_id,),
+                ).fetchone()
+                if row is None:
+                    raise KeyError(record_id)
+                connection.execute(
+                    "UPDATE corpus_records SET payload = ? WHERE record_id = ?",
+                    (json.dumps(record, ensure_ascii=False), record_id),
+                )
+                connection.commit()
+
+    def refresh_records_projection(self, build_id: str) -> None:
+        """Rebuild the JSONL publication projection from the transactional index."""
+        with self._lock:
+            self._bootstrap_records_db(build_id)
+            with self._records_db(build_id) as connection:
+                rows = connection.execute(
+                    "SELECT payload FROM corpus_records ORDER BY ordinal"
+                ).fetchall()
+            path = self.build_records_path(build_id)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+            tmp = Path(tmp_name)
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                    for (payload,) in rows:
+                        handle.write(payload + "\n")
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                os.replace(tmp, path)
+            finally:
+                try:
+                    tmp.unlink(missing_ok=True)
+                except OSError:
+                    pass
+            self._set_records_projection_state(build_id, dirty=False)
+
+    def get_record(self, build_id: str, record_id: str) -> dict[str, Any]:
+        """Read one interactive record without parsing the complete corpus."""
+        self.get_build(build_id)
+        with self._lock:
+            self._bootstrap_records_db(build_id)
+            with self._records_db(build_id) as connection:
+                row = connection.execute(
+                    "SELECT payload FROM corpus_records WHERE record_id = ?",
+                    (str(record_id),),
+                ).fetchone()
+        if row is None:
+            raise KeyError(record_id)
+        return migrate_record_assertions(
+            _migrate_status_vocabulary(json.loads(row[0])),
+            self._record_schema(build_id),
+        )
 
     def load_records(self, build_id: str) -> list[dict[str, Any]]:
-        build = self.get_build(build_id)
-        schema = None
-        raw_schema = build.get("schema") if isinstance(build, dict) else None
-        if isinstance(raw_schema, dict):
-            try:
-                schema = MetadataSchema.model_validate(raw_schema)
-            except ValidationError:
-                schema = None
-        path = self.build_records_path(build_id)
-        if not path.exists():
-            return []
+        schema = self._record_schema(build_id)
         with self._lock:
-            with path.open("r", encoding="utf-8") as handle:
+            self._bootstrap_records_db(build_id)
+            with self._records_db(build_id) as connection:
+                rows = connection.execute(
+                    "SELECT payload FROM corpus_records ORDER BY ordinal"
+                ).fetchall()
                 records = [
-                    migrate_record_assertions(_migrate_status_vocabulary(json.loads(line)), schema)
-                    for line in handle if line.strip()
+                    migrate_record_assertions(
+                        _migrate_status_vocabulary(json.loads(payload)),
+                        schema,
+                    )
+                    for (payload,) in rows
                 ]
-                for record in records:
-                    if any(
-                        isinstance(status, dict) and status.get("recheck")
-                        for status in (record.get("metadata_field_status") or {}).values()
-                    ):
-                        _scrub_canonical_transport(record)
-                return records
+        for record in records:
+            if any(
+                isinstance(status, dict) and status.get("recheck")
+                for status in (record.get("metadata_field_status") or {}).values()
+            ):
+                _scrub_canonical_transport(record)
+        return records
 
     def page_records(self, build_id: str, *, offset: int = 0, limit: int = 50, needs_review: bool | None = None, disposition: str | None = None, metadata_incomplete: bool | None = None, source_problem: bool | None = None, review_queue: str | None = None, query: str = "") -> dict[str, Any]:
-        # Stream the JSONL rather than loading the entire generated corpus for a
-        # browse request. Structural edits intentionally use load_records(); read
-        # pagination remains bounded no matter how large the generated record set.
-        build = self.get_build(build_id)
-        schema = None
-        if isinstance(build.get("schema"), dict):
-            try:
-                schema = MetadataSchema.model_validate(build["schema"])
-            except ValidationError:
-                schema = None
-        path = self.build_records_path(build_id)
-        if not path.exists():
+        # Read the transactional index so review pagination sees interactive
+        # updates immediately. Structural edits intentionally use load_records().
+        self.get_build(build_id)
+        if not self.build_records_path(build_id).exists() and not self.build_records_db_path(build_id).exists():
             return {
                 "items": [],
                 "total": 0,
@@ -1225,68 +1378,56 @@ class PdfCorpusRepository:
         metadata_values: dict[str, set[str]] = {field: set() for field in ALLOWED_METADATA_FIELDS}
         total = 0
         topology_count = 0
-        with path.open("r", encoding="utf-8") as handle:
-            for line in handle:
-                if not line.strip():
+        for record in self.load_records(build_id):
+            for field, value in record.items():
+                if field not in metadata_values and not isinstance(value, (str, list, tuple)):
                     continue
-                record = migrate_record_assertions(_migrate_status_vocabulary(json.loads(line)), schema)
-                for field, value in record.items():
-                    if field not in metadata_values and not isinstance(value, (str, list, tuple)):
+                metadata_values.setdefault(field, set())
+                value = record.get(field)
+                values = value if isinstance(value, list) else [value]
+                for item in values:
+                    if isinstance(item, str) and item.strip() and not is_placeholder(item):
+                        metadata_values[field].add(item.strip())
+            deterministic_ingest = record.get("deterministic_ingest")
+            if isinstance(deterministic_ingest, dict):
+                speakers = deterministic_ingest.get("speakers")
+                if isinstance(speakers, (list, tuple)):
+                    for speaker in speakers:
+                        if isinstance(speaker, str) and speaker.strip() and not is_placeholder(speaker):
+                            metadata_values.setdefault("speaker", set()).add(speaker.strip())
+            field_status = record.get("metadata_field_status")
+            if isinstance(field_status, dict):
+                for field, status in field_status.items():
+                    if not isinstance(status, dict):
                         continue
-                    metadata_values.setdefault(field, set())
-                    value = record.get(field)
-                    values = value if isinstance(value, list) else [value]
-                    for item in values:
-                        if isinstance(item, str) and item.strip() and not is_placeholder(item):
-                            metadata_values[field].add(item.strip())
-                deterministic_ingest = record.get("deterministic_ingest")
-                if isinstance(deterministic_ingest, dict):
-                    speakers = deterministic_ingest.get("speakers")
-                    if isinstance(speakers, (list, tuple)):
-                        for speaker in speakers:
-                            if isinstance(speaker, str) and speaker.strip() and not is_placeholder(speaker):
-                                metadata_values.setdefault("speaker", set()).add(speaker.strip())
-                field_status = record.get("metadata_field_status")
-                if isinstance(field_status, dict):
-                    for field, status in field_status.items():
-                        if not isinstance(status, dict):
-                            continue
-                        for candidate_key in ("proposed_value", "llm_value"):
-                            candidate = status.get(candidate_key)
-                            candidates = candidate if isinstance(candidate, (list, tuple)) else [candidate]
-                            for item in candidates:
-                                if isinstance(item, str) and item.strip() and not is_placeholder(item):
-                                    metadata_values.setdefault(field, set()).add(item.strip())
-                topology_index = topology_count
-                topology_count += 1
-                if needs_review is not None and bool(record.get("needs_review")) is not needs_review:
-                    continue
-                record_disposition = str(record.get("review_disposition") or ("accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"))
-                if disposition is not None and record_disposition != disposition:
-                    continue
-                if metadata_incomplete is not None and (not bool(record.get("metadata_complete"))) is not metadata_incomplete:
-                    continue
-                if source_problem is not None and bool(record.get("source_quality_issues")) is not source_problem:
-                    continue
-                if q and q not in line.casefold():
-                    continue
-                queue_records.append(record)
-                if review_queue and not _matches_review_queue(record, review_queue):
-                    continue
-                if total >= offset and len(items) < limit:
-                    record["topology_index"] = topology_index
-                    _decorate_review_state(record)
-                    _present_for_reviewer(record)
-                    # A blind projection must not reacquire durable assertion
-                    # identifiers through a later response filter.
-                    if any(
-                        isinstance(status, dict) and status.get("blind")
-                        for status in (record.get("metadata_field_status") or {}).values()
-                    ):
-                        record.pop("field_assertions", None)
-                        record.pop("current_field_assertions", None)
-                    items.append(record)
-                total += 1
+                    for candidate_key in ("proposed_value", "llm_value"):
+                        candidate = status.get(candidate_key)
+                        candidates = candidate if isinstance(candidate, (list, tuple)) else [candidate]
+                        for item in candidates:
+                            if isinstance(item, str) and item.strip() and not is_placeholder(item):
+                                metadata_values.setdefault(field, set()).add(item.strip())
+            topology_index = topology_count
+            topology_count += 1
+            if needs_review is not None and bool(record.get("needs_review")) is not needs_review:
+                continue
+            record_disposition = str(record.get("review_disposition") or ("accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"))
+            if disposition is not None and record_disposition != disposition:
+                continue
+            if metadata_incomplete is not None and (not bool(record.get("metadata_complete"))) is not metadata_incomplete:
+                continue
+            if source_problem is not None and bool(record.get("source_quality_issues")) is not source_problem:
+                continue
+            if q and q not in json.dumps(record, ensure_ascii=False).casefold():
+                continue
+            queue_records.append(record)
+            if review_queue and not _matches_review_queue(record, review_queue):
+                continue
+            if total >= offset and len(items) < limit:
+                record["topology_index"] = topology_index
+                _decorate_review_state(record)
+                _present_for_reviewer(record)
+                items.append(record)
+            total += 1
         for record in items:
             record["topology_count"] = topology_count
         return {
@@ -1325,6 +1466,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         # opened lazily only when reviewed exemplars actually exist for retrieval.
         self._progressive_metadata_index = ChromaMetadataExemplarIndex()
         self._progressive_metadata_warning_builds: set[str] = set()
+        self._metadata_projection_lock = threading.RLock()
         self._ledger = EnrichmentLedger(self.repo.root / "enrichment_ledger.jsonl")
         self._suspended: set[tuple[str, str]] = set()
         self._schemas = SchemaStore(self.repo.root)
@@ -1335,6 +1477,58 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         self._loaded_models_cache: tuple[float, str, set[str]] = (0.0, "", set())
         self._provider_epoch: dict[str, int] = {}  # bumped whenever a build's provider is switched, so a running pass can notice
         self._mark_interrupted()
+        self._recover_metadata_exemplar_projections()
+
+    def _project_metadata_exemplars(
+        self,
+        build_id: str,
+        *,
+        force: bool = False,
+    ) -> dict[str, Any]:
+        with self._metadata_projection_lock:
+            return project_build_metadata_exemplars(
+                self.repo,
+                build_id,
+                self._progressive_metadata_index,
+                force=force,
+            )
+
+    def _project_metadata_exemplars_best_effort(self, build_id: str) -> dict[str, Any]:
+        """Project reviewed metadata without making human review depend on Chroma.
+
+        The durable SQLite outbox is written before this method is scheduled.
+        Projection failures therefore remain dirty for startup/next-review retry
+        instead of escaping through executors that run submitted work inline or
+        otherwise coupling review success to vector availability.
+        """
+        try:
+            return self._project_metadata_exemplars(build_id)
+        except Exception as exc:
+            self._append_warning(
+                build_id,
+                "Metadata exemplar projection is pending because the derived vector "
+                f"index could not be updated ({exc}).",
+            )
+            return {
+                "scope_id": build_id,
+                "skipped": False,
+                "projected": False,
+                "error": str(exc),
+            }
+
+    def _schedule_metadata_exemplar_projection(self, build_id: str) -> None:
+        # Review durability never depends on Chroma. The SQLite outbox is committed
+        # first; projection runs best-effort and an unacknowledged item is retried
+        # after restart or the next review in this build.
+        self._executor.submit(self._project_metadata_exemplars_best_effort, build_id)
+
+    def _recover_metadata_exemplar_projections(self) -> None:
+        try:
+            build_ids = dirty_metadata_exemplar_build_ids(self.repo)
+        except Exception:
+            return
+        for build_id in build_ids:
+            self._schedule_metadata_exemplar_projection(build_id)
 
 
 
@@ -2516,7 +2710,13 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         )
 
 
-    def _rewrite_and_validate(self, build_id: str, records: list[dict[str, Any]]) -> dict[str, Any]:
+    def _rewrite_and_validate(
+        self,
+        build_id: str,
+        records: list[dict[str, Any]],
+        *,
+        persist_records: bool = True,
+    ) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
         automation_running = str(build.get("status") or "") in {"queued", "running"} and str(build.get("stage") or "") in {"enriching", "metadata_retry"}
         # A re-run pass overlaps review too. Its records already finished their first
@@ -2537,7 +2737,6 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         build["source_quality"] = page_source_quality_report(blocks)
         profile = self._profile_of_build(build)
         validation = self.validate_records(blocks, records, profile)
-        self.repo.save_records(build_id, records)
         build["record_count"] = len(records)
         build["validation"] = validation
         # Metadata completion is derived from persisted record state, never from a
@@ -2551,7 +2750,8 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 _sync_record_metadata_state(record, profile)
                 _enforce_review_invariants(record)
             _decorate_review_state(record)
-        self.repo.save_records(build_id, records)
+        if persist_records:
+            self.repo.save_records(build_id, records)
         # Review counts are derived only after metadata state and review invariants
         # have been synchronized. Otherwise a record reopened by validation could
         # still be reported as accepted until the next request, which is exactly
@@ -2701,6 +2901,86 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         self.repo.save_build(build)
         return build
 
+    def _rewrite_targeted_record(
+        self,
+        build_id: str,
+        record: dict[str, Any],
+        previous: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Validate and persist one ordinary review edit without corpus scans.
+
+        Structural edits continue through ``_rewrite_and_validate`` because they
+        change topology. Ordinary text, metadata, evidence, and disposition
+        edits only need record-local validation plus scalar build-counter deltas.
+        """
+        build = self.repo.get_build(build_id)
+        blocks = [
+            block for block in self.repo.load_blocks(str(build["asset_id"]))
+            if not block.get("excluded_reason")
+        ]
+        blocks = _manifest_main_text_blocks(
+            blocks,
+            build.get("manifest") or {},
+            bounds_confirmed=bool(build.get("manifest_confirmed_at")),
+        )
+        profile = self._profile_of_build(build)
+        _sync_record_metadata_state(record, profile)
+        _enforce_review_invariants(record)
+        local = self.validate_records(blocks, [record], profile)
+        existing = dict(build.get("validation") or {})
+        record_id = str(record.get("record_id") or "")
+        list_fields = (
+            "text_fidelity_errors", "source_order_errors", "page_mapping_errors",
+            "printed_page_label_errors", "metadata_schema_errors",
+            "relationship_errors", "human_ownership_errors", "record_content_errors",
+            "citation_errors", "suspicious_record_sizes",
+            "metadata_evidence_errors",
+        )
+        for field in list_fields:
+            prior = existing.get(field)
+            if not isinstance(prior, list):
+                continue
+            retained = [
+                item for item in prior
+                if str(item.get("record_id") if isinstance(item, dict) else item) != record_id
+            ]
+            additions = local.get(field)
+            if isinstance(additions, list):
+                existing[field] = retained + additions
+        existing["metadata_valid"] = not any(
+            existing.get(field) for field in (
+                "metadata_evidence_errors", "metadata_schema_errors",
+                "relationship_errors", "human_ownership_errors",
+                "record_content_errors", "citation_errors",
+                "printed_page_label_errors",
+            )
+        )
+        existing["valid"] = bool(existing.get("source_valid", True) and existing["metadata_valid"])
+        build["validation"] = existing
+        if build.get("publication"):
+            history = list(build.get("publication_history") or [])
+            history.append(build["publication"])
+            build["publication_history"] = history[-20:]
+            build["publication"] = None
+            build["publication_status"] = "unpublished"
+        for field in ("needs_review_count", "accepted_count", "rejected_count", "source_problem_count", "metadata_completed"):
+            before = bool(previous.get("needs_review")) if field == "needs_review_count" else (
+                str(previous.get("review_disposition") or "") == "accepted" if field == "accepted_count" else
+                str(previous.get("review_disposition") or "") == "rejected" if field == "rejected_count" else
+                bool(previous.get("source_quality_issues")) if field == "source_problem_count" else
+                bool(previous.get("metadata_complete"))
+            )
+            after = bool(record.get("needs_review")) if field == "needs_review_count" else (
+                str(record.get("review_disposition") or "") == "accepted" if field == "accepted_count" else
+                str(record.get("review_disposition") or "") == "rejected" if field == "rejected_count" else
+                bool(record.get("source_quality_issues")) if field == "source_problem_count" else
+                bool(record.get("metadata_complete"))
+            )
+            build[field] = max(0, int(build.get(field) or 0) + int(after) - int(before))
+        self.repo.save_build(build)
+        self.repo.update_record(build_id, record)
+        return build
+
     @_serialize_record_mutation
     def _write_start_page_to_layout(self, asset_id: str, start_page: Any) -> None:
         """Keep one answer for "where does the main text start" per PDF.
@@ -2730,12 +3010,10 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         record = next((row for row in records if row.get("record_id") == record_id), None)
         if record is None:
             raise KeyError(record_id)
-        had_canonical_assertions = "field_assertions" in record
-        _present_for_reviewer(record)  # the preview is built from the record as this reviewer may see it
+        blinded = _present_for_reviewer(record)  # the preview is built from the record as this reviewer may see it
         public = serialize_public_record(record)
-        if had_canonical_assertions and "field_assertions" not in record:
-            public.pop("field_assertions", None)
-            public.pop("current_field_assertions", None)
+        if blinded:
+            _scrub_canonical_transport(public)
         errors = validate_publication_record(public)
         unresolved = list(dict.fromkeys([str(v) for v in (record.get("metadata_incomplete_fields") or []) + (record.get("metadata_review_fields") or [])]))
         return {
@@ -2839,6 +3117,8 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
     @_serialize_record_mutation
     def publish(self, build_id: str, *, require_acceptance: bool = True) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
+        if self.repo.records_projection_dirty(build_id):
+            self.repo.refresh_records_projection(build_id)
         records = self.repo.load_records(build_id)
         validation = build.get("validation") or {}
         self._refresh_workflow_fields(build)

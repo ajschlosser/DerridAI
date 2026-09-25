@@ -15,6 +15,7 @@ import re
 from typing import Any
 
 TRUSTED_ASSERTION_STATUSES = frozenset({"human_confirmed", "human_override"})
+CONFIRMED_ABSENCE_STATUS = "confirmed_absent"
 TRUSTED_MODEL_REVIEW_METHODS = frozenset({"human_review_of_llm_proposal"})
 DEFAULT_CONTEXT_BLOCK_RADIUS = 1
 PROMPT_EVIDENCE_CHARS = 420
@@ -154,11 +155,18 @@ def build_metadata_exemplar(
     if not isinstance(statuses, dict):
         return None
     status = statuses.get(field)
-    if not isinstance(status, dict) or str(status.get("status") or "") not in TRUSTED_ASSERTION_STATUSES:
+    if not isinstance(status, dict):
+        return None
+    status_name = str(status.get("status") or "")
+    is_confirmed_absence = status_name == CONFIRMED_ABSENCE_STATUS
+    if status_name not in TRUSTED_ASSERTION_STATUSES and not is_confirmed_absence:
         return None
 
     value = record.get(field)
-    if value in (None, "", []):
+    if is_confirmed_absence:
+        if value not in (None, "", []):
+            return None
+    elif value in (None, "", []):
         return None
 
     evidence_map = record.get("metadata_evidence")
@@ -228,7 +236,7 @@ def build_metadata_exemplar(
 
     return {
         "metadata_exemplar_id": exemplar_id,
-        "kind": "positive",
+        "kind": "absence" if is_confirmed_absence else "positive",
         "record_id": record_id,
         "record_revision": record_revision,
         "source_document_id": effective_source_document_id,
@@ -343,8 +351,10 @@ def prompt_example(exemplar: dict[str, Any], *, similarity: float | None = None)
     }
     if similarity is not None:
         payload["similarity"] = round(max(0.0, min(1.0, float(similarity))), 4)
-    if exemplar.get("kind") == "correction":
-        payload["kind"] = "correction"
+    kind = str(exemplar.get("kind") or "positive")
+    if kind != "positive":
+        payload["kind"] = kind
+    if kind == "correction":
         payload["rejected_value"] = exemplar.get("rejected_value")
     return payload
 
@@ -353,6 +363,7 @@ def budget_prompt_examples(
     examples: dict[str, list[dict[str, Any]]],
     *,
     token_budget: int = DEFAULT_PROMPT_TOKEN_BUDGET,
+    field_limits: dict[str, int] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     """Bound the complete exemplar packet, not merely each field's top-k.
 
@@ -371,7 +382,15 @@ def budget_prompt_examples(
         items = examples.get(field)
         if not isinstance(items, list):
             continue
-        limit = FIELD_EXAMPLE_LIMITS.get(field, DEFAULT_FIELD_EXAMPLE_LIMIT)
+        limit = max(
+            0,
+            int(
+                (field_limits or {}).get(
+                    field,
+                    FIELD_EXAMPLE_LIMITS.get(field, DEFAULT_FIELD_EXAMPLE_LIMIT),
+                )
+            ),
+        )
         queues[field] = [dict(item) for item in items[:limit] if isinstance(item, dict)]
 
     selected: dict[str, list[dict[str, Any]]] = {}

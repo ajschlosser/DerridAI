@@ -31,6 +31,7 @@ def setup(tmp_path: Path, **experiment):
     repo.save_records(build["build_id"], [{"record_id": f"rec-{i}", "text": f"text {i}", "metadata_field_status": {}} for i in range(3)])
     manager = cb.PdfCorpusBuildManager(repo)
     manager._rewrite_and_validate = lambda bid, records: (repo.save_records(bid, records), repo.get_build(bid))[1]
+    manager._rewrite_targeted_record = lambda bid, record, previous: (repo.update_record(bid, record), repo.get_build(bid))[1]
     manager._assert_human_review_available = lambda *a, **k: None
     manager._push_review_history = lambda *a, **k: None
     return manager, repo, build["build_id"]

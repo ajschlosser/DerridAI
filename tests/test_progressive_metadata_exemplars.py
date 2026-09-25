@@ -168,6 +168,40 @@ def test_explicit_human_evidence_allows_a_direct_human_value():
     assert exemplar["reviewed_at"] == "2026-09-23T10:00:00Z"
 
 
+def test_confirmed_absence_requires_human_bound_evidence_and_renders_as_absence():
+    record = reviewed_record(
+        position_holder=None,
+        metadata_field_status={
+            "position_holder": {"status": "confirmed_absent", "method": "human"}
+        },
+        metadata_evidence={
+            "position_holder": {
+                "block_ids": ["b2"],
+                "reviewed_by": "human",
+                "reviewed_at": "2026-09-23T10:00:00Z",
+            }
+        },
+    )
+
+    exemplar = build_metadata_exemplar(record, "position_holder", blocks())
+
+    assert exemplar is not None
+    assert exemplar["kind"] == "absence"
+    assert exemplar["field_value"] is None
+    rendered = prompt_example(exemplar, similarity=0.91)
+    assert rendered["kind"] == "absence"
+    assert rendered["value"] is None
+    assert rendered["evidence"] == blocks()["b2"]["text"]
+
+    stale = reviewed_record(
+        position_holder=None,
+        metadata_field_status={
+            "position_holder": {"status": "confirmed_absent", "method": "human"}
+        },
+    )
+    assert build_metadata_exemplar(stale, "position_holder", blocks()) is None
+
+
 def test_correction_exemplar_keeps_rejected_value_as_negative_only():
     record = reviewed_record(
         position_holder="Derrida",
@@ -290,6 +324,29 @@ def test_prompt_example_budget_caps_each_field_and_total_packet():
     assert prompt_example_token_estimate(bounded) <= 230
 
 
+def test_prompt_example_budget_honors_configured_field_limit():
+    examples = {
+        "speaker": [
+            {"record_id": f"s{index}", "value": f"Speaker {index}", "excerpt": "short"}
+            for index in range(5)
+        ]
+    }
+
+    expanded = budget_prompt_examples(
+        examples,
+        token_budget=1000,
+        field_limits={"speaker": 4},
+    )
+    disabled = budget_prompt_examples(
+        examples,
+        token_budget=1000,
+        field_limits={"speaker": 0},
+    )
+
+    assert len(expanded["speaker"]) == 4
+    assert disabled == {}
+
+
 def test_prompt_example_budget_round_robins_across_fields():
     examples = {
         "speaker": [{"record_id": "s", "value": "Derrida", "excerpt": "x" * 40}],
@@ -322,8 +379,24 @@ def test_editorial_memory_semantic_retrieval_uses_bound_canonical_exemplars():
         def get_build(self, build_id):
             return {
                 "asset_id": "asset-1",
-                "schema_id": "derrida",
-                "metadata_schema_version": "v7",
+                "schema": {
+                    "id": "derrida",
+                    "schema_version": "v7",
+                    "fields": [
+                        {
+                            "name": "position_holder",
+                            "field_id": "field.position_holder",
+                            "group": "discourse",
+                            "retrieval_profile": {
+                                "enabled": True,
+                                "max_items": 3,
+                                "min_similarity": 0.73,
+                                "include_corrections": True,
+                                "include_confirmed_absence": True,
+                            },
+                        }
+                    ],
+                },
             }
 
         def load_blocks(self, asset_id):
@@ -344,6 +417,8 @@ def test_editorial_memory_semantic_retrieval_uses_bound_canonical_exemplars():
             assert kwargs["schema_version"] == "v7"
             assert kwargs["language"] == "en"
             assert kwargs["exclude_record_id"] == "r2"
+            assert kwargs["field_limits"] == {"position_holder": 3}
+            assert kwargs["field_min_similarity"] == {"position_holder": 0.73}
             assert len(kwargs["exemplars"]) == 1
             exemplar = kwargs["exemplars"][0]
             assert exemplar["evidence_text"] == blocks()["b2"]["text"]
@@ -578,3 +653,377 @@ def test_metadata_prompts_receive_only_examples_for_their_family(monkeypatch):
     assert "QUOTATION_ONLY_PROGRESSIVE_MARKER" not in prompts["discourse"]
     assert "QUOTATION_ONLY_PROGRESSIVE_MARKER" in prompts["quotation"]
     assert "SPEAKER_ONLY_PROGRESSIVE_MARKER" not in prompts["quotation"]
+
+
+def test_editorial_memory_applies_group_retrieval_policy_to_locked_core_fields():
+    from app.corpus_editorial_memory import EditorialMemoryMixin
+
+    reviewed = reviewed_record(
+        discourse_role="reported_position",
+        metadata_field_status={
+            "discourse_role": {
+                "status": "human_confirmed",
+                "method": "human_review_of_llm_proposal",
+            }
+        },
+        metadata_evidence={
+            "discourse_role": {
+                "block_ids": ["b2"],
+                "reviewed_by": "human",
+                "reviewed_at": "2026-09-23T10:00:00Z",
+            }
+        },
+    )
+    current = {
+        "record_id": "r2",
+        "record_revision": 1,
+        "text": "A similar reported position appears here.",
+        "metadata_field_status": {},
+    }
+
+    class Repo:
+        def load_records(self, build_id):
+            return [reviewed, current]
+
+        def get_build(self, build_id):
+            return {
+                "asset_id": "asset-1",
+                "schema": {
+                    "id": "derrida",
+                    "schema_version": "v7",
+                    "groups": [
+                        {
+                            "key": "discourse",
+                            "retrieval_profile": {
+                                "enabled": False,
+                                "max_items": 6,
+                                "min_similarity": 0.0,
+                                "include_corrections": True,
+                                "include_confirmed_absence": True,
+                            },
+                        }
+                    ],
+                    "fields": [],
+                },
+            }
+
+        def load_blocks(self, asset_id):
+            return list(blocks().values())
+
+    class GlobalLearning:
+        def conventions(self, *, exclude_build_id=""):
+            return {}
+
+    class SemanticIndex:
+        def retrieve(self, **kwargs):
+            raise AssertionError("Disabled core-group retrieval must not issue a semantic query.")
+
+    class Memory(EditorialMemoryMixin):
+        repo = Repo()
+        _global_learning = GlobalLearning()
+        _progressive_metadata_index = SemanticIndex()
+        _progressive_metadata_warning_builds = set()
+
+        def _append_warning(self, build_id, message):
+            raise AssertionError(f"Unexpected editorial-memory warning: {build_id}: {message}")
+
+    memory = Memory()._editorial_memory("build-1", current, exclude_record_id="r2")
+
+    assert "discourse_role" not in memory["examples"]
+    assert "discourse_role" not in memory["conventions"]
+
+
+def test_editorial_memory_disabled_field_does_not_leak_through_lexical_fallback():
+    from app.corpus_editorial_memory import EditorialMemoryMixin
+
+    reviewed = reviewed_record()
+    current = {
+        "record_id": "r2",
+        "record_revision": 1,
+        "text": "Levinas and responsibility.",
+        "metadata_field_status": {},
+    }
+
+    class Repo:
+        def load_records(self, build_id):
+            return [reviewed, current]
+
+        def get_build(self, build_id):
+            return {
+                "asset_id": "asset-1",
+                "schema": {
+                    "id": "derrida",
+                    "schema_version": "v7",
+                    "fields": [
+                        {
+                            "name": "position_holder",
+                            "field_id": "field.position_holder",
+                            "retrieval_profile": {
+                                "enabled": False,
+                                "use_for_metadata_enrichment": True,
+                                "include_corrections": True,
+                                "max_items": 6,
+                                "min_similarity": 0.0,
+                            },
+                        }
+                    ],
+                },
+            }
+
+        def load_blocks(self, asset_id):
+            return list(blocks().values())
+
+    class GlobalLearning:
+        def conventions(self, *, exclude_build_id=""):
+            return {}
+
+    class SemanticIndex:
+        def retrieve(self, **kwargs):
+            raise AssertionError("Disabled metadata field must not reach semantic retrieval.")
+
+    class Memory(EditorialMemoryMixin):
+        repo = Repo()
+        _global_learning = GlobalLearning()
+        _progressive_metadata_index = SemanticIndex()
+        _progressive_metadata_warning_builds = set()
+
+        def _append_warning(self, build_id, message):
+            raise AssertionError(f"Unexpected editorial-memory warning: {build_id}: {message}")
+
+    memory = Memory()._editorial_memory("build-1", current, exclude_record_id="r2")
+
+    assert "position_holder" not in memory["examples"]
+    assert "position_holder" not in memory["conventions"]
+
+
+def test_editorial_memory_excludes_corrections_when_field_policy_disables_them():
+    from app.corpus_editorial_memory import EditorialMemoryMixin
+
+    reviewed = reviewed_record(
+        position_holder="Derrida",
+        metadata_field_status={
+            "position_holder": {"status": "human_confirmed", "method": "human"}
+        },
+        metadata_evidence={
+            "position_holder": {
+                "block_ids": ["b3"],
+                "reviewed_by": "human",
+                "reviewed_at": "2026-09-23T10:00:00Z",
+            }
+        },
+        llm_rejections=[
+            {
+                "field": "position_holder",
+                "rejected_value": "Levinas",
+                "chosen_value": "Derrida",
+                "model": "small-model",
+                "at": "2026-09-23T10:00:00Z",
+            }
+        ],
+    )
+    current = {
+        "record_id": "r2",
+        "record_revision": 1,
+        "text": "Derrida discusses responsibility.",
+        "language": "en",
+        "metadata_field_status": {},
+    }
+
+    class Repo:
+        def load_records(self, build_id):
+            return [reviewed, current]
+
+        def get_build(self, build_id):
+            return {
+                "asset_id": "asset-1",
+                "schema": {
+                    "id": "derrida",
+                    "schema_version": "v7",
+                    "fields": [
+                        {
+                            "name": "position_holder",
+                            "field_id": "field.position_holder",
+                            "retrieval_profile": {
+                                "enabled": True,
+                                "use_for_metadata_enrichment": True,
+                                "include_corrections": False,
+                                "max_items": 6,
+                                "min_similarity": 0.0,
+                            },
+                        }
+                    ],
+                },
+            }
+
+        def load_blocks(self, asset_id):
+            return list(blocks().values())
+
+    class GlobalLearning:
+        def conventions(self, *, exclude_build_id=""):
+            return {}
+
+    class SemanticIndex:
+        def __init__(self):
+            self.calls = []
+
+        def retrieve(self, **kwargs):
+            self.calls.append(kwargs)
+            assert [item["kind"] for item in kwargs["exemplars"]] == ["positive"]
+            return {"ok": True, "examples": {}, "telemetry": {"examples_used": 0}}
+
+    semantic = SemanticIndex()
+
+    class Memory(EditorialMemoryMixin):
+        repo = Repo()
+        _global_learning = GlobalLearning()
+        _progressive_metadata_index = semantic
+        _progressive_metadata_warning_builds = set()
+
+        def _append_warning(self, build_id, message):
+            raise AssertionError(f"Unexpected editorial-memory warning: {build_id}: {message}")
+
+    Memory()._editorial_memory("build-1", current, exclude_record_id="r2")
+
+    assert len(semantic.calls) == 1
+
+
+
+def test_editorial_memory_honors_confirmed_absence_retrieval_policy():
+    from app.corpus_editorial_memory import EditorialMemoryMixin
+
+    reviewed = reviewed_record(
+        position_holder=None,
+        metadata_field_status={
+            "position_holder": {"status": "confirmed_absent", "method": "human"}
+        },
+        metadata_evidence={
+            "position_holder": {
+                "block_ids": ["b2"],
+                "reviewed_by": "human",
+                "reviewed_at": "2026-09-23T10:00:00Z",
+            }
+        },
+    )
+    current = {
+        "record_id": "r2",
+        "record_revision": 1,
+        "text": "Responsibility and alterity.",
+        "language": "en",
+        "metadata_field_status": {},
+    }
+
+    class Repo:
+        def load_records(self, build_id):
+            return [reviewed, current]
+
+        def get_build(self, build_id):
+            return {
+                "asset_id": "asset-1",
+                "schema": {
+                    "id": "derrida",
+                    "schema_version": "v7",
+                    "fields": [
+                        {
+                            "name": "position_holder",
+                            "field_id": "field.position_holder",
+                            "retrieval_profile": {
+                                "enabled": True,
+                                "use_for_metadata_enrichment": True,
+                                "include_corrections": True,
+                                "include_confirmed_absence": False,
+                                "max_items": 6,
+                                "min_similarity": 0.0,
+                            },
+                        }
+                    ],
+                },
+            }
+
+        def load_blocks(self, asset_id):
+            return list(blocks().values())
+
+    class GlobalLearning:
+        def conventions(self, *, exclude_build_id=""):
+            return {}
+
+    class SemanticIndex:
+        def retrieve(self, **kwargs):
+            raise AssertionError("Confirmed absence disabled by field policy must not be retrieved.")
+
+    class Memory(EditorialMemoryMixin):
+        repo = Repo()
+        _global_learning = GlobalLearning()
+        _progressive_metadata_index = SemanticIndex()
+        _progressive_metadata_warning_builds = set()
+
+        def _append_warning(self, build_id, message):
+            raise AssertionError(f"Unexpected editorial-memory warning: {build_id}: {message}")
+
+    memory = Memory()._editorial_memory("build-1", current, exclude_record_id="r2")
+
+    assert "position_holder" not in memory["examples"]
+
+
+
+def test_editorial_memory_zero_precedent_limit_disables_field_examples():
+    from app.corpus_editorial_memory import EditorialMemoryMixin
+
+    reviewed = reviewed_record()
+    current = {
+        "record_id": "r2",
+        "record_revision": 1,
+        "text": "Levinas and responsibility.",
+        "language": "en",
+        "metadata_field_status": {},
+    }
+
+    class Repo:
+        def load_records(self, build_id):
+            return [reviewed, current]
+
+        def get_build(self, build_id):
+            return {
+                "asset_id": "asset-1",
+                "schema": {
+                    "id": "derrida",
+                    "schema_version": "v7",
+                    "fields": [
+                        {
+                            "name": "position_holder",
+                            "field_id": "field.position_holder",
+                            "retrieval_profile": {
+                                "enabled": True,
+                                "use_for_metadata_enrichment": True,
+                                "include_corrections": True,
+                                "include_confirmed_absence": True,
+                                "max_items": 0,
+                                "min_similarity": 0.0,
+                            },
+                        }
+                    ],
+                },
+            }
+
+        def load_blocks(self, asset_id):
+            return list(blocks().values())
+
+    class GlobalLearning:
+        def conventions(self, *, exclude_build_id=""):
+            return {}
+
+    class SemanticIndex:
+        def retrieve(self, **kwargs):
+            raise AssertionError("A zero-precedent field should not issue a semantic query.")
+
+    class Memory(EditorialMemoryMixin):
+        repo = Repo()
+        _global_learning = GlobalLearning()
+        _progressive_metadata_index = SemanticIndex()
+        _progressive_metadata_warning_builds = set()
+
+        def _append_warning(self, build_id, message):
+            raise AssertionError(f"Unexpected editorial-memory warning: {build_id}: {message}")
+
+    memory = Memory()._editorial_memory("build-1", current, exclude_record_id="r2")
+
+    assert "position_holder" not in memory["examples"]

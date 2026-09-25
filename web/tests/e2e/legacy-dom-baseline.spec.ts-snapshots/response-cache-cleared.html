@@ -87,6 +87,30 @@
 </div>
 </footer>
 </section>
+<section class="card chroma-console" aria-labelledby="system-chroma-console-title">
+<div class="table-header">
+<div>
+<span class="eyebrow">System Chroma</span>
+<h2 id="system-chroma-console-title">Read-only query console</h2>
+<p>Inspect internal vector projections with CLI-style get and query commands. Commands are parsed and validated server-side before execution; no mutation commands are accepted.</p>
+</div>
+<div class="chroma-collection-summary">
+</div>
+</div>
+<label class="console-command">
+<span>Command</span>
+<textarea class="control mono" rows="3" spellcheck="false" placeholder="query derridai_metadata_exemplars --text &quot;responsibility to the Other&quot; --n-results 8 --where &quot;{&quot;field_name&quot;:&quot;position_holder&quot;}&quot;">
+</textarea>
+</label>
+<div class="console-help">
+<code>get COLLECTION --where '{"field_name":"speaker"}' --limit 20</code>
+<code>query COLLECTION --text "passage" --n-results 8 --where-document '{"$contains":"Levinas"}'</code>
+</div>
+<div class="schema-actions">
+<button class="btn" type="button" disabled="">Validate &amp; explain</button>
+<button class="btn primary" type="button" disabled="">Execute query</button>
+</div>
+</section>
 <section class="card" aria-labelledby="cache-records-title">
 <div class="table-header">
 <div>

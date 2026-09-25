@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from ..corpus_builder import pdf_corpus_repository
 from ..http_auth import request_user, require_admin
@@ -11,6 +11,11 @@ from ..llm import llm_status
 from ..metadata_memory import MetadataMemoryService
 from ..models import ResearcherProviderProfilesUpdate, ResearcherProviderStatusRequest
 from ..services import store
+from ..system_chroma_console import (
+    execute_system_chroma_command,
+    list_system_chroma_collections,
+    validate_system_chroma_command,
+)
 from ..system_store import system_store
 
 router = APIRouter(tags=["system"])
@@ -97,6 +102,39 @@ def inspect_metadata_memory(
         language=language,
         query=q,
     )
+
+
+@router.get("/api/system/chroma/collections")
+def system_chroma_collections(request: Request) -> dict[str, Any]:
+    """List internal Chroma collections without exposing them as ordinary corpus stores."""
+
+    require_admin(request)
+    try:
+        return {"collections": list_system_chroma_collections(store)}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/api/system/chroma/validate")
+def validate_system_chroma(body: dict[str, Any], request: Request) -> dict[str, Any]:
+    """Validate and explain one read-only CLI-style system Chroma command."""
+
+    require_admin(request)
+    try:
+        return validate_system_chroma_command(store, str(body.get("command") or ""))
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/api/system/chroma/query")
+def query_system_chroma(body: dict[str, Any], request: Request) -> dict[str, Any]:
+    """Execute a previously understandable read-only system Chroma command."""
+
+    require_admin(request)
+    try:
+        return execute_system_chroma_command(store, str(body.get("command") or ""))
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/api/system/research-memory")

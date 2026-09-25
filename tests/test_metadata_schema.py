@@ -12,6 +12,7 @@ from app.corpus_metadata import (
     METADATA_FAMILY_FIELDS,
     REVIEW_METADATA_FIELDS,
 )
+from app.metadata_schema import MetadataSchema, SchemaField, SchemaGroup
 
 LEGACY = json.loads((Path(__file__).parent / "fixtures" / "legacy_prompts.json").read_text(encoding="utf-8"))
 CONTEXT = "<<CONTEXT>>\n"
@@ -73,11 +74,14 @@ def test_response_consistency_rejects_assessment_value_contradictions():
     with pytest.raises(Exception, match="uncertain requires needs_review=true"):
         model.model_validate(bad)
 
-    bad = json.loads(json.dumps({"metadata": fields, "field_assessments": assessments, "field_evidence": evidence}))
-    bad["metadata"]["speaker"] = "Jacques Derrida"
-    bad["field_assessments"]["speaker"] = {"confidence": 0.95, "needs_review": False, "reason": "clear", "outcome": "supported_value"}
-    with pytest.raises(Exception, match="require at least one field_evidence block_id"):
-        model.model_validate(bad)
+    missing_evidence = json.loads(json.dumps({"metadata": fields, "field_assessments": assessments, "field_evidence": evidence}))
+    missing_evidence["metadata"]["speaker"] = "Jacques Derrida"
+    missing_evidence["field_assessments"]["speaker"] = {"confidence": 0.95, "needs_review": False, "reason": "clear", "outcome": "supported_value"}
+    # Structured-output validation preserves the usable family response. Evidence
+    # sufficiency is reconciled against current-record block IDs afterward, where
+    # this field becomes evidence_failed/reviewable instead of failing the whole call.
+    accepted = model.model_validate(missing_evidence)
+    assert accepted.metadata.speaker == "Jacques Derrida"
 
 
 def test_the_built_in_schema_describes_the_same_fields_as_the_code_does_today():
@@ -119,6 +123,34 @@ def custom():
             ms.SchemaField(name="year_mentioned", label="Year mentioned", type="number", group="ideas"),
         ],
     )
+
+
+def test_retrieval_profile_migrates_abandoned_routing_fields_without_losing_metadata_disable():
+    profile = ms.RetrievalProfile.model_validate(
+        {
+            "enabled": True,
+            "scope": "all_reviewed",
+            "max_items": 4,
+            "min_similarity": 0.35,
+            "include_corrections": False,
+            "include_confirmed_absence": True,
+            "use_for_metadata_enrichment": False,
+            "use_for_response_memory": True,
+            "use_for_claim_memory": True,
+        }
+    )
+
+    assert profile.enabled is False
+    assert profile.max_items == 4
+    assert profile.min_similarity == 0.35
+    dumped = profile.model_dump(mode="json")
+    assert set(dumped) == {
+        "enabled",
+        "max_items",
+        "min_similarity",
+        "include_corrections",
+        "include_confirmed_absence",
+    }
 
 
 def test_a_custom_schema_shapes_the_prompt_and_the_answer():
@@ -357,4 +389,44 @@ def test_researcher_cannot_author_metadata_schemas(tmp_path, monkeypatch):
 
     listing, created = asyncio.run(run())
     assert listing.status_code == 403 and created.status_code == 403
+
+
+
+def test_metadata_schema_accepts_complete_supported_pos_and_ner_vocabularies():
+    pos_tags = [
+        "ADJ", "ADP", "ADV", "AUX", "CCONJ", "DET", "INTJ", "NOUN", "NUM",
+        "PART", "PRON", "PROPN", "PUNCT", "SCONJ", "SYM", "VERB", "X",
+    ]
+    ner_tags = [
+        "CARDINAL", "DATE", "EVENT", "FAC", "GPE", "LANGUAGE", "LAW", "LOC",
+        "MONEY", "NORP", "ORDINAL", "ORG", "PERCENT", "PERSON", "PRODUCT",
+        "QUANTITY", "TIME", "WORK_OF_ART",
+    ]
+    schema = MetadataSchema(
+        name="NLP tags",
+        groups=[
+            SchemaGroup(
+                key="core",
+                label="Core",
+                intro="Infer core metadata.",
+            ),
+            SchemaGroup(
+                key="discourse",
+                label="Discourse",
+                intro="Infer discourse metadata.",
+            ),
+        ],
+        fields=[
+            SchemaField(
+                name="entities",
+                label="Entities",
+                group="discourse",
+                pos_tags=pos_tags,
+                ner_tags=ner_tags,
+            )
+        ],
+    )
+    field = schema.fields[0]
+    assert field.pos_tags == pos_tags
+    assert field.ner_tags == ner_tags
 

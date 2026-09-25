@@ -99,6 +99,13 @@ class EditorialMemoryMixin:
             for item in schema_payload.get("fields") or []
             if isinstance(item, dict) and str(item.get("name") or "")
         }
+        group_profiles = {
+            str(item.get("key") or ""): item.get("retrieval_profile")
+            for item in schema_payload.get("groups") or []
+            if isinstance(item, dict)
+            and str(item.get("key") or "")
+            and isinstance(item.get("retrieval_profile"), dict)
+        }
         core_field_ids = {
             "region_type": "core.region_type",
             "primary_text": "core.primary_text",
@@ -127,14 +134,30 @@ class EditorialMemoryMixin:
         field_limits: dict[str, int] = {}
         field_min_similarity: dict[str, float] = {}
         enabled_fields: set[str] = set()
+        correction_fields: set[str] = set()
+        confirmed_absence_fields: set[str] = set()
         for field, _field_id in field_ids.items():
             item = schema_fields.get(field, {})
             profile = item.get("retrieval_profile") if isinstance(item, dict) else None
-            if profile is not None and not bool(profile.get("enabled", True)):
-                continue
-            if profile is not None and profile.get("use_for_metadata_enrichment") is False:
+            if not isinstance(profile, dict):
+                group_key = (
+                    "discourse"
+                    if field in core_field_ids
+                    else str(item.get("group") or "")
+                )
+                profile = group_profiles.get(group_key)
+            if isinstance(profile, dict) and (
+                not bool(profile.get("enabled", True))
+                # Preserve the meaning of already-copied legacy schemas while
+                # new schemas no longer serialize this redundant routing flag.
+                or profile.get("use_for_metadata_enrichment") is False
+            ):
                 continue
             enabled_fields.add(field)
+            if profile is None or bool(profile.get("include_corrections", True)):
+                correction_fields.add(field)
+            if profile is None or bool(profile.get("include_confirmed_absence", True)):
+                confirmed_absence_fields.add(field)
             if profile is not None:
                 field_limits[field] = int(profile.get("max_items", 2) or 0)
                 field_min_similarity[field] = float(profile.get("min_similarity", 0) or 0)
@@ -156,7 +179,26 @@ class EditorialMemoryMixin:
             statuses = row.get("metadata_field_status") if isinstance(row.get("metadata_field_status"), dict) else {}
             for field, info in statuses.items():
                 field = str(field)
-                if not isinstance(info, dict) or str(info.get("status") or "") not in {"human_confirmed", "human_override"}:
+                if field not in enabled_fields or not isinstance(info, dict):
+                    continue
+                status_name = str(info.get("status") or "")
+                if status_name == "confirmed_absent":
+                    if field not in confirmed_absence_fields or _second_opinion_owed(row, field):
+                        continue
+                    exemplar = build_metadata_exemplar(
+                        row,
+                        field,
+                        blocks_by_id,
+                        schema_id=schema_id,
+                        schema_version=schema_version,
+                        source_document_id=source_document_id,
+                        field_id=field_ids.get(field, ""),
+                    )
+                    if exemplar is not None:
+                        canonical_exemplars.append(exemplar)
+                        trusted_rows[record_id or str(id(row))] = row
+                    continue
+                if status_name not in {"human_confirmed", "human_override"}:
                     continue
                 if _second_opinion_owed(row, field):
                     continue  # a conventions list or example must not tell a second reviewer what the first one answered
@@ -234,7 +276,11 @@ class EditorialMemoryMixin:
                 field_ids=field_ids,
             ):
                 field = str(correction.get("field_name") or "")
-                if field and not _second_opinion_owed(row, field):
+                if (
+                    field
+                    and field in correction_fields
+                    and not _second_opinion_owed(row, field)
+                ):
                     canonical_exemplars.append(correction)
         canonical_exemplars = list({
             str(item.get("metadata_exemplar_id") or ""): item
@@ -248,15 +294,20 @@ class EditorialMemoryMixin:
             # Keep prompts compact. Include up to four field-specific examples;
             # zero-overlap examples are still useful only for discourse role when
             # a repeated build convention exists.
-            kept = [item for item in ranked if float(item.get("similarity") or 0) > 0][:4]
+            configured_limit = field_limits.get(field)
+            prelimit = max(4, int(configured_limit)) if configured_limit is not None else 4
+            kept = [
+                item for item in ranked
+                if float(item.get("similarity") or 0) > 0
+            ][:prelimit]
             if not kept and field == "discourse_role" and conventions.get(field):
-                kept = ranked[:2]
+                kept = ranked[:max(2, prelimit)]
             if kept:
                 examples[field] = kept
         # Bound the complete few-shot packet rather than only each field.  This
         # keeps progressive retrieval from trading metadata quality for prompt
         # bloat as the reviewed corpus grows.
-        examples = budget_prompt_examples(examples)
+        examples = budget_prompt_examples(examples, field_limits=field_limits or None)
 
         retrieval_telemetry: dict[str, Any] = {}
         progressive_index = getattr(self, "_progressive_metadata_index", None)
@@ -264,19 +315,26 @@ class EditorialMemoryMixin:
             retrieval_fields = sorted({
                 str(item.get("field_name") or "")
                 for item in canonical_exemplars
-                if str(item.get("field_name") or "") in (enabled_fields or field_ids)
+                if (
+                    str(item.get("field_name") or "") in enabled_fields
+                    and int(field_limits.get(str(item.get("field_name") or ""), 1)) > 0
+                )
             })
-            semantic = progressive_index.retrieve(
-                scope_id=build_id,
-                query_text=current_text,
-                exemplars=canonical_exemplars,
-                fields=retrieval_fields,
-                schema_id=schema_id,
-                schema_version=schema_version,
-                language=str(current_record.get("language") or ""),
-                field_limits=field_limits or None,
-                field_min_similarity=field_min_similarity or None,
-                exclude_record_id=exclude_record_id,
+            semantic = (
+                progressive_index.retrieve(
+                    scope_id=build_id,
+                    query_text=current_text,
+                    exemplars=canonical_exemplars,
+                    fields=retrieval_fields,
+                    schema_id=schema_id,
+                    schema_version=schema_version,
+                    language=str(current_record.get("language") or ""),
+                    field_limits=field_limits or None,
+                    field_min_similarity=field_min_similarity or None,
+                    exclude_record_id=exclude_record_id,
+                )
+                if retrieval_fields
+                else None
             )
             if isinstance(semantic, dict):
                 retrieval_telemetry = dict(semantic.get("telemetry") or {})
@@ -287,7 +345,10 @@ class EditorialMemoryMixin:
                     for field, items in semantic["examples"].items():
                         if isinstance(items, list) and items:
                             examples[str(field)] = items
-                    examples = budget_prompt_examples(examples)
+                    examples = budget_prompt_examples(
+                        examples,
+                        field_limits=field_limits or None,
+                    )
                 elif retrieval_telemetry.get("fallback_reason"):
                     warned: set[str] = getattr(
                         self,

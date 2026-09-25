@@ -156,6 +156,7 @@ class SQLiteRepositoryBase:
                 CREATE TABLE IF NOT EXISTS semantic_memory_outbox (
                     item_id TEXT PRIMARY KEY,
                     projection TEXT NOT NULL,
+                    scope_id TEXT,
                     record_id TEXT,
                     reason TEXT NOT NULL,
                     status TEXT NOT NULL DEFAULT 'dirty',
@@ -206,6 +207,7 @@ class SQLiteRepositoryBase:
                 """
             )
             self._ensure_column(conn, "languages", "content_policy_json", "TEXT")
+            self._ensure_column(conn, "semantic_memory_outbox", "scope_id", "TEXT")
 
 
     @staticmethod
@@ -547,32 +549,73 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
             ).fetchall()
         return [value for value in (_json_loads(row["payload_json"], {}) for row in rows) if isinstance(value, dict)]
 
-    def mark_semantic_memory_dirty(self, projection: str, *, record_id: str | None = None, reason: str = "changed") -> str:
+    def mark_semantic_memory_dirty(
+        self,
+        projection: str,
+        *,
+        scope_id: str | None = None,
+        record_id: str | None = None,
+        reason: str = "changed",
+    ) -> str:
         import uuid
         item_id = str(uuid.uuid4())
         now = _iso_now()
         with self._lock, self._connect() as conn:
             conn.execute(
-                "INSERT INTO semantic_memory_outbox(item_id,projection,record_id,reason,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
-                (item_id, str(projection), record_id, str(reason), "dirty", now, now),
+                """
+                INSERT INTO semantic_memory_outbox
+                    (item_id,projection,scope_id,record_id,reason,status,created_at,updated_at)
+                VALUES(?,?,?,?,?,?,?,?)
+                """,
+                (item_id, str(projection), scope_id, record_id, str(reason), "dirty", now, now),
             )
             conn.commit()
         return item_id
 
-    def list_semantic_memory_dirty(self, projection: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+    def list_semantic_memory_dirty(
+        self,
+        projection: str | None = None,
+        *,
+        scope_id: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
         projection_filter = str(projection) if projection else None
+        scope_filter = str(scope_id) if scope_id else None
         with self._lock, self._connect() as conn:
             rows = conn.execute(
                 """
-                SELECT item_id,projection,record_id,reason,status,created_at,updated_at
+                SELECT item_id,projection,scope_id,record_id,reason,status,created_at,updated_at
                 FROM semantic_memory_outbox
-                WHERE status='dirty' AND (? IS NULL OR projection=?)
+                WHERE status='dirty'
+                  AND (? IS NULL OR projection=?)
+                  AND (? IS NULL OR scope_id=?)
                 ORDER BY created_at
                 LIMIT ?
                 """,
-                (projection_filter, projection_filter, max(1, min(1000, int(limit)))),
+                (
+                    projection_filter,
+                    projection_filter,
+                    scope_filter,
+                    scope_filter,
+                    max(1, min(1000, int(limit))),
+                ),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def complete_semantic_memory_dirty(self, item_ids: Iterable[str]) -> int:
+        ids = [str(item_id) for item_id in item_ids if str(item_id).strip()]
+        if not ids:
+            return 0
+        now = _iso_now()
+        with self._lock, self._connect() as conn:
+            cursor = conn.executemany(
+                "UPDATE semantic_memory_outbox "
+                "SET status='projected', updated_at=? "
+                "WHERE item_id=? AND status='dirty'",
+                [(now, item_id) for item_id in ids],
+            )
+            conn.commit()
+            return int(cursor.rowcount or 0)
 
     def put_generated_claim(self, payload: dict[str, Any]) -> None:
         claim_id = str(payload.get("claim_id") or "").strip()

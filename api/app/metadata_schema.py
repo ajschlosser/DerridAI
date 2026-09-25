@@ -82,26 +82,35 @@ MAX_FIELDS = 60
 MAX_GROUPS = 6
 
 FieldType = Literal["text", "number", "boolean", "choice", "list"]
-RetrievalScope = Literal["same_schema", "same_field", "all_reviewed"]
-
-
 class RetrievalProfile(BaseModel):
-    """Declarative policy for which reviewed memory may guide a field.
+    """Policy for evidence-bound reviewed precedents used during metadata enrichment.
 
-    This is configuration, not a retrieval result.  Scores, ranks, and
-    provider-specific diagnostics therefore never become part of a schema.
+    The profile intentionally contains only controls with implemented semantics.
+    Older schema files may still contain the abandoned multi-workflow routing
+    fields; those are migrated away here instead of remaining inert configuration.
     """
 
     model_config = ConfigDict(extra="forbid")
     enabled: bool = True
-    scope: RetrievalScope = "same_field"
     max_items: int = Field(default=6, ge=0, le=50)
     min_similarity: float = Field(default=0.0, ge=0.0, le=1.0)
     include_corrections: bool = True
     include_confirmed_absence: bool = True
-    use_for_metadata_enrichment: bool = True
-    use_for_response_memory: bool = False
-    use_for_claim_memory: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_legacy_routing(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        result = dict(value)
+        if result.pop("use_for_metadata_enrichment", True) is False:
+            result["enabled"] = False
+        # These fields were serialized before they had production semantics.
+        # Retrieval is field-specific evidence-bound metadata enrichment; response
+        # and claim memory remain separate systems.
+        for key in ("scope", "use_for_response_memory", "use_for_claim_memory"):
+            result.pop(key, None)
+        return result
 
 
 class SchemaValue(BaseModel):
@@ -129,8 +138,8 @@ class SchemaField(BaseModel):
     assess: bool = False  # the model must report its confidence
     review: bool = False  # an unresolved value here keeps a record out of "accepted" until a person decides
     # Optional linguistic hints used by deterministic suggestions and model prompts.
-    pos_tags: list[str] = Field(default_factory=list, max_length=16)
-    ner_tags: list[str] = Field(default_factory=list, max_length=16)
+    pos_tags: list[str] = Field(default_factory=list, max_length=32)
+    ner_tags: list[str] = Field(default_factory=list, max_length=32)
     retrieval_profile: RetrievalProfile | None = None
 
     @model_validator(mode="before")
@@ -377,8 +386,8 @@ def build_group_prompt(
             lines.append(f"- {field.name} should prefer values supported by POS tags: {json.dumps(field.pos_tags)}.")
         if field.ner_tags:
             lines.append(
-                f"- {field.name} should prefer named entities matching NER tags "
-                f"(IOB2-compatible): {json.dumps(field.ner_tags)}."
+                f"- {field.name} should prefer named entities matching these entity-type "
+                f"labels: {json.dumps(field.ner_tags)}."
             )
         described = {v.value: v.definition for v in field.values if v.definition}
         if described:
@@ -431,15 +440,6 @@ class MetadataResponseBase(BaseModel):
         metadata = metadata_obj.model_dump() if isinstance(metadata_obj, BaseModel) else dict(metadata_obj or {})
         assessments_obj = getattr(self, "field_assessments", None)
         assessments = assessments_obj.model_dump() if isinstance(assessments_obj, BaseModel) else dict(assessments_obj or {})
-        evidence_obj = getattr(self, "field_evidence", None)
-        if isinstance(evidence_obj, BaseModel):
-            evidence = evidence_obj.model_dump()
-        else:
-            evidence = {
-                str(key): value.model_dump() if isinstance(value, BaseModel) else value
-                for key, value in dict(evidence_obj or {}).items()
-            }
-
         def missing(value: Any) -> bool:
             return value is None or value == "" or value == []
 
@@ -458,13 +458,11 @@ class MetadataResponseBase(BaseModel):
             if outcome == "uncertain" and not needs_review:
                 raise ValueError(f"{field}: outcome=uncertain requires needs_review=true")
 
-            if outcome == "supported_value" and field in self.evidence_fields_for_validation:
-                info = evidence.get(field)
-                block_ids = info.get("block_ids") if isinstance(info, dict) else None
-                if not block_ids:
-                    raise ValueError(
-                        f"{field}: supported evidence-bearing values require at least one field_evidence block_id"
-                    )
+            # Missing/invalid evidence is a review-state problem, not a
+            # structured-output failure. Reconciliation below the schema layer
+            # validates block membership/confidence and marks the individual field
+            # evidence_failed so one omitted citation cannot discard an otherwise
+            # usable metadata-family response.
         return self
 
 

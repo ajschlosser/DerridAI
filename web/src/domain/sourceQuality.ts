@@ -37,6 +37,24 @@ export function firstRecordWithSourceWarning<T extends { source_quality_issues?:
   return records.find((record) => recordHasSourceWarning(record));
 }
 
+export const SOURCE_WARNING_HIDE_KEY = "derridai.pdf-corpus.hide-extraction-warnings";
+
+export function sourceWarningsHidden(): boolean {
+  try {
+    return localStorage.getItem(SOURCE_WARNING_HIDE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function hideSourceWarnings(): void {
+  try {
+    localStorage.setItem(SOURCE_WARNING_HIDE_KEY, "1");
+  } catch {
+    // Browser storage is optional; the current dialog can still close.
+  }
+}
+
 export function ingestWarningStorageKey(assetId: string): string {
   return `derridai.source-quality.seen.${assetId}`;
 }

@@ -154,9 +154,23 @@ class SystemStore:
         with self._lock:
             return self.repository.mark_semantic_memory_dirty(projection, **kwargs)
 
-    def list_semantic_memory_dirty(self, projection: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+    def list_semantic_memory_dirty(
+        self,
+        projection: str | None = None,
+        *,
+        scope_id: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
         with self._lock:
-            return self.repository.list_semantic_memory_dirty(projection, limit)
+            return self.repository.list_semantic_memory_dirty(
+                projection,
+                scope_id=scope_id,
+                limit=limit,
+            )
+
+    def complete_semantic_memory_dirty(self, item_ids: list[str]) -> int:
+        with self._lock:
+            return self.repository.complete_semantic_memory_dirty(item_ids)
 
     def put_generated_claim(self, payload: dict[str, Any]) -> None:
         with self._lock:

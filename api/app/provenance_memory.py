@@ -1,10 +1,11 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
-"""Canonical, permission-aware memory and claim provenance.
+"""Durable review-event and claim provenance.
 
-Chroma and other search indexes may project these objects, but this module
-keeps the durable decision and claim/support relationships in SQLite.  A
-binding is intentionally resolved again against the corpus before it is used
-as current evidence.
+The reviewed corpus RecordRevision remains authoritative for current metadata.
+This module keeps a durable audit binding for each human decision plus
+claim/support relationships in SQLite. Chroma and other search indexes are
+derived projections and are always resolved back to current corpus state before
+they can be used as evidence.
 """
 
 from __future__ import annotations
@@ -29,6 +30,15 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _optional_int(value: Any) -> int | None:
+    if value in (None, "") or isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 class EvidenceSpan(BaseModel):
     model_config = ConfigDict(extra="forbid")
     source_document_id: str
@@ -45,6 +55,7 @@ class MetadataMemoryBinding(BaseModel):
     model_config = ConfigDict(extra="forbid")
     binding_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     record_id: str
+    scope_id: str | None = None
     record_revision: int | None = Field(default=None, ge=1)
     source_document_id: str | None = None
     field_id: str
@@ -106,6 +117,7 @@ def persist_record_decision(
     decision_kind: DecisionKind = "value",
     owner: str | None = None,
     rejected_value: Any = None,
+    scope_id: str | None = None,
 ) -> MetadataMemoryBinding:
     """Create a binding from the canonical record's reviewed evidence."""
     migrate_record_assertions(record, schema)
@@ -117,25 +129,70 @@ def persist_record_decision(
         if assertion and assertion.evidence:
             candidate = assertion.evidence[0]
             field_evidence = candidate if isinstance(candidate, dict) else None
-    block_ids = (
-        field_evidence.get("block_ids") or field_evidence.get("source_unit_ids")
-        if isinstance(field_evidence, dict) else []
-    )
+    block_ids = field_evidence.get("block_ids") if isinstance(field_evidence, dict) else []
     source_document_id = str(
         (field_evidence.get("source_document_id") if isinstance(field_evidence, dict) else None)
         or record.get("source_document_id")
+        or record.get("source_asset_id")
         or ""
     ).strip()
-    if block_ids and source_document_id:
-        spans.append(EvidenceSpan(
-            source_document_id=source_document_id,
-            source_unit_ids=[str(item) for item in block_ids if str(item).strip()],
-        ))
+    normalized_block_ids = [str(item) for item in block_ids if str(item).strip()]
+    if normalized_block_ids and source_document_id:
+        wanted = set(normalized_block_ids)
+        matched: set[str] = set()
+        for source_span in record.get("source_spans") or []:
+            if not isinstance(source_span, dict):
+                continue
+            span_ids = {
+                str(source_span.get(key) or "").strip()
+                for key in ("source_unit_id", "block_id")
+                if str(source_span.get(key) or "").strip()
+            }
+            span_ids.update(
+                str(item).strip()
+                for item in source_span.get("source_unit_ids") or []
+                if str(item).strip()
+            )
+            evidence_ids = sorted(span_ids & wanted)
+            if not evidence_ids:
+                continue
+            matched.update(evidence_ids)
+            physical_page = _optional_int(
+                source_span.get("pdf_page") or source_span.get("page")
+            )
+            printed_page = source_span.get("printed_page_label")
+            spans.append(
+                EvidenceSpan(
+                    source_document_id=str(
+                        source_span.get("source_document_id") or source_document_id
+                    ),
+                    source_unit_ids=evidence_ids,
+                    physical_page_start=physical_page,
+                    physical_page_end=physical_page,
+                    printed_page_start=printed_page,
+                    printed_page_end=printed_page,
+                    character_start=_optional_int(
+                        source_span.get("char_start") or source_span.get("start")
+                    ),
+                    character_end=_optional_int(
+                        source_span.get("char_end") or source_span.get("end")
+                    ),
+                )
+            )
+        unmatched = [block_id for block_id in normalized_block_ids if block_id not in matched]
+        if unmatched:
+            spans.append(
+                EvidenceSpan(
+                    source_document_id=source_document_id,
+                    source_unit_ids=unmatched,
+                )
+            )
     if decision_kind == "correction":
         value = {"accepted": value, "rejected": rejected_value}
     field_id = field_identity(field_name, schema)
     binding = MetadataMemoryBinding(
         record_id=str(record.get("record_id") or ""),
+        scope_id=str(scope_id or "") or None,
         record_revision=int(record.get("record_revision") or 1),
         source_document_id=source_document_id or None,
         field_id=field_id,
@@ -157,7 +214,10 @@ def persist_metadata_decision(binding: MetadataMemoryBinding) -> MetadataMemoryB
         raise ValueError("An explicit absence cannot carry a value.")
     system_store.put_memory_binding(binding.model_dump(mode="json"))
     system_store.mark_semantic_memory_dirty(
-        "metadata_exemplars", record_id=binding.record_id, reason="reviewed_metadata_decision"
+        "metadata_exemplars",
+        scope_id=binding.scope_id,
+        record_id=binding.record_id,
+        reason="reviewed_metadata_decision",
     )
     return binding
 

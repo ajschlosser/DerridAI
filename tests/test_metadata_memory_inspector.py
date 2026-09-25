@@ -107,7 +107,7 @@ def reviewer_memory_row():
     }
 
 
-def test_inspector_deduplicates_semantic_memory_and_prefers_evidence_bound_entry():
+def test_inspector_ignores_superseded_reviewer_memory_and_uses_evidence_bound_entries():
     service = MetadataMemoryService(
         FakeStore(
             [
@@ -130,7 +130,7 @@ def test_inspector_deduplicates_semantic_memory_and_prefers_evidence_bound_entry
 
     assert payload["available"] is True
     assert payload["total"] == 1
-    assert payload["summary"]["backends"] == 2
+    assert payload["summary"]["backends"] == 1
     assert payload["summary"]["entries"] == 1
     item = payload["items"][0]
     assert item["memory_type"] == "evidence_bound"

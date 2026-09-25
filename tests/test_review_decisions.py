@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
 
 from app import corpus_builder as cb
+from app import corpus_review_actions as review_actions
 
 
 def install_repo(tmp_path: Path, records: list[dict]):
@@ -66,6 +67,200 @@ def test_review_decision_is_atomic_and_returns_next(tmp_path: Path):
     assert result["next_record"]["record_id"] == "r2"
     assert result["build"]["accepted_count"] == 1
     assert result["build"]["publication_readiness"]["records_pending"] == 1
+
+
+def test_set_disposition_persists_promoted_metadata_memory(tmp_path: Path, monkeypatch):
+    """Legacy acceptance must feed the same durable metadata-memory path as Accept & next."""
+
+    record = rec("r1", "b1")
+    record["metadata_field_status"]["discourse_role"] = {
+        "status": "model_inferred",
+        "method": "llm",
+        "confidence": 0.9,
+    }
+    repo, build = install_repo(tmp_path, [record])
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    persisted: list[tuple[str, str, object]] = []
+    scheduled: list[str] = []
+    monkeypatch.setattr(
+        review_actions,
+        "persist_record_decision",
+        lambda **kwargs: persisted.append(
+            (
+                str(kwargs["record"].get("record_id") or ""),
+                str(kwargs["field_name"]),
+                kwargs["value"],
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        manager,
+        "_schedule_metadata_exemplar_projection",
+        lambda build_id: scheduled.append(build_id),
+    )
+
+    result = manager.set_disposition(
+        build["build_id"],
+        "r1",
+        "accepted",
+        expected_revision=1,
+    )
+
+    assert result["metadata_field_status"]["discourse_role"]["status"] == "human_confirmed"
+    assert persisted == [("r1", "discourse_role", "analysis")]
+    assert scheduled == [build["build_id"]]
+
+
+def test_human_evidence_edit_reprojects_trusted_metadata_memory(tmp_path: Path, monkeypatch):
+    """Adding reviewed evidence can make a human-confirmed field exemplar-eligible."""
+
+    record = rec("r1", "b1")
+    record["metadata_field_status"]["discourse_role"] = {
+        "status": "human_confirmed",
+        "method": "human",
+        "confidence": 1.0,
+    }
+    repo, build = install_repo(tmp_path, [record])
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    persisted: list[tuple[str, str, object]] = []
+    scheduled: list[str] = []
+    monkeypatch.setattr(
+        review_actions,
+        "persist_record_decision",
+        lambda **kwargs: persisted.append(
+            (
+                str(kwargs["record"].get("record_id") or ""),
+                str(kwargs["field_name"]),
+                kwargs["value"],
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        manager,
+        "_schedule_metadata_exemplar_projection",
+        lambda build_id: scheduled.append(build_id),
+    )
+
+    result = manager.patch_evidence(
+        build["build_id"],
+        "r1",
+        "discourse_role",
+        ["b1"],
+        expected_revision=1,
+    )
+
+    assert result["metadata_evidence"]["discourse_role"]["reviewed_by"] == "human"
+    assert persisted == [("r1", "discourse_role", "analysis")]
+    assert scheduled == [build["build_id"]]
+
+
+def test_human_evidence_edit_persists_confirmed_absence_as_absence_binding(tmp_path: Path, monkeypatch):
+    """Evidence-bound no-value decisions remain absence audit events, not null positives."""
+
+    record = rec("r1", "b1")
+    record["position_holder"] = None
+    record["metadata_field_status"]["position_holder"] = {
+        "status": "confirmed_absent",
+        "method": "human",
+        "confidence": 1.0,
+    }
+    repo, build = install_repo(tmp_path, [record])
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    persisted: list[tuple[str, str, object, str]] = []
+    scheduled: list[str] = []
+    monkeypatch.setattr(
+        review_actions,
+        "persist_record_decision",
+        lambda **kwargs: persisted.append(
+            (
+                str(kwargs["record"].get("record_id") or ""),
+                str(kwargs["field_name"]),
+                kwargs["value"],
+                str(kwargs["decision_kind"]),
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        manager,
+        "_schedule_metadata_exemplar_projection",
+        lambda build_id: scheduled.append(build_id),
+    )
+
+    result = manager.patch_evidence(
+        build["build_id"],
+        "r1",
+        "position_holder",
+        ["b1"],
+        expected_revision=1,
+    )
+
+    assert result["metadata_field_status"]["position_holder"]["status"] == "confirmed_absent"
+    assert persisted == [("r1", "position_holder", None, "absence")]
+    assert scheduled == [build["build_id"]]
+
+
+def test_human_value_change_invalidates_evidence_for_previous_assertion(tmp_path: Path, monkeypatch):
+    record = rec("r1", "b1")
+    record["position_holder"] = "Levinas"
+    record["metadata_field_status"]["position_holder"] = {
+        "status": "human_confirmed",
+        "method": "human",
+        "confidence": 1.0,
+    }
+    record["metadata_evidence"] = {
+        "position_holder": {
+            "block_ids": ["b1"],
+            "reviewed_by": "human",
+            "reviewed_at": "2026-09-24T00:00:00Z",
+        }
+    }
+    repo, build = install_repo(tmp_path, [record])
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    monkeypatch.setattr(review_actions, "persist_record_decision", lambda **kwargs: None)
+    monkeypatch.setattr(manager, "_schedule_metadata_exemplar_projection", lambda build_id: None)
+
+    updated = manager.patch_metadata(
+        build["build_id"],
+        "r1",
+        {"position_holder": "Derrida"},
+        expected_revision=1,
+    )
+
+    assert updated["position_holder"] == "Derrida"
+    assert "position_holder" not in (updated.get("metadata_evidence") or {})
+
+
+def test_confirmed_absence_invalidates_evidence_for_previous_value(tmp_path: Path, monkeypatch):
+    record = rec("r1", "b1")
+    record["position_holder"] = "Levinas"
+    record["metadata_field_status"]["position_holder"] = {
+        "status": "human_confirmed",
+        "method": "human",
+        "confidence": 1.0,
+    }
+    record["metadata_evidence"] = {
+        "position_holder": {
+            "block_ids": ["b1"],
+            "reviewed_by": "human",
+            "reviewed_at": "2026-09-24T00:00:00Z",
+        }
+    }
+    repo, build = install_repo(tmp_path, [record])
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    monkeypatch.setattr(review_actions, "persist_record_decision", lambda **kwargs: None)
+    monkeypatch.setattr(manager, "_schedule_metadata_exemplar_projection", lambda build_id: None)
+
+    updated = manager.metadata_decision(
+        build["build_id"],
+        "r1",
+        "position_holder",
+        None,
+        expected_revision=1,
+        confirm_no_supported_value=True,
+    )["record"]
+
+    assert updated["metadata_field_status"]["position_holder"]["status"] == "confirmed_absent"
+    assert "position_holder" not in (updated.get("metadata_evidence") or {})
 
 
 def test_review_decision_returns_structured_metadata_blocker(tmp_path: Path):

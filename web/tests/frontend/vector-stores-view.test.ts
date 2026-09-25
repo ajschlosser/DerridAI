@@ -41,6 +41,11 @@ const chromaApi = vi.hoisted(() => ({
 }));
 vi.mock("../../src/api/chroma", () => ({ chromaApi }));
 
+const systemApi = vi.hoisted(() => ({
+  researcherProviders: vi.fn(),
+}));
+vi.mock("../../src/api/system", () => ({ systemApi }));
+
 import VectorStoresView from "../../src/views/VectorStoresView.vue";
 import { useAuthStore } from "../../src/stores/auth";
 
@@ -75,6 +80,7 @@ describe("VectorStoresView", () => {
     Object.assign(vectorState, createVectorState());
     chromaApi.health.mockResolvedValue(readyHealth);
     chromaApi.collections.mockResolvedValue([]);
+    systemApi.researcherProviders.mockResolvedValue({ profiles: [] });
   });
 
   it("sends researchers to Search with database scope", async () => {
