@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { ref, useId } from "vue";
 
-const { text, label = "", placement = "top" } = defineProps<{
+const {
+  text,
+  label = "",
+  placement = "top",
+} = defineProps<{
   text: string;
   label?: string;
   placement?: "top" | "bottom";

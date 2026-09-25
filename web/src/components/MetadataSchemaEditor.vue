@@ -502,9 +502,7 @@ defineExpose({ select, draft });
                   />
                   <span>
                     {{ t("memory_corrections", "Include corrections") }}
-                    <UiTooltip
-                      :text="t('memory_corrections_help', schemaHelp.memoryCorrections)"
-                    />
+                    <UiTooltip :text="t('memory_corrections_help', schemaHelp.memoryCorrections)" />
                   </span>
                 </label>
                 <label class="check">
@@ -534,9 +532,7 @@ defineExpose({ select, draft });
                   <label>
                     <span>
                       {{ t("memory_similarity", "Minimum similarity") }}
-                      <UiTooltip
-                        :text="t('memory_similarity_help', schemaHelp.memorySimilarity)"
-                      />
+                      <UiTooltip :text="t('memory_similarity_help', schemaHelp.memorySimilarity)" />
                     </span>
                     <input
                       v-model.number="item.field.retrieval_profile.min_similarity"
@@ -629,28 +625,24 @@ defineExpose({ select, draft });
                 ><input v-model="item.field.strict" type="checkbox" /><span>
                   {{ t("strict", "The model may only return these values") }}
                   <UiTooltip :text="t('strict_help', schemaHelp.strict)" /> </span
-                ></label
-              >
+              ></label>
             </div>
             <div class="flags">
               <label class="check"
                 ><input v-model="item.field.evidence" type="checkbox" /><span>
                   {{ t("evidence", "Must cite the source") }}
                   <UiTooltip :text="t('evidence_help', schemaHelp.evidence)" /> </span
-                ></label
-              >
+              ></label>
               <label class="check"
                 ><input v-model="item.field.assess" type="checkbox" /><span>
                   {{ t("assess", "Report its confidence") }}
                   <UiTooltip :text="t('assess_help', schemaHelp.assess)" /> </span
-                ></label
-              >
+              ></label>
               <label class="check"
                 ><input v-model="item.field.review" type="checkbox" /><span>
                   {{ t("review", "A person must settle it before accepting") }}
                   <UiTooltip :text="t('review_help', schemaHelp.review)" /> </span
-                ></label
-              >
+              ></label>
               <span class="grow"></span>
               <button
                 type="button"

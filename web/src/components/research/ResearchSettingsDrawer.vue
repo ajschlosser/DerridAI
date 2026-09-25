@@ -109,10 +109,7 @@ function promptMetadataPolicy(): ResearchPromptMetadataPolicy {
     record: [...(draft.value.prompt_metadata?.record || [])],
   };
 }
-function promptMetadataSelected(
-  scope: keyof ResearchPromptMetadataPolicy,
-  field: string,
-): boolean {
+function promptMetadataSelected(scope: keyof ResearchPromptMetadataPolicy, field: string): boolean {
   return promptMetadataPolicy()[scope].includes(field);
 }
 function togglePromptMetadata(

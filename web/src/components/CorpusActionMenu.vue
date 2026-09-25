@@ -51,10 +51,7 @@ function keepInWindow() {
   const gap = 6;
   const triggerBox = button.getBoundingClientRect();
   const listBox = list.getBoundingClientRect();
-  const width = Math.min(
-    listBox.width || 256,
-    Math.max(160, window.innerWidth - margin * 2),
-  );
+  const width = Math.min(listBox.width || 256, Math.max(160, window.innerWidth - margin * 2));
   const height = listBox.height || 0;
 
   let left = triggerBox.left;
@@ -85,11 +82,7 @@ function keepInWindow() {
 }
 function outside(event: Event) {
   const target = event.target as Node;
-  if (
-    root.value &&
-    !root.value.contains(target) &&
-    (!menu.value || !menu.value.contains(target))
-  )
+  if (root.value && !root.value.contains(target) && (!menu.value || !menu.value.contains(target)))
     close(false);
 }
 function reposition() {

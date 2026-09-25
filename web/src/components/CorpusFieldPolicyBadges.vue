@@ -13,12 +13,8 @@ const props = defineProps<{
 const i18n = useI18nStore();
 
 const humanDecision = computed(() => Boolean(props.coreRequired || props.schemaField?.review));
-const evidenceRequired = computed(() =>
-  Boolean(props.coreRequired || props.schemaField?.evidence),
-);
-const confidenceAssessed = computed(() =>
-  Boolean(props.coreRequired || props.schemaField?.assess),
-);
+const evidenceRequired = computed(() => Boolean(props.coreRequired || props.schemaField?.evidence));
+const confidenceAssessed = computed(() => Boolean(props.coreRequired || props.schemaField?.assess));
 const memory = computed(() => props.schemaField?.retrieval_profile || null);
 const memoryEnabled = computed(() =>
   Boolean(memory.value?.enabled && Number(memory.value.max_items || 0) > 0),
