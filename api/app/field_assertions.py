@@ -467,6 +467,60 @@ def replace_assertion_evidence(
     )
 
 
+def reset_fields_for_evaluation(
+    record: dict[str, Any],
+    fields: set[str] | list[str] | tuple[str, ...],
+    *,
+    schema: Any | None = None,
+    discard_history: bool = False,
+    method: str = "metadata_rerun",
+    reason: str = "Field reset for a fresh metadata evaluation.",
+) -> None:
+    """Reset selected fields without confusing a compatibility projection for authority.
+
+    Ephemeral worker copies may discard assertion history. Durable records instead
+    preserve history and select a new unresolved assertion until evaluation writes
+    a replacement.
+    """
+
+    migrate_record_assertions(record, schema)
+    wanted = {str(field) for field in fields if str(field)}
+    buckets = _assertions(record)
+    selected = record.setdefault("current_field_assertions", {})
+    for field in wanted:
+        matching_ids = [
+            field_id
+            for field_id, values in list(buckets.items())
+            if any(
+                isinstance(item, dict) and str(item.get("field_name") or "") == field
+                for item in (values if isinstance(values, list) else [])
+            )
+        ]
+        record.pop(field, None)
+        if discard_history:
+            for field_id in matching_ids:
+                buckets.pop(field_id, None)
+                if isinstance(selected, dict):
+                    selected.pop(field_id, None)
+        else:
+            create_unresolved_assertion(
+                record,
+                field,
+                schema=schema,
+                derivation_method="other",
+                evaluation_status="not_evaluated",
+                method=method,
+                reason=reason,
+            )
+        status_map = record.get("metadata_field_status")
+        if isinstance(status_map, dict):
+            status_map.pop(field, None)
+        evidence_map = record.get("metadata_evidence")
+        if isinstance(evidence_map, dict):
+            evidence_map.pop(field, None)
+    project_record_assertions(record)
+
+
 def reopen_assertion(record: dict[str, Any], assertion: FieldAssertion, *, actor: str | None = None, reason: str = "") -> FieldAssertion:
     return store_assertion(record, assertion.model_copy(update={
         "assertion_id": f"assertion-{uuid.uuid4().hex}",
