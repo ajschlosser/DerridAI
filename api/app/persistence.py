@@ -607,11 +607,12 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
         if not ids:
             return 0
         now = _iso_now()
-        placeholders = ",".join("?" for _ in ids)
         with self._lock, self._connect() as conn:
-            cursor = conn.execute(
-                f"UPDATE semantic_memory_outbox SET status='projected', updated_at=? WHERE item_id IN ({placeholders}) AND status='dirty'",
-                (now, *ids),
+            cursor = conn.executemany(
+                "UPDATE semantic_memory_outbox "
+                "SET status='projected', updated_at=? "
+                "WHERE item_id=? AND status='dirty'",
+                [(now, item_id) for item_id in ids],
             )
             conn.commit()
             return int(cursor.rowcount or 0)
