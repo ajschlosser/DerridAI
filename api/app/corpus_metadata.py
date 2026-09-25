@@ -201,6 +201,26 @@ MANIFEST_INHERITED_FIELDS = {
     "document_is_translation",
 }
 
+# Runtime schema policy is intentionally smaller than the legacy compatibility
+# whitelists below. Ordinary scholarly fields come from the build's pinned
+# MetadataSchema; only document-level or computed record metadata stays fixed.
+FIXED_RECORD_METADATA_FIELDS = MANIFEST_INHERITED_FIELDS | {
+    "language",
+    "attribution_confidence",
+    "semantic_classification_confidence",
+    "extraction_quality",
+    "inline_citation",
+    "full_citation",
+    "needs_review",
+    "review_reason",
+}
+
+FIXED_HUMAN_EDITABLE_METADATA_FIELDS = MANIFEST_INHERITED_FIELDS | {
+    "language",
+    "needs_review",
+    "review_reason",
+}
+
 HUMAN_EDITABLE_METADATA_FIELDS = {
     # Record-level overrides of inherited bibliographic metadata are explicit
     # human decisions. They never mutate the document manifest and must survive

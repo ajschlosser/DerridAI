@@ -1,5 +1,4 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
-
 # Changelog
 
 Release history for DerridAI, newest first. Each entry links to the full release note in [`docs/notes/`](docs/notes/). The README describes only the current release.
@@ -34,8 +33,9 @@ application's system-data and research-workspace improvements. See
   URL-addressable workspaces for databases, response caches, metadata
   examples, and advanced administration. Built-in structural semantics remain
   explicit where they govern segmentation and publication, while the Record
-  Inspector and Research evidence presentation still use built-in presentation
-  defaults rather than fully generic schema-driven layouts.
+  Inspector, touch-up workflow, Search, and Research evidence presentation now
+  discover schema-defined metadata through canonical assertions instead of
+  requiring each custom field to be added to presentation constants.
 - **Reliability and governance:** expanded API contracts, backend regression
   coverage, typed frontend tests, parallel CI, Playwright/axe coverage,
   accessibility and design-token checks, locale parity, backup/restore

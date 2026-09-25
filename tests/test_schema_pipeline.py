@@ -16,6 +16,7 @@ except ModuleNotFoundError:
 from app import corpus_builder as cb
 from app import metadata_schema as ms
 from app.config import APP_VERSION
+from app.field_assertions import current_assertion_by_name
 
 
 def notes_schema():
@@ -91,6 +92,85 @@ def answer(**metadata):
     return {"metadata": {"region_type": "main_text", "primary_text": True, "discourse_role": "assertion", **metadata},
             "field_evidence": {"mood": {"block_ids": ["b1"], "confidence": 0.95, "reason": "tone"}},
             "field_assessments": {"mood": {"confidence": 0.95, "needs_review": False, "reason": "clear"}}}
+
+
+def test_field_assertion_canary_flows_from_schema_through_enrichment_and_review(tmp_path):
+    schema = ms.MetadataSchema(
+        name="Conceptual analysis",
+        groups=[
+            ms.SchemaGroup(
+                key="discourse",
+                label="Conceptual analysis",
+                intro="Identify the central conceptual tension.",
+                footer="Report {assessed_fields}.\n",
+            )
+        ],
+        fields=[
+            ms.SchemaField(
+                field_id="field-conceptual-tension",
+                name="conceptual_tension",
+                label="Conceptual tension",
+                type="text",
+                instruction="names the central conceptual opposition in the passage.",
+                assess=True,
+                evidence=True,
+                review=True,
+            )
+        ],
+    )
+    m, bid = manager(tmp_path, schema)
+    record = {"record_id": "canary", "record_revision": 1, "text": "Hospitality strains against sovereignty.", "metadata_field_status": {}}
+    result = {
+        "metadata": {
+            "region_type": "main_text",
+            "primary_text": True,
+            "discourse_role": "analysis",
+            "conceptual_tension": "hospitality / sovereignty",
+        },
+        "field_evidence": {
+            "conceptual_tension": {
+                "block_ids": ["b1"],
+                "confidence": 0.91,
+                "reason": "Both concepts are explicitly opposed in the passage.",
+            }
+        },
+        "field_assessments": {
+            "conceptual_tension": {
+                "confidence": 0.91,
+                "needs_review": False,
+                "reason": "The opposition is explicit.",
+                "outcome": "supported_value",
+            }
+        },
+    }
+    out = m._reconcile_metadata_results(
+        record,
+        m._profile_for(bid),
+        ["b1"],
+        [("discourse", result, None)],
+        False,
+        request={"model": "q"},
+        build_id=bid,
+        schema=m._schema_for(bid),
+    )
+    assertion = current_assertion_by_name(out, "conceptual_tension")
+    assert assertion is not None
+    assert assertion.field_id == "field-conceptual-tension"
+    assert assertion.derivation_method == "model"
+    assert out["conceptual_tension"] == "hospitality / sovereignty"
+
+    m.repo.save_records(bid, [out])
+    saved = m.patch_metadata(
+        bid,
+        "canary",
+        {"conceptual_tension": "conditional hospitality / sovereignty"},
+        expected_revision=int(out.get("record_revision") or 1),
+    )
+    reviewed = current_assertion_by_name(saved, "conceptual_tension")
+    assert reviewed is not None
+    assert reviewed.field_id == "field-conceptual-tension"
+    assert reviewed.authority_status in {"human_confirmed", "human_override"}
+    assert saved["conceptual_tension"] == "conditional hospitality / sovereignty"
 
 
 def test_a_custom_field_is_proposed_cited_and_reviewed_like_any_other(tmp_path):

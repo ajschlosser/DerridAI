@@ -604,10 +604,13 @@ def migrate_record_assertions(record: dict[str, Any], schema: Any | None = None)
     for name in sorted(str(item) for item in names):
         if not name or name in _NON_ASSERTION_FIELDS:
             continue
-        field_id = field_identity(name, schema)
+        existing_named = current_assertion_by_name(record, name) if schema is None else None
+        field_id = existing_named.field_id if existing_named is not None else field_identity(name, schema)
         status = statuses.get(name) if isinstance(statuses.get(name), dict) else {}
         value = record.get(name)
         assertion = _legacy_assertion(record, name, value, status, schema=schema, evidence=evidence_map.get(name))
+        if assertion is not None and assertion.field_id != field_id:
+            assertion = assertion.model_copy(update={"field_id": field_id})
         current = current_assertion(record, field_id)
         if assertion is not None and (
             current is None

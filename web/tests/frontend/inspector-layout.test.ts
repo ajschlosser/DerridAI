@@ -11,19 +11,17 @@ import {
 describe("inspector layout", () => {
   it("keeps default overview, provenance, and indexing rows", () => {
     const layout = defaultInspectorLayout();
-    expect(
-      layout.overview.some((row) => row.kind === "field" && row.field === "document_author"),
-    ).toBe(true);
-    expect(
-      layout.provenance
-        .filter((row) => row.kind === "heading")
-        .map((row) => row.kind === "heading" && row.label),
-    ).toEqual(["Attribution", "Discourse"]);
-    expect(
-      layout.indexing
-        .filter((row) => row.kind === "field")
-        .map((row) => row.kind === "field" && row.field),
-    ).toEqual(["topics", "concepts", "persons", "works_referenced"]);
+    expect(layout.overview.some((row) => row.kind === "field" && row.field === "document_author")).toBe(true);
+    expect(layout.provenance.filter((row) => row.kind === "heading").map((row) => row.kind === "heading" && row.label)).toEqual([
+      "Attribution",
+      "Discourse",
+    ]);
+    expect(layout.indexing.filter((row) => row.kind === "field").map((row) => row.kind === "field" && row.field)).toEqual([
+      "topics",
+      "concepts",
+      "persons",
+      "works_referenced",
+    ]);
   });
 
   it("reorders stacked heading and field rows", () => {
@@ -47,12 +45,53 @@ describe("inspector layout", () => {
   });
 
   it("lists catalog fields that are not yet in the tab", () => {
-    expect(unusedInspectorFields("indexing", defaultInspectorLayout().indexing)).toContain(
-      "institutions_referenced",
+    expect(unusedInspectorFields("indexing", defaultInspectorLayout().indexing)).toContain("institutions_referenced");
+    expect(unusedInspectorFields("indexing", defaultInspectorLayout().indexing)).not.toContain("topics");
+  });
+
+
+  it("discovers custom assertion fields without adding them to the hard-coded catalog", () => {
+    const record = {
+      field_assertions: {
+        "field-conceptual-tension": [
+          {
+            assertion_id: "a1",
+            field_id: "field-conceptual-tension",
+            field_name: "conceptual_tension",
+            value: "hospitality / sovereignty",
+            derivation_method: "model",
+            evaluation_status: "value_supported",
+            authority_status: "human_confirmed",
+            value_status: "present",
+          },
+        ],
+      },
+      current_field_assertions: { "field-conceptual-tension": "a1" },
+    };
+    const layout = defaultInspectorLayout(record);
+    expect(
+      layout.provenance.some(
+        (row) => row.kind === "field" && row.field === "conceptual_tension",
+      ),
+    ).toBe(true);
+    expect(
+      unusedInspectorFields("provenance", [], record),
+    ).toContain("conceptual_tension");
+
+    const restored = normalizeInspectorLayout(
+      {
+        provenance: [
+          { kind: "heading", label: "Project fields" },
+          { kind: "field", field: "conceptual_tension" },
+        ],
+      },
+      record,
     );
-    expect(unusedInspectorFields("indexing", defaultInspectorLayout().indexing)).not.toContain(
-      "topics",
-    );
+    expect(
+      restored.provenance.some(
+        (row) => row.kind === "field" && row.field === "conceptual_tension",
+      ),
+    ).toBe(true);
   });
 
   it("groups stacked headings and the fields under them", () => {

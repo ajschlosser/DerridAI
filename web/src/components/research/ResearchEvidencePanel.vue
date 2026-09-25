@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { currentFieldAssertions } from "../../domain/fieldAssertions";
 import { useI18nStore } from "../../stores/i18n";
-import type { ResearchEvidenceSelection, ResearchResultEvidence } from "../../types/research";
+import type {
+  ResearchEvidenceSelection,
+  ResearchFieldAssertionSummary,
+  ResearchResultEvidence,
+} from "../../types/research";
 
 const props = withDefaults(
   defineProps<{
@@ -47,17 +52,79 @@ function display(value: unknown) {
   if (value == null) return "";
   return String(value);
 }
-const relationRows = computed(() =>
-  [
-    [i18n.t("research.speaker"), record.value.speaker],
-    [i18n.t("research.position_holder"), record.value.position_holder],
-    [i18n.t("research.stance"), record.value.stance],
-    [i18n.t("research.discourse_role"), record.value.discourse_role],
-    [i18n.t("research.proposition_status"), record.value.proposition_status],
-    [i18n.t("research.target"), record.value.target],
-    [i18n.t("research.quoted_speaker"), record.value.quoted_speaker],
-  ].filter(([, value]) => display(value)),
-);
+const HIDDEN_RESEARCH_METADATA = new Set(["region_type", "region_author", "primary_text"]);
+
+function fieldLabel(field: string) {
+  return i18n.t(
+    `field.${field}`,
+    field.replaceAll("_", " ").replace(/\b\w/g, (m) => m.toUpperCase()),
+  );
+}
+
+function assertionDisplayValue(assertion: ResearchFieldAssertionSummary) {
+  if (assertion.value_status === "confirmed_absent") return i18n.t("ui.none");
+  return display(assertion.value);
+}
+
+function rowsFromAssertions(assertions: ResearchFieldAssertionSummary[]) {
+  return assertions
+    .filter(
+      (assertion) =>
+        assertion.field_name &&
+        !HIDDEN_RESEARCH_METADATA.has(assertion.field_name) &&
+        (assertion.value_status === "confirmed_absent" || display(assertion.value)),
+    )
+    .map((assertion) => ({
+      field: assertion.field_name,
+      label: fieldLabel(assertion.field_name),
+      value: assertionDisplayValue(assertion),
+      assertion,
+    }));
+}
+
+function fallbackRows(source: Record<string, unknown>) {
+  const fields = [
+    "speaker",
+    "position_holder",
+    "stance",
+    "discourse_role",
+    "proposition_status",
+    "target",
+    "quoted_speaker",
+    "topics",
+    "concepts",
+  ];
+  return fields
+    .filter((field) => display(source[field]))
+    .map((field) => ({
+      field,
+      label: fieldLabel(field),
+      value: display(source[field]),
+      assertion: null,
+    }));
+}
+
+const relationRows = computed(() => {
+  const canonical = rowsFromAssertions(
+    currentFieldAssertions(record.value) as ResearchFieldAssertionSummary[],
+  );
+  return canonical.length ? canonical : fallbackRows(record.value);
+});
+
+function selectedRows(item: ResearchEvidenceSelection) {
+  const canonical = rowsFromAssertions(item.assertions || []);
+  if (canonical.length) return canonical;
+  const metadata = item.metadata || {};
+  const dynamic = Object.entries(metadata)
+    .filter(([field, value]) => !HIDDEN_RESEARCH_METADATA.has(field) && display(value))
+    .map(([field, value]) => ({
+      field,
+      label: fieldLabel(field),
+      value: display(value),
+      assertion: null,
+    }));
+  return dynamic.length ? dynamic : fallbackRows(item as Record<string, unknown>);
+}
 </script>
 
 <template>
@@ -69,7 +136,9 @@ const relationRows = computed(() =>
     <header class="research-panel-heading">
       <div>
         <b>{{
-          showingResult ? i18n.t("research.answer_evidence") : i18n.t("rag.selected_evidence")
+          showingResult
+            ? i18n.t("research.answer_evidence")
+            : i18n.t("rag.selected_evidence")
         }}</b
         ><small
           >{{ showingResult ? resultEvidence.length : selectedEvidence.length }}
@@ -122,15 +191,17 @@ const relationRows = computed(() =>
           }}</span>
           <div>
             <b>{{
-              display(record.work) || display(record.record_id) || i18n.t("research.evidence")
+              display(record.work) ||
+              display(record.record_id) ||
+              i18n.t("research.evidence")
             }}</b
             ><small>{{ active.inline_citation || "" }}</small>
           </div>
         </div>
         <dl v-if="relationRows.length" class="research-relation-grid">
-          <template v-for="([label, value], index) in relationRows" :key="index"
-            ><dt>{{ label }}</dt>
-            <dd>{{ display(value) }}</dd></template
+          <template v-for="row in relationRows" :key="row.field"
+            ><dt>{{ row.label }}</dt>
+            <dd>{{ row.value }}</dd></template
           >
         </dl>
         <p v-if="display(record.text)" class="research-evidence-text">{{ display(record.text) }}</p>
@@ -194,46 +265,21 @@ const relationRows = computed(() =>
             </summary>
             <div class="research-selected-preview">
               <dl
-                v-if="
-                  item.speaker ||
-                  item.position_holder ||
-                  item.stance ||
-                  item.discourse_role ||
-                  item.proposition_status ||
-                  item.target
-                "
+                v-if="selectedRows(item).length"
                 class="research-relation-grid compact"
               >
-                <template v-if="item.speaker"
-                  ><dt>{{ i18n.t("research.speaker") }}</dt>
-                  <dd>{{ item.speaker }}</dd></template
-                >
-                <template v-if="item.position_holder"
-                  ><dt>{{ i18n.t("research.position_holder") }}</dt>
-                  <dd>{{ item.position_holder }}</dd></template
-                >
-                <template v-if="item.stance"
-                  ><dt>{{ i18n.t("research.stance") }}</dt>
-                  <dd>{{ item.stance }}</dd></template
-                >
-                <template v-if="item.discourse_role"
-                  ><dt>{{ i18n.t("research.discourse_role") }}</dt>
-                  <dd>{{ item.discourse_role }}</dd></template
-                >
-                <template v-if="item.proposition_status"
-                  ><dt>{{ i18n.t("research.proposition_status") }}</dt>
-                  <dd>{{ item.proposition_status }}</dd></template
-                >
-                <template v-if="item.target"
-                  ><dt>{{ i18n.t("research.target") }}</dt>
-                  <dd>{{ item.target }}</dd></template
+                <template v-for="row in selectedRows(item)" :key="row.field"
+                  ><dt>{{ row.label }}</dt>
+                  <dd>{{ row.value }}</dd></template
                 >
               </dl>
               <p v-if="item.text_preview">
                 {{ item.text_preview }}<template v-if="item.text_preview.length >= 280">…</template>
               </p>
               <p v-else class="note">
-                {{ i18n.t("research.selected_preview_unavailable") }}
+                {{
+                  i18n.t("research.selected_preview_unavailable")
+                }}
               </p>
             </div>
           </details>
@@ -251,7 +297,9 @@ const relationRows = computed(() =>
         <span aria-hidden="true">∴</span>
         <b>{{ i18n.t("research.no_selected_evidence") }}</b>
         <p>
-          {{ i18n.t("research.no_selected_evidence_help") }}
+          {{
+            i18n.t("research.no_selected_evidence_help")
+          }}
         </p>
       </div>
     </template>

@@ -15,12 +15,12 @@ import {
   type InspectorTabKey,
 } from "../../domain/inspectorLayout";
 
-const props = defineProps<{ layout: InspectorLayout }>();
+const props = defineProps<{ layout: InspectorLayout; record?: Record<string, unknown> }>();
 const emit = defineEmits<{ apply: [layout: InspectorLayout]; reset: [] }>();
 const i18n = useI18nStore();
 const isOpen = ref(false);
 const tab = ref<InspectorTabKey>("overview");
-const draft = ref<InspectorLayout>(defaultInspectorLayout());
+const draft = ref<InspectorLayout>(defaultInspectorLayout(props.record));
 const dragging = ref<number | null>(null);
 
 const tabLabels: Record<InspectorTabKey, [string, string]> = {
@@ -30,14 +30,11 @@ const tabLabels: Record<InspectorTabKey, [string, string]> = {
 };
 
 const rows = computed(() => draft.value[tab.value]);
-const unused = computed(() => unusedInspectorFields(tab.value, rows.value));
+const unused = computed(() => unusedInspectorFields(tab.value, rows.value, props.record));
 
 function fieldLabel(key: string) {
   if (key === "__pages") return i18n.t("record.page");
-  return i18n.t(
-    `field.${key}`,
-    key.replaceAll("_", " ").replace(/\b\w/g, (m) => m.toUpperCase()),
-  );
+  return i18n.t(`field.${key}`, key.replaceAll("_", " ").replace(/\b\w/g, (m) => m.toUpperCase()));
 }
 
 function open() {
@@ -54,7 +51,7 @@ function apply() {
   isOpen.value = false;
 }
 function reset() {
-  draft.value = defaultInspectorLayout();
+  draft.value = defaultInspectorLayout(props.record);
   emit("reset");
 }
 function setRows(next: InspectorLayoutRow[]) {
@@ -82,9 +79,7 @@ function onDrop(index: number) {
   dragging.value = null;
 }
 function updateHeading(index: number, label: string) {
-  setRows(
-    rows.value.map((row, i) => (i === index && row.kind === "heading" ? { ...row, label } : row)),
-  );
+  setRows(rows.value.map((row, i) => (i === index && row.kind === "heading" ? { ...row, label } : row)));
 }
 
 defineExpose({ open, close });
@@ -95,7 +90,9 @@ defineExpose({ open, close });
     :open="isOpen"
     size="medium"
     :title="i18n.t('record.inspector_layout')"
-    :description="i18n.t('record.inspector_layout_help')"
+    :description="
+      i18n.t('record.inspector_layout_help')
+    "
     :close-label="i18n.t('common.close')"
     @close="close"
   >
@@ -129,57 +126,22 @@ defineExpose({ open, close });
           <template v-if="row.kind === 'heading'">
             <label class="layout-heading-field">
               <span class="sr-only">{{ i18n.t("record.layout_heading") }}</span>
-              <input
-                class="control"
-                :value="row.label"
-                @input="updateHeading(index, ($event.target as HTMLInputElement).value)"
-              />
+              <input class="control" :value="row.label" @input="updateHeading(index, ($event.target as HTMLInputElement).value)" />
             </label>
           </template>
           <span v-else class="layout-field-label">{{ fieldLabel(row.field) }}</span>
           <div class="layout-row-actions">
-            <button
-              type="button"
-              class="btn tiny"
-              :disabled="index === 0"
-              :aria-label="i18n.t('record.move_up')"
-              @click="move(index, -1)"
-            >
-              ↑
-            </button>
-            <button
-              type="button"
-              class="btn tiny"
-              :disabled="index === rows.length - 1"
-              :aria-label="i18n.t('record.move_down')"
-              @click="move(index, 1)"
-            >
-              ↓
-            </button>
-            <button
-              type="button"
-              class="btn tiny danger"
-              :aria-label="i18n.t('ui.remove')"
-              @click="removeRow(index)"
-            >
-              ×
-            </button>
+            <button type="button" class="btn tiny" :disabled="index === 0" :aria-label="i18n.t('record.move_up')" @click="move(index, -1)">↑</button>
+            <button type="button" class="btn tiny" :disabled="index === rows.length - 1" :aria-label="i18n.t('record.move_down')" @click="move(index, 1)">↓</button>
+            <button type="button" class="btn tiny danger" :aria-label="i18n.t('ui.remove')" @click="removeRow(index)">×</button>
           </div>
         </li>
       </ol>
       <div class="layout-add">
-        <button type="button" class="btn" @click="addHeading">
-          {{ i18n.t("record.add_heading") }}
-        </button>
+        <button type="button" class="btn" @click="addHeading">{{ i18n.t("record.add_heading") }}</button>
         <label v-if="unused.length">
           <span class="sr-only">{{ i18n.t("record.add_field") }}</span>
-          <select
-            class="control"
-            @change="
-              addField(($event.target as HTMLSelectElement).value);
-              ($event.target as HTMLSelectElement).value = '';
-            "
-          >
+          <select class="control" @change="addField(($event.target as HTMLSelectElement).value); ($event.target as HTMLSelectElement).value = ''">
             <option value="">{{ i18n.t("record.add_field") }}</option>
             <option v-for="name in unused" :key="name" :value="name">{{ fieldLabel(name) }}</option>
           </select>
