@@ -19,7 +19,11 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .field_assertions import current_assertion_by_name, field_identity, migrate_record_assertions
+from .field_assertions import (
+    current_assertion_by_name,
+    field_identity,
+    migrate_record_assertions,
+)
 from .system_store import system_store
 
 DecisionKind = Literal["value", "absence", "correction"]

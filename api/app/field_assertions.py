@@ -184,7 +184,7 @@ def current_assertion_by_name(record: dict[str, Any], field_name: str) -> FieldA
             for assertion in get_assertions(record, field_id):
                 if assertion.assertion_id == assertion_id and assertion.field_name == field_name:
                     return assertion
-    for field_id, values in _assertions(record).items():
+    for field_id, _values in _assertions(record).items():
         current = current_assertion(record, field_id)
         if current is not None and current.field_name == field_name:
             return current
@@ -309,7 +309,7 @@ def create_model_assertion(
         "no_supported_value": "no_supported_value",
         "uncertain": "value_supported" if value not in (None, "", []) else "no_supported_value",
         "evaluation_failed": "evaluation_failed",
-    }.get(str(outcome), "evaluation_failed")  # type: ignore[assignment]
+    }.get(str(outcome), "evaluation_failed")
     status: ValueStatus = "present" if value not in (None, "", []) else "unresolved"
     if evaluation == "evaluation_failed":
         status = "invalid" if value not in (None, "", []) else "unresolved"
@@ -432,7 +432,7 @@ def project_record_assertions(record: dict[str, Any]) -> dict[str, Any]:
     for field_name, prior in prior_status_map.items():
         if isinstance(prior, dict):
             compatibility_by_name[str(field_name)] = copy.deepcopy(prior)
-    for field_id, raw_values in _assertions(record).items():
+    for field_id, _raw_values in _assertions(record).items():
         current = current_assertion(record, field_id)
         if current is None or not current.field_name:
             continue
@@ -504,20 +504,20 @@ def _legacy_assertion(
     schema: Any | None,
     evidence: Any,
 ) -> FieldAssertion | None:
-    token = str(status.get("status") or "").strip()
-    if not token and value in (None, "", []):
+    legacy_status_token = str(status.get("status") or "").strip()
+    if not legacy_status_token and value in (None, "", []):
         return None
     derivation, evaluation, authority, value_status = _STATUS_TO_CANONICAL.get(
-        token,
+        legacy_status_token,
         ("imported", "not_evaluated", "unreviewed", "present" if value not in (None, "", []) else "unresolved"),
     )
-    if token == "unresolved":
+    if legacy_status_token == "unresolved":
         evaluation = "value_supported" if value not in (None, "", []) else "no_supported_value"
-    if token == "invalid":
+    if legacy_status_token == "invalid":
         evaluation = "evaluation_failed" if str(status.get("reason_code") or "") in {"invalid_value", "validation_failed"} else "value_supported"
-    if token == "human_confirmed" and str(status.get("method") or "").casefold() not in {"llm", "human_review_of_llm_proposal", "human_adjudication_cache"}:
+    if legacy_status_token == "human_confirmed" and str(status.get("method") or "").casefold() not in {"llm", "human_review_of_llm_proposal", "human_adjudication_cache"}:
         derivation = "human" if str(status.get("method") or "").casefold().startswith("human") else "imported"
-    if token == "confirmed_absent" and str(status.get("method") or "").casefold() in {"human", "human_review"}:
+    if legacy_status_token == "confirmed_absent" and str(status.get("method") or "").casefold() in {"human", "human_review"}:
         derivation = "human"
     if value in (None, "", []) and value_status == "present":
         value_status = "unresolved"
@@ -526,16 +526,16 @@ def _legacy_assertion(
         value = None
     raw_evidence = evidence if isinstance(evidence, list) else [evidence] if isinstance(evidence, dict) else []
     candidate = FieldAssertion(
-        assertion_id=f"assertion-{uuid.uuid5(uuid.NAMESPACE_URL, json.dumps([record.get('record_id'), record.get('record_revision'), field_identity(field_name, schema), token, value, status, raw_evidence], default=str, sort_keys=True)).hex}",
+        assertion_id=f"assertion-{uuid.uuid5(uuid.NAMESPACE_URL, json.dumps([record.get('record_id'), record.get('record_revision'), field_identity(field_name, schema), legacy_status_token, value, status, raw_evidence], default=str, sort_keys=True)).hex}",
         record_id=str(record.get("record_id") or ""),
         record_revision=int(record.get("record_revision") or 1),
         field_id=field_identity(field_name, schema),
         field_name=field_name,
         value=value,
-        derivation_method=derivation,  # type: ignore[arg-type]
-        evaluation_status=evaluation,  # type: ignore[arg-type]
-        authority_status=authority,  # type: ignore[arg-type]
-        value_status=value_status,  # type: ignore[arg-type]
+        derivation_method=derivation,
+        evaluation_status=evaluation,
+        authority_status=authority,
+        value_status=value_status,
         method=str(status.get("method") or "") or None,
         confidence=(
             status.get("confidence")
@@ -662,7 +662,13 @@ def validate_projection(record: dict[str, Any]) -> list[str]:
 
 def migrate_records(records: list[dict[str, Any]], schema: Any | None = None) -> dict[str, Any]:
     """Migrate an in-memory corpus and return counts suitable for dry-run reports."""
-    report = {"records": len(records), "migrated": 0, "assertions": 0, "ambiguous": 0, "errors": []}
+    report: dict[str, Any] = {
+        "records": len(records),
+        "migrated": 0,
+        "assertions": 0,
+        "ambiguous": 0,
+        "errors": [],
+    }
     for record in records:
         before = bool(record.get("field_assertions"))
         migrate_record_assertions(record, schema)

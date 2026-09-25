@@ -36,7 +36,11 @@ from .corpus_metadata import (
 from .corpus_models import CORPUS_PROFILES, PROFILE_VERSION
 from .corpus_record_quality import _metadata_source_quality_gate, iso_now
 from .corpus_review_state import _sync_record_metadata_state
-from .corpus_reviewer_helpers import _allowed_for, _scrub_canonical_transport, _scrub_sealed_field
+from .corpus_reviewer_helpers import (
+    _allowed_for,
+    _scrub_canonical_transport,
+    _scrub_sealed_field,
+)
 from .corpus_segmentation import _apply_manifest_metadata
 from .enrichment_ledger import (
     AUTOFILLED,
