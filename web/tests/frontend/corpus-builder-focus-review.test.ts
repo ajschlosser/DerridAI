@@ -217,6 +217,29 @@ describe("Corpus Builder focus review interactions", () => {
     wrapper.unmount();
   });
 
+  it("forwards Save all suggestions from focus-mode metadata review", async () => {
+    const wrapper = mount(CorpusRecordFocusReview, {
+      props: { record },
+      global: {
+        stubs: {
+          ...stubs,
+          CorpusMetadataResolutionPanel: {
+            template:
+              "<button data-save-all @click=\"$emit('resolveMany',{ speaker: 'Jacques Derrida', target: 'hospitality' })\">Save all</button>",
+          },
+        },
+      },
+    });
+
+    await wrapper.get("[data-save-all]").trigger("click");
+
+    expect(lastEmission(wrapper, "resolveMetadataMany")).toEqual([
+      { speaker: "Jacques Derrida", target: "hospitality" },
+    ]);
+    wrapper.unmount();
+  });
+
+
   it("disables acceptance when the parent marks the record unsafe to accept", () => {
     const wrapper = mount(CorpusRecordFocusReview, {
       props: { record, canAccept: false },
