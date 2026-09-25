@@ -399,37 +399,60 @@ Selected evidence MAY bypass retrieval entirely and SHOULD be normalized into th
 
 ## Evidence, Claims, Traceability, and Reproducibility
 
+
 ### Evidence Profile
+
+The Evidence layer defines how documentary material acquires an evidentiary role in a particular research operation. Its normative requirements are required for the DERRIDAI Evidence profile and for profiles that depend on EvidenceRef semantics.
+
+#### Evidence Acquisition
+
+**Evidence Acquisition** is the process by which Records or source spans become candidates for evidentiary use. It is mechanism-neutral. Acquisition MAY occur through semantic or lexical retrieval, metadata filtering, database query, human selection, direct reference, long-context inspection, agentic search, model-located source spans, or another declared method.
+
+Every acquired item intended for downstream audit SHOULD resolve to a persistent Record or SourceSpan regardless of acquisition method.
+
+An acquisition event SHOULD record its method, query or selection condition where applicable, source corpus or publication, parameters, time, and actor or computational component. Acquisition diagnostics MUST NOT become intrinsic Record metadata.
+
+#### Evidence as a role
+
+Evidence is a contextual role played by identified documentary material in a particular research operation; it is not a separate authoritative copy of that material. The same Record, RecordRevision, or SourceSpan MAY be evidence in one inquiry and irrelevant in another.
 
 #### EvidenceRef
 
-An **EvidenceRef** identifies exact source material used to support, contextualize, contrast with, quote, or otherwise bear on a downstream claim. It SHOULD contain an evidence-reference ID, Record ID, RecordRevision, SourceDocument ID, source spans, and exact offsets or another locator when the evidence is a strict subset of the Record. A quote hash MAY be included.
+An **EvidenceRef** is the DERRIDAI semantic locator for exact source material used to support, contextualize, contrast with, quote, attribute, or otherwise bear on a downstream claim. It does not have to be a standalone database row: a packet entry or SupportBinding MAY embed the equivalent locator fields directly.
 
-The local evidence-reference ID MUST NOT replace persistent Record identity.
+Every EvidenceRef semantic locator MUST declare exactly one authoritative `locator_kind`: `record` or `source_span`.
 
-#### EvidenceItem
+A record-backed locator (`locator_kind: record`) MUST identify `record_id`. It MAY additionally identify `publication_id`, `corpus_id`, or another namespace needed to resolve the Record. If its meaning depends on mutable Record text or reviewed state, it MUST identify the applicable `record_revision`. When the evidence is a strict subset of the Record, it SHOULD contain exact Record-relative offsets or another reproducible locator. The SourceDocument resolved through the Record MUST remain identifiable.
 
-An **EvidenceItem** combines an EvidenceRef with information needed by a research process. It SHOULD contain a run-local evidence ID, EvidenceRef, RecordRef or Record, acquisition provenance, inline citation, full citation, truncation state, and selection reason.
+A direct-source locator (`locator_kind: source_span`) MUST identify one `source_document_id` and one or more SourceSpans. Every SourceSpan in that locator MUST identify the same SourceDocument. It does not require a Record or RecordRevision. If the material is later associated with a Record, that association MUST NOT silently change the authoritative locator.
 
-#### Evidence text and truncation
-
-Evidence supplied to a model MAY be truncated. If it is, the truncation MUST be declared; the authoritative EvidenceRef MUST remain unchanged; and the full source SHOULD remain recoverable to an authorized auditor. Truncated text MUST NOT be represented as the complete Record.
+A locator MAY include a quote hash or content digest for integrity checking. A run-local label such as `E0` MUST NOT replace the durable documentary identity represented by its Record/RecordRevision or SourceDocument/SourceSpan locator.
 
 #### EvidencePacket
 
-An **EvidencePacket** is an ordered set of EvidenceItems supplied to or selected for a research operation. It SHOULD record packet ID, creation time, source publication IDs, items, context limit, and truncation policy where applicable. Reordering MUST NOT change underlying evidence identity.
+An **EvidencePacket** is the logical ordered evidence context selected or supplied for a research operation. It MAY be a standalone object or an embedded part of a retained ResearchRun or generation result. It SHOULD identify creation time, source publication or corpus where applicable, context limit, truncation policy, and an ordered array of entries.
 
-#### Evidence sufficiency
+Each packet entry SHOULD identify a run-local entry ID, an EvidenceRef semantic locator, the text actually supplied or enough deterministic information to reproduce that exact supplied text, whether truncation occurred, citation text where useful, and acquisition or selection provenance. A deterministic transformation is sufficient only when its input, parameters, and applicable transformation version are retained.
 
-Implementations SHOULD perform deterministic evidence-sufficiency checks before generation where possible. Evidence intended to support a scholarly claim SHOULD have Record identity, SourceDocument identity, non-empty exact text, work or document identity, and citation-resolvable location. Missing provenance MUST NOT be manufactured merely to satisfy a check.
+Evidence supplied to a model MAY be truncated. If it is, truncation MUST be declared; the authoritative EvidenceRef MUST remain unchanged; and the full authorized source SHOULD remain recoverable to an auditor. Truncated text MUST NOT be represented as the complete Record or complete SourceSpan content. Reordering packet entries MUST NOT change underlying evidence identity.
+
+Packet entries are composite implementation structures, not independent DERRIDAI first-class objects.
+
+#### Packet integrity and evidence sufficiency
+
+Implementations SHOULD distinguish packet integrity from semantic evidence sufficiency.
+
+Packet integrity is normally deterministic: does each supplied item resolve to documentary identity, contain or reproduce the actual supplied text, and have required source and citation metadata? Semantic sufficiency asks whether the evidence actually answers, supports, qualifies, or contradicts a research question or claim and may require human or model judgment.
+
+A system MAY block generation when deterministic packet-integrity requirements fail. Passing those checks MUST NOT be described as proof that the evidence semantically supports a later claim. Missing provenance MUST NOT be manufactured merely to satisfy a check.
 
 ### Citation
 
-Citations SHOULD be generated deterministically from authoritative bibliographic and location metadata when those facts are available. An LLM MUST NOT be treated as authoritative for a citation that can be generated from structured corpus data.
+Citations SHOULD be generated deterministically from authoritative bibliographic and location metadata when those facts are available. An LLM MUST NOT be treated as authoritative for citation facts that can be generated from structured corpus data.
 
-If required citation metadata is unavailable, the system SHOULD report incompleteness rather than invent missing bibliographic facts.
+If required citation metadata is unavailable, the system SHOULD report incompleteness rather than invent missing bibliographic facts. Citation formatting MAY vary by style guide, but underlying source identity MUST remain stable across styles.
 
-A citation in generated output SHOULD originate from an EvidenceRef or EvidenceItem. Citation formatting MAY vary by style guide, but underlying source identity MUST remain stable across styles.
+Human-readable citation rendering and machine evidence binding are different operations. A renderer MAY replace a temporary marker such as `[[E0]]` with a formatted citation, but the structured marker-to-evidence relation MUST be captured before or independently of that replacement when Claim-Binding conformance is claimed. A formatted citation alone MUST NOT be treated as the machine SupportBinding.
 
 ### Generation, Claims, and Support Bindings
 
@@ -445,15 +468,19 @@ A DERRIDAI Evidence-Grounded Generation implementation MUST instruct the generat
 
 #### GeneratedClaim
 
-A **GeneratedClaim** is a proposition or substantive assertion in generated output. It SHOULD contain claim ID, generation-run ID, claim text, answer offsets where available, support bindings, and claim status.
+A **GeneratedClaim** is a substantive assertion identified within generated output. It SHOULD contain claim ID, generation-run ID, claim text, answer offsets where available, derivation or segmentation method, support bindings, and claim status.
+
+Claim granularity MUST be declared or inferable from the derivation method. A sentence-level extraction MAY be used as a conservative reproducible claim unit, but a sentence MUST NOT automatically be described as one atomic scholarly proposition when it contains multiple propositions, qualifications, contrasts, or citation scopes.
 
 A system MAY omit explicit GeneratedClaim objects if it does not claim proposition-level traceability. A system claiming DERRIDAI Claim-Binding conformance MUST materialize or reproducibly derive them.
 
 #### SupportBinding
 
-A **SupportBinding** associates a GeneratedClaim with one or more EvidenceRefs. It SHOULD identify the relation between claim and evidence - for example, support, contrast, contextualization, quotation, or attribution - together with validation status and results where available.
+A **SupportBinding** associates exactly one GeneratedClaim with one or more EvidenceRef semantic locators. It MAY reference named EvidenceRefs or embed equivalent authoritative locator fields directly. It SHOULD identify the relation between claim and evidence - for example, support, contrast, qualification, contextualization, quotation, or attribution - together with validation status and results where available.
 
-A GeneratedClaim MUST NOT be described as supported by an EvidenceRef merely because the evidence appeared in model context.
+A GeneratedClaim MUST NOT be described as supported merely because evidence appeared in model context or because a human-readable citation appears nearby. Machine support binding SHOULD be captured from structured generation output, evidence markers, answer spans, or another reproducible relation before citation formatting can erase that structure.
+
+A binding that pins a RecordRevision or SourceSpan MUST be re-resolved before reuse when the underlying Record or source changes. Revision mismatch, missing source units, or source-identity mismatch MUST produce a visible stale or unresolved state rather than silently rebinding to current material.
 
 #### Evidence markers and exact quotation
 
@@ -465,23 +492,37 @@ When a GeneratedClaim contains a purported exact quotation, a Claim-Binding impl
 
 Validation systems SHOULD treat wrong-person attribution, fabricated quotation, wrong source binding, wrong page or span binding, support where evidence states the opposite, dropped proposition-bearing negation, and confusion of editorial or translator text with primary-author position as high-severity failures.
 
+### Advisory Research Memory
+
+Research systems MAY retain prior responses, generated claims, reviewed metadata decisions, editorial examples, or other memory to guide later work. DERRIDAI does not make such memory a first-class semantic object.
+
+Prior memory is advisory context unless it is re-resolved as current evidence. A previously generated claim, cached answer, or remembered reviewer decision MUST NOT become an EvidenceRef or SupportBinding merely because it is placed in a prompt.
+
+If prior material is promoted into current evidence or claim support, the implementation MUST resolve it back to current authoritative Record/RecordRevision or SourceSpan state and make stale or incompatible versions visible.
+
+Memory access SHOULD preserve applicable owner, visibility, and authorization constraints. Vector indexes, similarity projections, response caches, and exemplar-search indexes built over memory SHOULD remain rebuildable derived state rather than the sole authoritative copy of reviewed decisions or claim provenance.
+
 ### Traceability Matrix
 
-A DERRIDAI **traceability matrix** is the logical set of relations that connects research output to the documentary and computational state on which it depends. The matrix MAY be implemented as relational tables, graph edges, structured JSON, event records, or another representation; a literal tabular matrix is not required.
+A DERRIDAI **traceability matrix** is the logical set of relations connecting research output to the documentary and computational state on which it depends. It MAY be implemented as relational tables, graph edges, structured JSON, event records, or another representation; a literal table is not required.
 
-For a GeneratedClaim represented as evidentially supported, a Claim-Binding conforming implementation MUST be able to identify the applicable SupportBinding and EvidenceRef. The EvidenceRef MUST resolve to a Record or RecordRevision, and the Record MUST remain traceable to its SourceDocument and SourceSpan at the precision claimed by the implementation.
+For a GeneratedClaim represented as evidentially supported, a Claim-Binding conforming implementation MUST identify the applicable SupportBinding and EvidenceRef.
 
-Where a claim depends materially on interpretive metadata, the implementation SHOULD retain the FieldAssertion or equivalent provenance that established the relevant value. Where a claim depends on a particular research run, the implementation SHOULD retain or reference the ResearchRunManifest that identifies the corpus state, evidence-acquisition configuration, model, prompt contract, and validation state.
+A record-backed EvidenceRef MUST resolve through the applicable Record or RecordRevision to its SourceDocument and SourceSpan at the precision claimed by the implementation. A direct-source EvidenceRef MUST resolve directly to its declared SourceSpan or SourceSpans and SourceDocument.
 
-The traceability relation can therefore be summarized as:
+Where a claim depends materially on interpretive metadata, the implementation SHOULD retain the FieldAssertion or equivalent provenance that established the relevant value. Where a claim depends on a particular research operation, the implementation SHOULD retain or reference the ResearchRun describing corpus state, acquisition configuration, evidence supplied, generation configuration, and validation state.
 
-`Claim -> SupportBinding -> EvidenceRef -> RecordRevision -> SourceSpan -> SourceDocument`
+The principal audit paths are:
 
-with optional branches to FieldAssertions, Relations, RetrievalRuns, GenerationRuns, validators, and graders.
+`GeneratedClaim -> SupportBinding -> EvidenceRef(record) -> RecordRevision -> SourceSpan -> SourceDocument`
 
-A system MUST NOT describe a claim as fully traceable merely because it contains a human-readable citation if the internal evidence-to-record or record-to-source relationship cannot be resolved.
+or:
 
-> **Why call this a matrix?** In systems engineering, a traceability matrix shows how requirements connect to tests, implementations, or evidence. Here the same idea is applied to scholarship: a claim can be followed backward through the evidence and processing relationships that justify its presence in the research output.
+`GeneratedClaim -> SupportBinding -> EvidenceRef(source_span) -> SourceSpan -> SourceDocument`
+
+with optional branches to FieldAssertions, RetrievalRuns, GenerationRuns, and validation or evaluation reports.
+
+A system MUST NOT describe a claim as fully traceable merely because it contains a human-readable citation if the internal evidence-to-source relationship cannot be resolved.
 
 ### Reproducibility and Evaluation
 
@@ -491,11 +532,11 @@ DERRIDAI distinguishes three levels of reproducibility. **Corpus reproducibility
 
 Core and Reproducible Research conformance MUST NOT imply byte-identical output reproduction from a stochastic or externally mutable model. The required goal is preservation of the research state and process information needed to reconstruct and evaluate the operation, with the limitations of the original execution environment made explicit.
 
-#### ResearchRunManifest
+#### ResearchRun
 
-A research system SHOULD maintain a **ResearchRunManifest** sufficient to inspect and substantially reproduce a run. It SHOULD identify specification version, corpus publications, collection manifests, original and derived queries, acquisition and retrieval parameters, candidate identifiers where relevant, selected evidence, evidence packet, generation model and parameters, prompt contract, execution locality, validation results, output, grader information, and timestamps.
+A **ResearchRun** is the coherent retained audit view of one research operation. It MAY be one object or a resolvable composition of durable run records. It SHOULD identify specification version, corpus publication or snapshot, original and derived queries, evidence-acquisition and retrieval configuration, candidate identifiers where relevant, selected evidence, EvidencePacket, GenerationRun or generation configuration, prompt contract, execution locality, validation results, output, grader information, advisory-memory use, and timestamps.
 
-DERRIDAI does not require bit-identical regeneration from nondeterministic models. It requires a distinction between reproducibility of inputs and configuration and deterministic reproduction of output.
+A ResearchRun MUST retain enough information for the reproducibility profile it claims. DERRIDAI does not require bit-identical regeneration from nondeterministic models; it requires a distinction between reproducibility of inputs and configuration and deterministic reproduction of output.
 
 #### Candidate retention
 
