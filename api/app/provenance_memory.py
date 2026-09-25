@@ -124,10 +124,13 @@ def persist_record_decision(
     scope_id: str | None = None,
 ) -> MetadataMemoryBinding:
     """Create a binding from the canonical record's reviewed evidence."""
+    legacy_evidence = copy.deepcopy(record.get("metadata_evidence") or {})
     migrate_record_assertions(record, schema)
     spans: list[EvidenceSpan] = []
     evidence = record.get("metadata_evidence") or {}
     field_evidence = evidence.get(field_name) if isinstance(evidence, dict) else None
+    if not isinstance(field_evidence, dict) and isinstance(legacy_evidence, dict):
+        field_evidence = legacy_evidence.get(field_name)
     if not isinstance(field_evidence, dict):
         assertion = current_assertion_by_name(record, field_name)
         if assertion and assertion.evidence:
