@@ -19,7 +19,11 @@ from .corpus_enrichment_helpers import _editorial_tokens
 from .corpus_record_quality import iso_now
 from .corpus_reviewer_helpers import _second_opinion_owed
 from .enrichment_cycles import learn_from_pass
-from .field_assertions import current_assertions, migrate_record_assertions, project_record_assertions
+from .field_assertions import (
+    current_assertions,
+    migrate_record_assertions,
+    project_record_assertions,
+)
 from .metadata_exemplars import (
     budget_prompt_examples,
     build_correction_exemplars,
