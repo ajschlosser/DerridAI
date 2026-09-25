@@ -1021,7 +1021,7 @@ The central cardinality rules are:
 
 A compact cardinality view is:
 
-\`\`\`text
+```text
 SourceDocument 1 -------- 0..* SourceSpan
 SourceDocument 1 -------- 0..* Record
 Record         1 -------- 1..* SourceSpan
@@ -1036,7 +1036,7 @@ GenerationRun 1 ---------- 0..* GeneratedClaim
 GeneratedClaim 1 --------- 0..* SupportBinding
 SupportBinding 1 --------- 1..* EvidenceRef locators
 ResearchRun --------------- references publication/evidence/generation/validation state
-\`\`\`
+```
 
 ### Normative Object Glossary
 
@@ -1089,9 +1089,9 @@ The following identifiers are the tracked conformance requirements for DERRIDAI 
 
 | Requirement | Normative statement | Test class |
 |---|---|---|
-| **CORE-ID-001 MUST** | SourceDocument has a stable \`source_document_id\` not based solely on transient storage or application identifiers. | schema+semantic |
+| **CORE-ID-001 MUST** | SourceDocument has a stable `source_document_id` not based solely on transient storage or application identifiers. | schema+semantic |
 | **CORE-ID-002 MUST** | Each SourceSpan refers to exactly one SourceDocument. | schema+semantic |
-| **CORE-ID-003 MUST** | Each Record contains \`record_id\`, \`source_document_id\`, \`text\`, and one or more SourceSpans. | schema |
+| **CORE-ID-003 MUST** | Each Record contains `record_id`, `source_document_id`, `text`, and one or more SourceSpans. | schema |
 | **CORE-ID-004 MUST** | Every SourceSpan used by a Record identifies the same SourceDocument as that Record. | semantic |
 | **CORE-ID-005 MUST** | Logical Record identity remains distinguishable from storage identity and derived storage cannot silently become authoritative. | semantic |
 | **CORE-ID-006 MUST** | The RecordRevision identifier changes whenever authoritative Record text changes and whenever another mutation can invalidate a pinned evidence locator or SupportBinding; it MAY also advance for broader authoritative concurrency control. | behavioral+audit |
@@ -1129,7 +1129,7 @@ The following identifiers are the tracked conformance requirements for DERRIDAI 
 
 | Requirement | Normative statement | Test class |
 |---|---|---|
-| **EVID-ID-001 MUST** | Every EvidenceRef semantic locator, whether named or embedded, declares exactly one authoritative locator kind: \`record\` or \`source_span\`. | schema+semantic |
+| **EVID-ID-001 MUST** | Every EvidenceRef semantic locator, whether named or embedded, declares exactly one authoritative locator kind: `record` or `source_span`. | schema+semantic |
 | **EVID-ID-002 MUST** | A record-backed EvidenceRef identifies the applicable RecordRevision whenever its locator depends on mutable Record text. | semantic |
 | **EVID-ID-003 MUST** | A direct-source EvidenceRef contains one SourceDocument identity and one or more SourceSpans, all from that SourceDocument. | schema+semantic |
 | **EVID-ID-004 MUST NOT** | A run-local EvidenceRef ID does not replace its authoritative documentary identity. | semantic |
@@ -1208,11 +1208,11 @@ The following identifiers are the tracked conformance requirements for DERRIDAI 
 
 ### Reference Interchange and Automated Conformance
 
-DERRIDAI defines a reference JSON interchange profile, \`derridai-reference-json-v1\`, so conformance can be tested independently of an implementation's native database or programming language. Native storage MAY differ. For automated assessment, an implementation MUST be able to emit equivalent reference-interchange data or a documented lossless mapping for the claimed profile.
+DERRIDAI defines a reference JSON interchange profile, `derridai-reference-json-v1`, so conformance can be tested independently of an implementation's native database or programming language. Native storage MAY differ. For automated assessment, an implementation MUST be able to emit equivalent reference-interchange data or a documented lossless mapping for the claimed profile.
 
 The principal top-level first-class collections are:
 
-\`source_documents\`, \`source_spans\`, \`records\`, \`record_revisions\`, \`field_assertions\`, \`corpus_publications\`, \`retrieval_runs\`, \`evidence_refs\`, \`evidence_packets\`, \`generation_runs\`, \`generated_claims\`, \`support_bindings\`, and \`research_runs\`.
+`source_documents`, `source_spans`, `records`, `record_revisions`, `field_assertions`, `corpus_publications`, `retrieval_runs`, `evidence_refs`, `evidence_packets`, `generation_runs`, `generated_claims`, `support_bindings`, and `research_runs`.
 
 Implementation-specific extraction units, storage projections, collection manifests, retrieval candidates, validation records, and similar artifacts MAY appear as namespaced extensions, but they are not required DERRIDAI object collections.
 
@@ -1230,11 +1230,11 @@ The machine-readable registry package defines the base values for FieldAssertion
 
 Base FieldAssertion values include:
 
-- \`derivation_method\`: \`deterministic\`, \`model\`, \`human\`, \`inherited\`, \`imported\`, \`other\`;
-- \`evaluation_status\`: \`not_evaluated\`, \`value_supported\`, \`no_supported_value\`, \`evaluation_failed\`;
-- \`authority_status\`: \`unreviewed\`, \`human_confirmed\`, \`human_override\`, \`disputed\`;
-- \`value_status\`: \`present\`, \`confirmed_absent\`, \`invalid\`, \`unresolved\`;
-- EvidenceRef \`locator_kind\`: \`record\`, \`source_span\`.
+- `derivation_method`: `deterministic`, `model`, `human`, `inherited`, `imported`, `other`;
+- `evaluation_status`: `not_evaluated`, `value_supported`, `no_supported_value`, `evaluation_failed`;
+- `authority_status`: `unreviewed`, `human_confirmed`, `human_override`, `disputed`;
+- `value_status`: `present`, `confirmed_absent`, `invalid`, `unresolved`;
+- EvidenceRef `locator_kind`: `record`, `source_span`.
 
 ### Canonical Conceptual Schemas
 
@@ -1242,7 +1242,7 @@ The following examples are illustrative serializations of the normative concepts
 
 #### Canonical Record
 
-\`\`\`json
+```json
 {
   "record_id": "record-00142",
   "record_revision": 3,
@@ -1260,11 +1260,11 @@ The following examples are illustrative serializations of the normative concepts
   "position_holder": "Other Thinker",
   "stance": "questions"
 }
-\`\`\`
+```
 
 #### Canonical FieldAssertion
 
-\`\`\`json
+```json
 {
   "assertion_id": "fa-81",
   "record_id": "record-00142",
@@ -1282,11 +1282,11 @@ The following examples are illustrative serializations of the normative concepts
   "reason": "Passage attributes the proposition to another thinker.",
   "evidence_refs": ["evref-81"]
 }
-\`\`\`
+```
 
 #### Canonical SupportBinding
 
-\`\`\`json
+```json
 {
   "binding_id": "sb-8",
   "claim_id": "claim-12",
@@ -1295,11 +1295,11 @@ The following examples are illustrative serializations of the normative concepts
   "derived_from_marker": "E0",
   "validation_status": "verified"
 }
-\`\`\`
+```
 
 #### Canonical RetrievalRun
 
-\`\`\`json
+```json
 {
   "retrieval_run_id": "ret-17",
   "original_query": "hospitality and sovereignty",
@@ -1313,11 +1313,11 @@ The following examples are illustrative serializations of the normative concepts
     "score_semantics": "cosine_distance"
   }]
 }
-\`\`\`
+```
 
 #### Canonical EvidenceRef
 
-\`\`\`json
+```json
 {
   "evidence_ref_id": "evref-81",
   "locator_kind": "record",
@@ -1327,11 +1327,11 @@ The following examples are illustrative serializations of the normative concepts
   "record_character_start": 0,
   "record_character_end": 742
 }
-\`\`\`
+```
 
 #### Canonical ResearchRun
 
-\`\`\`json
+```json
 {
   "run_id": "research-44",
   "specification_version": "1.0",
@@ -1342,11 +1342,11 @@ The following examples are illustrative serializations of the normative concepts
   "prompt_contract_version": "research-answer-v4",
   "output": "..."
 }
-\`\`\`
+```
 
 #### Canonical EvidencePacket
 
-\`\`\`json
+```json
 {
   "packet_id": "packet-12",
   "entries": [{
@@ -1358,7 +1358,7 @@ The following examples are illustrative serializations of the normative concepts
     "selection_reason": "researcher selected"
   }]
 }
-\`\`\`
+```
 
 ## Appendix D - Relationship to External Standards
 
@@ -1379,11 +1379,11 @@ PROV does not by itself define DERRIDAI distinctions such as SourceSpan precisio
 
 _This appendix is non-normative._
 
-The published DERRIDAI Core Specification 1.0 PDF records a pre-publication audit of DerridAI \`master\` at commit \`724bef420a404fb2bc24182d8218f7a56d0ed84f\` on 24 September 2026. That audit is a historical implementation snapshot, not part of the normative contract. The repository may advance beyond it while remaining governed by the normative requirements above.
+The published DERRIDAI Core Specification 1.0 PDF records a pre-publication audit of DerridAI `master` at commit `724bef420a404fb2bc24182d8218f7a56d0ed84f` on 24 September 2026. That audit is a historical implementation snapshot, not part of the normative contract. The repository may advance beyond it while remaining governed by the normative requirements above.
 
 The DerridAI application is the originating reference implementation. Its practical scholarly-provenance shorthand is:
 
-\`SOURCE -> PASSAGE -> SPEAKER -> POSITION HOLDER -> STANCE -> PROPOSITION -> EXACT EVIDENCE -> CITATION -> CLAIM\`
+`SOURCE -> PASSAGE -> SPEAKER -> POSITION HOLDER -> STANCE -> PROPOSITION -> EXACT EVIDENCE -> CITATION -> CLAIM`
 
 Implementation lessons incorporated into DERRIDAI 1.0 include:
 
@@ -1410,13 +1410,13 @@ By contrast, extraction blocks, generic relations, schema-editor objects, storag
 
 The DERRIDAI conceptual model is the scholarly source-to-claim chain:
 
-\`SourceDocument -> SourceSpan -> Record -> RecordRevision -> FieldAssertion -> Evidence Acquisition -> EvidenceRef -> EvidencePacket -> GenerationRun -> GeneratedClaim -> SupportBinding\`
+`SourceDocument -> SourceSpan -> Record -> RecordRevision -> FieldAssertion -> Evidence Acquisition -> EvidenceRef -> EvidencePacket -> GenerationRun -> GeneratedClaim -> SupportBinding`
 
 These are semantic roles, not mandatory class names. EvidenceRef and EvidencePacket may be embedded in retained run data, and a native FieldAssertion representation may use different field names when the required epistemic dimensions are recoverable without loss. Advisory memory remains outside the evidence chain until it is re-resolved against current documentary state.
 
 The minimum DERRIDAI Core conformance profile requires the durable documentary substrate:
 
-\`SourceDocument -> SourceSpan -> Record\`
+`SourceDocument -> SourceSpan -> Record`
 
 with revision and assertion provenance preserved when applicable. Evidence, generation, and claim-binding requirements become mandatory when those capabilities are claimed; they remain part of the conceptual architecture whether or not a particular implementation instantiates them.
 
