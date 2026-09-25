@@ -2,12 +2,12 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
-  pdfCorpusApi,
+  corpusBuilderApi,
   type CorpusBuild,
   type CorpusRecord,
   type SourceBlock,
   type AutonomousPolicy,
-} from "../api/pdfCorpus";
+} from "../api/corpus";
 import { systemApi, type ProviderProfile } from "../api/system";
 import { useI18nStore } from "../stores/i18n";
 import ProviderProfileSelect from "./ProviderProfileSelect.vue";
@@ -192,7 +192,7 @@ async function runHandsFree() {
           "",
         llmActionModel.value,
       ) || providerPayload.value;
-    currentBuild.value = await pdfCorpusApi.runAutonomous(currentBuild.value.build_id, {
+    currentBuild.value = await corpusBuilderApi.runAutonomous(currentBuild.value.build_id, {
       ...config,
       autonomous: { ...handsFree.value, enabled: true },
     });
@@ -760,17 +760,17 @@ const selectedSourceCapabilities = computed(() =>
 const paginatedSource = computed(() => selectedSourceCapabilities.value.printedPagination);
 const imageSourceUrl = computed(() =>
   selectedSourceCapabilities.value.imageViewer && selectedAssetId.value
-    ? pdfCorpusApi.assetContentUrl(selectedAssetId.value)
+    ? corpusBuilderApi.assetContentUrl(selectedAssetId.value)
     : "",
 );
 const audioSourceUrl = computed(() =>
   selectedSourceCapabilities.value.audioPlayer && selectedAssetId.value
-    ? pdfCorpusApi.assetContentUrl(selectedAssetId.value)
+    ? corpusBuilderApi.assetContentUrl(selectedAssetId.value)
     : "",
 );
 const sourcePdfUrl = computed(() =>
   selectedSourceCapabilities.value.pdfViewer && selectedAssetId.value
-    ? pdfCorpusApi.assetContentUrl(selectedAssetId.value)
+    ? corpusBuilderApi.assetContentUrl(selectedAssetId.value)
     : "",
 );
 const recordPdfPages = computed(() =>
@@ -1229,7 +1229,7 @@ async function switchBuildProvider(profileId: string, modelOverride = "") {
         if (Object.keys(reviewConfig).length) payload.review_provider = reviewConfig;
       }
     }
-    currentBuild.value = await pdfCorpusApi.switchProviderProfile(selectedBuildId.value, payload);
+    currentBuild.value = await corpusBuilderApi.switchProviderProfile(selectedBuildId.value, payload);
     selectedProviderId.value = profileId;
     syncBuildInRail(currentBuild.value);
     const profile = providerProfiles.value.find((item) => item.id === profileId);
@@ -1354,13 +1354,13 @@ async function refreshProviders() {
 }
 async function refreshCorpusProfiles() {
   try {
-    corpusProfiles.value = (await pdfCorpusApi.profiles()).items || [];
+    corpusProfiles.value = (await corpusBuilderApi.profiles()).items || [];
   } catch {
     corpusProfiles.value = [];
   }
 }
 async function refreshBuilds() {
-  const result = await pdfCorpusApi.listBuilds(0, 100);
+  const result = await corpusBuilderApi.listBuilds(0, 100);
   builds.value = result.items;
   buildsTotal.value = result.total;
   const requested = String(route.query.build || "");
@@ -1388,7 +1388,7 @@ async function refreshBuild() {
     return;
   }
   try {
-    currentBuild.value = await pdfCorpusApi.build(selectedBuildId.value);
+    currentBuild.value = await corpusBuilderApi.build(selectedBuildId.value);
     syncBuildInRail(currentBuild.value);
   } catch (exc) {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
@@ -1460,7 +1460,7 @@ async function refreshRecords(reset = false, preferredId = "") {
     // Hydrate independently of form interaction and retry the read while the build
     // explicitly advertises topology that should already exist.
     for (let attempt = 0; attempt < 5; attempt++) {
-      result = await pdfCorpusApi.records(
+      result = await corpusBuilderApi.records(
         selectedBuildId.value,
         recordOffset.value,
         pageSize,
@@ -1537,7 +1537,7 @@ async function refreshBlocks() {
     sourceBlocks.value = [];
     return;
   }
-  const result = await pdfCorpusApi.blocks(
+  const result = await corpusBuilderApi.blocks(
     selectedAssetId.value,
     0,
     Math.min(1000, selectedRecord.value.source_block_ids.length),
@@ -1682,7 +1682,7 @@ function selectRecord(record: CorpusRecord) {
         try {
           return [
             field,
-            await pdfCorpusApi.metadataCache(
+            await corpusBuilderApi.metadataCache(
               currentBuild.value?.build_id || "",
               record.record_id,
               field,
@@ -1790,7 +1790,7 @@ async function startBuild() {
       ...providerPayload.value,
       ...(handsFree.value.enabled ? { autonomous: { ...handsFree.value } } : {}),
     };
-    const build = await pdfCorpusApi.createBuild(payload);
+    const build = await corpusBuilderApi.createBuild(payload);
     selectedBuildId.value = build.build_id;
     currentBuild.value = build;
     registerBuildOperation(build);
@@ -1811,7 +1811,7 @@ async function resumeBuild() {
   }
   busy.value = "build";
   try {
-    currentBuild.value = await pdfCorpusApi.resume(
+    currentBuild.value = await corpusBuilderApi.resume(
       currentBuild.value.build_id,
       providerPayload.value,
     );
@@ -1842,7 +1842,7 @@ async function retryIncompleteMetadata() {
   }
   busy.value = "metadata-retry";
   try {
-    currentBuild.value = await pdfCorpusApi.retryMetadata(
+    currentBuild.value = await corpusBuilderApi.retryMetadata(
       currentBuild.value.build_id,
       providerPayload.value,
     );
@@ -1941,7 +1941,7 @@ async function restoreAllRejected() {
   if (!currentBuild.value) return;
   busy.value = "bulk-restore";
   try {
-    const result = await pdfCorpusApi.bulkDisposition(
+    const result = await corpusBuilderApi.bulkDisposition(
       currentBuild.value.build_id,
       "pending",
       "rejected",
@@ -1965,7 +1965,7 @@ async function confirmManifest() {
   if (!currentBuild.value) return;
   busy.value = "manifest";
   try {
-    currentBuild.value = await pdfCorpusApi.confirmManifest(
+    currentBuild.value = await corpusBuilderApi.confirmManifest(
       currentBuild.value.build_id,
       providerPayload.value,
     );
@@ -2081,7 +2081,7 @@ async function setDisposition(disposition: "pending" | "accepted" | "rejected") 
     await restoreReviewViewport(viewport, { record: true, inspector: true });
     queueRecordRequest(id, ["review disposition"], async (rebase) => {
       if (disposition === "pending") {
-        const result = await pdfCorpusApi.disposition(
+        const result = await corpusBuilderApi.disposition(
           buildId,
           id,
           "pending",
@@ -2091,7 +2091,7 @@ async function setDisposition(disposition: "pending" | "accepted" | "rejected") 
         applyAuthoritativeRecord(result);
         return result;
       }
-      const result = await pdfCorpusApi.reviewDecision(
+      const result = await corpusBuilderApi.reviewDecision(
         buildId,
         id,
         "rejected",
@@ -2133,7 +2133,7 @@ async function setDisposition(disposition: "pending" | "accepted" | "rejected") 
     id,
     ["review disposition"],
     async (rebase) => {
-      const result = await pdfCorpusApi.reviewDecision(
+      const result = await corpusBuilderApi.reviewDecision(
         buildId,
         id,
         disposition,
@@ -2236,7 +2236,7 @@ async function acceptCleanRecords() {
   if (!window.confirm(i18n.tf("pdf_corpus.accept_clean_confirm", { count: clean }))) return;
   busy.value = "bulk";
   try {
-    const result = await pdfCorpusApi.bulkDisposition(
+    const result = await corpusBuilderApi.bulkDisposition(
       currentBuild.value.build_id,
       "accepted",
       "ready",
@@ -2283,7 +2283,7 @@ async function bulkDisposition(disposition: "accepted" | "rejected") {
     return;
   busy.value = "bulk";
   try {
-    const result = await pdfCorpusApi.bulkDisposition(
+    const result = await corpusBuilderApi.bulkDisposition(
       currentBuild.value.build_id,
       disposition,
       reviewQueue.value,
@@ -2323,7 +2323,7 @@ async function undoReview() {
   const viewport = captureReviewViewport();
   busy.value = "record";
   try {
-    const result = await pdfCorpusApi.undoReview(currentBuild.value.build_id);
+    const result = await corpusBuilderApi.undoReview(currentBuild.value.build_id);
     await refreshBuild();
     await refreshRecords(true, result.selected_record_id || "");
     await restoreReviewViewport(viewport, { record: true });
@@ -2340,7 +2340,7 @@ async function redoReview() {
   const viewport = captureReviewViewport();
   busy.value = "record";
   try {
-    const result = await pdfCorpusApi.redoReview(currentBuild.value.build_id);
+    const result = await corpusBuilderApi.redoReview(currentBuild.value.build_id);
     await refreshBuild();
     await refreshRecords(true, result.selected_record_id || "");
     await restoreReviewViewport(viewport, { record: true });
@@ -2356,7 +2356,7 @@ async function reanalyzeDocument() {
   if (!currentBuild.value) return;
   busy.value = "manifest";
   try {
-    const result = await pdfCorpusApi.regenerateManifest(
+    const result = await corpusBuilderApi.regenerateManifest(
       currentBuild.value.build_id,
       providerPayload.value,
     );
@@ -2381,7 +2381,7 @@ async function saveManifest(changes: Record<string, unknown>) {
   if (!currentBuild.value) return;
   busy.value = "manifest";
   try {
-    currentBuild.value = await pdfCorpusApi.patchManifest(
+    currentBuild.value = await corpusBuilderApi.patchManifest(
       currentBuild.value.build_id,
       changes,
       Number(currentBuild.value.manifest_revision || 1),
@@ -2421,7 +2421,7 @@ async function saveReviewedText(resolveIssues = resolveSourceOnTextSave.value) {
   }
   await restoreReviewViewport(viewport, { record: true });
   queueRecordRequest(recordId, ["text"], (rebase) =>
-    pdfCorpusApi.patchText(
+    corpusBuilderApi.patchText(
       buildId,
       recordId,
       text,
@@ -2463,7 +2463,7 @@ async function saveMetadata() {
   if (!context) return;
   await restoreReviewViewport(viewport);
   queueRecordRequest(context.recordId, Object.keys(changes), (rebase) =>
-    pdfCorpusApi.patchMetadata(
+    corpusBuilderApi.patchMetadata(
       context.buildId,
       context.recordId,
       changes,
@@ -2505,7 +2505,7 @@ async function assignEvidenceBlock(field: string, blockId: string) {
   if (index >= 0) records.value.splice(index, 1, row);
   await restoreReviewViewport(viewport);
   queueRecordRequest(recordId, [field], (rebase) =>
-    pdfCorpusApi.patchEvidence(
+    corpusBuilderApi.patchEvidence(
       buildId,
       recordId,
       field,
@@ -2548,7 +2548,7 @@ async function toggleEvidenceBlock(blockId: string) {
   if (index >= 0) records.value.splice(index, 1, row);
   await restoreReviewViewport(viewport);
   queueRecordRequest(recordId, [field], (rebase) =>
-    pdfCorpusApi.patchEvidence(
+    corpusBuilderApi.patchEvidence(
       buildId,
       recordId,
       field,
@@ -2595,7 +2595,7 @@ async function merge(direction: "previous" | "next") {
     [id, second.record_id],
     ["record boundary"],
     async () => {
-      const row = await pdfCorpusApi.merge(
+      const row = await corpusBuilderApi.merge(
         currentBuild.value!.build_id,
         id,
         direction,
@@ -2682,7 +2682,7 @@ async function split(afterBlockId: string) {
     [id, nextId],
     ["record boundary"],
     async () => {
-      const result = await pdfCorpusApi.split(
+      const result = await corpusBuilderApi.split(
         currentBuild.value!.build_id,
         id,
         afterBlockId,
@@ -2753,7 +2753,7 @@ async function sliceRecord(
       [previous.record_id, id, following.record_id],
       ["record boundary"],
       async () => {
-        const result = await pdfCorpusApi.sliceRecord(
+        const result = await corpusBuilderApi.sliceRecord(
           currentBuild.value!.build_id,
           id,
           direction,
@@ -2833,7 +2833,7 @@ async function sliceRecord(
       [id, neighbor.record_id],
       ["record boundary"],
       async () => {
-        const result = await pdfCorpusApi.sliceRecord(
+        const result = await corpusBuilderApi.sliceRecord(
           currentBuild.value!.build_id,
           id,
           direction,
@@ -2901,7 +2901,7 @@ async function sliceRecord(
     [id, provisionalId, following.record_id],
     ["record boundary"],
     async () => {
-      const result = await pdfCorpusApi.sliceRecord(
+      const result = await corpusBuilderApi.sliceRecord(
         currentBuild.value!.build_id,
         id,
         "new",
@@ -2941,7 +2941,7 @@ async function requeueCurrentRecord() {
       provider_profile_id: profileId,
       model: llmActionModel.value || undefined,
     };
-    await pdfCorpusApi.requeueMetadata(
+    await corpusBuilderApi.requeueMetadata(
       currentBuild.value.build_id,
       selectedRecord.value.record_id,
       actionPayload,
@@ -2968,7 +2968,7 @@ async function adjudicateBoundary(
       provider_profile_id: profileId,
       model: model || undefined,
     };
-    const result = await pdfCorpusApi.adjudicateBoundary(
+    const result = await corpusBuilderApi.adjudicateBoundary(
       currentBuild.value.build_id,
       id,
       direction,
@@ -3005,7 +3005,7 @@ async function resolveMetadataField(field: string, value: unknown) {
     context.recordId,
     [field],
     async (rebase) => {
-      const result = await pdfCorpusApi.metadataDecision(
+      const result = await corpusBuilderApi.metadataDecision(
         context.buildId,
         context.recordId,
         field,
@@ -3033,7 +3033,7 @@ async function resolveMetadataSuggestions(changes: Record<string, unknown>) {
   if (!context) return;
   await restoreReviewViewport(viewport, { inspector: true });
   queueRecordRequest(context.recordId, Object.keys(changes), async (rebase) => {
-    const result = await pdfCorpusApi.metadataDecisionBatch(
+    const result = await corpusBuilderApi.metadataDecisionBatch(
       context.buildId,
       context.recordId,
       changes,
@@ -3067,7 +3067,7 @@ async function resolveMetadataNoValue(field: string) {
     context.recordId,
     [field],
     async (rebase) => {
-      const result = await pdfCorpusApi.metadataDecision(
+      const result = await corpusBuilderApi.metadataDecision(
         context.buildId,
         context.recordId,
         field,
@@ -3099,7 +3099,7 @@ async function clearMetadataSuggestionCache() {
     return;
   busy.value = "metadata-cache";
   try {
-    const result = await pdfCorpusApi.clearAllMetadataCache();
+    const result = await corpusBuilderApi.clearAllMetadataCache();
     setMessage(
       i18n.tf("pdf_corpus.metadata_cache_cleared", "Cleared {count} remembered suggestion(s).", {
         count: result.cleared,
@@ -3126,7 +3126,7 @@ async function runMetadataEnrichment(payload: {
       payload.providerProfileId,
       payload.model,
     ) || { provider_profile_id: payload.providerProfileId, model: payload.model || undefined };
-    currentBuild.value = await pdfCorpusApi.rerunMetadataEnrichment(currentBuild.value.build_id, {
+    currentBuild.value = await corpusBuilderApi.rerunMetadataEnrichment(currentBuild.value.build_id, {
       ...actionPayload,
       families: payload.families,
       scope: payload.scope,
@@ -3149,7 +3149,7 @@ async function openEditorialMemory() {
   if (!currentBuild.value) return;
   busy.value = "editorial-memory";
   try {
-    editorialMemory.value = await pdfCorpusApi.editorialMemory(currentBuild.value.build_id);
+    editorialMemory.value = await corpusBuilderApi.editorialMemory(currentBuild.value.build_id);
     editorialMemoryOpen.value = true;
   } catch (exc) {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
@@ -3161,7 +3161,7 @@ async function resetEditorialMemory() {
   if (!currentBuild.value) return;
   busy.value = "editorial-memory";
   try {
-    editorialMemory.value = await pdfCorpusApi.resetEditorialMemory(currentBuild.value.build_id);
+    editorialMemory.value = await corpusBuilderApi.resetEditorialMemory(currentBuild.value.build_id);
     setMessage(i18n.t("pdf_corpus.editorial_memory_reset_done"));
   } catch (exc) {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
@@ -3174,7 +3174,7 @@ async function openJsonlPreview() {
   if (!currentBuild.value || !selectedRecord.value) return;
   busy.value = "preview";
   try {
-    const result = await pdfCorpusApi.previewRecord(
+    const result = await corpusBuilderApi.previewRecord(
       currentBuild.value.build_id,
       selectedRecord.value.record_id,
     );
@@ -3229,7 +3229,7 @@ async function runLlmTouchup(
       provider_profile_id: profileId,
       model: model || undefined,
     };
-    const result = await pdfCorpusApi.touchupText(
+    const result = await corpusBuilderApi.touchupText(
       currentBuild.value.build_id,
       selectedRecord.value.record_id,
       { ...actionPayload, instructions, text: textDraft.value || selectedRecord.value.text },
@@ -3273,7 +3273,7 @@ async function dismissLlmTouchup() {
   if (!currentBuild.value || !selectedRecord.value || !llmTouchupResult.value.proposal_id) return;
   busy.value = "text-touchup-dismiss";
   try {
-    const updated = await pdfCorpusApi.setTouchupProposalStatus(
+    const updated = await corpusBuilderApi.setTouchupProposalStatus(
       currentBuild.value.build_id,
       selectedRecord.value.record_id,
       "dismissed",
@@ -3319,7 +3319,7 @@ async function rerunMetadata() {
       }),
     } as Record<string, unknown>;
     if (metadataRerunFamily.value !== "all") payload.families = [metadataRerunFamily.value];
-    const row = await pdfCorpusApi.rerunMetadata(
+    const row = await corpusBuilderApi.rerunMetadata(
       currentBuild.value.build_id,
       selectedRecord.value.record_id,
       payload,
@@ -3351,7 +3351,7 @@ async function publish(options: { download?: boolean; automatic?: boolean } = {}
   if (!currentBuild.value) return null;
   busy.value = "publish";
   try {
-    const result = await pdfCorpusApi.publish(currentBuild.value.build_id);
+    const result = await corpusBuilderApi.publish(currentBuild.value.build_id);
     await refreshBuild();
     await refreshBuilds();
     setMessage(
@@ -3362,7 +3362,7 @@ async function publish(options: { download?: boolean; automatic?: boolean } = {}
             hash: result.sha256.slice(0, 12),
           }),
     );
-    if (options.download) window.location.href = pdfCorpusApi.publicationUrl(result.publication_id);
+    if (options.download) window.location.href = corpusBuilderApi.publicationUrl(result.publication_id);
     return result;
   } catch (exc) {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
@@ -3378,7 +3378,7 @@ async function applyBulkMetadata(payload: {
   if (!currentBuild.value) return;
   busy.value = "bulk-metadata";
   try {
-    const result = await pdfCorpusApi.bulkMetadata(currentBuild.value.build_id, payload.changes, {
+    const result = await corpusBuilderApi.bulkMetadata(currentBuild.value.build_id, payload.changes, {
       recordIds: payload.applyToAll ? [] : Array.from(selectedReviewIds.value),
       applyToAll: payload.applyToAll,
       reviewQueue: reviewQueue.value,
@@ -3415,7 +3415,7 @@ function startNewBuildSetup() {
 }
 async function cancelBuild() {
   if (!currentBuild.value) return;
-  await pdfCorpusApi.cancel(currentBuild.value.build_id);
+  await corpusBuilderApi.cancel(currentBuild.value.build_id);
   setMessage(i18n.t("pdf_corpus.cancel_requested"));
   startPolling();
 }
@@ -3423,7 +3423,7 @@ async function settleMetadata() {
   if (!currentBuild.value) return;
   busy.value = "settle";
   try {
-    currentBuild.value = await pdfCorpusApi.settleMetadata(currentBuild.value.build_id);
+    currentBuild.value = await corpusBuilderApi.settleMetadata(currentBuild.value.build_id);
     syncBuildInRail(currentBuild.value);
     setMessage(i18n.t("pdf_corpus.settle_requested_notice"));
     startPolling();
@@ -4251,7 +4251,7 @@ defineExpose({
               <a
                 v-if="currentBuild.publication"
                 class="btn primary"
-                :href="pdfCorpusApi.publicationUrl(currentBuild.publication.publication_id)"
+                :href="corpusBuilderApi.publicationUrl(currentBuild.publication.publication_id)"
                 >{{ i18n.t("pdf_corpus.download_jsonl") }}</a
               >
             </div>
@@ -5713,7 +5713,7 @@ defineExpose({
         :confidence-calibration="currentBuild?.llm_confidence_calibration || {}"
         :source-pdf-url="
           selectedAsset
-            ? `${pdfCorpusApi.assetContentUrl(selectedAsset.asset_id)}#page=${selectedPdfPage || 1}`
+            ? `${corpusBuilderApi.assetContentUrl(selectedAsset.asset_id)}#page=${selectedPdfPage || 1}`
             : ''
         "
         :source-pdf-page="selectedPdfPage"
