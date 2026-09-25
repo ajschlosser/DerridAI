@@ -6,7 +6,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from api.app.field_assertions import (
+from app.field_assertions import (
     FieldAssertion,
     confirm_absence,
     confirm_assertion,
@@ -16,7 +16,7 @@ from api.app.field_assertions import (
     project_record_assertions,
     validate_projection,
 )
-from api.app.metadata_schema import default_schema
+from app.metadata_schema import default_schema
 
 
 def test_model_confidence_and_human_confirmation_preserve_derivation() -> None:
