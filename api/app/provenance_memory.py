@@ -29,6 +29,15 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _optional_int(value: Any) -> int | None:
+    if value in (None, "") or isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 class EvidenceSpan(BaseModel):
     model_config = ConfigDict(extra="forbid")
     source_document_id: str
@@ -114,12 +123,60 @@ def persist_record_decision(
     evidence = record.get("metadata_evidence") or {}
     field_evidence = evidence.get(field_name) if isinstance(evidence, dict) else None
     block_ids = field_evidence.get("block_ids") if isinstance(field_evidence, dict) else []
-    source_document_id = str(record.get("source_document_id") or "").strip()
-    if block_ids and source_document_id:
-        spans.append(EvidenceSpan(
-            source_document_id=source_document_id,
-            source_unit_ids=[str(item) for item in block_ids if str(item).strip()],
-        ))
+    source_document_id = str(
+        record.get("source_document_id") or record.get("source_asset_id") or ""
+    ).strip()
+    normalized_block_ids = [str(item) for item in block_ids if str(item).strip()]
+    if normalized_block_ids and source_document_id:
+        wanted = set(normalized_block_ids)
+        matched: set[str] = set()
+        for source_span in record.get("source_spans") or []:
+            if not isinstance(source_span, dict):
+                continue
+            span_ids = {
+                str(source_span.get(key) or "").strip()
+                for key in ("source_unit_id", "block_id")
+                if str(source_span.get(key) or "").strip()
+            }
+            span_ids.update(
+                str(item).strip()
+                for item in source_span.get("source_unit_ids") or []
+                if str(item).strip()
+            )
+            evidence_ids = sorted(span_ids & wanted)
+            if not evidence_ids:
+                continue
+            matched.update(evidence_ids)
+            physical_page = _optional_int(
+                source_span.get("pdf_page") or source_span.get("page")
+            )
+            printed_page = source_span.get("printed_page_label")
+            spans.append(
+                EvidenceSpan(
+                    source_document_id=str(
+                        source_span.get("source_document_id") or source_document_id
+                    ),
+                    source_unit_ids=evidence_ids,
+                    physical_page_start=physical_page,
+                    physical_page_end=physical_page,
+                    printed_page_start=printed_page,
+                    printed_page_end=printed_page,
+                    character_start=_optional_int(
+                        source_span.get("char_start") or source_span.get("start")
+                    ),
+                    character_end=_optional_int(
+                        source_span.get("char_end") or source_span.get("end")
+                    ),
+                )
+            )
+        unmatched = [block_id for block_id in normalized_block_ids if block_id not in matched]
+        if unmatched:
+            spans.append(
+                EvidenceSpan(
+                    source_document_id=source_document_id,
+                    source_unit_ids=unmatched,
+                )
+            )
     if decision_kind == "correction":
         value = {"accepted": value, "rejected": rejected_value}
     try:
