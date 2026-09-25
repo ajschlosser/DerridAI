@@ -65,6 +65,33 @@ describe("Corpus Builder focus review interactions",()=>{
     wrapper.unmount();
   });
 
+  it("binds selected review text to the nearest source block and opens Evidence",async()=>{
+    const wrapper=mount(CorpusRecordFocusReview,{
+      props:{
+        record,
+        sourceBlocks:[
+          {block_id:"p24-b1",page:24,type:"paragraph",text:"Derrida frames the question."},
+          {block_id:"p24-b2",page:24,type:"paragraph",text:"For Levinas, responsibility precedes freedom."},
+        ],
+      },
+      global:{
+        stubs:{
+          ...stubs,
+          CorpusMetadataResolutionPanel:{
+            template:'<button data-selection-evidence @click="$emit(\'selectionEvidence\',\'position_holder\',\'Levinas responsibility precedes freedom\')">Bind evidence</button>',
+          },
+        },
+      },
+    });
+
+    await wrapper.get("[data-selection-evidence]").trigger("click");
+
+    expect(lastEmission(wrapper,"selectEvidence")).toEqual(["position_holder"]);
+    expect(lastEmission(wrapper,"assignEvidence")).toEqual(["position_holder","p24-b2"]);
+    expect(wrapper.get("#focus-tab-evidence").attributes("aria-selected")).toBe("true");
+    wrapper.unmount();
+  });
+
   it("disables acceptance when the parent marks the record unsafe to accept",()=>{
     const wrapper=mount(CorpusRecordFocusReview,{props:{record,canAccept:false},global:{stubs}});
     const accept=buttonByText(wrapper,"Accept");
