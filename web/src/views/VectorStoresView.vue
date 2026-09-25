@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import * as runtime from "../runtime/runtime.js";
 import { chromaApi } from "../api/chroma";
+import { systemApi, type ProviderProfile } from "../api/system";
 import { useAuthStore } from "../stores/auth";
 import { useVectorStore } from "../stores/workspace";
 import { corpusState } from "../state/workspaceState";
@@ -66,6 +67,7 @@ const loading = ref(true);
 const error = ref("");
 const health = ref<ChromaHealth | null>(null);
 const collections = ref<VectorCollection[]>([]);
+const providerProfiles = ref<ProviderProfile[]>([]);
 const activeName = ref("");
 const filter = ref(String(workspace.vectorCollectionFilter || ""));
 const tab = ref<VectorTab>(VECTOR_TABS.includes(workspace.vectorTab as VectorTab) ? workspace.vectorTab as VectorTab : "overview");
@@ -142,7 +144,12 @@ async function load(options: {details?: boolean} = {}) {
   loading.value = !collections.value.length;
   error.value = "";
   try {
-    const [nextHealth, stores] = await Promise.all([chromaApi.health(), chromaApi.collections()]);
+    const [nextHealth, stores, providers] = await Promise.all([
+      chromaApi.health(),
+      chromaApi.collections(),
+      systemApi.researcherProviders().catch(() => ({ profiles: [] })),
+    ]);
+    providerProfiles.value = providers.profiles || [];
     syncHealthIntoRuntime(nextHealth);
     const corpusStores = stores.filter(store => !store.metadata?.derridai_system_collection);
     collections.value = corpusStores;
@@ -198,6 +205,7 @@ function openCreate() {
     defaultProvider: runtimeState.appConfig?.embedding_provider || "ollama",
     defaultModel: runtimeState.appConfig?.embedding_model || "bge-m3:latest",
     installedModels: models,
+    providerProfiles: providerProfiles.value,
   } as never);
 }
 
