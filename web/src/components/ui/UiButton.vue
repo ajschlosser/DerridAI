@@ -40,6 +40,7 @@ const emit = defineEmits<{ click: [event: MouseEvent] }>();
       :disabled="props.disabled"
       :aria-disabled="props.disabled || undefined"
       :aria-pressed="props.pressed"
+      :aria-expanded="props.expanded"
       :aria-label="props.iconOnly ? props.label : undefined"
       :title="props.disabled ? props.disabledReason : props.iconOnly ? props.label : undefined"
       @click="emit('click', $event)"
