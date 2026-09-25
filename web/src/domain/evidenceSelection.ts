@@ -1,4 +1,5 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
+import { assertionSummaries, assertionValues } from "./fieldAssertions";
 
 // Evidence and review selection: which workspace/database records are picked as Research evidence or marked for review.
 // Moved verbatim from the legacy runtime; the runtime's state object and helpers are passed in as dependencies.
@@ -154,6 +155,8 @@ export function createEvidenceSelection(deps: Deps) {
         discourse_role: record.discourse_role || null,
         target: record.target || null,
         proposition_status: record.proposition_status || null,
+        metadata: assertionValues(record),
+        assertions: assertionSummaries(record),
         inline_citation: record.inline_citation || null,
         text_preview: String(record.text || "")
           .replace(/\s+/g, " ")
@@ -190,6 +193,8 @@ export function createEvidenceSelection(deps: Deps) {
         discourse_role: record.discourse_role || null,
         target: record.target || null,
         proposition_status: record.proposition_status || null,
+        metadata: assertionValues(record),
+        assertions: assertionSummaries(record),
         inline_citation: record.inline_citation || null,
         text_preview: String(record.text || "")
           .replace(/\s+/g, " ")
