@@ -73,11 +73,14 @@ def test_response_consistency_rejects_assessment_value_contradictions():
     with pytest.raises(Exception, match="uncertain requires needs_review=true"):
         model.model_validate(bad)
 
-    bad = json.loads(json.dumps({"metadata": fields, "field_assessments": assessments, "field_evidence": evidence}))
-    bad["metadata"]["speaker"] = "Jacques Derrida"
-    bad["field_assessments"]["speaker"] = {"confidence": 0.95, "needs_review": False, "reason": "clear", "outcome": "supported_value"}
-    with pytest.raises(Exception, match="require at least one field_evidence block_id"):
-        model.model_validate(bad)
+    missing_evidence = json.loads(json.dumps({"metadata": fields, "field_assessments": assessments, "field_evidence": evidence}))
+    missing_evidence["metadata"]["speaker"] = "Jacques Derrida"
+    missing_evidence["field_assessments"]["speaker"] = {"confidence": 0.95, "needs_review": False, "reason": "clear", "outcome": "supported_value"}
+    # Structured-output validation preserves the usable family response. Evidence
+    # sufficiency is reconciled against current-record block IDs afterward, where
+    # this field becomes evidence_failed/reviewable instead of failing the whole call.
+    accepted = model.model_validate(missing_evidence)
+    assert accepted.metadata.speaker == "Jacques Derrida"
 
 
 def test_the_built_in_schema_describes_the_same_fields_as_the_code_does_today():
