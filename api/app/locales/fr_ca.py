@@ -3409,6 +3409,7 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'pdf_corpus.review_metadata_issues': 'Réviser les problèmes de métadonnées',
  'pdf_corpus.review_metadata_records': 'Réviser {count} fiche(s) touchée(s)',
  'pdf_corpus.review_mode': 'Révision des fiches',
+  'pdf_corpus.review_workspace_title': 'Révision savante',
  'pdf_corpus.review_mode_help': 'Révisez la fiche proposée et ses métadonnées ensemble. Les diagnostics de '
                                 'construction restent accessibles sous Détails techniques de la construction.',
  'pdf_corpus.review_only': 'À réviser seulement',
