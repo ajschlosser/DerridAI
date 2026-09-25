@@ -2,7 +2,7 @@
 
 # Backend test suite
 
-Run from the repository root (see [CONTRIBUTING.md](../CONTRIBUTING.md) for the environment variables that point the tests at a scratch data directory):
+Run from the repository root after installing `api/requirements-dev.txt` as described in [CONTRIBUTING.md](../CONTRIBUTING.md):
 
 ```bash
 pytest -q -n auto --dist=worksteal
