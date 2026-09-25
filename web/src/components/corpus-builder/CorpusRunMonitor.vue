@@ -29,7 +29,9 @@ const emit = defineEmits<{
 const i18n = useI18nStore();
 const expanded = ref(false);
 const running = computed(() => ["queued", "running"].includes(String(props.build.status || "")));
-const progress = computed(() => Math.max(0, Math.min(100, Math.round(Number(props.build.progress || 0) * 100))));
+const progress = computed(() =>
+  Math.max(0, Math.min(100, Math.round(Number(props.build.progress || 0) * 100))),
+);
 const warnings = computed(() => props.build.warnings || []);
 const operation = computed(() => props.build.metadata_operation || {});
 const operationState = computed(() => String(operation.value.state || ""));
@@ -58,7 +60,12 @@ const contribution = computed(() => props.build.llm_contribution || {});
         <strong>{{ progress }}%</strong>
         <span v-if="running">{{ i18n.t("pdf_corpus.running", "Running") }}</span>
         <span v-else>{{ i18n.t(`pdf_corpus.status.${build.status}`, build.status) }}</span>
-        <button type="button" class="btn small" :aria-expanded="expanded" @click="expanded = !expanded">
+        <button
+          type="button"
+          class="btn small"
+          :aria-expanded="expanded"
+          @click="expanded = !expanded"
+        >
           {{
             expanded
               ? i18n.t("pdf_corpus.hide_diagnostics", "Hide diagnostics")
@@ -95,7 +102,10 @@ const contribution = computed(() => props.build.llm_contribution || {});
       @stop="emit('cancel')"
       @run-another="emit('runAnother')"
     />
-    <CorpusHandsFreeReport :report="build.autonomous_report" @open-record="emit('openRecord', $event)" />
+    <CorpusHandsFreeReport
+      :report="build.autonomous_report"
+      @open-record="emit('openRecord', $event)"
+    />
 
     <div v-if="expanded" class="run-monitor-diagnostics">
       <CorpusProviderSwitcher
