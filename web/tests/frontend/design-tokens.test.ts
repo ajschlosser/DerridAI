@@ -7,14 +7,12 @@ const tokens = readFileSync("src/styles/tokens.css", "utf8");
 const styles = readFileSync("src/style.css", "utf8");
 
 function block(css: string, selector: string): string {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\function block(css: string, opener: string): string {
-  const start = css.indexOf(opener);
-  if (start < 0) throw new Error(`No block for ${opener}`);
-  const open = css.indexOf("{", start);");
-  const match = new RegExp(`${escaped}\\s*\\{`).exec(css);
-  if (!match) throw new Error(`No block for ${selector}`);
-  const start = match.index;
-  const open = css.indexOf("{", start);
+  const start = css.indexOf(selector);
+  if (start < 0) throw new Error(`No block for ${selector}`);
+  const open = css.indexOf("{", start + selector.length);
+  if (open < 0 || css.slice(start + selector.length, open).trim()) {
+    throw new Error(`No block for ${selector}`);
+  }
   let depth = 0;
   for (let i = open; i < css.length; i++) {
     if (css[i] === "{") depth++;
