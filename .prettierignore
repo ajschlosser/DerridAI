@@ -1,0 +1,17 @@
+# Dependencies and generated build/runtime output
+.git/
+.venv/
+venv/
+data/
+web/node_modules/
+web/dist/
+web/storybook-static/
+web/coverage/
+web/test-results/
+web/playwright-report/
+
+# Generated characterization baselines: whitespace is part of the recorded output.
+web/tests/e2e/legacy-dom-baseline.spec.ts-snapshots/
+
+# Generated snapshot artifacts are updated by their owning test runner.
+*.snap
