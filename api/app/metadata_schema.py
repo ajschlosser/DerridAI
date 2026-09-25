@@ -347,8 +347,8 @@ def build_group_prompt(
             lines.append(f"- {field.name} should prefer values supported by POS tags: {json.dumps(field.pos_tags)}.")
         if field.ner_tags:
             lines.append(
-                f"- {field.name} should prefer named entities matching NER tags "
-                f"(IOB2-compatible): {json.dumps(field.ner_tags)}."
+                f"- {field.name} should prefer named entities matching these entity-type "
+                f"labels: {json.dumps(field.ner_tags)}."
             )
         described = {v.value: v.definition for v in field.values if v.definition}
         if described:
