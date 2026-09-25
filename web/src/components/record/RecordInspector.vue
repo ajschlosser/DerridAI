@@ -2,12 +2,17 @@
 import { computed, nextTick, ref } from "vue";
 import { useI18nStore } from "../../stores/i18n";
 import RecordProvenance from "./RecordProvenance.vue";
+import RecordTraceabilityExplorer from "./RecordTraceabilityExplorer.vue";
 import RecordIndexTerms from "./RecordIndexTerms.vue";
 import RecordAnnotations from "./RecordAnnotations.vue";
 import RecordPdfLinks from "./RecordPdfLinks.vue";
 import RecordHistoryTimeline from "./RecordHistoryTimeline.vue";
 import InspectorLayoutEditor from "./InspectorLayoutEditor.vue";
 import type { RecordWorkspaceSnapshot } from "../../types/record";
+import type {
+  DerridaiNormativeModel,
+  ResearchObjectGraph,
+} from "../../types/researchObjectGraph";
 import {
   loadInspectorLayout,
   saveInspectorLayout,
@@ -17,7 +22,13 @@ import {
   type InspectorLayoutRow,
 } from "../../domain/inspectorLayout";
 
-const props = defineProps<{ snapshot: RecordWorkspaceSnapshot }>();
+const props = defineProps<{
+  snapshot: RecordWorkspaceSnapshot;
+  objectGraph?: ResearchObjectGraph | null;
+  normativeModel?: DerridaiNormativeModel | null;
+  graphLoading?: boolean;
+  graphError?: string;
+}>();
 const emit = defineEmits<{
   search: [field: string, value: string, contains?: boolean];
   change: [changes: Record<string, unknown>];
@@ -38,6 +49,7 @@ const record = computed(() => props.snapshot.record || {});
 const tabs = computed(() => [
   ["overview", i18n.t("record.tab_overview")],
   ["provenance", i18n.t("record.tab_provenance")],
+  ["traceability", i18n.t("record.tab_traceability", "Traceability")],
   ["indexing", i18n.t("record.tab_indexing")],
   ["pdf", i18n.t("record.tab_pdf")],
   ["annotations", i18n.t("record.tab_annotations")],
@@ -231,6 +243,16 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
         role="tabpanel"
         :aria-labelledby="tabId('provenance')"
         @search="(field, value) => emit('search', field, value)"
+      />
+      <RecordTraceabilityExplorer
+        v-else-if="tab === 'traceability'"
+        :id="panelId('traceability')"
+        :graph="objectGraph"
+        :model="normativeModel"
+        :loading="graphLoading"
+        :error="graphError"
+        role="tabpanel"
+        :aria-labelledby="tabId('traceability')"
       />
       <section
         v-else-if="tab === 'indexing'"
