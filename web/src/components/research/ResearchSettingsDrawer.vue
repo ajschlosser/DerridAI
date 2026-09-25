@@ -84,14 +84,20 @@ function sync() {
   const raw = props.generation.extra_options;
   extraOptions.value = typeof raw === "string" ? raw : JSON.stringify(raw || {}, null, 2);
 }
-function open() {
+function open(section: SettingsSection = "retrieval", focusPromptMetadata = false) {
   sync();
-  activeSection.value = "retrieval";
+  activeSection.value = section;
   isOpen.value = true;
   dialog.value?.showModal();
-  void nextTick(() =>
-    dialog.value?.querySelector<HTMLElement>('[data-settings-tab="retrieval"]')?.focus(),
-  );
+  void nextTick(() => {
+    if (focusPromptMetadata && section === "evidence") {
+      const target = dialog.value?.querySelector<HTMLElement>("#research-prompt-metadata");
+      target?.scrollIntoView({ block: "start" });
+      target?.focus({ preventScroll: true });
+      return;
+    }
+    dialog.value?.querySelector<HTMLElement>(`[data-settings-tab="${section}"]`)?.focus();
+  });
 }
 function close() {
   isOpen.value = false;
@@ -511,7 +517,9 @@ defineExpose({ open, close });
               </fieldset>
               <fieldset
                 v-if="isOpen && activeSection === 'evidence'"
+                id="research-prompt-metadata"
                 class="research-settings-card wide research-prompt-metadata"
+                tabindex="-1"
               >
                 <legend>{{ i18n.t("research.prompt_metadata", "Prompt metadata") }}</legend>
                 <p>

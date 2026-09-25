@@ -39,7 +39,9 @@ const jobs = ref<ResearchJob[]>([]);
 const activeJob = ref<ResearchJob | null>(null);
 const sessionJobIds = ref<Set<string>>(new Set());
 const activeEvidenceIndex = ref(0);
-const settingsDrawer = ref<{ open: () => void } | null>(null);
+const settingsDrawer = ref<{
+  open: (section?: "retrieval" | "evidence" | "generation", focusPromptMetadata?: boolean) => void;
+} | null>(null);
 const runsDrawer = ref<{ open: () => void; close: () => void } | null>(null);
 let pollTimer: number | undefined;
 let draftTimer: number | undefined;
@@ -573,6 +575,7 @@ onBeforeUnmount(() => {
         :response-language="config.response_language"
         :preset="preset"
         :evidence-count="selectedEvidence.length"
+        :prompt-metadata="config.prompt_metadata"
         :stores="stores"
         :profiles="profiles"
         :history="workspace.history || []"
@@ -587,6 +590,7 @@ onBeforeUnmount(() => {
         @update:preset="applyPreset"
         @run="runResearch"
         @settings="settingsDrawer?.open()"
+        @prompt-metadata="settingsDrawer?.open('evidence', true)"
         @runs="runsDrawer?.open()"
         @history="loadHistory"
       />
