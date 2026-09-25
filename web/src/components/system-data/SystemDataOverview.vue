@@ -112,7 +112,7 @@ onMounted(refresh);
         technical="system · durable SQLite"
         :status="stateLabel(databaseState, database('system')?.tables.length === 0)"
         :count="`${database('system')?.tables.length || 0} ${t('runtime.system_tables', 'tables')}`"
-        @open="$emit('open-section', 'databases')"
+         :action-label="t('runtime.system_open', 'Open')" @open="$emit('open-section', 'databases')"
       />
       <SystemDataStoreCard
         icon="lock"
@@ -122,7 +122,7 @@ onMounted(refresh);
         sensitive
         :status="stateLabel(databaseState, database('auth')?.tables.length === 0)"
         :count="`${database('auth')?.tables.length || 0} ${t('runtime.system_tables', 'tables')}`"
-        @open="$emit('open-section', 'databases')"
+         :action-label="t('runtime.system_open', 'Open')" @open="$emit('open-section', 'databases')"
       />
       <SystemDataStoreCard
         icon="record"
@@ -131,7 +131,7 @@ onMounted(refresh);
         technical="_response_cache"
         :status="stateLabel(cacheState, cache?.total === 0)"
         :count="`${Number(cache?.total || 0).toLocaleString()} ${t('runtime.system_responses_count', 'responses')}`"
-        @open="$emit('open-section', 'responses')"
+         :action-label="t('runtime.system_open', 'Open')" @open="$emit('open-section', 'responses')"
       />
       <SystemDataStoreCard
         icon="spark"
@@ -140,7 +140,7 @@ onMounted(refresh);
         technical="derived · rebuildable projection"
         :status="exemplarState === 'available' && exemplars?.exists === false ? t('runtime.system_not_built', 'Not built') : stateLabel(exemplarState, exemplars?.count === 0)"
         :count="`${Number(exemplars?.count || 0).toLocaleString()} ${t('runtime.system_examples_count', 'examples')}`"
-        @open="$emit('open-section', 'metadata')"
+         :action-label="t('runtime.system_open', 'Open')" @open="$emit('open-section', 'metadata')"
       />
       <SystemDataStoreCard
         icon="search"
@@ -149,7 +149,7 @@ onMounted(refresh);
         technical="system Chroma · derived"
         :status="stateLabel(chromaState, collections.length === 0)"
         :count="`${collections.length} ${t('runtime.system_collections', 'collections')}`"
-        @open="$emit('open-section', 'advanced')"
+         :action-label="t('runtime.system_open', 'Open')" @open="$emit('open-section', 'advanced')"
       />
     </div>
 
