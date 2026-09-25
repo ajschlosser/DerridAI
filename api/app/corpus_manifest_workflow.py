@@ -35,17 +35,17 @@ from .corpus_models import (
     RecordMetadataModel,
 )
 from .corpus_record_quality import iso_now
+from .corpus_segmentation import (
+    _apply_manifest_metadata,
+    _normalize_text,
+    _scholarly_page_range,
+)
 from .field_assertions import (
     create_inherited_assertion,
     create_unresolved_assertion,
     current_assertion_by_name,
     migrate_record_assertions,
     project_record_assertions,
-)
-from .corpus_segmentation import (
-    _apply_manifest_metadata,
-    _normalize_text,
-    _scholarly_page_range,
 )
 from .metadata_schema import (
     DEFAULT_SCHEMA_ID,
