@@ -26,6 +26,7 @@ const emit = defineEmits<{
   noValue: [field: string];
   resolveMany: [changes: Record<string, unknown>];
   source: [field: string];
+  selectionEvidence: [field: string, text: string];
   dirty: [dirty: boolean];
 }>();
 const i18n = useI18nStore();
@@ -328,6 +329,7 @@ function displayValue(field: string) {
           @save="(value) => emit('resolve', field, value)"
           @no-value="emit('noValue', field)"
           @source="emit('source', field)"
+          @assign-selection-evidence="(text) => emit('selectionEvidence', field, text)"
           @dirty="(value) => emit('dirty', value)"
         />
         <button
@@ -341,7 +343,7 @@ function displayValue(field: string) {
         </button>
       </div>
     </div>
-    <details v-if="settledFields.length" class="settled-metadata">
+    <details v-if="settledFields.length" class="settled-metadata" open>
       <summary>
         {{ i18n.t("pdf_corpus.populated_metadata") }}
         <span>{{ settledFields.length }}</span>
