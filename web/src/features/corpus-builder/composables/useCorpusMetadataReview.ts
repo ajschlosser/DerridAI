@@ -93,7 +93,10 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
   const metadataKnownValues = computed<Record<string, string[]>>(() => {
     const out: Record<string, Set<string>> = {};
     for (const [field, values] of Object.entries(metadataObservedValues.value)) {
-      for (const value of values) (out[field] ??= new Set()).add(value);
+      for (const value of values) {
+        if (!isUsableMetadataSuggestion(value)) continue;
+        (out[field] ??= new Set()).add(value.trim());
+      }
     }
     for (const row of options.records.value) {
       const source = row as unknown as Record<string, unknown>;
