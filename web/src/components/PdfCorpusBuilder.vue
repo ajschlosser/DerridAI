@@ -2114,6 +2114,8 @@ async function openMetadataIssueQueue() {
 
 function firstValidationRecordId(): string {
   const validation = currentBuild.value?.validation || {};
+  const actionable = validation.validation_issues?.find((item) => item?.record_id);
+  if (actionable?.record_id) return String(actionable.record_id);
   for (const key of [
     "metadata_evidence_errors",
     "metadata_schema_errors",
