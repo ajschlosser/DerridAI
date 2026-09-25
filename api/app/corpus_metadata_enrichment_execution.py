@@ -238,7 +238,7 @@ class MetadataEnrichmentExecutionMixin:
                         "created_at": iso_now(),
                     }
                     self._append_warning(build_id, f"{record.get('record_id')}: LLM text touch-up failed; metadata enrichment continued.")
-        if _metadata_source_quality_gate(record, required_metadata_fields, stage_callback, schema=schema):
+        if _metadata_source_quality_gate(record, required_metadata_fields, stage_callback):
             return migrate_record_assertions(record, schema)
         tasks, source_ids, obvious_apparatus = self._prepare_metadata_tasks(
             record, manifest, request, profile, editorial_context, editorial_examples,
