@@ -156,17 +156,21 @@ describe("Corpus Builder focus review interactions", () => {
       props: {
         record,
         schema: {
+          format_version: 1,
+          schema_version: "review-schema-v1",
           id: "review-schema",
           name: "Review schema",
-          version: 1,
+          description: "Focus-mode schema fixture",
           groups: [],
           fields: [
             {
+              field_id: "field-quoted-author",
               name: "quoted_author",
               label: "Quoted author",
               type: "text",
               group: "core",
               instruction: "",
+              definitions_heading: "",
               values: [],
               strict: false,
               evidence: true,
