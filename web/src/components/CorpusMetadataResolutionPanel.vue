@@ -369,6 +369,7 @@ function displayValue(field: string) {
             @save="(value) => emit('resolve', field, value)"
             @no-value="emit('noValue', field)"
             @source="emit('source', field)"
+            @assign-selection-evidence="(text) => emit('selectionEvidence', field, text)"
             @dirty="(value) => emit('dirty', value)"
           />
         </div>
@@ -402,6 +403,7 @@ function displayValue(field: string) {
             @save="(value) => emit('resolve', field, value)"
             @no-value="emit('noValue', field)"
             @source="emit('source', field)"
+            @assign-selection-evidence="(text) => emit('selectionEvidence', field, text)"
             @dirty="(value) => emit('dirty', value)"
           />
         </div>
