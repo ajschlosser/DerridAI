@@ -3,6 +3,43 @@
 
 Release history for DerridAI, newest first. Each entry links to the full release note in [`docs/notes/`](docs/notes/). The README describes only the current release.
 
+## 0.80.0 — Beverly
+
+The release since 0.70.0 consolidates the canonical metadata and provenance
+migration, the continuing Corpus Builder and native Vue decomposition, and the
+application's system-data and research-workspace improvements. See
+[0.80.0](docs/notes/0.80.0.md) for the complete release note.
+
+- **Corpus Builder and ingestion:** decomposed build lifecycle, segmentation,
+  enrichment, review, publication, source-quality, and reviewer transport
+  responsibilities; added broader source-media ingestion; and improved
+  document-structure, record-quality, enrichment-rerun, and publication
+  readiness workflows.
+- **Canonical metadata assertions:** introduced durable `FieldAssertion`
+  records with independent derivation, evaluation, authority, value-state,
+  confidence, evidence, revision, and identity fields; migrated legacy
+  metadata lazily and idempotently while retaining compatibility projections;
+  preserved unresolved, invalid, confirmed-absent, model-inferred, and
+  human-confirmed states; and kept model derivation and confidence when a
+  reviewer confirms the assertion.
+- **Provenance, review, and retrieval:** integrated assertions with SQLite
+  persistence, enrichment, autonomous settlement, review state, publication,
+  provenance memory, evidence binding, and dynamic search facets; hardened
+  blind and second-opinion review; made custom fields first-class in RAG
+  evidence payloads and Search facets; and kept retrieval, vector indexes,
+  caches, and generated output separate from authoritative corpus records.
+- **Frontend and administration:** continued the native Vue migration across
+  core research surfaces and redesigned System Data into typed,
+  URL-addressable workspaces for databases, response caches, metadata
+  examples, and advanced administration. Built-in structural semantics remain
+  explicit where they govern segmentation and publication, while the Record
+  Inspector and Research evidence presentation still use built-in presentation
+  defaults rather than fully generic schema-driven layouts.
+- **Reliability and governance:** expanded API contracts, backend regression
+  coverage, typed frontend tests, parallel CI, Playwright/axe coverage,
+  accessibility and design-token checks, locale parity, backup/restore
+  coverage, authentication boundaries, and researcher access restrictions.
+
 ## 0.70.0 — Amesbury
 
 A consolidation release covering the Vue/runtime and Corpus Builder decomposition, specification-aligned assertion status vocabulary, metadata-schema/review improvements, search/provider/theme/internationalization work, and related reliability changes. See [0.70.0](docs/notes/0.70.0.md).
