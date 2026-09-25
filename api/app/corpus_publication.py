@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Any
 
 from .corpus_metadata import DISCOURSE_ROLES, REGION_TYPES
+from .field_assertions import migrate_record_assertions
 
 
 def validate_publication_record(record: dict[str, Any]) -> list[str]:
@@ -31,6 +32,7 @@ def validate_publication_record(record: dict[str, Any]) -> list[str]:
 
 def serialize_public_record(record: dict[str, Any]) -> dict[str, Any]:
     public_record = dict(record)
+    migrate_record_assertions(public_record)
     if not public_record.get("source_document_id") and public_record.get("source_asset_id"):
         public_record["source_document_id"] = public_record["source_asset_id"]
     source_document_id = public_record.get("source_document_id")

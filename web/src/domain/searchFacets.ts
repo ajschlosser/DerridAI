@@ -123,7 +123,10 @@ export function createSearchFacets(deps: Deps) {
   function buildSearchFacets(source: Loose[], { database = false } = {}) {
     const rows = (database ? null : source) as Loose[];
     const records = (database ? source : null) as Loose[];
-    return SEARCH_FACET_FIELDS.filter((field) => !(database && field === "__db_status"))
+    const facetFields = [
+      ...new Set([...SEARCH_FACET_FIELDS, ...recordFields()]),
+    ].filter((field) => !SEARCH_AUTOCOMPLETE_EXCLUDED.has(field) && field !== "text" && field !== "field_assertions" && field !== "current_field_assertions");
+    return facetFields.filter((field) => !(database && field === "__db_status"))
       .map((field) => {
         const counts = database
           ? searchFacetCountsFromRecords(records, field)

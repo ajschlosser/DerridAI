@@ -24,13 +24,15 @@ def _second_opinion_owed(record: dict[str, Any], field: str) -> dict[str, Any] |
     return None
 
 
-def _present_for_reviewer(record: dict[str, Any]) -> None:
+def _present_for_reviewer(record: dict[str, Any]) -> bool:
     """Hide, from a second reviewer, the answer they are about to independently give.
 
     Applied where records are served, never before saving: it must not reach storage.
     """
+    scrubbed = False
     for field in list((record.get("second_opinion") or {}).keys()):
         if _second_opinion_owed(record, field):
+            scrubbed = True
             record[field] = [] if isinstance(record.get(field), list) else None
             record.setdefault("metadata_field_status", {})[field] = {
                 "status": "unresolved", "method": "human", "blind": True, "reason_code": "second_opinion", "auto_populated": False, "reason": "",
@@ -44,6 +46,31 @@ def _present_for_reviewer(record: dict[str, Any]) -> None:
             for key in ("recheck_results", "blind_reveals", "recheck_scheduled"):
                 if isinstance(record.get(key), dict):
                     record[key].pop(field, None)
+    if scrubbed:
+        # Canonical assertions are durable internal provenance, not reviewer
+        # transport. Removing them from a blind projection prevents sealed
+        # values and assertion identifiers from disclosing the first answer.
+        record.pop("field_assertions", None)
+        record.pop("current_field_assertions", None)
+        _scrub_canonical_transport(record)
+    return scrubbed
+
+
+def _scrub_canonical_transport(value: Any) -> None:
+    """Remove canonical assertion internals from a sealed reviewer projection."""
+    if isinstance(value, dict):
+        for key in list(value):
+            if key in {
+                "field_assertions", "current_field_assertions", "assertion_id",
+                "field_id", "derivation_method", "evaluation_status",
+                "authority_status", "value_status", "legacy_status", "legacy_metadata",
+            }:
+                value.pop(key, None)
+            else:
+                _scrub_canonical_transport(value[key])
+    elif isinstance(value, list):
+        for item in value:
+            _scrub_canonical_transport(item)
 
 
 def _scrub_sealed_field(record: dict[str, Any], field: str) -> None:
@@ -168,4 +195,3 @@ def _metadata_issue_type(status: dict[str, Any] | None, record: dict[str, Any]) 
     if not info:
         return "not_run"
     return "unresolved"
-

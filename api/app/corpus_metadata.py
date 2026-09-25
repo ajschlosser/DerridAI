@@ -7,6 +7,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from .field_assertions import (
+    create_deterministic_assertion,
+    current_assertion_by_name,
+    migrate_record_assertions,
+    project_record_assertions,
+)
 from .metadata_values import clean as clean_value
 from .metadata_values import is_placeholder
 
@@ -94,13 +100,13 @@ def apply_metadata_constraints(record: dict[str, Any]) -> list[dict[str, Any]]:
     offered as scholarly choices.
     """
     region = str(record.get("region_type") or "")
-    status = record.setdefault("metadata_field_status", {})
+    migrate_record_assertions(record)
     changes: list[dict[str, Any]] = []
 
-    primary_status = status.get("primary_text") if isinstance(status.get("primary_text"), dict) else {}
-    human_primary = str(primary_status.get("status") or "") in {"human_confirmed", "human_override"}
-    strong_structural_primary = str(primary_status.get("method") or "") in STRONG_STRUCTURAL_METHODS
-    semantic_disagreement = str(primary_status.get("reason_code") or "") == "deterministic_llm_disagreement"
+    primary_assertion = current_assertion_by_name(record, "primary_text")
+    human_primary = bool(primary_assertion and primary_assertion.authority_status in {"human_confirmed", "human_override"})
+    strong_structural_primary = bool(primary_assertion and primary_assertion.method in STRONG_STRUCTURAL_METHODS)
+    semantic_disagreement = bool(primary_assertion and "disagreement" in primary_assertion.reason)
     desired_primary: bool | None = None
     primary_reason = ""
     primary_hard = False
@@ -116,13 +122,16 @@ def apply_metadata_constraints(record: dict[str, Any]) -> list[dict[str, Any]]:
             changes.append({"field": "primary_text", "value": desired_primary, "reason": primary_reason})
         record["primary_text"] = desired_primary
         if not semantic_disagreement and not strong_structural_primary:
-            status["primary_text"] = {
-                "status": "deterministic", "method": "region_type_consistency", "confidence": 1.0,
-                "reason_code": "semantic_invariant" if primary_hard else "deterministic_default", "reason": primary_reason,
-            }
+            create_deterministic_assertion(
+                record,
+                "primary_text",
+                desired_primary,
+                method="region_type_consistency",
+                reason=primary_reason,
+            )
 
-    role_status = status.get("discourse_role") if isinstance(status.get("discourse_role"), dict) else {}
-    human_role = str(role_status.get("status") or "") in {"human_confirmed", "human_override"}
+    role_assertion = current_assertion_by_name(record, "discourse_role")
+    human_role = bool(role_assertion and role_assertion.authority_status in {"human_confirmed", "human_override"})
     desired_role: str | None = None
     role_reason = ""
     if region == "bibliography":
@@ -135,10 +144,14 @@ def apply_metadata_constraints(record: dict[str, Any]) -> list[dict[str, Any]]:
         if record.get("discourse_role") != desired_role:
             changes.append({"field": "discourse_role", "value": desired_role, "reason": role_reason})
         record["discourse_role"] = desired_role
-        status["discourse_role"] = {
-            "status": "deterministic", "method": "region_type_consistency", "confidence": 1.0,
-            "reason_code": "semantic_invariant", "reason": role_reason,
-        }
+        create_deterministic_assertion(
+            record,
+            "discourse_role",
+            desired_role,
+            method="region_type_consistency",
+            reason=role_reason,
+        )
+    project_record_assertions(record)
     return changes
 
 ATTRIBUTION_EVIDENCE_FIELDS = {

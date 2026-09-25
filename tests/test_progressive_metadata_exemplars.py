@@ -1027,4 +1027,3 @@ def test_editorial_memory_zero_precedent_limit_disables_field_examples():
     memory = Memory()._editorial_memory("build-1", current, exclude_record_id="r2")
 
     assert "position_holder" not in memory["examples"]
-

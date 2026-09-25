@@ -93,6 +93,7 @@ export const TOUCHUP_TRANSPORT_CONTEXT_FIELDS = [
   "quoted_speaker", "quoted_author", "quoted_work", "quoted_position_holder",
   "quoted_addressee", "quoted_referent", "quotation_chain", "inline_citation",
   "full_citation", "needs_review", "review_reason",
+  "field_assertions", "current_field_assertions",
 ];
 export const RAG_EVIDENCE_TRANSPORT_FIELDS = [
   "record_id", "canonical_work_id", "work", "document_author", "edition", "year",
@@ -100,7 +101,47 @@ export const RAG_EVIDENCE_TRANSPORT_FIELDS = [
   "discourse_role", "proposition_status", "stance", "text", "topics", "concepts",
   "persons", "document_language", "document_languages", "quoted_speaker",
   "quoted_author", "quoted_work", "quoted_position_holder",
+  "field_assertions", "current_field_assertions",
 ];
+
+const NON_METADATA_TRANSPORT_FIELDS = new Set([
+  "accepted", "rejected", "review_disposition", "review_state", "needs_review",
+  "review_reason", "updates", "activity", "metadata_field_status",
+  "metadata_evidence", "metadata_decisions", "metadata_stage_status",
+  "metadata_execution_ledger", "metadata_incomplete_fields", "metadata_review_fields",
+  "metadata_attention_reasons", "metadata_needs_attention", "metadata_complete",
+  "metadata_enrichment_state", "metadata_enrichment_history", "metadata_disputes",
+  "human_touched_fields", "human_touched_at", "field_assertions",
+  "current_field_assertions", "_chroma_id", "_researcher_text_policy",
+]);
+
+function assertionFieldNames(source: Loose): string[] {
+  const names = new Set<string>();
+  const assertions = source.field_assertions;
+  if (!assertions || typeof assertions !== "object") return [];
+  for (const values of Object.values(assertions as Record<string, unknown>)) {
+    if (!Array.isArray(values)) continue;
+    for (const assertion of values) {
+      if (assertion && typeof assertion === "object" && typeof (assertion as Loose).field_name === "string")
+        names.add((assertion as Loose).field_name);
+    }
+  }
+  return [...names];
+}
+
+function customMetadataFields(source: Loose, baseFields: string[]): string[] {
+  const base = new Set(baseFields);
+  return [
+    ...assertionFieldNames(source),
+    ...Object.keys(source).filter((key) =>
+      !base.has(key) &&
+      !NON_METADATA_TRANSPORT_FIELDS.has(key) &&
+      !key.startsWith("_") &&
+      !["record_id", "text", "source_spans", "source_units", "source_unit_ids", "source_block_ids"].includes(key) &&
+      (typeof source[key] === "string" || typeof source[key] === "number" || typeof source[key] === "boolean" || Array.isArray(source[key])),
+    ),
+  ];
+}
 
 export function upsertRecordPayload(record: unknown, chromaId: string | null = null): Loose {
   const out = recordPayload(record, { includeChromaId: false });
@@ -109,11 +150,13 @@ export function upsertRecordPayload(record: unknown, chromaId: string | null = n
 }
 
 export function touchupRecordPayload(record: unknown, fields: string[] = []): Loose {
-  return recordPayload(record, { fields: [...fields, ...TOUCHUP_TRANSPORT_CONTEXT_FIELDS] });
+  const source = record && typeof record === "object" ? (record as Loose) : {};
+  return recordPayload(record, { fields: [...fields, ...TOUCHUP_TRANSPORT_CONTEXT_FIELDS, ...customMetadataFields(source, TOUCHUP_TRANSPORT_CONTEXT_FIELDS)] });
 }
 
 export function ragEvidenceRecordPayload(record: unknown): Loose {
-  return recordPayload(record, { fields: RAG_EVIDENCE_TRANSPORT_FIELDS });
+  const source = record && typeof record === "object" ? (record as Loose) : {};
+  return recordPayload(record, { fields: [...RAG_EVIDENCE_TRANSPORT_FIELDS, ...customMetadataFields(source, RAG_EVIDENCE_TRANSPORT_FIELDS)] });
 }
 
 export function isResponseCacheStore(store: Loose | null | undefined): boolean {

@@ -180,6 +180,7 @@ from .corpus_review_state import (
 from .corpus_reviewer_helpers import (
     _metadata_issue_type,
     _present_for_reviewer,
+    _scrub_canonical_transport,
 )
 from .corpus_reviewer_helpers import (
     _operation_from_build as _operation_from_build,
@@ -224,6 +225,7 @@ from .enrichment_ledger import (
     EnrichmentLedger,
 )
 from .error_severity import severity as error_severity
+from .field_assertions import migrate_record_assertions
 from .main_text_start import infer_main_text_start
 from .metadata_exemplar_projection import (
     dirty_metadata_exemplar_build_ids,
@@ -1186,6 +1188,16 @@ class PdfCorpusRepository:
     def save_build(self, build: dict[str, Any]) -> None:
         _json_write(self.build_path(str(build["build_id"])), build)
 
+    def _record_schema(self, build_id: str) -> MetadataSchema | None:
+        build = self.get_build(build_id)
+        raw_schema = build.get("schema") if isinstance(build, dict) else None
+        if not isinstance(raw_schema, dict):
+            return None
+        try:
+            return MetadataSchema.model_validate(raw_schema)
+        except ValidationError:
+            return None
+
     def get_build(self, build_id: str) -> dict[str, Any]:
         build = _json_read(self.build_path(build_id))
         if not isinstance(build, dict):
@@ -1210,6 +1222,11 @@ class PdfCorpusRepository:
         file. This is critical while progressive review and metadata checkpoints
         are both active.
         """
+        schema = self._record_schema(build_id)
+        records = [
+            migrate_record_assertions(_migrate_status_vocabulary(record), schema)
+            for record in records
+        ]
         path = self.build_records_path(build_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         with self._lock:
@@ -1253,6 +1270,10 @@ class PdfCorpusRepository:
         publication projection and is marked dirty until an explicit projection
         refresh completes, so a process crash cannot make divergence invisible.
         """
+        record = migrate_record_assertions(
+            _migrate_status_vocabulary(record),
+            self._record_schema(build_id),
+        )
         record_id = str(record.get("record_id") or "")
         if not record_id:
             raise ValueError("A record ID is required.")
@@ -1310,20 +1331,33 @@ class PdfCorpusRepository:
                 ).fetchone()
         if row is None:
             raise KeyError(record_id)
-        return _migrate_status_vocabulary(json.loads(row[0]))
+        return migrate_record_assertions(
+            _migrate_status_vocabulary(json.loads(row[0])),
+            self._record_schema(build_id),
+        )
 
     def load_records(self, build_id: str) -> list[dict[str, Any]]:
-        self.get_build(build_id)
+        schema = self._record_schema(build_id)
         with self._lock:
             self._bootstrap_records_db(build_id)
             with self._records_db(build_id) as connection:
                 rows = connection.execute(
                     "SELECT payload FROM corpus_records ORDER BY ordinal"
                 ).fetchall()
-                return [
-                    _migrate_status_vocabulary(json.loads(payload))
+                records = [
+                    migrate_record_assertions(
+                        _migrate_status_vocabulary(json.loads(payload)),
+                        schema,
+                    )
                     for (payload,) in rows
                 ]
+        for record in records:
+            if any(
+                isinstance(status, dict) and status.get("recheck")
+                for status in (record.get("metadata_field_status") or {}).values()
+            ):
+                _scrub_canonical_transport(record)
+        return records
 
     def page_records(self, build_id: str, *, offset: int = 0, limit: int = 50, needs_review: bool | None = None, disposition: str | None = None, metadata_incomplete: bool | None = None, source_problem: bool | None = None, review_queue: str | None = None, query: str = "") -> dict[str, Any]:
         # Read the transactional index so review pagination sees interactive
@@ -2976,8 +3010,10 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         record = next((row for row in records if row.get("record_id") == record_id), None)
         if record is None:
             raise KeyError(record_id)
-        _present_for_reviewer(record)  # the preview is built from the record as this reviewer may see it
+        blinded = _present_for_reviewer(record)  # the preview is built from the record as this reviewer may see it
         public = serialize_public_record(record)
+        if blinded:
+            _scrub_canonical_transport(public)
         errors = validate_publication_record(public)
         unresolved = list(dict.fromkeys([str(v) for v in (record.get("metadata_incomplete_fields") or []) + (record.get("metadata_review_fields") or [])]))
         return {

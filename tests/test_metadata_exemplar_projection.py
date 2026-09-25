@@ -196,4 +196,3 @@ def test_best_effort_projection_never_makes_review_depend_on_chroma():
     assert result["error"] == "chroma unavailable"
     assert warnings and warnings[0][0] == "build-1"
     assert "projection is pending" in warnings[0][1]
-
