@@ -1157,6 +1157,43 @@ class PdfCorpusRepository:
                     # Safe: best-effort temp-file cleanup; see _json_write.
                     pass
 
+    def update_record(self, build_id: str, record: dict[str, Any]) -> None:
+        """Persist one validated record without rebuilding the whole JSONL file."""
+        record_id = str(record.get("record_id") or "")
+        if not record_id:
+            raise ValueError("A record ID is required.")
+        path = self.build_records_path(build_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        replaced = False
+        with self._lock:
+            fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+            tmp = Path(tmp_name)
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as output:
+                    if path.exists():
+                        with path.open("r", encoding="utf-8") as source:
+                            for line in source:
+                                if line.strip():
+                                    try:
+                                        current = json.loads(line)
+                                    except json.JSONDecodeError:
+                                        current = None
+                                    if isinstance(current, dict) and str(current.get("record_id") or "") == record_id:
+                                        output.write(json.dumps(record, ensure_ascii=False) + "\n")
+                                        replaced = True
+                                    else:
+                                        output.write(line)
+                    if not replaced:
+                        output.write(json.dumps(record, ensure_ascii=False) + "\n")
+                    output.flush()
+                    os.fsync(output.fileno())
+                os.replace(tmp, path)
+            finally:
+                try:
+                    tmp.unlink(missing_ok=True)
+                except OSError:
+                    pass
+
     def load_records(self, build_id: str) -> list[dict[str, Any]]:
         self.get_build(build_id)
         path = self.build_records_path(build_id)
@@ -2470,7 +2507,13 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         )
 
 
-    def _rewrite_and_validate(self, build_id: str, records: list[dict[str, Any]]) -> dict[str, Any]:
+    def _rewrite_and_validate(
+        self,
+        build_id: str,
+        records: list[dict[str, Any]],
+        *,
+        persist_records: bool = True,
+    ) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
         automation_running = str(build.get("status") or "") in {"queued", "running"} and str(build.get("stage") or "") in {"enriching", "metadata_retry"}
         # A re-run pass overlaps review too. Its records already finished their first
@@ -2491,7 +2534,8 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         build["source_quality"] = page_source_quality_report(blocks)
         profile = self._profile_of_build(build)
         validation = self.validate_records(blocks, records, profile)
-        self.repo.save_records(build_id, records)
+        if persist_records:
+            self.repo.save_records(build_id, records)
         build["record_count"] = len(records)
         build["validation"] = validation
         # Metadata completion is derived from persisted record state, never from a
@@ -2505,7 +2549,8 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 _sync_record_metadata_state(record, profile)
                 _enforce_review_invariants(record)
             _decorate_review_state(record)
-        self.repo.save_records(build_id, records)
+        if persist_records:
+            self.repo.save_records(build_id, records)
         # Review counts are derived only after metadata state and review invariants
         # have been synchronized. Otherwise a record reopened by validation could
         # still be reported as accepted until the next request, which is exactly

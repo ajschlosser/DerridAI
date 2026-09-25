@@ -89,7 +89,7 @@ class ReviewActionsMixin:
         _lock: Any
         _ledger: Any
 
-        def _rewrite_and_validate(self, build_id: str, records: list[dict[str, Any]]) -> dict[str, Any]: ...
+        def _rewrite_and_validate(self, build_id: str, records: list[dict[str, Any]], *, persist_records: bool = True) -> dict[str, Any]: ...
         def _profile_for(self, build_id: str) -> dict[str, Any]: ...
         def _profile_of_build(self, build: dict[str, Any]) -> dict[str, Any]: ...
         def _schema_for(self, build_id: str) -> MetadataSchema: ...
@@ -406,7 +406,8 @@ class ReviewActionsMixin:
             review_events.append({"at": iso_now(), "event": "text_reviewed", "changed": False})
             target["review_events"] = review_events[-100:]
             target["record_revision"] = current_revision + 1
-            self._rewrite_and_validate(build_id, records)
+            self._rewrite_and_validate(build_id, records, persist_records=False)
+            self.repo.update_record(build_id, target)
             _decorate_review_state(target)
             return target
         history = list(target.get("text_revision_history") or [])
@@ -449,7 +450,8 @@ class ReviewActionsMixin:
         reasons.append("Reviewed text changed; rerun only the metadata families that need reconsideration.")
         target["metadata_attention_reasons"] = list(dict.fromkeys(reasons))[-50:]
         target["record_revision"] = current_revision + 1
-        self._rewrite_and_validate(build_id, records)
+        self._rewrite_and_validate(build_id, records, persist_records=False)
+        self.repo.update_record(build_id, target)
         _decorate_review_state(target)
         return target
 
@@ -518,7 +520,8 @@ class ReviewActionsMixin:
         _sync_record_metadata_state(target, profile)
         _settle_enrichment_review_reason(target)
         target["record_revision"] = current_revision + 1
-        _ = self._rewrite_and_validate(build_id, records)
+        _ = self._rewrite_and_validate(build_id, records, persist_records=False)
+        self.repo.update_record(build_id, target)
         # Return the record as persisted after authoritative state derivation.
         persisted = target
         schema = self._schema_for(build_id)
@@ -743,7 +746,8 @@ class ReviewActionsMixin:
         target["metadata_needs_attention"] = True
         target["metadata_attention_reasons"] = ["Source evidence binding changed and metadata validation must be rerun."]
         target["record_revision"] = current_revision + 1
-        self._rewrite_and_validate(build_id, records)
+        self._rewrite_and_validate(build_id, records, persist_records=False)
+        self.repo.update_record(build_id, target)
         return target
 
 
