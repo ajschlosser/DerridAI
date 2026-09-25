@@ -715,8 +715,8 @@ const llmActionConcurrentLoad = computed(() => {
 const canStartConcurrentBuild = computed(() =>
   Boolean(
     selectedAsset.value &&
-    contextSafe.value &&
-    (selectedProviderId.value || !activeBuildCount.value),
+      contextSafe.value &&
+      (selectedProviderId.value || !activeBuildCount.value),
   ),
 );
 const transientNetworkError = computed(() =>
@@ -828,7 +828,7 @@ const metadataKnownValues = computed<Record<string, string[]>>(() => {
 const selectedMetadataBlocked = computed(() =>
   Boolean(
     (selectedRecord.value?.metadata_review_fields || []).length ||
-    (selectedRecord.value?.metadata_incomplete_fields || []).length,
+      (selectedRecord.value?.metadata_incomplete_fields || []).length,
   ),
 );
 const selectedMetadataBlockingFields = computed(() =>
@@ -1206,8 +1206,8 @@ async function refreshRecords(reset = false, preferredId = "") {
     const match = wanted ? records.value.find((row) => row.record_id === wanted) : undefined;
     const preserveDraft = Boolean(
       selectedRecord.value &&
-      selectedRecordId.value === wanted &&
-      (editingText.value || metadataEditorDirty.value),
+        selectedRecordId.value === wanted &&
+        (editingText.value || metadataEditorDirty.value),
     );
     if (match && !preserveDraft) {
       selectRecord(match);
@@ -5014,12 +5014,12 @@ defineExpose({
                           providerProfiles.find(
                             (p) => p.id === (llmActionProviderId || selectedProviderId),
                           )?.type === 'ollama' &&
-                          llmActionConcurrentLoad + 1 >
-                            Number(
-                              providerProfiles.find(
-                                (p) => p.id === (llmActionProviderId || selectedProviderId),
-                              )?.max_concurrent_requests || 1,
-                            ),
+                            llmActionConcurrentLoad + 1 >
+                              Number(
+                                providerProfiles.find(
+                                  (p) => p.id === (llmActionProviderId || selectedProviderId),
+                                )?.max_concurrent_requests || 1,
+                              ),
                         )
                       "
                       :active-requests="llmActionConcurrentLoad"
@@ -5201,11 +5201,11 @@ defineExpose({
       :concurrency-risk="
         Boolean(
           providerProfiles.find((p) => p.id === llmActionProviderId)?.type === 'ollama' &&
-          llmActionConcurrentLoad + 1 >
-            Number(
-              providerProfiles.find((p) => p.id === llmActionProviderId)?.max_concurrent_requests ||
-                1,
-            ),
+            llmActionConcurrentLoad + 1 >
+              Number(
+                providerProfiles.find((p) => p.id === llmActionProviderId)
+                  ?.max_concurrent_requests || 1,
+              ),
         )
       "
       :active-requests="llmActionConcurrentLoad"
