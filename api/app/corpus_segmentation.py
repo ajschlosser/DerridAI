@@ -588,12 +588,6 @@ def _construct_records(asset: dict[str, Any], blocks: list[dict[str, Any]], boun
         thread_languages = sorted({str(block.get("thread_language") or "").strip() for block in group if str(block.get("thread_language") or "").strip()})
         speakers = [str(block.get("speaker") or "").strip() for block in group if str(block.get("speaker") or "").strip()]
         uniform_speaker = speakers[0] if speakers and len(set(speakers)) == 1 and (not audio or len(speakers) == len(group)) else None
-        field_status: dict[str, Any] = {}
-        if layout_region:
-            field_status["region_type"] = {"status": "deterministic", "method": "human_document_layout", "confidence": 0.99, "reason": "Derived from reviewer-confirmed document structure and pagination."}
-            field_status["primary_text"] = {"status": "deterministic", "method": "human_document_layout", "confidence": 0.99, "reason": "Derived from reviewer-confirmed document structure and pagination."}
-        if uniform_speaker:
-            field_status["speaker"] = {"status": "deterministic", "method": "source_span_speaker", "confidence": 0.95, "reason": "Speaker label assigned when the source was loaded."}
         source_spans = []
         for block in group:
             span = {"source_document_id": asset["asset_id"], "source_unit_id": block["block_id"], "block_id": block["block_id"], "page": block["page"], "printed_page_label": block.get("printed_page_label"), "bbox": block.get("bbox"), "extraction_method": block.get("extraction_method"), "confidence": block.get("confidence")}
@@ -607,7 +601,7 @@ def _construct_records(asset: dict[str, Any], blocks: list[dict[str, Any]], boun
                     span.pop(key, None)
                 span["locator_kind"] = "time"
             source_spans.append(span)
-        records.append({
+        record = {
             "record_id": f"{prefix}-{index:05d}",
             "record_revision": 1,
             **({"media_kind": "audio", "source_extracted_text": text} if audio else {}),
@@ -624,15 +618,40 @@ def _construct_records(asset: dict[str, Any], blocks: list[dict[str, Any]], boun
             "source_spans": source_spans,
             "boundary_evidence": boundary,
             "metadata_evidence": {},
-            **({"region_type": layout_region, "primary_text": layout_region == "main_text"} if layout_region else {}),
-            **({"speaker": uniform_speaker} if uniform_speaker else {}),
-            **({"metadata_field_status": field_status} if field_status else {}),
             **({"region_language": thread_languages, "region_is_multilingual": len(thread_languages) > 1} if thread_languages else {}),
             "needs_review": False,
             "review_reason": "",
             "accepted": False,
             "updates": [],
-        })
+        }
+        if layout_region:
+            create_deterministic_assertion(
+                record,
+                "region_type",
+                layout_region,
+                method="human_document_layout",
+                reason="Derived from reviewer-confirmed document structure and pagination.",
+                confidence=0.99,
+            )
+            create_deterministic_assertion(
+                record,
+                "primary_text",
+                layout_region == "main_text",
+                method="human_document_layout",
+                reason="Derived from reviewer-confirmed document structure and pagination.",
+                confidence=0.99,
+            )
+        if uniform_speaker:
+            create_deterministic_assertion(
+                record,
+                "speaker",
+                uniform_speaker,
+                method="source_span_speaker",
+                reason="Speaker label assigned when the source was loaded.",
+                confidence=0.95,
+            )
+        project_record_assertions(record)
+        records.append(record)
     return records
 
 
