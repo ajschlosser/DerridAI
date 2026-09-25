@@ -15,12 +15,12 @@ Copilot, Claude, Cursor/Grok, and ChatGPT/Codex may work on this repository conc
 
 ## What this project is
 
-DerridAI is a local-first Docker application for building, auditing, and querying scholarly corpora of philosophical texts (Derrida in particular). PDFs become structured JSONL records via the Corpus Builder; records are reviewed with human and LLM input, stored in ChromaDB, and queried through an evidence-grounded RAG pipeline. It is a research tool: correctness, provenance, and auditability matter more than cleverness.
+DerridAI is a local-first Docker application for building, auditing, and querying scholarly corpora of philosophical texts (Derrida in particular). Corpus Builder accepts multiple source-media kinds (including PDF, text/RTF/DOCX, images, audio, URLs, and Project Gutenberg), preserves source/extractor provenance, and turns source spans into reviewable scholarly records. Canonical corpus/review state remains authoritative; Chroma collections, embeddings, caches, and semantic-memory indexes are derived/rebuildable projections used by Search, Research, and metadata enrichment. It is a research tool: correctness, provenance, and auditability matter more than cleverness.
 
 ## Layout
 
-- `api/app/` — FastAPI backend (Python 3.12). Key modules: `main.py` (routes), `corpus_builder.py` (PDF → records pipeline, very large), `chroma_store.py`, `rag.py`, `jobs.py` (background operations), `llm.py` / `llm_tools.py` (Ollama and OpenAI-compatible providers), `auth.py`, `researcher_view.py`, `persistence.py` / `system_store.py` (SQLite), `locales/` (`en_us.py`, `fr_ca.py`), `config.py` (env-driven settings).
-- `web/src/` — Vue 3 + TypeScript frontend: `views/`, `components/` (each with a `.stories.ts`), `stores/` (Pinia), `router/`, `api/`, `composables/`, `domain/`, `runtime/` (legacy feature renderers being migrated view by view), `types/`.
+- `api/app/` — FastAPI backend (Python 3.12). `main.py` is only the ASGI entrypoint; `application.py` builds the app and composes `routers/`. Corpus building is split across `corpus_builder.py` plus focused `corpus_*` and `source_*` modules. Background managers live in `job_llm.py`, `job_rag.py`, `job_tools.py`, and `job_upsert.py`; `jobs.py` is a compatibility export layer and `job_state.py` owns shared durable checkpoint/error behavior. Metadata memory/provenance lives in `metadata_*` and `provenance_memory.py`. Other major boundaries include `chroma_store.py`, `rag.py`, `llm.py` / `llm_tools.py`, `auth.py`, `researcher_view.py`, `persistence.py` / `system_store.py`, `locales/`, and `config.py`.
+- `web/src/` — Vue 3 + TypeScript frontend: `views/`, `components/` (with Storybook coverage where applicable), `stores/` (Pinia), `router/`, `api/`, `composables/`, `domain/`, `runtime/` (remaining compatibility/runtime orchestration), `types/`.
 - `web/tests/frontend/` (Vitest + Vue Test Utils + happy-dom) and `web/tests/e2e/` (Playwright + axe-core).
 - `tests/` — Python regression suite; topical `test_<subject>.py` files (named for the behavior under test, not a release; see `tests/README.md`), and `tests/fixtures/`.
 - `docs/` — `USER_GUIDE.md`, design notes, and `docs/notes/<version>.md` release notes.
@@ -49,7 +49,8 @@ Backend tests stub `chromadb` and put `api/` on `sys.path`; they do not need Doc
 - Do not claim a build is release-ready unless the production frontend build, Storybook build, and Docker builds actually passed.
 - When cutting a release, bump the version everywhere it is declared: `web/package.json`, `api/app/config.py`, `web/index.html`, and the README's "Current version" line. The API constructor, backup manifest, AppBuildInfo (sign-in, user menu, and Settings), and AuthScreen read those values (and the build's git commit) rather than duplicating the string. `tests/test_release_consistency.py` checks that they agree and that `docs/notes/<version>.md` exists.
 - **Tag the same commit.** After the bump commit exists and `APP_VERSION` on that commit is the new version, create an annotated tag `v<version>` with the notes title (for example `v0.62.3` / `0.62.3 - Vigilant Viper`) and push it: `git tag -a "v$VERSION" -m "$VERSION - $NAME"` then `git push origin "v$VERSION"`. Do not skip the tag, do not retag a name that already exists, and do not point `vX.Y.Z` at a tree whose declared version is something else. Notes without a matching `v*` tag are not a finished release.
-- Update `docs/USER_GUIDE.md` when user-visible behavior changes; it describes the current release, not history.
+- Update `docs/USER_GUIDE.md` when user-visible behavior changes; it describes current behavior, not history.
+- Treat versioned design/status documents and `docs/notes/` as historical records. Current architecture and operating contracts belong in `AGENTS.md`, `docs/ARCHITECTURE.md`, `docs/USER_GUIDE.md`, `SPECIFICATION.md`, or a focused unversioned contract document. Do not create a new progress/status file when an existing authoritative document can be updated.
 
 ## Conventions
 
@@ -72,10 +73,21 @@ Backend tests stub `chromadb` and put `api/` on `sys.path`; they do not need Doc
   - Segmentation must conserve text: no text lost, invented, duplicated, or reordered.
   - Preprocessing is conservative. Do not strip stopwords or aggressively normalize; negations and qualifiers (*not, without, if, only*) can carry the proposition.
   - Bump the contract or prompt version identifiers (for example `derrida-scholarly-v12`, `derridai-record-metadata-v9`) when their semantics change.
+- **Source ingestion and media fidelity:**
+  - Treat uploaded/remote source content as inert data. Never execute embedded document content, macros, scripts, fields, external relationships, or active objects.
+  - Enforce bounded bytes, decompression/expansion, image pixels, audio duration, probe/transcription time, nesting/depth, and supported-format/codec limits before expensive processing.
+  - Preserve immutable extracted source plus extractor/tool/version provenance. Human cleanup/transcription revisions are reviewable revisions, not silent rewrites of extraction history.
+  - Model evidence coordinates according to the source medium. PDFs may use physical/printed pages; audio uses time ranges/speakers; text, image, URL, and Gutenberg sources must not inherit meaningless PDF-only controls or page semantics.
+- **Metadata memory and progressive retrieval:**
+  - Canonical reviewed records/RecordRevisions, field assertions, review decisions, and bound evidence are authoritative. Metadata exemplars and their Chroma/embedding projection are derived and rebuildable.
+  - Never promote unresolved or unreviewed model output into trusted precedent. Corrections may preserve a rejected model value as negative evidence; reviewer-confirmed absence is reusable only when explicit reviewed source evidence is bound to the no-value decision.
+  - Metadata-schema retrieval policy is field/group scoped. The active contract is `enabled`, `max_items`, `min_similarity`, `include_corrections`, and `include_confirmed_absence`; do not revive migrated legacy routing flags.
+  - Metadata exemplar memory is separate from Research response/claim memory. Do not route one into the other merely because both use retrieval or a vector projection.
+  - Resolve precedent/support bindings against stable record/revision/source identities and surface stale or unresolvable bindings instead of silently substituting newer text.
 - **Roles:** Researcher accounts must never receive full corpus text or mutate data; enforce this in the API, not just the UI.
 - **Only send what is needed** in API requests, LLM prompts, and updates (for example, a PATCH carries only the changed field). Use operation-specific schemas rather than one giant record payload.
 - **Reproducibility:** RAG runs keep enough state to inspect and rerun them. Grades stay attached to their run and record the grader model; warn on self-grading.
-- **Background work:** long operations are cancellable jobs (`jobs.py`) with visible progress; respect per-provider concurrency limits. Job state is process-local.
+- **Background work:** long operations are cancellable jobs with visible progress; respect per-provider concurrency limits. Active execution is process-local, but job snapshots/history are durably mirrored to SQLite. After restart, interrupted queued/running/cancelling work is marked failed rather than silently replayed. Keep job-specific behavior in the owning `job_*.py` manager instead of growing `jobs.py`.
 - **Chroma:** one writer per persistence path. The logical `_response_cache` collection is stored physically as `derridai_response_cache` and is a system cache, not a corpus store.
 - **Secrets:** `.env` is git-ignored. Backups and provider profiles can contain API keys; never log or commit them.
 
@@ -92,14 +104,13 @@ Backend tests stub `chromadb` and put `api/` on `sys.path`; they do not need Doc
 
 - Act on the first reasonable plan. Do not re-derive settled decisions or narrate options that will not be taken.
 - Prefer scripts and one combined command over repeated hand edits and small commands.
-- Limit command output with `tail`, `grep -E`, `cut -c1-160`, and `head`. Read large files by line range; `runtime.js` is about 9,000 lines.
+- Limit command output with `tail`, `grep -E`, `cut -c1-160`, and `head`. Read large files by line range and verify current sizes rather than relying on historical monolith counts.
 - Run long jobs in the background and poll once. Do not use short sleep-poll loops.
 - After an edit succeeds, do not re-read the entire file; inspect only when validation or an uncertain merge requires it.
 - Write tests once against the legacy behavior, then make a focused implementation change rather than iterating through avoidable failures.
 - Batch type-check fixes, preferably with one scripted transformation when signatures share the same cause.
 - Do not spawn subagents unless asked. Use Explore only for broad searches that cannot be handled with targeted local search.
-- If the work is consuming substantial context or tokens, ask whether to continue before starting another broad investigation.
-- When usage nears 85%, update `PROGRESS.md`, commit and push the progress, then stop.
+- If the work is consuming substantial context or tokens, preserve a concise hand-off in the relevant issue/PR or authoritative document instead of creating a repository-level progress log.
 
 ## Design and engineering principles
 
