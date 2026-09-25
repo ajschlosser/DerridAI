@@ -134,6 +134,7 @@ export function useCorpusReviewDecisions(options: CorpusReviewDecisionsOptions) 
       options.recordTotal.value = Math.max(0, options.recordTotal.value - 1);
     }
 
+    options.selectedRecord.value = optimistic;
     const nextLocal = currentRemainsVisible
       ? options.records.value[optimisticIndex + 1] || options.records.value[optimisticIndex - 1]
       : options.records.value[optimisticIndex] || options.records.value[optimisticIndex - 1];
