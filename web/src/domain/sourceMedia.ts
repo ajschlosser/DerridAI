@@ -19,8 +19,12 @@ export interface SourceMediaCapabilities {
   printedPagination: boolean;
   /** The PDF viewer is an appropriate primary source surface. */
   pdfViewer: boolean;
+  /** A standalone image viewer is an appropriate primary source surface. */
+  imageViewer: boolean;
   /** OCR/image-region affordances are meaningful for this source. */
   imageRegions: boolean;
+  /** An audio player is an appropriate primary source surface. */
+  audioPlayer: boolean;
   /** Time-coded source spans are meaningful for this source. */
   timeSpans: boolean;
   /** Transcript review/editing is meaningful for this source. */
@@ -44,7 +48,9 @@ export function sourceMediaCapabilities(kind?: CorpusMediaKind): SourceMediaCapa
       pages: false,
       printedPagination: false,
       pdfViewer: false,
+      imageViewer: false,
       imageRegions: false,
+      audioPlayer: true,
       timeSpans: true,
       transcription: true,
       documentLayout: false,
@@ -56,7 +62,9 @@ export function sourceMediaCapabilities(kind?: CorpusMediaKind): SourceMediaCapa
       pages: true,
       printedPagination: false,
       pdfViewer: false,
+      imageViewer: true,
       imageRegions: true,
+      audioPlayer: false,
       timeSpans: false,
       transcription: false,
       documentLayout: false,
@@ -68,7 +76,9 @@ export function sourceMediaCapabilities(kind?: CorpusMediaKind): SourceMediaCapa
       pages: true,
       printedPagination: true,
       pdfViewer: true,
+      imageViewer: false,
       imageRegions: true,
+      audioPlayer: false,
       timeSpans: false,
       transcription: false,
       documentLayout: true,
@@ -79,7 +89,9 @@ export function sourceMediaCapabilities(kind?: CorpusMediaKind): SourceMediaCapa
     pages: false,
     printedPagination: false,
     pdfViewer: false,
+    imageViewer: false,
     imageRegions: false,
+    audioPlayer: false,
     timeSpans: false,
     transcription: false,
     documentLayout: false,
