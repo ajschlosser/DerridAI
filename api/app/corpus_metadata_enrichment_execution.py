@@ -1207,5 +1207,9 @@ CURRENT REVIEWED RECORD TEXT:
                         "llm_confidence", "llm_corroboration", "conditions",
                     ):
                         status.pop(key, None)
+                    status["status"] = "unresolved"
+                    status["method"] = "llm"
+                    status["reason_code"] = "blind_review"
+                    status["auto_populated"] = False
                     status["reason"] = ""
         return normalized
