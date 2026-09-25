@@ -60,6 +60,26 @@ from .rag import _citation_strings
 from .system_store import system_store
 
 
+def _unreviewed_model_fields(
+    record: dict[str, Any],
+    schema: MetadataSchema,
+    fields: list[str] | tuple[str, ...] | set[str],
+) -> list[str]:
+    """Return schema fields whose current canonical assertion is an unreviewed model proposal."""
+    migrate_record_assertions(record, schema)
+    result: list[str] = []
+    for field in fields:
+        assertion = current_assertion_by_name(record, str(field))
+        if (
+            assertion is not None
+            and assertion.derivation_method == "model"
+            and assertion.authority_status == "unreviewed"
+            and assertion.value_status == "present"
+        ):
+            result.append(str(field))
+    return result
+
+
 def _serialize_record_mutation(method):
     """Serialize manager-level read/modify/write record transactions.
 
