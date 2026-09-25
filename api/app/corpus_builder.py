@@ -1,4 +1,13 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
+"""Compatibility facade for Corpus Builder orchestration.
+
+This module still owns the public manager surface and historical compatibility
+exports, but most behavior is deliberately split into focused `corpus_*` and
+`source_*` modules. New extraction, enrichment, review, or publication logic
+belongs in the focused owner module unless it genuinely coordinates multiple
+stages; do not grow this file simply because older callers import from it.
+"""
+
 from __future__ import annotations
 
 import difflib

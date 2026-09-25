@@ -142,6 +142,10 @@ def persist_record_decision(
     ).strip()
     normalized_block_ids = [str(item) for item in block_ids if str(item).strip()]
     if normalized_block_ids and source_document_id:
+        # Evidence may have been recorded through an older block-id shape. Resolve
+        # every identifier we can onto canonical source spans, but retain unmatched
+        # ids below instead of dropping them: later revision-aware validation must
+        # be able to mark that binding stale rather than silently losing provenance.
         wanted = set(normalized_block_ids)
         matched: set[str] = set()
         for source_span in record.get("source_spans") or []:
@@ -192,6 +196,8 @@ def persist_record_decision(
                 )
             )
     if decision_kind == "correction":
+        # Keep the rejected proposal as a hard-negative precedent alongside the
+        # reviewer-accepted value; downstream retrieval must never flatten the two.
         value = {"accepted": value, "rejected": rejected_value}
     field_id = field_identity(field_name, schema)
     binding = MetadataMemoryBinding(
