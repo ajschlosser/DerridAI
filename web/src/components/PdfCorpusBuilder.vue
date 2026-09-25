@@ -5945,6 +5945,7 @@ defineExpose({
       ><CorpusRecordFocusReview
         v-if="focusView && selectedRecord"
         :record="selectedRecord"
+        :schema="currentBuild?.schema"
         :source-blocks="visibleBlocks"
         :busy="busy !== '' || reviewLocked"
         :can-merge-previous="canMergePrevious"
