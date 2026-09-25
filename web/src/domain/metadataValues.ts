@@ -115,7 +115,7 @@ function looksLikeRuntimeFragment(value: string): boolean {
     )
   )
     return true;
-  if (/^[\[\]{}]",?$/.test(text) || /^[\[\]{}]/.test(text) || /[\[\]{}]$/.test(text))
+  if (/^(?:\[|\]|\{|\})",?$/.test(text) || /^(?:\[|\]|\{|\})/.test(text) || /(?:\[|\]|\{|\})$/.test(text))
     return true;
   if (/^["'][^"']+["']\s*:\s*/.test(text)) return true;
   return false;
