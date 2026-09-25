@@ -1350,46 +1350,46 @@ class PdfCorpusRepository:
                 for item in values:
                     if isinstance(item, str) and item.strip() and not is_placeholder(item):
                         metadata_values[field].add(item.strip())
-                deterministic_ingest = record.get("deterministic_ingest")
-                if isinstance(deterministic_ingest, dict):
-                    speakers = deterministic_ingest.get("speakers")
-                    if isinstance(speakers, (list, tuple)):
-                        for speaker in speakers:
-                            if isinstance(speaker, str) and speaker.strip() and not is_placeholder(speaker):
-                                metadata_values.setdefault("speaker", set()).add(speaker.strip())
-                field_status = record.get("metadata_field_status")
-                if isinstance(field_status, dict):
-                    for field, status in field_status.items():
-                        if not isinstance(status, dict):
-                            continue
-                        for candidate_key in ("proposed_value", "llm_value"):
-                            candidate = status.get(candidate_key)
-                            candidates = candidate if isinstance(candidate, (list, tuple)) else [candidate]
-                            for item in candidates:
-                                if isinstance(item, str) and item.strip() and not is_placeholder(item):
-                                    metadata_values.setdefault(field, set()).add(item.strip())
-                topology_index = topology_count
-                topology_count += 1
-                if needs_review is not None and bool(record.get("needs_review")) is not needs_review:
-                    continue
-                record_disposition = str(record.get("review_disposition") or ("accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"))
-                if disposition is not None and record_disposition != disposition:
-                    continue
-                if metadata_incomplete is not None and (not bool(record.get("metadata_complete"))) is not metadata_incomplete:
-                    continue
-                if source_problem is not None and bool(record.get("source_quality_issues")) is not source_problem:
-                    continue
-                if q and q not in json.dumps(record, ensure_ascii=False).casefold():
-                    continue
-                queue_records.append(record)
-                if review_queue and not _matches_review_queue(record, review_queue):
-                    continue
-                if total >= offset and len(items) < limit:
-                    record["topology_index"] = topology_index
-                    _decorate_review_state(record)
-                    _present_for_reviewer(record)
-                    items.append(record)
-                total += 1
+            deterministic_ingest = record.get("deterministic_ingest")
+            if isinstance(deterministic_ingest, dict):
+                speakers = deterministic_ingest.get("speakers")
+                if isinstance(speakers, (list, tuple)):
+                    for speaker in speakers:
+                        if isinstance(speaker, str) and speaker.strip() and not is_placeholder(speaker):
+                            metadata_values.setdefault("speaker", set()).add(speaker.strip())
+            field_status = record.get("metadata_field_status")
+            if isinstance(field_status, dict):
+                for field, status in field_status.items():
+                    if not isinstance(status, dict):
+                        continue
+                    for candidate_key in ("proposed_value", "llm_value"):
+                        candidate = status.get(candidate_key)
+                        candidates = candidate if isinstance(candidate, (list, tuple)) else [candidate]
+                        for item in candidates:
+                            if isinstance(item, str) and item.strip() and not is_placeholder(item):
+                                metadata_values.setdefault(field, set()).add(item.strip())
+            topology_index = topology_count
+            topology_count += 1
+            if needs_review is not None and bool(record.get("needs_review")) is not needs_review:
+                continue
+            record_disposition = str(record.get("review_disposition") or ("accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"))
+            if disposition is not None and record_disposition != disposition:
+                continue
+            if metadata_incomplete is not None and (not bool(record.get("metadata_complete"))) is not metadata_incomplete:
+                continue
+            if source_problem is not None and bool(record.get("source_quality_issues")) is not source_problem:
+                continue
+            if q and q not in json.dumps(record, ensure_ascii=False).casefold():
+                continue
+            queue_records.append(record)
+            if review_queue and not _matches_review_queue(record, review_queue):
+                continue
+            if total >= offset and len(items) < limit:
+                record["topology_index"] = topology_index
+                _decorate_review_state(record)
+                _present_for_reviewer(record)
+                items.append(record)
+            total += 1
         for record in items:
             record["topology_count"] = topology_count
         return {

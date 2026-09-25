@@ -81,20 +81,6 @@ import { firstRecordWithSourceWarning, recordHasSourceWarning } from "../domain/
 import { recurringShortLines } from "../domain/textCleanup";
 import * as runtime from "../runtime/runtime.js";
 
-type MetadataPatchState = {
-  record: CorpusRecord;
-  build: CorpusBuild;
-  queue_counts?: CorpusBuild["review_queue_counts"];
-};
-
-function isMetadataPatchState(
-  result: CorpusRecord | MetadataPatchState,
-): result is MetadataPatchState {
-  if (!result || typeof result !== "object") return false;
-  const candidate = result as { record?: unknown; build?: unknown };
-  return Boolean(candidate.record && candidate.build);
-}
-
 const i18n = useI18nStore();
 const route = useRoute();
 const router = useRouter();

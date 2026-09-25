@@ -45,6 +45,7 @@ def manager(tmp_path: Path, schema: ms.MetadataSchema | None = None):
     build.update(status="awaiting_review", stage="review")
     m.repo.save_build(build)
     m._rewrite_and_validate = lambda bid, records: (m.repo.save_records(bid, records), m.repo.get_build(bid))[1]
+    m._rewrite_targeted_record = lambda bid, record, previous: (m.repo.update_record(bid, record), m.repo.get_build(bid))[1]
     m._assert_human_review_available = lambda *a, **k: None
     m._push_review_history = lambda *a, **k: None
     return m, build["build_id"]

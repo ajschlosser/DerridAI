@@ -556,7 +556,18 @@ class ReviewActionsMixin:
         target["metadata_reviewed_at"] = iso_now()
         _mark_human_touch(target, [key for key in changes if key not in skipped])
         profile = self._profile_for(build_id)
-        self._reopen_due_rechecks(build_id, [target], target, profile)
+        # A due blind recheck reopens an *earlier* decision, so scheduled records
+        # other than the target must be considered and persisted when they change.
+        scheduled_others = [
+            other for other in self.repo.load_records(build_id)
+            if other.get("record_id") != target.get("record_id") and isinstance(other.get("recheck_scheduled"), dict)
+        ]
+        before_others = {str(other.get("record_id")): json.dumps(other, sort_keys=True, default=str) for other in scheduled_others}
+        self._reopen_due_rechecks(build_id, [target, *scheduled_others], target, profile)
+        for other in scheduled_others:
+            if json.dumps(other, sort_keys=True, default=str) != before_others[str(other.get("record_id"))]:
+                other["record_revision"] = int(other.get("record_revision") or 1) + 1
+                self.repo.update_record(build_id, other)
         _sync_record_metadata_state(target, profile)
         _settle_enrichment_review_reason(target)
         target["record_revision"] = current_revision + 1
@@ -709,9 +720,9 @@ class ReviewActionsMixin:
         current_record["metadata_disputes"] = disputes[-100:]
         _sync_record_metadata_state(current_record, self._profile_for(build_id))
         _settle_enrichment_review_reason(current_record)
+        _decorate_review_state(current_record)
         if current_record != previous_record:
             self._rewrite_targeted_record(build_id, current_record, previous_record)
-        _decorate_review_state(current_record)
         record = current_record
         build = self.repo.get_build(build_id)
         self._refresh_workflow_fields(build)
@@ -732,7 +743,7 @@ class ReviewActionsMixin:
             "applied": True,
             "record": record,
             "build": build,
-            "queue_counts": _queue_counts(records),
+            "queue_counts": _queue_counts(self.repo.load_records(build_id)),
             "remaining_fields": remaining_fields,
             "ready_for_acceptance": bool(record.get("can_accept")),
             "review_state": str(record.get("review_state") or "ready"),
