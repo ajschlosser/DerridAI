@@ -39,7 +39,7 @@ export const RequiredFallback: Story = {
   args: {
     modelValue: {
       persons: {
-        instructions: "Identify the position holder only when the passage supports the attribution.",
+        instructions:\n          "Identify the position holder only when the passage supports the attribution.",
         look_for: ["Emmanuel Levinas"],
         required: true,
         default_placeholder: "[not established in source]",
