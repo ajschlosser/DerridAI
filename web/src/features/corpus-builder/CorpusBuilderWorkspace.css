@@ -1261,15 +1261,15 @@ summary:focus-visible {
 .builder-workspace.review-mode .build-summary {
   display: none;
 }
-.builder-workspace.review-mode .review-session {
+.builder-workspace.review-mode .run-monitor {
   order: 0;
 }
-.builder-workspace.review-mode .review-frame {
+.builder-workspace.review-mode .review-session,
+.builder-workspace.review-mode .review-session-bar {
   order: 1;
 }
-.builder-workspace.review-mode .run-monitor {
+.builder-workspace.review-mode .review-frame {
   order: 2;
-  margin-top: var(--space-2);
 }
 .review-toolbar {
   position: sticky;
@@ -2486,17 +2486,16 @@ summary:focus-visible {
   container: record/inline-size;
 }
 .record-decision-dock {
-  position: fixed;
-  inset-inline: var(--sidebar) 0;
+  position: sticky;
   inset-block-end: 0;
-  z-index: 20;
+  z-index: 8;
   border-top: 1px solid var(--line);
   background: var(--surface-overlay, var(--card));
   box-shadow: 0 -0.75rem 2rem color-mix(in srgb, var(--text) 12%, transparent);
   padding-bottom: env(safe-area-inset-bottom);
 }
 .review-frame .record-review-pane {
-  padding-bottom: 5.25rem;
+  padding-bottom: 0;
 }
 .record-decision-dock .metadata-accept-blocker {
   margin: 0;
