@@ -82,9 +82,8 @@ function normalizedAssertion(raw: Loose, fallbackFieldId: string): FieldAssertio
   const fieldName = String(raw.field_name || "").trim();
   if (!fieldName) return null;
   const evidence = Array.isArray(raw.evidence)
-    ? raw.evidence.filter(
-        (item): item is FieldAssertionEvidenceView =>
-          Boolean(item && typeof item === "object" && !Array.isArray(item)),
+    ? raw.evidence.filter((item): item is FieldAssertionEvidenceView =>
+        Boolean(item && typeof item === "object" && !Array.isArray(item)),
       )
     : undefined;
   return {
