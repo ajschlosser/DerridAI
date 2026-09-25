@@ -21,8 +21,8 @@ export interface SchemaField {
   label: string;
   type: SchemaFieldType;
   group: string;
-  role: SchemaFieldRole;
-  review_visibility: SchemaReviewVisibility;
+  role?: SchemaFieldRole;
+  review_visibility?: SchemaReviewVisibility;
   values: SchemaValue[];
   strict: boolean;
   instruction: string;
