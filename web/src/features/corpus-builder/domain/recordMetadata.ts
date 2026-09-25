@@ -1,6 +1,10 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import type { MetadataSchema } from "../../../api/metadataSchemas";
-import { assertionFieldNames } from "../../../domain/fieldAssertions";
+import {
+  assertionFieldNames,
+  assertionValues,
+  currentFieldAssertions,
+} from "../../../domain/fieldAssertions";
 
 const STRUCTURAL_EDITABLE_FIELDS = ["region_type", "primary_text", "discourse_role"] as const;
 
@@ -74,5 +78,44 @@ export function editableRecordMetadata(
   );
   return Object.fromEntries(
     fields.filter((field) => record[field] !== undefined).map((field) => [field, record[field]]),
+  );
+}
+
+
+function hasMeaningfulValue(value: unknown): boolean {
+  if (Array.isArray(value)) return value.length > 0;
+  return value !== null && value !== undefined && value !== "";
+}
+
+/**
+ * Evidence review follows schema policy and canonical assertions instead of a
+ * closed list of Derrida-specific field names.
+ */
+export function evidenceCandidateFieldNames(
+  record: LooseRecord,
+  schema?: MetadataSchema | null,
+): string[] {
+  const persistedEvidence =
+    record.metadata_evidence &&
+    typeof record.metadata_evidence === "object" &&
+    !Array.isArray(record.metadata_evidence)
+      ? Object.keys(record.metadata_evidence as Record<string, unknown>)
+      : [];
+  const assertions = currentFieldAssertions(record);
+  const assertedEvidence = assertions
+    .filter((assertion) => Array.isArray(assertion.evidence) && assertion.evidence.length > 0)
+    .map((assertion) => assertion.field_name);
+  const assertionValueMap = assertionValues(record);
+  const configuredEvidence = (schema?.fields || [])
+    .filter((field) => field.evidence)
+    .map((field) => field.name);
+
+  const alwaysVisible = new Set([...persistedEvidence, ...assertedEvidence]);
+  return Array.from(new Set([...configuredEvidence, ...assertedEvidence, ...persistedEvidence])).filter(
+    (field) =>
+      alwaysVisible.has(field) ||
+      hasMeaningfulValue(
+        record[field] !== undefined ? record[field] : assertionValueMap[field],
+      ),
   );
 }
