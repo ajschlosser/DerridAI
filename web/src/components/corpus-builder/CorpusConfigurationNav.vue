@@ -156,7 +156,7 @@ function onTabKeydown(event: KeyboardEvent, id: CorpusConfigurationSection) {
   border-radius: 999px;
   background: var(--tone-success-bg);
   color: var(--tone-success-fg);
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
 }
 @media (max-width: 720px) {
   .corpus-config-tabs button {
