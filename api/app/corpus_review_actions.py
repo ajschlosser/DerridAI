@@ -43,15 +43,6 @@ from .corpus_segmentation import (
     _scholarly_page_range,
 )
 from .enrichment_ledger import ACCEPTED
-from .field_assertions import (
-    confirm_absence,
-    confirm_assertion,
-    create_human_assertion,
-    current_assertion_by_name,
-    migrate_record_assertions,
-    project_record_assertions,
-    replace_assertion_evidence,
-)
 from .metadata_adjudication_cache import remember as remember_adjudication
 from .metadata_schema import MetadataSchema
 from .provenance_memory import persist_record_decision
@@ -215,12 +206,16 @@ class ReviewActionsMixin:
                 record = self.repo.get_record(build_id, record_id)
             except KeyError:
                 continue
-            migrate_record_assertions(record, schema)
             for field in dict.fromkeys(str(item) for item in fields if str(item)):
-                assertion = current_assertion_by_name(record, field)
+                status = (
+                    (record.get("metadata_field_status") or {}).get(field)
+                    if isinstance(record.get("metadata_field_status"), dict)
+                    else None
+                )
                 decision_kind: Literal["value", "absence"] = (
                     "absence"
-                    if assertion is not None and assertion.value_status == "confirmed_absent"
+                    if isinstance(status, dict)
+                    and str(status.get("status") or "") == "confirmed_absent"
                     else "value"
                 )
                 persist_record_decision(
@@ -270,34 +265,16 @@ class ReviewActionsMixin:
             raise ValueError("Resolve the queued record metadata before accepting this record.")
         promoted_fields: list[str] = []
         if disposition == "accepted":
-            schema = self._schema_for(build_id)
-            migrate_record_assertions(target, schema)
             status_map = target.get("metadata_field_status") if isinstance(target.get("metadata_field_status"), dict) else {}
-            for field in schema.review_fields():
-                assertion = current_assertion_by_name(target, field)
-                if assertion is None or assertion.derivation_method != "model" or assertion.authority_status != "unreviewed":
-                    continue
-                info = status_map.get(field) if isinstance(status_map.get(field), dict) else {}
-                if assertion.model or info.get("model"):
-                    self._ledger.append(
-                        ACCEPTED,
-                        model=str(assertion.model or info.get("model") or ""),
-                        field=field,
-                        build_id=build_id,
-                        record_id=str(target.get("record_id") or ""),
-                        confidence=assertion.confidence,
-                        autofilled=bool(info.get("autofilled")),
-                        value=target.get(field),
-                        new_value=target.get(field),
-                        **(info.get("conditions") or {}),
-                    )
-                confirm_assertion(
-                    target,
-                    assertion,
-                    reason="Confirmed when the reviewer accepted the record.",
-                )
-                promoted_fields.append(field)
-            project_record_assertions(target)
+            for field in self._schema_for(build_id).review_fields():
+                info = status_map.get(field) if isinstance(status_map.get(field), dict) else None
+                if info and info.get("status") == "model_inferred":
+                    if info.get("model"):
+                        self._ledger.append(ACCEPTED, model=str(info["model"]), field=field, build_id=build_id, record_id=str(target.get("record_id") or ""), confidence=info.get("confidence"), autofilled=bool(info.get("autofilled")), value=target.get(field), new_value=target.get(field), **(info.get("conditions") or {}))
+                    info["status"] = "human_confirmed"
+                    info["method"] = "human_review_of_llm_proposal"
+                    info["reason"] = (str(info.get("reason") or "") + " Confirmed when the reviewer accepted the record.").strip()
+                    promoted_fields.append(field)
             target["metadata_reviewed_at"] = iso_now()
         target["review_disposition"] = disposition
         target["accepted"] = disposition == "accepted"
@@ -359,19 +336,13 @@ class ReviewActionsMixin:
         self._push_review_history(build_id, records, action=f"review_{disposition}", selected_record_id=record_id)
         promoted_fields: list[str] = []
         if disposition == "accepted":
-            schema = self._schema_for(build_id)
-            migrate_record_assertions(target, schema)
-            for field in schema.review_fields():
-                assertion = current_assertion_by_name(target, field)
-                if assertion is None or assertion.derivation_method != "model" or assertion.authority_status != "unreviewed":
-                    continue
-                confirm_assertion(
-                    target,
-                    assertion,
-                    reason="Confirmed when the reviewer accepted the record.",
-                )
-                promoted_fields.append(field)
-            project_record_assertions(target)
+            status_map = target.get("metadata_field_status") if isinstance(target.get("metadata_field_status"), dict) else {}
+            for field in self._schema_for(build_id).review_fields():
+                info = status_map.get(field) if isinstance(status_map.get(field), dict) else None
+                if info and info.get("status") == "model_inferred":
+                    info["status"] = "human_confirmed"
+                    info["method"] = "human_review_of_llm_proposal"
+                    promoted_fields.append(field)
             target["metadata_reviewed_at"] = iso_now()
         target["review_disposition"] = disposition
         target["accepted"] = disposition == "accepted"
@@ -440,20 +411,14 @@ class ReviewActionsMixin:
                 continue
             current_revision = int(record.get("record_revision") or 1)
             if disposition == "accepted":
-                schema = self._schema_for(build_id)
-                migrate_record_assertions(record, schema)
+                status_map = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
                 promoted_fields: list[str] = []
-                for field in schema.review_fields():
-                    assertion = current_assertion_by_name(record, field)
-                    if assertion is None or assertion.derivation_method != "model" or assertion.authority_status != "unreviewed":
-                        continue
-                    confirm_assertion(
-                        record,
-                        assertion,
-                        reason="Confirmed when the reviewer accepted the record.",
-                    )
-                    promoted_fields.append(field)
-                project_record_assertions(record)
+                for field in self._schema_for(build_id).review_fields():
+                    info = status_map.get(field) if isinstance(status_map.get(field), dict) else None
+                    if info and info.get("status") == "model_inferred":
+                        info["status"] = "human_confirmed"
+                        info["method"] = "human_review_of_llm_proposal"
+                        promoted_fields.append(field)
                 if promoted_fields:
                     promoted_by_record[str(record.get("record_id") or "")] = promoted_fields
                 record["metadata_reviewed_at"] = iso_now()
@@ -660,15 +625,12 @@ class ReviewActionsMixin:
         if expected_revision is not None and current_revision != int(expected_revision):
             raise ValueError("This record changed after it was opened. Reload it before saving metadata.")
         self._push_record_review_history(build_id, action="metadata_edit", record_id=record_id, previous_record=previous_record)
-        schema = self._schema_for(build_id)
-        migrate_record_assertions(target, schema)
         decision_log = list(target.get("metadata_decisions") or [])
         skipped: set[str] = set()
         for key, value in changes.items():
             status = target.setdefault("metadata_field_status", {})
             prior_status = dict(status.get(key) or {}) if isinstance(status.get(key), dict) else {}
             prior_value = target.get(key)
-            prior_assertion = current_assertion_by_name(target, key)
             owed = _second_opinion_owed(target, key)
             if owed:
                 # This is the independent second opinion, not an edit: it is compared with the first answer and the record is left alone.
@@ -686,35 +648,15 @@ class ReviewActionsMixin:
                 target["metadata_evidence"] = evidence_map
             target[key] = value
             if key in self._editable_fields(build_id):
-                is_manifest_override = key in MANIFEST_INHERITED_FIELDS
-                if (
-                    prior_assertion is not None
-                    and prior_assertion.derivation_method == "model"
-                    and prior_assertion.value == value
-                    and not is_manifest_override
-                ):
-                    confirm_assertion(
-                        target,
-                        prior_assertion,
-                        reason="Confirmed during record review.",
-                    )
-                else:
-                    create_human_assertion(
-                        target,
-                        key,
-                        value,
-                        schema=schema,
-                        supersedes=prior_assertion,
-                        override=bool(is_manifest_override or (prior_assertion is not None and prior_assertion.value != value)),
-                        reason=(
-                            "Human record-level override of inherited document metadata."
-                            if is_manifest_override
-                            else "Confirmed during record review."
-                        ),
-                        method="human_record_override" if is_manifest_override else "human",
-                    )
-                project_record_assertions(target)
-                decision_log.append({"field": key, "value": value, "at": iso_now(), "source": "human_override" if is_manifest_override else "human"})
+                is_override = key in MANIFEST_INHERITED_FIELDS
+                status[key] = {
+                    "status": "human_override" if is_override else "human_confirmed",
+                    "method": "human_record_override" if is_override else "human",
+                    "confidence": 1.0,
+                    "reason_code": "human_override" if is_override else "human_confirmed",
+                    "reason": "Human record-level override of inherited document metadata." if is_override else "Confirmed during record review.",
+                }
+                decision_log.append({"field": key, "value": value, "at": iso_now(), "source": "human_override" if is_override else "human"})
         constraint_changes = apply_metadata_constraints(target)
         for item in constraint_changes:
             decision_log.append({"field": item["field"], "value": item["value"], "at": iso_now(), "source": "deterministic_constraint", "reason": item["reason"]})
@@ -740,6 +682,7 @@ class ReviewActionsMixin:
         self._rewrite_targeted_record(build_id, target, previous_record)
         # Return the record as persisted after authoritative state derivation.
         persisted = target
+        schema = self._schema_for(build_id)
         for key, value in changes.items():
             if key not in skipped:
                 persist_record_decision(
@@ -791,46 +734,24 @@ class ReviewActionsMixin:
             if query_l and query_l not in (str(record.get("record_id") or "") + " " + str(record.get("text") or "")).casefold():
                 continue
             self._assert_human_review_available(build_id, record)
-            schema = self._schema_for(build_id)
-            migrate_record_assertions(record, schema)
             decisions = list(record.get("metadata_decisions") or [])
             statuses = record.setdefault("metadata_field_status", {})
             for key, value in changes.items():
                 prior_status = dict(statuses.get(key) or {}) if isinstance(statuses.get(key), dict) else {}
                 prior_value = record.get(key)
-                prior_assertion = current_assertion_by_name(record, key)
                 self._record_human_llm_feedback(build_id, key, prior_value, value, prior_status, record)
                 if prior_value != value and isinstance(record.get("metadata_evidence"), dict):
                     evidence_map = dict(record.get("metadata_evidence") or {})
                     evidence_map.pop(key, None)
                     record["metadata_evidence"] = evidence_map
                 record[key] = value
-                override = key in MANIFEST_INHERITED_FIELDS or (
-                    prior_assertion is not None and prior_assertion.value != value
-                )
-                if (
-                    prior_assertion is not None
-                    and prior_assertion.derivation_method == "model"
-                    and prior_assertion.value == value
-                    and key not in MANIFEST_INHERITED_FIELDS
-                ):
-                    confirm_assertion(
-                        record,
-                        prior_assertion,
-                        reason="Confirmed through bulk record metadata editing.",
-                    )
-                else:
-                    create_human_assertion(
-                        record,
-                        key,
-                        value,
-                        schema=schema,
-                        supersedes=prior_assertion,
-                        override=override,
-                        reason="Applied through bulk record metadata editing.",
-                        method="human_bulk_override" if override else "human_bulk",
-                    )
-                project_record_assertions(record)
+                override = key in MANIFEST_INHERITED_FIELDS
+                statuses[key] = {
+                    "status": "human_override" if override else "human_confirmed",
+                    "method": "human_bulk_override" if override else "human_bulk",
+                    "confidence": 1.0, "reason_code": "human_bulk",
+                    "reason": "Applied through bulk record metadata editing.",
+                }
                 decisions.append({"field": key, "value": value, "at": iso_now(), "source": "human_bulk"})
             constraint_changes = apply_metadata_constraints(record)
             for item in constraint_changes:
@@ -897,17 +818,15 @@ class ReviewActionsMixin:
             self._push_record_review_history(build_id, action="metadata_confirm_absent", record_id=record_id, previous_record=previous_record)
             prior_status = dict((target.get("metadata_field_status") or {}).get(field) or {})
             self._record_human_llm_feedback(build_id, field, target.get(field), None, prior_status, target)
-            schema = self._schema_for(build_id)
-            migrate_record_assertions(target, schema)
-            prior_assertion = current_assertion_by_name(target, field)
-            confirm_absence(
-                target,
-                field,
-                schema=schema,
-                prior=prior_assertion,
-                reason="Reviewer confirmed that no supported value applies to this record.",
+            target[field] = None
+            evidence_map = (
+                dict(target.get("metadata_evidence") or {})
+                if isinstance(target.get("metadata_evidence"), dict)
+                else {}
             )
-            project_record_assertions(target)
+            evidence_map.pop(field, None)
+            target["metadata_evidence"] = evidence_map
+            target.setdefault("metadata_field_status", {})[field] = {"status":"confirmed_absent","method":"human","confidence":1.0,"reason_code":"no_supported_value","reason":"Reviewer confirmed that no supported value applies to this record."}
             target.setdefault("metadata_decisions", []).append({"field":field,"value":None,"at":iso_now(),"source":"confirmed_absent"})
             target["metadata_decisions"] = target["metadata_decisions"][-100:]
             target["metadata_reviewed_at"] = iso_now(); _mark_human_touch(target,[field])
@@ -1004,37 +923,19 @@ class ReviewActionsMixin:
         else:
             evidence.pop(field, None)
         target["metadata_evidence"] = evidence
-        schema = self._schema_for(build_id)
-        migrate_record_assertions(target, schema)
-        assertion = current_assertion_by_name(target, field)
-        if assertion is not None:
-            assertion_evidence = (
-                [{
-                    "block_ids": unique_ids,
-                    "confidence": max(0.0, min(1.0, float(confidence))),
-                    "reason": str(reason or "Human-reviewed evidence binding."),
-                    "reviewed_by": "human",
-                    "reviewed_at": iso_now(),
-                }]
-                if unique_ids
-                else []
-            )
-            replace_assertion_evidence(
-                target,
-                assertion,
-                assertion_evidence,
-                reason=str(reason or "Human-reviewed evidence binding changed."),
-            )
-            project_record_assertions(target)
         target["metadata_needs_attention"] = True
         target["metadata_attention_reasons"] = ["Source evidence binding changed and metadata validation must be rerun."]
         target["record_revision"] = current_revision + 1
         self._rewrite_targeted_record(build_id, target, previous_record)
-        current = current_assertion_by_name(target, field)
+        status = (
+            (target.get("metadata_field_status") or {}).get(field)
+            if isinstance(target.get("metadata_field_status"), dict)
+            else None
+        )
         if (
             unique_ids
-            and current is not None
-            and current.authority_status in {"human_confirmed", "human_override"}
+            and isinstance(status, dict)
+            and str(status.get("status") or "") in {"human_confirmed", "human_override", "confirmed_absent"}
         ):
             self._persist_review_audit_bindings(
                 build_id,
