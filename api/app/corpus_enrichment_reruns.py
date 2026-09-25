@@ -287,6 +287,11 @@ class EnrichmentRerunsMixin:
         """Fold one pass's candidate into the live record. Human-owned assertions are never touched."""
         active_schema = schema or default_schema()
         groups = active_schema.family_fields()
+        # Provider/test candidates are often shallow copies of the live record.
+        # Canonical migration mutates nested assertion maps, so isolate the
+        # candidate before migration to prevent it from changing live state
+        # before conflict resolution has made a decision.
+        candidate = json.loads(json.dumps(candidate))
         migrate_record_assertions(live, active_schema)
         migrate_record_assertions(candidate, active_schema)
 
