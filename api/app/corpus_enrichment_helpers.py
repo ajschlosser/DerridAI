@@ -12,10 +12,11 @@ import json
 import re
 from typing import Any
 
-from .corpus_metadata import ALLOWED_METADATA_FIELDS, MANIFEST_INHERITED_FIELDS
+from .corpus_metadata import MANIFEST_INHERITED_FIELDS
 from .corpus_record_quality import iso_now
 from .field_assertions import (
     current_assertion_by_name,
+    current_assertions,
     migrate_record_assertions,
     project_record_assertions,
     store_assertion,
@@ -130,7 +131,17 @@ def _merge_enrichment_snapshot(live: dict[str, Any], worker: dict[str, Any], all
     text_was_touched = "__text__" in touched_markers
     record_frozen_by_review = "__review__" in touched_markers
     automatic_merge_blocked = (text_was_touched or record_frozen_by_review) and not live.get("metadata_requeue_requested")
-    for field in (allowed_fields if allowed_fields is not None else ALLOWED_METADATA_FIELDS):
+    merge_fields = (
+        set(allowed_fields)
+        if allowed_fields is not None
+        else {
+            str(assertion.field_name)
+            for source in (live, worker)
+            for assertion in current_assertions(source)
+            if assertion.field_name
+        }
+    )
+    for field in merge_fields:
         if field in MANIFEST_INHERITED_FIELDS:
             continue
         live_assertion = current_assertion_by_name(live, field)
