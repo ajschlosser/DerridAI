@@ -17,6 +17,19 @@ on:
       - "docs/**"
       - ".prettierignore"
       - ".editorconfig"
+      - "**/*.md"
+      - "**/*.json"
+      - "**/*.yml"
+      - "**/*.yaml"
+      - "**/*.js"
+      - "**/*.mjs"
+      - "**/*.cjs"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "**/*.vue"
+      - "**/*.css"
+      - "**/*.scss"
+      - "**/*.html"
   push:
     branches: [master]
     paths:
@@ -33,6 +46,19 @@ on:
       - "docs/**"
       - ".prettierignore"
       - ".editorconfig"
+      - "**/*.md"
+      - "**/*.json"
+      - "**/*.yml"
+      - "**/*.yaml"
+      - "**/*.js"
+      - "**/*.mjs"
+      - "**/*.cjs"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "**/*.vue"
+      - "**/*.css"
+      - "**/*.scss"
+      - "**/*.html"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -97,6 +123,15 @@ jobs:
                 format=true
                 ;;
               README.md|CONTRIBUTING.md|AGENTS.md|docs/*|.prettierignore|.editorconfig)
+                format=true
+                ;;
+            esac
+
+            # Prettier owns supported text formats across the repository, not
+            # only files under web/. Keep this separate from domain ownership
+            # above so e.g. api/README.md and JSON fixtures still get checked.
+            case "$path" in
+              *.md|*.json|*.yml|*.yaml|*.js|*.mjs|*.cjs|*.ts|*.tsx|*.vue|*.css|*.scss|*.html)
                 format=true
                 ;;
             esac
