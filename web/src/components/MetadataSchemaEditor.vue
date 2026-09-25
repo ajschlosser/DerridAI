@@ -526,26 +526,34 @@ defineExpose({ select, draft });
                 {{ t("add_value", "Add a value") }}
               </button>
               <label class="check"
-                ><input v-model="item.field.strict" type="checkbox" /><span>{{
+                ><input v-model="item.field.strict" type="checkbox" /><span
+                  :title="t('strict_help', 'When enabled, values outside this list fail schema validation instead of being accepted as free text.')"
+                >{{
                   t("strict", "The model may only return these values")
-                }}</span></label
+                }} <span aria-hidden="true">ⓘ</span></span></label
               >
             </div>
             <div class="flags">
               <label class="check"
-                ><input v-model="item.field.evidence" type="checkbox" /><span>{{
+                ><input v-model="item.field.evidence" type="checkbox" /><span
+                  :title="t('evidence_help', 'Supported values are expected to bind to source blocks. Missing or invalid evidence keeps the field reviewable instead of discarding the whole LLM response.')"
+                >{{
                   t("evidence", "Must cite the source")
-                }}</span></label
+                }} <span aria-hidden="true">ⓘ</span></span></label
               >
               <label class="check"
-                ><input v-model="item.field.assess" type="checkbox" /><span>{{
+                ><input v-model="item.field.assess" type="checkbox" /><span
+                  :title="t('assess_help', 'Requires the model to return a structured assessment for this field, including confidence, outcome, and review need.')"
+                >{{
                   t("assess", "Report its confidence")
-                }}</span></label
+                }} <span aria-hidden="true">ⓘ</span></span></label
               >
               <label class="check"
-                ><input v-model="item.field.review" type="checkbox" /><span>{{
+                ><input v-model="item.field.review" type="checkbox" /><span
+                  :title="t('review_help', 'If this field remains unresolved or model-inferred, record acceptance requires a human decision according to the review workflow.')"
+                >{{
                   t("review", "A person must settle it before accepting")
-                }}</span></label
+                }} <span aria-hidden="true">ⓘ</span></span></label
               >
               <span class="grow"></span>
               <button
