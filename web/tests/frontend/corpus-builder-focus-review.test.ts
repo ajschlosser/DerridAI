@@ -89,20 +89,33 @@ describe("Corpus Builder focus review interactions", () => {
     wrapper.unmount();
   });
 
-  it("saves reviewed text with Ctrl/Cmd+S without mutating immutable source text", async () => {
+  it("uses parent-owned text state and requests save with Ctrl/Cmd+S", async () => {
     const wrapper = mount(CorpusRecordFocusReview, {
       attachTo: document.body,
       props: { record },
       global: { stubs },
     });
+
     await buttonByText(wrapper, "Edit text").trigger("click");
+    expect(wrapper.emitted("beginTextEdit")).toHaveLength(1);
+
+    await wrapper.setProps({
+      editingText: true,
+      textDraft: record.text,
+      resolveSourceIssues: false,
+    });
     const editor = wrapper.get("textarea.focus-text-editor");
     expect((editor.element as HTMLTextAreaElement).value).toBe(record.text);
+
     await editor.setValue("A corrected reviewed passage.");
+    expect(lastEmission(wrapper, "textDraftChange")).toEqual(["A corrected reviewed passage."]);
+
+    // A controlled parent applies the emitted draft before the save shortcut.
+    await wrapper.setProps({ textDraft: "A corrected reviewed passage." });
     await wrapper.get(".focus-review").trigger("keydown", { key: "s", ctrlKey: true });
-    const event = lastEmission(wrapper, "saveText");
-    expect(event?.[0]).toBe("A corrected reviewed passage.");
-    expect(event?.[1]).toBe(false);
+
+    expect(wrapper.emitted("saveText")).toHaveLength(1);
+    expect(lastEmission(wrapper, "saveText")).toEqual([]);
     expect(record.text).toBe("A representative passage under review.");
     wrapper.unmount();
   });
