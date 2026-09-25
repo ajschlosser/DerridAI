@@ -43,6 +43,7 @@ from .enrichment_ledger import (
     CALL,
     PROPOSED,
 )
+from .field_assertions import migrate_record_assertions
 from .metadata_adjudication_cache import suggestions as adjudication_suggestions
 from .metadata_schema import (
     CORE_FIELDS,
@@ -234,7 +235,7 @@ class MetadataEnrichmentExecutionMixin:
                     }
                     self._append_warning(build_id, f"{record.get('record_id')}: LLM text touch-up failed; metadata enrichment continued.")
         if _metadata_source_quality_gate(record, required_metadata_fields, stage_callback):
-            return record
+            return migrate_record_assertions(record, schema)
         tasks, source_ids, obvious_apparatus = self._prepare_metadata_tasks(
             record, manifest, request, profile, editorial_context, editorial_examples,
             previous_text, next_text, stage_callback,
@@ -1082,4 +1083,4 @@ CURRENT REVIEWED RECORD TEXT:
         inline, full = _citation_strings(record)
         record["inline_citation"] = inline
         record["full_citation"] = full
-        return record
+        return migrate_record_assertions(record, schema)
