@@ -66,6 +66,7 @@ import { useCorpusRunGuidance } from "../composables/useCorpusRunGuidance";
 import { useCorpusReviewWorkspace } from "../features/corpus-builder/composables/useCorpusReviewWorkspace";
 import { useCorpusSourceConfiguration } from "../features/corpus-builder/composables/useCorpusSourceConfiguration";
 import { useCorpusProviderConfiguration } from "../features/corpus-builder/composables/useCorpusProviderConfiguration";
+import { useCorpusBuildLifecycleController } from "../features/corpus-builder/composables/useCorpusBuildLifecycleController";
 import { corpusReviewCommandFromKeydown } from "../features/corpus-builder/domain/reviewCommands";
 import {
   editableRecordMetadata,
@@ -367,7 +368,52 @@ const {
   finishPhase,
   showReviewWorkspace,
 } = useCorpusBuildLifecycle(currentBuild, recordTotal, reviewQueue);
-let pollTimer: number | undefined;
+const {
+  registerBuildOperation,
+  syncBuildInRail,
+  refreshBuilds,
+  refreshBuild,
+  startPolling,
+  stopPolling,
+  startBuild,
+  resumeBuild,
+  retryIncompleteMetadata,
+  confirmManifest,
+  cancelBuild,
+  settleMetadata,
+} = useCorpusBuildLifecycleController({
+  builds,
+  buildsTotal,
+  selectedBuildId,
+  currentBuild,
+  selectedAssetId,
+  assets,
+  busy,
+  schemaId,
+  providerPayload,
+  handsFree,
+  hydratedTopologyCount,
+  hydratedMetadataCount,
+  selectedRecordId,
+  canRetryMetadata,
+  metadataIssueCount,
+  requestedBuildId: () => String(route.query.build || ""),
+  runGuidancePayload,
+  applyBuildRequest,
+  setMessage,
+  resetReviewForBuildStart: () => {
+    reviewHydrated.value = false;
+    hydratedTopologyCount.value = 0;
+    hydratedMetadataCount.value = 0;
+    records.value = [];
+    recordTotal.value = 0;
+    selectedRecord.value = null;
+    sourceBlocks.value = [];
+  },
+  refreshRecords,
+  t: (key, fallback) => i18n.t(key, fallback),
+  tf: (key, values) => i18n.tf(key, values),
+});
 const DRAFT_KEY = "derridai.pdf-corpus-builder.draft.v2";
 function restoreBuilderDraft() {
   try {
@@ -907,36 +953,6 @@ function statusLabel(build: CorpusBuild) {
     String(build.status || "unknown").replace(/_/g, " "),
   );
 }
-function registerBuildOperation(build: CorpusBuild) {
-  const asset = assets.value.find((item) => item.asset_id === build.asset_id);
-  const total = Math.max(1, Number(asset?.block_count || 1));
-  const progress = Math.max(0, Math.min(1, Number(build.progress || 0)));
-  runtime.registerExternalJob?.({
-    id: build.build_id,
-    build_id: build.build_id,
-    type: "pdf_corpus",
-    kind: "pdf_corpus",
-    label: `${i18n.t("pdf_corpus.corpus_builder")} · ${build.source_filename || ""}`,
-    status: ["queued", "running"].includes(build.status)
-      ? build.status
-      : build.status === "blocked"
-        ? "blocked"
-        : "completed",
-    raw_status: build.status,
-    stage: build.stage,
-    stage_detail: build.stage,
-    source_filename: build.source_filename,
-    progress,
-    total,
-    completed: Math.min(total, Math.round(total * progress)),
-    record_count: Number(build.record_count || 0),
-    review_count: Number(build.needs_review_count || 0),
-    unresolved_regions: Number(build.segmentation_unresolved_regions?.length || 0),
-    created_at: build.created_at,
-    started_at: build.started_at,
-    finished_at: build.finished_at,
-  });
-}
 function setMessage(message: string, tone: "error" | "notice" = "notice") {
   if (tone === "error") {
     error.value = message;
@@ -1084,45 +1100,6 @@ async function refreshCorpusProfiles() {
   } catch {
     corpusProfiles.value = [];
   }
-}
-async function refreshBuilds() {
-  const result = await corpusBuilderApi.listBuilds(0, 100);
-  builds.value = result.items;
-  buildsTotal.value = result.total;
-  const requested = String(route.query.build || "");
-  if (requested && builds.value.some((build) => build.build_id === requested))
-    selectedBuildId.value = requested;
-  else if (
-    (!selectedBuildId.value ||
-      !builds.value.some((build) => build.build_id === selectedBuildId.value)) &&
-    builds.value[0]
-  )
-    selectedBuildId.value = builds.value[0].build_id;
-  else if (!builds.value.length) {
-    selectedBuildId.value = "";
-    currentBuild.value = null;
-  }
-}
-function syncBuildInRail(build: CorpusBuild) {
-  const index = builds.value.findIndex((item) => item.build_id === build.build_id);
-  if (index >= 0) builds.value.splice(index, 1, { ...builds.value[index], ...build });
-  else builds.value.unshift(build);
-}
-async function refreshBuild() {
-  if (!selectedBuildId.value) {
-    currentBuild.value = null;
-    return;
-  }
-  try {
-    currentBuild.value = await corpusBuilderApi.build(selectedBuildId.value);
-    syncBuildInRail(currentBuild.value);
-  } catch (exc) {
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-    return;
-  }
-  if (currentBuild.value?.asset_id) selectedAssetId.value = currentBuild.value.asset_id;
-  const request = currentBuild.value?.request || {};
-  applyBuildRequest(request as Record<string, unknown>);
 }
 async function refreshRecords(reset = false, preferredId = "") {
   if (reset) recordOffset.value = 0;
@@ -1460,97 +1437,6 @@ async function useCurrentPdf() {
   }
   await upload(file);
 }
-async function startBuild() {
-  if (!selectedAsset.value) {
-    setMessage(i18n.t("pdf_corpus.choose_pdf_before_build"), "error");
-    return;
-  }
-  busy.value = "build";
-  setMessage("");
-  reviewHydrated.value = false;
-  hydratedTopologyCount.value = 0;
-  hydratedMetadataCount.value = 0;
-  records.value = [];
-  recordTotal.value = 0;
-  selectedRecord.value = null;
-  sourceBlocks.value = [];
-  try {
-    const payload = {
-      asset_id: selectedAssetId.value,
-      auto_enrich_work_metadata: true,
-      schema_id: schemaId.value,
-      run_guidance: runGuidancePayload(),
-      ...providerPayload.value,
-      ...(handsFree.value.enabled ? { autonomous: { ...handsFree.value } } : {}),
-    };
-    const build = await corpusBuilderApi.createBuild(payload);
-    selectedBuildId.value = build.build_id;
-    currentBuild.value = build;
-    registerBuildOperation(build);
-    await refreshBuilds();
-    startPolling();
-    setMessage(i18n.t("pdf_corpus.build_started"));
-  } catch (exc) {
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
-}
-async function resumeBuild() {
-  if (!currentBuild.value) return;
-  if (buildRunning.value) {
-    setMessage(i18n.t("pdf_corpus.already_running"));
-    return;
-  }
-  busy.value = "build";
-  try {
-    currentBuild.value = await corpusBuilderApi.resume(
-      currentBuild.value.build_id,
-      providerPayload.value,
-    );
-    syncBuildInRail(currentBuild.value);
-    registerBuildOperation(currentBuild.value);
-    startPolling();
-    setMessage(i18n.t("pdf_corpus.build_resumed"));
-  } catch (exc) {
-    const message = exc instanceof Error ? exc.message : String(exc);
-    if (message.includes("already running")) {
-      await refreshBuild();
-      if (currentBuild.value) registerBuildOperation(currentBuild.value);
-      setMessage(i18n.t("pdf_corpus.already_running"));
-    } else setMessage(message, "error");
-  } finally {
-    busy.value = "";
-  }
-}
-async function retryIncompleteMetadata() {
-  if (!currentBuild.value || !canRetryMetadata.value) return;
-  const fields = Number(currentBuild.value.metadata_issue_summary?.auto_retry_fields || 0);
-  const recordsCount = Number(
-    currentBuild.value.metadata_issue_summary?.auto_retry_records || metadataIssueCount.value,
-  );
-  if (fields < 1) {
-    setMessage(i18n.t("pdf_corpus.no_retryable_metadata"));
-    return;
-  }
-  busy.value = "metadata-retry";
-  try {
-    currentBuild.value = await corpusBuilderApi.retryMetadata(
-      currentBuild.value.build_id,
-      providerPayload.value,
-    );
-    syncBuildInRail(currentBuild.value);
-    registerBuildOperation(currentBuild.value);
-    startPolling();
-    setMessage(
-      i18n.tf("pdf_corpus.metadata_retry_start_fields", { fields, records: recordsCount }),
-    );
-  } catch (exc) {
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
-}
 async function reviewMetadataRecord(recordId: string) {
   reviewQueue.value = "metadata";
   recordQuery.value = recordId;
@@ -1630,55 +1516,6 @@ async function restoreAllRejected() {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
   } finally {
     busy.value = "";
-  }
-}
-async function confirmManifest() {
-  if (!currentBuild.value) return;
-  busy.value = "manifest";
-  try {
-    currentBuild.value = await corpusBuilderApi.confirmManifest(
-      currentBuild.value.build_id,
-      providerPayload.value,
-    );
-    syncBuildInRail(currentBuild.value);
-    registerBuildOperation(currentBuild.value);
-    startPolling();
-    setMessage(i18n.t("pdf_corpus.manifest_confirmed"));
-  } catch (exc) {
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
-}
-function startPolling() {
-  stopPolling();
-  pollTimer = window.setInterval(async () => {
-    if (!selectedBuildId.value) return;
-    await refreshBuild();
-    // Deterministic records are persisted before metadata enrichment. Hydrate the
-    // review workspace as soon as topology exists instead of waiting for a form
-    // interaction or for the entire build to stop.
-    if (Number(currentBuild.value?.record_count || 0) > hydratedTopologyCount.value) {
-      await nextTick();
-      await refreshRecords(false, selectedRecordId.value);
-    }
-    const enriched = Number(currentBuild.value?.metadata_enriched_count || 0);
-    if (currentBuild.value?.stage === "enriching" && enriched > hydratedMetadataCount.value) {
-      hydratedMetadataCount.value = enriched;
-      await nextTick();
-      await refreshRecords(false, selectedRecordId.value);
-    }
-    if (!buildRunning.value) {
-      stopPolling();
-      await refreshBuilds();
-      await refreshRecords(false, selectedRecordId.value);
-    }
-  }, 1400);
-}
-function stopPolling() {
-  if (pollTimer !== undefined) {
-    clearInterval(pollTimer);
-    pollTimer = undefined;
   }
 }
 async function chooseBuild(build: CorpusBuild) {
@@ -3047,26 +2884,6 @@ function startNewBuildSetup() {
   void router.replace({
     query: { ...route.query, build: undefined, record: undefined, queue: undefined },
   });
-}
-async function cancelBuild() {
-  if (!currentBuild.value) return;
-  await corpusBuilderApi.cancel(currentBuild.value.build_id);
-  setMessage(i18n.t("pdf_corpus.cancel_requested"));
-  startPolling();
-}
-async function settleMetadata() {
-  if (!currentBuild.value) return;
-  busy.value = "settle";
-  try {
-    currentBuild.value = await corpusBuilderApi.settleMetadata(currentBuild.value.build_id);
-    syncBuildInRail(currentBuild.value);
-    setMessage(i18n.t("pdf_corpus.settle_requested_notice"));
-    startPolling();
-  } catch (exc) {
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
 }
 async function previousPage() {
   if (recordOffset.value <= 0) return;
