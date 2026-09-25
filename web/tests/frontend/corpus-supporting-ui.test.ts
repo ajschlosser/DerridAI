@@ -64,13 +64,22 @@ describe("Corpus Builder supporting UI", () => {
     const inferred = mount(CorpusFieldOwnershipBadge, {
       props: { status: "model_inferred" },
     });
-    const confirmed = mount(CorpusFieldOwnershipBadge, {
-      props: { status: "human_confirmed" },
+    const confirmedModel = mount(CorpusFieldOwnershipBadge, {
+      props: {
+        status: "human_confirmed",
+        method: "llm",
+        derivationMethod: "model",
+      },
+    });
+    const confirmedHuman = mount(CorpusFieldOwnershipBadge, {
+      props: { status: "human_confirmed", derivationMethod: "human" },
     });
 
     expect(inferred.text()).toContain("LLM");
     expect(inferred.text()).toContain("Auto");
-    expect(confirmed.text()).toContain("Human");
-    expect(confirmed.text()).not.toContain("Auto");
+    expect(confirmedModel.text()).toContain("LLM");
+    expect(confirmedModel.text()).toContain("Human");
+    expect(confirmedHuman.text()).toContain("Human");
+    expect(confirmedHuman.text()).not.toContain("LLM");
   });
 });
