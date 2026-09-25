@@ -183,6 +183,15 @@ const fieldsOf = (key: string) =>
     .map((field, index) => ({ field, index }))
     .filter((item) => item.field.group === key);
 const addValue = (field: SchemaField) => field.values.push({ value: "", definition: "" });
+const UNIVERSAL_POS_TAGS = [
+  "ADJ", "ADP", "ADV", "AUX", "CCONJ", "DET", "INTJ", "NOUN", "NUM",
+  "PART", "PRON", "PROPN", "PUNCT", "SCONJ", "SYM", "VERB", "X",
+];
+const NER_TAGS = [
+  "CARDINAL", "DATE", "EVENT", "FAC", "GPE", "LANGUAGE", "LAW", "LOC",
+  "MONEY", "NORP", "ORDINAL", "ORG", "PERCENT", "PERSON", "PRODUCT",
+  "QUANTITY", "TIME", "WORK_OF_ART",
+];
 const tagText = (values: string[]) => values.join(", ");
 const setTags = (field: SchemaField, key: "pos_tags" | "ner_tags", text: string) => {
   field[key] = [...new Set(text.split(/[,\n]/).map((value) => value.trim()).filter(Boolean))].slice(0, 16);
@@ -459,21 +468,41 @@ defineExpose({ select, draft });
             >
             <div class="row nlp-hints">
               <label class="schema-field"
-                ><span>{{ t("pos_tags", "POS tags (optional)") }}</span
+                ><span
+                  :title="t('pos_tags_help', 'POS tags are retrieval/model hints. They do not write metadata by themselves; they tell enrichment to prefer values grounded in tokens with these grammatical roles.')"
+                  >{{ t("pos_tags", "POS tags (optional)") }} <span aria-hidden="true">ⓘ</span></span
                 ><input
                   class="control"
+                  :list="`schema-pos-tags-${item.index}`"
                   :value="tagText(item.field.pos_tags || [])"
                   placeholder="NOUN, PROPN"
                   @input="setTags(item.field, 'pos_tags', ($event.target as HTMLInputElement).value)"
-              /></label>
+                />
+                <datalist :id="`schema-pos-tags-${item.index}`">
+                  <option v-for="tag in UNIVERSAL_POS_TAGS" :key="tag" :value="tag" />
+                </datalist>
+                <small class="hint">{{
+                  t("pos_tags_help", "Autocomplete uses the Universal POS tag set. These are advisory enrichment hints, not additional output fields.")
+                }}</small>
+              </label>
               <label class="schema-field"
-                ><span>{{ t("ner_tags", "NER tags (optional)") }}</span
+                ><span
+                  :title="t('ner_tags_help', 'NER tags are entity-type hints. They do not add entities automatically; they tell enrichment which named-entity classes are especially relevant to this field.')"
+                  >{{ t("ner_tags", "NER tags (optional)") }} <span aria-hidden="true">ⓘ</span></span
                 ><input
                   class="control"
+                  :list="`schema-ner-tags-${item.index}`"
                   :value="tagText(item.field.ner_tags || [])"
                   placeholder="PERSON, WORK_OF_ART"
                   @input="setTags(item.field, 'ner_tags', ($event.target as HTMLInputElement).value)"
-              /></label>
+                />
+                <datalist :id="`schema-ner-tags-${item.index}`">
+                  <option v-for="tag in NER_TAGS" :key="tag" :value="tag" />
+                </datalist>
+                <small class="hint">{{
+                  t("ner_tags_help", "Autocomplete uses DerridAI's supported NER vocabulary. These are advisory enrichment hints and do not change the field type.")
+                }}</small>
+              </label>
             </div>
             <div v-if="item.field.type === 'choice'" class="values">
               <div v-for="(value, vi) in item.field.values" :key="vi" class="value-row">
