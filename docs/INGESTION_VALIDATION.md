@@ -1,37 +1,63 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
-# Source ingestion validation
+# Source ingestion safety and fidelity
 
-Base: master `18866bfd272cdcdd99b5e55709562b52b2f02ea9`.
+Corpus Builder accepts multiple source-media kinds. This document is the current ingestion contract: source content is untrusted input, extracted source identity must remain auditable, and controls/evidence coordinates must match the selected medium rather than inherit PDF assumptions.
 
-The changes implement the SourceDocument/SourceSpan, source-text fidelity,
-RecordRevision, and visible-failure requirements in SPECIFICATION.md.
+## Cross-format rules
 
-| Boundary | Regression coverage |
+Every ingestion path must:
+
+- validate format before expensive processing;
+- bound upload/download bytes and format-specific resource expansion;
+- never execute embedded macros, scripts, fields, active objects, external relationships, or document-provided commands;
+- reject unsupported or unsafe media rather than attempting a permissive best-effort parse;
+- use timeouts/bounds around probes, extraction, OCR, transcription, downloads, and other external/tool work;
+- preserve extractor/tool/version and source-identity provenance;
+- preserve an immutable extracted/source representation alongside later human cleanup/transcription revisions;
+- conserve source text/content through segmentation except for explicitly defined, auditable normalization;
+- surface extraction/probe/transcription failures instead of converting them into apparently valid empty records.
+
+## Format boundaries
+
+| Source kind | Required safety/fidelity behavior |
 | --- | --- |
-| DOCX | Malformed ZIP/XML, entity declarations, expansion bombs, active objects/fields and external relationships, upload limit, entity-preserving text extraction, persisted extractor provenance |
-| RTF | Bad header, unbalanced/deep groups, embedded objects/fields, upload limit |
-| Images | Malformed input, unsupported GIF/SVG, pixel limit, upload limit, valid PNG conversion, inert script-like PNG metadata |
-| Audio | Missing optional diarizer/ffprobe/credentials, unsupported codec/format, probe timeout, byte/duration limits, empty/unlocated/invalid transcripts, transcription timeout, real multipart serialization, diarization failure, text conservation, timed speaker citations, human text revisions |
-| Gutenberg | Failed lookup, no results, multiple editions, timeout, encoding, metadata and selected identity, wrong file edition, size limits, exact download digest/URL, distinct assets for identical text from different editions |
-| Media controls | Audio/text omit OCR, PDF navigation, layout readiness and manifest page bounds; audio playback and timed speaker evidence; API rejects page edits for audio |
+| PDF | Validate the file; use native text and bounded OCR fallback where needed; preserve physical-page and printed-page distinctions; retain extraction/page-label warnings; never treat embedded active content as executable. |
+| DOCX | Treat as an archive/XML container; reject malformed structures, dangerous entity/expansion behavior, active objects/fields and external relationships; enforce compressed/uncompressed resource bounds; preserve extracted text and extractor provenance. |
+| RTF | Validate header/group structure and nesting; reject embedded objects/active fields and pathological depth/size; extract text without executing control content. |
+| Plain text | Enforce byte/encoding limits and preserve source text; do not invent page semantics. |
+| Images | Decode only supported inert formats; enforce byte and pixel/dimension limits before OCR; reject unsupported active/vector formats where the safe path does not support them; image metadata is data, not executable content. |
+| Audio | Keep speech dependencies optional/isolated; validate codec/container through bounded probing; enforce byte/duration/time limits; handle missing dependencies/credentials explicitly; preserve transcript timing/speaker provenance and allow human transcript revisions without overwriting extraction history. |
+| URL | Fetch only through the supported bounded ingestion path; preserve requested/final source identity and extraction provenance; do not treat remote page scripts as executable application content. |
+| Project Gutenberg | Resolve edition identity explicitly; preserve selected edition/source URL/digest/metadata; enforce network/encoding/size limits; identical text from different editions must not collapse scholarly source identity. |
 
-Validation completed locally:
+## Media-specific evidence and controls
 
-- Full backend suite: 512 passed. One additional PNG metadata regression was then added; the final ingestion boundary suite passed all 49 tests.
-- Frontend: 551 tests passed in 107 files.
-- Ruff, mypy, Python compilation, frontend lint and TypeScript checks passed.
-- Production and Storybook builds passed. Vite reports the existing large-bundle warning.
-- Changed Vue/TypeScript files were formatted with Prettier; English/French locale parity is covered by regression tests.
+UI and API behavior must follow the media kind.
 
-Limits: browser accessibility/E2E checks could not run because Playwright's
-Chromium download was truncated. Docker is unavailable. Remote CI was not run:
-these changes are uncommitted and have not been pushed. Audio/provider and
-Gutenberg network responses are simulated in deterministic tests; no live
-Whisper/whisperx model session was run. This validation does not assert full
-WCAG conformance or release readiness.
+- PDF/document workflows may expose OCR, page navigation, printed-page mapping, and page-based layout controls when those concepts actually exist.
+- Audio exposes playback/time ranges, transcript/speaker evidence, and audio-specific diagnostics. Time spans are evidence coordinates; they are not disguised page numbers.
+- Text, image, URL, and Gutenberg sources must omit PDF-only controls unless the extractor has produced a real paged-document representation with an explicit contract.
+- APIs must reject invalid cross-media mutations (for example, page-layout edits against an audio source) rather than silently accepting irrelevant fields.
 
-Audio still uses legacy navigation slots inside the extraction workspace.
-Published record spans and citation locations use time ranges and speakers;
-those navigation slots are not evidence page numbers. New non-PDF extraction
-identities include the extraction contract version, so old cached extraction
-results do not bypass the new checks. Historical assets are not rewritten.
+## Regression coverage
+
+The ingestion boundary suite should cover at least:
+
+- malformed input for every supported parser;
+- oversized input and decompression/expansion/resource bombs;
+- unsupported media/codec/encoding cases;
+- embedded active content and external relationships;
+- missing optional audio/tool dependencies;
+- probe/extraction/transcription/download timeouts;
+- image pixel limits;
+- audio duration limits and invalid/empty transcripts;
+- Project Gutenberg lookup/edition/identity/digest behavior;
+- extractor provenance persistence;
+- source-text conservation and human revision behavior;
+- media-specific API/UI constraints.
+
+The exact test count is intentionally not documented here; it changes as coverage grows. CI and the focused tests are the authority for current validation status.
+
+## Release-readiness note
+
+Passing parser/unit tests is not equivalent to full release readiness or WCAG conformance. A source-ingestion change that affects UI behavior must also pass the repository's frontend type/unit/build gates and relevant Playwright/axe WCAG 2.2 AA coverage; dependency/tool changes must be exercised in the environments they affect. Document any gate that could not be run in the PR/release note rather than in this evergreen contract.

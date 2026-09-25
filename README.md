@@ -1,20 +1,20 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 # DerridAI
 
-DerridAI is a local-first Docker application for building, auditing, and querying scholarly corpora of philosophical texts. It turns source PDFs into structured JSONL records, reviews and enriches those records with local or OpenAI-compatible LLMs, manages persistent ChromaDB vector collections, and runs an evidence-grounded retrieval-augmented generation (RAG) pipeline over the result.
+DerridAI is a local-first Docker application for building, auditing, and querying scholarly corpora of philosophical texts. It ingests PDF, text/RTF/DOCX, image, audio, URL, and Project Gutenberg sources into provenance-preserving scholarly records; supports human/LLM review and evidence-bound metadata enrichment; builds derived ChromaDB search projections; and runs an evidence-grounded retrieval-augmented generation (RAG) pipeline over the result.
 
 Current version: **0.80.0 — Beverly** ([release notes](docs/notes/0.80.0.md)).
 
 ## Features
 
-- **Corpus Builder** — a sequenced Source → Document structure → LLM & enrichment → Record construction → Build workflow that extracts, segments, and enriches records from PDFs, with reviewer-owned document structure and auditable field provenance.
-- **Record review** — JSONL workspaces with full audit history, bulk and work-level metadata editing, red/green diffs, source-PDF linking, and human/LLM field ownership (high-confidence LLM proposals populate fields; lower-confidence ones stay as suggestions).
+- **Corpus Builder** — a sequenced Source → Structure/transcription → LLM & enrichment → Record construction → Review workflow whose controls adapt to the selected medium. Extraction is bounded and provenance-preserving; reviewer-owned structure/text revisions and evidence remain auditable.
+- **Record review** — JSONL workspaces with audit history, bulk/work-level metadata editing, diffs, source/evidence navigation, and human/LLM field ownership. Schema-valid model values are visible for review; calibrated autofill is a separate evidence- and reviewer-precision-aware decision.
 - **LLM review and tools** — foreground, background, and background Auto-improve runs against named Ollama or OpenAI-compatible provider profiles, each with its own concurrency limit and warmup state.
 - **Vector stores** — persistent ChromaDB collections on the local filesystem or a running Chroma server, with English/French language mirrors, background upserts, and JSONL round-tripping.
-- **RAG Research** — hybrid retrieval, cross-encoder reranking, language routing, streamed and cancellable generation, a cached Response Library, and LLM grading of answers.
+- **RAG Research** — hybrid retrieval, cross-encoder reranking, language routing, selected-evidence mode, streamed/cancellable generation, response/claim provenance memory, a cached Response Library, and LLM grading.
 - **Roles** — Admin and Researcher accounts; researchers see summarized evidence text and cannot mutate corpora.
-- **Backup & restore** — one ZIP holding workspaces, audit history, provider profiles, PDFs, and every Chroma collection with its embeddings.
-- **Bilingual and accessible** — English and French are first-class locales with enforced key parity. Keyboard access, visible focus, and WCAG 2.0 AA are release requirements.
+- **Backup & restore** — one ZIP holding workspaces, audit history, provider profiles, corpus source assets, and every Chroma collection with its embeddings.
+- **Bilingual and accessible** — English and Canadian French are first-class locales with enforced key parity. Keyboard access, visible focus, responsive/reflow behavior, forced-colors support, and WCAG 2.2 AA are acceptance criteria.
 
 See the [User Guide](docs/USER_GUIDE.md) for a full feature reference.
 
@@ -23,7 +23,7 @@ See the [User Guide](docs/USER_GUIDE.md) for a full feature reference.
 | Service | Stack | Notes |
 | --- | --- | --- |
 | `web` | Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js, served by nginx | Proxies `/api/` to the API; Storybook is available as an opt-in dev service |
-| `api` | Python 3.12, FastAPI, ChromaDB, PyMuPDF, sentence-transformers | Persistent state lives under `./data` (Chroma, SQLite auth/system stores, model cache) |
+| `api` | Python 3.12, FastAPI, ChromaDB, PyMuPDF, sentence-transformers | Authoritative corpus/build files and SQLite auth/system/provenance state live under `./data`; Chroma holds derived search/result projections |
 | LLM backend | Ollama (default) or any OpenAI-compatible endpoint | Runs on the host or elsewhere; not part of the compose stack |
 
 ## Quick start
@@ -70,25 +70,27 @@ On Docker Desktop with WSL, set `HOST_UID` and `HOST_GID` to `id -u` / `id -g` s
 
 ```bash
 # Backend and release regression tests
-pip install -r api/requirements.txt pytest
-pytest -q
+pip install -r api/requirements.txt -r api/requirements-dev.txt
+pytest -q -n auto --dist=worksteal
+pytest -q -m contract tests/test_frontend_api_contract.py
 
 # Frontend
 cd web
-npm install
-npm run typecheck && npm run test:unit && npm run build
+npm ci --no-audit --no-fund
+npm run lint && npm run typecheck && npm run typecheck:tests && npm run test:unit && npm run build
 npm run storybook            # or: docker compose --profile dev up storybook
 npm run test:e2e             # Playwright + axe-core
 ```
 
-CI (`.github/workflows/frontend.yml`) runs Ruff, mypy, ESLint, the backend tests, and the full frontend gate. See [CONTRIBUTING.md](CONTRIBUTING.md) for every gate and [AGENTS.md](AGENTS.md) for conventions.
+CI (`.github/workflows/frontend.yml`) runs Ruff, mypy, ESLint, parallel backend regression tests, a focused frontend/FastAPI contract gate, and the frontend static/browser/accessibility gates. See [CONTRIBUTING.md](CONTRIBUTING.md) for every gate, [tests/README.md](tests/README.md) for test taxonomy, and [AGENTS.md](AGENTS.md) for conventions.
 
 ## Documentation
 
 - [User Guide](docs/USER_GUIDE.md) — feature reference, operations, backup, and limitations
 - [Changelog](CHANGELOG.md) — release history; full notes live in [`docs/notes/`](docs/notes/)
-- [Architecture overview](docs/ARCHITECTURE.md) and [Contributing](CONTRIBUTING.md)
-- Design notes: [Storage](docs/STORAGE_0.36.1.md), [Shareable state and data model](docs/SHAREABLE_STATE_AND_DATA_MODEL_0.36.2.md), [Search workspace](docs/SEARCH_WORKSPACE_0.36.10.md), [Packet reduction](docs/PACKET_REDUCTION_0.30.11.md), [fr-CA localization](docs/LOCALIZATION_FR_CA.md)
+- [Architecture overview](docs/ARCHITECTURE.md), [Project context](docs/PROJECT_CONTEXT.md), and [Contributing](CONTRIBUTING.md)
+- Focused contracts: [source ingestion](docs/INGESTION_VALIDATION.md), [metadata schemas](docs/METADATA_SCHEMAS.md), [metadata memory](docs/METADATA_MEMORY.md), [design tokens](docs/DESIGN_TOKENS.md), and [fr-CA localization](docs/LOCALIZATION_FR_CA.md)
+- Version-specific design/status documents and [`docs/notes/`](docs/notes/) are historical records; use the unversioned documents above for current behavior.
 
 ## License
 

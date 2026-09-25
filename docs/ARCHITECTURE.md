@@ -1,66 +1,99 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 # Architecture overview
 
-This describes the code as it exists in 0.62.19. For feature behavior see the [User Guide](USER_GUIDE.md); for storage history see [STORAGE_0.36.1.md](STORAGE_0.36.1.md).
+This document describes the current `master` architecture. For user-visible behavior see [USER_GUIDE.md](USER_GUIDE.md); for scholarly rationale and implemented-versus-intended distinctions see [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md).
 
-## Processes
+## Runtime processes
 
-- **web** — Vue 3 single-page app built by Vite and served by nginx (`web/nginx.conf`), which proxies `/api/` to the API. Storybook is an opt-in `dev` compose profile.
-- **api** — one FastAPI process exposed through `api/app/main.py`. `api/app/application.py` builds the application, composes domain `APIRouter`s from `api/app/routers/`, and registers cross-cutting middleware/exception handling. Process-wide Chroma and job-manager services are constructed in `api/app/services.py`. Background work runs on threads inside this process; there is no external queue or worker service.
-- **LLM backend** — Ollama or an OpenAI-compatible endpoint, reached over HTTP through provider profiles (`llm.py`). Optional compose profile `ollama`.
-- **Chroma backend** — embedded `PersistentClient` by default, or `HttpClient` to a running server (optional compose profile `chroma`, or `CHROMA_BASE_URL` like `OLLAMA_BASE_URL`).
+- **web** — Vue 3 single-page application built by Vite and served by nginx. It proxies `/api/` to the API; Storybook is an opt-in development surface.
+- **api** — one FastAPI process. `api/app/main.py` is intentionally a minimal ASGI entrypoint; `application.py` constructs the app, registers middleware/exception handling, and composes domain routers from `api/app/routers/`. Shared services are constructed in `services.py`.
+- **LLM providers** — Ollama or OpenAI-compatible endpoints reached through named provider profiles.
+- **Chroma** — embedded `PersistentClient` by default or an HTTP Chroma server. Chroma stores derived search/vector projections and operational caches; it is not the canonical scholarly record store.
 
-## Backend modules (`api/app/`)
+Background work runs in the API process. There is no external worker/queue service.
 
-| Module | Responsibility |
+## Backend boundaries
+
+| Area | Current ownership |
 | --- | --- |
-| `main.py`, `application.py` | Minimal ASGI entrypoint plus FastAPI application factory and router composition. |
-| `middleware.py`, `route_policy.py`, `response_filters.py`, `validation_handlers.py` | Cross-cutting API authentication/capability enforcement, second-opinion response privacy, and stable validation-error handling. |
-| `auth.py` | `AuthStore` over SQLite: users, roles/permissions, hashed session tokens, failed-login throttle. PBKDF2 password hashes. |
-| `persistence.py`, `system_store.py` | SQLite repositories for provider profiles, annotations, languages, and the `jobs` table; locale dictionary store. |
-| `chroma_store.py` | ChromaDB access: collections, language mirrors, hybrid search, and the response cache (public name `_response_cache`, stored as `derridai_response_cache`). Distinguishes an absent cache collection from storage errors. Embedded `PersistentClient` or HTTP `HttpClient` (`chroma_connection.py`). |
-| `rag.py` | Retrieval, reranking (cross-encoder with lexical fallback that reports a warning), generation, evidence assembly. |
-| `jobs.py`, `job_state.py`, `job_llm.py`, `job_rag.py`, `job_tools.py`, `job_upsert.py` | Compatibility exports plus focused background-job managers for LLM review, RAG, LLM tools/translation, and Chroma upserts. Shared durable checkpoint/error behavior lives in `job_state.py`; job state is mirrored to the SQLite `jobs` table. |
-| `llm.py`, `llm_tools.py`, `i18n_translation.py`, `content_policy_generation.py`, `bibliography.py` | Provider calls, tool workflows (catalog lookup, grading), locale translation, researcher text-policy generation, bibliographic helpers. |
-| `corpus_builder.py` | PDF → records pipeline: `PdfCorpusRepository` (file persistence) and `PdfCorpusBuildManager` (stages, checkpoints, enrichment, review mutation). |
-| `corpus_metadata.py` | Pure metadata vocabularies, normalization, and human/LLM ownership rules. |
-| `corpus_pipeline.py` | `BuildScope` and related explicit stage context. |
-| `corpus_publication.py` | Pure publication validation and serialization. |
-| `researcher_view.py` | Evidence redaction for Researcher accounts. |
+| Application composition | `main.py`, `application.py`, `middleware.py`, `route_policy.py`, `response_filters.py`, `validation_handlers.py` |
+| HTTP routes | `routers/{admin,annotations,auth,chroma,corpus,health,i18n,jobs,llm,stores,system,system_data}.py` |
+| Corpus orchestration | `corpus_builder.py` plus focused `corpus_*` modules for lifecycle, manifest workflow, segmentation, enrichment, review, quality, publication, and schema/profile behavior |
+| Source ingestion | `corpus_extraction.py`, `source_media.py`, `source_text.py`, `source_audio.py`, `source_gutenberg.py`, `source_safety.py`, `source_quality.py`, `source_kinds.py` |
+| Metadata schemas and progressive precedent | `metadata_schema.py`, `metadata_schema_store.py`, `metadata_exemplars.py`, `metadata_exemplar_projection.py`, `metadata_exemplar_retrieval.py`, `metadata_memory.py`, `metadata_adjudication_cache.py` |
+| Durable provenance / Research memory | `provenance_memory.py`, `system_store.py`, related Research/job persistence |
+| Search/vector storage | `chroma_store.py`, `chroma_connection.py`, `system_chroma_console.py` |
+| Research/RAG | `rag.py`, `researcher_view.py`, bibliography/evaluation helpers |
+| Background jobs | `job_llm.py`, `job_rag.py`, `job_tools.py`, `job_upsert.py`; `job_state.py` owns shared durable state; `jobs.py` is a compatibility export layer |
+| Providers/tools | `llm.py`, `llm_tools.py`, `provider_profile_options.py`, translation/content-policy helpers |
+| Auth/system persistence | `auth.py`, `persistence.py`, `system_store.py`, `database_backend.py` |
 
-`corpus_builder.py` re-exports names moved into `corpus_metadata.py` and `corpus_publication.py`, so existing imports keep working.
+The decomposition is intentional: do not move ordinary routes back into `main.py`, background implementations back into `jobs.py`, or extracted corpus logic back into one manager merely to reduce import count.
+
+## Sources and corpus build flow
+
+Corpus Builder is source-media aware rather than PDF-only.
+
+1. **Register and validate source.** Enforce format-specific byte/resource limits and reject unsafe active content before expensive extraction.
+2. **Extract/transcribe.** Preserve the immutable extracted source and extractor/tool/version provenance. PDF extraction may use OCR; audio may use transcription/diarization; text/document/image/Gutenberg paths have their own adapters.
+3. **Normalize source spans.** Build source units with medium-appropriate coordinates. Pages/printed folios are meaningful for paged documents; audio evidence uses time ranges/speakers.
+4. **Structure and segment.** Reviewer-confirmed structure is authoritative. Semantic boundary proposals are validated for text conservation and coherent source mapping.
+5. **Enrich.** Metadata-family tasks combine deterministic facts, optional run guidance, and bounded evidence-bound reviewed precedents. Model output is a proposal until schema/provenance checks pass.
+6. **Review.** Reviewer edits are revisioned and preserve field/evidence provenance. The frontend applies ordinary review edits optimistically while serializing conflicting same-record persistence and handling rejection/rebase/rollback.
+7. **Publish/index.** Validated records are serialized for publication. Vector indexes are explicit derived projections that can be rebuilt from authoritative records.
+
+The compatibility storage namespace still contains `.home/pdf-corpus`; that path name is historical and must not be interpreted as a PDF-only product contract.
+
+## Metadata and memory authority
+
+DerridAI has multiple kinds of “memory”; they must not be flattened into one database concept.
+
+- **Canonical scholarly state:** reviewed records/RecordRevisions, field assertions and review decisions, exact evidence bindings, source identity.
+- **Metadata exemplars:** evidence-bound reviewed precedents derived from canonical review state. Their semantic index is rebuildable. Corrections preserve rejected values as negative evidence; confirmed absence is reusable only when explicitly evidence-bound.
+- **Research response/claim memory:** prior Research responses, generated claims, and support bindings. It is separate from metadata exemplar retrieval.
+- **Exact adjudication cache:** deterministic/same-context assistance; it is not a substitute for evidence-bound semantic precedent.
+- **Response cache:** operational RAG cache/Response Library infrastructure, not corpus truth.
+- **Chroma projections:** search/vector indexes and internal semantic projections. Deleting/rebuilding them must not delete canonical review/provenance data.
+
+Support/exemplar resolution is revision-aware. When the referenced source revision/evidence can no longer be resolved, the binding is marked stale/unresolvable rather than silently rebound to newer text.
 
 ## Persistence
 
-All paths derive from `CHROMA_DATA_ROOT` (default `/data`, mounted from `./data`).
+All paths derive from `CHROMA_DATA_ROOT` (default `/data`).
 
-| Data | Location | Notes |
+| Data | Storage | Authority / restart behavior |
 | --- | --- | --- |
-| Vector collections, response cache | `CHROMA_PATH` (`/data/chroma`) when `CHROMA_MODE=embedded`; otherwise a Chroma HTTP server (`CHROMA_BASE_URL`) | Embedded: `PersistentClient`, one writer per path. HTTP: `HttpClient` to the compose `chroma` profile or a host-run server. |
-| Users, roles, sessions, login failures | `AUTH_DB_PATH` (SQLite) | Session tokens are stored hashed; the throttle table is keyed by lower-cased username. |
-| Provider profiles, annotations, languages, jobs | `SYSTEM_DB_PATH` (SQLite) | WAL journaling. Created directly; no migrations. |
-| PDF assets, builds, checkpoints, publications | `<CHROMA_DATA_ROOT>/.home/pdf-corpus/{assets,builds,publications}` | JSON/JSONL files written atomically (temp file, `fsync`, `os.replace`). Builds hold `records.jsonl` and `checkpoints/<name>.json`. |
-| Chroma upsert request spool | `UPSERT_JOB_SPOOL_PATH` (default beside the system DB) | Lets queued vector builds survive as inspectable files; LLM job bodies are deliberately not spooled. |
-| Browser workspace and preferences | IndexedDB/localStorage | Isolated per account role in the browser. |
+| Users, roles, sessions, login throttle | Auth SQLite | Authoritative auth state |
+| Provider profiles, annotations, languages, job snapshots/history, provenance/memory state | System SQLite | Durable application state |
+| Source assets, build/review checkpoints, publications | Files under DerridAI data root | Authoritative corpus/build artifacts; atomic writes where applicable |
+| Vector/search collections | Chroma embedded path or HTTP server | Derived/rebuildable from canonical data |
+| Metadata exemplar semantic projection | Internal Chroma/system projection | Derived/rebuildable; hidden from ordinary research collections |
+| Response cache | Chroma/system cache role | Operational cache, not corpus truth |
+| Upsert request spool | `UPSERT_JOB_SPOOL_PATH` | Durable queued vector-build request material |
+| Browser workspaces/preferences | IndexedDB/localStorage | Per-origin/browser UI state |
 
-Job state is process-local first: on restart, jobs left `queued`, `running`, or `cancelling` are marked `failed` (interrupted) and never replayed automatically. Failures to persist job checkpoints or collection status are recorded on the job rather than discarded.
+Active job execution is process-local, but job snapshots/history are mirrored to SQLite. On restart, work left `queued`, `running`, or `cancelling` is marked failed/interrupted rather than automatically replayed; completed history remains inspectable. Job state is not coordinated across multiple API processes.
 
-## Corpus build flow
+## Search and Research
 
-1. **Source** — `save_asset` hashes the PDF (`pdf-<sha256[:24]>`), extracts blocks with PyMuPDF (OCR when needed), and stores the PDF, metadata, and `*.blocks.jsonl`. Page-label lookup failures become asset warnings.
-2. **Build** — the manager prepares a `BuildScope` (manifest, source and semantic blocks, source-quality assessment), constructs segmentation topology (boundary decisions with second-reader checks), schedules per-record enrichment, then finalizes and validates.
-3. **Enrichment** — per record: source-quality gate, task preparation, metadata-family execution, reconciliation. Reviewer-owned fields are re-read live before each family runs and are never overwritten; if ownership cannot be read the family stops with a failed status. LLM values above the 65% confidence threshold and schema-valid populate fields; lower ones stay as `proposed_value`.
-4. **Checkpoints and review** — stage results are checkpointed so a failed build is resumable; records are saved under a lock while reviewers edit. Status ledgers and `warnings` on the build record what degraded.
-5. **Publication** — validated records are serialized to JSONL and can be upserted into a Chroma collection as a background job.
+Search can operate over browser-loaded records or server-backed corpus/vector collections. Research composes dense/lexical/MMR retrieval, deduplication and optional reranking, or can skip retrieval and synthesize from researcher-selected evidence. Evidence packets carry source identity and citation metadata into generation. Deterministic code owns stable IDs/citation resolution wherever the stored data can answer exactly.
 
-## Authentication and roles
+System Data exposes administrative inspection of application/system datasets, including metadata exemplars/memory and restricted system-Chroma querying, without presenting internal vector collections as scholarly corpora.
 
-Sessions are random tokens set in an HttpOnly, `SameSite=Lax` cookie (`derridai_session`, 14 days); `Secure` follows `SESSION_COOKIE_SECURE`. `AuthStore.authenticate` runs inside a `BEGIN IMMEDIATE` transaction, does equivalent password-hash work for unknown users, and locks a username key for `AUTH_LOGIN_LOCKOUT_SECONDS` after `AUTH_LOGIN_MAX_FAILURES` failures; success clears the counter. The throttle is per username, not per IP. Admin and Researcher roles are enforced in the API; researchers receive redacted evidence and cannot mutate corpora.
+## Frontend
 
-## Frontend (`web/src/`)
+`web/src/` is Vue 3 + TypeScript with Pinia and Vue Router:
 
-Vue 3 + Pinia + Vue Router. `views/` and `components/` (each with a Storybook story), `stores/` for state, `api/` for typed API calls, `domain/` for pure rule modules with Vitest coverage (corpus lifecycle, review rules), and `runtime/` for legacy feature renderers still being migrated view by view.
+- `views/` owns page composition;
+- `components/` owns reusable UI/Storybook surfaces;
+- `api/` owns typed transport contracts;
+- `domain/` owns pure rules/formatting;
+- `composables/` and `stores/` own reusable stateful behavior;
+- `runtime/` is a remaining compatibility/orchestration boundary, not the preferred home for new feature logic;
+- semantic tokens in `styles/tokens.css` and accessible primitives are the styling/interaction contract.
 
-## Known limits
+## Known constraints
 
-Single API process; job state is not shared across processes. `chroma_store.py` and `corpus_builder.py` remain large. See [STATIC_ANALYSIS_FOLLOWUPS.md](STATIC_ANALYSIS_FOLLOWUPS.md) for tracked typing and lint debt.
+- The application still assumes one API process for in-flight job execution and mutable embedded-storage coordination.
+- `chroma_store.py`, `corpus_builder.py`, and some frontend compatibility/style surfaces remain large; refactor them only along verified domain seams with regression coverage.
+- Historical versioned design documents describe the release that created them, not the current architecture.

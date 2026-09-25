@@ -1,5 +1,7 @@
 # DerridAI 0.36.1 — fresh-start SQLite persistence
 
+> Historical release design note. This documents the 0.36.1 storage contract, not current `master`. For current persistence boundaries, use [ARCHITECTURE.md](ARCHITECTURE.md).
+
 ## Scope
 
 0.36.1 keeps DerridAI's local-first persistence split simple:

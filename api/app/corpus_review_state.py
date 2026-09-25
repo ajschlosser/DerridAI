@@ -4,7 +4,7 @@
 Queue membership, the "review_state" badge, and acceptance eligibility are all
 derived from a record's own fields rather than independently persisted, so a saved
 metadata decision cannot leave behind a stale review flag. Moved verbatim out of
-PdfCorpusBuildManager (see PROGRESS.md); the stateful review-mutation methods
+PdfCorpusBuildManager (extracted during the 0.70 decomposition); the stateful review-mutation methods
 (set_disposition, review_decision, patch_record_text, etc.) stay on the manager.
 """
 
