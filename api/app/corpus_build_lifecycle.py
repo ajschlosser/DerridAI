@@ -42,7 +42,6 @@ from .enrichment_ledger import RECHECK, RECHECK_SEAL
 from .error_severity import severity as error_severity
 from .field_assertions import (
     create_unresolved_assertion,
-    migrate_record_assertions,
     project_record_assertions,
     reset_fields_for_evaluation,
 )
