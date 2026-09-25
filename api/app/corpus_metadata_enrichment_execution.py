@@ -47,7 +47,7 @@ from .enrichment_ledger import (
     CALL,
     PROPOSED,
 )
-from .field_assertions import migrate_record_assertions
+from .field_assertions import current_assertion_by_name, migrate_record_assertions
 from .metadata_adjudication_cache import suggestions as adjudication_suggestions
 from .metadata_schema import (
     CORE_FIELDS,
@@ -281,7 +281,7 @@ class MetadataEnrichmentExecutionMixin:
             record["needs_review"] = True
             record["review_reason"] = "Record exceeds this model's metadata context envelope; metadata was inferred from head/tail context and requires review."
 
-        human_status = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
+        migrate_record_assertions(record, schema)
         cached_prefills: dict[str, Any] = {}
         for field in schema.fields:
             cached = adjudication_suggestions(
@@ -297,8 +297,12 @@ class MetadataEnrichmentExecutionMixin:
         if cached_prefills:
             record["metadata_adjudication_prefills"] = cached_prefills
         human_locked_fields = sorted(
-            field for field, info in human_status.items()
-            if isinstance(info, dict) and str(info.get("status") or "") in {"human_confirmed", "human_override"}
+            field.name
+            for field in schema.fields
+            if (
+                (assertion := current_assertion_by_name(record, field.name)) is not None
+                and assertion.authority_status in {"human_confirmed", "human_override"}
+            )
         )
         def base_context_for(group_fields: list[str]) -> str:
             # Each LLM family receives only precedents for fields it can actually
@@ -443,11 +447,19 @@ CURRENT REVIEWED RECORD TEXT:
                     continue
                 if isinstance(live_record, dict):
                     touched = {str(value) for value in (live_record.get("human_touched_fields") or [])}
-                    live_status = live_record.get("metadata_field_status") if isinstance(live_record.get("metadata_field_status"), dict) else {}
-                    family_fields = self._schema_for(build_id).family_fields().get(task_name, set())
+                    live_schema = self._schema_for(build_id)
+                    migrate_record_assertions(live_record, live_schema)
+                    family_fields = live_schema.family_fields().get(task_name, set())
                     all_owned = bool(family_fields) and all(
-                        isinstance(live_status.get(field), dict) and str(live_status[field].get("status") or "") in {"human_confirmed", "human_override", "deterministic"}
-                        for field in family_fields if field not in {"attribution_confidence", "semantic_classification_confidence"}
+                        (
+                            (assertion := current_assertion_by_name(live_record, field)) is not None
+                            and (
+                                assertion.authority_status in {"human_confirmed", "human_override"}
+                                or assertion.derivation_method == "deterministic"
+                            )
+                        )
+                        for field in family_fields
+                        if field not in {"attribution_confidence", "semantic_classification_confidence"}
                     )
                     if "__text__" in touched or "__review__" in touched or all_owned:
                         reason = "Human reviewed this record before automatic enrichment." if {"__text__", "__review__"} & touched else "All fields in this metadata family are already human-owned or deterministic."
