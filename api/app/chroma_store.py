@@ -129,7 +129,9 @@ class Embeddings:
         provider: str | None = None,
         model: str | None = None,
     ) -> list[list[float]]:
-        provider = (provider or settings.embedding_provider).strip().lower()
+        provider = (provider or settings.embedding_provider).strip()
+        if not provider.startswith("profile:"):
+            provider = provider.lower()
 
         if provider == "precomputed":
             vectors: list[list[float]] = []
@@ -197,11 +199,13 @@ class Embeddings:
         provider: str | None = None,
         model: str | None = None,
     ) -> list[float]:
-        provider = (provider or settings.embedding_provider).strip().lower()
+        provider = (provider or settings.embedding_provider).strip()
+        if not provider.startswith("profile:"):
+            provider = provider.lower()
         if provider == "precomputed":
             raise ValueError(
                 "Semantic search cannot create a query embedding for a "
-                "precomputed-vector collection. Use chroma or ollama."
+                "precomputed-vector collection. Use Chroma or a configured provider profile."
             )
         return self.embed(
             [query],
@@ -603,7 +607,9 @@ class ChromaStore:
         A one-item probe catches missing Ollama models and records the actual vector
         dimension so dimension mismatches fail before a collection is populated.
         """
-        provider = str(provider or settings.embedding_provider).strip().lower()
+        provider = str(provider or settings.embedding_provider).strip()
+        if not provider.startswith("profile:"):
+            provider = provider.lower()
         if provider not in {"chroma", "ollama", "precomputed"} and not provider.startswith("profile:"):
             raise ValueError(
                 "Embedding provider must be chroma, precomputed, or profile:<provider-id>."
