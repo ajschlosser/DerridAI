@@ -39,6 +39,55 @@ def test_model_confidence_and_human_confirmation_preserve_derivation() -> None:
     assert not validate_projection(record)
 
 
+def test_confirmation_promotes_an_unresolved_model_candidate_without_changing_derivation() -> None:
+    record = {
+        "record_id": "r-confirm",
+        "record_revision": 1,
+        "speaker": "Derrida",
+        "metadata_field_status": {
+            "speaker": {"status": "unresolved", "method": "llm", "confidence": 0.61}
+        },
+    }
+    migrate_record_assertions(record)
+    proposed = current_assertion_by_name(record, "speaker")
+    assert proposed is not None and proposed.value_status == "unresolved"
+
+    confirmed = confirm_assertion(record, proposed, actor="reviewer")
+    project_record_assertions(record)
+
+    assert confirmed.derivation_method == "model"
+    assert confirmed.authority_status == "human_confirmed"
+    assert confirmed.value_status == "present"
+    assert confirmed.evaluation_status == "value_supported"
+    assert record["metadata_field_status"]["speaker"]["status"] == "human_confirmed"
+
+
+def test_projected_compatibility_state_cannot_reimport_over_canonical_state_on_revision_change() -> None:
+    record = {
+        "record_id": "r-projection",
+        "record_revision": 1,
+        "speaker": "Derrida",
+        "metadata_field_status": {
+            "speaker": {"status": "model_inferred", "method": "llm", "confidence": 0.82}
+        },
+    }
+    migrate_record_assertions(record)
+    proposed = current_assertion_by_name(record, "speaker")
+    assert proposed is not None
+    confirmed = confirm_assertion(record, proposed, actor="reviewer")
+    project_record_assertions(record)
+    selected_id = confirmed.assertion_id
+
+    record["record_revision"] = 2
+    migrate_record_assertions(record)
+    current = current_assertion_by_name(record, "speaker")
+
+    assert current is not None
+    assert current.assertion_id == selected_id
+    assert current.authority_status == "human_confirmed"
+    assert record["metadata_field_status"]["speaker"]["assertion_id"] == selected_id
+
+
 def test_legacy_migration_is_idempotent_and_preserves_confirmed_absence() -> None:
     record = {
         "record_id": "r2",
