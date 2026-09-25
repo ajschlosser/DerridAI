@@ -234,7 +234,12 @@ from .enrichment_ledger import (
     EnrichmentLedger,
 )
 from .error_severity import severity as error_severity
-from .field_assertions import migrate_record_assertions
+from .field_assertions import (
+    create_unresolved_assertion,
+    current_assertion_by_name,
+    migrate_record_assertions,
+    project_record_assertions,
+)
 from .main_text_start import infer_main_text_start
 from .metadata_exemplar_projection import (
     dirty_metadata_exemplar_build_ids,
@@ -2605,17 +2610,32 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                         fallback["metadata_needs_attention"] = True
                         profile_for_failure = self._profile_for(build_id)
                         required_failure_fields = list(profile_for_failure.get("required_metadata_fields") or [])
-                        failure_status = fallback.setdefault("metadata_field_status", {})
+                        schema_for_failure = self._schema_for(build_id)
+                        migrate_record_assertions(fallback, schema_for_failure)
                         for field in required_failure_fields:
-                            current = failure_status.get(field) if isinstance(failure_status.get(field), dict) else {}
-                            if current.get("status") == "deterministic":
+                            current = current_assertion_by_name(fallback, field)
+                            if current is not None and current.derivation_method == "deterministic":
                                 continue
-                            failure_status[field] = {
-                                "status": "unresolved", "method": "llm", "confidence": None,
-                                "reason_code": "llm_failed",
-                                "reason": f"Metadata worker failed before this field could be validated: {exc}",
-                            }
-                        fallback["metadata_incomplete_fields"] = [field for field in required_failure_fields if str((failure_status.get(field) or {}).get("status") or "") in {"unresolved", "invalid"} or fallback.get(field) in (None, "", [])]
+                            create_unresolved_assertion(
+                                fallback,
+                                field,
+                                schema=schema_for_failure,
+                                derivation_method="model",
+                                evaluation_status="evaluation_failed",
+                                method="llm",
+                                reason=f"Metadata worker failed before this field could be validated: {exc}",
+                                legacy_metadata={"reason_code": "llm_failed"},
+                            )
+                        project_record_assertions(fallback)
+                        fallback["metadata_incomplete_fields"] = [
+                            field
+                            for field in required_failure_fields
+                            if (
+                                (current_assertion_by_name(fallback, field) is None)
+                                or current_assertion_by_name(fallback, field).value_status in {"unresolved", "invalid"}
+                                or fallback.get(field) in (None, "", [])
+                            )
+                        ]
                         fallback["metadata_stage_status"] = {**(fallback.get("metadata_stage_status") or {}), "worker": "needs_review"}
                         reasons = list(fallback.get("metadata_attention_reasons") or [])
                         reasons.append(f"Metadata worker failed and requires review: {exc}")
