@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
+import type { CorpusRecord } from "../api/pdfCorpus";
 import CorpusBoundaryAdjudication from "./CorpusBoundaryAdjudication.vue";
 
 const meta: Meta<typeof CorpusBoundaryAdjudication> = {
@@ -7,7 +8,6 @@ const meta: Meta<typeof CorpusBoundaryAdjudication> = {
 };
 export default meta;
 type Story = StoryObj<typeof CorpusBoundaryAdjudication>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- SA-16: intentionally sparse Storybook fixture exercises partial/loading data without fabricating unrelated fields.
 export const RecommendedMove: Story = {
   args: {
     record: {
@@ -27,7 +27,7 @@ export const RecommendedMove: Story = {
         reason: "The next paragraph completes the same quotation frame.",
         suggested_after_block_id: "b14",
       },
-    } as any,
+    } as CorpusRecord,
     canPrevious: true,
     canNext: true,
     busy: false,
@@ -42,7 +42,7 @@ export const NotYetChecked: Story = {
       text_length: 7,
       source_block_ids: ["b1"],
       source_spans: [],
-    } as any,
+    } as CorpusRecord,
     canPrevious: false,
     canNext: true,
     busy: false,
