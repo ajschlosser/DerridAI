@@ -72,7 +72,8 @@ describe("System Data metadata examples", () => {
     const selects = wrapper.findAll(".filters select");
     await selects[0].setValue("position_holder");
     await selects[2].setValue("en");
-    await wrapper.find(".filter-actions .btn").trigger("click");
+    await flushPromises();
+    await wrapper.get("form.filters").trigger("submit");
     await flushPromises();
 
     expect(systemApi.systemMetadataExemplars).toHaveBeenLastCalledWith(
