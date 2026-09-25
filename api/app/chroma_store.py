@@ -1216,11 +1216,21 @@ class ChromaStore:
             collection_metadata[self._MODEL_KEY] = model
 
         try:
-            col = self.client.create_collection(
-                name=name,
-                metadata=collection_metadata,
-                configuration={"hnsw": {"space": metric}},
-            )
+            try:
+                col = self.client.create_collection(
+                    name=name,
+                    metadata=collection_metadata,
+                    configuration={"hnsw": {"space": metric}},
+                )
+            except TypeError:
+                # Chroma 1.x releases do not all expose collection configuration
+                # through the same constructor. The distance contract is already
+                # retained in metadata, so creation remains deterministic on
+                # clients that require the older constructor shape.
+                col = self.client.create_collection(
+                    name=name,
+                    metadata=collection_metadata,
+                )
         except Exception as exc:
             # Chroma's exception type differs across releases. Convert the race
             # between the explicit existence check and create into a 409-capable
