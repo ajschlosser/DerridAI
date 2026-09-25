@@ -176,6 +176,19 @@ def current_assertion(record: dict[str, Any], field_id: str) -> FieldAssertion |
     return values[-1] if values else None
 
 
+def current_assertions(record: dict[str, Any]) -> list[FieldAssertion]:
+    """Return the selected assertion for every field identity on a record."""
+    selected = record.get("current_field_assertions")
+    if not isinstance(selected, dict):
+        return []
+    result: list[FieldAssertion] = []
+    for field_id in selected:
+        assertion = current_assertion(record, str(field_id))
+        if assertion is not None:
+            result.append(assertion)
+    return result
+
+
 def current_assertion_by_name(record: dict[str, Any], field_name: str) -> FieldAssertion | None:
     """Return the selected assertion for a field regardless of schema identity."""
     selected = record.get("current_field_assertions")
@@ -338,25 +351,119 @@ def confirm_assertion(record: dict[str, Any], assertion: FieldAssertion, *, acto
     )
 
 
-def override_assertion(record: dict[str, Any], field_name: str, value: Any, *, schema: Any | None = None, supersedes: FieldAssertion | None = None, actor: str | None = None, reason: str = "") -> FieldAssertion:
+def create_human_assertion(
+    record: dict[str, Any],
+    field_name: str,
+    value: Any,
+    *,
+    schema: Any | None = None,
+    supersedes: FieldAssertion | None = None,
+    override: bool = False,
+    actor: str | None = None,
+    reason: str = "",
+    method: str = "human_review",
+) -> FieldAssertion:
+    present = value not in (None, "", [])
     return _new_assertion(
-        record, field_name=field_name, schema=schema, value=value,
-        derivation_method="human", evaluation_status="value_supported",
-        authority_status="human_override", method="human_review", actor=actor,
-        reason=reason or "Human record-level override.",
+        record,
+        field_name=field_name,
+        schema=schema,
+        value=value,
+        derivation_method="human",
+        evaluation_status="value_supported" if present else "no_supported_value",
+        authority_status="human_override" if override else "human_confirmed",
+        value_status="present" if present else "unresolved",
+        method=method,
+        actor=actor,
+        reason=reason or ("Human record-level override." if override else "Human-reviewed value."),
         supersedes_assertion_id=supersedes.assertion_id if supersedes else None,
     )
 
 
+def override_assertion(record: dict[str, Any], field_name: str, value: Any, *, schema: Any | None = None, supersedes: FieldAssertion | None = None, actor: str | None = None, reason: str = "") -> FieldAssertion:
+    return create_human_assertion(
+        record,
+        field_name,
+        value,
+        schema=schema,
+        supersedes=supersedes,
+        override=True,
+        actor=actor,
+        reason=reason,
+        method="human_review",
+    )
+
+
 def confirm_absence(record: dict[str, Any], field_name: str, *, schema: Any | None = None, prior: FieldAssertion | None = None, actor: str | None = None, reason: str = "") -> FieldAssertion:
-    derivation: DerivationMethod = prior.derivation_method if prior and prior.derivation_method == "model" else "human"
+    derivation: DerivationMethod = prior.derivation_method if prior else "human"
+    evaluated = prior is not None and prior.evaluation_status != "not_evaluated"
     return _new_assertion(
         record, field_name=field_name, schema=schema, value=None,
         derivation_method=derivation, evaluation_status="no_supported_value",
         authority_status="human_confirmed", value_status="confirmed_absent",
         method="human_review", actor=actor,
+        confidence=prior.confidence if evaluated else None,
+        calibration=copy.deepcopy(prior.calibration) if prior else None,
+        evidence=copy.deepcopy(prior.evidence) if prior else [],
+        model=prior.model if prior else None,
+        run_id=prior.run_id if prior else None,
+        schema_id=prior.schema_id if prior else None,
+        schema_version=prior.schema_version if prior else None,
         reason=reason or "Reviewer confirmed that no supported value applies.",
         supersedes_assertion_id=prior.assertion_id if prior else None,
+    )
+
+
+def create_unresolved_assertion(
+    record: dict[str, Any],
+    field_name: str,
+    *,
+    schema: Any | None = None,
+    derivation_method: DerivationMethod = "other",
+    evaluation_status: EvaluationStatus = "not_evaluated",
+    method: str,
+    reason: str,
+    confidence: float | None = None,
+    legacy_metadata: dict[str, Any] | None = None,
+) -> FieldAssertion:
+    """Record an unresolved field without inventing semantic absence."""
+    if evaluation_status == "not_evaluated":
+        confidence = None
+    return _new_assertion(
+        record,
+        field_name=field_name,
+        schema=schema,
+        value=None,
+        derivation_method=derivation_method,
+        evaluation_status=evaluation_status,
+        value_status="unresolved",
+        method=method,
+        reason=reason,
+        confidence=confidence,
+        legacy_metadata=copy.deepcopy(legacy_metadata or {}),
+    )
+
+
+def replace_assertion_evidence(
+    record: dict[str, Any],
+    assertion: FieldAssertion,
+    evidence: list[dict[str, Any]],
+    *,
+    actor: str | None = None,
+    reason: str = "",
+) -> FieldAssertion:
+    """Supersede an assertion when a reviewer changes its evidence binding."""
+    return store_assertion(
+        record,
+        assertion.model_copy(update={
+            "assertion_id": f"assertion-{uuid.uuid4().hex}",
+            "record_revision": int(record.get("record_revision") or assertion.record_revision or 1),
+            "evidence": copy.deepcopy(evidence),
+            "actor": actor or assertion.actor,
+            "reason": reason or assertion.reason,
+            "supersedes_assertion_id": assertion.assertion_id,
+            "created_at": _now(),
+        }),
     )
 
 
@@ -634,15 +741,26 @@ def migrate_record_assertions(record: dict[str, Any], schema: Any | None = None)
     return project_record_assertions(record)
 
 
-def confirm_model_assertions(record: dict[str, Any], schema: Any | None = None, *, actor: str | None = None) -> int:
-    """Confirm current model candidates without changing their derivation."""
+def confirm_model_assertions(
+    record: dict[str, Any],
+    schema: Any | None = None,
+    *,
+    actor: str | None = None,
+    fields: set[str] | list[str] | tuple[str, ...] | None = None,
+) -> int:
+    """Confirm selected current model candidates without changing derivation."""
     migrate_record_assertions(record, schema)
+    allowed = {str(field) for field in fields} if fields is not None else None
     changed = 0
-    for field_id in list(record.get("current_field_assertions") or {}):
-        assertion = current_assertion(record, field_id)
-        if assertion and assertion.derivation_method == "model" and assertion.authority_status == "unreviewed":
+    for assertion in current_assertions(record):
+        if not assertion.field_name:
+            continue
+        if allowed is not None and assertion.field_name not in allowed:
+            continue
+        if assertion.derivation_method == "model" and assertion.authority_status == "unreviewed":
             confirm_assertion(record, assertion, actor=actor, reason="Confirmed when the reviewer accepted the record.")
             changed += 1
+    project_record_assertions(record)
     return changed
 
 
