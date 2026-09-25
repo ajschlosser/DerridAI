@@ -683,15 +683,38 @@ class ReviewActionsMixin:
                 target["metadata_evidence"] = evidence_map
             target[key] = value
             if key in self._editable_fields(build_id):
-                is_override = key in MANIFEST_INHERITED_FIELDS
-                status[key] = {
-                    "status": "human_override" if is_override else "human_confirmed",
-                    "method": "human_record_override" if is_override else "human",
-                    "confidence": 1.0,
-                    "reason_code": "human_override" if is_override else "human_confirmed",
-                    "reason": "Human record-level override of inherited document metadata." if is_override else "Confirmed during record review.",
-                }
-                decision_log.append({"field": key, "value": value, "at": iso_now(), "source": "human_override" if is_override else "human"})
+                schema = self._schema_for(build_id)
+                migrate_record_assertions(target, schema)
+                prior_assertion = current_assertion_by_name(target, key)
+                is_manifest_override = key in MANIFEST_INHERITED_FIELDS
+                if (
+                    prior_assertion is not None
+                    and prior_assertion.derivation_method == "model"
+                    and prior_assertion.value == value
+                    and not is_manifest_override
+                ):
+                    confirm_assertion(
+                        target,
+                        prior_assertion,
+                        reason="Confirmed during record review.",
+                    )
+                else:
+                    create_human_assertion(
+                        target,
+                        key,
+                        value,
+                        schema=schema,
+                        supersedes=prior_assertion,
+                        override=bool(is_manifest_override or (prior_assertion is not None and prior_assertion.value != value)),
+                        reason=(
+                            "Human record-level override of inherited document metadata."
+                            if is_manifest_override
+                            else "Confirmed during record review."
+                        ),
+                        method="human_record_override" if is_manifest_override else "human",
+                    )
+                project_record_assertions(target)
+                decision_log.append({"field": key, "value": value, "at": iso_now(), "source": "human_override" if is_manifest_override else "human"})
         constraint_changes = apply_metadata_constraints(target)
         for item in constraint_changes:
             decision_log.append({"field": item["field"], "value": item["value"], "at": iso_now(), "source": "deterministic_constraint", "reason": item["reason"]})
@@ -780,13 +803,35 @@ class ReviewActionsMixin:
                     evidence_map.pop(key, None)
                     record["metadata_evidence"] = evidence_map
                 record[key] = value
-                override = key in MANIFEST_INHERITED_FIELDS
-                statuses[key] = {
-                    "status": "human_override" if override else "human_confirmed",
-                    "method": "human_bulk_override" if override else "human_bulk",
-                    "confidence": 1.0, "reason_code": "human_bulk",
-                    "reason": "Applied through bulk record metadata editing.",
-                }
+                schema = self._schema_for(build_id)
+                migrate_record_assertions(record, schema)
+                prior_assertion = current_assertion_by_name(record, key)
+                override = key in MANIFEST_INHERITED_FIELDS or (
+                    prior_assertion is not None and prior_assertion.value != value
+                )
+                if (
+                    prior_assertion is not None
+                    and prior_assertion.derivation_method == "model"
+                    and prior_assertion.value == value
+                    and key not in MANIFEST_INHERITED_FIELDS
+                ):
+                    confirm_assertion(
+                        record,
+                        prior_assertion,
+                        reason="Confirmed through bulk record metadata editing.",
+                    )
+                else:
+                    create_human_assertion(
+                        record,
+                        key,
+                        value,
+                        schema=schema,
+                        supersedes=prior_assertion,
+                        override=override,
+                        reason="Applied through bulk record metadata editing.",
+                        method="human_bulk_override" if override else "human_bulk",
+                    )
+                project_record_assertions(record)
                 decisions.append({"field": key, "value": value, "at": iso_now(), "source": "human_bulk"})
             constraint_changes = apply_metadata_constraints(record)
             for item in constraint_changes:
