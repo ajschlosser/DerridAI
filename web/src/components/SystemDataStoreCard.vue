@@ -10,6 +10,7 @@ defineProps<{
   status: string;
   count?: string;
   sensitive?: boolean;
+  actionLabel: string;
 }>();
 defineEmits<{ open: [] }>();
 </script>
@@ -28,7 +29,7 @@ defineEmits<{ open: [] }>();
     <div class="store-action">
       <strong v-if="count">{{ count }}</strong>
       <button class="btn tiny" type="button" @click="$emit('open')">
-        <slot name="action">Open</slot>
+        {{ actionLabel }}
         <AppIcon name="chevron-right" />
       </button>
     </div>
