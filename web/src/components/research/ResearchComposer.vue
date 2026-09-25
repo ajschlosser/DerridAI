@@ -2,7 +2,11 @@
 import { computed, ref } from "vue";
 import AppIcon from "../AppIcon.vue";
 import { useI18nStore } from "../../stores/i18n";
-import type { ResearchProfile, ResearchStore } from "../../types/research";
+import type {
+  ResearchProfile,
+  ResearchPromptMetadataPolicy,
+  ResearchStore,
+} from "../../types/research";
 
 const props = withDefaults(
   defineProps<{
@@ -13,6 +17,7 @@ const props = withDefaults(
     responseLanguage: string;
     preset: string;
     evidenceCount: number;
+    promptMetadata: ResearchPromptMetadataPolicy;
     stores: ResearchStore[];
     profiles: ResearchProfile[];
     history: Array<Record<string, unknown>>;
@@ -33,6 +38,7 @@ const emit = defineEmits<{
   "update:preset": [value: string];
   run: [];
   settings: [];
+  promptMetadata: [];
   runs: [];
   history: [item: Record<string, unknown>];
 }>();
@@ -55,6 +61,11 @@ const selectedProfile = computed(() =>
 const selectedStore = computed(() =>
   props.stores.find((store) => store.name === props.sourceCollection),
 );
+const promptMetadataCounts = computed(() => ({
+  evidence: props.promptMetadata?.evidence?.length || 0,
+  context: props.promptMetadata?.context?.length || 0,
+  record: props.promptMetadata?.record?.length || 0,
+}));
 function historyLabel(item: Record<string, unknown>) {
   const value = String(item.prompt || item.instructions || i18n.t("research.saved_prompt"))
     .replace(/\s+/g, " ")
@@ -223,6 +234,25 @@ function pickHistory(item: Record<string, unknown>) {
           )
         }}</small>
       </label>
+      <div class="research-context-action">
+        <span>{{ i18n.t("research.prompt_metadata", "Prompt metadata") }}</span>
+        <button
+          class="btn research-context-action-button"
+          type="button"
+          :disabled="!canConfigure"
+          @click="emit('promptMetadata')"
+        >
+          <AppIcon name="record" />{{ i18n.t("research.configure_prompt_metadata") }}
+        </button>
+        <small>
+          {{ i18n.t("research.metadata_with_evidence", "Evidence") }}
+          {{ promptMetadataCounts.evidence }} ·
+          {{ i18n.t("research.metadata_as_context", "Context") }}
+          {{ promptMetadataCounts.context }} ·
+          {{ i18n.t("research.metadata_with_record", "Record") }}
+          {{ promptMetadataCounts.record }}
+        </small>
+      </div>
       <label>
         <span>{{ i18n.t("research.answer_language") }}</span>
         <select
@@ -273,6 +303,25 @@ function pickHistory(item: Record<string, unknown>) {
 </template>
 
 <style scoped>
+.research-context-action {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+.research-context-action > span {
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.research-context-action-button {
+  justify-content: flex-start;
+  min-height: var(--control-height);
+}
+.research-context-action small {
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
 .research-history-list {
   max-height: 300px;
   overflow: auto;
