@@ -9,7 +9,7 @@ Current version: **0.80.0 — Beverly** ([release notes](docs/notes/0.80.0.md)).
 ## Features
 
 - **Corpus Builder** — a sequenced Source → Structure/transcription → LLM & enrichment → Record construction → Review workflow whose controls adapt to the selected medium. Extraction is bounded and provenance-preserving; reviewer-owned structure/text revisions and evidence remain auditable.
-- **Record review** — JSONL workspaces with audit history, bulk/work-level metadata editing, diffs, source/evidence navigation, and human/LLM field ownership. Schema-valid model values are visible for review; calibrated autofill is a separate evidence- and reviewer-precision-aware decision.
+- **Record review** — JSONL workspaces with audit history, bulk/work-level metadata editing, diffs, source/evidence navigation, and human/LLM field ownership. Canonical `FieldAssertion` records preserve value provenance, authority, evidence, and stable field identity while schema-defined metadata flows through review, Search, Record Inspector, touch-up, and Research presentation.
 - **LLM review and tools** — foreground, background, and background Auto-improve runs against named Ollama or OpenAI-compatible provider profiles, each with its own concurrency limit and warmup state.
 - **Vector stores** — persistent ChromaDB collections on the local filesystem or a running Chroma server, with English/French language mirrors, background upserts, and JSONL round-tripping.
 - **RAG Research** — hybrid retrieval, cross-encoder reranking, language routing, selected-evidence mode, streamed/cancellable generation, response/claim provenance memory, a cached Response Library, and LLM grading.
@@ -203,7 +203,7 @@ Start with the documents that describe current behavior:
 - [Project context](docs/PROJECT_CONTEXT.md) — scholarly rationale and implemented-versus-intended capabilities
 - [Contributing](CONTRIBUTING.md) — human developer setup, quality gates, and change rules
 - [AGENTS.md](AGENTS.md) — additional rules for coding agents
-- Focused contracts: [source ingestion](docs/INGESTION_VALIDATION.md), [metadata schemas](docs/METADATA_SCHEMAS.md), [metadata memory](docs/METADATA_MEMORY.md), [design tokens](docs/DESIGN_TOKENS.md), and [fr-CA localization](docs/LOCALIZATION_FR_CA.md)
+- Focused contracts: [source ingestion](docs/INGESTION_VALIDATION.md), [metadata schemas](docs/METADATA_SCHEMAS.md), [FieldAssertion migration](docs/FIELD_ASSERTION_MIGRATION.md), [metadata memory](docs/METADATA_MEMORY.md), [design tokens](docs/DESIGN_TOKENS.md), and [fr-CA localization](docs/LOCALIZATION_FR_CA.md)
 
 Release history is in [CHANGELOG.md](CHANGELOG.md) and `docs/notes/<version>.md`. Version-specific release notes are historical records; they are not current architecture or backlog documents.
 
