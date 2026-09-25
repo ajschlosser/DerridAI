@@ -251,6 +251,7 @@ def _new_assertion(
     authority_status: AuthorityStatus = "unreviewed",
     value_status: ValueStatus = "present",
     select: bool = True,
+    field_id_override: str | None = None,
     **kwargs: Any,
 ) -> FieldAssertion:
     return store_assertion(
@@ -258,7 +259,7 @@ def _new_assertion(
         FieldAssertion(
             record_id=str(record.get("record_id") or ""),
             record_revision=int(record.get("record_revision") or 1),
-            field_id=field_identity(field_name, schema),
+            field_id=field_id_override or field_identity(field_name, schema),
             field_name=field_name,
             value=value,
             derivation_method=derivation_method,
@@ -380,6 +381,7 @@ def create_human_assertion(
         actor=actor,
         reason=reason or ("Human record-level override." if override else "Human-reviewed value."),
         supersedes_assertion_id=supersedes.assertion_id if supersedes else None,
+        field_id_override=supersedes.field_id if supersedes else None,
     )
 
 
@@ -420,6 +422,7 @@ def confirm_absence(record: dict[str, Any], field_name: str, *, schema: Any | No
         schema_version=prior.schema_version if prior else None,
         reason=reason or "Reviewer confirmed that no supported value applies.",
         supersedes_assertion_id=prior.assertion_id if prior else None,
+        field_id_override=prior.field_id if prior else None,
     )
 
 
@@ -616,10 +619,15 @@ def project_record_assertions(record: dict[str, Any]) -> dict[str, Any]:
         current = current_assertion(record, field_id)
         if current is None or not current.field_name:
             continue
+        selected_for_name = current_assertion_by_name(record, current.field_name)
+        if selected_for_name is None or selected_for_name.assertion_id != current.assertion_id:
+            continue
         if current.value_status == "confirmed_absent":
             record[current.field_name] = None
         elif current.value_status == "present":
             record[current.field_name] = copy.deepcopy(current.value)
+        else:
+            record[current.field_name] = None
         status = {
             "status": _compatibility_status(current),
             "method": current.method or current.derivation_method,
@@ -784,11 +792,13 @@ def migrate_record_assertions(record: dict[str, Any], schema: Any | None = None)
         if not name or name in _NON_ASSERTION_FIELDS:
             continue
         existing_current = current_assertion_by_name(record, name)
-        if existing_current is not None:
-            continue
-        existing_named = existing_current if schema is None else None
-        field_id = existing_named.field_id if existing_named is not None else field_identity(name, schema)
         status = statuses.get(name) if isinstance(statuses.get(name), dict) else {}
+        if existing_current is not None:
+            status_assertion_id = str(status.get("assertion_id") or "")
+            if status_assertion_id:
+                continue
+        existing_named = existing_current if existing_current is not None else None
+        field_id = existing_named.field_id if existing_named is not None else field_identity(name, schema)
         value = record.get(name)
         assertion = _legacy_assertion(record, name, value, status, schema=schema, evidence=evidence_map.get(name))
         if assertion is not None and assertion.field_id != field_id:
