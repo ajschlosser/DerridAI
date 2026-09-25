@@ -9,10 +9,7 @@ import RecordPdfLinks from "./RecordPdfLinks.vue";
 import RecordHistoryTimeline from "./RecordHistoryTimeline.vue";
 import InspectorLayoutEditor from "./InspectorLayoutEditor.vue";
 import type { RecordWorkspaceSnapshot } from "../../types/record";
-import type {
-  DerridaiNormativeModel,
-  ResearchObjectGraph,
-} from "../../types/researchObjectGraph";
+import type { DerridaiNormativeModel, ResearchObjectGraph } from "../../types/researchObjectGraph";
 import {
   loadInspectorLayout,
   saveInspectorLayout,
