@@ -51,9 +51,7 @@ export function useCorpusPublication(options: {
     }
   }
 
-  async function publish(
-    publishOptions: { download?: boolean; automatic?: boolean } = {},
-  ) {
+  async function publish(publishOptions: { download?: boolean; automatic?: boolean } = {}) {
     if (!options.currentBuild.value) return null;
     options.busy.value = "publish";
     try {
