@@ -6343,5 +6343,6 @@ EN_US: dict[str, str] = {'common.apply': 'Apply',
  'schemas.ner_tag.product': 'Product',
  'schemas.ner_tag.quantity': 'Measurement',
  'schemas.ner_tag.time': 'Time',
- 'schemas.ner_tag.work_of_art': 'Creative work'
+ 'schemas.ner_tag.work_of_art': 'Creative work',
+ 'research.configure_prompt_metadata': 'Configure prompt metadata'
 }
