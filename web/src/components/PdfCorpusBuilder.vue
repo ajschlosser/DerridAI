@@ -1292,7 +1292,11 @@ function queueRecordRequest(
 ) {
   recordSaveQueue.enqueue(recordId, request, (exc) => {
     setMessage(
-      `${fields.join(", ")}: ${exc instanceof Error ? exc.message : String(exc)}`,
+      i18n.tf("pdf_corpus.record_save_failed", {
+        record: recordId,
+        fields: fields.join(", "),
+        error: exc instanceof Error ? exc.message : String(exc),
+      }),
       "error",
     );
   });
