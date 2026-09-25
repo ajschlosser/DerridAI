@@ -2854,6 +2854,72 @@ async function sliceRecord(
 ) {
   if (!currentBuild.value || !selectedRecord.value) return;
   const id = selectedRecord.value.record_id;
+  if (direction === "keep") {
+    const index = records.value.findIndex((row) => row.record_id === id);
+    const targetText = String(selectedRecord.value.text || "");
+    const previous = records.value[index - 1];
+    const following = records.value[index + 1];
+    if (
+      index <= 0 ||
+      index >= records.value.length - 1 ||
+      keepEnd === undefined ||
+      offset <= 0 ||
+      offset >= keepEnd ||
+      keepEnd > targetText.length
+    )
+      return;
+    const prefix = targetText.slice(0, offset).trim();
+    const retained = targetText.slice(offset, keepEnd).trim();
+    const suffix = targetText.slice(keepEnd).trim();
+    if (!prefix || !retained || !suffix) return;
+    const before = records.value.slice();
+    const beforeSelected = selectedRecord.value;
+    const previousText = `${String(previous.text || "").trim()}\n\n${prefix}`.trim();
+    const followingText = `${suffix}\n\n${String(following.text || "").trim()}`.trim();
+    const nextRecord = (row: CorpusRecord, text: string): CorpusRecord => ({
+      ...row,
+      text,
+      text_length: text.length,
+      record_revision: Number(row.record_revision || 1) + 1,
+      review_disposition: "pending",
+      accepted: false,
+      rejected: false,
+      needs_review: true,
+    });
+    const updatedPrevious = nextRecord(previous, previousText);
+    const updatedTarget = nextRecord(selectedRecord.value, retained);
+    const updatedFollowing = nextRecord(following, followingText);
+    const viewport = captureReviewViewport();
+    records.value.splice(index - 1, 3, updatedPrevious, updatedTarget, updatedFollowing);
+    selectedRecord.value = updatedTarget;
+    selectedRecordId.value = id;
+    await restoreReviewViewport(viewport, { record: true });
+    queueRecordRequest(
+      `${previous.record_id}:${id}:${following.record_id}`,
+      ["record boundary"],
+      async () => {
+        const result = await pdfCorpusApi.sliceRecord(
+          currentBuild.value!.build_id,
+          id,
+          direction,
+          offset,
+          Number(beforeSelected.record_revision || 1),
+          keepEnd,
+        );
+        boundarySliceOpen.value = false;
+        await refreshBuild();
+        await refreshRecords(false, result.record.record_id);
+        await restoreReviewViewport(viewport, { record: true });
+        setMessage(i18n.t("pdf_corpus.slice_done"));
+      },
+      () => {
+        records.value = before;
+        selectedRecord.value = beforeSelected;
+        selectedRecordId.value = beforeSelected.record_id;
+      },
+    );
+    return;
+  }
   if (direction === "previous" || direction === "next") {
     const index = records.value.findIndex((row) => row.record_id === id);
     const neighborIndex = direction === "previous" ? index - 1 : index + 1;
