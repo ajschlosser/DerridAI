@@ -22,7 +22,7 @@ import json
 import re
 import uuid
 from functools import wraps
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ValidationError
 
@@ -197,7 +197,7 @@ class ReviewActionsMixin:
                     if isinstance(record.get("metadata_field_status"), dict)
                     else None
                 )
-                decision_kind = (
+                decision_kind: Literal["value", "absence"] = (
                     "absence"
                     if isinstance(status, dict)
                     and str(status.get("status") or "") == "confirmed_absent"
