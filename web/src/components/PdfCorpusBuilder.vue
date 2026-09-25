@@ -68,6 +68,8 @@ import { useCorpusSourceConfiguration } from "../features/corpus-builder/composa
 import { useCorpusProviderConfiguration } from "../features/corpus-builder/composables/useCorpusProviderConfiguration";
 import { corpusReviewCommandFromKeydown } from "../features/corpus-builder/domain/reviewCommands";
 import { editableRecordMetadata } from "../features/corpus-builder/domain/recordMetadata";
+import { firstValidationRecordId } from "../features/corpus-builder/domain/publicationReadiness";
+import { useCorpusPublication } from "../features/corpus-builder/composables/useCorpusPublication";
 import AppIcon from "./AppIcon.vue";
 import CorpusRunMonitor from "./corpus-builder/CorpusRunMonitor.vue";
 import CorpusActionMenu, { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
@@ -255,6 +257,16 @@ const {
   savePageLabels,
   saveDocumentLayout,
 } = useCorpusSourceConfiguration(busy, setMessage);
+const { jsonlPreviewOpen, jsonlPreview, openJsonlPreview, publish } = useCorpusPublication({
+  currentBuild,
+  selectedRecord,
+  busy,
+  setMessage,
+  refreshBuild,
+  refreshBuilds,
+  t: (key, fallback) => i18n.t(key, fallback),
+  tf: (key, values) => i18n.tf(key, values),
+});
 const metadataSavingField = ref("");
 const metadataSavedField = ref("");
 const error = ref("");
@@ -269,13 +281,6 @@ const editingText = ref(false);
 const bulkMetadataOpen = ref(false);
 const documentMetadataOpen = ref(false);
 const textCleanupOpen = ref(false);
-const jsonlPreviewOpen = ref(false);
-const jsonlPreview = ref<{
-  jsonl: string;
-  validation_errors: string[];
-  unresolved_fields: string[];
-  would_publish: boolean;
-}>({ jsonl: "", validation_errors: [], unresolved_fields: [], would_publish: false });
 const llmTouchupOpen = ref(false);
 const boundarySliceOpen = ref(false);
 const sourceTranscriptionOpen = ref(false);
@@ -1573,32 +1578,10 @@ async function openMetadataIssueQueue() {
   recordListEl.value?.focus({ preventScroll: true });
 }
 
-function firstValidationRecordId(): string {
-  const validation = currentBuild.value?.validation || {};
-  const actionable = validation.validation_issues?.find((item) => item?.record_id);
-  if (actionable?.record_id) return String(actionable.record_id);
-  for (const key of [
-    "metadata_evidence_errors",
-    "metadata_schema_errors",
-    "relationship_errors",
-    "human_ownership_errors",
-    "record_content_errors",
-  ] as const) {
-    const items = validation[key];
-    if (!Array.isArray(items)) continue;
-    const found = items.find(
-      (item) => item && typeof item === "object" && "record_id" in item && item.record_id,
-    );
-    if (found && typeof found === "object" && "record_id" in found) return String(found.record_id);
-  }
-  const citation = validation.citation_errors?.find(Boolean);
-  return citation ? String(citation) : "";
-}
-
 async function openValidationIssueQueue() {
   reviewQueue.value = "issues";
   recordQuery.value = "";
-  const first = firstValidationRecordId();
+  const first = firstValidationRecordId(currentBuild.value);
   await nextTick();
   await refreshRecords(true, first);
   await nextTick();
@@ -2868,27 +2851,6 @@ async function resetEditorialMemory() {
   }
 }
 
-async function openJsonlPreview() {
-  if (!currentBuild.value || !selectedRecord.value) return;
-  busy.value = "preview";
-  try {
-    const result = await corpusBuilderApi.previewRecord(
-      currentBuild.value.build_id,
-      selectedRecord.value.record_id,
-    );
-    jsonlPreview.value = {
-      jsonl: result.jsonl,
-      validation_errors: result.validation_errors || [],
-      unresolved_fields: result.unresolved_fields || [],
-      would_publish: Boolean(result.would_publish),
-    };
-    jsonlPreviewOpen.value = true;
-  } catch (exc) {
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
-}
 function openLlmTouchup(text: string) {
   textDraft.value = text;
   editingText.value = true;
@@ -3041,30 +3003,6 @@ async function rerunMetadata() {
   } catch (exc) {
     await restoreReviewViewport(viewport);
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
-}
-async function publish(options: { download?: boolean; automatic?: boolean } = {}) {
-  if (!currentBuild.value) return null;
-  busy.value = "publish";
-  try {
-    const result = await corpusBuilderApi.publish(currentBuild.value.build_id);
-    await refreshBuild();
-    await refreshBuilds();
-    setMessage(
-      options.automatic
-        ? i18n.tf("pdf_corpus.auto_published", { count: result.record_count })
-        : i18n.tf("pdf_corpus.published", {
-            count: result.record_count,
-            hash: result.sha256.slice(0, 12),
-          }),
-    );
-    if (options.download) window.location.href = corpusBuilderApi.publicationUrl(result.publication_id);
-    return result;
-  } catch (exc) {
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-    return null;
   } finally {
     busy.value = "";
   }
