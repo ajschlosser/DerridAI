@@ -7,7 +7,12 @@ const meta = {
   args: {
     open: true,
     profiles: [
-      { id: "primary", name: "Local scholarly", type: "ollama", model: "gemma4:e4b" } as ProviderProfile,
+      {
+        id: "primary",
+        name: "Local scholarly",
+        type: "ollama",
+        model: "gemma4:e4b",
+      } as ProviderProfile,
     ],
     providerProfileId: "primary",
     recordId: "r1",
