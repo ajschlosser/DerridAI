@@ -65,11 +65,17 @@ export interface SystemDataColumn {
   primary_key?: number;
   sensitive?: boolean;
 }
+export interface SystemDataOperations {
+  insert: boolean;
+  update: boolean;
+  delete: boolean;
+}
 export interface SystemDataTable {
   name: string;
   columns: SystemDataColumn[];
   row_count: number;
   writable?: boolean;
+  operations?: SystemDataOperations;
 }
 export interface SystemDataDatabase {
   name: string;
@@ -118,6 +124,15 @@ export interface SystemChromaCollection {
   derived?: boolean;
   role?: string;
 }
+export interface SystemResponseCachePage {
+  exists?: boolean;
+  records: Array<Record<string, unknown>>;
+  count?: number;
+  total: number;
+  limit: number;
+  offset: number;
+  query?: string;
+}
 export interface SystemChromaCommandResult {
   valid: boolean;
   verb: "get" | "query";
@@ -156,6 +171,15 @@ export const systemApi = {
   updateLanguageContentPolicy: (code: string, payload: Pick<LanguageContentPolicy, "blocked_terms" | "contextual_terms">) => apiRequest<LanguageContentPolicy>(`/api/i18n/languages/${encodeURIComponent(code)}/content-policy`, {method: "PUT", body: JSON.stringify(payload)}),
   generateLanguageContentPolicy: (payload: Record<string, unknown>) => apiRequest<JobSummary>("/api/jobs/llm-tool", {method: "POST", body: JSON.stringify({task: "language_content_policy", language: payload, label: `Languages · ${String(payload.code || "policy")}`, provider_profile_id: String(payload.provider_profile_id || "") || null, max_concurrent_requests: Number(payload.max_concurrent_requests || 1)})}),
   systemData: () => apiRequest<{databases: SystemDataDatabase[]}>("/api/system/data"),
+  responseCacheRecords: (limit = 25, offset = 0, query = "") => {
+    const params = new URLSearchParams({
+      limit: String(limit),
+      offset: String(offset),
+    });
+    if (query.trim()) params.set("query", query.trim());
+    return apiRequest<SystemResponseCachePage>(`/api/response-cache/records?${params}`);
+  },
+  clearResponseCache: () => apiRequest<{ deleted: number }>("/api/system/data/response-cache-records", { method: "DELETE" }),
   systemChromaCollections: () => apiRequest<{collections: SystemChromaCollection[]}>("/api/system/chroma/collections"),
   validateSystemChroma: (command: string) => apiRequest<SystemChromaCommandResult>("/api/system/chroma/validate", {method: "POST", body: JSON.stringify({command})}),
   querySystemChroma: (command: string) => apiRequest<SystemChromaCommandResult>("/api/system/chroma/query", {method: "POST", body: JSON.stringify({command})}),
