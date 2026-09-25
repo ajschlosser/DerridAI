@@ -36,9 +36,9 @@ def _field_contract(
         or ""
     )
     core = {
-        "region_type": "core.region_type",
-        "primary_text": "core.primary_text",
-        "discourse_role": "core.discourse_role",
+        "region_type": "derridai.region_type",
+        "primary_text": "derridai.primary_text",
+        "discourse_role": "derridai.discourse_role",
     }
     fields = {
         str(item.get("name") or ""): str(item.get("field_id") or "")
