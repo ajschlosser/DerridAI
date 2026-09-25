@@ -40,6 +40,23 @@ class ObjectGraphBuilder:
         details: dict[str, Any] | None = None,
     ) -> str:
         graph_id = _node_id(object_type, object_id)
+        existing = self.nodes.get(graph_id)
+        if existing is not None:
+            existing_details = existing.get("details") if isinstance(existing.get("details"), dict) else {}
+            existing["details"] = {
+                **existing_details,
+                **{key: value for key, value in (details or {}).items() if value not in (None, "", [])},
+            }
+            if not existing.get("summary") and summary:
+                existing["summary"] = summary
+            if existing.get("materialization") in {"reference", "derived_view"} and materialization not in {
+                "reference",
+                "derived_view",
+            }:
+                existing["materialization"] = materialization
+            if not existing.get("status") and status:
+                existing["status"] = status
+            return graph_id
         self.nodes[graph_id] = {
             "id": graph_id,
             "object_type": object_type,
@@ -101,11 +118,16 @@ def _first_present(*values: Any) -> Any:
 
 
 def _span_locator(span: dict[str, Any], source_document_id: str) -> dict[str, Any]:
+    unit_ids = list(span.get("source_unit_ids") or [])
+    for key in ("source_unit_id", "block_id"):
+        value = str(span.get(key) or "").strip()
+        if value:
+            unit_ids.append(value)
+    normalized_unit_ids = sorted(dict.fromkeys(str(value).strip() for value in unit_ids if str(value).strip()))
     return {
         "source_document_id": str(span.get("source_document_id") or source_document_id),
         "source_span_id": span.get("source_span_id"),
-        "source_unit_id": span.get("source_unit_id") or span.get("block_id"),
-        "source_unit_ids": span.get("source_unit_ids") or [],
+        "source_unit_ids": normalized_unit_ids,
         "physical_page_start": _first_present(span.get("physical_page_start"), span.get("pdf_page"), span.get("page")),
         "physical_page_end": _first_present(span.get("physical_page_end"), span.get("pdf_page"), span.get("page")),
         "printed_page_start": _first_present(span.get("printed_page_start"), span.get("printed_page_label")),
@@ -113,6 +135,19 @@ def _span_locator(span: dict[str, Any], source_document_id: str) -> dict[str, An
         "character_start": _first_present(span.get("character_start"), span.get("char_start"), span.get("start")),
         "character_end": _first_present(span.get("character_end"), span.get("char_end"), span.get("end")),
     }
+
+
+def _span_identity(locator: dict[str, Any]) -> str:
+    explicit = str(locator.get("source_span_id") or "").strip()
+    if explicit:
+        return explicit
+    unit_ids = locator.get("source_unit_ids") or []
+    if unit_ids:
+        return _stable_digest({
+            "source_document_id": locator.get("source_document_id"),
+            "source_unit_ids": unit_ids,
+        })
+    return _stable_digest(locator)
 
 
 def _add_span(
@@ -123,7 +158,7 @@ def _add_span(
     materialization: str,
 ) -> str:
     locator = _span_locator(span, source_document_id)
-    span_id = str(locator.get("source_span_id") or "").strip() or _stable_digest(locator)
+    span_id = _span_identity(locator)
     pages = locator.get("printed_page_start") or locator.get("physical_page_start")
     summary = f"Page {pages}" if pages not in (None, "") else "Documentary source region"
     return graph.add_node(
@@ -191,7 +226,6 @@ def build_record_graph(
     )
     graph.add_edge(root, revision_node)
 
-    span_nodes: dict[str, str] = {}
     for span in record.get("source_spans") or []:
         if not isinstance(span, dict):
             continue
@@ -201,7 +235,6 @@ def build_record_graph(
             source_document_id=source_document_id,
             materialization="embedded",
         )
-        span_nodes[node] = node
         if source_document_node:
             graph.add_edge(source_document_node, node)
         graph.add_edge(root, node)
