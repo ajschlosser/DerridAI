@@ -67,11 +67,7 @@ interface CorpusMetadataReviewOptions {
   metadataDraftKey: (buildId: string, recordId: string) => string;
   setMessage: (message: string, tone?: MessageTone) => void;
   t: (key: string, fallback?: string) => string;
-  tf: (
-    key: string,
-    fallbackOrValues?: string | I18nValues,
-    values?: I18nValues,
-  ) => string;
+  tf: (key: string, fallbackOrValues?: string | I18nValues, values?: I18nValues) => string;
 }
 
 export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
@@ -493,13 +489,9 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
     const viewport = options.captureReviewViewport();
     options.busy.value = "record";
     try {
-      const profileId =
-        options.llmActionProviderId.value || options.selectedProviderId.value;
+      const profileId = options.llmActionProviderId.value || options.selectedProviderId.value;
       const payload = {
-        ...(options.directProfilePayloadWithModel(
-          profileId,
-          options.llmActionModel.value,
-        ) || {
+        ...(options.directProfilePayloadWithModel(profileId, options.llmActionModel.value) || {
           provider_profile_id: profileId,
           model: options.llmActionModel.value || undefined,
         }),
