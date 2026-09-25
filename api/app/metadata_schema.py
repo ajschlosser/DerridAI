@@ -82,6 +82,8 @@ MAX_FIELDS = 60
 MAX_GROUPS = 6
 
 FieldType = Literal["text", "number", "boolean", "choice", "list"]
+FieldRole = Literal["scholarly", "structural", "document", "operational"]
+ReviewVisibility = Literal["primary", "details", "hidden"]
 class RetrievalProfile(BaseModel):
     """Policy for evidence-bound reviewed precedents used during metadata enrichment.
 
@@ -127,6 +129,10 @@ class SchemaField(BaseModel):
     label: str = Field(min_length=1, max_length=80)
     type: FieldType = "text"
     group: str = "discourse"
+    # Storage/display names are arbitrary. These properties describe how a field
+    # participates in the product without hard-coding behavior to its name.
+    role: FieldRole = "scholarly"
+    review_visibility: ReviewVisibility = "primary"
     # For "choice": the allowed values. `strict` makes them the only values the model may return; otherwise they are
     # what it is told to prefer, and a person may still type another.
     values: list[SchemaValue] = Field(default_factory=list, max_length=60)
