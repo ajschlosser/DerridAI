@@ -787,9 +787,41 @@ def migrate_record_assertions(record: dict[str, Any], schema: Any | None = None)
                 normalized.setdefault(field_id, []).append(item.model_dump(mode="json"))
         record["field_assertions"] = normalized
         current = record.setdefault("current_field_assertions", {})
-        for field_id in normalized:
-            if not current.get(field_id) or not any(item["assertion_id"] == current[field_id] for item in normalized[field_id]):
-                current[field_id] = normalized[field_id][-1]["assertion_id"]
+        selected_names: set[str] = set()
+        if isinstance(current, dict):
+            for selected_field_id, selected_id in list(current.items()):
+                bucket = normalized.get(str(selected_field_id)) or []
+                selected_item = next(
+                    (
+                        item
+                        for item in bucket
+                        if isinstance(item, dict) and item.get("assertion_id") == selected_id
+                    ),
+                    None,
+                )
+                if selected_item and selected_item.get("field_name"):
+                    selected_names.add(str(selected_item["field_name"]))
+                elif selected_field_id not in normalized:
+                    current.pop(selected_field_id, None)
+        for field_id, bucket in normalized.items():
+            valid_selected = bool(
+                current.get(field_id)
+                and any(item["assertion_id"] == current[field_id] for item in bucket)
+            )
+            if valid_selected:
+                continue
+            field_name = str((bucket[-1] if bucket else {}).get("field_name") or "")
+            # A non-selected assertion bucket may use a newer schema identity
+            # while the authoritative/current value is still selected under a
+            # legacy identity. Preserve that non-selection across persistence;
+            # otherwise migration would silently promote an advisory candidate.
+            if field_name and field_name in selected_names:
+                current.pop(field_id, None)
+                continue
+            if bucket:
+                current[field_id] = bucket[-1]["assertion_id"]
+                if field_name:
+                    selected_names.add(field_name)
     statuses = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
     evidence_map = record.get("metadata_evidence") if isinstance(record.get("metadata_evidence"), dict) else {}
     names = set(statuses) | {
