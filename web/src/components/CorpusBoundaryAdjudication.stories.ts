@@ -33,7 +33,6 @@ export const RecommendedMove: Story = {
     busy: false,
   },
 };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- SA-16: intentionally sparse Storybook fixture exercises partial/loading data without fabricating unrelated fields.
 export const NotYetChecked: Story = {
   args: {
     record: {
