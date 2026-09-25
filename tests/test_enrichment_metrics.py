@@ -1,5 +1,9 @@
 from app.enrichment_metrics import compute
-from app.field_assertions import create_model_assertion, project_record_assertions, reopen_assertion
+from app.field_assertions import (
+    create_model_assertion,
+    project_record_assertions,
+    reopen_assertion,
+)
 
 
 def ev(kind, **kw):
