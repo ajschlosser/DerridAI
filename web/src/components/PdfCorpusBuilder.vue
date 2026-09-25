@@ -68,6 +68,7 @@ import { useCorpusSourceConfiguration } from "../features/corpus-builder/composa
 import { useCorpusProviderConfiguration } from "../features/corpus-builder/composables/useCorpusProviderConfiguration";
 import { useCorpusBuildLifecycleController } from "../features/corpus-builder/composables/useCorpusBuildLifecycleController";
 import { useCorpusReviewNavigation } from "../features/corpus-builder/composables/useCorpusReviewNavigation";
+import { useCorpusReviewDecisions } from "../features/corpus-builder/composables/useCorpusReviewDecisions";
 import { corpusReviewCommandFromKeydown } from "../features/corpus-builder/domain/reviewCommands";
 import {
   editableRecordMetadata,
@@ -897,6 +898,50 @@ const selectedMetadataBlocked = computed(() =>
       (selectedRecord.value?.metadata_incomplete_fields || []).length,
   ),
 );
+const {
+  setDisposition,
+  attemptAccept,
+  toggleAccept,
+  acceptFromFocus,
+  rejectRecord,
+  skipRecord,
+  acceptCleanRecords,
+  bulkDisposition,
+  restoreAllRejected,
+  undoReview,
+  redoReview,
+} = useCorpusReviewDecisions({
+  currentBuild,
+  selectedRecord,
+  selectedRecordId,
+  records,
+  recordTotal,
+  reviewQueue,
+  recordQuery,
+  selectedReviewIds,
+  justProcessedRecordId,
+  bulkActionFeedback,
+  busy,
+  focusView,
+  reviewInspectorTab,
+  reviewLocked,
+  selectedMetadataBlocked,
+  readyCount,
+  issueCount,
+  captureReviewViewport,
+  restoreReviewViewport,
+  queueRecordRequest,
+  applyAuthoritativeRecord,
+  syncBuildInRail,
+  selectRecord,
+  advanceFrom,
+  refreshBuild,
+  refreshRecords,
+  focusFirstMetadataBlocker,
+  setMessage,
+  t: (key, fallback) => i18n.t(key, fallback),
+  tf: (key, values) => i18n.tf(key, values),
+});
 const selectedMetadataBlockingFields = computed(() =>
   Array.from(
     new Set([
@@ -1410,30 +1455,6 @@ function openEnrichmentFromFinish() {
     llmActionProviderId.value || selectedProviderId.value || providerProfiles.value[0]?.id || "";
   metadataEnrichmentOpen.value = true;
 }
-async function restoreAllRejected() {
-  if (!currentBuild.value) return;
-  busy.value = "bulk-restore";
-  try {
-    const result = await corpusBuilderApi.bulkDisposition(
-      currentBuild.value.build_id,
-      "pending",
-      "rejected",
-      "",
-    );
-    await refreshBuild();
-    reviewQueue.value = "all";
-    recordQuery.value = "";
-    selectedRecordId.value = "";
-    selectedRecord.value = null;
-    await nextTick();
-    await refreshRecords(true);
-    setMessage(i18n.tf("pdf_corpus.restored_rejected_count", { count: result.changed }));
-  } catch (exc) {
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
-}
 async function chooseBuild(build: CorpusBuild) {
   selectedBuildId.value = build.build_id;
   selectedAssetId.value = build.asset_id;
@@ -1451,308 +1472,6 @@ async function chooseBuild(build: CorpusBuild) {
 }
 async function openPdfExplorer() {
   await router.replace({ query: { ...route.query, mode: "explorer" } });
-}
-async function setDisposition(disposition: "pending" | "accepted" | "rejected") {
-  if (reviewLocked.value) {
-    setMessage(i18n.t("pdf_corpus.review_preparing_help"));
-    return;
-  }
-  if (!currentBuild.value || !selectedRecord.value) return;
-  const id = selectedRecord.value.record_id;
-  if (disposition !== "pending") justProcessedRecordId.value = id;
-  const viewport = captureReviewViewport();
-  if (disposition !== "accepted") {
-    const buildId = currentBuild.value.build_id;
-    const expectedRevision = Number(selectedRecord.value.record_revision || 1);
-    const row: CorpusRecord = {
-      ...selectedRecord.value,
-      review_disposition: disposition,
-      accepted: false,
-      rejected: disposition === "rejected",
-      needs_review: disposition === "pending",
-      record_revision: expectedRevision + 1,
-    } as CorpusRecord;
-    const index = records.value.findIndex((item) => item.record_id === id);
-    if (reviewQueue.value !== "all" && disposition === "rejected") {
-      if (index >= 0) records.value.splice(index, 1);
-      recordTotal.value = Math.max(0, recordTotal.value - 1);
-    } else if (index >= 0) {
-      records.value.splice(index, 1, row);
-    }
-    selectedRecord.value = row;
-    await restoreReviewViewport(viewport, { record: true, inspector: true });
-    queueRecordRequest(id, ["review disposition"], async (rebase) => {
-      if (disposition === "pending") {
-        const result = await corpusBuilderApi.disposition(
-          buildId,
-          id,
-          "pending",
-          "",
-          rebase ? undefined : expectedRevision,
-        );
-        applyAuthoritativeRecord(result);
-        return result;
-      }
-      const result = await corpusBuilderApi.reviewDecision(
-        buildId,
-        id,
-        "rejected",
-        "",
-        rebase ? undefined : expectedRevision,
-        reviewQueue.value,
-      );
-      applyAuthoritativeRecord(result.record, result.build);
-      return result;
-    });
-    return;
-  }
-  const buildId = currentBuild.value.build_id;
-  const beforeRecords = records.value.slice();
-  const beforeTotal = recordTotal.value;
-  const beforeSelected = selectedRecord.value;
-  const beforeSelectedId = selectedRecordId.value;
-  const expectedRevision = Number(selectedRecord.value.record_revision || 1);
-  const optimistic = {
-    ...selectedRecord.value,
-    review_disposition: "accepted" as const,
-    accepted: true,
-    rejected: false,
-    needs_review: false,
-    review_reason: "",
-    record_revision: expectedRevision + 1,
-  };
-  const optimisticIndex = records.value.findIndex((row) => row.record_id === id);
-  if (reviewQueue.value === "all" || reviewQueue.value === disposition) {
-    if (optimisticIndex >= 0) records.value.splice(optimisticIndex, 1, optimistic);
-  } else if (optimisticIndex >= 0) {
-    records.value.splice(optimisticIndex, 1);
-    recordTotal.value = Math.max(0, recordTotal.value - 1);
-  }
-  const nextLocal = records.value[optimisticIndex] || records.value[optimisticIndex - 1];
-  if (nextLocal) selectRecord(nextLocal);
-  await restoreReviewViewport(viewport, { record: true, inspector: true });
-  queueRecordRequest(
-    id,
-    ["review disposition"],
-    async (rebase) => {
-      const result = await corpusBuilderApi.reviewDecision(
-        buildId,
-        id,
-        disposition,
-        "",
-        rebase ? undefined : expectedRevision,
-        reviewQueue.value,
-      );
-      currentBuild.value = result.build;
-      syncBuildInRail(result.build);
-      if (result.blocked) {
-        records.value = beforeRecords;
-        recordTotal.value = beforeTotal;
-        selectedRecord.value = result.record;
-        selectedRecordId.value = id;
-        const idx = records.value.findIndex((row) => row.record_id === id);
-        if (idx >= 0) records.value.splice(idx, 1, result.record);
-        if (result.blocker === "source_problem") {
-          reviewInspectorTab.value = "source";
-          reviewQueue.value = "source";
-          setMessage(i18n.t("pdf_corpus.accept_blocked_source"), "error");
-        } else {
-          reviewInspectorTab.value = "metadata";
-          const fields = (result.blocking_fields || [])
-            .map((field) => i18n.t(`record.${field}`, field.replace(/_/g, " ")))
-            .join(", ");
-          setMessage(i18n.tf("pdf_corpus.accept_blocked_metadata", { fields }));
-          await nextTick();
-          focusFirstMetadataBlocker();
-        }
-      } else {
-        const idx = records.value.findIndex((row) => row.record_id === id);
-        if (reviewQueue.value === "all" || reviewQueue.value === disposition) {
-          if (idx >= 0) records.value.splice(idx, 1, result.record);
-        }
-        if (result.next_record) {
-          const existing = records.value.find(
-            (row) => row.record_id === result.next_record?.record_id,
-          );
-          if (existing) selectRecord(existing);
-          else selectRecord(result.next_record);
-        }
-        setMessage(i18n.t("pdf_corpus.accepted_notice"));
-      }
-      await restoreReviewViewport(viewport, { record: true, inspector: true });
-    },
-    async () => {
-      records.value = beforeRecords;
-      recordTotal.value = beforeTotal;
-      selectedRecord.value = beforeSelected;
-      selectedRecordId.value = beforeSelectedId;
-      await restoreReviewViewport(viewport);
-    },
-    false,
-  );
-}
-
-async function attemptAccept() {
-  if (reviewLocked.value) {
-    setMessage(i18n.t("pdf_corpus.review_preparing_help"));
-    return;
-  }
-  if (!selectedRecord.value) return;
-  if (selectedRecord.value.accepted) {
-    await setDisposition("pending");
-    return;
-  }
-  // The server owns acceptance eligibility. Do not let stale client metadata
-  // state turn the primary action into a no-op.
-  await setDisposition("accepted");
-}
-async function toggleAccept() {
-  await attemptAccept();
-}
-async function acceptFromFocus() {
-  if (selectedMetadataBlocked.value) {
-    focusView.value = false;
-    await nextTick();
-  }
-  await attemptAccept();
-}
-async function rejectRecord() {
-  await setDisposition("rejected");
-}
-async function skipRecord() {
-  if (!selectedRecord.value) return;
-  await advanceFrom(selectedRecord.value.record_id);
-}
-async function acceptCleanRecords() {
-  if (reviewLocked.value) {
-    setMessage(i18n.t("pdf_corpus.review_preparing_help"));
-    return;
-  }
-  if (!currentBuild.value) return;
-  const clean = readyCount.value;
-  if (clean < 1) {
-    setMessage(i18n.t("pdf_corpus.no_clean_records"));
-    return;
-  }
-  const viewport = captureReviewViewport();
-  if (!window.confirm(i18n.tf("pdf_corpus.accept_clean_confirm", { count: clean }))) return;
-  busy.value = "bulk";
-  try {
-    const result = await corpusBuilderApi.bulkDisposition(
-      currentBuild.value.build_id,
-      "accepted",
-      "ready",
-      "",
-    );
-    await refreshBuild();
-    reviewQueue.value = issueCount.value > 0 ? "issues" : "all";
-    await nextTick();
-    await refreshRecords(true);
-    await restoreReviewViewport(viewport, { record: true, inspector: true });
-    bulkActionFeedback.value =
-      result.changed > 0
-        ? i18n.tf("pdf_corpus.accept_clean_done", { count: result.changed })
-        : i18n.t("pdf_corpus.accept_clean_none_changed");
-    setMessage(bulkActionFeedback.value);
-  } catch (exc) {
-    await restoreReviewViewport(viewport);
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
-}
-async function bulkDisposition(disposition: "accepted" | "rejected") {
-  if (!currentBuild.value) return;
-  const recordIds = Array.from(selectedReviewIds.value);
-  const count = recordIds.length;
-  if (!count) {
-    setMessage(i18n.t("pdf_corpus.select_records_first"));
-    return;
-  }
-  const viewport = captureReviewViewport();
-  const verb =
-    disposition === "accepted"
-      ? i18n.t("pdf_corpus.accept_selected")
-      : i18n.t("pdf_corpus.reject_selected");
-  if (
-    !window.confirm(
-      i18n.tf("pdf_corpus.bulk_confirm", {
-        action: verb,
-        count,
-      }),
-    )
-  )
-    return;
-  busy.value = "bulk";
-  try {
-    const result = await corpusBuilderApi.bulkDisposition(
-      currentBuild.value.build_id,
-      disposition,
-      reviewQueue.value,
-      recordQuery.value,
-      "",
-      recordIds,
-    );
-    selectedReviewIds.value = new Set();
-    await refreshBuild();
-    if (disposition === "accepted" && Number(result.blocked_metadata || 0) > 0) {
-      reviewQueue.value = "metadata";
-      recordQuery.value = "";
-      await nextTick();
-      await refreshRecords(true, result.blocked_record_ids?.[0] || "");
-      reviewInspectorTab.value = "metadata";
-    } else {
-      await refreshRecords(true);
-    }
-    await restoreReviewViewport(viewport, { record: true, inspector: true });
-    bulkActionFeedback.value = result.blocked_metadata
-      ? i18n.tf("pdf_corpus.bulk_done_metadata_blocked", {
-          count: result.changed,
-          blocked: result.blocked_metadata,
-        })
-      : i18n.tf("pdf_corpus.bulk_done", { count: result.changed });
-    setMessage(bulkActionFeedback.value);
-  } catch (exc) {
-    await restoreReviewViewport(viewport);
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
-}
-
-async function undoReview() {
-  if (!currentBuild.value) return;
-  const viewport = captureReviewViewport();
-  busy.value = "record";
-  try {
-    const result = await corpusBuilderApi.undoReview(currentBuild.value.build_id);
-    await refreshBuild();
-    await refreshRecords(true, result.selected_record_id || "");
-    await restoreReviewViewport(viewport, { record: true });
-    setMessage(i18n.t("pdf_corpus.undo_done"));
-  } catch (exc) {
-    await restoreReviewViewport(viewport);
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
-}
-async function redoReview() {
-  if (!currentBuild.value) return;
-  const viewport = captureReviewViewport();
-  busy.value = "record";
-  try {
-    const result = await corpusBuilderApi.redoReview(currentBuild.value.build_id);
-    await refreshBuild();
-    await refreshRecords(true, result.selected_record_id || "");
-    await restoreReviewViewport(viewport, { record: true });
-    setMessage(i18n.t("pdf_corpus.redo_done"));
-  } catch (exc) {
-    await restoreReviewViewport(viewport);
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
 }
 async function reanalyzeDocument() {
   if (!currentBuild.value) return;
