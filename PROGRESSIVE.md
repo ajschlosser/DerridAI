@@ -621,8 +621,9 @@ Before either branch merges across the other:
 
 The initial backend slice merged to `master` in PR #149. The current follow-up branch adds the first audit/inspection surface:
 
-- evidence-bound positive and correction exemplars;
+- evidence-bound positive, correction/hard-negative, and explicitly evidenced confirmed-absence exemplars;
 - strict evidence-to-record membership: a globally resolvable source block is not enough unless it belongs to the reviewed RecordRevision;
+- human value changes and confirmed-absence decisions invalidate prior field evidence so stale evidence cannot silently teach a revised assertion;
 - conservative promotion from human-reviewed metadata only;
 - revision-aware, rebuildable Chroma projection;
 - build/schema/language/field scoping;
