@@ -1189,9 +1189,18 @@ CURRENT REVIEWED RECORD TEXT:
                 isinstance(status, dict) and status.get("blind")
                 for status in normalized_status.values()
             ):
+                blind_fields = [
+                    field_name
+                    for field_name, status in normalized_status.items()
+                    if isinstance(status, dict) and status.get("blind")
+                ]
                 _scrub_canonical_transport(normalized)
-                for status in normalized_status.values():
-                    if not isinstance(status, dict) or not status.get("blind"):
+                for field_name in blind_fields:
+                    normalized[field_name] = (
+                        [] if isinstance(normalized.get(field_name), list) else None
+                    )
+                    status = normalized_status.get(field_name)
+                    if not isinstance(status, dict):
                         continue
                     for key in (
                         "confidence", "proposed_value", "llm_value", "raw_llm_value",
