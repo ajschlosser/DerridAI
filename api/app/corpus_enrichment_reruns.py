@@ -293,6 +293,19 @@ class EnrichmentRerunsMixin:
         # candidate before migration to prevent it from changing live state
         # before conflict resolution has made a decision.
         candidate = json.loads(json.dumps(candidate))
+        candidate_values = {
+            field: json.loads(json.dumps(candidate.get(field)))
+            for family in families
+            for field in groups[family]
+            if field in candidate
+        }
+        candidate_status_snapshot = json.loads(
+            json.dumps(
+                candidate.get("metadata_field_status")
+                if isinstance(candidate.get("metadata_field_status"), dict)
+                else {}
+            )
+        )
         migrate_record_assertions(live, active_schema)
         migrate_record_assertions(candidate, active_schema)
 
@@ -315,11 +328,17 @@ class EnrichmentRerunsMixin:
 
         for family in families:
             for field in groups[family]:
-                new, old = candidate.get(field), live.get(field)
+                new = candidate_values.get(field, candidate.get(field))
+                old = live.get(field)
                 old_assertion = current_assertion_by_name(live, field)
                 new_assertion = current_assertion_by_name(candidate, field)
                 old_info = live_status.get(field) if isinstance(live_status.get(field), dict) else {}
-                new_info = cand_status.get(field) if isinstance(cand_status.get(field), dict) else {}
+                snapshot_info = candidate_status_snapshot.get(field)
+                new_info = (
+                    snapshot_info
+                    if isinstance(snapshot_info, dict)
+                    else (cand_status.get(field) if isinstance(cand_status.get(field), dict) else {})
+                )
                 # Some provider/test candidates are shallow derivatives of the live
                 # record: their top-level proposal and compatibility status are new,
                 # but the copied canonical assertion still describes the old value.
