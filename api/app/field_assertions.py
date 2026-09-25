@@ -521,10 +521,20 @@ def reset_fields_for_evaluation(
     project_record_assertions(record)
 
 
-def reopen_assertion(record: dict[str, Any], assertion: FieldAssertion, *, actor: str | None = None, reason: str = "") -> FieldAssertion:
+def reopen_assertion(
+    record: dict[str, Any],
+    assertion: FieldAssertion,
+    *,
+    actor: str | None = None,
+    reason: str = "",
+    legacy_metadata: dict[str, Any] | None = None,
+) -> FieldAssertion:
+    metadata = copy.deepcopy(assertion.legacy_metadata)
+    metadata.update(copy.deepcopy(legacy_metadata or {}))
     return store_assertion(record, assertion.model_copy(update={
         "assertion_id": f"assertion-{uuid.uuid4().hex}",
         "legacy_status": None,
+        "legacy_metadata": metadata,
         "authority_status": "disputed",
         "value_status": "unresolved",
         "actor": actor,
