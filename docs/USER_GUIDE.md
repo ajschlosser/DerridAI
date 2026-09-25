@@ -332,14 +332,13 @@ Chroma is derived data. The corpus JSONL/PDF pipeline is the source of truth; co
 
 Vector Stores → Connection settings can probe and switch backends at runtime. Switching does **not** move collections. Do not point embedded storage and a Chroma server at the same directory (one writer per path). NUKE in HTTP mode deletes collections on that server; it does not empty a leftover local `chroma` folder. Backups always go through the client API and preserve embeddings.
 
-Default embeddings:
+Embedding choices are explicit per collection:
 
-```text
-Provider: Ollama
-Model:    bge-m3:latest
-```
+- **Chroma default** for Chroma-managed embeddings;
+- **Precomputed** when vectors are supplied by the caller;
+- **Configured provider profile + embedding model** when DerridAI should call an Ollama or OpenAI-compatible endpoint.
 
-Collections support Ollama embeddings, Chroma default embeddings, and precomputed vectors. Embedding configuration can change while a collection is empty and is locked once records exist.
+Provider-profile collections persist the profile identity and embedding model as part of the collection contract, so retrieval uses the same configured endpoint/credentials instead of falling back to the global Ollama URL. Embedding configuration can change while a collection is empty and is locked once records exist.
 
 ## English / French vector-store model
 
