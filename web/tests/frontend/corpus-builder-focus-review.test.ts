@@ -70,8 +70,8 @@ describe("Corpus Builder focus review interactions",()=>{
       props:{
         record,
         sourceBlocks:[
-          {block_id:"p24-b1",page:24,type:"paragraph",text:"Derrida frames the question."},
-          {block_id:"p24-b2",page:24,type:"paragraph",text:"For Levinas, responsibility precedes freedom."},
+          {block_id:"p24-b1",page:24,bbox:[0,0,1,1],type:"paragraph",text:"Derrida frames the question.",extraction_method:"native",confidence:1},
+          {block_id:"p24-b2",page:24,bbox:[0,0,1,1],type:"paragraph",text:"For Levinas, responsibility precedes freedom.",extraction_method:"native",confidence:1},
         ],
       },
       global:{
