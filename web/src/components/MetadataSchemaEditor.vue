@@ -194,7 +194,16 @@ const NER_TAGS = [
 ];
 const tagText = (values: string[]) => values.join(", ");
 const setTags = (field: SchemaField, key: "pos_tags" | "ner_tags", text: string) => {
-  field[key] = [...new Set(text.split(/[,\n]/).map((value) => value.trim()).filter(Boolean))].slice(0, 16);
+  const available = key === "pos_tags" ? UNIVERSAL_POS_TAGS : NER_TAGS;
+  const allowed = new Set(available);
+  field[key] = [
+    ...new Set(
+      text
+        .split(/[,\n]/)
+        .map((value) => value.trim().toUpperCase())
+        .filter((value) => allowed.has(value)),
+    ),
+  ];
 };
 
 // ---- preview ---------------------------------------------------------------------------------------------------
