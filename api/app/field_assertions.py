@@ -412,6 +412,7 @@ def create_unresolved_assertion(
     reason: str,
     confidence: float | None = None,
     legacy_metadata: dict[str, Any] | None = None,
+    supersedes: FieldAssertion | None = None,
 ) -> FieldAssertion:
     """Record an unresolved field without inventing semantic absence."""
     if evaluation_status == "not_evaluated":
@@ -428,6 +429,7 @@ def create_unresolved_assertion(
         reason=reason,
         confidence=confidence,
         legacy_metadata=copy.deepcopy(legacy_metadata or {}),
+        supersedes_assertion_id=supersedes.assertion_id if supersedes else None,
     )
 
 
