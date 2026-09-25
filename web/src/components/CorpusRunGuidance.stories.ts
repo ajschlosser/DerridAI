@@ -79,7 +79,8 @@ export const FrenchLongText: Story = {
     },
   },
   decorators: [
-    () => ({
+    (story) => ({
+      components: { story },
       template: '<div style="max-width: 520px"><story /></div>',
     }),
   ],
