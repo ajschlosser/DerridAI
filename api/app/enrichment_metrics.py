@@ -15,6 +15,7 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Any
 
+from .field_assertions import current_assertions, migrate_record_assertions
 from .enrichment_ledger import (
     ACCEPTED,
     AUTOFILLED,
@@ -232,13 +233,20 @@ def inter_model_agreement(events: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def unresolved_remaining(records: list[dict[str, Any]]) -> int:
-    """10. Fields still waiting for a person, across the records given."""
-    return sum(
-        1
-        for record in records
-        for info in (record.get("metadata_field_status") or {}).values()
-        if isinstance(info, dict) and info.get("status") in {"unresolved", "invalid"}
-    )
+    """10. Canonical assertions still waiting for a person."""
+    total = 0
+    for record in records:
+        migrate_record_assertions(record)
+        total += sum(
+            1
+            for assertion in current_assertions(record)
+            if (
+                assertion.value_status in {"unresolved", "invalid"}
+                or assertion.evaluation_status == "evaluation_failed"
+                or assertion.authority_status == "disputed"
+            )
+        )
+    return total
 
 
 def compute(
