@@ -23,6 +23,7 @@ Consultez le [Guide de l’utilisateur](docs/USER_GUIDE.md) pour la référence 
 
 ## Architecture
 
+<!-- prettier-ignore -->
 | Service     | Pile technologique                                                   | Notes                                                                                                                                                  |
 | ----------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `web`       | Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js, servi par nginx | Transmet `/api/` vers l’API; Storybook est offert comme service de développement facultatif                                                          |
