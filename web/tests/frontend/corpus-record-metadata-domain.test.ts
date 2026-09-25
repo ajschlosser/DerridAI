@@ -92,4 +92,55 @@ describe("Corpus Builder editable metadata packet", () => {
 
     expect(evidenceCandidateFieldNames(record)).toEqual(["custom_claim"]);
   });
+
+  it("keeps operational revision and runtime fields out of scholarly review", () => {
+    const record = {
+      speaker: "Derrida",
+      text_revision_history: [{ at: "2026-09-25T00:00:00Z", source: "human" }],
+      metadata_execution_ledger: { quotation: { status: "complete" } },
+      field_assertions: {
+        "legacy.utility": [
+          {
+            assertion_id: "utility-a1",
+            field_id: "legacy.utility",
+            field_name: "text_revision_history",
+            value: [{ at: "2026-09-25T00:00:00Z" }],
+            derivation_method: "imported",
+            evaluation_status: "not_evaluated",
+            authority_status: "unreviewed",
+            value_status: "present",
+          },
+        ],
+      },
+      current_field_assertions: { "legacy.utility": "utility-a1" },
+    };
+
+    expect(editableRecordMetadata(record)).toEqual({ speaker: "Derrida" });
+  });
+
+  it("honors schema review visibility without relying on field names", () => {
+    const record = {
+      public_note: "review me",
+      internal_note: "runtime detail",
+    };
+    const schema = {
+      fields: [
+        {
+          name: "public_note",
+          label: "Public note",
+          role: "scholarly",
+          review_visibility: "primary",
+        },
+        {
+          name: "internal_note",
+          label: "Internal note",
+          role: "operational",
+          review_visibility: "hidden",
+        },
+      ],
+    } as any;
+
+    expect(editableRecordMetadata(record, schema)).toEqual({ public_note: "review me" });
+  });
+
 });
