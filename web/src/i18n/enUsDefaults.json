@@ -5582,5 +5582,17 @@
   "pdf_corpus.running": "Running",
   "pdf_corpus.show_diagnostics": "Show diagnostics",
   "pdf_corpus.hide_diagnostics": "Hide diagnostics",
-  "pdf_corpus.progress": "Progress"
+  "pdf_corpus.progress": "Progress",
+  "schemas.field_role": "Role",
+  "schemas.field_role_help": "Role describes how DerridAI uses this field independently of its storage name. Scholarly fields are research metadata; structural fields describe corpus structure; document fields describe the source edition; operational fields are utility/runtime data.",
+  "schemas.role_scholarly": "Scholarly metadata",
+  "schemas.role_structural": "Structural metadata",
+  "schemas.role_document": "Document metadata",
+  "schemas.role_operational": "Operational / utility",
+  "schemas.review_visibility": "Record review visibility",
+  "schemas.review_visibility_help": "Controls whether this field appears in ordinary Record review. Hidden fields remain available to the data model without being presented as scholarly metadata.",
+  "schemas.visibility_primary": "Show in review",
+  "schemas.visibility_details": "Show in details",
+  "schemas.visibility_hidden": "Hidden",
+  "schemas.hidden_short": "Hidden"
 }
