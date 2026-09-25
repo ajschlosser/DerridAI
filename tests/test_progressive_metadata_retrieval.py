@@ -289,3 +289,68 @@ def test_rebuild_scope_can_remove_all_stale_rows_deterministically():
     assert "stale" not in store.collection.rows
     assert "other-scope" in store.collection.rows
     assert "mex-new" in store.collection.rows
+
+def test_missing_metadata_exemplar_collection_is_created_on_first_use():
+    class MissingCollectionError(RuntimeError):
+        pass
+
+    class Client:
+        def __init__(self):
+            self.collection = None
+
+        def get_collection(self, *, name):
+            assert name == "test_metadata_exemplars"
+            if self.collection is None:
+                raise MissingCollectionError("Collection [test_metadata_exemplars] does not exist")
+            return self.collection
+
+        def delete_collection(self, *, name):
+            self.collection = None
+
+    class Store:
+        def __init__(self):
+            self.client = Client()
+            self.created = 0
+
+        @staticmethod
+        def _is_missing_collection_error(exc):
+            return "does not exist" in str(exc).casefold()
+
+        def create_store(self, name, **kwargs):
+            assert name == "test_metadata_exemplars"
+            self.created += 1
+            self.client.collection = FakeCollection()
+            return {"name": name}
+
+    store = Store()
+    index = ChromaMetadataExemplarIndex(store, collection_name="test_metadata_exemplars")
+
+    collection = index._ensure()
+
+    assert collection is store.client.collection
+    assert store.created == 1
+
+
+def test_exemplar_collection_creation_failure_is_not_rewritten_as_missing_collection():
+    class Client:
+        def get_collection(self, *, name):
+            raise RuntimeError("Collection [test_metadata_exemplars] does not exist")
+
+    class Store:
+        client = Client()
+
+        @staticmethod
+        def _is_missing_collection_error(exc):
+            return "does not exist" in str(exc).casefold()
+
+        def create_store(self, name, **kwargs):
+            raise RuntimeError("embedding provider unavailable")
+
+    index = ChromaMetadataExemplarIndex(Store(), collection_name="test_metadata_exemplars")
+
+    try:
+        index._ensure()
+        raise AssertionError("creation failure should propagate")
+    except RuntimeError as exc:
+        assert "embedding provider unavailable" in str(exc)
+
