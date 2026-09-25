@@ -2861,18 +2861,25 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         llm_family_calls = 0
         for record in records:
             status_map = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
-            for _field, info in status_map.items():
+            for field, info in status_map.items():
                 if not isinstance(info, dict):
                     continue
-                state = str(info.get("status") or "")
-                if state == "inherited": contribution["inherited_fields"] += 1
-                elif state == "deterministic": contribution["deterministic_fields"] += 1
-                elif state == "model_inferred": contribution["llm_fields_usable"] += 1
-                elif state in {"unresolved", "invalid"} and str(info.get("method") or "").startswith("llm"):
-                    contribution["llm_fields_review"] += 1
-                    if info.get("proposed_value") not in (None, "", []):
-                        contribution["llm_fields_proposed"] += 1
-                elif state in {"human_confirmed", "human_override"}: contribution["human_fields"] += 1
+                assertion = current_assertion_by_name(record, str(field))
+                if assertion is None:
+                    continue
+                if assertion.authority_status in {"human_confirmed", "human_override"}:
+                    contribution["human_fields"] += 1
+                elif assertion.derivation_method == "inherited":
+                    contribution["inherited_fields"] += 1
+                elif assertion.derivation_method == "deterministic":
+                    contribution["deterministic_fields"] += 1
+                elif assertion.derivation_method == "model":
+                    if assertion.value_status == "present" and assertion.evaluation_status != "evaluation_failed":
+                        contribution["llm_fields_usable"] += 1
+                    if assertion.value_status in {"unresolved", "invalid"} or assertion.evaluation_status == "evaluation_failed":
+                        contribution["llm_fields_review"] += 1
+                        if info.get("proposed_value") not in (None, "", []):
+                            contribution["llm_fields_proposed"] += 1
             ledger = record.get("metadata_execution_ledger") if isinstance(record.get("metadata_execution_ledger"), dict) else {}
             for family in ("discourse", "quotation", "indexing"):
                 entry = ledger.get(family) if isinstance(ledger.get(family), dict) else {}
