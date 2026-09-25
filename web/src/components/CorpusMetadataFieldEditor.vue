@@ -185,6 +185,7 @@ const autoResolved = computed(
         ><CorpusFieldOwnershipBadge
           :status="String(status?.status || '')"
           :method="String(status?.method || '')"
+          :derivation-method="String(status?.derivation_method || '')"
           :source="String(status?.value_source || '')"
           :verification="String(status?.verification_status || '')"
           :audit="Boolean(status?.audit_sample)"

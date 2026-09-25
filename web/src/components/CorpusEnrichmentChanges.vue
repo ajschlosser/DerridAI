@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18nStore } from "../stores/i18n";
+import UiButton from "./ui/UiButton.vue";
 
 interface Replaced {
   field: string;
@@ -144,14 +145,13 @@ function showInformational(item: Informational): string {
         ><span class="what"
           ><b>{{ label(item.field) }}</b
           >: <s>{{ show(item.previous) }}</s> → {{ show(item.value) }}</span
-        ><button
-          type="button"
-          class="btn small"
+        >
+        <UiButton
+          size="small"
+          :label="i18n.t('pdf_corpus.change_restore')"
           :disabled="busy"
           @click="emit('resolve', item.field, item.previous)"
-        >
-          {{ i18n.t("pdf_corpus.change_restore") }}
-        </button>
+        />
       </li>
       <li v-for="item in disputes" :key="`d-${item.field}`" data-kind="disputed">
         <span class="kind">{{ i18n.t("pdf_corpus.change_disputed") }}</span
@@ -169,14 +169,12 @@ function showInformational(item: Informational): string {
               <strong>{{ show(candidate.value) }}</strong
               ><small v-if="candidateMeta(candidate)">{{ candidateMeta(candidate) }}</small>
             </div>
-            <button
-              type="button"
-              class="btn small"
+            <UiButton
+              size="small"
+              :label="actionLabel(candidate)"
               :disabled="busy"
               @click="emit('resolve', item.field, candidate.value)"
-            >
-              {{ actionLabel(candidate) }}
-            </button>
+            />
           </article>
         </div>
       </li>
@@ -191,7 +189,7 @@ function showInformational(item: Informational): string {
           ><small v-if="item.model || item.pass || item.confidence !== undefined">{{
             [
               item.model,
-              item.pass ? `pass ${item.pass}` : null,
+              item.pass ? i18n.tf("pdf_corpus.enrichment_pass_number", { pass: item.pass }) : null,
               typeof item.confidence === "number" ? `${Math.round(item.confidence * 100)}%` : null,
             ]
               .filter(Boolean)
@@ -207,27 +205,27 @@ function showInformational(item: Informational): string {
 <style scoped>
 .enrichment-changes {
   display: grid;
-  gap: 8px;
-  padding: 12px 14px;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--tone-info-border);
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   background: var(--tone-info-bg);
-  color: var(--text);
+  color: var(--text-primary);
 }
 h4 {
   margin: 0;
-  font-size: 0.9375rem;
+  font-size: var(--fs-base);
   color: var(--tone-info-fg);
 }
 header p {
-  margin: 2px 0 0;
-  font-size: 0.8125rem;
-  color: var(--text-2);
-  line-height: 1.4;
+  margin: var(--space-1) 0 0;
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  line-height: var(--lh-normal);
 }
 ul {
   display: grid;
-  gap: 6px;
+  gap: var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -236,12 +234,12 @@ li {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
   align-items: baseline;
-  gap: 6px 12px;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
   border-inline-start-width: 4px;
-  border-radius: 8px;
-  background: var(--card);
+  border-radius: var(--radius-control);
+  background: var(--surface-card);
 }
 li[data-kind="added"] {
   border-inline-start-color: var(--tone-ok-edge);
@@ -257,47 +255,48 @@ li[data-kind="informational"] {
 }
 .kind {
   min-inline-size: 5.5rem;
-  font-size: 0.75rem;
-  font-weight: 800;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--text-2);
+  color: var(--text-secondary);
 }
 .what {
-  font-size: 0.875rem;
+  font-size: var(--fs-base);
   overflow-wrap: anywhere;
 }
 .what s {
-  color: var(--muted);
+  color: var(--text-tertiary);
 }
 .what small {
   display: block;
   color: var(--muted);
-  font-size: 0.75rem;
-  line-height: 1.4;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-normal);
 }
-li > .btn,
+li > :deep(.ui-button-wrap),
 li > .candidate-list {
   grid-column: 2;
+  justify-self: start;
 }
 .candidate-list {
   display: grid;
-  gap: 7px;
+  gap: var(--space-2);
   min-width: 0;
 }
 .candidate {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--soft);
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-inset);
 }
 .candidate-copy {
   display: grid;
-  gap: 2px;
+  gap: var(--space-1);
   min-width: 0;
 }
 .candidate-copy strong {
@@ -305,16 +304,16 @@ li > .candidate-list {
 }
 .candidate-copy small {
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
 }
-.candidate .btn {
+.candidate :deep(.ui-button-wrap) {
   flex: 0 0 auto;
 }
 @media (max-width: 520px) {
   li {
     grid-template-columns: minmax(0, 1fr);
   }
-  li > .btn,
+  li > :deep(.ui-button-wrap),
   li > .candidate-list {
     grid-column: 1;
   }
@@ -322,7 +321,7 @@ li > .candidate-list {
     align-items: stretch;
     flex-direction: column;
   }
-  .candidate .btn {
+  .candidate :deep(.ui-button-wrap) {
     align-self: flex-start;
   }
 }

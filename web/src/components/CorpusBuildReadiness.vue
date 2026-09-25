@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // Copyright 2026 Aaron John Schlosser, PhD.
-import { hasPages } from "../domain/sourceMedia";
 import { computed } from "vue";
+import { hasPages } from "../domain/sourceMedia";
 import { useI18nStore } from "../stores/i18n";
+import UiButton from "./ui/UiButton.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -39,6 +40,7 @@ const props = withDefaults(
     warnings: () => [],
   },
 );
+
 const emit = defineEmits<{ build: [] }>();
 const i18n = useI18nStore();
 const ready = computed(() => Boolean(props.sourceFilename && props.canStart && props.contextSafe));
@@ -54,6 +56,13 @@ const sizing = computed(() =>
         tolerance: props.toleranceChars.toLocaleString(),
       })
     : "—",
+);
+const buildActionLabel = computed(() =>
+  props.busy
+    ? i18n.t("pdf_corpus.starting")
+    : i18n.t(
+        props.activeBuildCount ? "pdf_corpus.start_another_build" : "pdf_corpus.build_records",
+      ),
 );
 </script>
 
@@ -73,17 +82,18 @@ const sizing = computed(() =>
           }}
         </h3>
       </div>
+
       <dl>
         <div>
           <dt>{{ i18n.t("pdf_corpus.readiness.source") }}</dt>
           <dd>
-            {{ sourceFilename || i18n.t("pdf_corpus.choose_source_prompt")
-            }}<small v-if="sourceFilename"
-              ><template v-if="hasPages(mediaKind)"
-                >{{ pageCount }} {{ i18n.t("pdf_corpus.pages") }} ·
+            {{ sourceFilename || i18n.t("pdf_corpus.choose_source_prompt") }}
+            <small v-if="sourceFilename">
+              <template v-if="hasPages(mediaKind)">
+                {{ pageCount }} {{ i18n.t("pdf_corpus.pages") }} ·
               </template>
-              {{ blockCount }} {{ i18n.t("pdf_corpus.blocks") }}</small
-            >
+              {{ blockCount }} {{ i18n.t("pdf_corpus.blocks") }}
+            </small>
           </dd>
         </div>
         <div v-if="hasPages(mediaKind)">
@@ -99,8 +109,8 @@ const sizing = computed(() =>
         <div>
           <dt>{{ i18n.t("pdf_corpus.readiness.llm") }}</dt>
           <dd>
-            {{ providerLabel || i18n.t("pdf_corpus.provider_default")
-            }}<small v-if="modelLabel">{{ modelLabel }}</small>
+            {{ providerLabel || i18n.t("pdf_corpus.provider_default") }}
+            <small v-if="modelLabel">{{ modelLabel }}</small>
           </dd>
         </div>
         <div>
@@ -108,6 +118,7 @@ const sizing = computed(() =>
           <dd>{{ sizing }}</dd>
         </div>
       </dl>
+
       <div v-if="!contextSafe" class="readiness-alert" role="alert">
         {{ i18n.t("pdf_corpus.context_unsafe") }}
       </div>
@@ -122,151 +133,167 @@ const sizing = computed(() =>
         {{ i18n.tf("pdf_corpus.active_build_capacity", { count: activeBuildCount }) }}
       </p>
     </div>
-    <button
-      type="button"
-      class="btn primary build-action"
+
+    <UiButton
+      class="build-action-wrap"
+      button-class="build-action"
+      variant="primary"
+      :label="buildActionLabel"
       :disabled="!ready || busy"
       @click="emit('build')"
-    >
-      {{
-        busy
-          ? i18n.t("pdf_corpus.starting")
-          : i18n.t(
-              activeBuildCount ? "pdf_corpus.start_another_build" : "pdf_corpus.build_records",
-              activeBuildCount ? "Start another build" : "Build record set",
-            )
-      }}
-    </button>
+    />
   </section>
 </template>
 
 <style scoped>
 .build-readiness {
   position: sticky;
-  bottom: 12px;
+  bottom: var(--space-3);
   z-index: 12;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 18px;
+  gap: var(--space-4);
   align-items: center;
-  padding: 16px 18px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--surface-glass, rgba(255, 255, 255, 0.96));
-  box-shadow: 0 14px 36px rgb(15 23 42 / 0.12);
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-glass);
+  box-shadow: var(--shadow-overlay);
   backdrop-filter: blur(10px);
 }
+
 .readiness-copy {
   display: grid;
-  gap: 11px;
+  gap: var(--space-3);
   min-width: 0;
 }
+
 .readiness-heading {
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
+
 .readiness-heading h3 {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--fs-md);
 }
-.eyebrow {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--muted);
-  font-weight: 800;
+
+.eyebrow,
+dt {
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  font-weight: var(--fw-bold);
 }
+
 dl {
   display: grid;
   grid-template-columns: repeat(5, minmax(120px, 1fr));
-  gap: 10px;
+  gap: var(--space-2);
   margin: 0;
 }
+
 dl > div {
   min-width: 0;
   display: grid;
-  gap: 2px;
-  padding-inline-end: 10px;
-  border-inline-end: 1px solid var(--line);
+  gap: var(--space-1);
+  padding-inline-end: var(--space-2);
+  border-inline-end: 1px solid var(--border-subtle);
 }
+
 dl > div:last-child {
   border-inline-end: 0;
 }
-dt {
-  font-size: 0.75rem;
-  color: var(--muted);
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
+
 dd {
   min-width: 0;
   margin: 0;
-  font-size: 0.875rem;
-  font-weight: 750;
+  font-size: var(--fs-base);
+  font-weight: var(--fw-bold);
   overflow-wrap: anywhere;
 }
+
 dd small {
   display: block;
-  margin-top: 2px;
-  color: var(--muted);
-  font-size: 0.8125rem;
-  font-weight: 500;
+  margin-top: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
 }
+
 .readiness-alert {
-  padding: 8px 10px;
-  border-radius: 8px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--tone-danger-border);
+  border-radius: var(--radius-control);
   background: var(--tone-danger-bg);
   color: var(--tone-danger-fg);
-  font-size: 0.8125rem;
-  font-weight: 750;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-bold);
 }
+
 .readiness-warnings {
   margin: 0;
-  padding-inline-start: 20px;
-  color: var(--muted);
-  font-size: 0.8125rem;
-  line-height: 1.45;
+  padding-inline-start: var(--space-5);
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-normal);
 }
+
 .capacity-note {
   margin: 0;
-  color: var(--muted);
-  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
 }
-.build-action {
+
+.build-action-wrap {
   min-width: 160px;
-  min-height: 46px;
-  font-weight: 800;
 }
+
+.build-action-wrap :deep(.build-action) {
+  width: 100%;
+}
+
 @media (max-width: 1100px) {
   .build-readiness {
     position: static;
     grid-template-columns: 1fr;
   }
+
   dl {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
   dl > div {
     border-inline-end: 0;
-    border-bottom: 1px solid var(--line);
-    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-subtle);
+    padding-bottom: var(--space-2);
   }
-  .build-action {
+
+  .build-action-wrap {
     width: 100%;
   }
 }
+
 @media (max-width: 620px) {
   dl {
     grid-template-columns: 1fr;
   }
+
   .build-readiness {
-    padding: 14px;
+    padding: var(--space-3);
   }
+
   .readiness-heading {
     display: grid;
-    gap: 3px;
+    gap: var(--space-1);
+  }
+}
+
+@media (forced-colors: active) {
+  .build-readiness {
+    border-color: CanvasText;
+    box-shadow: none;
   }
 }
 </style>
