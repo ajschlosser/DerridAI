@@ -26,6 +26,24 @@ describe("UiTagPicker", () => {
     wrapper.unmount();
   });
 
+  it("announces the keyboard-active option through aria-activedescendant", async () => {
+    const wrapper = mount(UiTagPicker, {
+      props: {
+        modelValue: [],
+        options: ["NOUN", "PROPN"],
+        label: "POS tags",
+      },
+    });
+
+    const input = wrapper.get("input");
+    await input.trigger("focus");
+    await input.trigger("keydown", { key: "ArrowDown" });
+
+    const activeId = input.attributes("aria-activedescendant");
+    expect(activeId).toBeTruthy();
+    expect(wrapper.get(`#${activeId}`).text()).toBe("NOUN");
+  });
+
   it("removes a selected tag independently of the search query", async () => {
     const wrapper = mount(UiTagPicker, {
       props: {
