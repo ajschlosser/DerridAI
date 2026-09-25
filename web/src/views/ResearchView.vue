@@ -47,6 +47,36 @@ let draftTimer: number | undefined;
 const selectedEvidence = computed(() => workspace.value?.selected_evidence || []);
 const profiles = computed(() => workspace.value?.profiles || []);
 const stores = computed(() => workspace.value?.stores || []);
+const metadataFields = computed(() => {
+  const fields = new Set<string>();
+  const selectedStore = stores.value.find((store) => store.name === config.value?.source_collection);
+  for (const field of selectedStore?.filter_fields || []) fields.add(String(field));
+  for (const item of selectedEvidence.value) {
+    for (const assertion of item.assertions || []) {
+      if (assertion.field_id) fields.add(assertion.field_id);
+      else if (assertion.field_name) fields.add(assertion.field_name);
+    }
+    for (const field of Object.keys(item.metadata || {})) fields.add(field);
+  }
+  for (const scope of ["evidence", "context", "record"] as const)
+    for (const field of config.value?.prompt_metadata?.[scope] || []) fields.add(field);
+  for (const field of [
+    "speaker",
+    "quoted_speaker",
+    "quoted_author",
+    "quoted_work",
+    "quoted_position_holder",
+    "position_holder",
+    "stance",
+    "proposition_status",
+    "target",
+    "discourse_role",
+  ])
+    fields.add(field);
+  return [...fields]
+    .filter((field) => field && !field.startsWith("_"))
+    .sort((a, b) => a.localeCompare(b));
+});
 const activeResult = computed(() => activeJob.value?.result || null);
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- SA-13: preserve legacy setup binding until its owning workflow is extracted.
 const resultEvidence = computed(() => activeResult.value?.evidence || []);
@@ -593,6 +623,7 @@ onBeforeUnmount(() => {
         :generation="generation"
         :model="model"
         :models="discoveredModels"
+        :metadata-fields="metadataFields"
         :researcher="workspace.is_researcher"
         @apply="applySettings"
         @discover="discoverModels"
