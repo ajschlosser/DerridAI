@@ -2,7 +2,11 @@
 import { computed, nextTick, ref, watch } from "vue";
 import AppIcon from "../AppIcon.vue";
 import { useI18nStore } from "../../stores/i18n";
-import type { ResearchConfig, ResearchProfile } from "../../types/research";
+import type {
+  ResearchConfig,
+  ResearchProfile,
+  ResearchPromptMetadataPolicy,
+} from "../../types/research";
 
 type SettingsSection = "retrieval" | "evidence" | "generation";
 const props = defineProps<{
@@ -12,6 +16,7 @@ const props = defineProps<{
   generation: Record<string, unknown>;
   model: string;
   models: string[];
+  metadataFields: string[];
   researcher: boolean;
 }>();
 const emit = defineEmits<{
@@ -62,6 +67,11 @@ function sync() {
     evidence_total_char_limit: props.config.evidence_total_char_limit,
     bind_citations: props.config.bind_citations,
     include_works_cited: props.config.include_works_cited,
+    prompt_metadata: {
+      evidence: [...(props.config.prompt_metadata?.evidence || [])],
+      context: [...(props.config.prompt_metadata?.context || [])],
+      record: [...(props.config.prompt_metadata?.record || [])],
+    },
     auto_grade: props.config.auto_grade,
     auto_grade_provider_profile_id: props.config.auto_grade_provider_profile_id,
     use_prior_response_memory: props.config.use_prior_response_memory,
@@ -89,6 +99,31 @@ function toggleList(key: "locales" | "search_types", value: string, checked: boo
   checked ? list.add(value) : list.delete(value);
   draft.value[key] = [...list];
 }
+function promptMetadataPolicy(): ResearchPromptMetadataPolicy {
+  return {
+    evidence: [...(draft.value.prompt_metadata?.evidence || [])],
+    context: [...(draft.value.prompt_metadata?.context || [])],
+    record: [...(draft.value.prompt_metadata?.record || [])],
+  };
+}
+function promptMetadataSelected(
+  scope: keyof ResearchPromptMetadataPolicy,
+  field: string,
+): boolean {
+  return promptMetadataPolicy()[scope].includes(field);
+}
+function togglePromptMetadata(
+  scope: keyof ResearchPromptMetadataPolicy,
+  field: string,
+  checked: boolean,
+) {
+  const policy = promptMetadataPolicy();
+  const values = new Set(policy[scope]);
+  checked ? values.add(field) : values.delete(field);
+  policy[scope] = [...values];
+  draft.value.prompt_metadata = policy;
+}
+
 function resetSection(section: SettingsSection) {
   const source = props.config;
   if (section === "retrieval")
@@ -111,6 +146,11 @@ function resetSection(section: SettingsSection) {
       evidence_total_char_limit: source.evidence_total_char_limit,
       bind_citations: source.bind_citations,
       include_works_cited: source.include_works_cited,
+      prompt_metadata: {
+        evidence: [...(source.prompt_metadata?.evidence || [])],
+        context: [...(source.prompt_metadata?.context || [])],
+        record: [...(source.prompt_metadata?.record || [])],
+      },
       auto_grade: source.auto_grade,
       auto_grade_provider_profile_id: source.auto_grade_provider_profile_id,
       use_prior_response_memory: source.use_prior_response_memory,
@@ -469,6 +509,83 @@ defineExpose({ open, close });
                   >
                 </div>
               </fieldset>
+              <fieldset class="research-settings-card wide research-prompt-metadata">
+                <legend>{{ i18n.t("research.prompt_metadata", "Prompt metadata") }}</legend>
+                <p>
+                  {{
+                    i18n.t(
+                      "research.prompt_metadata_help",
+                      "Choose which scholarly metadata fields enter the generation prompt. Source identity, citations, record IDs, and evidence text stay in the deterministic evidence envelope.",
+                    )
+                  }}
+                </p>
+                <div class="research-prompt-metadata-head" aria-hidden="true">
+                  <span>{{ i18n.t("research.metadata_field", "Field") }}</span>
+                  <span>{{ i18n.t("research.metadata_with_evidence", "Evidence") }}</span>
+                  <span>{{ i18n.t("research.metadata_as_context", "Context") }}</span>
+                  <span>{{ i18n.t("research.metadata_with_record", "Record") }}</span>
+                </div>
+                <div class="research-prompt-metadata-rows">
+                  <div
+                    v-for="field in metadataFields"
+                    :key="field"
+                    class="research-prompt-metadata-row"
+                  >
+                    <code>{{ field }}</code>
+                    <label
+                      ><input
+                        type="checkbox"
+                        :checked="promptMetadataSelected('evidence', field)"
+                        @change="
+                          togglePromptMetadata(
+                            'evidence',
+                            field,
+                            ($event.target as HTMLInputElement).checked,
+                          )
+                        "
+                      /><span class="sr-only">{{
+                        i18n.t("research.metadata_with_evidence", "Evidence")
+                      }}</span></label
+                    >
+                    <label
+                      ><input
+                        type="checkbox"
+                        :checked="promptMetadataSelected('context', field)"
+                        @change="
+                          togglePromptMetadata(
+                            'context',
+                            field,
+                            ($event.target as HTMLInputElement).checked,
+                          )
+                        "
+                      /><span class="sr-only">{{
+                        i18n.t("research.metadata_as_context", "Context")
+                      }}</span></label
+                    >
+                    <label
+                      ><input
+                        type="checkbox"
+                        :checked="promptMetadataSelected('record', field)"
+                        @change="
+                          togglePromptMetadata(
+                            'record',
+                            field,
+                            ($event.target as HTMLInputElement).checked,
+                          )
+                        "
+                      /><span class="sr-only">{{
+                        i18n.t("research.metadata_with_record", "Record")
+                      }}</span></label
+                    >
+                  </div>
+                </div>
+                <small>{{
+                  i18n.t(
+                    "research.prompt_metadata_reproducible",
+                    "These selections are stored with the run and restored for reruns.",
+                  )
+                }}</small>
+              </fieldset>
               <fieldset class="research-settings-card">
                 <legend>{{ i18n.t("research.evaluation") }}</legend>
                 <p>{{ i18n.t("research.evaluation_help") }}</p>
@@ -660,3 +777,57 @@ defineExpose({ open, close });
     </div>
   </dialog>
 </template>
+
+<style scoped>
+.research-prompt-metadata {
+  min-width: 0;
+}
+.research-prompt-metadata-head,
+.research-prompt-metadata-row {
+  display: grid;
+  grid-template-columns: minmax(10rem, 1fr) repeat(3, minmax(4.5rem, 0.28fr));
+  gap: 0.5rem;
+  align-items: center;
+}
+.research-prompt-metadata-head {
+  padding: 0 0.625rem 0.375rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+.research-prompt-metadata-head span:not(:first-child) {
+  text-align: center;
+}
+.research-prompt-metadata-rows {
+  max-block-size: 22rem;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control, 0.625rem);
+  background: var(--surface-control, var(--card));
+}
+.research-prompt-metadata-row {
+  min-block-size: 2.75rem;
+  padding: 0.375rem 0.625rem;
+  border-block-start: 1px solid var(--line);
+}
+.research-prompt-metadata-row:first-child {
+  border-block-start: 0;
+}
+.research-prompt-metadata-row code {
+  overflow-wrap: anywhere;
+}
+.research-prompt-metadata-row label {
+  display: grid;
+  place-items: center;
+}
+.research-prompt-metadata-row input {
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
+}
+@media (max-width: 720px) {
+  .research-prompt-metadata-head,
+  .research-prompt-metadata-row {
+    grid-template-columns: minmax(8rem, 1fr) repeat(3, minmax(3.25rem, 0.25fr));
+  }
+}
+</style>
