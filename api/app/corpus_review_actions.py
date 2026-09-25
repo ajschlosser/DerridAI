@@ -43,6 +43,15 @@ from .corpus_segmentation import (
     _scholarly_page_range,
 )
 from .enrichment_ledger import ACCEPTED
+from .field_assertions import (
+    confirm_absence,
+    confirm_assertion,
+    create_human_assertion,
+    current_assertion_by_name,
+    migrate_record_assertions,
+    project_record_assertions,
+    replace_assertion_evidence,
+)
 from .metadata_adjudication_cache import remember as remember_adjudication
 from .metadata_schema import MetadataSchema
 from .provenance_memory import persist_record_decision
@@ -206,16 +215,12 @@ class ReviewActionsMixin:
                 record = self.repo.get_record(build_id, record_id)
             except KeyError:
                 continue
+            migrate_record_assertions(record, schema)
             for field in dict.fromkeys(str(item) for item in fields if str(item)):
-                status = (
-                    (record.get("metadata_field_status") or {}).get(field)
-                    if isinstance(record.get("metadata_field_status"), dict)
-                    else None
-                )
+                assertion = current_assertion_by_name(record, field)
                 decision_kind: Literal["value", "absence"] = (
                     "absence"
-                    if isinstance(status, dict)
-                    and str(status.get("status") or "") == "confirmed_absent"
+                    if assertion is not None and assertion.value_status == "confirmed_absent"
                     else "value"
                 )
                 persist_record_decision(
