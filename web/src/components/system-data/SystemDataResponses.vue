@@ -46,6 +46,10 @@ function provider(record: DataRow) {
       "—",
   );
 }
+function openLibrary(record?: DataRow) {
+  const id = String(record?.record_id || record?.id || "");
+  void router.push(id ? { path: "/faq", query: { id } } : "/faq");
+}
 function grade(record: DataRow) {
   const value = record.grade ?? record.grade_status ?? record.grades;
   if (Array.isArray(value)) {
@@ -132,7 +136,7 @@ onMounted(() => void load(0));
         </p>
       </div>
       <div class="heading-actions">
-        <button class="btn" type="button" @click="router.push('/faq')">
+        <button class="btn" type="button" @click="openLibrary()">
           {{ t("runtime.help.open_response_library", "Open Response Library") }}
         </button>
         <details v-if="page.total > 0" class="maintenance-menu">
@@ -210,7 +214,7 @@ onMounted(() => void load(0));
               <td>{{ provider(record) }}</td>
               <td><span class="status-pill">{{ grade(record) }}</span></td>
               <td class="row-actions">
-                <button class="btn tiny" type="button" @click="router.push('/faq')">
+                <button class="btn tiny" type="button" @click="openLibrary(record)">
                   {{ t("runtime.system_library", "Library") }}
                 </button>
                 <button
