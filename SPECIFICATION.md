@@ -10,7 +10,6 @@
 
 DERRIDAI defines a normalized, traceable, and reproducible information architecture for AI-assisted documentary research. In the name DERRIDAI, **Retrieval** is used in both a broad research sense - the recovery of relevant documentary information for active use - and a narrower technical sense that includes vector, lexical, hybrid, filtered, and other computational search methods. Vector search is one retrieval mechanism, not the meaning of the specification as a whole.
 
-
 ## Contents
 
 - [How to Read This Specification](#how-to-read-this-specification)
@@ -64,7 +63,6 @@ Sections explicitly marked _Non-normative_ are explanatory.
 A DERRIDAI system is designed so that: heterogeneous documentary inputs are normalized into stable research objects with declared semantics; documentary data remains traceable to source; logical record identity remains distinct from storage identity; source facts remain distinguishable from deterministic derivations, model inferences, human judgments, unresolved states, and explicit absence; retrieval diagnostics remain properties of retrieval events rather than of the source record; evidence can be bound explicitly to generated claims; research runs retain enough versioned state for substantial reproducibility; source-derived facts such as identifiers, page maps, schema validity, and citation structure are handled deterministically when possible - that is, by fixed procedures whose results do not depend on model interpretation; uncertainty remains representable; and derived indexes do not silently replace authoritative corpus state.
 
 > **Core rule.** The identity, provenance, and evidentiary integrity of documentary information MUST survive the transformations between source extraction and AI-assisted research, while computational mechanisms operating over that information remain replaceable.
-
 
 ### Architectural Model
 
@@ -129,7 +127,6 @@ DERRIDAI distinguishes physical navigation from scholarly citation. An implement
 
 A location MAY include `physical_page`, `printed_page`, `printed_page_label`, `volume`, `section`, `chapter`, `paragraph`, `column`, bounding boxes, and character offsets. When multiple page systems exist, the representation MUST identify which system a value belongs to.
 
-
 #### Extraction units (implementation-specific)
 
 An implementation MAY use addressable extraction units such as PDF blocks, OCR regions, paragraph candidates, XML nodes, line groups, media segments, or page regions. Such units MAY carry stable local IDs, extracted text, source-document identity, location, extraction method, and extraction confidence.
@@ -187,7 +184,6 @@ Provider failure, malformed model output, or model uncertainty MUST NOT by itsel
 #### Field classes
 
 Implementations SHOULD distinguish at least: identity fields; source-bound fields; document-inherited fields; semantic or interpretive fields; derived fields; and operational fields. Operational fields MUST NOT be silently published as scholarly record content.
-
 
 #### FieldAssertion
 
@@ -249,7 +245,6 @@ A system MAY retain multiple FieldAssertions for the same field. When determinis
 The implementation MUST have a declared authority or resolution policy for selecting a materialized current value. Human confirmation and human override MUST be explicit and auditable. If contradictory later evidence reopens a human-confirmed value, the prior confirmation SHOULD remain historical provenance rather than being rewritten as though it never occurred.
 
 ### Attribution and Semantic Relations
-
 
 #### Scholarly attribution
 
@@ -394,7 +389,6 @@ A user MAY designate a Record or RecordSpan as evidence independently of retriev
 Selected evidence MAY bypass retrieval entirely and SHOULD be normalized into the same evidence model used by retrieved evidence so downstream citation and validation do not depend on acquisition method.
 
 ## Evidence, Claims, Traceability, and Reproducibility
-
 
 ### Evidence Profile
 
@@ -720,18 +714,18 @@ Implementation-specific extraction units, metadata-contract objects, retrieval c
 
 Where both Record and RecordRevision are exported, the persistent logical Record MUST remain distinguishable from a particular revision of that Record. A consumer MUST be able to determine which exact RecordRevision was used as evidence when the native ResearchRun preserves that information.
 
-| DERRIDAI object | PROV-oriented representation |
-|---|---|
-| SourceDocument, SourceSpan | Entity representing documentary material or an identified reproducible portion of it |
-| Record, RecordRevision | Entity representing persistent scholarly identity and a particular state of that identity |
-| FieldAssertion | Entity whose lineage records derivation, evaluation, confirmation, override, or dispute |
-| CorpusPublication | Entity representing an immutable/versioned corpus release |
-| RetrievalRun | Entity or associated Activity state representing one declared computational retrieval operation |
+| DERRIDAI object             | PROV-oriented representation                                                                        |
+| --------------------------- | --------------------------------------------------------------------------------------------------- |
+| SourceDocument, SourceSpan  | Entity representing documentary material or an identified reproducible portion of it                |
+| Record, RecordRevision      | Entity representing persistent scholarly identity and a particular state of that identity           |
+| FieldAssertion              | Entity whose lineage records derivation, evaluation, confirmation, override, or dispute             |
+| CorpusPublication           | Entity representing an immutable/versioned corpus release                                           |
+| RetrievalRun                | Entity or associated Activity state representing one declared computational retrieval operation     |
 | EvidenceRef, EvidencePacket | Entity representing evidentiary locator semantics or the ordered evidence context supplied to a run |
-| GenerationRun | Associated Activity or retained run entity representing an AI generation operation |
-| GeneratedClaim | Entity representing an identified claim produced by generation |
-| SupportBinding | Entity representing the claim-scoped evidentiary relation |
-| ResearchRun | Entity describing the coherent retained audit view of a research operation |
+| GenerationRun               | Associated Activity or retained run entity representing an AI generation operation                  |
+| GeneratedClaim              | Entity representing an identified claim produced by generation                                      |
+| SupportBinding              | Entity representing the claim-scoped evidentiary relation                                           |
+| ResearchRun                 | Entity describing the coherent retained audit view of a research operation                          |
 
 #### Record and RecordRevision
 
@@ -1040,21 +1034,21 @@ ResearchRun --------------- references publication/evidence/generation/validatio
 
 ### Normative Object Glossary
 
-| Object | Identity and persistence | Cardinality and owning profile |
-|---|---|---|
-| **SourceDocument** | Stable documentary representation; durable | 1 SourceDocument -> 0..* SourceSpans and Records. Profile: Core |
-| **SourceSpan** | Reproducible region within one SourceDocument; durable locator | Exactly 1 SourceDocument; may contribute to 0..* Records/EvidenceRefs. Profile: Core |
-| **Record** | Logical research unit; durable | Exactly 1 SourceDocument; 1..* SourceSpans; 0..* RecordRevisions. Profile: Core |
-| **RecordRevision** | Specific state of one Record; durable/versioned | Exactly 1 Record; 0..* EvidenceRefs may reference it. Profile: Core |
-| **FieldAssertion** | Assertion about one stable field identity/value in Record context; durable when retained | Belongs to a Record or RecordRevision context; native encoding may vary if required epistemic dimensions remain recoverable. Profile: Core |
-| **CorpusPublication** | Immutable corpus snapshot identity; durable/immutable | Publishes 1..* Records or immutable Record locators. Profile: Publication |
-| **RetrievalRun** | One computational retrieval operation; run/audit state | May record 0..* result diagnostics and acquisition links. Profile: Retrieval |
-| **EvidenceRef** | Exact evidentiary locator semantics; durable for audit | Exactly 1 locator_kind; resolves to exactly 1 SourceDocument; may be named or embedded. Profile: Evidence |
-| **EvidencePacket** | Exact or deterministically reproducible ordered model context; run-specific/audit-retainable | 0..* composite entries carrying/referring to EvidenceRef locators. Profile: Evidence |
-| **GenerationRun** | One AI generation operation; run-specific/audit-retainable | Uses 0..1 EvidencePacket; produces 0..* GeneratedClaims. Profile: Claim-Binding |
-| **GeneratedClaim** | Identifiable claim within generated output; run-specific/audit-retainable | Exactly 1 GenerationRun; 0..* SupportBindings. Profile: Claim-Binding |
-| **SupportBinding** | Claim-scoped evidentiary relation; run-specific/audit-retainable | Exactly 1 GeneratedClaim; 1..* named or embedded EvidenceRef locators. Profile: Claim-Binding |
-| **ResearchRun** | Coherent retained research-operation audit view; run/audit state | May be one object or a resolvable composition of durable run records; references publication, evidence, generation, validation, and advisory-memory state. Profile: Reproducible Research |
+| Object                | Identity and persistence                                                                     | Cardinality and owning profile                                                                                                                                                            |
+| --------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **SourceDocument**    | Stable documentary representation; durable                                                   | 1 SourceDocument -> 0..\* SourceSpans and Records. Profile: Core                                                                                                                          |
+| **SourceSpan**        | Reproducible region within one SourceDocument; durable locator                               | Exactly 1 SourceDocument; may contribute to 0..\* Records/EvidenceRefs. Profile: Core                                                                                                     |
+| **Record**            | Logical research unit; durable                                                               | Exactly 1 SourceDocument; 1.._ SourceSpans; 0.._ RecordRevisions. Profile: Core                                                                                                           |
+| **RecordRevision**    | Specific state of one Record; durable/versioned                                              | Exactly 1 Record; 0..\* EvidenceRefs may reference it. Profile: Core                                                                                                                      |
+| **FieldAssertion**    | Assertion about one stable field identity/value in Record context; durable when retained     | Belongs to a Record or RecordRevision context; native encoding may vary if required epistemic dimensions remain recoverable. Profile: Core                                                |
+| **CorpusPublication** | Immutable corpus snapshot identity; durable/immutable                                        | Publishes 1..\* Records or immutable Record locators. Profile: Publication                                                                                                                |
+| **RetrievalRun**      | One computational retrieval operation; run/audit state                                       | May record 0..\* result diagnostics and acquisition links. Profile: Retrieval                                                                                                             |
+| **EvidenceRef**       | Exact evidentiary locator semantics; durable for audit                                       | Exactly 1 locator_kind; resolves to exactly 1 SourceDocument; may be named or embedded. Profile: Evidence                                                                                 |
+| **EvidencePacket**    | Exact or deterministically reproducible ordered model context; run-specific/audit-retainable | 0..\* composite entries carrying/referring to EvidenceRef locators. Profile: Evidence                                                                                                     |
+| **GenerationRun**     | One AI generation operation; run-specific/audit-retainable                                   | Uses 0..1 EvidencePacket; produces 0..\* GeneratedClaims. Profile: Claim-Binding                                                                                                          |
+| **GeneratedClaim**    | Identifiable claim within generated output; run-specific/audit-retainable                    | Exactly 1 GenerationRun; 0..\* SupportBindings. Profile: Claim-Binding                                                                                                                    |
+| **SupportBinding**    | Claim-scoped evidentiary relation; run-specific/audit-retainable                             | Exactly 1 GeneratedClaim; 1..\* named or embedded EvidenceRef locators. Profile: Claim-Binding                                                                                            |
+| **ResearchRun**       | Coherent retained research-operation audit view; run/audit state                             | May be one object or a resolvable composition of durable run records; references publication, evidence, generation, validation, and advisory-memory state. Profile: Reproducible Research |
 
 DERRIDAI intentionally does **not** define first-class semantic objects for extraction units, generic relations, metadata schemas, generic transformations, storage projections, collection manifests, retrieval hits or candidates, packet items, transport RecordRefs, validation results, or grade results. Implementations MAY use such artifacts. Their semantics are governed by the relevant DERRIDAI identity, provenance, evidence, or interoperability rules rather than by additional object classes.
 
@@ -1087,122 +1081,122 @@ The following identifiers are the tracked conformance requirements for DERRIDAI 
 
 #### Core requirements
 
-| Requirement | Normative statement | Test class |
-|---|---|---|
-| **CORE-ID-001 MUST** | SourceDocument has a stable `source_document_id` not based solely on transient storage or application identifiers. | schema+semantic |
-| **CORE-ID-002 MUST** | Each SourceSpan refers to exactly one SourceDocument. | schema+semantic |
-| **CORE-ID-003 MUST** | Each Record contains `record_id`, `source_document_id`, `text`, and one or more SourceSpans. | schema |
-| **CORE-ID-004 MUST** | Every SourceSpan used by a Record identifies the same SourceDocument as that Record. | semantic |
-| **CORE-ID-005 MUST** | Logical Record identity remains distinguishable from storage identity and derived storage cannot silently become authoritative. | semantic |
-| **CORE-ID-006 MUST** | The RecordRevision identifier changes whenever authoritative Record text changes and whenever another mutation can invalidate a pinned evidence locator or SupportBinding; it MAY also advance for broader authoritative concurrency control. | behavioral+audit |
-| **CORE-ID-007 MUST** | Modification of extracted text preserves original extraction, reconstructible immutable source, or an auditable change trail. | behavioral+audit |
-| **CORE-ID-008 MUST NOT** | Cleaning does not silently paraphrase, summarize, translate, alter proposition-bearing negation, remove meaningful qualification, or erase material distinctions. | behavioral+audit |
-| **CORE-ID-009 MUST NOT** | Segmentation does not silently lose, invent, duplicate, or reorder source material. | semantic+behavioral |
-| **CORE-ID-010 MUST** | Unresolved state remains representable and is not conflated with confirmed absence. | schema+semantic |
-| **CORE-ID-011 MUST** | A declared authority policy governs materialized current values, and human overrides are explicit and auditable. | behavioral+audit |
-| **CORE-ID-012 MUST NOT** | Replacing a model, embedding engine, retrieval engine, or provider does not by itself alter authoritative Record identity, source relationships, or human-confirmed assertions. | behavioral+audit |
-| **CORE-ID-013 MUST** | Authoritative boundaries validate required shape/types and model output is separately validated before semantic entry. | schema+behavioral |
-| **CORE-ID-014 MUST NOT** | Failures affecting provenance, attribution, evidence, publication, or corpus integrity are not silently converted into confident success. | behavioral+audit |
-| **CORE-ID-015 MUST NOT** | Persisted data is not silently reinterpreted under an incompatible newer specification or schema contract. | behavioral+audit |
-| **CORE-ID-016 MUST** | A materialized FieldAssertion preserves independently recoverable derivation, evaluation, authority, and value-state semantics; native field names or compact encodings MAY differ if the mapping is lossless. | schema+semantic |
-| **CORE-ID-017 MUST** | Confidence is omitted when not evaluated; after evaluation it is present as a documented-scale number or explicit null, and is never fabricated as zero or one. | semantic |
-| **CORE-ID-018 SHOULD** | Persisted schema-defined assertions use stable field identity across non-semantic renames, or declare an explicit compatibility mapping. | semantic+audit |
+| Requirement              | Normative statement                                                                                                                                                                                                                           | Test class          |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| **CORE-ID-001 MUST**     | SourceDocument has a stable `source_document_id` not based solely on transient storage or application identifiers.                                                                                                                            | schema+semantic     |
+| **CORE-ID-002 MUST**     | Each SourceSpan refers to exactly one SourceDocument.                                                                                                                                                                                         | schema+semantic     |
+| **CORE-ID-003 MUST**     | Each Record contains `record_id`, `source_document_id`, `text`, and one or more SourceSpans.                                                                                                                                                  | schema              |
+| **CORE-ID-004 MUST**     | Every SourceSpan used by a Record identifies the same SourceDocument as that Record.                                                                                                                                                          | semantic            |
+| **CORE-ID-005 MUST**     | Logical Record identity remains distinguishable from storage identity and derived storage cannot silently become authoritative.                                                                                                               | semantic            |
+| **CORE-ID-006 MUST**     | The RecordRevision identifier changes whenever authoritative Record text changes and whenever another mutation can invalidate a pinned evidence locator or SupportBinding; it MAY also advance for broader authoritative concurrency control. | behavioral+audit    |
+| **CORE-ID-007 MUST**     | Modification of extracted text preserves original extraction, reconstructible immutable source, or an auditable change trail.                                                                                                                 | behavioral+audit    |
+| **CORE-ID-008 MUST NOT** | Cleaning does not silently paraphrase, summarize, translate, alter proposition-bearing negation, remove meaningful qualification, or erase material distinctions.                                                                             | behavioral+audit    |
+| **CORE-ID-009 MUST NOT** | Segmentation does not silently lose, invent, duplicate, or reorder source material.                                                                                                                                                           | semantic+behavioral |
+| **CORE-ID-010 MUST**     | Unresolved state remains representable and is not conflated with confirmed absence.                                                                                                                                                           | schema+semantic     |
+| **CORE-ID-011 MUST**     | A declared authority policy governs materialized current values, and human overrides are explicit and auditable.                                                                                                                              | behavioral+audit    |
+| **CORE-ID-012 MUST NOT** | Replacing a model, embedding engine, retrieval engine, or provider does not by itself alter authoritative Record identity, source relationships, or human-confirmed assertions.                                                               | behavioral+audit    |
+| **CORE-ID-013 MUST**     | Authoritative boundaries validate required shape/types and model output is separately validated before semantic entry.                                                                                                                        | schema+behavioral   |
+| **CORE-ID-014 MUST NOT** | Failures affecting provenance, attribution, evidence, publication, or corpus integrity are not silently converted into confident success.                                                                                                     | behavioral+audit    |
+| **CORE-ID-015 MUST NOT** | Persisted data is not silently reinterpreted under an incompatible newer specification or schema contract.                                                                                                                                    | behavioral+audit    |
+| **CORE-ID-016 MUST**     | A materialized FieldAssertion preserves independently recoverable derivation, evaluation, authority, and value-state semantics; native field names or compact encodings MAY differ if the mapping is lossless.                                | schema+semantic     |
+| **CORE-ID-017 MUST**     | Confidence is omitted when not evaluated; after evaluation it is present as a documented-scale number or explicit null, and is never fabricated as zero or one.                                                                               | semantic            |
+| **CORE-ID-018 SHOULD**   | Persisted schema-defined assertions use stable field identity across non-semantic renames, or declare an explicit compatibility mapping.                                                                                                      | semantic+audit      |
 
 #### Publication requirements
 
-| Requirement | Normative statement | Test class |
-|---|---|---|
-| **PUB-ID-001 MUST NOT** | A final CorpusPublication is not changed in place; corrections create a new publication or revision. | semantic+audit |
-| **PUB-ID-002 MUST** | Published Records pass structural/type/vocabulary validation before publication. | schema+semantic |
-| **PUB-ID-003 MUST** | Publication fails rather than silently removing required provenance fields. | behavioral |
-| **PUB-ID-004 MUST NOT** | Transient operational fields are not published as scholarly Record content unless explicitly defined by the publication contract. | semantic |
+| Requirement             | Normative statement                                                                                                               | Test class      |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| **PUB-ID-001 MUST NOT** | A final CorpusPublication is not changed in place; corrections create a new publication or revision.                              | semantic+audit  |
+| **PUB-ID-002 MUST**     | Published Records pass structural/type/vocabulary validation before publication.                                                  | schema+semantic |
+| **PUB-ID-003 MUST**     | Publication fails rather than silently removing required provenance fields.                                                       | behavioral      |
+| **PUB-ID-004 MUST NOT** | Transient operational fields are not published as scholarly Record content unless explicitly defined by the publication contract. | semantic        |
 
 #### Retrieval requirements
 
-| Requirement | Normative statement | Test class |
-|---|---|---|
-| **RET-ID-001 MUST** | The original query is preserved and derived queries are identified as derived when decomposition or translation occurs. | semantic |
-| **RET-ID-002 MUST NOT** | Distance or similarity is not described as confidence or probability unless the retrieval system defines it that way. | semantic |
-| **RET-ID-003 MUST NOT** | Retrieval metadata and scores do not mutate authoritative Record semantics. | semantic |
+| Requirement             | Normative statement                                                                                                     | Test class |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------- |
+| **RET-ID-001 MUST**     | The original query is preserved and derived queries are identified as derived when decomposition or translation occurs. | semantic   |
+| **RET-ID-002 MUST NOT** | Distance or similarity is not described as confidence or probability unless the retrieval system defines it that way.   | semantic   |
+| **RET-ID-003 MUST NOT** | Retrieval metadata and scores do not mutate authoritative Record semantics.                                             | semantic   |
 
 #### Evidence requirements
 
-| Requirement | Normative statement | Test class |
-|---|---|---|
-| **EVID-ID-001 MUST** | Every EvidenceRef semantic locator, whether named or embedded, declares exactly one authoritative locator kind: `record` or `source_span`. | schema+semantic |
-| **EVID-ID-002 MUST** | A record-backed EvidenceRef identifies the applicable RecordRevision whenever its locator depends on mutable Record text. | semantic |
-| **EVID-ID-003 MUST** | A direct-source EvidenceRef contains one SourceDocument identity and one or more SourceSpans, all from that SourceDocument. | schema+semantic |
-| **EVID-ID-004 MUST NOT** | A run-local EvidenceRef ID does not replace its authoritative documentary identity. | semantic |
-| **EVID-ID-005 MUST** | The exact supplied evidence text is retained or deterministically reproducible; truncation is declared and does not change authoritative EvidenceRef identity. | schema+semantic |
-| **EVID-ID-006 MUST** | Citation facts use authoritative structured metadata where deterministically available; missing facts are not invented; formatting changes do not alter source identity. | semantic+behavioral |
+| Requirement              | Normative statement                                                                                                                                                      | Test class          |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------- |
+| **EVID-ID-001 MUST**     | Every EvidenceRef semantic locator, whether named or embedded, declares exactly one authoritative locator kind: `record` or `source_span`.                               | schema+semantic     |
+| **EVID-ID-002 MUST**     | A record-backed EvidenceRef identifies the applicable RecordRevision whenever its locator depends on mutable Record text.                                                | semantic            |
+| **EVID-ID-003 MUST**     | A direct-source EvidenceRef contains one SourceDocument identity and one or more SourceSpans, all from that SourceDocument.                                              | schema+semantic     |
+| **EVID-ID-004 MUST NOT** | A run-local EvidenceRef ID does not replace its authoritative documentary identity.                                                                                      | semantic            |
+| **EVID-ID-005 MUST**     | The exact supplied evidence text is retained or deterministically reproducible; truncation is declared and does not change authoritative EvidenceRef identity.           | schema+semantic     |
+| **EVID-ID-006 MUST**     | Citation facts use authoritative structured metadata where deterministically available; missing facts are not invented; formatting changes do not alter source identity. | semantic+behavioral |
 
 #### Claim-Binding requirements
 
-| Requirement | Normative statement | Test class |
-|---|---|---|
-| **CLM-ID-001 MUST** | Claim-Binding implementations materialize or reproducibly derive GeneratedClaims. | semantic+audit |
-| **CLM-ID-002 MUST** | Claims represented as supported have explicit SupportBindings to one or more named or embedded EvidenceRef semantic locators. | schema+semantic |
-| **CLM-ID-003 MUST NOT** | Evidence is not described as supporting a claim merely because it appeared in model context. | behavioral+audit |
-| **CLM-ID-004 MUST NOT** | Unknown evidence markers do not resolve silently to unrelated sources, and machine claim/evidence relations are not lost merely because markers are rendered as human-readable citations. | semantic |
-| **CLM-ID-005 MUST** | A supported claim resolves through SupportBinding and EvidenceRef to the authoritative Record/RecordRevision or SourceSpan and SourceDocument. | semantic |
-| **CLM-ID-006 MUST NOT** | A failed exact-quotation check is not silently treated as successful support. | semantic+behavioral |
+| Requirement             | Normative statement                                                                                                                                                                       | Test class          |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| **CLM-ID-001 MUST**     | Claim-Binding implementations materialize or reproducibly derive GeneratedClaims.                                                                                                         | semantic+audit      |
+| **CLM-ID-002 MUST**     | Claims represented as supported have explicit SupportBindings to one or more named or embedded EvidenceRef semantic locators.                                                             | schema+semantic     |
+| **CLM-ID-003 MUST NOT** | Evidence is not described as supporting a claim merely because it appeared in model context.                                                                                              | behavioral+audit    |
+| **CLM-ID-004 MUST NOT** | Unknown evidence markers do not resolve silently to unrelated sources, and machine claim/evidence relations are not lost merely because markers are rendered as human-readable citations. | semantic            |
+| **CLM-ID-005 MUST**     | A supported claim resolves through SupportBinding and EvidenceRef to the authoritative Record/RecordRevision or SourceSpan and SourceDocument.                                            | semantic            |
+| **CLM-ID-006 MUST NOT** | A failed exact-quotation check is not silently treated as successful support.                                                                                                             | semantic+behavioral |
 
 #### Reproducible Research requirements
 
-| Requirement | Normative statement | Test class |
-|---|---|---|
-| **REP-ID-001 MUST** | Retained ResearchRun state identifies corpus snapshot, evidence-acquisition configuration, exact supplied evidence or deterministic reconstruction, generation model/configuration, prompt contract, output, and validation results; advisory memory is distinguishable from evidence. | schema+semantic |
-| **REP-ID-002 MUST NOT** | Conformance does not imply byte-identical output reproduction from stochastic or externally mutable models. | claim-review |
+| Requirement             | Normative statement                                                                                                                                                                                                                                                                    | Test class      |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| **REP-ID-001 MUST**     | Retained ResearchRun state identifies corpus snapshot, evidence-acquisition configuration, exact supplied evidence or deterministic reconstruction, generation model/configuration, prompt contract, output, and validation results; advisory memory is distinguishable from evidence. | schema+semantic |
+| **REP-ID-002 MUST NOT** | Conformance does not imply byte-identical output reproduction from stochastic or externally mutable models.                                                                                                                                                                            | claim-review    |
 
 #### PROV Mapping requirements
 
-| Requirement | Normative statement | Test class |
-|---|---|---|
+| Requirement          | Normative statement                                                                                                                                                                                                                                | Test class        |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
 | **PROV-ID-001 MUST** | A PROV export preserves applicable DERRIDAI identity/lineage semantics, human/computational distinction where known, material RecordRevision/SourceSpan, FieldAssertion state dimensions, claim/evidence binding where present, and declared loss. | external+semantic |
 
 #### RO-Crate requirements
 
-| Requirement | Normative statement | Test class |
-|---|---|---|
+| Requirement          | Normative statement                                                                                                                                                                                           | Test class        |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
 | **ROCR-ID-001 MUST** | A RO-Crate export declares RO-Crate and DERRIDAI adapter versions, stable object references, authoritative/derived status, sufficient ResearchRun/EvidencePacket state, and validates against both contracts. | external+semantic |
 
 #### Local Sovereign requirements
 
-| Requirement | Normative statement | Test class |
-|---|---|---|
+| Requirement         | Normative statement                                                                                                                                                                                                                                                           | Test class      |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
 | **LOC-ID-001 MUST** | For the declared capability/media scope, essential documentary, evidence, inference, validation, and research-output operations can execute within researcher-controlled infrastructure without mandatory remote storage, embedding, inference, authentication, or telemetry. | deployment-test |
 
 ### Profile-to-Requirement Matrix
 
-| Profile | Required dependency | Requirement IDs |
-|---|---|---|
-| Core | - | CORE-ID-001 through CORE-ID-018 |
-| Publication | Core | PUB-ID-001 through PUB-ID-004 |
-| Retrieval | Core | RET-ID-001 through RET-ID-003 |
-| Evidence | Core | EVID-ID-001 through EVID-ID-006 |
-| Claim-Binding | Core + Evidence | CLM-ID-001 through CLM-ID-006 |
-| Reproducible Research | Core + Evidence | REP-ID-001, REP-ID-002 |
-| Local Sovereign | Core | LOC-ID-001 |
-| PROV Mapping adapter | Core | PROV-ID-001 |
-| RO-Crate adapter | Core | ROCR-ID-001 |
+| Profile               | Required dependency | Requirement IDs                 |
+| --------------------- | ------------------- | ------------------------------- |
+| Core                  | -                   | CORE-ID-001 through CORE-ID-018 |
+| Publication           | Core                | PUB-ID-001 through PUB-ID-004   |
+| Retrieval             | Core                | RET-ID-001 through RET-ID-003   |
+| Evidence              | Core                | EVID-ID-001 through EVID-ID-006 |
+| Claim-Binding         | Core + Evidence     | CLM-ID-001 through CLM-ID-006   |
+| Reproducible Research | Core + Evidence     | REP-ID-001, REP-ID-002          |
+| Local Sovereign       | Core                | LOC-ID-001                      |
+| PROV Mapping adapter  | Core                | PROV-ID-001                     |
+| RO-Crate adapter      | Core                | ROCR-ID-001                     |
 
 ### Required Invariants and Profile Applicability
 
-| Invariant | Applies to | Requirement IDs | Normative rule |
-|---|---|---|---|
-| Identity invariant | Core | CORE-ID-005 | Logical Record identity remains distinguishable from storage identity. |
-| Source invariant | Core | CORE-ID-002, CORE-ID-004 | A Record and all of its SourceSpans resolve to one and the same SourceDocument. |
-| Revision invariant | Core, Evidence | CORE-ID-006, EVID-ID-002 | Evidence pins the applicable RecordRevision when mutable text or reviewed state can affect the evidence represented; evidence-affecting changes advance the revision. |
-| Conservation invariant | Core | CORE-ID-009 | Segmentation does not silently lose, invent, duplicate, or reorder source material. |
-| Epistemic invariant | Core | CORE-ID-010, CORE-ID-016, CORE-ID-017 | Derivation, evaluation, authority, value state, and confidence availability remain distinguishable. |
-| Assertion invariant | Core | CORE-ID-011, CORE-ID-016, CORE-ID-018 | Interpretive provenance remains distinguishable from the materialized value; durable fields retain stable identity; current-value resolution follows a declared authority policy. |
-| Retrieval invariant | Retrieval | RET-ID-002, RET-ID-003 | Retrieval diagnostics describe retrieval operations, not intrinsic Record properties. |
-| Citation invariant | Evidence | EVID-ID-006 | Citation facts preserve authoritative source identity and are not fabricated to fill missing metadata. |
-| Evidence invariant | Evidence | EVID-ID-001 through EVID-ID-005 | Evidence resolves through one declared authoritative locator and run-local labels do not replace documentary identity. |
-| Generation invariant | Claim-Binding | CLM-ID-003 | Context inclusion alone does not constitute evidence-to-claim support. |
-| Failure invariant | Core; all claimed profiles | CORE-ID-014 | Failures affecting provenance or correctness are not silently converted into confident success. |
-| Model-independence invariant | Core | CORE-ID-012 | Model substitution does not redefine authoritative documentary or human-confirmed state. |
-| Version invariant | Core; all versioned profiles | CORE-ID-015 | Persisted objects retain enough contract identity to avoid silent incompatible reinterpretation. |
+| Invariant                    | Applies to                   | Requirement IDs                       | Normative rule                                                                                                                                                                    |
+| ---------------------------- | ---------------------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Identity invariant           | Core                         | CORE-ID-005                           | Logical Record identity remains distinguishable from storage identity.                                                                                                            |
+| Source invariant             | Core                         | CORE-ID-002, CORE-ID-004              | A Record and all of its SourceSpans resolve to one and the same SourceDocument.                                                                                                   |
+| Revision invariant           | Core, Evidence               | CORE-ID-006, EVID-ID-002              | Evidence pins the applicable RecordRevision when mutable text or reviewed state can affect the evidence represented; evidence-affecting changes advance the revision.             |
+| Conservation invariant       | Core                         | CORE-ID-009                           | Segmentation does not silently lose, invent, duplicate, or reorder source material.                                                                                               |
+| Epistemic invariant          | Core                         | CORE-ID-010, CORE-ID-016, CORE-ID-017 | Derivation, evaluation, authority, value state, and confidence availability remain distinguishable.                                                                               |
+| Assertion invariant          | Core                         | CORE-ID-011, CORE-ID-016, CORE-ID-018 | Interpretive provenance remains distinguishable from the materialized value; durable fields retain stable identity; current-value resolution follows a declared authority policy. |
+| Retrieval invariant          | Retrieval                    | RET-ID-002, RET-ID-003                | Retrieval diagnostics describe retrieval operations, not intrinsic Record properties.                                                                                             |
+| Citation invariant           | Evidence                     | EVID-ID-006                           | Citation facts preserve authoritative source identity and are not fabricated to fill missing metadata.                                                                            |
+| Evidence invariant           | Evidence                     | EVID-ID-001 through EVID-ID-005       | Evidence resolves through one declared authoritative locator and run-local labels do not replace documentary identity.                                                            |
+| Generation invariant         | Claim-Binding                | CLM-ID-003                            | Context inclusion alone does not constitute evidence-to-claim support.                                                                                                            |
+| Failure invariant            | Core; all claimed profiles   | CORE-ID-014                           | Failures affecting provenance or correctness are not silently converted into confident success.                                                                                   |
+| Model-independence invariant | Core                         | CORE-ID-012                           | Model substitution does not redefine authoritative documentary or human-confirmed state.                                                                                          |
+| Version invariant            | Core; all versioned profiles | CORE-ID-015                           | Persisted objects retain enough contract identity to avoid silent incompatible reinterpretation.                                                                                  |
 
 ## Appendix C - Reference Interchange, Vocabularies, and Schemas
 
@@ -1247,14 +1241,16 @@ The following examples are illustrative serializations of the normative concepts
   "record_id": "record-00142",
   "record_revision": 3,
   "source_document_id": "doc-9f4c",
-  "source_spans": [{
-    "source_span_id": "span-401-402",
-    "source_document_id": "doc-9f4c",
-    "physical_page_start": 113,
-    "physical_page_end": 114,
-    "printed_page_start": 97,
-    "printed_page_end": 98
-  }],
+  "source_spans": [
+    {
+      "source_span_id": "span-401-402",
+      "source_document_id": "doc-9f4c",
+      "physical_page_start": 113,
+      "physical_page_end": 114,
+      "printed_page_start": 97,
+      "printed_page_end": 98
+    }
+  ],
   "text": "...",
   "speaker": "Example Author",
   "position_holder": "Other Thinker",
@@ -1305,13 +1301,15 @@ The following examples are illustrative serializations of the normative concepts
   "original_query": "hospitality and sovereignty",
   "methods": ["hybrid"],
   "source_publication_id": "pub-2026-09",
-  "results": [{
-    "record_id": "record-00142",
-    "record_revision": 3,
-    "rank": 1,
-    "score": 0.31,
-    "score_semantics": "cosine_distance"
-  }]
+  "results": [
+    {
+      "record_id": "record-00142",
+      "record_revision": 3,
+      "rank": 1,
+      "score": 0.31,
+      "score_semantics": "cosine_distance"
+    }
+  ]
 }
 ```
 
@@ -1337,7 +1335,7 @@ The following examples are illustrative serializations of the normative concepts
   "specification_version": "1.0",
   "publication_ids": ["pub-2026-09"],
   "evidence_packet_ids": ["packet-12"],
-  "advisory_memory": {"prior_claim_ids": ["claim-old-7"]},
+  "advisory_memory": { "prior_claim_ids": ["claim-old-7"] },
   "generation_run_ids": ["gen-9"],
   "prompt_contract_version": "research-answer-v4",
   "output": "..."
@@ -1349,14 +1347,16 @@ The following examples are illustrative serializations of the normative concepts
 ```json
 {
   "packet_id": "packet-12",
-  "entries": [{
-    "entry_id": "E0",
-    "evidence_ref_id": "evref-81",
-    "text": "...",
-    "text_truncated": false,
-    "text_transform": {"kind": "record-prefix", "character_limit": 12000},
-    "selection_reason": "researcher selected"
-  }]
+  "entries": [
+    {
+      "entry_id": "E0",
+      "evidence_ref_id": "evref-81",
+      "text": "...",
+      "text_truncated": false,
+      "text_transform": { "kind": "record-prefix", "character_limit": 12000 },
+      "selection_reason": "researcher selected"
+    }
+  ]
 }
 ```
 
@@ -1364,12 +1364,12 @@ The following examples are illustrative serializations of the normative concepts
 
 DERRIDAI's contribution is not a new generic provenance vocabulary, workflow engine, archive format, or serialization technology. It specifies scholarly-AI semantics that general standards can carry.
 
-| Standard or technology | Primary responsibility relative to DERRIDAI |
-|---|---|
-| **DERRIDAI** | Documentary identity, scholarly attribution and epistemic state, evidentiary use, and source-to-claim traceability |
-| **W3C PROV** | General provenance relationships among entities, activities, and agents |
-| **RO-Crate** | Portable packaging and contextual metadata for research objects |
-| **JSON / JSON-LD / RDF** | Serialization and exchange technologies |
+| Standard or technology   | Primary responsibility relative to DERRIDAI                                                                        |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| **DERRIDAI**             | Documentary identity, scholarly attribution and epistemic state, evidentiary use, and source-to-claim traceability |
+| **W3C PROV**             | General provenance relationships among entities, activities, and agents                                            |
+| **RO-Crate**             | Portable packaging and contextual metadata for research objects                                                    |
+| **JSON / JSON-LD / RDF** | Serialization and exchange technologies                                                                            |
 
 PROV does not by itself define DERRIDAI distinctions such as SourceSpan precision, Record versus RecordRevision, speaker versus position holder, FieldAssertion authority, exact EvidenceRef locator mode, or SupportBinding. RO-Crate does not define what constitutes a DERRIDAI Record, which corpus state is authoritative, or how evidence supports a GeneratedClaim.
 
@@ -1423,4 +1423,3 @@ with revision and assertion provenance preserved when applicable. Evidence, gene
 For audit, the essential chain reverses from GeneratedClaim through SupportBinding and EvidenceRef to the exact RecordRevision or SourceSpan and ultimately to the SourceDocument.
 
 The scope rule follows directly: **DERRIDAI standardizes an object only when the object preserves a scholarly identity or distinction that must survive across implementations; generic infrastructure remains implementation-specific and is constrained only where it can damage that scholarly traceability.**
-
