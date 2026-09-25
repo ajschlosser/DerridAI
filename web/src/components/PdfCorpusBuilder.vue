@@ -67,12 +67,12 @@ import { useCorpusReviewWorkspace } from "../features/corpus-builder/composables
 import { useCorpusSourceConfiguration } from "../features/corpus-builder/composables/useCorpusSourceConfiguration";
 import { useCorpusProviderConfiguration } from "../features/corpus-builder/composables/useCorpusProviderConfiguration";
 import { useCorpusBuildLifecycleController } from "../features/corpus-builder/composables/useCorpusBuildLifecycleController";
+import { useCorpusReviewNavigation } from "../features/corpus-builder/composables/useCorpusReviewNavigation";
 import { corpusReviewCommandFromKeydown } from "../features/corpus-builder/domain/reviewCommands";
 import {
   editableRecordMetadata,
   evidenceCandidateFieldNames,
 } from "../features/corpus-builder/domain/recordMetadata";
-import { firstValidationRecordId } from "../features/corpus-builder/domain/publicationReadiness";
 import { useCorpusPublication } from "../features/corpus-builder/composables/useCorpusPublication";
 import AppIcon from "./AppIcon.vue";
 import CorpusRunMonitor from "./corpus-builder/CorpusRunMonitor.vue";
@@ -592,6 +592,39 @@ const canPublish = computed(() => Boolean(currentBuild.value?.publication_readin
 const selectedRecordIndex = computed(() =>
   records.value.findIndex((row) => row.record_id === selectedRecordId.value),
 );
+const {
+  openFocusView,
+  pushFocusHistory,
+  focusHistoryMove,
+  focusQueueMove,
+  navigateToQueueRecord,
+  advanceFrom,
+  reviewMetadataRecord,
+  openMetadataIssueQueue,
+  openValidationIssueQueue,
+  openRejectedQueue,
+  openAllReviewQueue,
+  openSourceIssueQueue,
+  previousPage,
+  nextPage,
+} = useCorpusReviewNavigation({
+  currentBuild,
+  records,
+  recordTotal,
+  recordOffset,
+  selectedRecord,
+  selectedRecordIndex,
+  reviewQueue,
+  recordQuery,
+  focusView,
+  focusHistory,
+  focusHistoryOffsets,
+  focusHistoryIndex,
+  recordListEl,
+  pageSize,
+  refreshRecords,
+  selectRecord,
+});
 const nextQueueRecordId = computed(() => {
   const index = selectedRecordIndex.value;
   return index >= 0 ? records.value[index + 1]?.record_id || "" : "";
@@ -1248,73 +1281,6 @@ async function refreshAll() {
     if (hasRecordTopology.value && !reviewHydrated.value) void ensureReviewHydrated();
   }, 250);
 }
-function openFocusView() {
-  if (!selectedRecord.value) return;
-  focusView.value = true;
-  const id = selectedRecord.value.record_id;
-  if (focusHistory.value[focusHistoryIndex.value] !== id) {
-    focusHistory.value = focusHistory.value.slice(0, focusHistoryIndex.value + 1);
-    focusHistoryOffsets.value = focusHistoryOffsets.value.slice(0, focusHistoryIndex.value + 1);
-    focusHistory.value.push(id);
-    focusHistoryOffsets.value.push(recordOffset.value);
-    focusHistoryIndex.value = focusHistory.value.length - 1;
-  }
-}
-function pushFocusHistory(id: string) {
-  if (!id || focusHistory.value[focusHistoryIndex.value] === id) return;
-  focusHistory.value = focusHistory.value.slice(0, focusHistoryIndex.value + 1);
-  focusHistoryOffsets.value = focusHistoryOffsets.value.slice(0, focusHistoryIndex.value + 1);
-  focusHistory.value.push(id);
-  focusHistoryOffsets.value.push(recordOffset.value);
-  focusHistoryIndex.value = focusHistory.value.length - 1;
-}
-async function focusHistoryMove(delta: number) {
-  const next = focusHistoryIndex.value + delta;
-  if (next < 0 || next >= focusHistory.value.length) return;
-  focusHistoryIndex.value = next;
-  const id = focusHistory.value[next];
-  const targetOffset = focusHistoryOffsets.value[next] ?? recordOffset.value;
-  const local =
-    targetOffset === recordOffset.value
-      ? records.value.find((row) => row.record_id === id)
-      : undefined;
-  if (local) {
-    selectRecord(local);
-    return;
-  }
-  recordOffset.value = targetOffset;
-  await refreshRecords(false, id);
-}
-async function focusQueueMove(delta: number) {
-  const index = selectedRecordIndex.value;
-  if (index >= 0) {
-    const next = records.value[index + delta];
-    if (next) {
-      selectRecord(next);
-      pushFocusHistory(next.record_id);
-      return;
-    }
-  }
-  if (delta > 0 && recordOffset.value + pageSize < recordTotal.value) {
-    recordOffset.value += pageSize;
-    await refreshRecords(false);
-    const next = records.value[0];
-    if (next) {
-      selectRecord(next);
-      pushFocusHistory(next.record_id);
-    }
-    return;
-  }
-  if (delta < 0 && recordOffset.value > 0) {
-    recordOffset.value = Math.max(0, recordOffset.value - pageSize);
-    await refreshRecords(false);
-    const next = records.value[records.value.length - 1];
-    if (next) {
-      selectRecord(next);
-      pushFocusHistory(next.record_id);
-    }
-  }
-}
 function selectRecord(record: CorpusRecord) {
   const viewport = captureReviewViewport();
   const sameRecord = selectedRecordId.value === record.record_id;
@@ -1437,62 +1403,12 @@ async function useCurrentPdf() {
   }
   await upload(file);
 }
-async function reviewMetadataRecord(recordId: string) {
-  reviewQueue.value = "metadata";
-  recordQuery.value = recordId;
-  await nextTick();
-  await refreshRecords(true, recordId);
-  if (selectedRecord.value?.record_id === recordId) focusView.value = false;
-}
-async function openMetadataIssueQueue() {
-  reviewQueue.value = "metadata";
-  recordQuery.value = "";
-  const first = currentBuild.value?.metadata_issue_summary?.records?.[0]?.record_id;
-  await nextTick();
-  await refreshRecords(true, first ? String(first) : "");
-  await nextTick();
-  recordListEl.value?.focus({ preventScroll: true });
-}
-
-async function openValidationIssueQueue() {
-  reviewQueue.value = "issues";
-  recordQuery.value = "";
-  const first = firstValidationRecordId(currentBuild.value);
-  await nextTick();
-  await refreshRecords(true, first);
-  await nextTick();
-  recordListEl.value?.focus({ preventScroll: true });
-}
-async function openRejectedQueue() {
-  reviewQueue.value = "rejected";
-  recordQuery.value = "";
-  await nextTick();
-  await refreshRecords(true);
-  await nextTick();
-  recordListEl.value?.focus({ preventScroll: true });
-}
-async function openAllReviewQueue() {
-  reviewQueue.value = "all";
-  recordQuery.value = "";
-  await nextTick();
-  await refreshRecords(true);
-  await nextTick();
-  recordListEl.value?.focus({ preventScroll: true });
-}
 function openEnrichmentFromFinish() {
   // Finish actions always mean all records; never inherit a hidden table selection.
   selectedReviewIds.value = new Set();
   llmActionProviderId.value =
     llmActionProviderId.value || selectedProviderId.value || providerProfiles.value[0]?.id || "";
   metadataEnrichmentOpen.value = true;
-}
-async function openSourceIssueQueue() {
-  reviewQueue.value = "source";
-  recordQuery.value = "";
-  await nextTick();
-  await refreshRecords(true);
-  await nextTick();
-  recordListEl.value?.focus({ preventScroll: true });
 }
 async function restoreAllRejected() {
   if (!currentBuild.value) return;
@@ -1535,28 +1451,6 @@ async function chooseBuild(build: CorpusBuild) {
 }
 async function openPdfExplorer() {
   await router.replace({ query: { ...route.query, mode: "explorer" } });
-}
-async function advanceFrom(recordId: string) {
-  const index = records.value.findIndex((row) => row.record_id === recordId);
-  const next = records.value[index + 1] || records.value[index - 1];
-  if (next) {
-    selectRecord(next);
-    return;
-  }
-  if (recordOffset.value + pageSize < recordTotal.value) {
-    recordOffset.value += pageSize;
-    await refreshRecords();
-    return;
-  }
-  await refreshRecords();
-}
-async function navigateToQueueRecord(recordId: string) {
-  const existing = records.value.find((row) => row.record_id === recordId);
-  if (existing) {
-    selectRecord(existing);
-    return;
-  }
-  await refreshRecords(true, recordId);
 }
 async function setDisposition(disposition: "pending" | "accepted" | "rejected") {
   if (reviewLocked.value) {
@@ -2885,17 +2779,6 @@ function startNewBuildSetup() {
     query: { ...route.query, build: undefined, record: undefined, queue: undefined },
   });
 }
-async function previousPage() {
-  if (recordOffset.value <= 0) return;
-  recordOffset.value = Math.max(0, recordOffset.value - pageSize);
-  await refreshRecords();
-}
-async function nextPage() {
-  if (recordOffset.value + pageSize >= recordTotal.value) return;
-  recordOffset.value += pageSize;
-  await refreshRecords();
-}
-
 function reviewShortcut(event: KeyboardEvent) {
   if (!selectedRecord.value || busy.value) return;
   const command = corpusReviewCommandFromKeydown(event);
