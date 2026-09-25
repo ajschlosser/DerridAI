@@ -107,8 +107,8 @@ class SchemaField(BaseModel):
     assess: bool = False  # the model must report its confidence
     review: bool = False  # an unresolved value here keeps a record out of "accepted" until a person decides
     # Optional linguistic hints used by deterministic suggestions and model prompts.
-    pos_tags: list[str] = Field(default_factory=list, max_length=16)
-    ner_tags: list[str] = Field(default_factory=list, max_length=16)
+    pos_tags: list[str] = Field(default_factory=list, max_length=32)
+    ner_tags: list[str] = Field(default_factory=list, max_length=32)
     retrieval_profile: RetrievalProfile | None = None
 
     @model_validator(mode="before")
