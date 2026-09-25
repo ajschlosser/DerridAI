@@ -101,7 +101,9 @@ const neighbors = computed<GraphNeighbor[]>(() => {
 });
 
 const visibleHistory = computed(() =>
-  history.value.map((id, index) => ({ id, index, node: nodeMap.value.get(id) })).filter((item) => item.node),
+  history.value
+    .map((id, index) => ({ id, index, node: nodeMap.value.get(id) }))
+    .filter((item) => item.node),
 );
 
 function setHistoryRoot(id: string) {
@@ -214,11 +216,19 @@ watch(
     </div>
     <div v-else-if="error" class="object-graph-state error" role="alert">{{ error }}</div>
     <div v-else-if="!focus" class="object-graph-state">
-      {{ i18n.t("traceability.empty", "No traceability relationships are available for this object yet.") }}
+      {{
+        i18n.t(
+          "traceability.empty",
+          "No traceability relationships are available for this object yet.",
+        )
+      }}
     </div>
 
     <template v-else>
-      <nav class="object-graph-history" :aria-label="i18n.t('traceability.walk_history', 'Traversal history')">
+      <nav
+        class="object-graph-history"
+        :aria-label="i18n.t('traceability.walk_history', 'Traversal history')"
+      >
         <div class="object-graph-history-actions">
           <button type="button" :disabled="!canBack" @click="goBack">
             {{ i18n.t("common.previous", "Previous") }}
@@ -264,7 +274,9 @@ watch(
               </small>
               <b>{{ item.node.object_type }}</b>
               <span>{{ item.node.label }}</span>
-              <em v-if="!item.edge.normative">{{ i18n.t("traceability.application_link", "DerridAI link") }}</em>
+              <em v-if="!item.edge.normative">{{
+                i18n.t("traceability.application_link", "DerridAI link")
+              }}</em>
             </div>
             <button
               type="button"
@@ -277,7 +289,12 @@ watch(
           </li>
         </ul>
         <p v-else class="object-graph-none">
-          {{ i18n.t("traceability.no_connections", "No connected objects are retained from this focus.") }}
+          {{
+            i18n.t(
+              "traceability.no_connections",
+              "No connected objects are retained from this focus.",
+            )
+          }}
         </p>
       </section>
     </template>
