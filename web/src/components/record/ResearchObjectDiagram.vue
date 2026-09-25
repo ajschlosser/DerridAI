@@ -171,7 +171,7 @@ function typeLabel(type: string) {
         :viewBox="`0 0 ${canvasWidth} ${canvasHeight}`"
         :width="canvasWidth"
         :height="canvasHeight"
-        role="img"
+        role="group"
         :aria-label="i18n.t('traceability.diagram_help', 'Objects are grouped from source material through research output. Select a node to inspect its direct relationships.')"
       >
         <g class="diagram-lanes" aria-hidden="true">
