@@ -190,7 +190,9 @@ export function assertionConflict(
     field_name: current.field_name,
     current,
     alternatives,
-    disputed: current.authority_status === "disputed" || alternatives.length > 0,
+    disputed:
+      current.authority_status === "disputed" ||
+      alternatives.some((item) => item.authority_status === "disputed"),
   };
 }
 
