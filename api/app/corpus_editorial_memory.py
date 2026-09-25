@@ -127,6 +127,7 @@ class EditorialMemoryMixin:
         field_limits: dict[str, int] = {}
         field_min_similarity: dict[str, float] = {}
         enabled_fields: set[str] = set()
+        correction_fields: set[str] = set()
         for field, _field_id in field_ids.items():
             item = schema_fields.get(field, {})
             profile = item.get("retrieval_profile") if isinstance(item, dict) else None
@@ -135,6 +136,8 @@ class EditorialMemoryMixin:
             if profile is not None and profile.get("use_for_metadata_enrichment") is False:
                 continue
             enabled_fields.add(field)
+            if profile is None or bool(profile.get("include_corrections", True)):
+                correction_fields.add(field)
             if profile is not None:
                 field_limits[field] = int(profile.get("max_items", 2) or 0)
                 field_min_similarity[field] = float(profile.get("min_similarity", 0) or 0)
@@ -156,6 +159,8 @@ class EditorialMemoryMixin:
             statuses = row.get("metadata_field_status") if isinstance(row.get("metadata_field_status"), dict) else {}
             for field, info in statuses.items():
                 field = str(field)
+                if field not in enabled_fields:
+                    continue
                 if not isinstance(info, dict) or str(info.get("status") or "") not in {"human_confirmed", "human_override"}:
                     continue
                 if _second_opinion_owed(row, field):
@@ -234,7 +239,11 @@ class EditorialMemoryMixin:
                 field_ids=field_ids,
             ):
                 field = str(correction.get("field_name") or "")
-                if field and not _second_opinion_owed(row, field):
+                if (
+                    field
+                    and field in correction_fields
+                    and not _second_opinion_owed(row, field)
+                ):
                     canonical_exemplars.append(correction)
         canonical_exemplars = list({
             str(item.get("metadata_exemplar_id") or ""): item
@@ -264,7 +273,7 @@ class EditorialMemoryMixin:
             retrieval_fields = sorted({
                 str(item.get("field_name") or "")
                 for item in canonical_exemplars
-                if str(item.get("field_name") or "") in (enabled_fields or field_ids)
+                if str(item.get("field_name") or "") in enabled_fields
             })
             semantic = progressive_index.retrieve(
                 scope_id=build_id,
