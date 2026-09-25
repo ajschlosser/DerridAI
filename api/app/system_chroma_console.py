@@ -121,7 +121,10 @@ def parse_system_chroma_command(command: str) -> ParsedSystemChromaCommand:
 def _system_collection(store: ChromaStore, name: str):
     collection = store.client.get_collection(name=name)
     metadata = dict(getattr(collection, "metadata", None) or {})
-    if not bool(metadata.get("derridai_hidden_system_collection")):
+    if not (
+        bool(metadata.get("derridai_hidden_system_collection"))
+        or bool(metadata.get("derridai_system_collection"))
+    ):
         raise ValueError("The console may query only DerridAI system collections.")
     return collection
 
@@ -135,7 +138,10 @@ def list_system_chroma_collections(store: ChromaStore) -> list[dict[str, Any]]:
         except Exception:
             continue
         metadata = dict(getattr(collection, "metadata", None) or {})
-        if not bool(metadata.get("derridai_hidden_system_collection")):
+        if not (
+            bool(metadata.get("derridai_hidden_system_collection"))
+            or bool(metadata.get("derridai_system_collection"))
+        ):
             continue
         rows.append({
             "name": name,
