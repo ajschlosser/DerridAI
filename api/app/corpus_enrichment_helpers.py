@@ -14,6 +14,12 @@ from typing import Any
 
 from .corpus_metadata import ALLOWED_METADATA_FIELDS, MANIFEST_INHERITED_FIELDS
 from .corpus_record_quality import iso_now
+from .field_assertions import (
+    current_assertion_by_name,
+    migrate_record_assertions,
+    project_record_assertions,
+    store_assertion,
+)
 
 
 def _semantic_atoms(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -116,10 +122,10 @@ def _editorial_tokens(value: str) -> set[str]:
 
 
 def _merge_enrichment_snapshot(live: dict[str, Any], worker: dict[str, Any], allowed_fields: set[str] | None = None) -> dict[str, Any]:
-    """Merge automatic enrichment into current human state without overwriting it."""
+    """Merge automatic enrichment without overwriting human-owned assertions."""
+    migrate_record_assertions(live)
+    migrate_record_assertions(worker)
     merged = json.loads(json.dumps(live))
-    live_status = live.get("metadata_field_status") if isinstance(live.get("metadata_field_status"), dict) else {}
-    worker_status = worker.get("metadata_field_status") if isinstance(worker.get("metadata_field_status"), dict) else {}
     touched_markers = set(str(v) for v in (live.get("human_touched_fields") or []))
     text_was_touched = "__text__" in touched_markers
     record_frozen_by_review = "__review__" in touched_markers
@@ -127,20 +133,17 @@ def _merge_enrichment_snapshot(live: dict[str, Any], worker: dict[str, Any], all
     for field in (allowed_fields if allowed_fields is not None else ALLOWED_METADATA_FIELDS):
         if field in MANIFEST_INHERITED_FIELDS:
             continue
-        info = live_status.get(field) if isinstance(live_status.get(field), dict) else {}
-        if str(info.get("status") or "") in {"human_confirmed", "human_override"}:
+        live_assertion = current_assertion_by_name(live, field)
+        if live_assertion is not None and live_assertion.authority_status in {"human_confirmed", "human_override"}:
             continue
-        if not automatic_merge_blocked and field in worker:
+        if automatic_merge_blocked:
+            continue
+        worker_assertion = current_assertion_by_name(worker, field)
+        if worker_assertion is not None:
+            store_assertion(merged, worker_assertion)
+        elif field in worker:
             merged[field] = worker[field]
-        if not automatic_merge_blocked and field in worker_status:
-            merged.setdefault("metadata_field_status", {})[field] = worker_status[field]
-    if not automatic_merge_blocked:
-        worker_evidence = worker.get("metadata_evidence") if isinstance(worker.get("metadata_evidence"), dict) else {}
-        live_evidence = merged.setdefault("metadata_evidence", {})
-        for field, info in worker_evidence.items():
-            status = live_status.get(field) if isinstance(live_status.get(field), dict) else {}
-            if str(status.get("status") or "") not in {"human_confirmed", "human_override"}:
-                live_evidence[field] = info
+    project_record_assertions(merged)
     for key in (
         "metadata_stage_status", "metadata_execution_ledger", "metadata_incomplete_fields",
         "metadata_review_fields", "metadata_needs_attention", "metadata_attention_reasons",
