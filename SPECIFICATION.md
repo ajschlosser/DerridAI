@@ -10,6 +10,7 @@
 
 DERRIDAI defines a normalized, traceable, and reproducible information architecture for AI-assisted documentary research. In the name DERRIDAI, **Retrieval** is used in both a broad research sense - the recovery of relevant documentary information for active use - and a narrower technical sense that includes vector, lexical, hybrid, filtered, and other computational search methods. Vector search is one retrieval mechanism, not the meaning of the specification as a whole.
 
+
 ## Contents
 
 - [How to Read This Specification](#how-to-read-this-specification)
@@ -19,7 +20,12 @@ DERRIDAI defines a normalized, traceable, and reproducible information architect
 - [Evidence, Claims, Traceability, and Reproducibility](#evidence-claims-traceability-and-reproducibility)
 - [Interfaces, Validation, and Governance](#interfaces-validation-and-governance)
 - [Interoperability, Portability, and External Standards](#interoperability-portability-and-external-standards)
-- [Extensibility, Conformance, and Reference Schemas](#extensibility-conformance-and-reference-schemas)
+- [Appendix A - Normative Entity Model and Object Glossary](#appendix-a---normative-entity-model-and-object-glossary)
+- [Appendix B - Extensibility and Conformance](#appendix-b---extensibility-and-conformance)
+- [Appendix C - Reference Interchange, Vocabularies, and Schemas](#appendix-c---reference-interchange-vocabularies-and-schemas)
+- [Appendix D - Relationship to External Standards](#appendix-d---relationship-to-external-standards)
+- [Appendix E - Reference Implementation](#appendix-e---reference-implementation)
+- [Appendix F - Rationale and Summary](#appendix-f---rationale-and-summary)
 
 ---
 
@@ -59,33 +65,43 @@ A DERRIDAI system is designed so that: heterogeneous documentary inputs are norm
 
 > **Core rule.** The identity, provenance, and evidentiary integrity of documentary information MUST survive the transformations between source extraction and AI-assisted research, while computational mechanisms operating over that information remain replaceable.
 
+
 ### Architectural Model
 
-#### Durable Research Layer
+DERRIDAI standardizes scholarly identities and distinctions that must remain recoverable across implementations. It intentionally keeps the first-class semantic object model small. Extraction blocks, generic relations, schema-editor objects, storage projections, retrieval candidates, packet-item wrappers, validation-result classes, and grading-result classes MAY exist in an implementation without becoming DERRIDAI semantic objects.
 
-A DERRIDAI implementation SHOULD distinguish a **Durable Research Layer** from derived computational state. The Durable Research Layer comprises research information whose identity or scholarly meaning is intended to persist across model substitutions, index rebuilds, prompt changes, and research runs.
+#### Four scholarly layers
 
-It MAY include SourceDocuments, SourceUnits, SourceSpans, Records, RecordRevisions, bibliographic metadata, MetadataSchemas, FieldAssertions, Relations, human review decisions, annotations, CorpusPublications, and other domain-specific durable objects.
+The DERRIDAI source-to-claim architecture is organized into four conceptual layers:
 
-#### Derived Computational Layer
+1. **Documentary Layer** - SourceDocument, SourceSpan, Record, and RecordRevision preserve documentary identity and source location.
+2. **Scholarly Assertion and Attribution Layer** - FieldAssertion preserves derivation, evaluation, authority, value state, confidence, and interpretive attribution without flattening those distinctions.
+3. **Evidence Layer** - Evidence Acquisition, EvidenceRef, and EvidencePacket represent how identified documentary material enters a particular research operation as evidence.
+4. **AI Research-Output Layer** - GenerationRun, GeneratedClaim, and SupportBinding preserve the relationship between supplied evidence and generated research output.
 
-Embeddings, vector indexes, lexical indexes, query decompositions, retrieval rankings, reranker scores, model contexts, caches, temporary evidence ordering, and generation state SHOULD be treated as derived or run-specific unless an implementation explicitly declares otherwise.
+Profiles add CorpusPublication, RetrievalRun, and ResearchRun where publication, computational retrieval, or reproducible research capability is claimed.
 
-A rebuildable derived representation MUST NOT silently become more authoritative than the corpus or source data from which it was created.
+#### Durable and derived state
+
+Authoritative documentary and scholarly state MUST remain distinguishable from derived computational state. Embeddings, vector indexes, lexical indexes, query decompositions, retrieval rankings, reranker scores, caches, temporary evidence ordering, response projections, and similar rebuildable artifacts MUST NOT silently become more authoritative than the corpus or source data from which they derive.
 
 #### Conceptual flow
 
-The normative conceptual flow is:
+At its fullest extent, the scholarly traceability chain is:
 
-`SourceDocument -> SourceSpan -> Record -> EvidenceAcquisition -> Evidence -> GenerationRun -> GeneratedClaim`
+`SourceDocument -> SourceSpan -> Record -> RecordRevision -> FieldAssertion -> Evidence Acquisition -> EvidenceRef -> EvidencePacket -> GenerationRun -> GeneratedClaim -> SupportBinding`
 
-with the auditable reverse path:
+These are semantic roles, not mandatory class or table names. Not every capability profile requires every role to be separately materialized.
 
-`GeneratedClaim -> SupportBinding -> EvidenceRef -> RecordRevision -> SourceSpan -> SourceDocument`.
+The principal reverse audit paths are:
 
-A system MAY omit stages that are not applicable. For example, a search-only implementation need not perform generation, and a long-context system may acquire evidence without a vector retrieval stage.
+`GeneratedClaim -> SupportBinding -> EvidenceRef(record) -> RecordRevision -> SourceSpan -> SourceDocument`
 
-> **Plain-language summary.** The core obligation is traceability. A system may use very different software internally, but it should still be able to answer: Which source did this Record come from? Which version of the Record was used? Which evidence supported this claim?
+or:
+
+`GeneratedClaim -> SupportBinding -> EvidenceRef(source_span) -> SourceSpan -> SourceDocument`
+
+A system MUST NOT claim full claim traceability merely because a human-readable citation is present when the internal evidence-to-source relationship cannot be resolved.
 
 #### Research normalization
 
@@ -113,11 +129,12 @@ DERRIDAI distinguishes physical navigation from scholarly citation. An implement
 
 A location MAY include `physical_page`, `printed_page`, `printed_page_label`, `volume`, `section`, `chapter`, `paragraph`, `column`, bounding boxes, and character offsets. When multiple page systems exist, the representation MUST identify which system a value belongs to.
 
-#### SourceUnit
 
-A **SourceUnit** is an addressable unit produced directly or near-directly from document extraction, such as a PDF block, OCR region, paragraph candidate, XML node, line group, or page region. A SourceUnit SHOULD include a stable ID, source-document ID, extracted text, location, unit type, extraction method, and extraction confidence where available.
+#### Extraction units (implementation-specific)
 
-SourceUnits MUST NOT acquire semantic significance merely because they are physical extraction units.
+An implementation MAY use addressable extraction units such as PDF blocks, OCR regions, paragraph candidates, XML nodes, line groups, media segments, or page regions. Such units MAY carry stable local IDs, extracted text, source-document identity, location, extraction method, and extraction confidence.
+
+Extraction units are not first-class DERRIDAI semantic objects. They MUST NOT acquire scholarly significance merely because they are physical or technical extraction units. When they participate in provenance, they do so as locator material inside a SourceSpan or another DERRIDAI object.
 
 #### SourceSpan
 
@@ -147,9 +164,9 @@ Splitting one Record into two or more independently retrievable Records MUST cre
 
 A **RecordRevision** identifies a specific state of a Record. It SHOULD record `record_id`, revision identifier, creation time, actor, change reason, and parent revision where applicable.
 
-A revision identifier MUST change when authoritative record text changes and SHOULD change when publication-relevant metadata changes. Evidence that depends on offsets or hashes SHOULD identify the applicable RecordRevision.
+A revision identifier MUST change whenever authoritative Record text changes and whenever another mutation can invalidate a pinned evidence locator or SupportBinding. It MAY also advance for broader authoritative concurrency control.
 
-An implementation MUST NOT silently resolve an EvidenceRef against a different revision when doing so changes the evidence referenced.
+Evidence whose locator depends on mutable Record text or reviewed state MUST identify the applicable RecordRevision. An implementation MUST NOT silently resolve an EvidenceRef against a different revision when doing so changes the evidence represented.
 
 #### Record text and source text
 
@@ -171,73 +188,88 @@ Provider failure, malformed model output, or model uncertainty MUST NOT by itsel
 
 Implementations SHOULD distinguish at least: identity fields; source-bound fields; document-inherited fields; semantic or interpretive fields; derived fields; and operational fields. Operational fields MUST NOT be silently published as scholarly record content.
 
+
 #### FieldAssertion
 
-A value stored on a Record and an assertion concerning that value are distinct concepts. A **FieldAssertion** SHOULD support `field`, `value`, `status`, `method`, `checked`, `confidence`, `reason`, `evidence_refs`, `actor`, `model`, and `created_at` where relevant.
+A value stored on a Record and an assertion concerning that value are distinct concepts. A **FieldAssertion** represents one assertion about one field value in Record or RecordRevision context.
 
-An implementation MAY materialize the currently authoritative value directly on the Record for convenience. Provenance of interpretive or disputed values SHOULD remain available separately.
+DERRIDAI requires four independently recoverable semantics:
 
-#### Assertion status
+- **derivation** - how the assertion or asserted value entered the research model;
+- **evaluation outcome** - whether and how the field was assessed;
+- **authority** - the review or resolution authority currently attached to the assertion;
+- **value state** - whether the value is present, absent, invalid, or unresolved.
 
-DERRIDAI defines the base statuses `deterministic`, `model_inferred`, `human_confirmed`, `human_override`, `unresolved`, `invalid`, and `confirmed_absent`. Profiles MAY add others.
+The canonical interchange representation uses `derivation_method`, `evaluation_status`, `authority_status`, and `value_status`. A native implementation MAY encode the same semantics through another lossless structure, but a Boolean such as `checked` by itself is not sufficient.
 
-`unresolved` and `confirmed_absent` MUST NOT be treated as equivalent.
+A materialized FieldAssertion SHOULD support `assertion_id`, `record_id`, `record_revision`, stable field identity, field name, value, the four state dimensions or their lossless equivalent, specific method, confidence, reason, evidence references, actor or model, metadata-contract identity, and creation time where relevant.
 
-#### Checked state and confidence
+An implementation MAY materialize the currently authoritative value directly on the Record for convenience. Provenance of interpretive, disputed, superseded, rejected, or human-confirmed assertions SHOULD remain available separately. Human confirmation MUST NOT erase the assertion's original derivation, model, method, evidence, or confidence provenance.
 
-Systems MUST distinguish, when relevant, among not evaluated; evaluated with a result; evaluated with no supported value; evaluated but confidence unavailable; and evaluation failed.
+#### Derivation method
 
-A field MUST NOT be described as checked merely because a processing stage ran somewhere in the same record.
+`derivation_method` identifies how the assertion or asserted value entered the research model. DERRIDAI defines the base values `deterministic`, `model`, `human`, `inherited`, `imported`, and `other`. Profiles MAY add namespaced values.
 
-Confidence MUST be metadata about an assertion rather than an intrinsic property of the source fact. Numeric confidence SHOULD use a documented scale, normally 0 to 1. A system MUST NOT fabricate numeric zero because confidence was omitted. `confidence: null` MAY represent an explicitly unavailable confidence when the field was in fact evaluated.
+Derivation method MUST NOT substitute for authority. A model-derived assertion can later be human-confirmed without becoming human-derived; a deterministic assertion can remain unreviewed; and a human override is both human-derived and an authority event.
+
+#### Evaluation status
+
+`evaluation_status` identifies whether the relevant field was evaluated and what the evaluation produced. DERRIDAI defines `not_evaluated`, `value_supported`, `no_supported_value`, and `evaluation_failed`.
+
+`not_evaluated` means the applicable evaluator did not assess the field. `value_supported` means the evaluation produced at least one supported value or candidate. `no_supported_value` means the evaluation completed but did not support a value. `evaluation_failed` means an attempted evaluation failed operationally or structurally and therefore MUST NOT by itself establish a semantic conclusion.
+
+An implementation MUST NOT infer evaluation success merely because another field or stage was processed.
+
+#### Authority status
+
+`authority_status` identifies the review or resolution authority currently attached to the assertion. DERRIDAI defines `unreviewed`, `human_confirmed`, `human_override`, and `disputed`.
+
+`human_confirmed` means a human reviewer explicitly accepted the assertion without changing its derivation history. `human_override` means a human supplied or selected a replacement authoritative value. `disputed` means materially incompatible assertions remain unresolved or a previously authoritative assertion has been reopened because of contradictory evidence.
+
+Authority status MUST NOT erase derivation history.
+
+#### Value status
+
+`value_status` identifies the semantic state of the asserted value. DERRIDAI defines `present`, `confirmed_absent`, `invalid`, and `unresolved`.
+
+`confirmed_absent` MUST NOT be treated as equivalent to `unresolved`. A failure, missing model response, or omitted confidence MUST NOT by itself establish `confirmed_absent`, `invalid`, or any other semantic conclusion.
+
+#### Confidence
+
+Confidence is metadata about an evaluation or assertion, not an intrinsic property of the source fact. Numeric confidence MUST use a documented scale and SHOULD normally use the interval 0 to 1.
+
+When `evaluation_status` is `not_evaluated`, confidence MUST be omitted. When an evaluation occurred, confidence MUST be present: it MAY be numeric when the evaluator supplied a meaningful value, or `null` when evaluation occurred but confidence is explicitly unavailable. A system MUST NOT fabricate numeric zero or numeric one merely because confidence was omitted.
 
 Implementations MUST NOT present confidence as a calibrated probability unless calibration has actually been established.
 
 #### Disagreement and authority
 
-A system MAY retain multiple FieldAssertions for the same field. When deterministic, inherited, model-derived, and human-derived values disagree, the implementation SHOULD retain the disagreement rather than overwriting it without trace.
+A system MAY retain multiple FieldAssertions for the same field. When deterministic, inherited, model-derived, imported, and human-derived assertions disagree, the implementation SHOULD retain the disagreement rather than overwrite it without trace.
 
-The implementation MUST have a declared authority or resolution policy for selecting a materialized current value. A human override MUST be explicit and auditable.
+The implementation MUST have a declared authority or resolution policy for selecting a materialized current value. Human confirmation and human override MUST be explicit and auditable. If contradictory later evidence reopens a human-confirmed value, the prior confirmation SHOULD remain historical provenance rather than being rewritten as though it never occurred.
 
 ### Attribution and Semantic Relations
 
+
 #### Scholarly attribution
 
-The DERRIDAI Scholarly Attribution Profile RECOMMENDS support for the following fields when their distinctions are relevant:
+When the distinctions are relevant, an implementation SHOULD support fields such as `speaker`, `quoted_speaker`, `quoted_author`, `quoted_work`, `quoted_position_holder`, `quoted_addressee`, `quoted_referent`, `quotation_chain`, `position_holder`, `target`, `stance`, `discourse_role`, and `proposition_status`.
 
-- `speaker`, `quoted_speaker`, `quoted_author`, and `quoted_work`;
+A passage written by an author does not entail that every proposition within it is held by that author. An implementation claiming scholarly-attribution support MUST be able to distinguish document author or textual speaker from proposition holder when the source requires that distinction.
 
-- `quoted_position_holder`, `quoted_addressee`, and `quoted_referent`;
+DERRIDAI intentionally does not define a universal generic Relation object. Domain-specific semantic relationships MAY be represented as fields, namespaced predicates, linked-data relations, or extension objects. Such representations MUST preserve the relevant FieldAssertion or equivalent epistemic provenance when interpretation is material.
 
-- `quotation_chain`;
+#### Metadata contracts
 
-- `position_holder`, `target`, `stance`, `discourse_role`, and `proposition_status`.
+Implementations MAY support configurable metadata contracts defining fields, types, controlled values, validation rules, evidence requirements, review requirements, and model instructions. DERRIDAI does not require a first-class MetadataSchema object.
 
-A passage written by an author does not entail that every proposition within it is held by that author. A conforming Scholarly Attribution implementation MUST be able to represent a difference between document author or textual speaker and proposition holder.
+A processing run that depends on a configurable metadata contract MUST retain the exact contract snapshot or an immutable identifier for that exact version. Editing or deleting a later saved schema MUST NOT reinterpret an earlier run or publication. A content hash, immutable schema version, or equivalent evidence SHOULD be retained.
 
-#### Relation
+A schema-defined field whose assertions persist beyond one transient operation SHOULD have a stable field identity distinct from its display label or mutable field name. Renaming a field SHOULD preserve that identity when the scholarly meaning is unchanged; changing its meaning SHOULD create a new identity or explicitly declared compatibility mapping.
 
-Implementations requiring greater generality SHOULD represent semantic relationships as **Relation** objects with a relation ID, subject, predicate, object, epistemic status, evidence references, and assertion references where applicable.
+Reserved identity, source, provenance, and operational semantics MUST NOT be silently shadowed by a custom field. Implementations that permit schema editing SHOULD publish which fields are locked and which fields require evidence, evaluation, or human review.
 
-Profiles MAY define controlled predicates. Relations MUST retain the epistemic status of the information from which they are derived.
-
-### Metadata Schemas
-
-#### MetadataSchema
-
-A DERRIDAI implementation MAY support configurable MetadataSchemas. A schema defines what metadata fields exist, their types and allowed values, validation rules, and, when applicable, what an AI system is instructed to evaluate.
-
-A schema SHOULD declare a schema ID, schema version, name, description, groups, fields, and content hash. Field definitions SHOULD declare name, type, group, allowed values, strictness, instruction, evidence requirement, assessment requirement, and review requirement where applicable.
-
-Schema-defined fields MUST NOT silently collide with reserved identity, source, provenance, or operational names.
-
-#### Locked core fields
-
-A profile MAY identify locked core fields whose semantics cannot be removed or redefined by a user schema. An implementation MUST publish the names and semantics of its locked fields. A schema editor MUST NOT permit a custom field to shadow a locked field.
-
-#### Schema snapshots
-
-When a processing run depends on a configurable schema, the run MUST retain either the exact schema snapshot or an immutable reference to that exact version. Editing a saved schema after a run begins MUST NOT silently alter the semantics of the active or completed run. A schema content hash SHOULD be retained.
+A run MAY apply temporary guidance, requiredness, linguistic hints, or review policy without modifying the saved metadata contract. When such run-specific guidance changes what must be evaluated or reviewed, the effective guidance MUST be retained with the run so the result can be interpreted later.
 
 ### Lifecycle, Transformation, Segmentation, and Review
 
