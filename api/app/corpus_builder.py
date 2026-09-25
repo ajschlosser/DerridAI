@@ -1310,11 +1310,34 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                 force=force,
             )
 
+    def _project_metadata_exemplars_best_effort(self, build_id: str) -> dict[str, Any]:
+        """Project reviewed metadata without making human review depend on Chroma.
+
+        The durable SQLite outbox is written before this method is scheduled.
+        Projection failures therefore remain dirty for startup/next-review retry
+        instead of escaping through executors that run submitted work inline or
+        otherwise coupling review success to vector availability.
+        """
+        try:
+            return self._project_metadata_exemplars(build_id)
+        except Exception as exc:
+            self._append_warning(
+                build_id,
+                "Metadata exemplar projection is pending because the derived vector "
+                f"index could not be updated ({exc}).",
+            )
+            return {
+                "scope_id": build_id,
+                "skipped": False,
+                "projected": False,
+                "error": str(exc),
+            }
+
     def _schedule_metadata_exemplar_projection(self, build_id: str) -> None:
         # Review durability never depends on Chroma. The SQLite outbox is committed
         # first; projection runs best-effort and an unacknowledged item is retried
         # after restart or the next review in this build.
-        self._executor.submit(self._project_metadata_exemplars, build_id)
+        self._executor.submit(self._project_metadata_exemplars_best_effort, build_id)
 
     def _recover_metadata_exemplar_projections(self) -> None:
         try:
