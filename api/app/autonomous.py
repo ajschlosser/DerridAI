@@ -15,7 +15,12 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from .field_assertions import migrate_record_assertions
+from .field_assertions import (
+    create_model_assertion,
+    current_assertions,
+    migrate_record_assertions,
+    project_record_assertions,
+)
 
 # Statuses a person set. The policy never overrides them.
 HUMAN_STATUSES = {"human_confirmed", "human_override", "confirmed_absent"}
@@ -60,40 +65,61 @@ def _empty(value: Any) -> bool:
 
 
 def settle_record(record: dict[str, Any], policy: Policy) -> dict[str, Any]:
-    """Apply the policy to one record's waiting fields. Mutates the record; returns what it filled and what it left."""
-    statuses = record.setdefault("metadata_field_status", {})
+    """Apply hands-free policy to unresolved canonical assertions."""
+    migrate_record_assertions(record)
     filled: list[dict[str, Any]] = []
     left: list[dict[str, str]] = []
-    for field, info in list(statuses.items()):
-        if not isinstance(info, dict) or info.get("status") not in {"unresolved", "invalid"}:
+    for assertion in list(current_assertions(record)):
+        field = str(assertion.field_name or "")
+        if not field or assertion.authority_status in {"human_confirmed", "human_override"}:
             continue
-        if info.get("status") in HUMAN_STATUSES:
+        if assertion.value_status not in {"unresolved", "invalid"}:
             continue
-        if info.get("status") == "invalid":
+        if assertion.value_status == "invalid":
             left.append({"field": field, "reason": "the model returned an unusable value"})
             continue
-        if info.get("reason_code") not in PROPOSAL_REASONS and info.get("method") not in {"llm", "hybrid", "deterministic+llm"}:
-            left.append({"field": field, "reason": str(info.get("reason") or "needs a decision")[:160]})
+        legacy = assertion.legacy_metadata or {}
+        reason_code = str(legacy.get("reason_code") or "")
+        if reason_code not in PROPOSAL_REASONS and assertion.method not in {"llm", "hybrid", "deterministic+llm"}:
+            left.append({"field": field, "reason": str(assertion.reason or "needs a decision")[:160]})
             continue
-        proposed = info.get("proposed_value")
+        proposed = legacy.get("proposed_value")
         if _empty(proposed):
-            proposed = record.get(field)  # a prefilled candidate already sits in the record
+            proposed = assertion.value
+        if _empty(proposed):
+            proposed = record.get(field)
         if _empty(proposed):
             left.append({"field": field, "reason": "the model proposed no value"})
             continue
-        confidence = _confidence(info)
+        confidence = assertion.confidence
         if not ((confidence is not None and confidence >= policy.min_confidence) or policy.unresolved == "best_guess"):
             left.append({"field": field, "reason": f"the model was {round((confidence or 0) * 100)}% confident, below {round(policy.min_confidence * 100)}%"})
             continue
-        record[field] = proposed
         pct = f"{round(confidence * 100)}%" if confidence is not None else "unreported"
-        statuses[field] = {
-            "status": "model_inferred", "method": "autonomous_policy", "autonomous": True, "confidence": confidence,
-            "auto_populated": True, "proposed_value": proposed, "reason_code": "resolved",
-            "reason": f"Taken automatically in hands-free mode (model confidence {pct}); no person reviewed it.",
-        }
+        create_model_assertion(
+            record,
+            field,
+            proposed,
+            outcome="supported_value",
+            confidence=confidence,
+            method="autonomous_policy",
+            reason=f"Taken automatically in hands-free mode (model confidence {pct}); no person reviewed it.",
+            evidence=assertion.evidence,
+            model=assertion.model,
+            run_id=assertion.run_id,
+            schema_id=assertion.schema_id,
+            schema_version=assertion.schema_version,
+        )
+        projection = record.setdefault("metadata_field_status", {}).setdefault(field, {})
+        if isinstance(projection, dict):
+            projection.update({
+                "autonomous": True,
+                "auto_populated": True,
+                "proposed_value": proposed,
+                "reason_code": "resolved",
+            })
         filled.append({"field": field, "value": proposed, "confidence": confidence})
-    migrate_record_assertions(record)
+    project_record_assertions(record)
     return {"filled": filled, "left": left}
 
 
