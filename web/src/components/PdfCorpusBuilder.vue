@@ -76,6 +76,7 @@ import { useCorpusRunGuidance } from "../composables/useCorpusRunGuidance";
 import AppIcon from "./AppIcon.vue";
 import CorpusActionMenu, { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
 import { recordState, recordIssueKinds } from "../domain/corpusReview";
+import { RecordMutationQueue } from "../domain/recordMutationQueue";
 import { firstRecordWithSourceWarning, recordHasSourceWarning } from "../domain/sourceQuality";
 import { recurringShortLines } from "../domain/textCleanup";
 import * as runtime from "../runtime/runtime.js";
@@ -281,7 +282,7 @@ const recordSizing = ref<RecordSizingPolicy>({
   absolute_record_chars: 6000,
 });
 const metadataDraft = ref("{}");
-const recordSaveQueues = new Map<string, Promise<void>>();
+const recordSaveQueue = new RecordMutationQueue();
 const textDraft = ref("");
 const editingText = ref(false);
 const bulkMetadataOpen = ref(false);
@@ -1289,22 +1290,11 @@ function queueRecordRequest(
   fields: string[],
   request: () => Promise<unknown>,
 ) {
-  const prior = recordSaveQueues.get(recordId) || Promise.resolve();
-  const save = prior
-    .catch(() => undefined)
-    .then(async () => {
-      try {
-        await request();
-      } catch (exc) {
-        setMessage(
-          `${fields.join(", ")}: ${exc instanceof Error ? exc.message : String(exc)}`,
-          "error",
-        );
-      }
-    });
-  recordSaveQueues.set(recordId, save);
-  void save.finally(() => {
-    if (recordSaveQueues.get(recordId) === save) recordSaveQueues.delete(recordId);
+  recordSaveQueue.enqueue(recordId, request, (exc) => {
+    setMessage(
+      `${fields.join(", ")}: ${exc instanceof Error ? exc.message : String(exc)}`,
+      "error",
+    );
   });
 }
 function manageProviders() {
@@ -2281,21 +2271,36 @@ async function setDisposition(disposition: "pending" | "accepted" | "rejected") 
   const id = selectedRecord.value.record_id;
   if (disposition !== "pending") justProcessedRecordId.value = id;
   const viewport = captureReviewViewport();
+  if (disposition !== "accepted") {
+    const buildId = currentBuild.value.build_id;
+    const expectedRevision = Number(selectedRecord.value.record_revision || 1);
+    const row: CorpusRecord = {
+      ...selectedRecord.value,
+      review_disposition: disposition,
+      accepted: false,
+      rejected: disposition === "rejected",
+      needs_review: disposition === "pending",
+      record_revision: expectedRevision + 1,
+    } as CorpusRecord;
+    const index = records.value.findIndex((item) => item.record_id === id);
+    if (reviewQueue.value !== "all" && disposition === "rejected") {
+      if (index >= 0) records.value.splice(index, 1);
+      recordTotal.value = Math.max(0, recordTotal.value - 1);
+    } else if (index >= 0) {
+      records.value.splice(index, 1, row);
+    }
+    selectedRecord.value = row;
+    await restoreReviewViewport(viewport, { record: true, inspector: true });
+    queueRecordRequest(id, ["review disposition"], () =>
+      disposition === "pending"
+        ? pdfCorpusApi.disposition(buildId, id, "pending", "", expectedRevision)
+        : pdfCorpusApi.reviewDecision(buildId, id, "rejected", "", expectedRevision, reviewQueue.value),
+    );
+    return;
+  }
   busy.value = "record";
   try {
-    if (disposition === "pending") {
-      const updated = await pdfCorpusApi.disposition(
-        currentBuild.value.build_id,
-        id,
-        "pending",
-        "",
-        Number(selectedRecord.value.record_revision || 1),
-      );
-      selectedRecord.value = updated;
-      await refreshBuild();
-      await refreshRecords(false, id);
-      setMessage(i18n.t("pdf_corpus.reopened_notice"));
-    } else {
+    {
       const result = await pdfCorpusApi.reviewDecision(
         currentBuild.value.build_id,
         id,
