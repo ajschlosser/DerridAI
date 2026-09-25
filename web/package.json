@@ -26,7 +26,7 @@
     "test:characterization": "npm run test:e2e:legacy",
     "test:accessibility": "npm run test:e2e:a11y",
     "format:repo": "prettier --write .. --config .prettierrc --ignore-path ../.prettierignore",
-    "format:repo:check": "prettier --write src/components/corpus-builder/CorpusBuilderWorkspaceHeader.vue src/components/corpus-builder/CorpusConfigurationNav.vue src/components/CorpusBuildReadiness.vue src/components/CorpusMetadataFieldEditor.vue src/components/PdfCorpusBuilder.vue --config .prettierrc --ignore-path ../.prettierignore && git diff -- src/components/corpus-builder/CorpusBuilderWorkspaceHeader.vue src/components/corpus-builder/CorpusConfigurationNav.vue src/components/CorpusBuildReadiness.vue src/components/CorpusMetadataFieldEditor.vue src/components/PdfCorpusBuilder.vue && exit 1"
+    "format:repo:check": "prettier --check .. --config .prettierrc --ignore-path ../.prettierignore"
   },
   "dependencies": {
     "diff": "^7.0.0",
