@@ -93,18 +93,25 @@ class ObjectGraphBuilder:
         }
 
 
+def _first_present(*values: Any) -> Any:
+    for value in values:
+        if value is not None and value != "":
+            return value
+    return None
+
+
 def _span_locator(span: dict[str, Any], source_document_id: str) -> dict[str, Any]:
     return {
         "source_document_id": str(span.get("source_document_id") or source_document_id),
         "source_span_id": span.get("source_span_id"),
         "source_unit_id": span.get("source_unit_id") or span.get("block_id"),
         "source_unit_ids": span.get("source_unit_ids") or [],
-        "physical_page_start": span.get("physical_page_start") or span.get("pdf_page") or span.get("page"),
-        "physical_page_end": span.get("physical_page_end") or span.get("pdf_page") or span.get("page"),
-        "printed_page_start": span.get("printed_page_start") or span.get("printed_page_label"),
-        "printed_page_end": span.get("printed_page_end") or span.get("printed_page_label"),
-        "character_start": span.get("character_start") or span.get("char_start") or span.get("start"),
-        "character_end": span.get("character_end") or span.get("char_end") or span.get("end"),
+        "physical_page_start": _first_present(span.get("physical_page_start"), span.get("pdf_page"), span.get("page")),
+        "physical_page_end": _first_present(span.get("physical_page_end"), span.get("pdf_page"), span.get("page")),
+        "printed_page_start": _first_present(span.get("printed_page_start"), span.get("printed_page_label")),
+        "printed_page_end": _first_present(span.get("printed_page_end"), span.get("printed_page_label")),
+        "character_start": _first_present(span.get("character_start"), span.get("char_start"), span.get("start")),
+        "character_end": _first_present(span.get("character_end"), span.get("char_end"), span.get("end")),
     }
 
 
