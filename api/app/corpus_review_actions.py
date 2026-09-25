@@ -291,16 +291,34 @@ class ReviewActionsMixin:
             raise ValueError("Resolve the queued record metadata before accepting this record.")
         promoted_fields: list[str] = []
         if disposition == "accepted":
+            schema = self._schema_for(build_id)
+            migrate_record_assertions(target, schema)
             status_map = target.get("metadata_field_status") if isinstance(target.get("metadata_field_status"), dict) else {}
-            for field in self._schema_for(build_id).review_fields():
-                info = status_map.get(field) if isinstance(status_map.get(field), dict) else None
-                if info and info.get("status") == "model_inferred":
-                    if info.get("model"):
-                        self._ledger.append(ACCEPTED, model=str(info["model"]), field=field, build_id=build_id, record_id=str(target.get("record_id") or ""), confidence=info.get("confidence"), autofilled=bool(info.get("autofilled")), value=target.get(field), new_value=target.get(field), **(info.get("conditions") or {}))
-                    info["status"] = "human_confirmed"
-                    info["method"] = "human_review_of_llm_proposal"
-                    info["reason"] = (str(info.get("reason") or "") + " Confirmed when the reviewer accepted the record.").strip()
-                    promoted_fields.append(field)
+            for field in schema.review_fields():
+                assertion = current_assertion_by_name(target, field)
+                if assertion is None or assertion.derivation_method != "model" or assertion.authority_status != "unreviewed":
+                    continue
+                info = status_map.get(field) if isinstance(status_map.get(field), dict) else {}
+                if assertion.model or info.get("model"):
+                    self._ledger.append(
+                        ACCEPTED,
+                        model=str(assertion.model or info.get("model") or ""),
+                        field=field,
+                        build_id=build_id,
+                        record_id=str(target.get("record_id") or ""),
+                        confidence=assertion.confidence,
+                        autofilled=bool(info.get("autofilled")),
+                        value=target.get(field),
+                        new_value=target.get(field),
+                        **(info.get("conditions") or {}),
+                    )
+                confirm_assertion(
+                    target,
+                    assertion,
+                    reason="Confirmed when the reviewer accepted the record.",
+                )
+                promoted_fields.append(field)
+            project_record_assertions(target)
             target["metadata_reviewed_at"] = iso_now()
         target["review_disposition"] = disposition
         target["accepted"] = disposition == "accepted"
@@ -362,13 +380,19 @@ class ReviewActionsMixin:
         self._push_review_history(build_id, records, action=f"review_{disposition}", selected_record_id=record_id)
         promoted_fields: list[str] = []
         if disposition == "accepted":
-            status_map = target.get("metadata_field_status") if isinstance(target.get("metadata_field_status"), dict) else {}
-            for field in self._schema_for(build_id).review_fields():
-                info = status_map.get(field) if isinstance(status_map.get(field), dict) else None
-                if info and info.get("status") == "model_inferred":
-                    info["status"] = "human_confirmed"
-                    info["method"] = "human_review_of_llm_proposal"
-                    promoted_fields.append(field)
+            schema = self._schema_for(build_id)
+            migrate_record_assertions(target, schema)
+            for field in schema.review_fields():
+                assertion = current_assertion_by_name(target, field)
+                if assertion is None or assertion.derivation_method != "model" or assertion.authority_status != "unreviewed":
+                    continue
+                confirm_assertion(
+                    target,
+                    assertion,
+                    reason="Confirmed when the reviewer accepted the record.",
+                )
+                promoted_fields.append(field)
+            project_record_assertions(target)
             target["metadata_reviewed_at"] = iso_now()
         target["review_disposition"] = disposition
         target["accepted"] = disposition == "accepted"
@@ -437,14 +461,20 @@ class ReviewActionsMixin:
                 continue
             current_revision = int(record.get("record_revision") or 1)
             if disposition == "accepted":
-                status_map = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
+                schema = self._schema_for(build_id)
+                migrate_record_assertions(record, schema)
                 promoted_fields: list[str] = []
-                for field in self._schema_for(build_id).review_fields():
-                    info = status_map.get(field) if isinstance(status_map.get(field), dict) else None
-                    if info and info.get("status") == "model_inferred":
-                        info["status"] = "human_confirmed"
-                        info["method"] = "human_review_of_llm_proposal"
-                        promoted_fields.append(field)
+                for field in schema.review_fields():
+                    assertion = current_assertion_by_name(record, field)
+                    if assertion is None or assertion.derivation_method != "model" or assertion.authority_status != "unreviewed":
+                        continue
+                    confirm_assertion(
+                        record,
+                        assertion,
+                        reason="Confirmed when the reviewer accepted the record.",
+                    )
+                    promoted_fields.append(field)
+                project_record_assertions(record)
                 if promoted_fields:
                     promoted_by_record[str(record.get("record_id") or "")] = promoted_fields
                 record["metadata_reviewed_at"] = iso_now()
