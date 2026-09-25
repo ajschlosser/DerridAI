@@ -504,20 +504,20 @@ def _legacy_assertion(
     schema: Any | None,
     evidence: Any,
 ) -> FieldAssertion | None:
-    legacy_status_token = str(status.get("status") or "").strip()
-    if not legacy_status_token and value in (None, "", []):
+    legacy_status_name = str(status.get("status") or "").strip()
+    if not legacy_status_name and value in (None, "", []):
         return None
     derivation, evaluation, authority, value_status = _STATUS_TO_CANONICAL.get(
-        legacy_status_token,
+        legacy_status_name,
         ("imported", "not_evaluated", "unreviewed", "present" if value not in (None, "", []) else "unresolved"),
     )
-    if legacy_status_token == "unresolved":
+    if legacy_status_name == "unresolved":
         evaluation = "value_supported" if value not in (None, "", []) else "no_supported_value"
-    if legacy_status_token == "invalid":
+    if legacy_status_name == "invalid":
         evaluation = "evaluation_failed" if str(status.get("reason_code") or "") in {"invalid_value", "validation_failed"} else "value_supported"
-    if legacy_status_token == "human_confirmed" and str(status.get("method") or "").casefold() not in {"llm", "human_review_of_llm_proposal", "human_adjudication_cache"}:
+    if legacy_status_name == "human_confirmed" and str(status.get("method") or "").casefold() not in {"llm", "human_review_of_llm_proposal", "human_adjudication_cache"}:
         derivation = "human" if str(status.get("method") or "").casefold().startswith("human") else "imported"
-    if legacy_status_token == "confirmed_absent" and str(status.get("method") or "").casefold() in {"human", "human_review"}:
+    if legacy_status_name == "confirmed_absent" and str(status.get("method") or "").casefold() in {"human", "human_review"}:
         derivation = "human"
     if value in (None, "", []) and value_status == "present":
         value_status = "unresolved"
@@ -526,7 +526,7 @@ def _legacy_assertion(
         value = None
     raw_evidence = evidence if isinstance(evidence, list) else [evidence] if isinstance(evidence, dict) else []
     candidate = FieldAssertion(
-        assertion_id=f"assertion-{uuid.uuid5(uuid.NAMESPACE_URL, json.dumps([record.get('record_id'), record.get('record_revision'), field_identity(field_name, schema), legacy_status_token, value, status, raw_evidence], default=str, sort_keys=True)).hex}",
+        assertion_id=f"assertion-{uuid.uuid5(uuid.NAMESPACE_URL, json.dumps([record.get('record_id'), record.get('record_revision'), field_identity(field_name, schema), legacy_status_name, value, status, raw_evidence], default=str, sort_keys=True)).hex}",
         record_id=str(record.get("record_id") or ""),
         record_revision=int(record.get("record_revision") or 1),
         field_id=field_identity(field_name, schema),
@@ -558,7 +558,7 @@ def _legacy_assertion(
                 "actor", "model", "run_id", "schema_id", "schema_version",
             }
         },
-        legacy_status=token or None,
+        legacy_status=legacy_status_name or None,
     )
     return candidate
 
