@@ -16,7 +16,6 @@ from typing import Any
 
 from .field_assertions import FieldAssertion, current_assertion_by_name, migrate_record_assertions
 
-TRUSTED_MODEL_REVIEW_METHODS = frozenset({"human_review_of_llm_proposal"})
 DEFAULT_CONTEXT_BLOCK_RADIUS = 1
 PROMPT_EVIDENCE_CHARS = 420
 DEFAULT_PROMPT_TOKEN_BUDGET = 1200
@@ -42,11 +41,16 @@ def _unique_strings(values: Any) -> list[str]:
 
 
 def _reviewed_evidence(assertion: FieldAssertion, evidence: dict[str, Any]) -> bool:
-    """Whether an authoritative assertion's evidence is safe as model precedent."""
+    """Whether an authoritative assertion's evidence is safe as model precedent.
+
+    Canonical authority replaces the old overloaded method/status convention:
+    confirming a model-derived value does not rewrite its derivation or method,
+    but the human authority event still makes its bound evidence eligible.
+    """
 
     if str(evidence.get("reviewed_by") or "") == "human":
         return True
-    return str(assertion.method or "") in TRUSTED_MODEL_REVIEW_METHODS
+    return assertion.authority_status in {"human_confirmed", "human_override"}
 
 
 def _source_span(span: dict[str, Any]) -> dict[str, Any]:
