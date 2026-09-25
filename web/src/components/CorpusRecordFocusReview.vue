@@ -3,13 +3,10 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useI18nStore } from "../stores/i18n";
 import type { CorpusRecord, SourceBlock } from "../api/pdfCorpus";
 import type { MetadataSchema } from "../api/metadataSchemas";
-import { hideSourceWarnings } from "../domain/sourceQuality";
 import type { ProviderProfile } from "../api/system";
 import CorpusSourceIssuePanel from "./CorpusSourceIssuePanel.vue";
-import CorpusSourceQualityDialog from "./CorpusSourceQualityDialog.vue";
 import CorpusMetadataResolutionPanel from "./CorpusMetadataResolutionPanel.vue";
 import CorpusRevisionHistory from "./CorpusRevisionHistory.vue";
-import CorpusBoundarySliceDialog from "./CorpusBoundarySliceDialog.vue";
 import CorpusBoundaryAdjudication from "./CorpusBoundaryAdjudication.vue";
 import CorpusSourceSummary from "./CorpusSourceSummary.vue";
 import FieldEvidenceList from "./FieldEvidenceList.vue";
@@ -59,6 +56,8 @@ const emit = defineEmits<{
   previousRecord: [];
   nextRecord: [];
   requeueMetadata: [];
+  requestSlice: [];
+  openSourceIssue: [];
   merge: [direction: "previous" | "next"];
   slice: [direction: "previous" | "next" | "keep" | "new", offset: number, keepEnd?: number];
   adjudicateBoundary: [direction: "previous" | "next", providerProfileId: string, model: string];
@@ -86,8 +85,6 @@ const dialog = ref<HTMLElement | null>(null);
 const closeButton = ref<HTMLButtonElement | null>(null);
 const tab = ref<"metadata" | "evidence" | "source">("metadata");
 const priorActive = ref<HTMLElement | null>(null);
-const sourceIssueOpen = ref(false);
-const sliceOpen = ref(false);
 const tabOrder = ["metadata", "evidence", "source"] as const;
 const state = computed(
   () =>
@@ -179,10 +176,6 @@ function updateTextDraft(event: Event) {
 }
 function updateResolveSourceIssues(event: Event) {
   emit("resolveSourceIssuesChange", (event.target as HTMLInputElement).checked);
-}
-function acknowledgeSourceIssue(dontShowAgain = false) {
-  if (dontShowAgain) hideSourceWarnings();
-  sourceIssueOpen.value = false;
 }
 function openFieldEvidence(field: string) {
   emit("selectEvidence", field);
@@ -376,7 +369,7 @@ watch(
               class="source-warn-icon"
               type="button"
               :aria-label="i18n.t('pdf_corpus.source_warning_icon')"
-              @click="sourceIssueOpen = true"
+              @click="emit('openSourceIssue')"
             >
               <AppIcon name="warning" /></button
             ><button class="btn" type="button" @click="emit('previewJsonl')" :disabled="busy">
@@ -689,7 +682,7 @@ watch(
         ><button
           class="btn"
           type="button"
-          @click="sliceOpen = true"
+          @click="emit('requestSlice')"
           :disabled="busy || editingText || (!canMergePrevious && !canMergeNext)"
         >
           {{ i18n.t("pdf_corpus.slice_record") }}</button
@@ -717,33 +710,6 @@ watch(
         </button>
       </div>
     </footer>
-    <CorpusBoundarySliceDialog
-      v-if="sliceOpen"
-      :text="String(record.text || '')"
-      :can-previous="Boolean(canMergePrevious)"
-      :can-next="Boolean(canMergeNext)"
-      :busy="busy"
-      @close="sliceOpen = false"
-      @slice="
-        (direction, offset, keepEnd) => {
-          emit('slice', direction, offset, keepEnd);
-          sliceOpen = false;
-        }
-      "
-    />
-    <CorpusSourceQualityDialog
-      :open="sourceIssueOpen && Boolean(record.source_quality_issues?.length)"
-      :issues="record.source_quality_issues"
-      @close="acknowledgeSourceIssue"
-      @edit-text="
-        sourceIssueOpen = false;
-        requestBeginTextEdit();
-      "
-      @open-source="
-        sourceIssueOpen = false;
-        tab = 'source';
-      "
-    />
   </section>
 </template>
 
