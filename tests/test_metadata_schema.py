@@ -361,3 +361,43 @@ def test_researcher_cannot_author_metadata_schemas(tmp_path, monkeypatch):
     listing, created = asyncio.run(run())
     assert listing.status_code == 403 and created.status_code == 403
 
+
+
+def test_metadata_schema_accepts_complete_supported_pos_and_ner_vocabularies():
+    pos_tags = [
+        "ADJ", "ADP", "ADV", "AUX", "CCONJ", "DET", "INTJ", "NOUN", "NUM",
+        "PART", "PRON", "PROPN", "PUNCT", "SCONJ", "SYM", "VERB", "X",
+    ]
+    ner_tags = [
+        "CARDINAL", "DATE", "EVENT", "FAC", "GPE", "LANGUAGE", "LAW", "LOC",
+        "MONEY", "NORP", "ORDINAL", "ORG", "PERCENT", "PERSON", "PRODUCT",
+        "QUANTITY", "TIME", "WORK_OF_ART",
+    ]
+    schema = MetadataSchema(
+        name="NLP tags",
+        groups=[
+            SchemaGroup(
+                key="core",
+                label="Core",
+                intro="Infer core metadata.",
+            ),
+            SchemaGroup(
+                key="discourse",
+                label="Discourse",
+                intro="Infer discourse metadata.",
+            ),
+        ],
+        fields=[
+            SchemaField(
+                name="entities",
+                label="Entities",
+                group="discourse",
+                pos_tags=pos_tags,
+                ner_tags=ner_tags,
+            )
+        ],
+    )
+    field = schema.fields[0]
+    assert field.pos_tags == pos_tags
+    assert field.ner_tags == ner_tags
+
