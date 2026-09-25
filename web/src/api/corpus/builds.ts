@@ -22,11 +22,7 @@ export const corpusBuildsApi = {
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/manifest/regenerate`,
       { method: "POST", body: JSON.stringify(payload) },
     ),
-  patchManifest: (
-    buildId: string,
-    changes: Record<string, unknown>,
-    expectedRevision?: number,
-  ) =>
+  patchManifest: (buildId: string, changes: Record<string, unknown>, expectedRevision?: number) =>
     apiRequest<CorpusBuild>(
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/manifest`,
       {
