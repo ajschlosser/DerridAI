@@ -4,6 +4,16 @@
 
 Release history for DerridAI, newest first. Each entry links to the full release note in [`docs/notes/`](docs/notes/). The README describes only the current release.
 
+## 0.80.5 — Cambridge
+
+Cambridge completes the canonical FieldAssertion migration, tightens metadata
+review and Research prompt-metadata configuration, substantially decomposes and
+modernizes Corpus Builder, aligns `SPECIFICATION.md` with DERRIDAI Core
+Specification 1.0, and adds the first walkable DERRIDAI object-graph explorer.
+It also adds multilingual README coverage, AGPLv3 licensing, and stronger
+repository-format/handoff discipline. See
+[0.80.5](docs/notes/0.80.5.md) for the complete release note.
+
 ## 0.80.0 — Beverly
 
 The release since 0.70.0 consolidates the canonical metadata and provenance
