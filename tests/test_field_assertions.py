@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import pytest
-
 from app.field_assertions import (
     FieldAssertion,
     confirm_absence,
