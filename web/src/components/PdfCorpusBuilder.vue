@@ -6339,6 +6339,19 @@ onBeforeUnmount(() => {
   font-size: 0.8125rem;
   color: var(--muted);
 }
+.record-llm-processed {
+  display: inline-flex !important;
+  width: fit-content;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: 1px solid var(--tone-ok-border);
+  border-radius: 999px;
+  background: var(--tone-ok-bg);
+  color: var(--tone-ok-fg);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
 .inspector-pane details {
   border-bottom: 1px solid var(--line);
   padding: 10px 12px;
