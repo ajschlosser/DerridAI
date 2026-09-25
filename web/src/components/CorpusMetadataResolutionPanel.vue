@@ -122,10 +122,10 @@ function canonicalStatus(field: string): Record<string, unknown> | null {
 }
 function fieldValue(field: string) {
   const assertion = assertionByField.value[field];
-  if (!assertion) return props.record[field];
+  if (!assertion) return unwrapMetadataValue(props.record[field]);
   if (assertion.value_status === "confirmed_absent") return null;
-  if (assertion.value_status === "present") return assertion.value;
-  return props.record[field];
+  if (assertion.value_status === "present") return unwrapMetadataValue(assertion.value);
+  return unwrapMetadataValue(props.record[field]);
 }
 const unresolved = computed(
   () =>
