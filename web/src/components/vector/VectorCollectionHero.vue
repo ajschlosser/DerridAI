@@ -21,6 +21,10 @@ const status = computed(() => String(props.collection.status || ((props.collecti
 const statusTone = computed(() => status.value === "ready" ? "success" : status.value.includes("fail") || status.value === "stale" ? "danger" : status.value === "empty" ? "neutral" : "info");
 const providerLabel = computed(() => {
   const provider = props.collection.embedding_provider || "chroma";
+  if (provider.startsWith("profile:")) {
+    const id = provider.slice("profile:".length);
+    return props.collection.embedding_model ? `${id} · ${props.collection.embedding_model}` : id;
+  }
   if (provider === "ollama") return `Ollama · ${props.collection.embedding_model || ""}`.trim();
   if (provider === "precomputed") return i18n.t("vector.provider_precomputed");
   return i18n.t("vector.provider_chroma");
