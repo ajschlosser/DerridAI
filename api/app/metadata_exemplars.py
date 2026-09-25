@@ -249,8 +249,8 @@ def build_metadata_exemplar(
         "field_name": field,
         "field_id": str(field_id or ""),
         "field_value": value,
-        "assertion_status": str(status.get("status") or ""),
-        "assertion_method": str(status.get("method") or ""),
+        "assertion_status": assertion.authority_status,
+        "assertion_method": str(assertion.method or assertion.derivation_method),
         "evidence_ref": {
             "record_id": record_id,
             "record_revision": record_revision,
