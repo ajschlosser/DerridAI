@@ -67,7 +67,10 @@ import { useCorpusReviewWorkspace } from "../features/corpus-builder/composables
 import { useCorpusSourceConfiguration } from "../features/corpus-builder/composables/useCorpusSourceConfiguration";
 import { useCorpusProviderConfiguration } from "../features/corpus-builder/composables/useCorpusProviderConfiguration";
 import { corpusReviewCommandFromKeydown } from "../features/corpus-builder/domain/reviewCommands";
-import { editableRecordMetadata } from "../features/corpus-builder/domain/recordMetadata";
+import {
+  editableRecordMetadata,
+  evidenceCandidateFieldNames,
+} from "../features/corpus-builder/domain/recordMetadata";
 import { firstValidationRecordId } from "../features/corpus-builder/domain/publicationReadiness";
 import { useCorpusPublication } from "../features/corpus-builder/composables/useCorpusPublication";
 import AppIcon from "./AppIcon.vue";
@@ -507,26 +510,10 @@ const evidenceBlockIds = computed(() => {
 const evidenceCandidateFields = computed(() => {
   const record = selectedRecord.value;
   if (!record) return [];
-  const candidates = [
-    "speaker",
-    "position_holder",
-    "target",
-    "stance",
-    "proposition_status",
-    "quoted_speaker",
-    "quoted_author",
-    "quoted_work",
-    "quoted_position_holder",
-    "quoted_addressee",
-    "quoted_referent",
-    "quotation_chain",
-  ];
-  return candidates.filter((field) => {
-    const value = record[field];
-    return Array.isArray(value)
-      ? value.length > 0
-      : value !== null && value !== undefined && value !== "";
-  });
+  return evidenceCandidateFieldNames(
+    record as unknown as Record<string, unknown>,
+    currentBuild.value?.schema || selectedSchema.value,
+  );
 });
 const visibleBlocks = computed(() => {
   const ids = new Set(selectedRecord.value?.source_block_ids || []);
