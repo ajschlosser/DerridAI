@@ -355,7 +355,7 @@ class EnrichmentRerunsMixin:
                         reason="The model found no new supported value.",
                     ))
                     if new_assertion is not None:
-                        store_assertion(live, new_assertion)
+                        store_assertion(live, new_assertion, select=False)
                     continue
                 if (field, json.dumps(new, sort_keys=True, default=str)) in known:
                     informational.append(enrichment_informational_event(
