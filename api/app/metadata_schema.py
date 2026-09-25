@@ -428,13 +428,11 @@ class MetadataResponseBase(BaseModel):
             if outcome == "uncertain" and not needs_review:
                 raise ValueError(f"{field}: outcome=uncertain requires needs_review=true")
 
-            if outcome == "supported_value" and field in self.evidence_fields_for_validation:
-                info = evidence.get(field)
-                block_ids = info.get("block_ids") if isinstance(info, dict) else None
-                if not block_ids:
-                    raise ValueError(
-                        f"{field}: supported evidence-bearing values require at least one field_evidence block_id"
-                    )
+            # Missing/invalid evidence is a review-state problem, not a
+            # structured-output failure. Reconciliation below the schema layer
+            # validates block membership/confidence and marks the individual field
+            # evidence_failed so one omitted citation cannot discard an otherwise
+            # usable metadata-family response.
         return self
 
 
