@@ -1,7 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { assertionFieldsByTab } from "./fieldAssertions";
 
-const STORAGE_KEY = "derridai.record.inspectorLayout.v2";
+const STORAGE_KEY = "derridai.record.inspectorLayout.v1";
 
 export type InspectorTabKey = "overview" | "provenance" | "indexing";
 
