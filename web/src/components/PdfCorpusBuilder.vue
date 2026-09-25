@@ -2771,26 +2771,81 @@ async function merge(direction: "previous" | "next") {
 async function split(afterBlockId: string) {
   if (!currentBuild.value || !selectedRecord.value) return;
   const id = selectedRecord.value.record_id;
+  const targetIndex = records.value.findIndex((row) => row.record_id === id);
+  const blockIds = [...(selectedRecord.value.source_block_ids || [])];
+  const cut = blockIds.indexOf(afterBlockId) + 1;
+  if (targetIndex < 0 || cut <= 0 || cut >= blockIds.length) return;
+  const before = records.value.slice();
+  const beforeTotal = recordTotal.value;
+  const beforeSelected = selectedRecord.value;
+  const blockText = new Map(visibleBlocks.value.map((block) => [block.block_id, block.text]));
+  const textFor = (ids: string[]) =>
+    ids.map((blockId) => blockText.get(blockId) || "").filter(Boolean).join("\n\n");
+  const leftIds = blockIds.slice(0, cut);
+  const rightIds = blockIds.slice(cut);
+  const leftText = textFor(leftIds);
+  const rightText = textFor(rightIds);
+  if (!leftText || !rightText) return;
+  const nextId = `${id}-split-pending`;
+  const left: CorpusRecord = {
+    ...selectedRecord.value,
+    source_block_ids: leftIds,
+    source_unit_ids: leftIds,
+    source_spans: (selectedRecord.value.source_spans || []).filter((span) =>
+      leftIds.includes(String(span.block_id || "")),
+    ),
+    text: leftText,
+    text_length: leftText.length,
+    record_revision: Number(selectedRecord.value.record_revision || 1) + 1,
+    review_disposition: "pending",
+    accepted: false,
+    rejected: false,
+    needs_review: true,
+  };
+  const right: CorpusRecord = {
+    ...selectedRecord.value,
+    record_id: nextId,
+    source_block_ids: rightIds,
+    source_unit_ids: rightIds,
+    source_spans: (selectedRecord.value.source_spans || []).filter((span) =>
+      rightIds.includes(String(span.block_id || "")),
+    ),
+    text: rightText,
+    text_length: rightText.length,
+    record_revision: 1,
+    review_disposition: "pending",
+    accepted: false,
+    rejected: false,
+    needs_review: true,
+  };
   const viewport = captureReviewViewport();
-  busy.value = "record";
-  try {
-    const result = await pdfCorpusApi.split(
-      currentBuild.value.build_id,
-      id,
-      afterBlockId,
-      Number(selectedRecord.value.record_revision || 1),
-    );
-    await refreshBuild();
-    await refreshRecords(false, result.records[0]?.record_id || id);
-    await restoreReviewViewport(viewport, { record: true });
-    setMessage(
-      i18n.t("pdf_corpus.split_done"),
-    );
-  } catch (exc) {
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
+  records.value.splice(targetIndex, 1, left, right);
+  recordTotal.value += 1;
+  selectedRecord.value = left;
+  selectedRecordId.value = left.record_id;
+  await restoreReviewViewport(viewport, { record: true });
+  queueRecordRequest(
+    id,
+    ["record boundary"],
+    async () => {
+      const result = await pdfCorpusApi.split(
+        currentBuild.value!.build_id,
+        id,
+        afterBlockId,
+        Number(beforeSelected.record_revision || 1),
+      );
+      await refreshBuild();
+      await refreshRecords(false, result.records[0]?.record_id || id);
+      await restoreReviewViewport(viewport, { record: true });
+      setMessage(i18n.t("pdf_corpus.split_done"));
+    },
+    () => {
+      records.value = before;
+      recordTotal.value = beforeTotal;
+      selectedRecord.value = beforeSelected;
+      selectedRecordId.value = beforeSelected.record_id;
+    },
+  );
 }
 async function sliceRecord(
   direction: "previous" | "next" | "keep" | "new",
