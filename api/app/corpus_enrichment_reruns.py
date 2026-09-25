@@ -28,7 +28,7 @@ from .corpus_llm_helpers import _validate_execution_budget
 from .corpus_record_quality import iso_now
 from .corpus_review_actions import _serialize_record_mutation
 from .corpus_review_state import _sync_record_metadata_state
-from .corpus_reviewer_helpers import _metadata_issue_type
+from .corpus_reviewer_helpers import _metadata_issue_type_for_field
 from .enrichment_cycles import (
     CONFIDENCE_FIELDS,
     MAX_PASSES,
@@ -103,8 +103,11 @@ class EnrichmentRerunsMixin:
         target_fields: dict[str, list[str]] = {}
         for index, record in enumerate(records):
             incomplete = [str(value) for value in record.get("metadata_incomplete_fields") or []]
-            statuses = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
-            retry_fields = [field for field in incomplete if _metadata_issue_type(statuses.get(field) if isinstance(statuses.get(field), dict) else {}, record) in retryable_types]
+            retry_fields = [
+                field
+                for field in incomplete
+                if _metadata_issue_type_for_field(record, field) in retryable_types
+            ]
             if retry_fields:
                 target_indices.append(index)
                 target_fields[str(record.get("record_id") or index)] = retry_fields
