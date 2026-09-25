@@ -88,10 +88,9 @@ function detail(job: ResearchJob) {
           type="button"
           :disabled="job.status === 'cancelling' || job.cancel_requested"
           :aria-label="i18n.t('research.cancel_run')"
+          v-text="'×'"
           @click="emit('cancel', job)"
-        >
-          ×
-        </button>
+        ></button>
       </article>
     </div>
   </section>
