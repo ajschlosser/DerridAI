@@ -68,8 +68,15 @@ def _metadata_source_quality_gate(
                 legacy_metadata={"reason_code": "source_quality"},
             )
         project_record_assertions(record)
-        field_status = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
-        incomplete_fields = [field for field in required_metadata_fields if (current_assertion_by_name(record, field) is None or current_assertion_by_name(record, field).value_status in {"unresolved", "invalid"} or record.get(field) in (None, "", []))]
+        incomplete_fields = [
+            field
+            for field in required_metadata_fields
+            if (
+                current_assertion_by_name(record, field) is None
+                or current_assertion_by_name(record, field).value_status in {"unresolved", "invalid"}
+                or record.get(field) in (None, "", [])
+            )
+        ]
         record["metadata_incomplete_fields"] = incomplete_fields
         record["metadata_complete"] = not incomplete_fields
         record["metadata_stage_status"] = {"discourse": "skipped", "quotation": "skipped", "indexing": "skipped", "source_quality": "needs_review"}
