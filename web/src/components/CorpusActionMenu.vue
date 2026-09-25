@@ -51,7 +51,10 @@ function keepInWindow() {
   const gap = 6;
   const triggerBox = button.getBoundingClientRect();
   const listBox = list.getBoundingClientRect();
-  const width = Math.min(listBox.width || 256, Math.max(160, window.innerWidth - margin * 2));
+  const width = Math.min(
+    listBox.width || 256,
+    Math.max(160, window.innerWidth - margin * 2),
+  );
   const height = listBox.height || 0;
 
   let left = triggerBox.left;
@@ -67,8 +70,11 @@ function keepInWindow() {
     props.placement === "top" ? triggerBox.top - height - gap : triggerBox.bottom + gap;
   const alternateTop =
     props.placement === "top" ? triggerBox.bottom + gap : triggerBox.top - height - gap;
-  const preferredFits = preferredTop >= margin && preferredTop + height <= window.innerHeight - margin;
-  const top = preferredFits ? preferredTop : Math.max(margin, Math.min(alternateTop, window.innerHeight - height - margin));
+  const preferredFits =
+    preferredTop >= margin && preferredTop + height <= window.innerHeight - margin;
+  const top = preferredFits
+    ? preferredTop
+    : Math.max(margin, Math.min(alternateTop, window.innerHeight - height - margin));
   flipped.value = !preferredFits;
 
   menuStyle.value = {
