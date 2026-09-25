@@ -324,6 +324,29 @@ def test_prompt_example_budget_caps_each_field_and_total_packet():
     assert prompt_example_token_estimate(bounded) <= 230
 
 
+def test_prompt_example_budget_honors_configured_field_limit():
+    examples = {
+        "speaker": [
+            {"record_id": f"s{index}", "value": f"Speaker {index}", "excerpt": "short"}
+            for index in range(5)
+        ]
+    }
+
+    expanded = budget_prompt_examples(
+        examples,
+        token_budget=1000,
+        field_limits={"speaker": 4},
+    )
+    disabled = budget_prompt_examples(
+        examples,
+        token_budget=1000,
+        field_limits={"speaker": 0},
+    )
+
+    assert len(expanded["speaker"]) == 4
+    assert disabled == {}
+
+
 def test_prompt_example_budget_round_robins_across_fields():
     examples = {
         "speaker": [{"record_id": "s", "value": "Derrida", "excerpt": "x" * 40}],
