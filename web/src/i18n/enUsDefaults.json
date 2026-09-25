@@ -2569,6 +2569,7 @@
   "pdf_corpus.review_metadata_issues": "Review metadata issues",
   "pdf_corpus.review_metadata_records": "Review {count} affected record(s)",
   "pdf_corpus.review_mode": "Record review",
+  "pdf_corpus.review_workspace_title": "Scholarly review",
   "pdf_corpus.review_mode_help": "Review the proposed record and its metadata together. Build diagnostics remain available under Technical build details.",
   "pdf_corpus.review_only": "Needs review only",
   "pdf_corpus.review_preparing_help": "Metadata enrichment is still running. Records unlock individually as soon as their metadata pass finishes, so you can begin review without waiting for the entire book.",
