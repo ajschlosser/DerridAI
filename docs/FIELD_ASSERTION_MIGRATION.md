@@ -55,6 +55,24 @@ Schema-defined assertion fields can now flow without production code changes thr
 
 Built-in field lists remain as useful ordering and presentation defaults. They are no longer closed whitelists for ordinary custom metadata.
 
+## Canonical policy reads
+
+Backend policy now reads FieldAssertions directly for:
+
+- record acceptance and implicit confirmation;
+- human edits and confirmed absence;
+- reviewed evidence changes;
+- source-quality gating;
+- manifest inheritance and deterministic structural ownership;
+- enrichment ownership/protection;
+- enrichment-pass disagreement and rerun resets;
+- metadata exemplar/editorial-memory trust;
+- hands-free settlement;
+- metadata retry eligibility;
+- metadata issue summaries and enrichment contribution metrics.
+
+`metadata_field_status` may still be written or read while constructing compatibility projections, preserving blind-review/recheck telemetry, or migrating historical records. New scholarly authority decisions must not originate from that flattened status token.
+
 ## Canary coverage
 
 The regression suite uses the custom field `conceptual_tension` without adding it to production field constants.
