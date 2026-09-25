@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, useId } from "vue";
 
-const props = withDefaults(
+withDefaults(
   defineProps<{
     text: string;
     label?: string;
@@ -83,7 +83,7 @@ function onKeydown(event: KeyboardEvent) {
   place-items: center;
   border: 1px solid currentColor;
   border-radius: 999px;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 800;
   line-height: 1;
 }
