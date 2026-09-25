@@ -6632,5 +6632,6 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'schemas.ner_tag.product': 'Produit',
  'schemas.ner_tag.quantity': 'Mesure',
  'schemas.ner_tag.time': 'Heure',
- 'schemas.ner_tag.work_of_art': 'Œuvre créative'
+ 'schemas.ner_tag.work_of_art': 'Œuvre créative',
+ 'research.configure_prompt_metadata': 'Configurer les métadonnées d’invite'
 }
