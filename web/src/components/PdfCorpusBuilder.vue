@@ -2854,6 +2854,88 @@ async function sliceRecord(
 ) {
   if (!currentBuild.value || !selectedRecord.value) return;
   const id = selectedRecord.value.record_id;
+  if (direction === "previous" || direction === "next") {
+    const index = records.value.findIndex((row) => row.record_id === id);
+    const neighborIndex = direction === "previous" ? index - 1 : index + 1;
+    const targetText = String(selectedRecord.value.text || "");
+    if (
+      index < 0 ||
+      neighborIndex < 0 ||
+      neighborIndex >= records.value.length ||
+      offset <= 0 ||
+      offset >= targetText.length
+    )
+      return;
+    const before = records.value.slice();
+    const beforeSelected = selectedRecord.value;
+    const neighbor = records.value[neighborIndex];
+    const moved = targetText.slice(
+      direction === "previous" ? 0 : offset,
+      direction === "previous" ? offset : undefined,
+    ).trim();
+    const retained = targetText
+      .slice(direction === "previous" ? offset : 0)
+      .trim();
+    if (!moved || !retained) return;
+    const target = {
+      ...selectedRecord.value,
+      text: retained,
+      text_length: retained.length,
+      record_revision: Number(selectedRecord.value.record_revision || 1) + 1,
+      review_disposition: "pending" as const,
+      accepted: false,
+      rejected: false,
+      needs_review: true,
+    };
+    const neighborText =
+      direction === "previous"
+        ? `${String(neighbor.text || "").trim()}\n\n${moved}`.trim()
+        : `${moved}\n\n${String(neighbor.text || "").trim()}`.trim();
+    const updatedNeighbor = {
+      ...neighbor,
+      text: neighborText,
+      text_length: neighborText.length,
+      record_revision: Number(neighbor.record_revision || 1) + 1,
+      review_disposition: "pending" as const,
+      accepted: false,
+      rejected: false,
+      needs_review: true,
+    };
+    const viewport = captureReviewViewport();
+    records.value.splice(
+      Math.min(index, neighborIndex),
+      2,
+      ...(direction === "previous" ? [updatedNeighbor, target] : [target, updatedNeighbor]),
+    );
+    selectedRecord.value = target;
+    selectedRecordId.value = id;
+    await restoreReviewViewport(viewport, { record: true });
+    queueRecordRequest(
+      `${id}:${neighbor.record_id}`,
+      ["record boundary"],
+      async () => {
+        const result = await pdfCorpusApi.sliceRecord(
+          currentBuild.value!.build_id,
+          id,
+          direction,
+          offset,
+          Number(beforeSelected.record_revision || 1),
+          keepEnd,
+        );
+        boundarySliceOpen.value = false;
+        await refreshBuild();
+        await refreshRecords(false, result.record.record_id);
+        await restoreReviewViewport(viewport, { record: true });
+        setMessage(i18n.t("pdf_corpus.slice_done"));
+      },
+      () => {
+        records.value = before;
+        selectedRecord.value = beforeSelected;
+        selectedRecordId.value = beforeSelected.record_id;
+      },
+    );
+    return;
+  }
   const viewport = captureReviewViewport();
   busy.value = "record";
   try {
