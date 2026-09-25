@@ -492,6 +492,13 @@ function extraIssueKinds(record: CorpusRecord) {
   const state = recordState(record);
   return recordIssueKinds(record).filter((kind: string) => kind !== state);
 }
+function recordLlmProcessed(record: CorpusRecord) {
+  if (record.metadata_enrichment_finished) return true;
+  if (String(record.metadata_enrichment_state || "") === "complete") return true;
+  return Object.values(record.metadata_stage_status || {}).some((value) =>
+    ["complete", "needs_review"].includes(String(value || "")),
+  );
+}
 
 const selectedAsset = computed(
   () => assets.value.find((item) => item.asset_id === selectedAssetId.value) || null,
@@ -4702,6 +4709,13 @@ onBeforeUnmount(() => {
                         {{ i18n.t("pdf_corpus.characters") }}</small
                       ><span class="record-row-status" :data-state="recordState(record)">{{
                         recordStateLabel(record)
+                      }}</span
+                      ><span
+                        v-if="recordState(record) === 'ready' && recordLlmProcessed(record)"
+                        class="record-llm-processed"
+                        :title="i18n.t('pdf_corpus.llm_processed_help', 'The metadata enrichment run finished for this record; it is now waiting for human review.')"
+                      ><AppIcon name="spark" />{{
+                        i18n.t("pdf_corpus.llm_processed", "LLM processed")
                       }}</span
                       ><small v-if="extraIssueKinds(record).length" class="record-issue-summary">{{
                         extraIssueKinds(record)
