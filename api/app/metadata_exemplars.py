@@ -14,7 +14,11 @@ import json
 import re
 from typing import Any
 
-from .field_assertions import FieldAssertion, current_assertion_by_name, migrate_record_assertions
+from .field_assertions import (
+    FieldAssertion,
+    current_assertion_by_name,
+    migrate_record_assertions,
+)
 
 DEFAULT_CONTEXT_BLOCK_RADIUS = 1
 PROMPT_EVIDENCE_CHARS = 420
