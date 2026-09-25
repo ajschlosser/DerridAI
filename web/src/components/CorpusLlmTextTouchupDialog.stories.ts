@@ -1,13 +1,13 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
+import type { ProviderProfile } from "../api/system";
 import CorpusLlmTextTouchupDialog from "./CorpusLlmTextTouchupDialog.vue";
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- SA-16: intentionally sparse Storybook fixture exercises partial/loading data without fabricating unrelated fields.
 const meta = {
   title: "Corpus Builder/Review/LLM Text Touch-up",
   component: CorpusLlmTextTouchupDialog,
   args: {
     open: true,
     profiles: [
-      { id: "primary", name: "Local scholarly", type: "ollama", model: "gemma4:e4b" } as any,
+      { id: "primary", name: "Local scholarly", type: "ollama", model: "gemma4:e4b" } as ProviderProfile,
     ],
     providerProfileId: "primary",
     recordId: "r1",
