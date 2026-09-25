@@ -1,6 +1,6 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { apiRequest } from "../http";
-import type { CorpusBuild, CorpusRecord } from "./types";
+import type { CorpusBuild, CorpusRecord, EnrichmentMetrics } from "./types";
 import { LEGACY_CORPUS_BASE, legacyCorpusUrl } from "./compatibility";
 
 export const corpusMetadataApi = {
