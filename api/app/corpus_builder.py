@@ -188,6 +188,7 @@ from .corpus_review_state import (
 )
 from .corpus_reviewer_helpers import (
     _metadata_issue_type,
+    _metadata_issue_type_for_field,
     _present_for_reviewer,
     _scrub_canonical_transport,
 )
@@ -2811,9 +2812,10 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             for field in incomplete:
                 by_field[field] += 1
                 status_info = statuses.get(field) if isinstance(statuses.get(field), dict) else {}
-                if status_info.get("status") == "invalid":
+                assertion = current_assertion_by_name(record, field)
+                if assertion is not None and assertion.value_status == "invalid":
                     invalid_by_field[field] += 1
-                issue_type = _metadata_issue_type(status_info, record)
+                issue_type = _metadata_issue_type_for_field(record, field)
                 by_reason[issue_type] += 1
                 retryable = issue_type in retryable_types
                 row = {
