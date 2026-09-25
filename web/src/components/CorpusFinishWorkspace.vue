@@ -88,7 +88,7 @@ function fixBlocker(code?: string) {
           }}
         </p>
       </div>
-      <div class="publication-primary">
+      <div class="publication-primary finish-primary">
         <a
           v-if="publication"
           class="btn primary"
@@ -160,7 +160,7 @@ function fixBlocker(code?: string) {
 
     <section
       v-if="blockers.length && !noPublishable"
-      class="publication-blockers"
+      class="publication-blockers blockers"
       aria-labelledby="publication-blockers-title"
     >
       <div class="publication-blockers-head">
