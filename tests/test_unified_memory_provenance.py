@@ -146,3 +146,38 @@ def test_research_memory_reads_are_owner_scoped(tmp_path: Path):
         "answer": "Answer B",
     })
     assert [row["response_id"] for row in repository.list_response_memory(owner="alice")] == ["private-a"]
+
+def test_record_support_lookup_is_owner_scoped(tmp_path: Path):
+    repository = SQLiteSystemRepository(tmp_path / "system.sqlite3")
+    repository.put_generated_claim({
+        "claim_id": "claim-a",
+        "owner": "alice",
+        "claim_text": "A claim",
+    })
+    repository.put_generated_claim({
+        "claim_id": "claim-b",
+        "owner": "bob",
+        "claim_text": "B claim",
+    })
+    repository.put_claim_support_binding({
+        "support_binding_id": "support-a",
+        "claim_id": "claim-a",
+        "owner": "alice",
+        "record_id": "r1",
+        "record_revision": 2,
+        "relation": "supports",
+    })
+    repository.put_claim_support_binding({
+        "support_binding_id": "support-b",
+        "claim_id": "claim-b",
+        "owner": "bob",
+        "record_id": "r1",
+        "record_revision": 2,
+        "relation": "supports",
+    })
+
+    alice_bindings = repository.list_claim_support_bindings_for_record("r1", owner="alice")
+    assert [item["support_binding_id"] for item in alice_bindings] == ["support-a"]
+    assert repository.get_generated_claim("claim-a", owner="alice")["claim_text"] == "A claim"
+    assert repository.get_generated_claim("claim-b", owner="alice") is None
+
