@@ -104,13 +104,24 @@ def test_invalid_states_are_rejected() -> None:
 
 def test_human_absence_supersedes_model_candidate_without_claiming_model_absence() -> None:
     record = {"record_id": "r6", "record_revision": 1}
-    model = create_model_assertion(record, "position_holder", None, outcome="no_supported_value", confidence=None)
+    model = create_model_assertion(
+        record,
+        "position_holder",
+        None,
+        outcome="no_supported_value",
+        confidence=0.73,
+        model="test-model",
+        evidence=[{"block_ids": ["b1"], "reason": "No supported holder in this passage."}],
+    )
     absent = confirm_absence(record, "position_holder", prior=model, actor="reviewer")
 
     assert absent.derivation_method == "model"
     assert absent.authority_status == "human_confirmed"
     assert absent.value_status == "confirmed_absent"
     assert absent.supersedes_assertion_id == model.assertion_id
+    assert absent.model == "test-model"
+    assert absent.confidence == pytest.approx(0.73)
+    assert absent.evidence == model.evidence
 
 
 def test_schema_identity_survives_legacy_migration_and_custom_fields() -> None:
