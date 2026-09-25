@@ -685,10 +685,9 @@ onBeforeUnmount(() => {
               type="button"
               class="search-query-clear"
               :aria-label="i18n.t('search.clear_query')"
+              v-text="'×'"
               @click="clearQuery"
-            >
-              ×
-            </button>
+            ></button>
           </label>
           <button
             v-if="databaseMode"
@@ -859,9 +858,9 @@ onBeforeUnmount(() => {
             type="button"
             class="search-facet-close"
             :aria-label="i18n.t('ui.close')"
+            v-text="'×'"
             @click="facetDrawerOpen = false"
-          >
-            ×</button
+          ></button
           ><SearchFacetPanel :facets="snapshot.facets" @toggle="toggleFacet" @clear="clearFacets" />
         </div>
 
@@ -1252,10 +1251,9 @@ onBeforeUnmount(() => {
               type="button"
               class="btn icon-only"
               :aria-label="i18n.t('ui.close')"
+              v-text="'×'"
               @click="closeSaveView"
-            >
-              ×
-            </button>
+            ></button>
           </div>
           <div class="db">
             <label class="field"
@@ -1294,10 +1292,9 @@ onBeforeUnmount(() => {
             type="button"
             class="btn icon-only"
             :aria-label="i18n.t('ui.close')"
+            v-text="'×'"
             @click="closeSavedViews"
-          >
-            ×
-          </button>
+          ></button>
         </div>
         <div class="db search-views-body">
           <section>
