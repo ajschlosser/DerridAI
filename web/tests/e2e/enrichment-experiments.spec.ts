@@ -75,6 +75,7 @@ test.describe("the enrichment measurements panel", () => {
     page,
   }) => {
     await open(page);
+    await page.getByRole("button", { name: /Show diagnostics/i }).click();
     const summary = page.getByText("How well is enrichment working?").first();
     await summary.scrollIntoViewIfNeeded();
     await summary.click();
