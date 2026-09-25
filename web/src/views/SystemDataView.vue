@@ -28,6 +28,13 @@ const activeSection = computed<Section>(() => {
   const requested = String(route.query.section || "overview");
   return sections.some((item) => item.id === requested) ? (requested as Section) : "overview";
 });
+const activeComponent = computed(() => ({
+  overview: SystemDataOverview,
+  responses: SystemDataResponses,
+  metadata: SystemDataMetadataExamples,
+  databases: SystemDataDatabases,
+  advanced: SystemDataAdvanced,
+})[activeSection.value]);
 
 function t(key: string, fallback: string) {
   return i18n.t(key, fallback);
@@ -84,11 +91,9 @@ function setSection(section: Section) {
       </nav>
 
       <section class="workspace" aria-live="polite">
-        <SystemDataOverview v-if="activeSection === 'overview'" @open-section="setSection" />
-        <SystemDataResponses v-else-if="activeSection === 'responses'" />
-        <SystemDataMetadataExamples v-else-if="activeSection === 'metadata'" />
-        <SystemDataDatabases v-else-if="activeSection === 'databases'" />
-        <SystemDataAdvanced v-else />
+        <KeepAlive>
+          <component :is="activeComponent" @open-section="setSection" />
+        </KeepAlive>
       </section>
     </div>
   </main>
