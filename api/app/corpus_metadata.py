@@ -68,10 +68,11 @@ def _strip_llm_transport_suffix(value: Any) -> tuple[Any, Any | None]:
     """
     if not isinstance(value, str):
         return value, None
-    match = _LLM_TRANSPORT_SUFFIX.search(value)
+    text: str = value
+    match = _LLM_TRANSPORT_SUFFIX.search(text)
     if not match or match.start() <= 0:
         return value, None
-    clean = value[: int(match.start())].rstrip(" ,;")
+    clean = text[: match.start()].rstrip(" ,;")
     return (clean or None), value
 
 
