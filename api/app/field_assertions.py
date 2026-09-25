@@ -86,7 +86,7 @@ def field_identity(field_name: str, schema: Any | None = None) -> str:
         except (AttributeError, KeyError):
             pass
     if name in {"region_type", "primary_text", "discourse_role"}:
-        return f"core.{name}"
+        return f"derridai.{name}"
     return f"legacy.{uuid.uuid5(uuid.NAMESPACE_URL, 'derridai:field:' + name)}"
 
 
