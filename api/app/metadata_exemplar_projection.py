@@ -13,7 +13,11 @@ from typing import Any
 
 from . import experiment
 from .corpus_reviewer_helpers import _second_opinion_owed
-from .field_assertions import current_assertions, migrate_record_assertions, project_record_assertions
+from .field_assertions import (
+    current_assertions,
+    migrate_record_assertions,
+    project_record_assertions,
+)
 from .metadata_exemplars import build_correction_exemplars, build_metadata_exemplar
 from .system_store import system_store
 
