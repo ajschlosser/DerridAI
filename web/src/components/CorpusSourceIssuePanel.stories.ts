@@ -131,7 +131,8 @@ export const NarrowActions: Story = {
     ],
   },
   decorators: [
-    () => ({
+    (story) => ({
+      components: { story },
       template: '<div style="max-width: 320px"><story /></div>',
     }),
   ],
