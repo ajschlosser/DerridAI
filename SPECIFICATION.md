@@ -331,11 +331,11 @@ A DERRIDAI implementation MUST identify its authoritative corpus representation.
 
 If a derived store differs from the authoritative corpus, the discrepancy MUST be detectable.
 
-#### StorageProjection
+#### Storage projections (implementation-specific)
 
-A **StorageProjection** is a technology-specific representation of a Record. It MAY contain `storage_id`, a RecordRef, document text, metadata, and embedding. `storage_id` MAY differ from `record_id`, but the mapping MUST remain recoverable.
+An implementation MAY maintain technology-specific storage projections of a Record containing a storage ID, Record reference, document text, metadata, embedding, or other index-specific values. Such projections are not first-class DERRIDAI semantic objects.
 
-A StorageProjection MUST NOT silently alter semantic Record values. Storage-specific encoding is permitted when decoding is lossless for the declared contract.
+A storage ID MAY differ from `record_id`, but the mapping MUST remain recoverable. A storage projection MUST NOT silently alter semantic Record values. Storage-specific encoding is permitted only when decoding is lossless for the declared contract.
 
 #### Embedding contract
 
@@ -373,17 +373,13 @@ The DERRIDAI Retrieval Profile specifies the technical sense of retrieval: expli
 
 A **RetrievalRun** represents one retrieval operation. It SHOULD record a retrieval-run ID, original query, source collections or publications, retrieval methods, parameters, and timestamps. If query decomposition or translation is used, the original user query MUST remain preserved and derived queries MUST be identified as derived.
 
-#### RetrievalHit
+#### Retrieval diagnostics and candidate envelopes (implementation-specific)
 
-A **RetrievalHit** describes one Record’s appearance in one retrieval route. It SHOULD include collection, search type, rank, raw score, and score semantics. A distance or similarity value MUST NOT be described as confidence or probability unless the retrieval system actually defines it that way.
+An implementation MAY represent route-level retrieval hits containing collection, search type, rank, raw score, and score semantics. A distance or similarity value MUST NOT be described as confidence or probability unless the retrieval system actually defines it that way.
 
-#### RetrievalCandidate
+An implementation MAY also use candidate envelopes that reference a Record and add retrieval-specific information such as collection, distance, fusion score, rerank score, MMR score, route diagnostics, and selection state. Retrieval-hit and candidate-envelope classes are not first-class DERRIDAI semantic objects.
 
-A **RetrievalCandidate** wraps or references a Record and adds retrieval-specific information such as candidate ID, RecordRef, collection, distance, RRF score, rerank score, MMR score, RetrievalHits, and selection state.
-
-At least one of RecordRef or embedded Record MUST be present. A RetrievalCandidate MUST NOT mutate the authoritative Record merely to attach retrieval information.
-
-The same logical Record found through multiple routes SHOULD be deduplicated by logical identity while retaining all contributing RetrievalHits.
+Retrieval diagnostics MUST NOT mutate the authoritative Record merely to attach computational information. The same logical Record found through multiple routes SHOULD be deduplicated by logical identity while retaining contributing route diagnostics.
 
 #### Fusion and reranking
 
@@ -616,7 +612,7 @@ DERRIDAI does not itself establish legal compliance with copyright, confidential
 
 A Record MAY have a language different from the application interface language. Documentary language metadata MUST NOT be silently translated merely to match UI locale. Source text, quotations, bibliographic titles, and evidence SHOULD retain authoritative source language unless an explicit translation transformation is represented.
 
-A translation used as evidence MUST remain distinguishable from the source-language text from which it derives. A translated Record or EvidenceItem SHOULD reference the source Record or SourceSpan when available. Machine translation MUST be identified as such.
+A translation used as evidence MUST remain distinguishable from the source-language text from which it derives. A translated Record or EvidencePacket entry SHOULD reference the source Record or SourceSpan when available. Machine translation MUST be identified as such.
 
 ### Model Independence and Execution Locality
 
@@ -704,7 +700,7 @@ An exported object SHOULD identify the applicable DERRIDAI Core version, DERRIDA
 
 Interoperability asks whether another system can understand or consume a research object. Reproducibility asks whether enough state has been preserved to reconstruct, repeat, inspect, or meaningfully compare the research process. The two properties are complementary.
 
-A PROV graph may be interoperable but insufficient for reproducing a ResearchRun if the EvidencePacket or model configuration is missing. Conversely, a complete local ResearchRunManifest may support substantial reproducibility even if it has not been exported through any external standard.
+A PROV graph may be interoperable but insufficient for reproducing a ResearchRun if the EvidencePacket or model configuration is missing. Conversely, a complete local ResearchRun may support substantial reproducibility even if it has not been exported through any external standard.
 
 ### DERRIDAI PROV Mapping Profile
 
@@ -718,20 +714,24 @@ A DERRIDAI implementation MAY support this profile without using RDF, PROV-O, or
 
 #### Entity mapping
 
-The following DERRIDAI objects SHOULD be exportable as PROV Entities when present: SourceDocument, SourceUnit, SourceSpan, Record, RecordRevision, MetadataSchema, FieldAssertion, CorpusPublication, EvidenceRef, EvidenceItem, EvidencePacket, ResearchRunManifest, GeneratedClaim, ValidationResult, and GradeResult.
+The first-class DERRIDAI objects SHOULD be exportable as PROV Entities when present: SourceDocument, SourceSpan, Record, RecordRevision, FieldAssertion, CorpusPublication, RetrievalRun, EvidenceRef, EvidencePacket, GenerationRun, GeneratedClaim, SupportBinding, and ResearchRun.
+
+Implementation-specific extraction units, metadata-contract objects, retrieval candidates, validation records, grading records, and similar artifacts MAY also be represented in PROV when useful, but they MUST NOT be misrepresented as additional normative DERRIDAI semantic object classes.
 
 Where both Record and RecordRevision are exported, the persistent logical Record MUST remain distinguishable from a particular revision of that Record. A consumer MUST be able to determine which exact RecordRevision was used as evidence when the native ResearchRun preserves that information.
 
-| **DERRIDAI object**                        | PROV-oriented representation                                                                           |
-| :----------------------------------------- | :----------------------------------------------------------------------------------------------------- |
-| **SourceDocument, SourceUnit, SourceSpan** | Entity representing documentary material or an identified portion of it.                               |
-| **Record, RecordRevision**                 | Entity representing persistent scholarly identity and a particular state of that identity.             |
-| **FieldAssertion**                         | Entity whose lineage records inference, validation, confirmation, or override.                         |
-| **CorpusPublication**                      | Entity representing an immutable/versioned corpus release.                                             |
-| **EvidenceRef, EvidencePacket**            | Entity representing research evidence or a set of evidence supplied to a run.                          |
-| **ResearchRunManifest**                    | Entity describing a preserved run state; associated Activities represent the operations that occurred. |
-| **GeneratedClaim**                         | Entity representing an identified proposition or claim produced by generation.                         |
-| **ValidationResult, GradeResult**          | Entity representing a result of validation or evaluation.                                              |
+| DERRIDAI object | PROV-oriented representation |
+|---|---|
+| SourceDocument, SourceSpan | Entity representing documentary material or an identified reproducible portion of it |
+| Record, RecordRevision | Entity representing persistent scholarly identity and a particular state of that identity |
+| FieldAssertion | Entity whose lineage records derivation, evaluation, confirmation, override, or dispute |
+| CorpusPublication | Entity representing an immutable/versioned corpus release |
+| RetrievalRun | Entity or associated Activity state representing one declared computational retrieval operation |
+| EvidenceRef, EvidencePacket | Entity representing evidentiary locator semantics or the ordered evidence context supplied to a run |
+| GenerationRun | Associated Activity or retained run entity representing an AI generation operation |
+| GeneratedClaim | Entity representing an identified claim produced by generation |
+| SupportBinding | Entity representing the claim-scoped evidentiary relation |
+| ResearchRun | Entity describing the coherent retained audit view of a research operation |
 
 #### Record and RecordRevision
 
@@ -821,9 +821,9 @@ The DERRIDAI RO-Crate Profile SHOULD be published as a versioned RO-Crate profil
 
 DERRIDAI defines three conceptual crate scopes.
 
-- A **Corpus Crate** represents a portable CorpusPublication and SHOULD contain or reference the corpus manifest, MetadataSchema, public Records, source-document descriptors, bibliographic metadata, and publication/version information. It MAY contain source documents, annotations, validation reports, PROV representation, and derived index manifests.
+- A **Corpus Crate** represents a portable CorpusPublication and SHOULD contain or reference the corpus manifest, applicable metadata-contract snapshot, public Records, source-document descriptors, bibliographic metadata, and publication/version information. It MAY contain source documents, annotations, validation reports, PROV representation, and derived index manifests.
 
-- A **Research Run Crate** represents a particular AI-assisted research operation and SHOULD contain or reference the ResearchRunManifest, corpus/publication identity, query, evidence-acquisition configuration, EvidencePacket, model configuration, prompt-contract identity, generated output, citations, validation results, grades, and warnings.
+- A **Research Run Crate** represents a particular AI-assisted research operation and SHOULD contain or reference the ResearchRun, corpus/publication identity, query, evidence-acquisition configuration, EvidencePacket, model configuration, prompt-contract identity, generated output, citations, validation results, grades, and warnings.
 
 - A **Project Snapshot Crate** represents a broader research state and MAY contain one or more CorpusPublications, multiple ResearchRuns, annotations, research notes, validation reports, comparison results, configuration snapshots, PROV graphs, derived outputs, and bibliographic resources.
 
@@ -859,7 +859,7 @@ An implementation MAY serialize a Research Run Crate conceptually as follows. Fi
 
 #### Authoritative versus derived artifacts
 
-A crate MUST distinguish authoritative research information from derived computational artifacts where both are included. CorpusPublication, RecordRevision, MetadataSchema, and human-confirmed assertions may be authoritative; embeddings, vector indexes, search rankings, reranker scores, cached responses, and temporary model contexts are normally derived. A consumer SHOULD NOT have to infer authority merely from file names.
+A crate MUST distinguish authoritative research information from derived computational artifacts where both are included. CorpusPublication, RecordRevision, retained metadata-contract snapshots, and human-confirmed assertions may be authoritative; embeddings, vector indexes, search rankings, reranker scores, cached responses, and temporary model contexts are normally derived. A consumer SHOULD NOT have to infer authority merely from file names.
 
 #### Record identity within a crate
 
