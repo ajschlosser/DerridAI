@@ -38,23 +38,17 @@ import CorpusBuildTimeline from "./CorpusBuildTimeline.vue";
 import CorpusFinishWorkspace from "./CorpusFinishWorkspace.vue";
 import CorpusMetadataResolutionPanel from "./CorpusMetadataResolutionPanel.vue";
 import CorpusBuildStageNotice from "./CorpusBuildStageNotice.vue";
-import CorpusMetadataLiveStatus from "./CorpusMetadataLiveStatus.vue";
 import CorpusSourceQualityDialog from "./CorpusSourceQualityDialog.vue";
 import CorpusBulkMetadataEditor from "./CorpusBulkMetadataEditor.vue";
 import CorpusTextCleanupDialog from "./CorpusTextCleanupDialog.vue";
-import CorpusProviderSwitcher from "./CorpusProviderSwitcher.vue";
-import CorpusLlmEffectivenessPanel from "./CorpusLlmEffectivenessPanel.vue";
 import CorpusEditorialMemoryDialog from "./CorpusEditorialMemoryDialog.vue";
 import CorpusReviewSessionBar from "./CorpusReviewSessionBar.vue";
-import CorpusTextCleanupSummary from "./CorpusTextCleanupSummary.vue";
 import CorpusRevisionHistory from "./CorpusRevisionHistory.vue";
 import CorpusJsonlPreviewDialog from "./CorpusJsonlPreviewDialog.vue";
 import CorpusLlmTextTouchupDialog from "./CorpusLlmTextTouchupDialog.vue";
 import CorpusBoundarySliceDialog from "./CorpusBoundarySliceDialog.vue";
 import CorpusBoundaryAdjudication from "./CorpusBoundaryAdjudication.vue";
 import MetadataEnrichmentDialog from "./MetadataEnrichmentDialog.vue";
-import CorpusEnrichmentPassStatus from "./CorpusEnrichmentPassStatus.vue";
-import CorpusEnrichmentMetrics from "./CorpusEnrichmentMetrics.vue";
 import CorpusModelActivity from "./CorpusModelActivity.vue";
 import CorpusHandsFreeSettings from "./CorpusHandsFreeSettings.vue";
 import CorpusTextNoiseSettings from "./CorpusTextNoiseSettings.vue";
@@ -64,7 +58,6 @@ import {
   type MetadataSchema,
   type SchemaSummary,
 } from "../api/metadataSchemas";
-import CorpusHandsFreeReport from "./CorpusHandsFreeReport.vue";
 import UiDialog from "./ui/UiDialog.vue";
 import LlmExecutionControl from "./LlmExecutionControl.vue";
 import { useCorpusBuildLifecycle } from "../composables/useCorpusBuildLifecycle";
@@ -76,6 +69,7 @@ import { useCorpusSourceConfiguration } from "../features/corpus-builder/composa
 import { corpusReviewCommandFromKeydown } from "../features/corpus-builder/domain/reviewCommands";
 import { editableRecordMetadata } from "../features/corpus-builder/domain/recordMetadata";
 import AppIcon from "./AppIcon.vue";
+import CorpusRunMonitor from "./corpus-builder/CorpusRunMonitor.vue";
 import CorpusActionMenu, { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
 import { recordState, recordIssueKinds } from "../domain/corpusReview";
 import { RecordMutationQueue } from "../domain/recordMutationQueue";
@@ -729,7 +723,6 @@ const canStartConcurrentBuild = computed(() =>
       (selectedProviderId.value || !activeBuildCount.value),
   ),
 );
-const llmContribution = computed(() => currentBuild.value?.llm_contribution || {});
 const transientNetworkError = computed(() =>
   Boolean(buildRunning.value && /networkerror|failed to fetch|network error/i.test(error.value)),
 );
@@ -4472,52 +4465,22 @@ defineExpose({
         </section>
 
         <template v-if="showReviewWorkspace">
-          <CorpusProviderSwitcher
-            v-if="currentBuild && providerProfiles.length"
+          <CorpusRunMonitor
+            v-if="currentBuild"
+            :build="currentBuild"
             :profiles="providerProfiles"
             :active-profile-id="activeBuildProfileId"
             :active-model="activeModelLabel"
-            :history="currentBuild.provider_profile_history || []"
-            :disabled="busy !== '' || !buildRunning"
-            @change="switchBuildProvider"
-          />
-          <CorpusMetadataLiveStatus
-            v-if="buildRunning && currentBuild?.stage === 'enriching'"
-            :build="currentBuild"
             :disabled="busy !== ''"
+            @switch-profile="switchBuildProvider"
             @settle="settleMetadata"
             @cancel="cancelBuild"
-          />
-          <CorpusEnrichmentPassStatus
-            v-if="currentBuild"
-            :build="currentBuild"
-            :disabled="busy !== ''"
-            @stop="cancelBuild"
             @run-another="
               llmActionProviderId =
                 llmActionProviderId || selectedProviderId || providerProfiles[0]?.id || '';
               metadataEnrichmentOpen = true;
             "
-          />
-          <CorpusHandsFreeReport
-            v-if="currentBuild"
-            :report="currentBuild.autonomous_report"
             @open-record="openHandsFreeException"
-          />
-          <CorpusEnrichmentMetrics v-if="currentBuild" :build-id="currentBuild.build_id" />
-          <CorpusTextCleanupSummary
-            v-if="currentBuild?.text_cleanup"
-            :summary="currentBuild.text_cleanup"
-          />
-          <CorpusLlmEffectivenessPanel
-            v-if="currentBuild?.llm_contribution"
-            :contribution="llmContribution"
-            :family-effectiveness="currentBuild?.llm_family_effectiveness || {}"
-            :confidence-calibration="currentBuild?.llm_confidence_calibration || {}"
-            :model-effectiveness="currentBuild?.llm_model_effectiveness || {}"
-            :editorial-examples-used="
-              Number(currentBuild?.llm_metrics?.editorial_examples_used || 0)
-            "
             @inspect-editorial-memory="openEditorialMemory"
           />
 
