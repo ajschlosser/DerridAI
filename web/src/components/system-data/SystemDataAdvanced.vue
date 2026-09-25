@@ -79,7 +79,7 @@ onMounted(() => void load());
 
       <section class="console" aria-labelledby="console-title">
         <div class="section-heading">
-          <div><h3 id="console-title">{{ t("runtime.system_chroma_console", "Read-only query console") }}</h3><p>{{ t("runtime.system_chroma_examples", "Examples: get collection_name --limit 10 · query collection_name --text "responsibility" --n-results 8") }}</p></div>
+          <div><h3 id="console-title">{{ t("runtime.system_chroma_console", "Read-only query console") }}</h3><p>{{ t('runtime.system_chroma_examples', 'Examples: get collection_name --limit 10 · query collection_name --text "responsibility" --n-results 8') }}</p></div>
           <span class="readonly"><AppIcon name="lock" /> {{ t("runtime.system_read_only", "Read only") }}</span>
         </div>
         <label class="command-field"><span>{{ t("runtime.system_chroma_command", "Command") }}</span><textarea v-model="command" rows="4" spellcheck="false" /></label>
