@@ -164,7 +164,7 @@ class ReviewActionsMixin:
         self._push_review_history(build_id, records, action=action, selected_record_id=selected_record_id)
 
 
-    def _persist_promoted_metadata_memory(
+    def _persist_reviewed_metadata_memory(
         self,
         build_id: str,
         promoted: dict[str, list[str]],
@@ -249,7 +249,7 @@ class ReviewActionsMixin:
         target["record_revision"] = current_revision + 1
         self._rewrite_and_validate(build_id, records)
         if promoted_fields:
-            self._persist_promoted_metadata_memory(
+            self._persist_reviewed_metadata_memory(
                 build_id,
                 {str(target.get("record_id") or ""): promoted_fields},
             )
@@ -314,7 +314,7 @@ class ReviewActionsMixin:
         target["record_revision"] = current_revision + 1
         build = self._rewrite_and_validate(build_id, records)
         if promoted_fields:
-            self._persist_promoted_metadata_memory(
+            self._persist_reviewed_metadata_memory(
                 build_id,
                 {str(target.get("record_id") or ""): promoted_fields},
             )
@@ -403,7 +403,7 @@ class ReviewActionsMixin:
             record["record_revision"] = current_revision + 1
             changed += 1
         self._rewrite_and_validate(build_id, records)
-        self._persist_promoted_metadata_memory(build_id, promoted_by_record)
+        self._persist_reviewed_metadata_memory(build_id, promoted_by_record)
         persisted = self.repo.load_records(build_id)
         return {"changed": changed, "disposition": disposition, "blocked_metadata": blocked_metadata, "blocked_record_ids": blocked_record_ids, "queue_counts": _queue_counts(persisted)}
 
@@ -830,7 +830,38 @@ class ReviewActionsMixin:
         target["metadata_attention_reasons"] = ["Source evidence binding changed and metadata validation must be rerun."]
         target["record_revision"] = current_revision + 1
         self._rewrite_and_validate(build_id, records)
-        return target
+        persisted = next(
+            (row for row in self.repo.load_records(build_id) if row.get("record_id") == record_id),
+            target,
+        )
+        status = (
+            (persisted.get("metadata_field_status") or {}).get(field)
+            if isinstance(persisted.get("metadata_field_status"), dict)
+            else None
+        )
+        if (
+            unique_ids
+            and isinstance(status, dict)
+            and str(status.get("status") or "") in {"human_confirmed", "human_override"}
+        ):
+            self._persist_reviewed_metadata_memory(
+                build_id,
+                {record_id: [field]},
+            )
+        else:
+            # Evidence is part of the exemplar projection even when no trusted
+            # value is currently eligible. If an older exemplar exists, removing
+            # or changing its evidence must invalidate that derived row.
+            from .system_store import system_store
+
+            system_store.mark_semantic_memory_dirty(
+                "metadata_exemplars",
+                scope_id=build_id,
+                record_id=record_id,
+                reason="reviewed_metadata_evidence_changed",
+            )
+            self._schedule_metadata_exemplar_projection(build_id)
+        return persisted
 
 
     @_serialize_record_mutation
