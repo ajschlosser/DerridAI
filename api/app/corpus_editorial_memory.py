@@ -303,17 +303,21 @@ class EditorialMemoryMixin:
                     and int(field_limits.get(str(item.get("field_name") or ""), 1)) > 0
                 )
             })
-            semantic = progressive_index.retrieve(
-                scope_id=build_id,
-                query_text=current_text,
-                exemplars=canonical_exemplars,
-                fields=retrieval_fields,
-                schema_id=schema_id,
-                schema_version=schema_version,
-                language=str(current_record.get("language") or ""),
-                field_limits=field_limits or None,
-                field_min_similarity=field_min_similarity or None,
-                exclude_record_id=exclude_record_id,
+            semantic = (
+                progressive_index.retrieve(
+                    scope_id=build_id,
+                    query_text=current_text,
+                    exemplars=canonical_exemplars,
+                    fields=retrieval_fields,
+                    schema_id=schema_id,
+                    schema_version=schema_version,
+                    language=str(current_record.get("language") or ""),
+                    field_limits=field_limits or None,
+                    field_min_similarity=field_min_similarity or None,
+                    exclude_record_id=exclude_record_id,
+                )
+                if retrieval_fields
+                else None
             )
             if isinstance(semantic, dict):
                 retrieval_telemetry = dict(semantic.get("telemetry") or {})
