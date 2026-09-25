@@ -473,6 +473,17 @@ identity, redirects, timeouts, and undecodable content fail visibly. The importe
 does not guess another download or substitute another edition. Two editions
 with identical text remain distinct assets.
 
+### Corpus Builder review saves
+
+Review edits are applied to the open record immediately so navigation and
+repetitive review work do not wait for the API response. The changed record
+is then persisted in the background. Saves for the same record remain ordered
+so revision checks are safe, while saves for different records can proceed
+independently. A failed background save leaves the local edit visible and
+reports the affected field or record rather than discarding unrelated edits.
+Acceptance remains server-confirmed because metadata and source-quality rules
+can block it.
+
 ## Corpus Builder metadata population
 
 The LLM returns each metadata field (or `null` when unsupported) together with a per-field confidence. The response schema requires every field, so a model cannot return confidence assessments without values.
