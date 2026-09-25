@@ -60,46 +60,6 @@ const inheritedFieldSet = new Set([
 ]);
 // Which fields a record shows, in order: the locked core, then the fields of the build's schema, then the document-level ones
 // records inherit. Without a schema (an old build), the fixed list.
-const legacyOrder = [
-  "region_type",
-  "primary_text",
-  "discourse_role",
-  "region_author",
-  "speaker",
-  "position_holder",
-  "target",
-  "stance",
-  "proposition_status",
-  "claim_scope",
-  "semantic_function",
-  "is_direct_quote",
-  "quoted_speaker",
-  "quoted_author",
-  "quoted_work",
-  "quoted_position_holder",
-  "quoted_addressee",
-  "quoted_referent",
-  "quotation_chain",
-  "topics",
-  "concepts",
-  "persons",
-  "works_referenced",
-  "work",
-  "document_title",
-  "short_title",
-  "original_title",
-  "document_author",
-  "translator",
-  "edition",
-  "publication_year",
-  "publisher",
-  "publication_place",
-  "isbn",
-  "document_language",
-  "original_language",
-  "document_is_translation",
-];
-const documentFields = legacyOrder.slice(legacyOrder.indexOf("work"));
 const schemaFields = computed<Record<string, SchemaField>>(() =>
   Object.fromEntries((props.schema?.fields || []).map((field) => [field.name, field])),
 );
