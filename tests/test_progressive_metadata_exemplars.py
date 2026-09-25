@@ -637,6 +637,84 @@ def test_metadata_prompts_receive_only_examples_for_their_family(monkeypatch):
     assert "SPEAKER_ONLY_PROGRESSIVE_MARKER" not in prompts["quotation"]
 
 
+def test_editorial_memory_applies_group_retrieval_policy_to_locked_core_fields():
+    from app.corpus_editorial_memory import EditorialMemoryMixin
+
+    reviewed = reviewed_record(
+        discourse_role="reported_position",
+        metadata_field_status={
+            "discourse_role": {
+                "status": "human_confirmed",
+                "method": "human_review_of_llm_proposal",
+            }
+        },
+        metadata_evidence={
+            "discourse_role": {
+                "block_ids": ["b2"],
+                "reviewed_by": "human",
+                "reviewed_at": "2026-09-23T10:00:00Z",
+            }
+        },
+    )
+    current = {
+        "record_id": "r2",
+        "record_revision": 1,
+        "text": "A similar reported position appears here.",
+        "metadata_field_status": {},
+    }
+
+    class Repo:
+        def load_records(self, build_id):
+            return [reviewed, current]
+
+        def get_build(self, build_id):
+            return {
+                "asset_id": "asset-1",
+                "schema": {
+                    "id": "derrida",
+                    "schema_version": "v7",
+                    "groups": [
+                        {
+                            "key": "discourse",
+                            "retrieval_profile": {
+                                "enabled": False,
+                                "max_items": 6,
+                                "min_similarity": 0.0,
+                                "include_corrections": True,
+                                "include_confirmed_absence": True,
+                            },
+                        }
+                    ],
+                    "fields": [],
+                },
+            }
+
+        def load_blocks(self, asset_id):
+            return list(blocks().values())
+
+    class GlobalLearning:
+        def conventions(self, *, exclude_build_id=""):
+            return {}
+
+    class SemanticIndex:
+        def retrieve(self, **kwargs):
+            raise AssertionError("Disabled core-group retrieval must not issue a semantic query.")
+
+    class Memory(EditorialMemoryMixin):
+        repo = Repo()
+        _global_learning = GlobalLearning()
+        _progressive_metadata_index = SemanticIndex()
+        _progressive_metadata_warning_builds = set()
+
+        def _append_warning(self, build_id, message):
+            raise AssertionError(f"Unexpected editorial-memory warning: {build_id}: {message}")
+
+    memory = Memory()._editorial_memory("build-1", current, exclude_record_id="r2")
+
+    assert "discourse_role" not in memory["examples"]
+    assert "discourse_role" not in memory["conventions"]
+
+
 def test_editorial_memory_disabled_field_does_not_leak_through_lexical_fallback():
     from app.corpus_editorial_memory import EditorialMemoryMixin
 
