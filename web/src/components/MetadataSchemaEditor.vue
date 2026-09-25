@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import type { ProviderProfile } from "../api/system";
 import UiButton from "./ui/UiButton.vue";
+import UiCombobox from "./ui/UiCombobox.vue";
 import ProviderProfileSelect from "./ProviderProfileSelect.vue";
 import {
   CORE_FIELDS,
@@ -480,16 +481,15 @@ defineExpose({ select, draft });
                 ><span
                   :title="t('pos_tags_help', 'POS tags are retrieval/model hints. They do not write metadata by themselves; they tell enrichment to prefer values grounded in tokens with these grammatical roles.')"
                   >{{ t("pos_tags", "POS tags (optional)") }} <span aria-hidden="true">ⓘ</span></span
-                ><input
-                  class="control"
-                  :list="`schema-pos-tags-${item.index}`"
-                  :value="tagText(item.field.pos_tags || [])"
+                ><UiCombobox
+                  :model-value="tagText(item.field.pos_tags || [])"
+                  :options="UNIVERSAL_POS_TAGS"
+                  :label="t('pos_tags', 'POS tags (optional)')"
                   placeholder="NOUN, PROPN"
-                  @input="setTags(item.field, 'pos_tags', ($event.target as HTMLInputElement).value)"
+                  :allow-custom="false"
+                  :multiple="true"
+                  @update:model-value="setTags(item.field, 'pos_tags', $event)"
                 />
-                <datalist :id="`schema-pos-tags-${item.index}`">
-                  <option v-for="tag in UNIVERSAL_POS_TAGS" :key="tag" :value="tag" />
-                </datalist>
                 <small class="hint">{{
                   t("pos_tags_help", "Autocomplete uses the Universal POS tag set. These are advisory enrichment hints, not additional output fields.")
                 }}</small>
@@ -498,16 +498,15 @@ defineExpose({ select, draft });
                 ><span
                   :title="t('ner_tags_help', 'NER tags are entity-type hints. They do not add entities automatically; they tell enrichment which named-entity classes are especially relevant to this field.')"
                   >{{ t("ner_tags", "NER tags (optional)") }} <span aria-hidden="true">ⓘ</span></span
-                ><input
-                  class="control"
-                  :list="`schema-ner-tags-${item.index}`"
-                  :value="tagText(item.field.ner_tags || [])"
+                ><UiCombobox
+                  :model-value="tagText(item.field.ner_tags || [])"
+                  :options="NER_TAGS"
+                  :label="t('ner_tags', 'NER tags (optional)')"
                   placeholder="PERSON, WORK_OF_ART"
-                  @input="setTags(item.field, 'ner_tags', ($event.target as HTMLInputElement).value)"
+                  :allow-custom="false"
+                  :multiple="true"
+                  @update:model-value="setTags(item.field, 'ner_tags', $event)"
                 />
-                <datalist :id="`schema-ner-tags-${item.index}`">
-                  <option v-for="tag in NER_TAGS" :key="tag" :value="tag" />
-                </datalist>
                 <small class="hint">{{
                   t("ner_tags_help", "Autocomplete uses DerridAI's supported NER vocabulary. These are advisory enrichment hints and do not change the field type.")
                 }}</small>
