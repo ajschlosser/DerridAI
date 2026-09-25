@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import { isPlaceholderValue, usableListOptions } from "../domain/metadataValues";
+import {
+  metadataValueText,
+  unwrapMetadataValue,
+  usableListOptions,
+  usableOptions,
+} from "../domain/metadataValues";
 import { computed, ref } from "vue";
 import type { CorpusRecord } from "../api/pdfCorpus";
 import { useI18nStore } from "../stores/i18n";
@@ -7,6 +12,9 @@ import { metadataConstraints } from "../domain/metadataConstraints";
 import { metadataFieldSpec, metadataSuggestions } from "../domain/metadataFieldRegistry";
 import { assertionConflict, currentFieldAssertions } from "../domain/fieldAssertions";
 import type { MetadataSchema, SchemaField } from "../api/metadataSchemas";
+import {
+  reviewableMetadataFieldNames,
+} from "../features/corpus-builder/domain/recordMetadata";
 import CorpusMetadataFieldEditor from "./CorpusMetadataFieldEditor.vue";
 import CorpusFieldOwnershipBadge from "./CorpusFieldOwnershipBadge.vue";
 import CorpusEnrichmentChanges from "./CorpusEnrichmentChanges.vue";
@@ -99,20 +107,15 @@ const canonicalAssertions = computed(() =>
   currentFieldAssertions(props.record as unknown as Record<string, unknown>),
 );
 const fieldOrder = computed<string[]>(() =>
-  Array.from(
-    new Set(
-      props.schema
-        ? [
-            "region_type",
-            "primary_text",
-            "discourse_role",
-            ...props.schema.fields.map((field) => field.name),
-            ...canonicalAssertions.value.map((item) => item.field_name),
-            ...documentFields,
-          ]
-        : [...legacyOrder, ...canonicalAssertions.value.map((item) => item.field_name)],
-    ),
-  ),
+  props.schema
+    ? reviewableMetadataFieldNames(
+        props.record as unknown as Record<string, unknown>,
+        props.schema,
+      )
+    : reviewableMetadataFieldNames(
+        props.record as unknown as Record<string, unknown>,
+        null,
+      ),
 );
 const fieldLabel = (field: string) => schemaFields.value[field]?.label || "";
 const assertionByField = computed(() =>
@@ -276,9 +279,7 @@ function options(field: string) {
     }
   }
   const cleaned =
-    item.control === "multi-combobox"
-      ? usableListOptions(values)
-      : values.filter((value) => !isPlaceholderValue(value)).map((value) => value.trim());
+    item.control === "multi-combobox" ? usableListOptions(values) : usableOptions(values);
   return [...new Set(cleaned)].sort((a, b) => a.localeCompare(b));
 }
 function fieldBusy(field: string) {
@@ -300,11 +301,10 @@ function calibrated(field: string) {
     : null;
 }
 function displayValue(field: string) {
-  const value = fieldValue(field);
+  const value = unwrapMetadataValue(fieldValue(field));
   if (value === true) return i18n.t("ui.yes");
   if (value === false) return i18n.t("ui.no");
-  if (Array.isArray(value)) return value.join(", ") || "—";
-  return value === null || value === undefined || value === "" ? "—" : String(value);
+  return metadataValueText(value) || "—";
 }
 </script>
 
