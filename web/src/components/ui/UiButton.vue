@@ -13,6 +13,8 @@ const props = withDefaults(
     type?: "button" | "submit" | "reset";
     iconOnly?: boolean;
     pressed?: boolean;
+    expanded?: boolean;
+    buttonClass?: string;
   }>(),
   {
     label: "",
@@ -25,6 +27,8 @@ const props = withDefaults(
     type: "button",
     iconOnly: false,
     pressed: undefined,
+    expanded: undefined,
+    buttonClass: "",
   },
 );
 
@@ -35,7 +39,12 @@ const emit = defineEmits<{ click: [event: MouseEvent] }>();
   <span class="ui-button-wrap" :data-tooltip="props.disabled ? props.disabledReason : ''">
     <button
       class="ui-button"
-      :class="[`variant-${props.variant}`, `size-${props.size}`, { 'icon-only': props.iconOnly }]"
+      :class="[
+        `variant-${props.variant}`,
+        `size-${props.size}`,
+        props.buttonClass,
+        { 'icon-only': props.iconOnly },
+      ]"
       :type="props.type"
       :disabled="props.disabled"
       :aria-disabled="props.disabled || undefined"
