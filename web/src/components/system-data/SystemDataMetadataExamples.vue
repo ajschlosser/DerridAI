@@ -31,6 +31,17 @@ async function load(offset = 0) {
     error.value = cause instanceof Error ? cause.message : String(cause);
   } finally { loading.value = false; }
 }
+function filterLabel(key: string) {
+  const labels: Record<string, string> = {
+    field: t("runtime.system_exemplar_field", "Field"),
+    kind: t("runtime.system_exemplar_kind", "Kind"),
+    language: t("runtime.system_exemplar_language", "Language"),
+    scope_id: t("runtime.system_exemplar_build", "Build"),
+    schema_id: t("runtime.system_exemplar_schema", "Schema"),
+    record_id: t("runtime.system_exemplar_record", "Record ID"),
+  };
+  return labels[key] || key;
+}
 function clearFilter(key: string) {
   (filters.value as Record<string, string>)[key] = "";
   void load(0);
@@ -64,7 +75,7 @@ onMounted(() => void load(0));
 
     <div v-if="activeFilters.length" class="chips" aria-label="Active filters">
       <button v-for="[key, value] in activeFilters" :key="key" type="button" @click="clearFilter(key)">
-        {{ key.replace('_id', '').replace('_', ' ') }}: {{ value }} <AppIcon name="close" />
+        {{ filterLabel(key) }}: {{ value }} <AppIcon name="close" />
       </button>
     </div>
 
