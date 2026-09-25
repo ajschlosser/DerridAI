@@ -1,3 +1,4 @@
+<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { computed, nextTick, ref, useId } from "vue";
 
@@ -7,13 +8,12 @@ const props = withDefaults(
     options: string[];
     label: string;
     placeholder?: string;
-    removeLabel?: string;
+    removeLabel: string;
     disabled?: boolean;
   }>(),
   {
     modelValue: () => [],
     placeholder: "",
-    removeLabel: "Remove {value}",
     disabled: false,
   },
 );
