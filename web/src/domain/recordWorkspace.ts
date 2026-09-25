@@ -113,6 +113,7 @@ export function createRecordWorkspace(deps: Deps) {
       fallback || englishDefault(key) || key,
     ),
   );
+  let derridaiModelCache: Any = null;
   function recordWorkspaceRecord(record: Any) {
     const out = recordPayload(record, { includeChromaId: true });
     delete out.updates;
@@ -294,6 +295,22 @@ export function createRecordWorkspace(deps: Deps) {
         loaded_pages: loadedPages,
       },
     };
+  }
+  async function getRecordObjectGraph(recordOverride: Any = null) {
+    const source =
+      recordOverride && typeof recordOverride === "object"
+        ? recordOverride
+        : (await getRecordWorkspaceSnapshot()).record;
+    if (!source || !String(source.record_id || "").trim()) return null;
+    return api("/api/derridai/graph/record", {
+      method: "POST",
+      body: JSON.stringify({ record: source }),
+    });
+  }
+  async function getDerridaiNormativeModel({ refresh = false } = {}) {
+    if (!refresh && derridaiModelCache) return cloneAuditValue(derridaiModelCache);
+    derridaiModelCache = await api("/api/derridai/model");
+    return cloneAuditValue(derridaiModelCache);
   }
   async function recordWorkspaceNavigate(delta: Any) {
     const step = Number(delta) || 0;
@@ -595,6 +612,8 @@ export function createRecordWorkspace(deps: Deps) {
     recordWorkspaceRecord,
     researcherCurrentRecord,
     getRecordWorkspaceSnapshot,
+    getRecordObjectGraph,
+    getDerridaiNormativeModel,
     recordWorkspaceNavigate,
     setRecordWorkspaceFind,
     toggleCurrentRecordEvidence,
