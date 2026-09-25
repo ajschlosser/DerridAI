@@ -157,12 +157,7 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci --no-audit --no-fund
-      - run: |
-          npm run format:repo:check || {
-            npx prettier --write src/components/CorpusRunGuidance.stories.ts
-            git diff -- src/components/CorpusRunGuidance.stories.ts
-            exit 1
-          }
+      - run: npm run format:repo:check
 
   backend-lint:
     needs: changes
