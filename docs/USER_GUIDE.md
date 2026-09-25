@@ -801,25 +801,39 @@ Backups are blocked while background operations are active so the archive is int
 
 **Load from backup** validates the manifest and ZIP member paths before making changes. The API first creates a logical rollback snapshot of the current Chroma database; if Chroma restoration fails, the current vector database is restored from that rollback. After a successful server restore, the browser IndexedDB workspace and current PDF are replaced and the UI reloads.
 
-**System Data** is the administrative surface for the response cache,
-metadata exemplars, and durable application databases. Metadata
-exemplars are read-only, evidence-bound precedents derived from reviewed corpus
-metadata, including supported values, human corrections, and explicitly evidenced
-confirmed absences; the inspector shows field/value, review authority, source
-record/revision/build, schema/language, evidence block IDs/hash, and the bounded
-evidence-context window. Their current storage/index technology is an
-implementation detail and is not presented as a research corpus.
+**System Data** is an administrator-only storage workspace with five bookmarkable
+sections: **Overview**, **Responses**, **Metadata examples**, **Databases**, and
+**Advanced**. The overview explains the role and current availability of each
+store without treating every store as a database.
 
-The same page includes an administrator-only **System Chroma** read-only query
-console for approved system collections. `get` and `query` commands are validated
-and explained before execution; collection names, embedding details, distances,
-and raw results are operational diagnostics rather than scholarly record semantics.
-If System Chroma is unavailable, the independent database browser remains usable.
+- **Application data** (`system`) is durable application state such as provider
+  profiles, annotations, installed languages, and jobs.
+- **Identity and access** (`auth`) contains sensitive authentication and
+  authorization state such as users, roles/permissions, sessions, and login
+  security data.
+- **Saved responses** are generated research responses and their grades. They are
+  operational history, not a corpus or research source; use **Response Library**
+  for normal reading.
+- **Metadata examples** are evidence-bound, derived projections from reviewed
+  corpus metadata. The detail view preserves field/value, review authority,
+  source record and revision, build/scope, schema, evidence blocks, hash, and
+  bounded evidence context.
+- **Internal vector collections** are DerridAI-owned derived projections. The
+  Advanced workspace exposes only these system collections through a restricted,
+  read-only command console; corpus collections and mutation commands remain
+  unavailable there.
 
-The database browser exposes tables and rows through a backend-neutral contract;
-SQLite is the current adapter, not a UI-level requirement. Sensitive credentials,
-password material, and session tokens are redacted or protected from mutation.
-The former **Response Cache** route remains available as a compatibility alias.
+The database browser is intentionally inspection-first and read-only by default.
+Its backend exposes explicit per-table/per-operation permissions; generic raw JSON
+insert/update/delete is not enabled merely because a table exists. Changes to
+users, roles, providers, languages, or other managed objects should use their
+purpose-built administration surfaces so domain validation and audit behavior
+remain intact. Sensitive credential and session material stays redacted.
+
+Each workspace loads independently. A vector-backend failure does not prevent
+inspection of SQLite data or saved responses, and empty, unavailable, not-built,
+and no-match states are shown separately. The former **Response Cache** URL remains
+a compatibility alias and opens the Responses workspace.
 
 Full backups can contain credentials. Treat them as sensitive files.
 
