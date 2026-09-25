@@ -70,10 +70,9 @@ defineExpose({ open, close });
             class="btn icon-only"
             type="button"
             :aria-label="i18n.t('ui.close')"
+            v-text="'×'"
             @click="close"
-          >
-            ×
-          </button>
+          ></button>
         </div>
       </header>
       <div class="research-runs-content">
