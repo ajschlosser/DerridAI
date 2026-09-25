@@ -793,7 +793,8 @@ Backups are blocked while background operations are active so the archive is int
 **System Data** is the administrative surface for the response cache,
 progressive metadata exemplars, and durable application databases. Metadata
 exemplars are read-only, evidence-bound precedents derived from reviewed corpus
-metadata; the inspector shows field/value, review authority, source
+metadata, including supported values, human corrections, and explicitly evidenced
+confirmed absences; the inspector shows field/value, review authority, source
 record/revision/build, schema/language, evidence block IDs/hash, and the bounded
 evidence-context window. Their current storage/index technology is an
 implementation detail and is not presented as a research corpus.
