@@ -62,8 +62,6 @@ describe("UiTagPicker", () => {
 
     expect(wrapper.emitted("update:modelValue")?.at(-1)?.[0]).toEqual(["ORG"]);
   });
-});
-
 
   it("shows descriptive option labels while persisting only the tag value", async () => {
     const wrapper = mount(UiTagPicker, {
@@ -84,3 +82,4 @@ describe("UiTagPicker", () => {
     await wrapper.get('[role="option"]').trigger("mousedown");
     expect(wrapper.emitted("update:modelValue")?.at(-1)?.[0]).toEqual(["PROPN"]);
   });
+});
