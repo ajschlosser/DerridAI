@@ -3,7 +3,7 @@
 
 Deterministic parsing and validation around a corpus-build LLM call, independent of any
 particular provider session or build state. Moved verbatim out of PdfCorpusBuildManager
-(see PROGRESS.md); the stateful methods that call these (_chat_json, _segment, etc.) stay
+(extracted during the 0.70 decomposition); the stateful methods that call these (_chat_json, _segment, etc.) stay
 on the manager.
 """
 
