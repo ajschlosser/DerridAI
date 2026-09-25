@@ -44,6 +44,13 @@ function remove(value: string) {
   emit("update:modelValue", props.modelValue.filter((item) => item !== value));
 }
 
+function scheduleClose() {
+  window.setTimeout(() => {
+    open.value = false;
+    active.value = -1;
+  }, 120);
+}
+
 function keydown(event: KeyboardEvent) {
   if (event.key === "ArrowDown") {
     event.preventDefault();
@@ -99,7 +106,7 @@ function keydown(event: KeyboardEvent) {
           active = -1;
         "
         @keydown="keydown"
-        @blur="window.setTimeout(() => (open = false), 120)"
+        @blur="scheduleClose"
       />
     </div>
     <ul
