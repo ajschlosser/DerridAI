@@ -407,7 +407,8 @@ class ReviewActionsMixin:
             target["review_events"] = review_events[-100:]
             target["record_revision"] = current_revision + 1
             self._rewrite_and_validate(build_id, records)
-            return next((row for row in self.repo.load_records(build_id) if row.get("record_id") == record_id), target)
+            _decorate_review_state(target)
+            return target
         history = list(target.get("text_revision_history") or [])
         history.append({
             "at": iso_now(), "source": "human",
@@ -449,9 +450,8 @@ class ReviewActionsMixin:
         target["metadata_attention_reasons"] = list(dict.fromkeys(reasons))[-50:]
         target["record_revision"] = current_revision + 1
         self._rewrite_and_validate(build_id, records)
-        persisted = next((row for row in self.repo.load_records(build_id) if row.get("record_id") == record_id), target)
-        _decorate_review_state(persisted)
-        return persisted
+        _decorate_review_state(target)
+        return target
 
 
     @_serialize_record_mutation
@@ -520,7 +520,7 @@ class ReviewActionsMixin:
         target["record_revision"] = current_revision + 1
         _ = self._rewrite_and_validate(build_id, records)
         # Return the record as persisted after authoritative state derivation.
-        persisted = next((row for row in self.repo.load_records(build_id) if row.get("record_id") == record_id), target)
+        persisted = target
         schema = self._schema_for(build_id)
         for key, value in changes.items():
             if key not in skipped:
