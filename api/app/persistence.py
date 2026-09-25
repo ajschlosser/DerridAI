@@ -213,6 +213,8 @@ class SQLiteRepositoryBase:
                 );
                 CREATE INDEX IF NOT EXISTS idx_claim_support_claim
                     ON claim_support_bindings(claim_id, created_at);
+                CREATE INDEX IF NOT EXISTS idx_claim_support_record
+                    ON claim_support_bindings(record_id, created_at);
                 """
             )
             self._ensure_column(conn, "languages", "content_policy_json", "TEXT")
@@ -742,6 +744,60 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
                 (str(claim_id), owner_filter, owner_filter),
             ).fetchall()
         return [value for value in (_json_loads(row["payload_json"], {}) for row in rows) if isinstance(value, dict)]
+
+    def list_claim_support_bindings_for_record(
+        self,
+        record_id: str,
+        *,
+        owner: str | None = None,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        """Return support relations that point at one logical Record."""
+        owner_filter = str(owner) if owner is not None else None
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT payload_json
+                FROM claim_support_bindings
+                WHERE record_id=?
+                  AND (? IS NULL OR owner IS NULL OR owner=?)
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (
+                    str(record_id),
+                    owner_filter,
+                    owner_filter,
+                    max(1, min(1000, int(limit))),
+                ),
+            ).fetchall()
+        return [
+            value
+            for value in (_json_loads(row["payload_json"], {}) for row in rows)
+            if isinstance(value, dict)
+        ]
+
+    def get_generated_claim(
+        self,
+        claim_id: str,
+        *,
+        owner: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Resolve one durable generated claim while enforcing owner visibility."""
+        owner_filter = str(owner) if owner is not None else None
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT payload_json
+                FROM generated_claims
+                WHERE claim_id=?
+                  AND (? IS NULL OR owner IS NULL OR owner=?)
+                LIMIT 1
+                """,
+                (str(claim_id), owner_filter, owner_filter),
+            ).fetchone()
+        value = _json_loads(row["payload_json"], {}) if row is not None else {}
+        return value if isinstance(value, dict) and value else None
 
     def list_languages(self) -> dict[str, dict[str, Any]]:
         with self._lock, self._connect() as conn:
