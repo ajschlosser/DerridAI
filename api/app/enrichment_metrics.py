@@ -240,7 +240,11 @@ def unresolved_remaining(records: list[dict[str, Any]]) -> int:
         total += sum(
             1
             for assertion in current_assertions(record)
-            if (
+            if not (
+                assertion.legacy_status in {"model_inferred", "llm_inferred"}
+                and assertion.value in (None, "", [])
+            )
+            and (
                 assertion.value_status in {"unresolved", "invalid"}
                 or assertion.evaluation_status == "evaluation_failed"
                 or assertion.authority_status == "disputed"
