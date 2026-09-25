@@ -1286,7 +1286,7 @@ function applyOptimisticMetadata(changes: Record<string, unknown>) {
 }
 
 function queueRecordRequest(
-  recordId: string,
+  recordId: string | readonly string[],
   fields: string[],
   request: () => Promise<unknown>,
   onFailure?: () => void,
@@ -1295,7 +1295,7 @@ function queueRecordRequest(
     onFailure?.();
     setMessage(
       i18n.tf("pdf_corpus.record_save_failed", {
-        record: recordId,
+        record: typeof recordId === "string" ? recordId : recordId.join(", "),
         fields: fields.join(", "),
         error: exc instanceof Error ? exc.message : String(exc),
       }),
@@ -2742,7 +2742,7 @@ async function merge(direction: "previous" | "next") {
   selectedRecordId.value = merged.record_id;
   await restoreReviewViewport(viewport, { record: true });
   queueRecordRequest(
-    `${id}:${second.record_id}`,
+    [id, second.record_id],
     ["record boundary"],
     async () => {
       const row = await pdfCorpusApi.merge(
@@ -2825,7 +2825,7 @@ async function split(afterBlockId: string) {
   selectedRecordId.value = left.record_id;
   await restoreReviewViewport(viewport, { record: true });
   queueRecordRequest(
-    id,
+    [id, nextId],
     ["record boundary"],
     async () => {
       const result = await pdfCorpusApi.split(
@@ -2895,7 +2895,7 @@ async function sliceRecord(
     selectedRecordId.value = id;
     await restoreReviewViewport(viewport, { record: true });
     queueRecordRequest(
-      `${previous.record_id}:${id}:${following.record_id}`,
+      [previous.record_id, id, following.record_id],
       ["record boundary"],
       async () => {
         const result = await pdfCorpusApi.sliceRecord(
@@ -2977,7 +2977,7 @@ async function sliceRecord(
     selectedRecordId.value = id;
     await restoreReviewViewport(viewport, { record: true });
     queueRecordRequest(
-      `${id}:${neighbor.record_id}`,
+      [id, neighbor.record_id],
       ["record boundary"],
       async () => {
         const result = await pdfCorpusApi.sliceRecord(

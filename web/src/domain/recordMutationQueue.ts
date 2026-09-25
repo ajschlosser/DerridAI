@@ -10,8 +10,16 @@ export type RecordMutation = () => Promise<unknown>;
 export class RecordMutationQueue {
   private readonly pending = new Map<string, Promise<void>>();
 
-  enqueue(recordId: string, mutation: RecordMutation, onError: (error: unknown) => void): void {
-    const previous = this.pending.get(recordId) || Promise.resolve();
+  enqueue(
+    recordIds: string | readonly string[],
+    mutation: RecordMutation,
+    onError: (error: unknown) => void,
+  ): void {
+    const keys = Array.from(new Set(typeof recordIds === "string" ? [recordIds] : recordIds));
+    if (!keys.length) return;
+    const previous = Promise.all(
+      keys.map((recordId) => this.pending.get(recordId) || Promise.resolve()),
+    );
     const current = previous
       .catch(() => undefined)
       .then(async () => {
@@ -21,9 +29,11 @@ export class RecordMutationQueue {
           onError(error);
         }
       });
-    this.pending.set(recordId, current);
+    keys.forEach((recordId) => this.pending.set(recordId, current));
     void current.finally(() => {
-      if (this.pending.get(recordId) === current) this.pending.delete(recordId);
+      keys.forEach((recordId) => {
+        if (this.pending.get(recordId) === current) this.pending.delete(recordId);
+      });
     });
   }
 

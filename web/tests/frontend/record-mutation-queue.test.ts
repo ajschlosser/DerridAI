@@ -42,4 +42,24 @@ describe("RecordMutationQueue", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(errors).toHaveLength(1);
   });
+
+  it("locks every record in a multi-record mutation", async () => {
+    const queue = new RecordMutationQueue();
+    const order: string[] = [];
+    let release!: () => void;
+    const first = new Promise<void>((resolve) => { release = resolve; });
+
+    queue.enqueue(["r1", "r2"], async () => {
+      order.push("boundary-start");
+      await first;
+      order.push("boundary-end");
+    }, vi.fn());
+    queue.enqueue("r2", async () => { order.push("r2-after"); }, vi.fn());
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(order).toEqual(["boundary-start"]);
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(order).toEqual(["boundary-start", "boundary-end", "r2-after"]);
+  });
 });
