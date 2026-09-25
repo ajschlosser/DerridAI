@@ -74,6 +74,7 @@ import { usePdfCorpusPaneSizing } from "../composables/usePdfCorpusPaneSizing";
 import { useCorpusIngestWarning } from "../composables/useCorpusIngestWarning";
 import { useCorpusRunGuidance } from "../composables/useCorpusRunGuidance";
 import { useCorpusReviewWorkspace } from "../features/corpus-builder/composables/useCorpusReviewWorkspace";
+import { corpusReviewCommandFromKeydown } from "../features/corpus-builder/domain/reviewCommands";
 import AppIcon from "./AppIcon.vue";
 import CorpusActionMenu, { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
 import { recordState, recordIssueKinds } from "../domain/corpusReview";
@@ -3607,24 +3608,18 @@ async function nextPage() {
 
 function reviewShortcut(event: KeyboardEvent) {
   if (!selectedRecord.value || busy.value) return;
-  const target = event.target as HTMLElement | null;
-  if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
-  if (event.key.toLowerCase() === "a") {
-    event.preventDefault();
-    void attemptAccept();
-  } else if (event.key.toLowerCase() === "r") {
-    event.preventDefault();
-    void setDisposition("rejected");
-  } else if (event.key.toLowerCase() === "z") {
-    event.preventDefault();
-    void undoReview();
-  } else if (event.key.toLowerCase() === "j" || event.key === "ArrowDown") {
-    event.preventDefault();
-    void skipRecord();
-  } else if (event.key.toLowerCase() === "f") {
-    event.preventDefault();
-    focusView.value = !focusView.value;
-  }
+  const command = corpusReviewCommandFromKeydown(event);
+  if (!command) return;
+  event.preventDefault();
+
+  if (command === "accept") void attemptAccept();
+  else if (command === "reject") void setDisposition("rejected");
+  else if (command === "needs-attention") void setDisposition("pending");
+  else if (command === "undo") void undoReview();
+  else if (command === "redo") void redoReview();
+  else if (command === "next") void focusQueueMove(1);
+  else if (command === "previous") void focusQueueMove(-1);
+  else if (command === "focus") focusView.value = !focusView.value;
 }
 watch(selectedProviderId, (profileId) => {
   if (!profileId) return;
