@@ -52,72 +52,42 @@ def _normalized_item(
     document: Any,
     metadata: Mapping[str, Any],
 ) -> dict[str, Any] | None:
-    if memory_kind == "metadata_exemplars":
-        field = _text(metadata.get("field_name"))
-        record_id = _text(metadata.get("record_id"))
-        if not field or not record_id:
-            return None
-        block_ids = _decode_json(metadata.get("evidence_block_ids_json"), [])
-        if not isinstance(block_ids, list):
-            block_ids = []
-        return {
-            "id": _text(metadata.get("metadata_exemplar_id")) or item_id,
-            "memory_type": "evidence_bound",
-            "kind": _text(metadata.get("kind")) or "positive",
-            "field": field,
-            "field_id": _text(metadata.get("field_id")),
-            "value": _decode_json(metadata.get("field_value_json")),
-            "rejected_value": _decode_json(metadata.get("rejected_value_json")),
-            "authority": _text(metadata.get("assertion_status")),
-            "review_method": _text(metadata.get("assertion_method")),
-            "record_id": record_id,
-            "record_revision": metadata.get("record_revision"),
-            "build_id": _text(metadata.get("scope_id")),
-            "source_document_id": _text(metadata.get("source_document_id")),
-            "schema_id": _text(metadata.get("schema_id")),
-            "schema_version": _text(metadata.get("schema_version")),
-            "language": _text(metadata.get("language")),
-            "region_type": _text(metadata.get("region_type")),
-            "page_start": metadata.get("page_start"),
-            "page_end": metadata.get("page_end"),
-            "reviewed_at": _text(metadata.get("reviewed_at")),
-            "evidence_bound": True,
-            "evidence_hash": _text(metadata.get("evidence_hash")),
-            "evidence_block_ids": [str(value) for value in block_ids if str(value)],
-            "evidence_text": "",
-            "context_text": str(document or metadata.get("context_text") or ""),
-        }
-
-    return None
-        return {
-            "id": item_id,
-            "memory_type": "reviewer_memory",
-            "kind": "positive",
-            "field": field,
-            "field_id": _text(metadata.get("field_id")),
-            "value": _decode_json(metadata.get("memory_value")),
-            "rejected_value": None,
-            "authority": _text(metadata.get("status")) or "human_confirmed",
-            "review_method": "",
-            "record_id": record_id,
-            "record_revision": metadata.get("record_revision"),
-            "build_id": _text(metadata.get("build_id")),
-            "source_document_id": _text(metadata.get("source_document_id")),
-            "schema_id": _text(metadata.get("schema_id")),
-            "schema_version": _text(metadata.get("schema_version")),
-            "language": _text(metadata.get("language")),
-            "region_type": _text(metadata.get("region_type")),
-            "page_start": metadata.get("page_start"),
-            "page_end": metadata.get("page_end"),
-            "reviewed_at": _text(metadata.get("reviewed_at")),
-            "evidence_bound": False,
-            "evidence_hash": "",
-            "evidence_block_ids": [],
-            "evidence_text": "",
-            "context_text": str(document or metadata.get("text") or ""),
-        }
-    return None
-
+    if memory_kind != "metadata_exemplars":
+        return None
+    field = _text(metadata.get("field_name"))
+    record_id = _text(metadata.get("record_id"))
+    if not field or not record_id:
+        return None
+    block_ids = _decode_json(metadata.get("evidence_block_ids_json"), [])
+    if not isinstance(block_ids, list):
+        block_ids = []
+    return {
+        "id": _text(metadata.get("metadata_exemplar_id")) or item_id,
+        "memory_type": "evidence_bound",
+        "kind": _text(metadata.get("kind")) or "positive",
+        "field": field,
+        "field_id": _text(metadata.get("field_id")),
+        "value": _decode_json(metadata.get("field_value_json")),
+        "rejected_value": _decode_json(metadata.get("rejected_value_json")),
+        "authority": _text(metadata.get("assertion_status")),
+        "review_method": _text(metadata.get("assertion_method")),
+        "record_id": record_id,
+        "record_revision": metadata.get("record_revision"),
+        "build_id": _text(metadata.get("scope_id")),
+        "source_document_id": _text(metadata.get("source_document_id")),
+        "schema_id": _text(metadata.get("schema_id")),
+        "schema_version": _text(metadata.get("schema_version")),
+        "language": _text(metadata.get("language")),
+        "region_type": _text(metadata.get("region_type")),
+        "page_start": metadata.get("page_start"),
+        "page_end": metadata.get("page_end"),
+        "reviewed_at": _text(metadata.get("reviewed_at")),
+        "evidence_bound": True,
+        "evidence_hash": _text(metadata.get("evidence_hash")),
+        "evidence_block_ids": [str(value) for value in block_ids if str(value)],
+        "evidence_text": "",
+        "context_text": str(document or metadata.get("context_text") or ""),
+    }
 
 def _dedupe_key(item: Mapping[str, Any]) -> tuple[str, str, str, str]:
     value = json.dumps(item.get("value"), ensure_ascii=False, sort_keys=True, default=str)
