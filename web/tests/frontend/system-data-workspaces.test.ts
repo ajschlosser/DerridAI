@@ -39,7 +39,7 @@ describe("System Data workspaces", () => {
 
     expect(wrapper.get("h1").text()).toBe("System Data");
     expect(wrapper.text()).not.toContain("System DataSystem Data");
-    expect(wrapper.get("#system-data-section").element.value).toBe("metadata");
+    expect((wrapper.get("#system-data-section").element as HTMLSelectElement).value).toBe("metadata");
 
     const advanced = wrapper.findAll(".section-rail button").find((button) => button.text().includes("Advanced"));
     expect(advanced).toBeTruthy();
