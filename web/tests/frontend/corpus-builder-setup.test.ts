@@ -19,23 +19,23 @@ function lastEmission(wrapper: any, event: string) {
 describe("Corpus Builder setup and launch controls", () => {
   it("gates launch on source, readiness, context safety, and busy state", async () => {
     const wrapper = mount(CorpusBuildReadiness, { props: { canStart: true, contextSafe: true } });
-    const action = wrapper.get(".build-action button");
+    const action = wrapper.get(".build-action");
     expect(action.attributes("disabled")).toBeDefined();
     expect(wrapper.attributes("data-ready")).toBe("false");
 
     await wrapper.setProps({ sourceFilename: "book.pdf", pageCount: 80, blockCount: 300 });
     expect(wrapper.attributes("data-ready")).toBe("true");
-    expect(wrapper.get(".build-action button").attributes("disabled")).toBeUndefined();
-    await wrapper.get(".build-action button").trigger("click");
+    expect(wrapper.get(".build-action").attributes("disabled")).toBeUndefined();
+    await wrapper.get(".build-action").trigger("click");
     expect(wrapper.emitted("build")).toHaveLength(1);
 
     await wrapper.setProps({ busy: true });
-    expect(wrapper.get(".build-action button").attributes("disabled")).toBeDefined();
-    expect(wrapper.get(".build-action button").text()).toContain("Starting");
+    expect(wrapper.get(".build-action").attributes("disabled")).toBeDefined();
+    expect(wrapper.get(".build-action").text()).toContain("Starting");
 
     await wrapper.setProps({ busy: false, contextSafe: false });
     expect(wrapper.get('[role="alert"]').text()).toContain("Context budget");
-    expect(wrapper.get(".build-action button").attributes("disabled")).toBeDefined();
+    expect(wrapper.get(".build-action").attributes("disabled")).toBeDefined();
   });
 
   it.each([
