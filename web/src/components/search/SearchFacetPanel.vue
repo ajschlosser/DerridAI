@@ -32,9 +32,13 @@ const activeCount = computed(() =>
         <span class="section-label">{{ i18n.t("search.refine") }}</span>
         <h2>{{ i18n.t("search.filters") }}</h2>
       </div>
-      <button v-if="activeCount" type="button" class="text-button" @click="emit('clear')">
-        {{ i18n.t("search.clear_all") }} ({{ activeCount }})
-      </button>
+      <button
+        v-if="activeCount"
+        type="button"
+        class="text-button"
+        v-text="`${i18n.t('search.clear_all')} (${activeCount})`"
+        @click="emit('clear')"
+      ></button>
     </div>
     <label class="search-facet-find">
       <span class="sr-only">{{ i18n.t("search.filter_facets") }}</span>
