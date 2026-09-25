@@ -49,6 +49,51 @@ describe("inspector layout", () => {
     expect(unusedInspectorFields("indexing", defaultInspectorLayout().indexing)).not.toContain("topics");
   });
 
+
+  it("discovers custom assertion fields without adding them to the hard-coded catalog", () => {
+    const record = {
+      field_assertions: {
+        "field-conceptual-tension": [
+          {
+            assertion_id: "a1",
+            field_id: "field-conceptual-tension",
+            field_name: "conceptual_tension",
+            value: "hospitality / sovereignty",
+            derivation_method: "model",
+            evaluation_status: "value_supported",
+            authority_status: "human_confirmed",
+            value_status: "present",
+          },
+        ],
+      },
+      current_field_assertions: { "field-conceptual-tension": "a1" },
+    };
+    const layout = defaultInspectorLayout(record);
+    expect(
+      layout.provenance.some(
+        (row) => row.kind === "field" && row.field === "conceptual_tension",
+      ),
+    ).toBe(true);
+    expect(
+      unusedInspectorFields("provenance", [], record),
+    ).toContain("conceptual_tension");
+
+    const restored = normalizeInspectorLayout(
+      {
+        provenance: [
+          { kind: "heading", label: "Project fields" },
+          { kind: "field", field: "conceptual_tension" },
+        ],
+      },
+      record,
+    );
+    expect(
+      restored.provenance.some(
+        (row) => row.kind === "field" && row.field === "conceptual_tension",
+      ),
+    ).toBe(true);
+  });
+
   it("groups stacked headings and the fields under them", () => {
     const grouped = groupInspectorRows(defaultInspectorLayout().overview);
     expect(grouped[0]?.heading).toBe("Record context");

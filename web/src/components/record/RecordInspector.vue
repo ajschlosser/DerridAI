@@ -32,7 +32,7 @@ const emit = defineEmits<{
 }>();
 const i18n = useI18nStore();
 const tab = ref("overview");
-const layout = ref<InspectorLayout>(loadInspectorLayout());
+const layout = ref<InspectorLayout>(loadInspectorLayout(props.snapshot.record || {}));
 const layoutEditor = ref<{ open: () => void } | null>(null);
 const record = computed(() => props.snapshot.record || {});
 const tabs = computed(() => [
@@ -52,12 +52,12 @@ const provenanceFields = computed(() =>
 );
 function applyLayout(next: InspectorLayout) {
   layout.value = next;
-  saveInspectorLayout(next);
+  saveInspectorLayout(next, record.value);
 }
 function resetLayout() {
-  const next = defaultInspectorLayout();
+  const next = defaultInspectorLayout(record.value);
   layout.value = next;
-  saveInspectorLayout(next);
+  saveInspectorLayout(next, record.value);
 }
 function headingText(label: string) {
   if (label === "Record context") return i18n.t("record.record_context");
@@ -287,7 +287,7 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
         @open="emit('openHistory')"
       />
     </div>
-    <InspectorLayoutEditor ref="layoutEditor" :layout="layout" @apply="applyLayout" @reset="resetLayout" />
+    <InspectorLayoutEditor ref="layoutEditor" :layout="layout" :record="record" @apply="applyLayout" @reset="resetLayout" />
   </aside>
 </template>
 <style scoped>

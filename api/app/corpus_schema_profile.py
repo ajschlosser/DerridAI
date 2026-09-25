@@ -20,7 +20,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from .config import settings
-from .corpus_metadata import HUMAN_EDITABLE_METADATA_FIELDS
+from .corpus_metadata import FIXED_HUMAN_EDITABLE_METADATA_FIELDS
 from .corpus_reviewer_helpers import _allowed_for
 from .enrichment_ledger import RESUMED, SUSPENDED
 from .enrichment_metrics import compute as compute_enrichment_metrics
@@ -61,8 +61,8 @@ class SchemaProfileMixin:
 
 
     def _editable_fields(self, build_id: str) -> set[str]:
-        """Fields a person may edit: the fixed editable ones, minus the default schema's, plus this build's schema's."""
-        return (HUMAN_EDITABLE_METADATA_FIELDS - {f.name for f in default_schema().fields}) | set(self._schema_for(build_id).field_names())
+        """Fields a person may edit: fixed document fields plus this build's pinned schema fields."""
+        return set(FIXED_HUMAN_EDITABLE_METADATA_FIELDS) | set(self._schema_for(build_id).field_names())
 
 
     def _schema_for(self, build_id: str) -> MetadataSchema:

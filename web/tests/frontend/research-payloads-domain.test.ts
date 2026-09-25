@@ -65,6 +65,44 @@ describe("research payloads", () => {
     expect(normalizedResearchConfig().search_types).toEqual(["similarity", "lexical", "mmr"]);
   });
 
+
+  it("preserves custom assertion metadata for Research evidence", () => {
+    const item = researchEvidenceForUi({
+      key: "custom",
+      kind: "workspace",
+      record_id: "r-custom",
+      field_assertions: {
+        "field-conceptual-tension": [
+          {
+            assertion_id: "a-custom",
+            field_id: "field-conceptual-tension",
+            field_name: "conceptual_tension",
+            value: "hospitality / sovereignty",
+            derivation_method: "model",
+            evaluation_status: "value_supported",
+            authority_status: "human_confirmed",
+            value_status: "present",
+            confidence: 0.88,
+          },
+        ],
+      },
+      current_field_assertions: {
+        "field-conceptual-tension": "a-custom",
+      },
+    });
+
+    expect(item?.metadata).toMatchObject({
+      conceptual_tension: "hospitality / sovereignty",
+    });
+    expect(item?.assertions).toEqual([
+      expect.objectContaining({
+        field_name: "conceptual_tension",
+        field_id: "field-conceptual-tension",
+        authority_status: "human_confirmed",
+      }),
+    ]);
+  });
+
   it("shapes profiles, evidence and jobs for the UI", () => {
     expect(researchProfileForUi(null)).toBeNull();
     expect(researchProfileForUi({ id: "p", seed: 0, api_key: "secret" })).toEqual({

@@ -1,4 +1,5 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
+import { assertionSummaries, assertionValues } from "./fieldAssertions";
 import { cloneAuditValue } from "./recordValues";
 
 // Shaping and validation of Research (RAG) data crossing the runtime/Vue boundary. Pure functions
@@ -42,6 +43,13 @@ export function researchProfileForUi(profile: Loose | null | undefined) {
 
 export function researchEvidenceForUi(item: Loose | null | undefined) {
   if (!item) return null;
+  const metadata: Record<string, unknown> =
+    item.metadata && typeof item.metadata === "object" && !Array.isArray(item.metadata)
+      ? (cloneAuditValue(item.metadata) as Record<string, unknown>)
+      : assertionValues(item);
+  const assertions = Array.isArray(item.assertions)
+    ? (cloneAuditValue(item.assertions) as ReturnType<typeof assertionSummaries>)
+    : assertionSummaries(item);
   return {
     key: item.key,
     kind: item.kind,
@@ -51,12 +59,14 @@ export function researchEvidenceForUi(item: Loose | null | undefined) {
     work: item.work || "",
     page_start: item.page_start ?? null,
     page_end: item.page_end ?? null,
-    speaker: item.speaker || null,
-    position_holder: item.position_holder || null,
-    stance: item.stance || null,
-    discourse_role: item.discourse_role || null,
-    target: item.target || null,
-    proposition_status: item.proposition_status || null,
+    speaker: item.speaker ?? metadata.speaker ?? null,
+    position_holder: item.position_holder ?? metadata.position_holder ?? null,
+    stance: item.stance ?? metadata.stance ?? null,
+    discourse_role: item.discourse_role ?? metadata.discourse_role ?? null,
+    target: item.target ?? metadata.target ?? null,
+    proposition_status: item.proposition_status ?? metadata.proposition_status ?? null,
+    metadata,
+    assertions,
     inline_citation: item.inline_citation || null,
     text_preview: item.text_preview || "",
     label: item.label || "",

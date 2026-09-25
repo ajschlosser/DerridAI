@@ -15,12 +15,12 @@ import {
   type InspectorTabKey,
 } from "../../domain/inspectorLayout";
 
-const props = defineProps<{ layout: InspectorLayout }>();
+const props = defineProps<{ layout: InspectorLayout; record?: Record<string, unknown> }>();
 const emit = defineEmits<{ apply: [layout: InspectorLayout]; reset: [] }>();
 const i18n = useI18nStore();
 const isOpen = ref(false);
 const tab = ref<InspectorTabKey>("overview");
-const draft = ref<InspectorLayout>(defaultInspectorLayout());
+const draft = ref<InspectorLayout>(defaultInspectorLayout(props.record));
 const dragging = ref<number | null>(null);
 
 const tabLabels: Record<InspectorTabKey, [string, string]> = {
@@ -30,7 +30,7 @@ const tabLabels: Record<InspectorTabKey, [string, string]> = {
 };
 
 const rows = computed(() => draft.value[tab.value]);
-const unused = computed(() => unusedInspectorFields(tab.value, rows.value));
+const unused = computed(() => unusedInspectorFields(tab.value, rows.value, props.record));
 
 function fieldLabel(key: string) {
   if (key === "__pages") return i18n.t("record.page");
@@ -51,7 +51,7 @@ function apply() {
   isOpen.value = false;
 }
 function reset() {
-  draft.value = defaultInspectorLayout();
+  draft.value = defaultInspectorLayout(props.record);
   emit("reset");
 }
 function setRows(next: InspectorLayoutRow[]) {

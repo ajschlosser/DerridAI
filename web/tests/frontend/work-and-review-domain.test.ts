@@ -44,6 +44,34 @@ describe("touch-up fields", () => {
       }),
     ).toMatchSnapshot();
   });
+
+  it("offers custom assertion fields and hides canonical bookkeeping", () => {
+    const fields = touchup.touchupFieldsForRecord({
+      text: "t",
+      conceptual_tension: "hospitality / sovereignty",
+      field_assertions: {
+        "field-conceptual-tension": [
+          {
+            assertion_id: "a1",
+            field_id: "field-conceptual-tension",
+            field_name: "conceptual_tension",
+            value: "hospitality / sovereignty",
+            derivation_method: "model",
+            evaluation_status: "value_supported",
+            authority_status: "human_confirmed",
+            value_status: "present",
+          },
+        ],
+      },
+      current_field_assertions: { "field-conceptual-tension": "a1" },
+      metadata_field_status: { conceptual_tension: { status: "human_confirmed" } },
+    });
+    expect(fields).toContain("conceptual_tension");
+    expect(fields).not.toContain("field_assertions");
+    expect(fields).not.toContain("current_field_assertions");
+    expect(fields).not.toContain("metadata_field_status");
+  });
+
 });
 
 describe("review presentation", () => {

@@ -29,6 +29,18 @@ export type ResearchProfile = {
   extra_options?: string | Record<string, unknown> | null;
 };
 
+export type ResearchFieldAssertionSummary = {
+  assertion_id?: string;
+  field_id: string;
+  field_name: string;
+  value: unknown;
+  derivation_method?: string;
+  evaluation_status?: string;
+  authority_status?: string;
+  value_status?: string;
+  confidence?: number | null;
+};
+
 export type ResearchEvidenceSelection = {
   key: string;
   kind?: string;
@@ -44,6 +56,8 @@ export type ResearchEvidenceSelection = {
   discourse_role?: string | null;
   target?: string | null;
   proposition_status?: string | null;
+  metadata?: Record<string, unknown>;
+  assertions?: ResearchFieldAssertionSummary[];
   inline_citation?: string | null;
   text_preview?: string;
   label?: string;
