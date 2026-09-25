@@ -60,7 +60,7 @@ onMounted(() => void load());
       <button class="btn" type="button" :disabled="loading" @click="load"><AppIcon name="refresh" /> {{ t("common.refresh", "Refresh") }}</button>
     </header>
 
-    <div v-if="loading" class="state" role="status">Checking internal vector collections…</div>
+    <div v-if="loading" class="state" role="status">{{ t("runtime.system_checking_vectors", "Checking internal vector collections…") }}</div>
     <div v-else-if="error && !collections.length" class="state error" role="alert">
       <strong>{{ t("runtime.system_vector_unavailable", "Internal vector storage is unavailable.") }}</strong>
       <span>{{ error }}</span>
@@ -90,7 +90,7 @@ onMounted(() => void load());
         <div v-if="error" class="state error" role="alert">{{ error }}</div>
         <div v-if="validation" class="explanation">
           <AppIcon name="check" />
-          <div><strong>{{ t("runtime.system_command_valid", "Valid read-only command") }}</strong><p>{{ validation.explanation }}</p><small v-if="validation.embedding_provider">Embedding: {{ validation.embedding_provider }}<template v-if="validation.embedding_model"> / {{ validation.embedding_model }}</template></small></div>
+          <div><strong>{{ t("runtime.system_command_valid", "Valid read-only command") }}</strong><p>{{ validation.explanation }}</p><small v-if="validation.embedding_provider">{{ t("runtime.system_embedding", "Embedding") }}: {{ validation.embedding_provider }}<template v-if="validation.embedding_model"> / {{ validation.embedding_model }}</template></small></div>
         </div>
         <details v-if="result?.result" class="result">
           <summary>{{ t("runtime.system_query_results", "Query results") }}</summary>
