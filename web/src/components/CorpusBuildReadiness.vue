@@ -283,7 +283,7 @@ const providerSummary = computed(() =>
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-card);
   background: var(--surface-card);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-overlay);
 }
 dl {
   display: grid;
