@@ -64,15 +64,15 @@ const message = computed(() => {
 .model-activity {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 0.625rem;
   margin: 0;
-  padding: var(--space-2) var(--space-4);
+  padding: 0.5rem 0.875rem;
   border: 1px solid var(--tone-info-border);
-  border-radius: var(--radius-control);
+  border-radius: 10px;
   background: var(--tone-info-bg);
   color: var(--tone-info-fg);
-  font-size: var(--fs-base);
-  line-height: var(--lh-normal);
+  font-size: 0.875rem;
+  line-height: 1.45;
 }
 .model-activity[data-state="loading_model"] {
   border-color: var(--tone-warn-border);

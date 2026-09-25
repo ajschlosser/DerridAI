@@ -1,0 +1,56 @@
+/* Copyright 2026 Aaron John Schlosser, PhD. */
+import { apiRequest } from "../http";
+import type { PdfAsset, DocumentLayoutPlan, SourceBlock, GutenbergHit } from "./types";
+import { LEGACY_CORPUS_BASE, legacyCorpusUrl } from "./compatibility";
+
+export const corpusSourcesApi = {
+  listAssets: () => apiRequest<{ items: PdfAsset[] }>(legacyCorpusUrl("assets")),
+  async uploadAsset(file: File, ocrMode = "auto", sourceIllegibility = 0) {
+    const body = new FormData();
+    body.append("file", file);
+    body.append("ocr_mode", ocrMode);
+    body.append("ocr_languages", "eng+fra+deu");
+    body.append("source_illegibility", String(sourceIllegibility));
+    return apiRequest<PdfAsset>(legacyCorpusUrl("assets"), { method: "POST", body });
+  },
+  importUrl: (url: string, sourceIllegibility = 0) =>
+    apiRequest<PdfAsset>(legacyCorpusUrl("assets/url"), {
+      method: "POST",
+      body: JSON.stringify({ url, source_illegibility: sourceIllegibility }),
+    }),
+  searchGutenberg: (query: string) =>
+    apiRequest<{ items: GutenbergHit[] }>(
+      `${LEGACY_CORPUS_BASE}/gutenberg/search?q=${encodeURIComponent(query)}&limit=12`,
+    ),
+  importGutenberg: (etextId: number, sourceIllegibility = 0) =>
+    apiRequest<PdfAsset>(legacyCorpusUrl("gutenberg/import"), {
+      method: "POST",
+      body: JSON.stringify({ etext_id: etextId, source_illegibility: sourceIllegibility }),
+    }),
+  assetContentUrl: (assetId: string) =>
+    `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/content`,
+  updatePageLabels: (assetId: string, labels: Record<number, string | null>) =>
+    apiRequest<PdfAsset>(
+      `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/page-labels`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ labels }),
+      },
+    ),
+  updateDocumentLayout: (assetId: string, plan: DocumentLayoutPlan) =>
+    apiRequest<PdfAsset>(
+      `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/document-layout`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(plan),
+      },
+    ),
+  blocks: (assetId: string, offset = 0, limit = 200, ids: string[] = []) =>
+    apiRequest<{ items: SourceBlock[]; total: number }>(
+      `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/blocks?offset=${offset}&limit=${limit}${
+        ids.length ? `&ids=${encodeURIComponent(ids.join(","))}` : ""
+      }`,
+    ),
+  profiles: () =>
+    apiRequest<{ items: Array<Record<string, unknown>> }>(legacyCorpusUrl("corpus-profiles")),
+};

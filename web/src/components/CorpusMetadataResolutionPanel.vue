@@ -5,7 +5,7 @@ import type { CorpusRecord } from "../api/pdfCorpus";
 import { useI18nStore } from "../stores/i18n";
 import { metadataConstraints } from "../domain/metadataConstraints";
 import { metadataFieldSpec, metadataSuggestions } from "../domain/metadataFieldRegistry";
-import { currentFieldAssertions } from "../domain/fieldAssertions";
+import { assertionConflict, currentFieldAssertions } from "../domain/fieldAssertions";
 import type { MetadataSchema, SchemaField } from "../api/metadataSchemas";
 import CorpusMetadataFieldEditor from "./CorpusMetadataFieldEditor.vue";
 import CorpusFieldOwnershipBadge from "./CorpusFieldOwnershipBadge.vue";
@@ -95,25 +95,28 @@ const documentFields = legacyOrder.slice(legacyOrder.indexOf("work"));
 const schemaFields = computed<Record<string, SchemaField>>(() =>
   Object.fromEntries((props.schema?.fields || []).map((field) => [field.name, field])),
 );
+const canonicalAssertions = computed(() =>
+  currentFieldAssertions(props.record as unknown as Record<string, unknown>),
+);
 const fieldOrder = computed<string[]>(() =>
-  props.schema
-    ? [
-        "region_type",
-        "primary_text",
-        "discourse_role",
-        ...props.schema.fields.map((field) => field.name),
-        ...documentFields,
-      ]
-    : legacyOrder,
+  Array.from(
+    new Set(
+      props.schema
+        ? [
+            "region_type",
+            "primary_text",
+            "discourse_role",
+            ...props.schema.fields.map((field) => field.name),
+            ...canonicalAssertions.value.map((item) => item.field_name),
+            ...documentFields,
+          ]
+        : [...legacyOrder, ...canonicalAssertions.value.map((item) => item.field_name)],
+    ),
+  ),
 );
 const fieldLabel = (field: string) => schemaFields.value[field]?.label || "";
 const assertionByField = computed(() =>
-  Object.fromEntries(
-    currentFieldAssertions(props.record as unknown as Record<string, unknown>).map((item) => [
-      item.field_name,
-      item,
-    ]),
-  ),
+  Object.fromEntries(canonicalAssertions.value.map((item) => [item.field_name, item])),
 );
 function canonicalStatus(field: string): Record<string, unknown> | null {
   const assertion = assertionByField.value[field];
@@ -127,15 +130,31 @@ function canonicalStatus(field: string): Record<string, unknown> | null {
   else if (assertion.derivation_method === "model") status = "model_inferred";
   else if (assertion.derivation_method === "deterministic") status = "deterministic";
   else if (assertion.derivation_method === "inherited") status = "inherited";
+  const history = assertionConflict(
+    props.record as unknown as Record<string, unknown>,
+    assertion.field_id || field,
+  );
   return {
     status,
-    method: assertion.derivation_method || "",
+    method:
+      assertion.method ||
+      (assertion.derivation_method === "model" ? "llm" : assertion.derivation_method || ""),
+    derivation_method: assertion.derivation_method,
     confidence: assertion.confidence,
     assertion_id: assertion.assertion_id,
     field_id: assertion.field_id,
     authority_status: assertion.authority_status,
     evaluation_status: assertion.evaluation_status,
     value_status: assertion.value_status,
+    actor: assertion.actor,
+    model: assertion.model,
+    reason: assertion.reason,
+    evidence: assertion.evidence,
+    created_at: assertion.created_at,
+    record_revision: assertion.record_revision,
+    supersedes_assertion_id: assertion.supersedes_assertion_id,
+    disputed: history?.disputed || false,
+    conflicting_assertions: history?.alternatives || [],
   };
 }
 function fieldValue(field: string) {
@@ -157,6 +176,7 @@ const fields = computed(() =>
     (field) =>
       props.record.metadata_field_status?.[field] ||
       props.record[field] !== undefined ||
+      Boolean(assertionByField.value[field]) ||
       unresolved.value.has(field),
   ),
 );

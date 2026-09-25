@@ -13,6 +13,7 @@ const props = withDefaults(
     type?: "button" | "submit" | "reset";
     iconOnly?: boolean;
     pressed?: boolean;
+    expanded?: boolean;
     buttonClass?: string;
   }>(),
   {
@@ -26,6 +27,7 @@ const props = withDefaults(
     type: "button",
     iconOnly: false,
     pressed: undefined,
+    expanded: undefined,
     buttonClass: "",
   },
 );
@@ -47,6 +49,7 @@ const emit = defineEmits<{ click: [event: MouseEvent] }>();
       :disabled="props.disabled"
       :aria-disabled="props.disabled || undefined"
       :aria-pressed="props.pressed"
+      :aria-expanded="props.expanded"
       :aria-label="props.iconOnly ? props.label : undefined"
       :title="props.disabled ? props.disabledReason : props.iconOnly ? props.label : undefined"
       @click="emit('click', $event)"

@@ -40,8 +40,27 @@ const confidence = computed(() =>
     ? Number(props.status.confidence)
     : null,
 );
-const isLlm = computed(() => String(props.status?.method || "").includes("llm"));
+const isLlm = computed(
+  () =>
+    String(props.status?.method || "").includes("llm") ||
+    String(props.status?.derivation_method || "") === "model",
+);
 const isMultiCombobox = computed(() => props.control === "multi-combobox");
+const assertionAlternatives = computed<Record<string, unknown>[]>(() =>
+  Array.isArray(props.status?.conflicting_assertions)
+    ? (props.status?.conflicting_assertions as Record<string, unknown>[])
+    : [],
+);
+function humanizeToken(value: unknown) {
+  return String(value || "")
+    .replaceAll("_", " ")
+    .trim();
+}
+function displayTimestamp(value: unknown) {
+  if (!value) return "";
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+}
 const autocompleteOptions = computed(() =>
   isMultiCombobox.value ? usableListOptions(props.options || []) : props.options || [],
 );
@@ -228,6 +247,78 @@ const autoResolved = computed(
       }}
     </p>
     <div v-if="!editing" class="field-current">{{ display(resolvedValue) }}</div>
+    <details v-if="status?.assertion_id" class="assertion-provenance">
+      <summary>
+        <span>{{ i18n.t("pdf_corpus.assertion_details", "Assertion details") }}</span>
+        <span v-if="status?.disputed" class="assertion-disputed">{{
+          i18n.t("pdf_corpus.assertion_disputed", "Disputed")
+        }}</span>
+      </summary>
+      <dl class="assertion-facts">
+        <div v-if="status?.derivation_method">
+          <dt>{{ i18n.t("pdf_corpus.assertion_derivation", "Derivation") }}</dt>
+          <dd>{{ humanizeToken(status.derivation_method) }}</dd>
+        </div>
+        <div v-if="status?.evaluation_status">
+          <dt>{{ i18n.t("pdf_corpus.assertion_evaluation", "Evaluation") }}</dt>
+          <dd>{{ humanizeToken(status.evaluation_status) }}</dd>
+        </div>
+        <div v-if="status?.authority_status">
+          <dt>{{ i18n.t("pdf_corpus.assertion_authority", "Authority") }}</dt>
+          <dd>{{ humanizeToken(status.authority_status) }}</dd>
+        </div>
+        <div v-if="status?.value_status">
+          <dt>{{ i18n.t("pdf_corpus.assertion_value_state", "Value state") }}</dt>
+          <dd>{{ humanizeToken(status.value_status) }}</dd>
+        </div>
+        <div v-if="status?.model">
+          <dt>{{ i18n.t("pdf_corpus.assertion_model", "Model") }}</dt>
+          <dd>{{ status.model }}</dd>
+        </div>
+        <div v-if="status?.actor">
+          <dt>{{ i18n.t("pdf_corpus.assertion_actor", "Actor") }}</dt>
+          <dd>{{ status.actor }}</dd>
+        </div>
+        <div v-if="status?.record_revision">
+          <dt>{{ i18n.t("pdf_corpus.assertion_revision", "Record revision") }}</dt>
+          <dd>{{ status.record_revision }}</dd>
+        </div>
+        <div v-if="status?.created_at">
+          <dt>{{ i18n.t("pdf_corpus.assertion_created", "Created") }}</dt>
+          <dd>{{ displayTimestamp(status.created_at) }}</dd>
+        </div>
+      </dl>
+      <p v-if="status?.reason" class="assertion-reason">{{ status.reason }}</p>
+      <p v-if="Array.isArray(status?.evidence)" class="assertion-evidence-count">
+        {{
+          i18n.t(
+            "pdf_corpus.assertion_evidence_count",
+            `${status.evidence.length} evidence reference(s)`,
+          )
+        }}
+      </p>
+      <div v-if="assertionAlternatives.length" class="assertion-alternatives">
+        <b>{{
+          i18n.t("pdf_corpus.assertion_retained_alternatives", "Retained alternative assertions")
+        }}</b>
+        <ul>
+          <li
+            v-for="item in assertionAlternatives"
+            :key="String(item.assertion_id || item.created_at || item.value)"
+          >
+            <span>{{ display(item.value) }}</span>
+            <small>
+              {{ humanizeToken(item.derivation_method) }}
+              <template v-if="item.authority_status">
+                · {{ humanizeToken(item.authority_status) }}</template
+              >
+              <template v-if="item.model"> · {{ item.model }}</template>
+              <template v-if="item.actor"> · {{ item.actor }}</template>
+            </small>
+          </li>
+        </ul>
+      </div>
+    </details>
     <div v-else class="field-editor">
       <div
         v-if="
@@ -468,6 +559,76 @@ const autoResolved = computed(
   gap: 10px;
   padding-top: 10px;
   border-top: 1px solid var(--line);
+}
+.assertion-provenance {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--soft);
+}
+.assertion-provenance summary {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 750;
+}
+.assertion-disputed {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--tone-warn-bg);
+  color: var(--tone-warn-fg);
+  font-size: 0.75rem;
+}
+.assertion-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
+  gap: 7px 12px;
+  margin: 10px 0 0;
+}
+.assertion-facts div {
+  min-width: 0;
+}
+.assertion-facts dt {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.assertion-facts dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+  font-size: 0.8125rem;
+  font-weight: 650;
+}
+.assertion-reason,
+.assertion-evidence-count {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+.assertion-alternatives {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--line);
+  font-size: 0.8125rem;
+}
+.assertion-alternatives ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.assertion-alternatives li {
+  display: grid;
+  gap: 1px;
+}
+.assertion-alternatives small {
+  color: var(--muted);
 }
 .value-control {
   min-width: 0;

@@ -47,26 +47,26 @@ const more = computed(() => Math.max(0, (props.report?.left_for_review ?? 0) - s
 <style scoped>
 .hf-report {
   display: grid;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
+  gap: 8px;
+  padding: 12px 14px;
   border: 1px solid var(--tone-info-border);
-  border-radius: var(--radius-card);
+  border-radius: 12px;
   background: var(--tone-info-bg);
-  color: var(--text-primary);
+  color: var(--text);
 }
 h3 {
   margin: 0;
-  font-size: var(--fs-base);
+  font-size: 0.9375rem;
   color: var(--tone-info-fg);
 }
 p {
   margin: 0;
-  font-size: var(--fs-base);
-  line-height: var(--lh-normal);
+  font-size: 0.875rem;
+  line-height: 1.5;
 }
 ul {
   display: grid;
-  gap: var(--space-1);
+  gap: 4px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -74,16 +74,16 @@ ul {
 .hf-exceptions li {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-1) var(--space-2);
+  gap: 4px 10px;
   align-items: baseline;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-control);
-  background: var(--surface-card);
-  font-size: var(--fs-sm);
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  font-size: 0.8125rem;
 }
 .hf-exceptions span {
-  color: var(--text-secondary);
+  color: var(--text-2);
 }
 .link-button {
   border: 0;
@@ -96,15 +96,15 @@ ul {
   cursor: pointer;
 }
 .link-button:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 .hf-notes {
   color: var(--text-2);
-  font-size: var(--fs-sm);
+  font-size: 0.8125rem;
 }
 .hf-more {
-  color: var(--text-tertiary);
+  color: var(--muted);
   font-size: 0.8125rem;
 }
 </style>

@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
+import { ref } from "vue";
 import CorpusRecordFocusReview from "./CorpusRecordFocusReview.vue";
 const record = {
   record_id: "record-00014",
@@ -72,6 +73,49 @@ const record = {
 const meta = {
   title: "Corpus Builder/Review/Focus View",
   component: CorpusRecordFocusReview,
+  render: (args) => ({
+    components: { CorpusRecordFocusReview },
+    setup() {
+      const editingText = ref(Boolean(args.editingText));
+      const textDraft = ref(String(args.textDraft ?? args.record?.text ?? ""));
+      const resolveSourceIssues = ref(Boolean(args.resolveSourceIssues));
+      const beginTextEdit = (proposal = false) => {
+        textDraft.value = proposal
+          ? String(args.record?.text_touchup_proposal?.proposed_text || args.record?.text || "")
+          : String(args.record?.text || "");
+        editingText.value = true;
+      };
+      const cancelTextEdit = () => {
+        editingText.value = false;
+        textDraft.value = String(args.record?.text || "");
+      };
+      const saveText = () => {
+        editingText.value = false;
+      };
+      return {
+        args,
+        editingText,
+        textDraft,
+        resolveSourceIssues,
+        beginTextEdit,
+        cancelTextEdit,
+        saveText,
+      };
+    },
+    template: `
+      <CorpusRecordFocusReview
+        v-bind="args"
+        :editing-text="editingText"
+        :text-draft="textDraft"
+        :resolve-source-issues="resolveSourceIssues"
+        @begin-text-edit="beginTextEdit"
+        @cancel-text-edit="cancelTextEdit"
+        @save-text="saveText"
+        @text-draft-change="textDraft = $event"
+        @resolve-source-issues-change="resolveSourceIssues = $event"
+      />
+    `,
+  }),
   args: {
     canMergePrevious: true,
     canMergeNext: true,

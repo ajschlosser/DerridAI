@@ -66,9 +66,9 @@ const steps = computed(() => {
         :data-state="step.state"
         :aria-current="step.state === 'current' ? 'step' : undefined"
       >
-        <span class="marker" aria-hidden="true">
-          {{ step.state === "complete" ? "✓" : step.number }}
-        </span>
+        <span class="marker" aria-hidden="true">{{
+          step.state === "complete" ? "✓" : step.number
+        }}</span>
         <span class="step-copy">
           <b>{{ step.label }}</b>
           <small>{{
@@ -86,93 +86,73 @@ const steps = computed(() => {
 
 <style scoped>
 .workflow {
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-card);
-  background: var(--surface-card);
-  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  padding: 10px 12px;
 }
-
 .workflow ol {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-2);
+  gap: 8px;
 }
-
 .workflow li {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2);
-  border-radius: var(--radius-control);
-  color: var(--text-secondary);
+  gap: 8px;
+  padding: 8px;
+  border-radius: 9px;
+  color: var(--muted);
 }
-
 .workflow li[data-state="current"] {
-  background: var(--surface-inset);
-  color: var(--text-primary);
+  background: var(--soft);
+  color: var(--text);
 }
-
 .workflow li[data-state="complete"] {
-  color: var(--text-primary);
+  color: var(--text);
 }
-
 .marker {
   display: grid;
   place-items: center;
   inline-size: 26px;
   block-size: 26px;
   flex: 0 0 26px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-pill);
-  font-size: var(--fs-sm);
-  font-weight: var(--fw-bold);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  font-size: 0.8125rem;
+  font-weight: 800;
 }
-
 .workflow li[data-state="current"] .marker {
-  border-color: var(--border-interactive);
-  outline: 2px solid color-mix(in srgb, var(--accent-fg) 20%, transparent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 15%, transparent);
 }
-
 .step-copy {
   display: grid;
-  gap: var(--space-1);
+  gap: 1px;
   min-width: 0;
 }
-
-.step-copy b,
-.step-copy small {
-  overflow-wrap: anywhere;
-}
-
 .step-copy b {
-  font-size: var(--fs-sm);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-
 .step-copy small {
-  font-size: var(--fs-sm);
-  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  color: var(--muted);
 }
-
 @media (max-width: 760px) {
   .workflow ol {
     grid-template-columns: 1fr 1fr;
   }
 }
-
 @media (max-width: 480px) {
   .workflow ol {
     grid-template-columns: 1fr;
-  }
-}
-
-@media (forced-colors: active) {
-  .workflow li[data-state="current"] .marker {
-    border-color: Highlight;
-    outline-color: Highlight;
   }
 }
 </style>

@@ -18,10 +18,10 @@ const pdfCorpusApi = vi.hoisted(() => ({
   assetContentUrl: vi.fn((assetId: string) => `/api/pdf/assets/${assetId}/content`),
 }));
 
-vi.mock("../../src/api/pdfCorpus", async () => {
+vi.mock("../../src/api/corpus", async () => {
   const actual =
-    await vi.importActual<typeof import("../../src/api/pdfCorpus")>("../../src/api/pdfCorpus");
-  return { ...actual, pdfCorpusApi };
+    await vi.importActual<typeof import("../../src/api/corpus")>("../../src/api/corpus");
+  return { ...actual, corpusBuilderApi: pdfCorpusApi };
 });
 
 const systemApi = vi.hoisted(() => ({

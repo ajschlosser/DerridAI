@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import CorpusReviewSessionBar from "./CorpusReviewSessionBar.vue";
-
 const meta = {
   title: "Corpus Builder/Review/Session Header",
   component: CorpusReviewSessionBar,
@@ -14,35 +13,12 @@ const meta = {
     issues: 7,
   },
 } satisfies Meta<typeof CorpusReviewSessionBar>;
-
 export default meta;
 type Story = StoryObj<typeof meta>;
-
 export const Default: Story = {};
-
-export const FocusDisabled: Story = {
-  args: { focusDisabled: true },
-};
-
 export const FrenchLengthStress: Story = {
   parameters: { locale: "fr-CA" },
   args: {
-    sourceFilename:
-      "Cosmopolites de tous les pays, encore un effort ! — édition critique commentée et révisée.pdf",
-    model: "Modèle local de synthèse et d’attribution avec contexte documentaire étendu",
+    sourceFilename: "Cosmopolites de tous les pays, encore un effort ! — édition commentée.pdf",
   },
-};
-
-export const Narrow: Story = {
-  args: {
-    sourceFilename:
-      "Entretien enregistré — transcription révisée avec identification détaillée des locuteurs.flac",
-    model: "Local attribution model with extended provenance context",
-  },
-  decorators: [
-    (story) => ({
-      components: { story },
-      template: '<div style="max-width: 360px"><story /></div>',
-    }),
-  ],
 };

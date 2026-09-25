@@ -107,22 +107,22 @@ const pct = (value: number) => `${Math.round(value * 100)}%`;
 <style scoped>
 .hands-free {
   display: grid;
-  gap: var(--space-3);
+  gap: 12px;
 }
 .hands-free-note {
   margin: 0;
-  padding: var(--space-3) var(--space-4);
+  padding: 10px 12px;
   border: 1px solid var(--tone-warn-border);
-  border-radius: var(--radius-control);
+  border-radius: 10px;
   background: var(--tone-warn-bg);
   color: var(--tone-warn-fg);
-  font-size: var(--fs-base);
-  line-height: var(--lh-normal);
+  font-size: 0.875rem;
+  line-height: 1.5;
 }
 .hf-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3) var(--space-4);
+  gap: 14px 18px;
   margin: 0;
   padding: 0;
   border: 0;
@@ -130,22 +130,22 @@ const pct = (value: number) => `${Math.round(value * 100)}%`;
 }
 .hf-field {
   display: grid;
-  gap: var(--space-1);
+  gap: 5px;
   align-content: start;
-  font-size: var(--fs-sm);
-  font-weight: var(--fw-bold);
+  font-size: 0.8125rem;
+  font-weight: 700;
 }
 .hf-field small,
 .hf-check small {
   display: block;
-  color: var(--text-tertiary);
-  font-weight: var(--fw-medium);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-normal);
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 0.8125rem;
+  line-height: 1.45;
 }
 .hf-check {
   display: flex;
-  gap: var(--space-2);
+  gap: 10px;
   align-items: flex-start;
 }
 .hf-check input {
@@ -156,7 +156,7 @@ const pct = (value: number) => `${Math.round(value * 100)}%`;
 }
 .control {
   inline-size: 100%;
-  min-block-size: var(--control-height);
+  min-block-size: 42px;
 }
 fieldset:disabled {
   opacity: 0.6;

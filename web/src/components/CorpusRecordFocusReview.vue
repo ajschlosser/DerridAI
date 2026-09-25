@@ -3,14 +3,10 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useI18nStore } from "../stores/i18n";
 import type { CorpusRecord, SourceBlock } from "../api/pdfCorpus";
 import type { MetadataSchema } from "../api/metadataSchemas";
-import { hideSourceWarnings } from "../domain/sourceQuality";
 import type { ProviderProfile } from "../api/system";
 import CorpusSourceIssuePanel from "./CorpusSourceIssuePanel.vue";
-import CorpusSourceQualityDialog from "./CorpusSourceQualityDialog.vue";
 import CorpusMetadataResolutionPanel from "./CorpusMetadataResolutionPanel.vue";
-import CorpusTextCleanupDialog from "./CorpusTextCleanupDialog.vue";
 import CorpusRevisionHistory from "./CorpusRevisionHistory.vue";
-import CorpusBoundarySliceDialog from "./CorpusBoundarySliceDialog.vue";
 import CorpusBoundaryAdjudication from "./CorpusBoundaryAdjudication.vue";
 import CorpusSourceSummary from "./CorpusSourceSummary.vue";
 import FieldEvidenceList from "./FieldEvidenceList.vue";
@@ -32,8 +28,6 @@ const props = defineProps<{
   canAccept?: boolean;
   regionTypes?: string[];
   discourseRoles?: string[];
-  recurringLines?: string[];
-  documentTerms?: string[];
   confidenceCalibration?: Record<string, Record<string, Record<string, number>>>;
   canHistoryBack?: boolean;
   canHistoryForward?: boolean;
@@ -46,6 +40,9 @@ const props = defineProps<{
   nextRecordId?: string;
   selectedEvidenceField?: string;
   evidenceBlockIds?: string[];
+  editingText?: boolean;
+  textDraft?: string;
+  resolveSourceIssues?: boolean;
 }>();
 const emit = defineEmits<{
   close: [];
@@ -59,13 +56,20 @@ const emit = defineEmits<{
   previousRecord: [];
   nextRecord: [];
   requeueMetadata: [];
+  requestSlice: [];
+  openSourceIssue: [];
   merge: [direction: "previous" | "next"];
   slice: [direction: "previous" | "next" | "keep" | "new", offset: number, keepEnd?: number];
   adjudicateBoundary: [direction: "previous" | "next", providerProfileId: string, model: string];
   openSourceViewer: [];
   updateLlmProviderProfile: [value: string];
   updateLlmModel: [value: string];
-  saveText: [text: string, resolveSourceIssues: boolean];
+  beginTextEdit: [proposal?: boolean];
+  cancelTextEdit: [];
+  saveText: [];
+  textDraftChange: [value: string];
+  resolveSourceIssuesChange: [value: boolean];
+  openTextCleanup: [];
   resolveMetadata: [field: string, value: unknown];
   confirmNoMetadataValue: [field: string];
   metadataDirty: [dirty: boolean];
@@ -81,12 +85,6 @@ const dialog = ref<HTMLElement | null>(null);
 const closeButton = ref<HTMLButtonElement | null>(null);
 const tab = ref<"metadata" | "evidence" | "source">("metadata");
 const priorActive = ref<HTMLElement | null>(null);
-const editingText = ref(false);
-const textDraft = ref("");
-const resolveSourceIssues = ref(false);
-const cleanupOpen = ref(false);
-const sourceIssueOpen = ref(false);
-const sliceOpen = ref(false);
 const tabOrder = ["metadata", "evidence", "source"] as const;
 const state = computed(
   () =>
@@ -119,9 +117,9 @@ function focusables() {
   ).filter((node) => node.offsetParent !== null);
 }
 function handleKeydown(event: KeyboardEvent) {
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s" && editingText.value) {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s" && props.editingText) {
     event.preventDefault();
-    saveText();
+    requestSaveText();
     return;
   }
   if (event.altKey && event.key === "ArrowLeft" && props.canPreviousRecord) {
@@ -166,24 +164,18 @@ function handleTabKeydown(event: KeyboardEvent) {
     dialog.value?.querySelector<HTMLButtonElement>(`#focus-tab-${tab.value}`)?.focus(),
   );
 }
-function beginTextEdit(proposal = false) {
-  textDraft.value = proposal
-    ? String(props.record.text_touchup_proposal?.proposed_text || props.record.text || "")
-    : String(props.record.text || "");
-  resolveSourceIssues.value = Boolean(props.record.source_quality_issues?.length);
-  editingText.value = true;
-  void nextTick(() =>
-    dialog.value?.querySelector<HTMLTextAreaElement>(".focus-text-editor")?.focus(),
-  );
+function requestBeginTextEdit(proposal = false) {
+  emit("beginTextEdit", proposal);
 }
-function saveText() {
-  if (!textDraft.value.trim()) return;
-  emit("saveText", textDraft.value, resolveSourceIssues.value);
-  editingText.value = false;
+function requestSaveText() {
+  if (!String(props.textDraft || "").trim()) return;
+  emit("saveText");
 }
-function acknowledgeSourceIssue(dontShowAgain = false) {
-  if (dontShowAgain) hideSourceWarnings();
-  sourceIssueOpen.value = false;
+function updateTextDraft(event: Event) {
+  emit("textDraftChange", (event.target as HTMLTextAreaElement).value);
+}
+function updateResolveSourceIssues(event: Event) {
+  emit("resolveSourceIssuesChange", (event.target as HTMLInputElement).checked);
 }
 function openFieldEvidence(field: string) {
   emit("selectEvidence", field);
@@ -244,7 +236,6 @@ function restoreBackgroundScroll() {
 onMounted(() => {
   priorActive.value = document.activeElement as HTMLElement | null;
   preventBackgroundScroll();
-  textDraft.value = String(props.record.text || "");
   void nextTick(() => closeButton.value?.focus({ preventScroll: true }));
 });
 onBeforeUnmount(() => {
@@ -255,8 +246,6 @@ watch(
   () => props.record.record_id,
   () => {
     tab.value = "metadata";
-    editingText.value = false;
-    textDraft.value = String(props.record.text || "");
     void nextTick(() =>
       dialog.value
         ?.querySelector<HTMLElement>(".focus-record-text")
@@ -380,7 +369,7 @@ watch(
               class="source-warn-icon"
               type="button"
               :aria-label="i18n.t('pdf_corpus.source_warning_icon')"
-              @click="sourceIssueOpen = true"
+              @click="emit('openSourceIssue')"
             >
               <AppIcon name="warning" /></button
             ><button class="btn" type="button" @click="emit('previewJsonl')" :disabled="busy">
@@ -388,7 +377,7 @@ watch(
             ><button
               class="btn"
               type="button"
-              @click="editingText ? (editingText = false) : beginTextEdit()"
+              @click="editingText ? emit('cancelTextEdit') : requestBeginTextEdit()"
               :disabled="busy"
             >
               {{ editingText ? i18n.t("ui.cancel") : i18n.t("pdf_corpus.edit_text") }}
@@ -419,41 +408,49 @@ watch(
         >
           <b>{{ i18n.t("pdf_corpus.llm_touchup_proposal_available") }}</b
           ><span>{{ i18n.t("pdf_corpus.llm_touchup_proposal_help") }}</span
-          ><button class="btn small" type="button" :disabled="busy" @click="beginTextEdit(true)">
+          ><button
+            class="btn small"
+            type="button"
+            :disabled="busy"
+            @click="requestBeginTextEdit(true)"
+          >
             {{ i18n.t("pdf_corpus.review_touchup_proposal") }}
           </button>
         </div>
         <div v-if="editingText" class="focus-text-edit">
           <div class="focus-text-tools">
-            <button class="btn" type="button" @click="cleanupOpen = true" :disabled="busy">
+            <button class="btn" type="button" @click="emit('openTextCleanup')" :disabled="busy">
               {{ i18n.t("pdf_corpus.clean_text") }}</button
             ><button
               class="btn"
               type="button"
-              @click="emit('llmTouchup', textDraft)"
+              @click="emit('llmTouchup', textDraft || '')"
               :disabled="busy"
             >
               {{ i18n.t("pdf_corpus.llm_touchup") }}
             </button>
           </div>
           <textarea
-            v-model="textDraft"
+            :value="textDraft || ''"
+            @input="updateTextDraft"
             class="focus-text-editor"
             :aria-label="i18n.t('pdf_corpus.reviewed_record_text')"
           ></textarea
           ><label v-if="record.source_quality_issues?.length" class="resolve-check"
-            ><input v-model="resolveSourceIssues" type="checkbox" /><span>{{
-              i18n.t("pdf_corpus.resolve_source_with_correction")
-            }}</span></label
+            ><input
+              :checked="resolveSourceIssues"
+              type="checkbox"
+              @change="updateResolveSourceIssues"
+            /><span>{{ i18n.t("pdf_corpus.resolve_source_with_correction") }}</span></label
           >
           <div class="edit-actions">
-            <button class="btn" type="button" @click="editingText = false">
+            <button class="btn" type="button" @click="emit('cancelTextEdit')">
               {{ i18n.t("ui.cancel") }}</button
             ><button
               class="btn primary"
               type="button"
-              @click="saveText"
-              :disabled="busy || !textDraft.trim()"
+              @click="requestSaveText"
+              :disabled="busy || !String(textDraft || '').trim()"
             >
               {{ i18n.t("pdf_corpus.save_reviewed_text") }}
             </button>
@@ -692,7 +689,7 @@ watch(
         ><button
           class="btn"
           type="button"
-          @click="sliceOpen = true"
+          @click="emit('requestSlice')"
           :disabled="busy || editingText || (!canMergePrevious && !canMergeNext)"
         >
           {{ i18n.t("pdf_corpus.slice_record") }}</button
@@ -720,555 +717,7 @@ watch(
         </button>
       </div>
     </footer>
-    <CorpusBoundarySliceDialog
-      v-if="sliceOpen"
-      :text="String(record.text || '')"
-      :can-previous="Boolean(canMergePrevious)"
-      :can-next="Boolean(canMergeNext)"
-      :busy="busy"
-      @close="sliceOpen = false"
-      @slice="
-        (direction, offset, keepEnd) => {
-          emit('slice', direction, offset, keepEnd);
-          sliceOpen = false;
-        }
-      "
-    />
-    <CorpusTextCleanupDialog
-      v-if="cleanupOpen"
-      :text="textDraft"
-      :recurring-lines="recurringLines || []"
-      :document-terms="documentTerms || []"
-      @close="cleanupOpen = false"
-      @apply="
-        (value) => {
-          textDraft = value;
-          cleanupOpen = false;
-        }
-      "
-    />
-    <CorpusSourceQualityDialog
-      :open="sourceIssueOpen && Boolean(record.source_quality_issues?.length)"
-      :issues="record.source_quality_issues"
-      @close="acknowledgeSourceIssue"
-      @edit-text="
-        sourceIssueOpen = false;
-        beginTextEdit();
-      "
-      @open-source="
-        sourceIssueOpen = false;
-        tab = 'source';
-      "
-    />
   </section>
 </template>
 
-<style scoped>
-.touchup-proposal {
-  display: grid;
-  gap: 5px;
-  max-width: 86ch;
-  margin: 18px auto 0;
-  padding: 11px 12px;
-  border: 1px solid var(--tone-info-border);
-  border-radius: 9px;
-  background: var(--tone-info-bg);
-  color: var(--tone-info-fg);
-}
-.touchup-proposal span {
-  font-size: 0.8125rem;
-}
-.touchup-proposal .btn {
-  justify-self: start;
-}
-.focus-review {
-  position: fixed;
-  inset: 0;
-  z-index: 10000;
-  background: var(--bg);
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  color: var(--text);
-}
-.focus-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 24px;
-  padding: 18px clamp(18px, 3vw, 42px);
-  border-bottom: 1px solid var(--line);
-  background: var(--card);
-}
-.focus-head-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: none;
-}
-.focus-shortcuts {
-  position: relative;
-}
-.focus-shortcuts summary {
-  list-style: none;
-  width: 38px;
-  height: 38px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--card);
-  cursor: pointer;
-  font-weight: 900;
-}
-.focus-shortcuts summary::-webkit-details-marker {
-  display: none;
-}
-.focus-shortcuts-popover {
-  position: absolute;
-  right: 0;
-  top: 46px;
-  z-index: 20;
-  width: 270px;
-  display: grid;
-  gap: 8px;
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--card);
-  box-shadow: var(--shadow-overlay);
-  font-size: 0.75rem;
-}
-.focus-shortcuts-popover span {
-  color: var(--muted);
-}
-kbd {
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--soft);
-  padding: 1px 4px;
-  font: inherit;
-}
-.focus-title-block {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-}
-.focus-breadcrumb {
-  display: flex;
-  gap: 7px;
-  align-items: center;
-  flex-wrap: wrap;
-  font-size: 0.8125rem;
-  color: var(--muted);
-}
-.focus-breadcrumb strong {
-  color: var(--text);
-}
-.focus-history-controls {
-  display: flex;
-  gap: 7px;
-  align-items: center;
-  flex-wrap: wrap;
-  margin: 2px 0 4px;
-}
-.focus-nav-divider {
-  width: 1px;
-  height: 24px;
-  background: var(--line);
-  margin-inline: 2px;
-}
-.focus-head h2 {
-  margin: 0;
-  font-size: 1.375rem;
-  overflow-wrap: anywhere;
-}
-.eyebrow {
-  font-size: 0.8125rem;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--muted);
-  font-weight: 800;
-}
-.focus-facts {
-  display: flex;
-  gap: 14px;
-  align-items: center;
-  flex-wrap: wrap;
-  font-size: 0.8125rem;
-  color: var(--muted);
-}
-.state-pill,
-.unresolved-badge {
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 4px 8px;
-  font-size: 0.8125rem;
-  font-weight: 750;
-}
-.state-pill[data-state="accepted"] {
-  background: var(--tone-ok-bg);
-  color: var(--tone-ok-fg);
-}
-.state-pill[data-state="rejected"] {
-  background: var(--tone-danger-bg);
-  color: var(--tone-danger-fg);
-}
-.focus-workspace {
-  min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(370px, 440px);
-  overflow: hidden;
-}
-.focus-record {
-  min-width: 0;
-  min-height: 0;
-  overflow: auto;
-  border-inline-end: 1px solid var(--line);
-  background: var(--card);
-}
-.focus-record-heading {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: var(--card);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  padding: 14px clamp(22px, 4vw, 54px);
-  border-bottom: 1px solid var(--line);
-}
-.focus-record-heading h3 {
-  margin: 3px 0 0;
-  font-size: 1rem;
-}
-.record-noise-summary {
-  margin: 10px 0 0;
-  color: var(--muted);
-  font-size: 0.8125rem;
-}
-.heading-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.source-warn-icon {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  margin: 0;
-  padding: 0;
-  border: 1px solid var(--tone-warn-border);
-  border-radius: 10px;
-  background: var(--tone-warn-bg);
-  color: var(--tone-warn-fg);
-  cursor: pointer;
-}
-.source-warn-icon svg {
-  width: 18px;
-  height: 18px;
-}
-.unresolved-badge {
-  background: var(--tone-warn-bg);
-  color: var(--tone-warn-fg);
-}
-.focus-record-text {
-  max-width: 78ch;
-  margin: 0 auto;
-  padding: 34px clamp(24px, 5vw, 72px) 80px;
-  white-space: pre-wrap;
-  font:
-    18px/1.78 Georgia,
-    serif;
-  outline: none;
-}
-.focus-text-tools {
-  display: flex;
-  justify-content: flex-end;
-}
-.focus-text-edit {
-  max-width: 90ch;
-  margin: 24px auto;
-  padding: 0 clamp(24px, 4vw, 54px);
-  display: grid;
-  gap: 12px;
-}
-.focus-text-editor {
-  width: 100%;
-  min-height: 58vh;
-  resize: vertical;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--bg);
-  color: var(--text);
-  font:
-    17px/1.7 Georgia,
-    serif;
-}
-.resolve-check {
-  display: flex;
-  gap: 9px;
-  align-items: flex-start;
-  font-size: 0.8125rem;
-  line-height: 1.5;
-}
-.resolve-check input {
-  inline-size: 18px;
-  block-size: 18px;
-  flex: none;
-}
-.edit-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
-.focus-data {
-  min-width: 0;
-  min-height: 0;
-  overflow: auto;
-  background: var(--soft);
-}
-.tabs {
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  background: var(--card);
-  border-bottom: 1px solid var(--line);
-}
-.tabs button {
-  min-height: 48px;
-  border: 0;
-  border-inline-end: 1px solid var(--line);
-  background: transparent;
-  color: inherit;
-  font-size: 0.8125rem;
-  font-weight: 750;
-  cursor: pointer;
-}
-.tabs button[aria-selected="true"] {
-  box-shadow: inset 0 -3px 0 var(--accent);
-  background: var(--soft);
-}
-.tab-panel {
-  padding: 16px;
-  display: grid;
-  gap: 12px;
-}
-.focus-metadata-panel {
-  padding: 0;
-}
-.focus-metadata-panel :deep(.metadata-review) {
-  border: 0;
-  border-radius: 0;
-}
-.guidance-match-panel {
-  display: grid;
-  gap: 6px;
-  border: 1px solid var(--ui-accent-border);
-  border-radius: 9px;
-  background: var(--ui-accent-soft);
-  padding: 11px;
-}
-.guidance-match-panel h3,
-.guidance-match-panel p {
-  margin: 0;
-}
-.guidance-match-panel h3 {
-  color: var(--text);
-  font-size: 0.875rem;
-}
-.guidance-match-panel p,
-.guidance-match-panel li {
-  color: var(--text-2);
-  font-size: 0.8125rem;
-  line-height: 1.5;
-}
-.guidance-match-panel ul {
-  display: grid;
-  gap: 5px;
-  margin: 0;
-  padding-inline-start: 18px;
-}
-.guidance-match-panel li span {
-  margin-inline-start: 8px;
-}
-.evidence-row,
-.source-row {
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--card);
-  padding: 11px;
-}
-.evidence-row header,
-.source-row header {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 0.8125rem;
-}
-.evidence-row p {
-  margin: 7px 0;
-  font-size: 0.8125rem;
-  line-height: 1.5;
-}
-.evidence-row small {
-  font-size: 0.8125rem;
-  color: var(--muted);
-}
-.focus-pdf-source {
-  display: grid;
-  gap: 8px;
-}
-.focus-pdf-source {
-  min-width: 0;
-}
-.focus-pdf-source header {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  align-items: center;
-  font-size: 0.875rem;
-  flex-wrap: wrap;
-}
-.focus-pdf-source header > div {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-.focus-pdf-source header span,
-.focus-pdf-source p {
-  color: var(--muted);
-  font-size: 0.8125rem;
-  line-height: 1.45;
-}
-.focus-pdf-source p {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-.source-row p {
-  white-space: pre-wrap;
-  margin: 8px 0 0;
-  font:
-    14px/1.6 Georgia,
-    serif;
-}
-.source-row header span {
-  font-size: 0.8125rem;
-  color: var(--muted);
-}
-.empty-note {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.8125rem;
-  line-height: 1.5;
-}
-.focus-blocker {
-  margin: 0;
-  padding: 10px 18px;
-  border-top: 1px solid var(--tone-warn-edge);
-  background: var(--tone-warn-bg);
-  color: var(--tone-warn-fg);
-  font-size: 0.8125rem;
-}
-.focus-actions {
-  position: fixed;
-  inset-inline: var(--sidebar) 0;
-  inset-block-end: 0;
-  z-index: 20;
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-  padding: 12px clamp(18px, 3vw, 42px);
-  border-top: 1px solid var(--line);
-  background: var(--card);
-  box-shadow: 0 -0.75rem 2rem color-mix(in srgb, var(--text) 12%, transparent);
-  padding-bottom: calc(12px + env(safe-area-inset-bottom));
-}
-.focus-review {
-  padding-bottom: 5.5rem;
-}
-.structural-actions,
-.decision-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.danger {
-  border-color: var(--tone-danger-border);
-  color: var(--tone-danger-fg);
-}
-.focus-review :is(button, [tabindex], textarea, input):focus-visible {
-  outline: 3px solid var(--accent);
-  outline-offset: 2px;
-}
-@media (max-width: 900px) {
-  .focus-workspace {
-    grid-template-columns: 1fr;
-    overflow: auto;
-  }
-  .focus-record {
-    overflow: visible;
-    border-inline-end: 0;
-  }
-  .focus-data {
-    overflow: visible;
-    border-top: 1px solid var(--line);
-  }
-  .focus-actions {
-    inset-inline-start: 0;
-    align-items: stretch;
-    flex-direction: column;
-    box-shadow: 0 -8px 24px color-mix(in srgb, var(--text) 10%, transparent);
-  }
-  .decision-actions {
-    justify-content: flex-end;
-  }
-  .focus-record-text {
-    font-size: 1.0625rem;
-    padding: 24px 18px 50px;
-  }
-}
-.source-tab-panel {
-  min-width: 0;
-  overflow-x: hidden;
-}
-.focus-source-section {
-  min-width: 0;
-  border-top: 1px solid var(--line);
-}
-.focus-source-section > summary {
-  min-height: 44px;
-  padding: 10px 12px;
-  display: flex;
-  align-items: center;
-  font-weight: 800;
-  cursor: pointer;
-}
-.focus-source-section :deep(.boundary-adjudication) {
-  border: 0;
-  border-radius: 0;
-}
-.source-row {
-  min-width: 0;
-}
-.source-row p,
-.source-row header {
-  overflow-wrap: anywhere;
-}
-.source-row pre {
-  max-width: 100%;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-@media (prefers-reduced-motion: reduce) {
-  * {
-    scroll-behavior: auto !important;
-  }
-}
-</style>
+<style scoped src="../features/corpus-builder/CorpusRecordFocusReview.css"></style>

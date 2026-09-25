@@ -17,3 +17,7 @@ export const DisabledWithReason: Story = {
     label: "Unavailable",
   },
 };
+
+export const Disclosure: Story = {
+  args: { variant: "default", label: "Hide diagnostics", expanded: true },
+};

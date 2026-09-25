@@ -1,0 +1,794 @@
+/* Copyright 2026 Aaron John Schlosser, PhD. */
+
+export interface PdfAsset {
+  asset_id: string;
+  sha256: string;
+  filename: string;
+  main_text_start_inference?: {
+    page: number | null;
+    confidence: number;
+    clues: { kind: string; detail: string }[];
+    offered: boolean;
+  };
+  created_at: string;
+  page_count: number;
+  block_count: number;
+  ocr_pages: number;
+  warnings: string[];
+  metadata: Record<string, unknown>;
+  media_kind?: string;
+  source_illegibility?: number;
+  deterministic_checked_at?: string;
+  initial_metadata?: {
+    title?: string;
+    document_author?: string;
+    speaker?: string;
+    speakers?: string[];
+    language?: string;
+    [key: string]: unknown;
+  };
+  document_layout?: DocumentLayoutPlan;
+  document_layout_revision?: number;
+  pages?: Array<{
+    pdf_page: number;
+    printed_page_label?: string | null;
+    printed_page_label_source?: string | null;
+    width: number;
+    height: number;
+    block_ids?: string[];
+    extraction_method?: string;
+    image_count?: number;
+    logical_pages?: Array<{ slot: string; printed_page_label?: string | null }>;
+    deterministic_region_type?: string;
+    thread_ids?: string[];
+  }>;
+  source_quality?: {
+    valid_for_enrichment?: boolean;
+    page_count?: number;
+    blocking_page_count?: number;
+    warning_page_count?: number;
+    image_only_page_count?: number;
+    blocking_pages?: number[];
+    warning_pages?: number[];
+    issues?: Array<{
+      page?: number;
+      severity?: string;
+      codes?: string[];
+      characters?: number;
+      replacement_characters?: number;
+      control_characters?: number;
+      extraction_methods?: Record<string, number>;
+    }>;
+  };
+  extraction_noise?: {
+    page_count?: number;
+    unusable_page_count?: number;
+    unusable_page_ratio?: number;
+    median_noise?: number | null;
+    threshold?: number;
+    exceeds_threshold?: boolean;
+    pages?: Array<{
+      page?: number;
+      score?: number;
+      unusable?: boolean;
+      reasons?: string[];
+      effective_dpi?: number | null;
+    }>;
+  };
+}
+
+export interface DocumentLayoutPlan {
+  page_layout: "single" | "two_up";
+  reading_order: "left_to_right" | "right_to_left";
+  main_text_pdf_start?: number | null;
+  main_text_printed_start?: number | null;
+  main_text_slot?: "left" | "right" | null;
+  bibliography_pdf_start?: number | null;
+  thread_mode: "continuous" | "odd_even" | "even_odd" | "left_right" | "right_left";
+  thread_a_language?: string | null;
+  thread_b_language?: string | null;
+}
+
+export interface LlmActivity {
+  state: "loading_model" | "working" | "unknown";
+  task: "manifest" | "segmentation" | "metadata" | "other";
+  model: string;
+  provider: string;
+  seconds: number;
+  calls_in_flight: number;
+}
+export interface AutonomousPolicy {
+  enabled: boolean;
+  passes: number;
+  min_confidence: number;
+  unresolved: "best_guess" | "leave";
+  accept_records: boolean;
+  publish: boolean;
+}
+export interface AutonomousReport {
+  records: number;
+  accepted: number;
+  fields_filled: number;
+  left_for_review: number;
+  passes_run: number;
+  ran_at: string;
+  exceptions: { record_id: string; reasons: string[] }[];
+  notes: string[];
+  policy: AutonomousPolicy;
+  published?: boolean;
+}
+import type { MetadataSchema } from "../metadataSchemas";
+export interface CorpusBuild {
+  /** The metadata schema this build was started with: its own copy, unaffected by later edits to the saved one. */
+  schema?: MetadataSchema | null;
+  schema_id?: string;
+  schema_name?: string;
+  /** What the last hands-free run settled and left. */
+  autonomous_report?: AutonomousReport | null;
+  /** A live reading of the oldest model call in flight; not stored with the build. */
+  llm_activity?: LlmActivity | null;
+  build_id: string;
+  asset_id: string;
+  source_filename: string;
+  source_sha256: string;
+  status: string;
+  stage: string;
+  progress: number;
+  created_at: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+  record_count: number;
+  source_block_count?: number;
+  needs_review_count: number;
+  accepted_count: number;
+  rejected_count?: number;
+  source_problem_count?: number;
+  review_queue_counts?: {
+    all?: number;
+    ready?: number;
+    preparing?: number;
+    issues?: number;
+    metadata?: number;
+    topology?: number;
+    source?: number;
+    accepted?: number;
+    rejected?: number;
+    pending?: number;
+  };
+  model?: string | null;
+  provider?: string | null;
+  profile_id: string;
+  schema_version?: string;
+  metadata_schema_version?: string;
+  segmentation_prompt_version?: string;
+  metadata_prompt_version?: string;
+  document_prompt_version?: string;
+  validation?: {
+    valid?: boolean;
+    source_valid?: boolean;
+    metadata_valid?: boolean;
+    coverage?: number;
+    missing_block_ids?: string[];
+    duplicate_block_ids?: string[];
+    text_fidelity_errors?: string[];
+    source_order_errors?: string[];
+    page_mapping_errors?: string[];
+    printed_page_label_errors?: string[];
+    metadata_evidence_errors?: Array<{ record_id?: string; field?: string; reason?: string }>;
+    metadata_schema_errors?: Array<{ record_id?: string; reason?: string }>;
+    citation_errors?: string[];
+    relationship_errors?: string[];
+    human_ownership_errors?: string[];
+    record_content_errors?: string[];
+    validation_issues?: Array<{
+      code?: string;
+      record_id?: string;
+      field?: string;
+      reason?: string;
+    }>;
+  };
+  manifest?: Record<string, unknown>;
+  manifest_revision?: number;
+  manifest_confirmed_at?: string | null;
+  manifest_confirmed_revision?: number | null;
+  publication?: {
+    publication_id: string;
+    filename: string;
+    sha256: string;
+    record_count: number;
+    created_at: string;
+  } | null;
+  publication_status?: "unpublished" | "published";
+  provider_profile_history?: Array<{
+    at?: string;
+    provider_profile_id?: string;
+    provider?: string;
+    model?: string;
+    metadata_completed?: number;
+    note?: string;
+  }>;
+  published_at?: string | null;
+  error?: string | null;
+  warnings?: string[];
+  resumable?: boolean;
+  boundary_count?: number;
+  boundary_candidate_count?: number;
+  segmentation_degraded?: boolean;
+  segmentation_failed_windows?: number;
+  segmentation_total_windows?: number;
+  segmentation_recovered_windows?: number;
+  segmentation_blocked?: boolean;
+  retrying_segmentation?: boolean;
+  segmentation_unresolved_regions?: Array<{
+    after_block_id?: string;
+    next_block_id?: string;
+    left_block_id?: string;
+    right_block_id?: string;
+    start_block_id?: string;
+    end_block_id?: string;
+    reason?: string;
+    kind?: string;
+    [key: string]: unknown;
+  }>;
+  segmentation_boundary_reviews?: Array<{
+    after_block_id?: string;
+    next_block_id?: string;
+    reason?: string;
+    kind?: string;
+    [key: string]: unknown;
+  }>;
+  boundary_review_count?: number;
+  provisional_boundary_count?: number;
+  boundary_deterministic_split_count?: number;
+  boundary_deterministic_keep_count?: number;
+  boundary_llm_adjudication_count?: number;
+  boundary_llm_batch_call_count?: number;
+  boundary_llm_split_count?: number;
+  boundary_llm_keep_count?: number;
+  boundary_budget_skipped_count?: number;
+  boundary_classifier_failure_count?: number;
+  boundary_second_reader_count?: number;
+  boundary_second_reader_keep_count?: number;
+  boundary_second_reader_move_count?: number;
+  boundary_second_reader_uncertain_count?: number;
+  boundary_second_reader_failure_count?: number;
+  topology_validation?: {
+    valid?: boolean;
+    issues?: string[];
+    findings?: Array<{
+      code: string;
+      severity: string;
+      record_id?: string | null;
+      auto_repairable?: boolean;
+      params?: Record<string, unknown>;
+    }>;
+    record_count?: number;
+    max_record_chars?: number;
+    min_record_chars?: number;
+    median_record_chars?: number;
+    p10_record_chars?: number;
+    p90_record_chars?: number;
+    preferred_record_chars?: number;
+    record_length_tolerance?: number;
+    long_record_chars?: number;
+    absolute_record_chars?: number;
+    records_in_preferred_range?: number;
+    records_over_preferred_range?: number;
+    records_over_long_limit?: number;
+    micro_record_count?: number;
+  };
+  topology_quality?: {
+    valid?: boolean;
+    source_block_count?: number;
+    used_source_block_count?: number;
+    source_coverage?: number;
+    source_order_valid?: boolean;
+    source_conservation_valid?: boolean;
+    record_count?: number;
+    median_record_chars?: number;
+    p10_record_chars?: number;
+    p90_record_chars?: number;
+    max_record_chars?: number;
+    records_in_preferred_range?: number;
+    records_over_preferred_range?: number;
+    records_over_long_limit?: number;
+    micro_record_count?: number;
+    policy?: Record<string, number>;
+  };
+  record_sizing_policy?: Record<string, number>;
+  size_optimized_boundary_count?: number;
+  absolute_safety_boundary_count?: number;
+  long_exception_record_count?: number;
+  metadata_completed?: number;
+  metadata_total?: number;
+  metadata_enriched_count?: number;
+  metadata_enrichment_total?: number;
+  metadata_concurrency?: number;
+  metadata_tasks_total?: number;
+  metadata_tasks_completed?: number;
+  metadata_tasks_failed?: number;
+  metadata_tasks_skipped?: number;
+  metadata_tasks_running?: number;
+  metadata_tasks_queued?: number;
+  metadata_started_at?: string | null;
+  metadata_last_progress_at?: string | null;
+  metadata_settle_requested?: boolean;
+  metadata_active_tasks?: Array<{ record_id?: string; task?: string; started_at?: string | null }>;
+  metadata_issue_summary?: {
+    records_incomplete?: number;
+    fields_unresolved?: number;
+    by_field?: Record<string, number>;
+    by_reason?: Record<string, number>;
+    invalid_by_field?: Record<string, number>;
+    auto_retry_records?: number;
+    human_review_records?: number;
+    auto_retry_fields?: number;
+    human_review_fields?: number;
+    issues?: Array<{
+      record_id?: string;
+      field?: string;
+      issue_type?: string;
+      retryable?: boolean;
+      status?: string;
+      reason?: string;
+      method?: string;
+      confidence?: number | null;
+      current_value?: unknown;
+      page_start?: number | string | null;
+      page_end?: number | string | null;
+    }>;
+    records?: Array<{
+      record_id?: string;
+      fields?: string[];
+      issues?: Array<Record<string, unknown>>;
+      page_start?: number | string | null;
+      page_end?: number | string | null;
+    }>;
+  };
+  metadata_operation?: {
+    operation_id?: string;
+    kind?: string;
+    state?: "queued" | "running" | "completed" | "failed" | string;
+    started_at?: string;
+    finished_at?: string | null;
+    records_total?: number;
+    records_processed?: number;
+    records_unchanged?: number;
+    records_enriched?: number;
+    records_reopened?: number;
+    records_skipped?: number;
+    fields_total?: number;
+    fields_resolved?: number;
+    fields_remaining?: number;
+    provider_profile_id?: string | null;
+    provider?: string | null;
+    model?: string | null;
+    target_fields?: Record<string, string[]>;
+    error?: string | null;
+    passes_requested?: number;
+    passes_completed?: number;
+    current_pass?: number;
+    current_record_id?: string | null;
+    current_task?: string | null;
+    active_tasks?: Array<{
+      record_id?: string;
+      task?: string;
+      state?: string;
+      started_at?: string;
+    }>;
+    converged?: boolean;
+    records_disputed?: number;
+    fields_replaced?: number;
+    fields_kept?: number;
+    pass_results?: { pass: number; records_processed?: number; fields_added?: number }[];
+  };
+  trash_quality?: {
+    record_count?: number;
+    trash_record_count?: number;
+    trash_ratio?: number;
+    threshold?: number;
+    exceeds_threshold?: boolean;
+    deterministic?: boolean;
+    unusable_page_count?: number;
+    unusable_page_ratio?: number;
+    median_noise?: number | null;
+    noise_unusable_threshold?: number;
+  };
+  source_quality?: {
+    valid_for_enrichment?: boolean;
+    page_count?: number;
+    blocking_page_count?: number;
+    warning_page_count?: number;
+    image_only_page_count?: number;
+    blocking_pages?: number[];
+    warning_pages?: number[];
+    issues?: Array<{
+      page?: number;
+      severity?: string;
+      codes?: string[];
+      characters?: number;
+      replacement_characters?: number;
+      control_characters?: number;
+      extraction_methods?: Record<string, number>;
+    }>;
+  };
+  pipeline_state?: {
+    current?: string;
+    stages?: Record<string, { state?: string; [key: string]: unknown }>;
+  };
+  publication_readiness?: {
+    can_publish?: boolean;
+    next_action?: string;
+    blockers?: Array<{ code?: string; count?: number; fields?: string[] }>;
+    required_metadata_fields?: string[];
+    required_document_fields?: string[];
+    missing_document_fields?: string[];
+    records_total?: number;
+    records_reviewed?: number;
+    records_accepted?: number;
+    records_rejected?: number;
+    records_pending?: number;
+    metadata_records_remaining?: number;
+    metadata_fields_unresolved?: number;
+    source_valid?: boolean;
+    metadata_valid?: boolean;
+    published?: boolean;
+    no_publishable_records?: boolean;
+  };
+  build_events?: Array<{ at?: string; stage?: string; status?: string; progress?: number }>;
+  request?: Record<string, unknown>;
+  llm_metrics?: {
+    calls?: number;
+    retries?: number;
+    structured_output_failures?: number;
+    escalations?: number;
+    editorial_examples_used?: number;
+  };
+  llm_contribution?: {
+    inherited_fields?: number;
+    deterministic_fields?: number;
+    llm_fields_usable?: number;
+    llm_fields_proposed?: number;
+    llm_fields_review?: number;
+    human_fields?: number;
+    family_calls?: number;
+    elapsed_ms?: number;
+    useful_fields_per_minute?: number;
+    tasks_complete?: number;
+    tasks_failed?: number;
+    tasks_skipped?: number;
+    enrichment_mode?: string;
+    semantic_indexing?: boolean;
+  };
+  llm_family_effectiveness?: Record<
+    string,
+    {
+      calls?: number;
+      proposed_fields?: number;
+      elapsed_ms?: number;
+      human_accepted_fields?: number;
+      human_corrected_fields?: number;
+      last_updated_at?: string;
+      last_human_feedback_at?: string;
+    }
+  >;
+  llm_model_effectiveness?: Record<
+    string,
+    {
+      provider_profile_id?: string | null;
+      provider?: string | null;
+      model?: string | null;
+      calls?: number;
+      proposed_fields?: number;
+      elapsed_ms?: number;
+    }
+  >;
+  llm_confidence_calibration?: Record<
+    string,
+    Record<
+      string,
+      { reviewed?: number; accepted?: number; corrected?: number; acceptance_rate?: number }
+    >
+  >;
+  text_cleanup?: {
+    enabled?: boolean;
+    rules?: string[];
+    records_changed?: number;
+    changes?: number;
+    removed_lines?: number;
+    recurring_line_patterns?: number;
+  };
+}
+
+export interface CorpusRecord {
+  record_id: string;
+  text: string;
+  text_length: number;
+  source_document_id?: string;
+  source_unit_ids?: string[];
+  page_start?: number | string | null;
+  page_end?: number | string | null;
+  source_block_ids: string[];
+  source_spans: Array<{
+    source_unit_id?: string;
+    block_id?: string;
+    page?: number;
+    start?: number;
+    end?: number;
+    speaker?: string;
+    locator_kind?: string;
+    bbox?: number[];
+    extraction_method?: string;
+  }>;
+  metadata_evidence?: Record<
+    string,
+    {
+      block_ids?: string[];
+      confidence?: number;
+      reason?: string;
+      reviewed_by?: string;
+      reviewed_at?: string;
+    }
+  >;
+  metadata_guidance_matches?: Record<string, Array<{ term: string; occurrences: number }>>;
+  metadata_field_status?: Record<
+    string,
+    {
+      status?:
+        | "deterministic"
+        | "model_inferred"
+        | "human_confirmed"
+        | "unresolved"
+        | "invalid"
+        | string;
+      method?: string;
+      confidence?: number | null;
+      reason?: string;
+      reason_code?: string;
+      proposed_value?: unknown;
+      auto_populated?: boolean;
+      autofilled?: boolean;
+      verification_status?: "pending_review" | "auto_resolved" | "human_confirmed" | string;
+      value_source?: "llm" | "deterministic" | "human" | string;
+      llm_requested?: boolean;
+      llm_value_returned?: boolean;
+      llm_assessed?: boolean;
+      llm_checked?: boolean;
+      audit_sample?: boolean;
+      self_reported_confidence?: number;
+      model?: string;
+    }
+  >;
+  metadata_incomplete_fields?: string[];
+  metadata_review_fields?: string[];
+  metadata_reviewed_at?: string;
+  metadata_decisions?: Array<{ field?: string; value?: unknown; at?: string; source?: string }>;
+  metadata_enrichment_history?: Array<{
+    run_id?: string;
+    pass?: number;
+    at?: string;
+    state?: string;
+    outcome?: string;
+    model?: string;
+    added_fields?: string[];
+    replaced?: Array<{ field?: string; previous?: unknown; value?: unknown }>;
+    disputes?: Array<Record<string, unknown>>;
+    informational?: Array<{
+      kind?: string;
+      field?: string;
+      authoritative_value?: unknown;
+      proposed_value?: unknown;
+      confidence?: number;
+      reason?: string;
+      run_id?: string;
+      pass?: number;
+      model?: string | null;
+      at?: string;
+    }>;
+  }>;
+  activity?: {
+    human_view_count?: number;
+    human_review_count?: number;
+    llm_review_count?: number;
+    enrichment_pass_count?: number;
+    last_human_viewed_at?: string;
+    last_human_reviewed_at?: string;
+    last_llm_reviewed_at?: string;
+    last_enrichment_provider?: string;
+    last_enrichment_model?: string;
+  };
+  human_view_count?: number;
+  metadata_stage_status?: Record<string, string>;
+  metadata_execution_ledger?: Record<
+    string,
+    {
+      state?: string;
+      started_at?: string;
+      finished_at?: string | null;
+      elapsed_ms?: number;
+      error?: string | null;
+    }
+  >;
+  metadata_enrichment_state?: "queued" | "running" | "complete" | "failed" | string;
+  metadata_enrichment_finished?: boolean;
+  human_touched_fields?: string[];
+  human_touched_at?: string;
+  human_touched_revision?: number;
+  metadata_complete?: boolean;
+  metadata_needs_attention?: boolean;
+  metadata_attention_reasons?: string[];
+  source_quality_issues?: Array<{
+    code?: string;
+    severity?: string;
+    pages?: number[];
+    message?: string;
+    micro_line_ratio?: number;
+    page_findings?: Array<Record<string, unknown>>;
+    noise?: number;
+  }>;
+  text_noise?: {
+    score?: number;
+    deterministic_score?: number;
+    raster_score?: number | null;
+    llm_score?: number | null;
+    threshold?: number;
+    unusable?: boolean;
+    reasons?: string[];
+    method?: string;
+  };
+  resolved_source_quality_issues?: Array<Record<string, unknown>>;
+  source_extracted_text?: string;
+  text_review_status?: "human_corrected" | string;
+  text_touchup_proposal?: {
+    proposal_id?: string;
+    run_id?: string;
+    status?: string;
+    source_text?: string;
+    proposed_text?: string;
+    changes?: string[];
+    warnings?: string[];
+    provider?: string;
+    model?: string;
+    created_at?: string;
+    no_change?: boolean;
+    updated_at?: string;
+  };
+  text_reviewed_at?: string;
+  text_revision_history?: Array<{
+    at?: string;
+    source?: string;
+    previous_sha256?: string;
+    text_sha256?: string;
+    previous_length?: number;
+    text_length?: number;
+    diff?: string;
+    resolved_source_issues?: boolean;
+  }>;
+  review_events?: Array<{
+    at?: string;
+    event?: string;
+    transaction_id?: string;
+    direction?: string;
+    source_record_id?: string;
+    [key: string]: unknown;
+  }>;
+  boundary_quality_issues?: Array<{
+    code?: string;
+    edge?: string;
+    reason?: string;
+    decision?: string;
+    confidence?: number;
+    suggested_after_block_id?: string | null;
+  }>;
+  boundary_llm_before?: {
+    boundary_id?: string;
+    decision?: "keep" | "move_earlier" | "move_later" | "uncertain";
+    suggested_after_block_id?: string | null;
+    current_after_block_id?: string | null;
+    confidence?: number;
+    signals?: string[];
+    reason?: string;
+    source?: string;
+    editorial_examples_used?: number;
+    adjudicated_at?: string;
+  };
+  boundary_llm_after?: {
+    boundary_id?: string;
+    decision?: "keep" | "move_earlier" | "move_later" | "uncertain";
+    suggested_after_block_id?: string | null;
+    current_after_block_id?: string | null;
+    confidence?: number;
+    signals?: string[];
+    reason?: string;
+    source?: string;
+    editorial_examples_used?: number;
+    adjudicated_at?: string;
+  };
+  needs_review?: boolean;
+  review_reason?: string;
+  accepted?: boolean;
+  rejected?: boolean;
+  review_disposition?: "pending" | "accepted" | "rejected";
+  review_state?: "ready" | "metadata" | "topology" | "source" | "accepted" | "rejected" | string;
+  review_issue_codes?: string[];
+  acceptance_blocking_fields?: string[];
+  can_accept?: boolean;
+  record_revision?: number;
+  topology_index?: number;
+  topology_count?: number;
+  pdf_pages?: number[];
+  [key: string]: unknown;
+}
+
+export interface SourceBlock {
+  start?: number;
+  end?: number;
+  locator_kind?: string;
+  block_id: string;
+  page: number;
+  bbox: number[];
+  type: string;
+  text: string;
+  extraction_method: string;
+  confidence: number;
+  speaker?: string;
+}
+
+export interface GutenbergHit {
+  etext_id: number;
+  title: string;
+  author: string;
+  language: string;
+}
+
+export interface EnrichmentModelMetrics {
+  proposals: number;
+  reviews: number;
+  autofilled: number;
+  acceptance_rate: number | null;
+  brier_score: number | null;
+  correction_rate: number | null;
+  rejection_rate: number | null;
+  autofill_precision: number | null;
+  stability: number | null;
+  touched_share: number | null;
+  grounded_rate: number | null;
+  ms_per_accepted_field: number | null;
+  precision_at_threshold: {
+    threshold: number;
+    reviews: number;
+    precision: number | null;
+    coverage: number | null;
+  }[];
+  learning_curve: { reviews_before: number; acceptance: number | null }[];
+  acceptance_ci: Interval;
+  substantive_error_rate: Interval;
+  autofill_precision_ci: Interval;
+  spot_checks_still_needed: number;
+  correction_severity: Record<string, number>;
+  supported_rate: number | null;
+  supported_checked: number;
+  repeat_rate: number | null;
+  proposals_after_a_rejection: number;
+  review_seconds_per_decision: number | null;
+  seconds_to_first_useful_value: number | null;
+  autofill_suspensions: number;
+  autofill_resumptions: number;
+}
+
+export interface Interval {
+  rate: number | null;
+  low: number | null;
+  high: number | null;
+  n: number;
+}
+
+export interface EnrichmentMetrics {
+  self_consistency?: Interval;
+  inter_annotator?: Interval & { kappa: number | null };
+  models: Record<string, EnrichmentModelMetrics>;
+  inter_model_agreement: { compared: number; agreement: number | null };
+  unresolved_remaining: number | null;
+  runs: string[];
+  concurrency: { limit: number; working: number };
+}
