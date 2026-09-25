@@ -633,8 +633,14 @@ CURRENT REVIEWED RECORD TEXT:
         if discourse_state in {"skipped", "failed", "needs_review"}:
             skip_reason = str(discourse_ledger.get("error") or f"Discourse metadata stage was {discourse_state}.")
             for structural_field in ("region_type", "primary_text"):
+                assertion = current_assertion_by_name(record, structural_field)
                 structural_status = record.setdefault("metadata_field_status", {}).get(structural_field)
-                if isinstance(structural_status, dict) and structural_status.get("status") == "deterministic" and "llm_checked" not in structural_status:
+                if (
+                    assertion is not None
+                    and assertion.derivation_method == "deterministic"
+                    and isinstance(structural_status, dict)
+                    and "llm_checked" not in structural_status
+                ):
                     structural_status["llm_checked"] = False
                     structural_status["llm_skip_reason"] = skip_reason
 
@@ -679,7 +685,11 @@ CURRENT REVIEWED RECORD TEXT:
                 # Human decisions are authoritative. Background/retry enrichment
                 # may add evidence, but it must never resurrect an already
                 # confirmed review issue or overwrite a human value.
-                if existing_status.get("status") in {"human_confirmed", "human_override"}:
+                existing_assertion = current_assertion_by_name(record, key)
+                if (
+                    existing_assertion is not None
+                    and existing_assertion.authority_status in {"human_confirmed", "human_override"}
+                ):
                     continue
                 prefilled = cached_prefills.get(key)
                 if prefilled not in (None, "", []) and value not in (None, "", []) and value != prefilled:
@@ -819,8 +829,8 @@ CURRENT REVIEWED RECORD TEXT:
             value = record.get(field)
             if value in (None, "", []):
                 continue
-            existing_status = (record.get("metadata_field_status") or {}).get(field) if isinstance(record.get("metadata_field_status"), dict) else {}
-            if isinstance(existing_status, dict) and existing_status.get("status") == "deterministic":
+            existing_assertion = current_assertion_by_name(record, field)
+            if existing_assertion is not None and existing_assertion.derivation_method == "deterministic":
                 continue
             info = clean_evidence.get(field)
             if not isinstance(info, dict):
@@ -1084,7 +1094,14 @@ CURRENT REVIEWED RECORD TEXT:
             status_map = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
             required_discourse = [field for field in required_metadata_fields if field in schema.family_fields()[CORE_GROUP]]
             human_or_deterministic = all(
-                isinstance(status_map.get(field), dict) and str(status_map[field].get("status") or "") in {"human_confirmed", "human_override", "deterministic", "inherited", "model_inferred"}
+                (
+                    (assertion := current_assertion_by_name(record, field)) is not None
+                    and assertion.value_status in {"present", "confirmed_absent"}
+                    and (
+                        assertion.authority_status in {"human_confirmed", "human_override"}
+                        or assertion.derivation_method in {"deterministic", "inherited", "model"}
+                    )
+                )
                 for field in required_discourse
             ) if required_discourse else True
             discourse_ok = obvious_apparatus or human_or_deterministic
