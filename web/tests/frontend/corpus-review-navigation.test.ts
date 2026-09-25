@@ -30,7 +30,7 @@ function setup() {
   const focusHistoryOffsets = ref<number[]>([]);
   const focusHistoryIndex = ref(-1);
   const recordListEl = ref<HTMLElement | null>(document.createElement("div"));
-  recordListEl.value.focus = vi.fn();
+  recordListEl.value!.focus = vi.fn();
   const refreshRecords = vi.fn(async (_reset = false, preferredId = "") => {
     if (preferredId) selectedRecord.value = record(preferredId);
   });
