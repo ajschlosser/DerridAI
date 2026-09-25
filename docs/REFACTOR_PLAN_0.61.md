@@ -1,5 +1,7 @@
 # 0.61.0 decomposition plan
 
+> Historical implementation plan. The work described here belongs to the 0.61.0 release and later decomposition has superseded several “follow-up” statements. Use [ARCHITECTURE.md](ARCHITECTURE.md) for current module ownership.
+
 Approved before implementation. Baseline: master `4184f97`, 474 Python tests,
 30 Vue component tests, and 36 Playwright/axe tests. Typechecking, production
 build, and Storybook build pass. Local Windows browser tests use port 16006
