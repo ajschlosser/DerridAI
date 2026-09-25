@@ -17,8 +17,8 @@ const items = [
 const mountMenu = () =>
   mount(CorpusActionMenu, { props: { label: "More actions", items }, attachTo: document.body });
 const body = () => new DOMWrapper(document.body);
-const key = (wrapper: any, selector: string, k: string) =>
-  wrapper.get(selector).trigger("keydown", { key: k });
+const key = (selector: string, k: string) =>
+  body().get(selector).trigger("keydown", { key: k });
 
 describe("CorpusActionMenu", () => {
   afterEach(() => {
@@ -39,13 +39,13 @@ describe("CorpusActionMenu", () => {
   it("moves with the arrows, wraps, and jumps with Home and End", async () => {
     const wrapper = mountMenu();
     await wrapper.get("button[aria-haspopup='menu']").trigger("click");
-    await key(wrapper, "[role=menu]", "ArrowDown");
+    await key("[role=menu]", "ArrowDown");
     expect(document.activeElement?.textContent).toContain("Combine with next record");
-    await key(wrapper, "[role=menu]", "End");
+    await key("[role=menu]", "End");
     expect(document.activeElement?.textContent).toContain("Slice record");
-    await key(wrapper, "[role=menu]", "ArrowDown");
+    await key("[role=menu]", "ArrowDown");
     expect(document.activeElement?.textContent).toContain("Combine with previous record");
-    await key(wrapper, "[role=menu]", "ArrowUp");
+    await key("[role=menu]", "ArrowUp");
     expect(document.activeElement?.textContent).toContain("Slice record");
     wrapper.unmount();
   });
@@ -54,7 +54,7 @@ describe("CorpusActionMenu", () => {
     const wrapper = mountMenu();
     const trigger = wrapper.get("button[aria-haspopup='menu']");
     await trigger.trigger("click");
-    await key(wrapper, "[role=menu]", "Escape");
+    await key("[role=menu]", "Escape");
     expect(body().find("[role=menu]").exists()).toBe(false);
     expect(document.activeElement).toBe(trigger.element);
     wrapper.unmount();
