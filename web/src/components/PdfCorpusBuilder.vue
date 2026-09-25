@@ -69,6 +69,7 @@ import { useCorpusProviderConfiguration } from "../features/corpus-builder/compo
 import { useCorpusBuildLifecycleController } from "../features/corpus-builder/composables/useCorpusBuildLifecycleController";
 import { useCorpusReviewNavigation } from "../features/corpus-builder/composables/useCorpusReviewNavigation";
 import { useCorpusReviewDecisions } from "../features/corpus-builder/composables/useCorpusReviewDecisions";
+import { useCorpusTextReview } from "../features/corpus-builder/composables/useCorpusTextReview";
 import { corpusReviewCommandFromKeydown } from "../features/corpus-builder/domain/reviewCommands";
 import {
   editableRecordMetadata,
@@ -281,37 +282,48 @@ const acceptButtonEl = ref<HTMLButtonElement | null>(null);
 const advancedOpen = ref(false);
 const metadataDraft = ref("{}");
 const recordSaveQueue = new RecordMutationQueue();
-const textDraft = ref("");
-const editingText = ref(false);
 const bulkMetadataOpen = ref(false);
 const documentMetadataOpen = ref(false);
 const textCleanupOpen = ref(false);
-const llmTouchupOpen = ref(false);
 const boundarySliceOpen = ref(false);
 const sourceTranscriptionOpen = ref(false);
 const metadataEnrichmentOpen = ref(false);
-const llmTouchupResult = ref<{
-  source_text: string;
-  proposed_text: string;
-  changes: string[];
-  warnings: string[];
-  provider: string;
-  model: string;
-  proposal_id?: string;
-  run_id?: string;
-  created_at?: string;
-  status?: string;
-  no_change: boolean;
-}>({
-  source_text: "",
-  proposed_text: "",
-  changes: [],
-  warnings: [],
-  provider: "",
-  model: "",
-  no_change: false,
+const {
+  textDraft,
+  editingText,
+  resolveSourceOnTextSave,
+  llmTouchupOpen,
+  llmTouchupResult,
+  llmTouchupError,
+  beginTextEdit,
+  cancelTextEdit,
+  saveReviewedText,
+  markTextReviewed,
+  saveTextFromFocus,
+  saveSourceTranscription,
+  openLlmTouchup,
+  runLlmTouchup,
+  dismissLlmTouchup,
+  applyLlmTouchup,
+} = useCorpusTextReview({
+  currentBuild,
+  selectedBuildId,
+  selectedRecord,
+  records,
+  busy,
+  sourceTranscriptionOpen,
+  llmActionProviderId,
+  llmActionModel,
+  selectedProviderId,
+  providerProfiles,
+  directProfilePayloadWithModel,
+  captureReviewViewport,
+  restoreReviewViewport,
+  queueRecordRequest,
+  textDraftKey,
+  setMessage,
+  t: (key, fallback) => i18n.t(key, fallback),
 });
-const llmTouchupError = ref("");
 const metadataEditorDirty = ref(false);
 const editorialMemoryOpen = ref(false);
 const editorialMemory = ref<{
@@ -325,7 +337,6 @@ const editorialMemory = ref<{
   example_count: number;
 }>({ conventions: {}, examples: {}, convention_count: 0, example_count: 0 });
 const bulkActionFeedback = ref("");
-const resolveSourceOnTextSave = ref(false);
 const metadataRerunFamily = ref("all");
 const metadataFamilyOptions = computed(
   () =>
@@ -1394,23 +1405,6 @@ function selectRecord(record: CorpusRecord) {
       .catch(() => undefined);
   void restoreReviewViewport(viewport, { record: !sameRecord });
 }
-function beginTextEdit(useTouchupProposal = false) {
-  if (!selectedRecord.value) return;
-  editingText.value = true;
-  if (useTouchupProposal && selectedRecord.value.text_touchup_proposal?.proposed_text)
-    textDraft.value = selectedRecord.value.text_touchup_proposal.proposed_text;
-  else if (!textDraft.value) textDraft.value = String(selectedRecord.value.text || "");
-}
-function cancelTextEdit() {
-  if (!selectedRecord.value) return;
-  editingText.value = false;
-  textDraft.value = String(selectedRecord.value.text || "");
-  try {
-    localStorage.removeItem(textDraftKey(selectedBuildId.value, selectedRecord.value.record_id));
-  } catch {
-    // Best effort: stale local drafts are ignored.
-  }
-}
 function toggleReviewSelection(recordId: string, checked: boolean) {
   const next = new Set(selectedReviewIds.value);
   if (checked) next.add(recordId);
@@ -1515,59 +1509,6 @@ async function saveManifest(changes: Record<string, unknown>) {
   } finally {
     busy.value = "";
   }
-}
-
-async function saveReviewedText(resolveIssues = resolveSourceOnTextSave.value) {
-  if (!currentBuild.value || !selectedRecord.value) return;
-  const recordId = selectedRecord.value.record_id;
-  const viewport = captureReviewViewport();
-  const buildId = currentBuild.value.build_id;
-  const expectedRevision = Number(selectedRecord.value.record_revision || 1);
-  const text = textDraft.value;
-  const row: CorpusRecord = {
-    ...selectedRecord.value,
-    text,
-    text_length: text.length,
-    record_revision: expectedRevision + 1,
-  } as CorpusRecord;
-  selectedRecord.value = row;
-  const index = records.value.findIndex((item) => item.record_id === recordId);
-  if (index >= 0) records.value.splice(index, 1, row);
-  editingText.value = false;
-  resolveSourceOnTextSave.value = false;
-  try {
-    localStorage.removeItem(textDraftKey(selectedBuildId.value, recordId));
-  } catch {
-    // Best effort: browser storage must not block review.
-  }
-  await restoreReviewViewport(viewport, { record: true });
-  queueRecordRequest(recordId, ["text"], (rebase) =>
-    corpusBuilderApi.patchText(
-      buildId,
-      recordId,
-      text,
-      rebase ? undefined : expectedRevision,
-      resolveIssues,
-    ),
-  );
-}
-
-async function markTextReviewed() {
-  if (!selectedRecord.value) return;
-  textDraft.value = String(selectedRecord.value.text || "");
-  await saveReviewedText(false);
-}
-
-async function saveTextFromFocus(text: string, resolve: boolean) {
-  textDraft.value = text;
-  resolveSourceOnTextSave.value = resolve;
-  await saveReviewedText(resolve);
-}
-async function saveSourceTranscription(text: string) {
-  textDraft.value = text;
-  resolveSourceOnTextSave.value = false;
-  await saveReviewedText(false);
-  sourceTranscriptionOpen.value = false;
 }
 
 async function saveMetadata() {
@@ -2296,109 +2237,6 @@ async function resetEditorialMemory() {
   }
 }
 
-function openLlmTouchup(text: string) {
-  textDraft.value = text;
-  editingText.value = true;
-  llmTouchupError.value = "";
-  llmTouchupResult.value = {
-    source_text: selectedRecord.value?.text_touchup_proposal?.source_text || "",
-    proposed_text: selectedRecord.value?.text_touchup_proposal?.proposed_text || "",
-    changes: selectedRecord.value?.text_touchup_proposal?.changes || [],
-    warnings: selectedRecord.value?.text_touchup_proposal?.warnings || [],
-    provider: selectedRecord.value?.text_touchup_proposal?.provider || "",
-    model: selectedRecord.value?.text_touchup_proposal?.model || "",
-    proposal_id: selectedRecord.value?.text_touchup_proposal?.proposal_id,
-    run_id: selectedRecord.value?.text_touchup_proposal?.run_id,
-    created_at: selectedRecord.value?.text_touchup_proposal?.created_at,
-    status: selectedRecord.value?.text_touchup_proposal?.status,
-    no_change: false,
-  };
-  llmActionProviderId.value =
-    llmActionProviderId.value || selectedProviderId.value || providerProfiles.value[0]?.id || "";
-  llmActionModel.value = String(
-    providerProfiles.value.find((p) => p.id === llmActionProviderId.value)?.model || "",
-  );
-  llmTouchupOpen.value = true;
-}
-async function runLlmTouchup(
-  instructions = "",
-  profileId = llmActionProviderId.value,
-  model = llmActionModel.value,
-) {
-  if (!currentBuild.value || !selectedRecord.value) return;
-  busy.value = "text-touchup";
-  llmTouchupError.value = "";
-  llmTouchupOpen.value = true;
-  try {
-    const actionPayload = directProfilePayloadWithModel(profileId, model) || {
-      provider_profile_id: profileId,
-      model: model || undefined,
-    };
-    const result = await corpusBuilderApi.touchupText(
-      currentBuild.value.build_id,
-      selectedRecord.value.record_id,
-      { ...actionPayload, instructions, text: textDraft.value || selectedRecord.value.text },
-    );
-    llmTouchupResult.value = {
-      source_text: result.source_text,
-      proposed_text: result.proposed_text,
-      changes: result.changes || [],
-      warnings: result.warnings || [],
-      provider: result.provider || "",
-      model: result.model || "",
-      proposal_id: result.proposal_id,
-      run_id: result.run_id,
-      created_at: result.created_at,
-      status: "pending_review",
-      no_change: Boolean(result.no_change),
-    };
-    selectedRecord.value = {
-      ...selectedRecord.value,
-      text_touchup_proposal: {
-        status: "pending_review",
-        proposal_id: result.proposal_id,
-        run_id: result.run_id,
-        source_text: result.source_text,
-        proposed_text: result.proposed_text,
-        changes: result.changes || [],
-        warnings: result.warnings || [],
-        provider: result.provider || "",
-        model: result.model || "",
-        created_at: result.created_at,
-      },
-    };
-  } catch (exc) {
-    llmTouchupError.value = exc instanceof Error ? exc.message : String(exc);
-    setMessage(llmTouchupError.value, "error");
-  } finally {
-    busy.value = "";
-  }
-}
-async function dismissLlmTouchup() {
-  if (!currentBuild.value || !selectedRecord.value || !llmTouchupResult.value.proposal_id) return;
-  busy.value = "text-touchup-dismiss";
-  try {
-    const updated = await corpusBuilderApi.setTouchupProposalStatus(
-      currentBuild.value.build_id,
-      selectedRecord.value.record_id,
-      "dismissed",
-    );
-    selectedRecord.value = updated;
-    const index = records.value.findIndex((row) => row.record_id === updated.record_id);
-    if (index >= 0) records.value.splice(index, 1, updated);
-    llmTouchupOpen.value = false;
-  } catch (exc) {
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
-}
-function applyLlmTouchup(text: string) {
-  textDraft.value = text;
-  editingText.value = true;
-  llmTouchupOpen.value = false;
-  setMessage(i18n.t("pdf_corpus.llm_touchup_applied"));
-}
 function handleMetadataDirty(value: boolean) {
   metadataEditorDirty.value = value;
 }
