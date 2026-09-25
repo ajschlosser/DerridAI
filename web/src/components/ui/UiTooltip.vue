@@ -1,14 +1,11 @@
 <script setup lang="ts">
 import { ref, useId } from "vue";
 
-withDefaults(
-  defineProps<{
-    text: string;
-    label?: string;
-    placement?: "top" | "bottom";
-  }>(),
-  { label: "", placement: "top" },
-);
+const { text, label = "", placement = "top" } = defineProps<{
+  text: string;
+  label?: string;
+  placement?: "top" | "bottom";
+}>();
 
 const id = `${useId()}-tooltip`;
 const open = ref(false);
