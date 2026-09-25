@@ -84,59 +84,59 @@ onMounted(() => void loadDatabases());
       <button class="btn" type="button" :disabled="loading" @click="loadDatabases"><AppIcon name="refresh" /> {{ t("common.refresh", "Refresh") }}</button>
     </header>
 
-    <div v-if="error" class="state error" role="alert"><strong>Could not load system databases.</strong><span>{{ error }}</span></div>
-    <div v-else-if="loading" class="state" role="status">Loading system databases…</div>
+    <div v-if="error" class="state error" role="alert"><strong>{{ t("runtime.system_database_failed", "Could not load system databases.") }}</strong><span>{{ error }}</span></div>
+    <div v-else-if="loading" class="state" role="status">{{ t("runtime.system_database_loading", "Loading system databases…") }}</div>
     <div v-else class="browser">
       <aside class="directory">
         <div class="database-switcher">
           <button v-for="item in databases" :key="item.name" type="button" :class="{ active: selectedDatabase === item.name }" @click="chooseDatabase(item.name)">
             <AppIcon :name="item.name === 'auth' ? 'lock' : 'database'" />
-            <span><strong>{{ dbTitle(item.name) }}</strong><small>{{ item.name }} · {{ item.tables.length }} tables</small></span>
+            <span><strong>{{ dbTitle(item.name) }}</strong><small>{{ item.name }} · {{ item.tables.length }} {{ t("runtime.system_tables", "tables") }}</small></span>
           </button>
         </div>
         <div class="database-description"><strong>{{ dbTitle(selectedDatabase) }}</strong><p>{{ dbHelp(selectedDatabase) }}</p></div>
         <label class="search-field"><AppIcon name="search" /><input v-model="search" type="search" :placeholder="t('runtime.system_find_table', 'Find a table')" /></label>
         <nav class="table-directory" aria-label="Database tables">
           <button v-for="item in filteredTables" :key="item.name" type="button" :class="{ active: selectedTable === item.name }" @click="chooseTable(item.name)">
-            <span>{{ item.name }}</span><small>{{ item.row_count.toLocaleString() }} rows</small>
+            <span>{{ item.name }}</span><small>{{ item.row_count.toLocaleString() }} {{ t("runtime.system_rows", "rows") }}</small>
           </button>
         </nav>
       </aside>
 
       <section class="table-space">
         <header v-if="table" class="table-heading">
-          <div><h3>{{ table.name }}</h3><p>{{ totalRows.toLocaleString() }} rows · read-only inspection</p></div>
-          <span class="readonly"><AppIcon name="lock" /> Read only</span>
+          <div><h3>{{ table.name }}</h3><p>{{ totalRows.toLocaleString() }} {{ t("runtime.system_rows", "rows") }} · {{ t("runtime.system_read_only_inspection", "read-only inspection") }}</p></div>
+          <span class="readonly"><AppIcon name="lock" /> {{ t("runtime.system_read_only", "Read only") }}</span>
         </header>
-        <div class="policy-note"><AppIcon name="help" /><span>Changes to users, roles, providers, languages, and other managed objects belong in their dedicated administration workspaces so validation and audit rules remain intact.</span></div>
+        <div class="policy-note"><AppIcon name="help" /><span>{{ t("runtime.system_database_policy", "Changes to users, roles, providers, languages, and other managed objects belong in their dedicated administration workspaces so validation and audit rules remain intact.") }}</span></div>
 
-        <div v-if="tableError" class="state error"><strong>Could not load this table.</strong><span>{{ tableError }}</span></div>
-        <div v-else-if="tableLoading" class="state">Loading rows…</div>
-        <div v-else-if="!page?.rows.length" class="state">This table is empty.</div>
+        <div v-if="tableError" class="state error"><strong>{{ t("runtime.system_table_failed", "Could not load this table.") }}</strong><span>{{ tableError }}</span></div>
+        <div v-else-if="tableLoading" class="state">{{ t("runtime.system_rows_loading", "Loading rows…") }}</div>
+        <div v-else-if="!page?.rows.length" class="state">{{ t("runtime.system_table_empty", "This table is empty.") }}</div>
         <template v-else>
           <div class="data-table-wrap">
             <table class="data-table">
-              <thead><tr><th v-for="column in visibleColumns" :key="column.name">{{ column.name }}<span v-if="column.sensitive" class="sensitive-mark" title="Sensitive value redacted">●</span></th><th><span class="sr-only">Actions</span></th></tr></thead>
+              <thead><tr><th v-for="column in visibleColumns" :key="column.name">{{ column.name }}<span v-if="column.sensitive" class="sensitive-mark"  :title="t('runtime.system_sensitive_redacted', 'Sensitive value redacted')">●</span></th><th><span class="sr-only">{{ t("common.actions", "Actions") }}</span></th></tr></thead>
               <tbody>
                 <tr v-for="(row, index) in page.rows" :key="index">
                   <td v-for="column in visibleColumns" :key="column.name" :class="{ mono: column.primary_key }"><span class="cell-value">{{ cell(row[column.name]) }}</span></td>
-                  <td><button class="btn tiny" type="button" @click="detail = row">Inspect</button></td>
+                  <td><button class="btn tiny" type="button" @click="detail = row">{{ t("runtime.system_inspect", "Inspect") }}</button></td>
                 </tr>
               </tbody>
             </table>
           </div>
           <footer class="pagination">
             <span>{{ page.offset + 1 }}–{{ Math.min(page.offset + page.rows.length, totalRows) }} of {{ totalRows }}</span>
-            <div><button class="btn tiny" type="button" :disabled="page.offset <= 0" @click="loadTable(Math.max(0, page.offset - page.limit))">Previous</button><button class="btn tiny" type="button" :disabled="page.offset + page.rows.length >= totalRows" @click="loadTable(page.offset + page.limit)">Next</button></div>
+            <div><button class="btn tiny" type="button" :disabled="page.offset <= 0" @click="loadTable(Math.max(0, page.offset - page.limit))">{{ t("common.previous", "Previous") }}</button><button class="btn tiny" type="button" :disabled="page.offset + page.rows.length >= totalRows" @click="loadTable(page.offset + page.limit)">{{ t("common.next", "Next") }}</button></div>
           </footer>
         </template>
       </section>
     </div>
 
     <aside v-if="detail" class="detail-panel" aria-label="Row details">
-      <header><div><small>{{ selectedDatabase }} / {{ selectedTable }}</small><h3>Row details</h3></div><button class="icon-btn" type="button" aria-label="Close details" @click="detail = null"><AppIcon name="close" /></button></header>
+      <header><div><small>{{ selectedDatabase }} / {{ selectedTable }}</small><h3>{{ t("runtime.system_row_details", "Row details") }}</h3></div><button class="icon-btn" type="button"  :aria-label="t('runtime.system_close_details', 'Close details')" @click="detail = null"><AppIcon name="close" /></button></header>
       <dl>
-        <div v-for="column in columns" :key="column.name"><dt>{{ column.name }}<span v-if="column.sensitive"> · sensitive</span></dt><dd :class="{ mono: column.primary_key }">{{ cell(detail[column.name]) }}</dd></div>
+        <div v-for="column in columns" :key="column.name"><dt>{{ column.name }}<span v-if="column.sensitive"> · {{ t("runtime.system_sensitive", "sensitive") }}</span></dt><dd :class="{ mono: column.primary_key }">{{ cell(detail[column.name]) }}</dd></div>
       </dl>
     </aside>
   </div>
