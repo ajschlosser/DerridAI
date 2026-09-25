@@ -11,12 +11,12 @@ from ..llm import llm_status
 from ..metadata_memory import MetadataMemoryService
 from ..models import ResearcherProviderProfilesUpdate, ResearcherProviderStatusRequest
 from ..services import store
-from ..system_store import system_store
 from ..system_chroma_console import (
     execute_system_chroma_command,
     list_system_chroma_collections,
     validate_system_chroma_command,
 )
+from ..system_store import system_store
 
 router = APIRouter(tags=["system"])
 metadata_memory = MetadataMemoryService(store, pdf_corpus_repository)
