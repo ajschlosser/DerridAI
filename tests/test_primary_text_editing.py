@@ -156,7 +156,44 @@ def test_accept_and_bulk_accept_block_any_incomplete_metadata(tmp_path: Path):
     assert result["blocked_record_ids"] == ["r1"]
 
 
+def test_update_record_updates_only_the_target_indexed_record(tmp_path: Path):
+    """The targeted persistence path must preserve neighboring records in SQLite."""
+    record_one = {
+        "record_id": "r1",
+        "record_revision": 1,
+        "text": "first",
+        "source_spans": [{"block_id": "b1", "page": 1}],
+    }
+    record_two = {
+        "record_id": "r2",
+        "record_revision": 1,
+        "text": "second",
+        "source_spans": [{"block_id": "b1", "page": 1}],
+    }
+    repo, build = install_repo(tmp_path, record_one)
+    repo.save_records(build["build_id"], [record_one, record_two])
+    original_lines = repo.build_records_path(build["build_id"]).read_text(encoding="utf-8").splitlines()
 
+    repo.update_record(
+        build["build_id"],
+        {
+            **record_two,
+            "record_revision": 2,
+            "text": "second, reviewed",
+        },
+    )
 
+    persisted = repo.load_records(build["build_id"])
+    assert persisted[0] == record_one
+    assert persisted[1]["text"] == "second, reviewed"
+    assert persisted[1]["record_revision"] == 2
+    assert repo.build_records_path(build["build_id"]).read_text(encoding="utf-8").splitlines() == original_lines
+    assert repo.records_projection_dirty(build["build_id"])
+
+    repo.refresh_records_projection(build["build_id"])
+    assert not repo.records_projection_dirty(build["build_id"])
+    assert repo.build_records_path(build["build_id"]).read_text(encoding="utf-8").splitlines()[1] == json.dumps(
+        persisted[1], ensure_ascii=False
+    )
 
 

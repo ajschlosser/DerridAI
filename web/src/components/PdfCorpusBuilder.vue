@@ -76,23 +76,10 @@ import { useCorpusRunGuidance } from "../composables/useCorpusRunGuidance";
 import AppIcon from "./AppIcon.vue";
 import CorpusActionMenu, { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
 import { recordState, recordIssueKinds } from "../domain/corpusReview";
+import { RecordMutationQueue } from "../domain/recordMutationQueue";
 import { firstRecordWithSourceWarning, recordHasSourceWarning } from "../domain/sourceQuality";
 import { recurringShortLines } from "../domain/textCleanup";
 import * as runtime from "../runtime/runtime.js";
-
-type MetadataPatchState = {
-  record: CorpusRecord;
-  build: CorpusBuild;
-  queue_counts?: CorpusBuild["review_queue_counts"];
-};
-
-function isMetadataPatchState(
-  result: CorpusRecord | MetadataPatchState,
-): result is MetadataPatchState {
-  if (!result || typeof result !== "object") return false;
-  const candidate = result as { record?: unknown; build?: unknown };
-  return Boolean(candidate.record && candidate.build);
-}
 
 const i18n = useI18nStore();
 const route = useRoute();
@@ -281,6 +268,7 @@ const recordSizing = ref<RecordSizingPolicy>({
   absolute_record_chars: 6000,
 });
 const metadataDraft = ref("{}");
+const recordSaveQueue = new RecordMutationQueue();
 const textDraft = ref("");
 const editingText = ref(false);
 const bulkMetadataOpen = ref(false);
@@ -1248,6 +1236,59 @@ function recordMetadata(record: CorpusRecord) {
   return Object.fromEntries(
     editableFields.filter((key) => record[key] !== undefined).map((key) => [key, record[key]]),
   );
+}
+
+function applyOptimisticMetadata(changes: Record<string, unknown>) {
+  if (!currentBuild.value || !selectedRecord.value) return null;
+  const buildId = currentBuild.value.build_id;
+  const recordId = selectedRecord.value.record_id;
+  const expectedRevision = Number(selectedRecord.value.record_revision || 1);
+  const row: CorpusRecord = {
+    ...selectedRecord.value,
+    ...changes,
+    record_revision: expectedRevision + 1,
+  } as CorpusRecord;
+  const status = { ...(row.metadata_field_status || {}) };
+  for (const field of Object.keys(changes)) {
+    status[field] = {
+      status: changes[field] === null ? "confirmed_absent" : "human_confirmed",
+      method: "human",
+      confidence: 1,
+      reason: "Saved locally; server confirmation pending.",
+    };
+  }
+  row.metadata_field_status = status;
+  selectedRecord.value = row;
+  metadataDraft.value = JSON.stringify(recordMetadata(row), null, 2);
+  const index = records.value.findIndex((item) => item.record_id === recordId);
+  if (index >= 0) records.value.splice(index, 1, row);
+  metadataEditorDirty.value = false;
+  try {
+    localStorage.removeItem(metadataDraftKey(buildId, recordId));
+  } catch {
+    // Best effort: browser storage must not block review.
+  }
+  return { buildId, recordId, expectedRevision };
+}
+
+function queueRecordRequest(
+  recordId: string | readonly string[],
+  fields: string[],
+  request: (rebase: boolean) => Promise<unknown>,
+  onFailure?: () => void,
+  retryOnFailure = true,
+) {
+  recordSaveQueue.enqueue(recordId, ({ rebase }) => request(rebase), (exc) => {
+    onFailure?.();
+    setMessage(
+      i18n.tf("pdf_corpus.record_save_failed", {
+        record: typeof recordId === "string" ? recordId : recordId.join(", "),
+        fields: fields.join(", "),
+        error: exc instanceof Error ? exc.message : String(exc),
+      }),
+      "error",
+    );
+  }, { retryOnFailure });
 }
 function manageProviders() {
   window.dispatchEvent(
@@ -2223,50 +2264,89 @@ async function setDisposition(disposition: "pending" | "accepted" | "rejected") 
   const id = selectedRecord.value.record_id;
   if (disposition !== "pending") justProcessedRecordId.value = id;
   const viewport = captureReviewViewport();
-  busy.value = "record";
-  try {
-    if (disposition === "pending") {
-      const updated = await pdfCorpusApi.disposition(
-        currentBuild.value.build_id,
-        id,
-        "pending",
-        "",
-        Number(selectedRecord.value.record_revision || 1),
-      );
-      selectedRecord.value = updated;
-      await refreshBuild();
-      await refreshRecords(false, id);
-      setMessage(i18n.t("pdf_corpus.reopened_notice"));
-    } else {
+  if (disposition !== "accepted") {
+    const buildId = currentBuild.value.build_id;
+    const expectedRevision = Number(selectedRecord.value.record_revision || 1);
+    const row: CorpusRecord = {
+      ...selectedRecord.value,
+      review_disposition: disposition,
+      accepted: false,
+      rejected: disposition === "rejected",
+      needs_review: disposition === "pending",
+      record_revision: expectedRevision + 1,
+    } as CorpusRecord;
+    const index = records.value.findIndex((item) => item.record_id === id);
+    if (reviewQueue.value !== "all" && disposition === "rejected") {
+      if (index >= 0) records.value.splice(index, 1);
+      recordTotal.value = Math.max(0, recordTotal.value - 1);
+    } else if (index >= 0) {
+      records.value.splice(index, 1, row);
+    }
+    selectedRecord.value = row;
+    await restoreReviewViewport(viewport, { record: true, inspector: true });
+    queueRecordRequest(id, ["review disposition"], (rebase) =>
+      disposition === "pending"
+        ? pdfCorpusApi.disposition(buildId, id, "pending", "", rebase ? undefined : expectedRevision)
+        : pdfCorpusApi.reviewDecision(buildId, id, "rejected", "", rebase ? undefined : expectedRevision, reviewQueue.value),
+    );
+    return;
+  }
+  const buildId = currentBuild.value.build_id;
+  const beforeRecords = records.value.slice();
+  const beforeTotal = recordTotal.value;
+  const beforeSelected = selectedRecord.value;
+  const beforeSelectedId = selectedRecordId.value;
+  const expectedRevision = Number(selectedRecord.value.record_revision || 1);
+  const optimistic = {
+    ...selectedRecord.value,
+    review_disposition: "accepted" as const,
+    accepted: true,
+    rejected: false,
+    needs_review: false,
+    review_reason: "",
+    record_revision: expectedRevision + 1,
+  };
+  const optimisticIndex = records.value.findIndex((row) => row.record_id === id);
+  if (reviewQueue.value === "all" || reviewQueue.value === disposition) {
+    if (optimisticIndex >= 0) records.value.splice(optimisticIndex, 1, optimistic);
+  } else if (optimisticIndex >= 0) {
+    records.value.splice(optimisticIndex, 1);
+    recordTotal.value = Math.max(0, recordTotal.value - 1);
+  }
+  const nextLocal = records.value[optimisticIndex] || records.value[optimisticIndex - 1];
+  if (nextLocal) selectRecord(nextLocal);
+  await restoreReviewViewport(viewport, { record: true, inspector: true });
+  queueRecordRequest(
+    id,
+    ["review disposition"],
+    async (rebase) => {
       const result = await pdfCorpusApi.reviewDecision(
-        currentBuild.value.build_id,
+        buildId,
         id,
         disposition,
         "",
-        Number(selectedRecord.value.record_revision || 1),
+        rebase ? undefined : expectedRevision,
         reviewQueue.value,
       );
       currentBuild.value = result.build;
       syncBuildInRail(result.build);
       if (result.blocked) {
+        records.value = beforeRecords;
+        recordTotal.value = beforeTotal;
         selectedRecord.value = result.record;
+        selectedRecordId.value = id;
         const idx = records.value.findIndex((row) => row.record_id === id);
         if (idx >= 0) records.value.splice(idx, 1, result.record);
         if (result.blocker === "source_problem") {
           reviewInspectorTab.value = "source";
           reviewQueue.value = "source";
-          setMessage(
-            i18n.t("pdf_corpus.accept_blocked_source"),
-            "error",
-          );
+          setMessage(i18n.t("pdf_corpus.accept_blocked_source"), "error");
         } else {
           reviewInspectorTab.value = "metadata";
           const fields = (result.blocking_fields || [])
             .map((field) => i18n.t(`record.${field}`, field.replace(/_/g, " ")))
             .join(", ");
-          setMessage(
-            i18n.tf("pdf_corpus.accept_blocked_metadata", { fields }),
-          );
+          setMessage(i18n.tf("pdf_corpus.accept_blocked_metadata", { fields }));
           await nextTick();
           focusFirstMetadataBlocker();
         }
@@ -2274,42 +2354,25 @@ async function setDisposition(disposition: "pending" | "accepted" | "rejected") 
         const idx = records.value.findIndex((row) => row.record_id === id);
         if (reviewQueue.value === "all" || reviewQueue.value === disposition) {
           if (idx >= 0) records.value.splice(idx, 1, result.record);
-        } else if (idx >= 0) {
-          records.value.splice(idx, 1);
-          recordTotal.value = Math.max(0, recordTotal.value - 1);
         }
         if (result.next_record) {
-          const existing = records.value.find(
-            (row) => row.record_id === result.next_record?.record_id,
-          );
-          if (existing) {
-            selectRecord(existing);
-            await nextTick();
-            if (reviewPaneEl.value) reviewPaneEl.value.scrollTop = 0;
-          } else if (reviewQueue.value !== "all") {
-            reviewQueue.value = "all";
-            await nextTick();
-            await refreshRecords(true, result.next_record.record_id);
-          } else {
-            selectRecord(result.next_record);
-          }
-        } else {
-          await refreshRecords(false);
+          const existing = records.value.find((row) => row.record_id === result.next_record?.record_id);
+          if (existing) selectRecord(existing);
+          else selectRecord(result.next_record);
         }
-        setMessage(
-          disposition === "accepted"
-            ? i18n.t("pdf_corpus.accepted_notice")
-            : i18n.t("pdf_corpus.rejected_notice"),
-        );
+        setMessage(i18n.t("pdf_corpus.accepted_notice"));
       }
-    }
-    await restoreReviewViewport(viewport, { record: true, inspector: true });
-  } catch (exc) {
-    await restoreReviewViewport(viewport);
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
+      await restoreReviewViewport(viewport, { record: true, inspector: true });
+    },
+    async () => {
+      records.value = beforeRecords;
+      recordTotal.value = beforeTotal;
+      selectedRecord.value = beforeSelected;
+      selectedRecordId.value = beforeSelectedId;
+      await restoreReviewViewport(viewport);
+    },
+    false,
+  );
 }
 
 async function attemptAccept() {
@@ -2527,40 +2590,29 @@ async function saveReviewedText(resolveIssues = resolveSourceOnTextSave.value) {
   if (!currentBuild.value || !selectedRecord.value) return;
   const recordId = selectedRecord.value.record_id;
   const viewport = captureReviewViewport();
-  busy.value = "text";
+  const buildId = currentBuild.value.build_id;
+  const expectedRevision = Number(selectedRecord.value.record_revision || 1);
+  const text = textDraft.value;
+  const row: CorpusRecord = {
+    ...selectedRecord.value,
+    text,
+    text_length: text.length,
+    record_revision: expectedRevision + 1,
+  } as CorpusRecord;
+  selectedRecord.value = row;
+  const index = records.value.findIndex((item) => item.record_id === recordId);
+  if (index >= 0) records.value.splice(index, 1, row);
+  editingText.value = false;
+  resolveSourceOnTextSave.value = false;
   try {
-    const row = await pdfCorpusApi.patchText(
-      currentBuild.value.build_id,
-      recordId,
-      textDraft.value,
-      Number(selectedRecord.value.record_revision || 1),
-      resolveIssues,
-    );
-    selectedRecord.value = row;
-    textDraft.value = String(row.text || "");
-    editingText.value = false;
-    resolveSourceOnTextSave.value = false;
-    try {
-      localStorage.removeItem(textDraftKey(selectedBuildId.value, row.record_id));
-    } catch {
-      // Best effort: an unavailable browser API does not block review.
-    }
-    const idx = records.value.findIndex((item) => item.record_id === recordId);
-    if (idx >= 0) records.value.splice(idx, 1, row);
-    await refreshBuild();
-    await refreshRecords(false, row.record_id);
-    await restoreReviewViewport(viewport, { record: true });
-    setMessage(
-      resolveIssues
-        ? i18n.t("pdf_corpus.text_saved_resolved")
-        : i18n.t("pdf_corpus.text_saved"),
-    );
-  } catch (exc) {
-    await restoreReviewViewport(viewport);
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
+    localStorage.removeItem(textDraftKey(selectedBuildId.value, recordId));
+  } catch {
+    // Best effort: browser storage must not block review.
   }
+  await restoreReviewViewport(viewport, { record: true });
+  queueRecordRequest(recordId, ["text"], (rebase) =>
+    pdfCorpusApi.patchText(buildId, recordId, text, rebase ? undefined : expectedRevision, resolveIssues),
+  );
 }
 
 async function markTextReviewed() {
@@ -2594,34 +2646,12 @@ async function saveMetadata() {
     );
     return;
   }
-  busy.value = "record";
-  try {
-    const result = await pdfCorpusApi.patchMetadata(
-      currentBuild.value.build_id,
-      selectedRecord.value.record_id,
-      changes,
-      Number(selectedRecord.value.record_revision || 1),
-    );
-    const row = isMetadataPatchState(result) ? result.record : result;
-    selectedRecord.value = row;
-    metadataDraft.value = JSON.stringify(recordMetadata(row), null, 2);
-    try {
-      localStorage.removeItem(metadataDraftKey(currentBuild.value.build_id, row.record_id));
-    } catch {
-      // Best effort: a missing stored preference uses the default.
-    }
-    await refreshBuild();
-    await refreshRecords(false, row.record_id);
-    await restoreReviewViewport(viewport);
-    setMessage(
-      i18n.t("pdf_corpus.metadata_saved"),
-    );
-  } catch (exc) {
-    await restoreReviewViewport(viewport);
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
+  const context = applyOptimisticMetadata(changes);
+  if (!context) return;
+  await restoreReviewViewport(viewport);
+  queueRecordRequest(context.recordId, Object.keys(changes), (rebase) =>
+    pdfCorpusApi.patchMetadata(context.buildId, context.recordId, changes, rebase ? undefined : context.expectedRevision),
+  );
 }
 async function toggleEvidenceBlock(blockId: string) {
   if (!currentBuild.value || !selectedRecord.value || !selectedEvidenceField.value) return;
@@ -2631,80 +2661,187 @@ async function toggleEvidenceBlock(blockId: string) {
   const ids = new Set((existing?.block_ids || []).map(String));
   if (ids.has(blockId)) ids.delete(blockId);
   else ids.add(blockId);
-  busy.value = "evidence";
-  try {
-    const row = await pdfCorpusApi.patchEvidence(
-      currentBuild.value.build_id,
-      selectedRecord.value.record_id,
+  const buildId = currentBuild.value.build_id;
+  const recordId = selectedRecord.value.record_id;
+  const expectedRevision = Number(selectedRecord.value.record_revision || 1);
+  const evidence = {
+    ...(selectedRecord.value.metadata_evidence || {}),
+    [field]: {
+      ...(existing || {}),
+      block_ids: Array.from(ids),
+      confidence: existing?.confidence ?? 1,
+      reason: existing?.reason || i18n.t("pdf_corpus.human_evidence_reason"),
+    },
+  };
+  const row: CorpusRecord = {
+    ...selectedRecord.value,
+    metadata_evidence: evidence,
+    record_revision: expectedRevision + 1,
+  } as CorpusRecord;
+  selectedRecord.value = row;
+  metadataDraft.value = JSON.stringify(recordMetadata(row), null, 2);
+  const index = records.value.findIndex((item) => item.record_id === recordId);
+  if (index >= 0) records.value.splice(index, 1, row);
+  await restoreReviewViewport(viewport);
+  queueRecordRequest(recordId, [field], (rebase) =>
+    pdfCorpusApi.patchEvidence(
+      buildId,
+      recordId,
       field,
       Array.from(ids),
       existing?.confidence ?? 1,
-      existing?.reason ||
-        i18n.t("pdf_corpus.human_evidence_reason"),
-      Number(selectedRecord.value.record_revision || 1),
-    );
-    selectedRecord.value = row;
-    metadataDraft.value = JSON.stringify(recordMetadata(row), null, 2);
-    await refreshBuild();
-    await refreshRecords(false, row.record_id);
-    await restoreReviewViewport(viewport);
-    setMessage(
-      i18n.t("pdf_corpus.evidence_saved"),
-    );
-  } catch (exc) {
-    await restoreReviewViewport(viewport);
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
+      existing?.reason || i18n.t("pdf_corpus.human_evidence_reason"),
+      rebase ? undefined : expectedRevision,
+    ),
+  );
 }
 async function merge(direction: "previous" | "next") {
   if (!currentBuild.value || !selectedRecord.value) return;
   const id = selectedRecord.value.record_id;
+  const index = records.value.findIndex((row) => row.record_id === id);
+  const neighborIndex = direction === "previous" ? index - 1 : index + 1;
+  if (index < 0 || neighborIndex < 0 || neighborIndex >= records.value.length) return;
+  const before = records.value.slice();
+  const beforeTotal = recordTotal.value;
+  const beforeSelected = selectedRecord.value;
+  const firstIndex = Math.min(index, neighborIndex);
+  const first = records.value[firstIndex];
+  const second = records.value[Math.max(index, neighborIndex)];
+  const merged: CorpusRecord = {
+    ...first,
+    text: [first.text, second.text].filter(Boolean).join("\n\n"),
+    text_length: [first.text, second.text].filter(Boolean).join("\n\n").length,
+    source_block_ids: [
+      ...(first.source_block_ids || []),
+      ...(second.source_block_ids || []),
+    ],
+    source_unit_ids: [
+      ...(first.source_unit_ids || []),
+      ...(second.source_unit_ids || []),
+    ],
+    source_spans: [...(first.source_spans || []), ...(second.source_spans || [])],
+    review_disposition: "pending",
+    accepted: false,
+    rejected: false,
+    needs_review: true,
+    record_revision: Math.max(
+      Number(first.record_revision || 1),
+      Number(second.record_revision || 1),
+    ) + 1,
+  };
   const viewport = captureReviewViewport();
-  busy.value = "record";
-  try {
-    const row = await pdfCorpusApi.merge(
-      currentBuild.value.build_id,
-      id,
-      direction,
-      Number(selectedRecord.value.record_revision || 1),
-    );
-    await refreshBuild();
-    await refreshRecords(false, row.record_id);
-    await restoreReviewViewport(viewport, { record: true });
-    setMessage(
-      i18n.tf("pdf_corpus.merged", { direction: i18n.t(`pdf_corpus.${direction}`, direction) }),
-    );
-  } catch (exc) {
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
+  records.value.splice(firstIndex, 2, merged);
+  recordTotal.value = Math.max(0, recordTotal.value - 1);
+  selectedRecord.value = merged;
+  selectedRecordId.value = merged.record_id;
+  await restoreReviewViewport(viewport, { record: true });
+  queueRecordRequest(
+    [id, second.record_id],
+    ["record boundary"],
+    async () => {
+      const row = await pdfCorpusApi.merge(
+        currentBuild.value!.build_id,
+        id,
+        direction,
+        Number(before.find((item) => item.record_id === id)?.record_revision || 1),
+      );
+      await refreshBuild();
+      await refreshRecords(false, row.record_id);
+      await restoreReviewViewport(viewport, { record: true });
+      setMessage(
+        i18n.tf("pdf_corpus.merged", {
+          direction: i18n.t(`pdf_corpus.${direction}`, direction),
+        }),
+      );
+    },
+    () => {
+      records.value = before;
+      recordTotal.value = beforeTotal;
+      selectedRecord.value = beforeSelected;
+      selectedRecordId.value = beforeSelected.record_id;
+    },
+    false,
+  );
 }
 async function split(afterBlockId: string) {
   if (!currentBuild.value || !selectedRecord.value) return;
   const id = selectedRecord.value.record_id;
+  const targetIndex = records.value.findIndex((row) => row.record_id === id);
+  const blockIds = [...(selectedRecord.value.source_block_ids || [])];
+  const cut = blockIds.indexOf(afterBlockId) + 1;
+  if (targetIndex < 0 || cut <= 0 || cut >= blockIds.length) return;
+  const before = records.value.slice();
+  const beforeTotal = recordTotal.value;
+  const beforeSelected = selectedRecord.value;
+  const blockText = new Map(visibleBlocks.value.map((block) => [block.block_id, block.text]));
+  const textFor = (ids: string[]) =>
+    ids.map((blockId) => blockText.get(blockId) || "").filter(Boolean).join("\n\n");
+  const leftIds = blockIds.slice(0, cut);
+  const rightIds = blockIds.slice(cut);
+  const leftText = textFor(leftIds);
+  const rightText = textFor(rightIds);
+  if (!leftText || !rightText) return;
+  const nextId = `${id}-split-pending`;
+  const left: CorpusRecord = {
+    ...selectedRecord.value,
+    source_block_ids: leftIds,
+    source_unit_ids: leftIds,
+    source_spans: (selectedRecord.value.source_spans || []).filter((span) =>
+      leftIds.includes(String(span.block_id || "")),
+    ),
+    text: leftText,
+    text_length: leftText.length,
+    record_revision: Number(selectedRecord.value.record_revision || 1) + 1,
+    review_disposition: "pending",
+    accepted: false,
+    rejected: false,
+    needs_review: true,
+  };
+  const right: CorpusRecord = {
+    ...selectedRecord.value,
+    record_id: nextId,
+    source_block_ids: rightIds,
+    source_unit_ids: rightIds,
+    source_spans: (selectedRecord.value.source_spans || []).filter((span) =>
+      rightIds.includes(String(span.block_id || "")),
+    ),
+    text: rightText,
+    text_length: rightText.length,
+    record_revision: 1,
+    review_disposition: "pending",
+    accepted: false,
+    rejected: false,
+    needs_review: true,
+  };
   const viewport = captureReviewViewport();
-  busy.value = "record";
-  try {
-    const result = await pdfCorpusApi.split(
-      currentBuild.value.build_id,
-      id,
-      afterBlockId,
-      Number(selectedRecord.value.record_revision || 1),
-    );
-    await refreshBuild();
-    await refreshRecords(false, result.records[0]?.record_id || id);
-    await restoreReviewViewport(viewport, { record: true });
-    setMessage(
-      i18n.t("pdf_corpus.split_done"),
-    );
-  } catch (exc) {
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
+  records.value.splice(targetIndex, 1, left, right);
+  recordTotal.value += 1;
+  selectedRecord.value = left;
+  selectedRecordId.value = left.record_id;
+  await restoreReviewViewport(viewport, { record: true });
+  queueRecordRequest(
+    [id, nextId],
+    ["record boundary"],
+    async () => {
+      const result = await pdfCorpusApi.split(
+        currentBuild.value!.build_id,
+        id,
+        afterBlockId,
+        Number(beforeSelected.record_revision || 1),
+      );
+      await refreshBuild();
+      await refreshRecords(false, result.records[0]?.record_id || id);
+      await restoreReviewViewport(viewport, { record: true });
+      setMessage(i18n.t("pdf_corpus.split_done"));
+    },
+    () => {
+      records.value = before;
+      recordTotal.value = beforeTotal;
+      selectedRecord.value = beforeSelected;
+      selectedRecordId.value = beforeSelected.record_id;
+    },
+    false,
+  );
 }
 async function sliceRecord(
   direction: "previous" | "next" | "keep" | "new",
@@ -2713,29 +2850,233 @@ async function sliceRecord(
 ) {
   if (!currentBuild.value || !selectedRecord.value) return;
   const id = selectedRecord.value.record_id;
-  const viewport = captureReviewViewport();
-  busy.value = "record";
-  try {
-    const result = await pdfCorpusApi.sliceRecord(
-      currentBuild.value.build_id,
-      id,
-      direction,
-      offset,
-      Number(selectedRecord.value.record_revision || 1),
-      keepEnd,
-    );
-    boundarySliceOpen.value = false;
-    await refreshBuild();
-    await refreshRecords(false, result.record.record_id);
+  if (direction === "keep") {
+    const index = records.value.findIndex((row) => row.record_id === id);
+    const targetText = String(selectedRecord.value.text || "");
+    const previous = records.value[index - 1];
+    const following = records.value[index + 1];
+    if (
+      index <= 0 ||
+      index >= records.value.length - 1 ||
+      keepEnd === undefined ||
+      offset <= 0 ||
+      offset >= keepEnd ||
+      keepEnd > targetText.length
+    )
+      return;
+    const prefix = targetText.slice(0, offset).trim();
+    const retained = targetText.slice(offset, keepEnd).trim();
+    const suffix = targetText.slice(keepEnd).trim();
+    if (!prefix || !retained || !suffix) return;
+    const before = records.value.slice();
+    const beforeSelected = selectedRecord.value;
+    const previousText = `${String(previous.text || "").trim()}\n\n${prefix}`.trim();
+    const followingText = `${suffix}\n\n${String(following.text || "").trim()}`.trim();
+    const nextRecord = (row: CorpusRecord, text: string): CorpusRecord => ({
+      ...row,
+      text,
+      text_length: text.length,
+      record_revision: Number(row.record_revision || 1) + 1,
+      review_disposition: "pending",
+      accepted: false,
+      rejected: false,
+      needs_review: true,
+    });
+    const updatedPrevious = nextRecord(previous, previousText);
+    const updatedTarget = nextRecord(selectedRecord.value, retained);
+    const updatedFollowing = nextRecord(following, followingText);
+    const viewport = captureReviewViewport();
+    records.value.splice(index - 1, 3, updatedPrevious, updatedTarget, updatedFollowing);
+    selectedRecord.value = updatedTarget;
+    selectedRecordId.value = id;
     await restoreReviewViewport(viewport, { record: true });
-    setMessage(
-      i18n.t("pdf_corpus.slice_done"),
+    queueRecordRequest(
+      [previous.record_id, id, following.record_id],
+      ["record boundary"],
+      async () => {
+        const result = await pdfCorpusApi.sliceRecord(
+          currentBuild.value!.build_id,
+          id,
+          direction,
+          offset,
+          Number(beforeSelected.record_revision || 1),
+          keepEnd,
+        );
+        boundarySliceOpen.value = false;
+        await refreshBuild();
+        await refreshRecords(false, result.record.record_id);
+        await restoreReviewViewport(viewport, { record: true });
+        setMessage(i18n.t("pdf_corpus.slice_done"));
+      },
+      () => {
+        records.value = before;
+        selectedRecord.value = beforeSelected;
+        selectedRecordId.value = beforeSelected.record_id;
+      },
+      false,
     );
-  } catch (exc) {
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
+    return;
   }
+  if (direction === "previous" || direction === "next") {
+    const index = records.value.findIndex((row) => row.record_id === id);
+    const neighborIndex = direction === "previous" ? index - 1 : index + 1;
+    const targetText = String(selectedRecord.value.text || "");
+    if (
+      index < 0 ||
+      neighborIndex < 0 ||
+      neighborIndex >= records.value.length ||
+      offset <= 0 ||
+      offset >= targetText.length
+    )
+      return;
+    const before = records.value.slice();
+    const beforeSelected = selectedRecord.value;
+    const neighbor = records.value[neighborIndex];
+    const moved = targetText.slice(
+      direction === "previous" ? 0 : offset,
+      direction === "previous" ? offset : undefined,
+    ).trim();
+    const retained = targetText
+      .slice(direction === "previous" ? offset : 0)
+      .trim();
+    if (!moved || !retained) return;
+    const target = {
+      ...selectedRecord.value,
+      text: retained,
+      text_length: retained.length,
+      record_revision: Number(selectedRecord.value.record_revision || 1) + 1,
+      review_disposition: "pending" as const,
+      accepted: false,
+      rejected: false,
+      needs_review: true,
+    };
+    const neighborText =
+      direction === "previous"
+        ? `${String(neighbor.text || "").trim()}\n\n${moved}`.trim()
+        : `${moved}\n\n${String(neighbor.text || "").trim()}`.trim();
+    const updatedNeighbor = {
+      ...neighbor,
+      text: neighborText,
+      text_length: neighborText.length,
+      record_revision: Number(neighbor.record_revision || 1) + 1,
+      review_disposition: "pending" as const,
+      accepted: false,
+      rejected: false,
+      needs_review: true,
+    };
+    const viewport = captureReviewViewport();
+    records.value.splice(
+      Math.min(index, neighborIndex),
+      2,
+      ...(direction === "previous" ? [updatedNeighbor, target] : [target, updatedNeighbor]),
+    );
+    selectedRecord.value = target;
+    selectedRecordId.value = id;
+    await restoreReviewViewport(viewport, { record: true });
+    queueRecordRequest(
+      [id, neighbor.record_id],
+      ["record boundary"],
+      async () => {
+        const result = await pdfCorpusApi.sliceRecord(
+          currentBuild.value!.build_id,
+          id,
+          direction,
+          offset,
+          Number(beforeSelected.record_revision || 1),
+          keepEnd,
+        );
+        boundarySliceOpen.value = false;
+        await refreshBuild();
+        await refreshRecords(false, result.record.record_id);
+        await restoreReviewViewport(viewport, { record: true });
+        setMessage(i18n.t("pdf_corpus.slice_done"));
+      },
+      () => {
+        records.value = before;
+        selectedRecord.value = beforeSelected;
+        selectedRecordId.value = beforeSelected.record_id;
+      },
+      false,
+    );
+    return;
+  }
+  if (direction !== "new" || keepEnd === undefined) return;
+  const index = records.value.findIndex((row) => row.record_id === id);
+  const following = records.value[index + 1];
+  const targetText = String(selectedRecord.value.text || "");
+  if (
+    index < 0 ||
+    !following ||
+    offset <= 0 ||
+    offset >= keepEnd ||
+    keepEnd > targetText.length
+  )
+    return;
+  const prefix = targetText.slice(0, offset).trim();
+  const retained = targetText.slice(offset, keepEnd).trim();
+  const suffix = targetText.slice(keepEnd).trim();
+  if (!prefix || !retained || !suffix) return;
+  const before = records.value.slice();
+  const beforeTotal = recordTotal.value;
+  const beforeSelected = selectedRecord.value;
+  const provisionalId = `${id}-slice-pending`;
+  const revised = (row: CorpusRecord, text: string, revision: number): CorpusRecord => ({
+    ...row,
+    text,
+    text_length: text.length,
+    record_revision: revision,
+    review_disposition: "pending",
+    accepted: false,
+    rejected: false,
+    needs_review: true,
+  });
+  const target = revised(
+    selectedRecord.value,
+    prefix,
+    Number(selectedRecord.value.record_revision || 1) + 1,
+  );
+  const created = revised(
+    { ...selectedRecord.value, record_id: provisionalId },
+    retained,
+    1,
+  );
+  const updatedFollowing = revised(
+    following,
+    `${suffix}\n\n${String(following.text || "").trim()}`.trim(),
+    Number(following.record_revision || 1) + 1,
+  );
+  const viewport = captureReviewViewport();
+  records.value.splice(index, 2, target, created, updatedFollowing);
+  recordTotal.value = beforeTotal + 1;
+  selectedRecord.value = created;
+  selectedRecordId.value = provisionalId;
+  await restoreReviewViewport(viewport, { record: true });
+  queueRecordRequest(
+    [id, provisionalId, following.record_id],
+    ["record boundary"],
+    async () => {
+      const result = await pdfCorpusApi.sliceRecord(
+        currentBuild.value!.build_id,
+        id,
+        "new",
+        offset,
+        Number(beforeSelected.record_revision || 1),
+        keepEnd,
+      );
+      boundarySliceOpen.value = false;
+      await refreshBuild();
+      await refreshRecords(false, result.new_record?.record_id || result.record.record_id);
+      await restoreReviewViewport(viewport, { record: true });
+      setMessage(i18n.t("pdf_corpus.slice_done"));
+    },
+    () => {
+      records.value = before;
+      recordTotal.value = beforeTotal;
+      selectedRecord.value = beforeSelected;
+      selectedRecordId.value = beforeSelected.record_id;
+    },
+    false,
+  );
 }
 
 async function requeueCurrentRecord() {
@@ -2813,79 +3154,37 @@ async function resolveMetadataField(field: string, value: unknown) {
   const viewport = captureReviewViewport();
   metadataSavingField.value = field;
   metadataSavedField.value = "";
-  busy.value = "metadata-field";
-  const recordId = selectedRecord.value.record_id;
-  try {
-    const result = await pdfCorpusApi.metadataDecision(
-      currentBuild.value.build_id,
-      recordId,
+  const context = applyOptimisticMetadata({ [field]: value });
+  if (!context) return;
+  metadataSavedField.value = field;
+  await restoreReviewViewport(viewport, { inspector: true });
+  queueRecordRequest(context.recordId, [field], (rebase) =>
+    pdfCorpusApi.metadataDecision(
+      context.buildId,
+      context.recordId,
       field,
       value,
-      Number(selectedRecord.value.record_revision || 1),
-    );
-    selectedRecord.value = result.record;
-    currentBuild.value = result.build;
-    syncBuildInRail(result.build);
-    if (result.queue_counts) currentBuild.value.review_queue_counts = result.queue_counts;
-    metadataDraft.value = JSON.stringify(recordMetadata(result.record), null, 2);
-    const idx = records.value.findIndex((row) => row.record_id === recordId);
-    if (idx >= 0) records.value.splice(idx, 1, result.record);
-    metadataSavedField.value = field;
-    metadataEditorDirty.value = false;
-    const remaining = result.remaining_fields || [];
-    if (remaining.length === 0) {
-      // Keep the resolved record on screen even if the active exception queue no
-      // longer contains it. The reviewer should make one final record-level
-      // decision instead of hunting for the same record in another queue.
-      setMessage(
-        i18n.t("pdf_corpus.metadata_resolved_ready"),
-      );
-      await nextTick();
-      acceptButtonEl.value?.focus({ preventScroll: true });
-    } else {
-      setMessage(
-        i18n.tf("pdf_corpus.metadata_field_confirmed", { field: i18n.t(`record.${field}`, field.replace(/_/g, " ")), count: remaining.length }),
-      );
-    }
-    await restoreReviewViewport(viewport, { inspector: true });
-  } catch (exc) {
-    await restoreReviewViewport(viewport);
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-    metadataSavingField.value = "";
-  }
+      rebase ? undefined : context.expectedRevision,
+    ),
+  );
+  metadataSavingField.value = "";
 }
 
 async function resolveMetadataSuggestions(changes: Record<string, unknown>) {
   if (!currentBuild.value || !selectedRecord.value || !Object.keys(changes).length) return;
   for (const [field, value] of Object.entries(changes)) rememberMetadataValues(field, value);
   const viewport = captureReviewViewport();
-  busy.value = "metadata-suggestions";
-  try {
-    const result = await pdfCorpusApi.metadataDecisionBatch(
-      currentBuild.value.build_id,
-      selectedRecord.value.record_id,
+  const context = applyOptimisticMetadata(changes);
+  if (!context) return;
+  await restoreReviewViewport(viewport, { inspector: true });
+  queueRecordRequest(context.recordId, Object.keys(changes), (rebase) =>
+    pdfCorpusApi.metadataDecisionBatch(
+      context.buildId,
+      context.recordId,
       changes,
-      Number(selectedRecord.value.record_revision || 1),
-    );
-    const row = result.record;
-    currentBuild.value = result.build;
-    selectedRecord.value = row;
-    const idx = records.value.findIndex((item) => item.record_id === row.record_id);
-    if (idx >= 0) records.value.splice(idx, 1, row);
-    metadataDraft.value = JSON.stringify(recordMetadata(row), null, 2);
-    metadataEditorDirty.value = false;
-    await restoreReviewViewport(viewport, { inspector: true });
-    setMessage(
-      i18n.tf("pdf_corpus.llm_suggestions_saved", { count: Object.keys(changes).length }),
-    );
-  } catch (exc) {
-    await restoreReviewViewport(viewport);
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
+      rebase ? undefined : context.expectedRevision,
+    ),
+  );
 }
 
 function rememberMetadataValues(field: string, value: unknown) {
@@ -2900,34 +3199,20 @@ async function resolveMetadataNoValue(field: string) {
   if (!currentBuild.value || !selectedRecord.value) return;
   const viewport = captureReviewViewport();
   metadataSavingField.value = field;
-  busy.value = "metadata-field";
-  try {
-    const result = await pdfCorpusApi.metadataDecision(
-      currentBuild.value.build_id,
-      selectedRecord.value.record_id,
+  const context = applyOptimisticMetadata({ [field]: null });
+  if (!context) return;
+  await restoreReviewViewport(viewport, { inspector: true });
+  queueRecordRequest(context.recordId, [field], (rebase) =>
+    pdfCorpusApi.metadataDecision(
+      context.buildId,
+      context.recordId,
       field,
       null,
-      Number(selectedRecord.value.record_revision || 1),
+      rebase ? undefined : context.expectedRevision,
       true,
-    );
-    selectedRecord.value = result.record;
-    currentBuild.value = result.build;
-    syncBuildInRail(result.build);
-    metadataDraft.value = JSON.stringify(recordMetadata(result.record), null, 2);
-    const idx = records.value.findIndex((row) => row.record_id === result.record.record_id);
-    if (idx >= 0) records.value.splice(idx, 1, result.record);
-    metadataEditorDirty.value = false;
-    setMessage(
-      i18n.t("pdf_corpus.no_supported_value_confirmed"),
-    );
-    await restoreReviewViewport(viewport, { inspector: true });
-  } catch (exc) {
-    await restoreReviewViewport(viewport);
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-    metadataSavingField.value = "";
-  }
+    ),
+  );
+  metadataSavingField.value = "";
 }
 async function clearMetadataSuggestionCache() {
   if (
@@ -3507,6 +3792,14 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", reviewShortcut);
   stopPolling();
+});
+defineExpose({
+  saveTextFromFocus,
+  saveMetadata,
+  setDisposition,
+  selectedRecord,
+  records,
+  error,
 });
 </script>
 
