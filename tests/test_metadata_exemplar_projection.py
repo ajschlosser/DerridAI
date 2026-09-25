@@ -92,6 +92,27 @@ def test_derivation_embeds_evidence_context_not_whole_record(monkeypatch):
     )
 
 
+def test_derivation_includes_evidence_bound_confirmed_absence(monkeypatch):
+    repo = FakeRepo()
+    repo.records[0]["position_holder"] = None
+    repo.records[0]["metadata_field_status"]["position_holder"] = {
+        "status": "confirmed_absent",
+        "method": "human",
+    }
+    repo.records[0]["metadata_evidence"]["position_holder"].update(
+        {"reviewed_by": "human", "reviewed_at": "2026-09-24T00:00:00Z"}
+    )
+    monkeypatch.setattr(projection.experiment, "is_gold", lambda record_id: False)
+    monkeypatch.setattr(projection, "_second_opinion_owed", lambda row, field: False)
+
+    rows = projection.derive_build_metadata_exemplars(repo, "build-1")
+
+    assert len(rows) == 1
+    assert rows[0]["kind"] == "absence"
+    assert rows[0]["field_value"] is None
+    assert rows[0]["evidence_ref"]["block_ids"] == ["b2"]
+
+
 def test_projector_rebuilds_dirty_scope_then_acknowledges(monkeypatch):
     repo = FakeRepo()
     index = FakeIndex()
