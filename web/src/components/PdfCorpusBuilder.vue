@@ -2111,6 +2111,36 @@ async function openMetadataIssueQueue() {
   await nextTick();
   recordListEl.value?.focus({ preventScroll: true });
 }
+
+function firstValidationRecordId(): string {
+  const validation = currentBuild.value?.validation || {};
+  for (const key of [
+    "metadata_evidence_errors",
+    "metadata_schema_errors",
+    "relationship_errors",
+    "human_ownership_errors",
+    "record_content_errors",
+  ] as const) {
+    const items = validation[key];
+    if (!Array.isArray(items)) continue;
+    const found = items.find(
+      (item) => item && typeof item === "object" && "record_id" in item && item.record_id,
+    );
+    if (found && typeof found === "object" && "record_id" in found) return String(found.record_id);
+  }
+  const citation = validation.citation_errors?.find(Boolean);
+  return citation ? String(citation) : "";
+}
+
+async function openValidationIssueQueue() {
+  reviewQueue.value = "issues";
+  recordQuery.value = "";
+  const first = firstValidationRecordId();
+  await nextTick();
+  await refreshRecords(true, first);
+  await nextTick();
+  recordListEl.value?.focus({ preventScroll: true });
+}
 async function openRejectedQueue() {
   reviewQueue.value = "rejected";
   recordQuery.value = "";
@@ -4483,6 +4513,7 @@ defineExpose({
             :busy="busy !== ''"
             @retry-metadata="retryIncompleteMetadata"
             @review-metadata="openMetadataIssueQueue"
+            @review-validation="openValidationIssueQueue"
             @review-rejected="openRejectedQueue"
             @review-records="openAllReviewQueue"
             @review-source="openSourceIssueQueue"
@@ -5916,7 +5947,7 @@ defineExpose({
         :busy="busy !== '' || reviewLocked"
         :can-merge-previous="canMergePrevious"
         :can-merge-next="canMergeNext"
-:can-accept="true"
+        :can-accept="true"
         :region-types="regionTypes"
         :discourse-roles="discourseRoles"
         :recurring-lines="recurringCleanupLines"
