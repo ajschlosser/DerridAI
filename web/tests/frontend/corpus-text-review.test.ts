@@ -9,7 +9,8 @@ const corpusBuilderApi = vi.hoisted(() => ({
 }));
 
 vi.mock("../../src/api/corpus", async () => {
-  const actual = await vi.importActual<typeof import("../../src/api/corpus")>("../../src/api/corpus");
+  const actual =
+    await vi.importActual<typeof import("../../src/api/corpus")>("../../src/api/corpus");
   return { ...actual, corpusBuilderApi };
 });
 
@@ -100,13 +101,7 @@ describe("Corpus Builder text review", () => {
 
     corpusBuilderApi.patchText.mockResolvedValue(state.selectedRecord.value);
     await state.queued[0](false);
-    expect(corpusBuilderApi.patchText).toHaveBeenCalledWith(
-      "b1",
-      "r1",
-      "Edited text",
-      1,
-      false,
-    );
+    expect(corpusBuilderApi.patchText).toHaveBeenCalledWith("b1", "r1", "Edited text", 1, false);
   });
 
   it("opens touch-up with the shared provider/model defaults", () => {
