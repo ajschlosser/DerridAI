@@ -16,6 +16,13 @@ from pathlib import Path
 from typing import Any
 
 from .corpus_metadata import STRONG_STRUCTURAL_METHODS
+from .field_assertions import (
+    create_deterministic_assertion,
+    create_inherited_assertion,
+    current_assertion_by_name,
+    migrate_record_assertions,
+    project_record_assertions,
+)
 
 
 def _normalize_text(value: str) -> str:
@@ -652,21 +659,31 @@ def _mark_segmentation_review(records: list[dict[str, Any]], unresolved: list[di
 
 
 def _apply_manifest_metadata(record: dict[str, Any], manifest: dict[str, Any]) -> None:
-    field_status = record.setdefault("metadata_field_status", {})
+    """Apply reviewed manifest metadata without overriding canonical human decisions."""
+    migrate_record_assertions(record)
+
+    def assertion_for(field: str):
+        return current_assertion_by_name(record, field)
+
+    def human_owned(field: str) -> bool:
+        assertion = assertion_for(field)
+        return bool(assertion and assertion.authority_status in {"human_confirmed", "human_override"})
 
     def inherited(field: str, value: Any) -> None:
         if value in (None, "", []):
             return
-        status = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
-        if status.get("status") in {"human_confirmed", "human_override"}:
+        assertion = assertion_for(field)
+        if human_owned(field):
             return
-        if field == "speaker" and status.get("method") == "source_span_speaker":
+        if field == "speaker" and assertion is not None and assertion.method == "source_span_speaker":
             return
-        record[field] = value
-        field_status[field] = {
-            "status": "inherited", "method": "document_manifest", "confidence": 1.0,
-            "reason": "Inherited from the reviewed document manifest.",
-        }
+        create_inherited_assertion(
+            record,
+            field,
+            value,
+            method="document_manifest",
+            reason="Inherited from the reviewed document manifest.",
+        )
 
     title = manifest.get("title")
     author = manifest.get("document_author")
@@ -678,7 +695,10 @@ def _apply_manifest_metadata(record: dict[str, Any], manifest: dict[str, Any]) -
     if title:
         inherited("work", title)
         inherited("document_title", title)
-        inherited("canonical_work_id", re.sub(r"[^a-z0-9]+", "-", str(title).casefold()).strip("-")[:120])
+        inherited(
+            "canonical_work_id",
+            re.sub(r"[^a-z0-9]+", "-", str(title).casefold()).strip("-")[:120],
+        )
     inherited("short_title", manifest.get("short_title"))
     inherited("original_title", manifest.get("original_title"))
     inherited("document_author", author)
@@ -707,20 +727,27 @@ def _apply_manifest_metadata(record: dict[str, Any], manifest: dict[str, Any]) -
     end_page = manifest.get("main_text_end_page")
     pdf_pages = [int(value) for value in record.get("pdf_pages") or [] if isinstance(value, int)]
     if pdf_pages and isinstance(start_page, int):
-        inside = min(pdf_pages) >= start_page and (not isinstance(end_page, int) or max(pdf_pages) <= end_page)
-        primary_status = field_status.get("primary_text") if isinstance(field_status.get("primary_text"), dict) else {}
-        region_status = field_status.get("region_type") if isinstance(field_status.get("region_type"), dict) else {}
-        primary_method = str(primary_status.get("method") or "")
-        region_method = str(region_status.get("method") or "")
-        primary_structure_owned = primary_method in STRONG_STRUCTURAL_METHODS
-        region_structure_owned = region_method in STRONG_STRUCTURAL_METHODS
-        if primary_status.get("status") not in {"human_confirmed", "human_override"} and not primary_structure_owned:
-            record["primary_text"] = inside
-            field_status["primary_text"] = {
-                "status": "deterministic", "method": "manifest_page_range", "confidence": 1.0,
-                "reason": "Classified from the reviewed document main-text page range.",
-            }
-        if region_status.get("status") not in {"human_confirmed", "human_override"} and not region_structure_owned:
+        inside = min(pdf_pages) >= start_page and (
+            not isinstance(end_page, int) or max(pdf_pages) <= end_page
+        )
+        primary_assertion = assertion_for("primary_text")
+        region_assertion = assertion_for("region_type")
+        primary_structure_owned = bool(
+            primary_assertion and primary_assertion.method in STRONG_STRUCTURAL_METHODS
+        )
+        region_structure_owned = bool(
+            region_assertion and region_assertion.method in STRONG_STRUCTURAL_METHODS
+        )
+
+        if not human_owned("primary_text") and not primary_structure_owned:
+            create_deterministic_assertion(
+                record,
+                "primary_text",
+                inside,
+                method="manifest_page_range",
+                reason="Classified from the reviewed document main-text page range.",
+            )
+        if not human_owned("region_type") and not region_structure_owned:
             if inside:
                 inferred_region = "main_text"
                 region_reason = "Record lies entirely inside the reviewed main-text page range."
@@ -734,40 +761,58 @@ def _apply_manifest_metadata(record: dict[str, Any], manifest: dict[str, Any]) -
                 inferred_region = None
                 region_reason = ""
             if inferred_region:
-                record["region_type"] = inferred_region
-                field_status["region_type"] = {
-                    "status": "deterministic", "method": "manifest_page_range", "confidence": 1.0,
-                    "reason": region_reason,
-                }
-        # A record that begins before the main text and runs into it cannot be labelled by
-        # page alone: the reviewer chooses main text, front matter, or splits it.
-        issues = [i for i in record.get("boundary_quality_issues") or [] if not (isinstance(i, dict) and i.get("code") == "main_text_start_straddle")]
-        if min(pdf_pages) < start_page <= max(pdf_pages) and region_status.get("status") not in {"human_confirmed", "human_override"}:
-            reason = f"This record starts before the main text (PDF page {start_page}) and continues into it. Choose main text, front matter, or split it."
+                create_deterministic_assertion(
+                    record,
+                    "region_type",
+                    inferred_region,
+                    method="manifest_page_range",
+                    reason=region_reason,
+                )
+
+        issues = [
+            item
+            for item in record.get("boundary_quality_issues") or []
+            if not (isinstance(item, dict) and item.get("code") == "main_text_start_straddle")
+        ]
+        if min(pdf_pages) < start_page <= max(pdf_pages) and not human_owned("region_type"):
+            reason = (
+                f"This record starts before the main text (PDF page {start_page}) and continues into it. "
+                "Choose main text, front matter, or split it."
+            )
             issues.append({"code": "main_text_start_straddle", "edge": "record", "reason": reason})
             record["needs_review"] = True
             if not record.get("review_reason") or str(record.get("review_reason")).lower() == "pending human review.":
                 record["review_reason"] = reason
-        if not any(isinstance(i, dict) and i.get("code") == "main_text_start_straddle" for i in issues) and str(record.get("review_reason") or "").endswith("Choose main text, front matter, or split it."):
+        if (
+            not any(
+                isinstance(item, dict) and item.get("code") == "main_text_start_straddle"
+                for item in issues
+            )
+            and str(record.get("review_reason") or "").endswith(
+                "Choose main text, front matter, or split it."
+            )
+        ):
             record["review_reason"] = ""
             record["needs_review"] = bool(issues)
         if issues or record.get("boundary_quality_issues"):
             record["boundary_quality_issues"] = issues
-        role_status = field_status.get("discourse_role") if isinstance(field_status.get("discourse_role"), dict) else {}
-        # A stale/inferred manifest range must not make a reviewer-defined
-        # main-text record paratext. Region/primary structural ownership is
-        # the higher-order document fact; discourse role remains available
-        # for semantic classification.
+
         strong_main_text = (
             (region_structure_owned and record.get("region_type") == "main_text")
             or (primary_structure_owned and record.get("primary_text") is True)
         )
-        if not inside and not strong_main_text and role_status.get("status") not in {"human_confirmed", "human_override"}:
-            record["discourse_role"] = "paratext"
-            field_status["discourse_role"] = {
-                "status": "deterministic", "method": "manifest_page_range", "confidence": 1.0,
-                "reason": "Non-primary material is deterministically classified as paratext unless a reviewer overrides it.",
-            }
+        if not inside and not strong_main_text and not human_owned("discourse_role"):
+            create_deterministic_assertion(
+                record,
+                "discourse_role",
+                "paratext",
+                method="manifest_page_range",
+                reason=(
+                    "Non-primary material is deterministically classified as paratext "
+                    "unless a reviewer overrides it."
+                ),
+            )
+
     confidences = [
         float(span.get("confidence"))
         for span in record.get("source_spans") or []
@@ -775,3 +820,4 @@ def _apply_manifest_metadata(record: dict[str, Any], manifest: dict[str, Any]) -
     ]
     if confidences:
         record["extraction_quality"] = round(sum(confidences) / len(confidences), 4)
+    project_record_assertions(record)
