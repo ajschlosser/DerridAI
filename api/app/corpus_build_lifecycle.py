@@ -40,12 +40,6 @@ from .corpus_review_state import _sync_record_metadata_state
 from .corpus_reviewer_helpers import _human_touched
 from .enrichment_ledger import RECHECK, RECHECK_SEAL
 from .error_severity import severity as error_severity
-from .field_assertions import (
-    current_assertion_by_name,
-    migrate_record_assertions,
-    project_record_assertions,
-    reopen_assertion,
-)
 from .reviewer_context import current_reviewer
 
 
@@ -359,21 +353,11 @@ class BuildLifecycleMixin:
                     if isinstance(entry, dict) and entry.get("field") == field:
                         entry["value"] = None  # the earlier answer must not travel with the record
                         entry["sealed"] = True
-                migrate_record_assertions(record)
-                prior_assertion = current_assertion_by_name(record, field)
                 record[field] = [] if isinstance(record.get(field), list) else None
                 record.setdefault("metadata_field_status", {})[field] = {
                     "status": "unresolved", "method": "human_recheck", "recheck": True, "reason_code": "recheck", "auto_populated": False,
                     "reason": "",
                 }
-                if prior_assertion is not None:
-                    reopen_assertion(
-                        record,
-                        prior_assertion,
-                        reason="Reopened blind for a scheduled human recheck.",
-                    )
-                    project_record_assertions(record)
-                    record[field] = [] if isinstance(prior_assertion.value, list) else None
                 del scheduled[field]
                 record["accepted"] = False
                 record["needs_review"] = True
