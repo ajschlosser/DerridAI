@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Copyright 2026 Aaron John Schlosser, PhD.
-import { hasPages } from "../domain/sourceMedia";
 import { computed } from "vue";
+import { hasPages } from "../domain/sourceMedia";
 import { useI18nStore } from "../stores/i18n";
 
 const props = withDefaults(
@@ -55,218 +55,326 @@ const sizing = computed(() =>
       })
     : "—",
 );
+const providerSummary = computed(() =>
+  [props.providerLabel || i18n.t("pdf_corpus.provider_default"), props.modelLabel]
+    .filter(Boolean)
+    .join(" · "),
+);
 </script>
 
 <template>
   <section
-    class="build-readiness"
+    class="build-command-bar"
     :data-ready="ready ? 'true' : 'false'"
     aria-labelledby="build-readiness-title"
-    data-surface="glass"
   >
-    <div class="readiness-copy">
-      <div class="readiness-heading">
-        <span class="eyebrow">{{ i18n.t("pdf_corpus.readiness.eyebrow") }}</span>
+    <div class="build-command-status">
+      <span class="build-command-indicator" aria-hidden="true"></span>
+      <div>
         <h3 id="build-readiness-title">
           {{
             ready ? i18n.t("pdf_corpus.readiness.ready") : i18n.t("pdf_corpus.readiness.not_ready")
           }}
         </h3>
+        <p>
+          {{
+            sourceFilename ||
+            i18n.t("pdf_corpus.choose_source_prompt")
+          }}
+        </p>
       </div>
-      <dl>
-        <div>
-          <dt>{{ i18n.t("pdf_corpus.readiness.source") }}</dt>
-          <dd>
-            {{ sourceFilename || i18n.t("pdf_corpus.choose_source_prompt")
-            }}<small v-if="sourceFilename"
-              ><template v-if="hasPages(mediaKind)"
-                >{{ pageCount }} {{ i18n.t("pdf_corpus.pages") }} ·
-              </template>
-              {{ blockCount }} {{ i18n.t("pdf_corpus.blocks") }}</small
-            >
-          </dd>
-        </div>
-        <div v-if="hasPages(mediaKind)">
-          <dt>{{ i18n.t("pdf_corpus.readiness.structure") }}</dt>
-          <dd>
-            {{ structureSummary || i18n.t("pdf_corpus.readiness.structure_unset") }}
-          </dd>
-        </div>
-        <div>
-          <dt>{{ i18n.t("pdf_corpus.readiness.enrichment") }}</dt>
-          <dd>{{ modeLabel }}</dd>
-        </div>
-        <div>
-          <dt>{{ i18n.t("pdf_corpus.readiness.llm") }}</dt>
-          <dd>
-            {{ providerLabel || i18n.t("pdf_corpus.provider_default")
-            }}<small v-if="modelLabel">{{ modelLabel }}</small>
-          </dd>
-        </div>
-        <div>
-          <dt>{{ i18n.t("pdf_corpus.readiness.record_size") }}</dt>
-          <dd>{{ sizing }}</dd>
-        </div>
-      </dl>
-      <div v-if="!contextSafe" class="readiness-alert" role="alert">
-        {{ i18n.t("pdf_corpus.context_unsafe") }}
-      </div>
-      <ul
-        v-if="warnings.length"
-        class="readiness-warnings"
-        :aria-label="i18n.t('pdf_corpus.readiness.warnings')"
-      >
-        <li v-for="warning in warnings" :key="warning">{{ warning }}</li>
-      </ul>
-      <p v-if="activeBuildCount" class="capacity-note">
-        {{ i18n.tf("pdf_corpus.active_build_capacity", { count: activeBuildCount }) }}
-      </p>
     </div>
-    <button
-      type="button"
-      class="btn primary build-action"
-      :disabled="!ready || busy"
-      @click="emit('build')"
-    >
-      {{
-        busy
-          ? i18n.t("pdf_corpus.starting")
-          : i18n.t(
-              activeBuildCount ? "pdf_corpus.start_another_build" : "pdf_corpus.build_records",
-              activeBuildCount ? "Start another build" : "Build record set",
-            )
-      }}
-    </button>
+
+    <div class="build-command-summary" aria-label="Build configuration summary">
+      <span>{{ modeLabel }}</span>
+      <span>{{ providerSummary }}</span>
+      <span>{{ sizing }}</span>
+      <span v-if="warnings.length" class="build-command-warning">
+        {{ warnings.length }}
+        {{ i18n.t("pdf_corpus.readiness.warnings", "warnings") }}
+      </span>
+    </div>
+
+    <div class="build-command-actions">
+      <details class="build-command-details">
+        <summary>{{ i18n.t("pdf_corpus.readiness.review_setup", "Review setup") }}</summary>
+        <div class="build-command-popover">
+          <dl>
+            <div>
+              <dt>{{ i18n.t("pdf_corpus.readiness.source") }}</dt>
+              <dd>
+                {{ sourceFilename || i18n.t("pdf_corpus.choose_source_prompt") }}
+                <small v-if="sourceFilename">
+                  <template v-if="hasPages(mediaKind)">
+                    {{ pageCount }} {{ i18n.t("pdf_corpus.pages") }} ·
+                  </template>
+                  {{ blockCount }} {{ i18n.t("pdf_corpus.blocks") }}
+                </small>
+              </dd>
+            </div>
+            <div v-if="hasPages(mediaKind)">
+              <dt>{{ i18n.t("pdf_corpus.readiness.structure") }}</dt>
+              <dd>{{ structureSummary || i18n.t("pdf_corpus.readiness.structure_unset") }}</dd>
+            </div>
+            <div>
+              <dt>{{ i18n.t("pdf_corpus.readiness.enrichment") }}</dt>
+              <dd>{{ modeLabel }}</dd>
+            </div>
+            <div>
+              <dt>{{ i18n.t("pdf_corpus.readiness.llm") }}</dt>
+              <dd>{{ providerSummary }}</dd>
+            </div>
+            <div>
+              <dt>{{ i18n.t("pdf_corpus.readiness.record_size") }}</dt>
+              <dd>{{ sizing }}</dd>
+            </div>
+          </dl>
+          <div v-if="!contextSafe" class="readiness-alert" role="alert">
+            {{ i18n.t("pdf_corpus.context_unsafe") }}
+          </div>
+          <ul
+            v-if="warnings.length"
+            class="readiness-warnings"
+            :aria-label="i18n.t('pdf_corpus.readiness.warnings')"
+          >
+            <li v-for="warning in warnings" :key="warning">{{ warning }}</li>
+          </ul>
+          <p v-if="activeBuildCount" class="capacity-note">
+            {{ i18n.tf("pdf_corpus.active_build_capacity", { count: activeBuildCount }) }}
+          </p>
+        </div>
+      </details>
+
+      <button
+        type="button"
+        class="btn primary build-action"
+        :disabled="!ready || busy"
+        @click="emit('build')"
+      >
+        {{
+          busy
+            ? i18n.t("pdf_corpus.starting")
+            : i18n.t(
+                activeBuildCount ? "pdf_corpus.start_another_build" : "pdf_corpus.build_records",
+                activeBuildCount ? "Start another build" : "Build record set",
+              )
+        }}
+      </button>
+    </div>
   </section>
 </template>
 
 <style scoped>
-.build-readiness {
+.build-command-bar {
   position: sticky;
-  bottom: 12px;
+  bottom: var(--space-3);
   z-index: 12;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 18px;
+  grid-template-columns: minmax(12rem, 1fr) minmax(0, 1.5fr) auto;
+  gap: var(--space-4);
   align-items: center;
-  padding: 16px 18px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--surface-glass, rgba(255, 255, 255, 0.96));
-  box-shadow: 0 14px 36px rgb(15 23 42 / 0.12);
-  backdrop-filter: blur(10px);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--surface-card) 94%, transparent);
+  box-shadow: var(--shadow-card);
+  backdrop-filter: blur(16px);
 }
-.readiness-copy {
+.build-command-status {
   display: grid;
-  gap: 11px;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: center;
   min-width: 0;
 }
-.readiness-heading {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  flex-wrap: wrap;
+.build-command-indicator {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 999px;
+  background: var(--tone-warn-fg);
+  box-shadow: 0 0 0 4px var(--tone-warn-bg);
 }
-.readiness-heading h3 {
+.build-command-bar[data-ready="true"] .build-command-indicator {
+  background: var(--tone-success-fg);
+  box-shadow: 0 0 0 4px var(--tone-success-bg);
+}
+.build-command-status h3,
+.build-command-status p {
   margin: 0;
-  font-size: 1rem;
 }
-.eyebrow {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--muted);
-  font-weight: 800;
+.build-command-status h3 {
+  font-size: var(--fs-sm);
+}
+.build-command-status p {
+  margin-top: 0.1rem;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.build-command-summary {
+  min-width: 0;
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  overflow: hidden;
+}
+.build-command-summary > span {
+  min-width: 0;
+  padding: 0.28rem 0.55rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-subtle);
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.build-command-summary .build-command-warning {
+  border-color: var(--tone-warn-border);
+  background: var(--tone-warn-bg);
+  color: var(--tone-warn-fg);
+}
+.build-command-actions {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+.build-command-details {
+  position: relative;
+}
+.build-command-details > summary {
+  min-height: 2.5rem;
+  display: inline-flex;
+  align-items: center;
+  padding-inline: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  list-style: none;
+}
+.build-command-details > summary::-webkit-details-marker {
+  display: none;
+}
+.build-command-details > summary:hover {
+  color: var(--text-primary);
+}
+.build-command-details > summary:focus-visible {
+  outline: 3px solid var(--ui-accent-focus);
+  outline-offset: 1px;
+}
+.build-command-popover {
+  position: absolute;
+  inset-inline-end: 0;
+  bottom: calc(100% + var(--space-2));
+  width: min(38rem, calc(100vw - var(--space-6)));
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-lg);
 }
 dl {
   display: grid;
-  grid-template-columns: repeat(5, minmax(120px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
   margin: 0;
 }
 dl > div {
   min-width: 0;
   display: grid;
-  gap: 2px;
-  padding-inline-end: 10px;
-  border-inline-end: 1px solid var(--line);
-}
-dl > div:last-child {
-  border-inline-end: 0;
+  gap: var(--space-1);
 }
 dt {
-  font-size: 0.75rem;
-  color: var(--muted);
-  font-weight: 800;
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 dd {
   min-width: 0;
   margin: 0;
-  font-size: 0.875rem;
-  font-weight: 750;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
   overflow-wrap: anywhere;
 }
 dd small {
   display: block;
-  margin-top: 2px;
-  color: var(--muted);
-  font-size: 0.8125rem;
-  font-weight: 500;
+  margin-top: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: normal;
 }
 .readiness-alert {
-  padding: 8px 10px;
-  border-radius: 8px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--tone-danger-border);
+  border-radius: var(--radius-control);
   background: var(--tone-danger-bg);
   color: var(--tone-danger-fg);
-  font-size: 0.8125rem;
-  font-weight: 750;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
 }
 .readiness-warnings {
   margin: 0;
-  padding-inline-start: 20px;
-  color: var(--muted);
-  font-size: 0.8125rem;
+  padding-inline-start: 1.25rem;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
   line-height: 1.45;
 }
 .capacity-note {
   margin: 0;
-  color: var(--muted);
-  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
 }
 .build-action {
-  min-width: 160px;
-  min-height: 46px;
-  font-weight: 800;
+  min-width: 10rem;
+  min-height: 2.6rem;
+  font-weight: var(--fw-bold);
 }
 @media (max-width: 1100px) {
-  .build-readiness {
+  .build-command-bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .build-command-summary {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+@media (max-width: 720px) {
+  .build-command-bar {
     position: static;
     grid-template-columns: 1fr;
   }
-  dl {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .build-command-summary {
+    grid-column: auto;
+    grid-row: auto;
+    flex-wrap: wrap;
   }
-  dl > div {
-    border-inline-end: 0;
-    border-bottom: 1px solid var(--line);
-    padding-bottom: 8px;
-  }
-  .build-action {
-    width: 100%;
-  }
-}
-@media (max-width: 620px) {
-  dl {
+  .build-command-actions {
+    display: grid;
     grid-template-columns: 1fr;
   }
-  .build-readiness {
-    padding: 14px;
+  .build-command-details > summary,
+  .build-action {
+    width: 100%;
+    justify-content: center;
   }
-  .readiness-heading {
-    display: grid;
-    gap: 3px;
+  .build-command-popover {
+    position: static;
+    width: auto;
+    margin-top: var(--space-2);
+  }
+  dl {
+    grid-template-columns: 1fr;
   }
 }
 </style>
