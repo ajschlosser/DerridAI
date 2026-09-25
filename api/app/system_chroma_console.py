@@ -4,12 +4,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import shlex
 from dataclasses import dataclass
 from typing import Any
 
 from .chroma_store import ChromaStore
 
+logger = logging.getLogger(__name__)
 
 _MAX_GET = 200
 _MAX_QUERY = 100
@@ -136,6 +138,7 @@ def list_system_chroma_collections(store: ChromaStore) -> list[dict[str, Any]]:
         try:
             collection = store.client.get_collection(name=name)
         except Exception:
+            logger.debug("Could not inspect system Chroma collection %s", name, exc_info=True)
             continue
         metadata = dict(getattr(collection, "metadata", None) or {})
         if not (
