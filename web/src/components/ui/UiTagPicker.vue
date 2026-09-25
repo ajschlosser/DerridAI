@@ -3,13 +3,14 @@ import { computed, nextTick, ref, useId } from "vue";
 
 const props = withDefaults(
   defineProps<{
-    modelValue: string[];
+    modelValue?: string[];
     options: string[];
     label: string;
     placeholder?: string;
     disabled?: boolean;
   }>(),
   {
+    modelValue: () => [],
     placeholder: "",
     disabled: false,
   },
@@ -21,7 +22,7 @@ const open = ref(false);
 const active = ref(-1);
 const input = ref<HTMLInputElement | null>(null);
 
-const selected = computed(() => new Set(props.modelValue.map((value) => value.toLocaleUpperCase())));
+const selected = computed(() => new Set((props.modelValue || []).map((value) => value.toLocaleUpperCase())));
 const filtered = computed(() => {
   const needle = query.value.trim().toLocaleUpperCase();
   return props.options
@@ -33,7 +34,7 @@ const filtered = computed(() => {
 function commit(value: string) {
   const option = props.options.find((item) => item.toLocaleUpperCase() === value.toLocaleUpperCase());
   if (!option || selected.value.has(option.toLocaleUpperCase())) return;
-  emit("update:modelValue", [...props.modelValue, option]);
+  emit("update:modelValue", [...(props.modelValue || []), option]);
   query.value = "";
   active.value = -1;
   open.value = true;
@@ -41,7 +42,7 @@ function commit(value: string) {
 }
 
 function remove(value: string) {
-  emit("update:modelValue", props.modelValue.filter((item) => item !== value));
+  emit("update:modelValue", (props.modelValue || []).filter((item) => item !== value));
 }
 
 function scheduleClose() {
@@ -69,8 +70,8 @@ function keydown(event: KeyboardEvent) {
   } else if (event.key === "Escape") {
     open.value = false;
     active.value = -1;
-  } else if (event.key === "Backspace" && !query.value && props.modelValue.length) {
-    remove(props.modelValue.at(-1) || "");
+  } else if (event.key === "Backspace" && !query.value && (props.modelValue || []).length) {
+    remove((props.modelValue || []).at(-1) || "");
   }
 }
 </script>
@@ -78,7 +79,7 @@ function keydown(event: KeyboardEvent) {
 <template>
   <div class="ui-tag-picker">
     <div class="tag-shell" :data-disabled="disabled ? 'true' : 'false'">
-      <span v-for="value in modelValue" :key="value" class="tag-chip">
+      <span v-for="value in modelValue || []" :key="value" class="tag-chip">
         <span>{{ value }}</span>
         <button
           type="button"
@@ -98,7 +99,7 @@ function keydown(event: KeyboardEvent) {
         aria-autocomplete="list"
         :aria-expanded="open && filtered.length > 0"
         :aria-controls="`${id}-listbox`"
-        :placeholder="modelValue.length ? '' : placeholder"
+        :placeholder="(modelValue || []).length ? '' : placeholder"
         :disabled="disabled"
         @focus="open = true"
         @input="
