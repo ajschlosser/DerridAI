@@ -10,8 +10,11 @@ from app.field_assertions import (
     confirm_assertion,
     create_model_assertion,
     current_assertion_by_name,
+    current_assertions,
     migrate_record_assertions,
     project_record_assertions,
+    replace_assertion_evidence,
+    reset_fields_for_evaluation,
     validate_projection,
 )
 from app.metadata_schema import default_schema
@@ -122,6 +125,94 @@ def test_human_absence_supersedes_model_candidate_without_claiming_model_absence
     assert absent.model == "test-model"
     assert absent.confidence == pytest.approx(0.73)
     assert absent.evidence == model.evidence
+
+
+
+
+def test_confirmed_absence_preserves_model_provenance_and_evidence() -> None:
+    record = {"record_id": "r8", "record_revision": 2}
+    model = create_model_assertion(
+        record,
+        "position_holder",
+        None,
+        outcome="no_supported_value",
+        confidence=0.64,
+        model="model-x",
+        run_id="run-1",
+        evidence=[{"block_ids": ["b2"], "confidence": 0.9}],
+    )
+    absent = confirm_absence(record, "position_holder", prior=model, actor="reviewer")
+
+    assert absent.derivation_method == "model"
+    assert absent.authority_status == "human_confirmed"
+    assert absent.value_status == "confirmed_absent"
+    assert absent.confidence == pytest.approx(0.64)
+    assert absent.model == "model-x"
+    assert absent.run_id == "run-1"
+    assert absent.evidence == [{"block_ids": ["b2"], "confidence": 0.9}]
+
+
+def test_reset_fields_for_evaluation_preserves_durable_history() -> None:
+    record = {"record_id": "r9", "record_revision": 1}
+    original = create_model_assertion(
+        record,
+        "stance",
+        "critical",
+        confidence=0.8,
+        model="model-x",
+    )
+    project_record_assertions(record)
+
+    reset_fields_for_evaluation(record, ["stance"], method="metadata_rerun")
+    current = current_assertion_by_name(record, "stance")
+
+    assert current is not None
+    assert current.assertion_id != original.assertion_id
+    assert current.value_status == "unresolved"
+    assert current.evaluation_status == "not_evaluated"
+    assert "stance" not in record
+    assert any(item.assertion_id == original.assertion_id for item in current_assertions(record))
+
+
+def test_worker_reset_discards_ephemeral_field_history() -> None:
+    record = {"record_id": "r10", "record_revision": 1}
+    create_model_assertion(record, "stance", "critical", confidence=0.8)
+    create_model_assertion(record, "speaker", "Derrida", confidence=0.9)
+    project_record_assertions(record)
+
+    reset_fields_for_evaluation(
+        record,
+        ["stance"],
+        discard_history=True,
+        method="metadata_rerun_worker",
+    )
+
+    assert current_assertion_by_name(record, "stance") is None
+    assert "stance" not in record
+    assert current_assertion_by_name(record, "speaker") is not None
+
+
+def test_replacing_evidence_supersedes_without_changing_authority() -> None:
+    record = {"record_id": "r11", "record_revision": 3}
+    model = create_model_assertion(
+        record,
+        "speaker",
+        "Derrida",
+        confidence=0.9,
+        evidence=[{"block_ids": ["b1"]}],
+    )
+    confirmed = confirm_assertion(record, model)
+    changed = replace_assertion_evidence(
+        record,
+        confirmed,
+        [{"block_ids": ["b2"], "reviewed_by": "human"}],
+        actor="reviewer",
+    )
+
+    assert changed.supersedes_assertion_id == confirmed.assertion_id
+    assert changed.derivation_method == "model"
+    assert changed.authority_status == "human_confirmed"
+    assert changed.evidence == [{"block_ids": ["b2"], "reviewed_by": "human"}]
 
 
 def test_schema_identity_survives_legacy_migration_and_custom_fields() -> None:
