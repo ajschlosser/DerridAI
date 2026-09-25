@@ -4,7 +4,7 @@ import { useI18nStore } from "../stores/i18n";
 import CorpusFieldOwnershipBadge from "./CorpusFieldOwnershipBadge.vue";
 import UiCombobox from "./ui/UiCombobox.vue";
 import { normalizeMetadataFieldValue } from "../domain/metadataFieldRegistry";
-import { usableListOptions } from "../domain/metadataValues";
+import { metadataValueText, unwrapMetadataValue, usableListOptions } from "../domain/metadataValues";
 
 const props = defineProps<{
   field: string;
@@ -102,8 +102,8 @@ const resolvedValue = computed(() => {
   );
 });
 function editableValue() {
-  const value = resolvedValue.value;
-  return Array.isArray(value) ? value.join(", ") : (value ?? "");
+  const value = unwrapMetadataValue(resolvedValue.value);
+  return Array.isArray(value) ? value.join(", ") : metadataValueText(value);
 }
 watch(
   () => [
@@ -173,10 +173,10 @@ function selectFromText() {
   markDirty();
 }
 function display(value: unknown) {
-  if (value === true) return i18n.t("ui.yes");
-  if (value === false) return i18n.t("ui.no");
-  if (Array.isArray(value)) return value.join(", ") || "—";
-  return value === null || value === undefined || value === "" ? "—" : String(value);
+  const unwrapped = unwrapMetadataValue(value);
+  if (unwrapped === true) return i18n.t("ui.yes");
+  if (unwrapped === false) return i18n.t("ui.no");
+  return metadataValueText(unwrapped) || "—";
 }
 const confidenceLabel = computed(() =>
   confidence.value === null
@@ -320,7 +320,7 @@ const autoResolved = computed(
         </ul>
       </div>
     </details>
-    <div v-else class="field-editor">
+    <div v-if="editing" class="field-editor">
       <div
         v-if="
           ['deterministic_llm_disagreement', 'human_llm_disagreement'].includes(
