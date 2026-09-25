@@ -510,7 +510,6 @@ const {
 } = useCorpusIngestWarning(selectedAsset);
 
 function openRecordSourceWarning(record: CorpusRecord) {
-  if (sourceWarningsHidden()) return;
   selectRecord(record);
   recordSourceWarningOpen.value = true;
 }
