@@ -92,7 +92,8 @@ export const ProtectedSuggestion: Story = {
               confidence: 0.81,
               model: "qwen3:8b",
               pass: 3,
-              reason: "The model proposal was retained as information and did not overwrite the human decision.",
+              reason:
+                "The model proposal was retained as information and did not overwrite the human decision.",
             },
           ],
         },
