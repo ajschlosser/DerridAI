@@ -17,7 +17,8 @@ const corpusBuilderApi = vi.hoisted(() => ({
 }));
 
 vi.mock("../../src/api/corpus", async () => {
-  const actual = await vi.importActual<typeof import("../../src/api/corpus")>("../../src/api/corpus");
+  const actual =
+    await vi.importActual<typeof import("../../src/api/corpus")>("../../src/api/corpus");
   return { ...actual, corpusBuilderApi };
 });
 
@@ -109,9 +110,7 @@ function setup() {
     t: (key, fallback) => fallback || key,
     tf: (key, fallbackOrValues, values) => {
       const vars =
-        fallbackOrValues && typeof fallbackOrValues === "object"
-          ? fallbackOrValues
-          : values || {};
+        fallbackOrValues && typeof fallbackOrValues === "object" ? fallbackOrValues : values || {};
       return Object.entries(vars).reduce(
         (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
         typeof fallbackOrValues === "string" ? fallbackOrValues : key,
@@ -153,13 +152,7 @@ describe("Corpus Builder metadata review", () => {
     expect(state.queued).toHaveLength(1);
 
     await state.queued[0](false);
-    expect(corpusBuilderApi.metadataDecision).toHaveBeenCalledWith(
-      "b1",
-      "r1",
-      "target",
-      "Kant",
-      1,
-    );
+    expect(corpusBuilderApi.metadataDecision).toHaveBeenCalledWith("b1", "r1", "target", "Kant", 1);
     expect(state.applyAuthoritativeRecord).toHaveBeenCalled();
   });
 
@@ -169,9 +162,7 @@ describe("Corpus Builder metadata review", () => {
     await state.review.assignEvidenceBlock("speaker", "block-1");
 
     expect(state.selectedEvidenceField.value).toBe("speaker");
-    expect(state.selectedRecord.value?.metadata_evidence?.speaker?.block_ids).toEqual([
-      "block-1",
-    ]);
+    expect(state.selectedRecord.value?.metadata_evidence?.speaker?.block_ids).toEqual(["block-1"]);
     expect(state.queued).toHaveLength(1);
 
     corpusBuilderApi.patchEvidence.mockResolvedValue(state.selectedRecord.value);
