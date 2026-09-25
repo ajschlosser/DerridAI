@@ -174,4 +174,54 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
     );
     wrapper.unmount();
   });
+
+  it("keeps canonical FieldAssertion provenance editable", async () => {
+    const wrapper = mount(CorpusMetadataFieldEditor, {
+      props: {
+        field: "speaker",
+        value: "Jacques Derrida",
+        control: "text",
+        status: {
+          status: "model_inferred",
+          method: "llm",
+          assertion_id: "assertion-1",
+          field_id: "derridai.speaker",
+          derivation_method: "model",
+          evaluation_status: "value_supported",
+          authority_status: "unreviewed",
+          value_status: "present",
+        },
+      },
+    });
+
+    expect(wrapper.find("input").exists()).toBe(false);
+    const edit = wrapper.findAll("button").find((button) => button.text().includes("Edit"));
+    expect(edit).toBeTruthy();
+    await edit!.trigger("click");
+    await nextTick();
+    expect(wrapper.find("input").exists()).toBe(true);
+    expect((wrapper.get("input").element as HTMLInputElement).value).toBe("Jacques Derrida");
+    expect(wrapper.find(".assertion-provenance").exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("unwraps structured compatibility values instead of rendering object Object", async () => {
+    const wrapper = mount(CorpusMetadataFieldEditor, {
+      props: {
+        field: "speaker",
+        value: { value: "Jacques Derrida", reason: "model proposal" },
+        control: "text",
+        status: { status: "model_inferred", method: "llm" },
+      },
+    });
+
+    expect(wrapper.text()).toContain("Jacques Derrida");
+    expect(wrapper.text()).not.toContain("[object Object]");
+    const edit = wrapper.findAll("button").find((button) => button.text().includes("Edit"));
+    await edit!.trigger("click");
+    await nextTick();
+    expect((wrapper.get("input").element as HTMLInputElement).value).toBe("Jacques Derrida");
+    wrapper.unmount();
+  });
+
 });
