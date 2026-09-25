@@ -660,12 +660,15 @@ class ReviewActionsMixin:
         if expected_revision is not None and current_revision != int(expected_revision):
             raise ValueError("This record changed after it was opened. Reload it before saving metadata.")
         self._push_record_review_history(build_id, action="metadata_edit", record_id=record_id, previous_record=previous_record)
+        schema = self._schema_for(build_id)
+        migrate_record_assertions(target, schema)
         decision_log = list(target.get("metadata_decisions") or [])
         skipped: set[str] = set()
         for key, value in changes.items():
             status = target.setdefault("metadata_field_status", {})
             prior_status = dict(status.get(key) or {}) if isinstance(status.get(key), dict) else {}
             prior_value = target.get(key)
+            prior_assertion = current_assertion_by_name(target, key)
             owed = _second_opinion_owed(target, key)
             if owed:
                 # This is the independent second opinion, not an edit: it is compared with the first answer and the record is left alone.
@@ -683,9 +686,6 @@ class ReviewActionsMixin:
                 target["metadata_evidence"] = evidence_map
             target[key] = value
             if key in self._editable_fields(build_id):
-                schema = self._schema_for(build_id)
-                migrate_record_assertions(target, schema)
-                prior_assertion = current_assertion_by_name(target, key)
                 is_manifest_override = key in MANIFEST_INHERITED_FIELDS
                 if (
                     prior_assertion is not None
@@ -740,7 +740,6 @@ class ReviewActionsMixin:
         self._rewrite_targeted_record(build_id, target, previous_record)
         # Return the record as persisted after authoritative state derivation.
         persisted = target
-        schema = self._schema_for(build_id)
         for key, value in changes.items():
             if key not in skipped:
                 persist_record_decision(
@@ -792,20 +791,20 @@ class ReviewActionsMixin:
             if query_l and query_l not in (str(record.get("record_id") or "") + " " + str(record.get("text") or "")).casefold():
                 continue
             self._assert_human_review_available(build_id, record)
+            schema = self._schema_for(build_id)
+            migrate_record_assertions(record, schema)
             decisions = list(record.get("metadata_decisions") or [])
             statuses = record.setdefault("metadata_field_status", {})
             for key, value in changes.items():
                 prior_status = dict(statuses.get(key) or {}) if isinstance(statuses.get(key), dict) else {}
                 prior_value = record.get(key)
+                prior_assertion = current_assertion_by_name(record, key)
                 self._record_human_llm_feedback(build_id, key, prior_value, value, prior_status, record)
                 if prior_value != value and isinstance(record.get("metadata_evidence"), dict):
                     evidence_map = dict(record.get("metadata_evidence") or {})
                     evidence_map.pop(key, None)
                     record["metadata_evidence"] = evidence_map
                 record[key] = value
-                schema = self._schema_for(build_id)
-                migrate_record_assertions(record, schema)
-                prior_assertion = current_assertion_by_name(record, key)
                 override = key in MANIFEST_INHERITED_FIELDS or (
                     prior_assertion is not None and prior_assertion.value != value
                 )
