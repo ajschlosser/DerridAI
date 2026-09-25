@@ -1,6 +1,7 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 from __future__ import annotations
 
+from app import corpus_builder as cb
 from app import metadata_exemplar_projection as projection
 
 
@@ -156,3 +157,22 @@ def test_projector_does_not_acknowledge_if_chroma_rebuild_fails(monkeypatch):
     except RuntimeError as exc:
         assert "chroma unavailable" in str(exc)
     assert acknowledged == []
+
+
+def test_best_effort_projection_never_makes_review_depend_on_chroma():
+    manager = object.__new__(cb.PdfCorpusBuildManager)
+    warnings: list[tuple[str, str]] = []
+
+    def fail_projection(build_id: str, *, force: bool = False):
+        raise RuntimeError("chroma unavailable")
+
+    manager._project_metadata_exemplars = fail_projection  # type: ignore[method-assign]
+    manager._append_warning = lambda build_id, message: warnings.append((build_id, message))  # type: ignore[method-assign]
+
+    result = manager._project_metadata_exemplars_best_effort("build-1")
+
+    assert result["projected"] is False
+    assert result["error"] == "chroma unavailable"
+    assert warnings and warnings[0][0] == "build-1"
+    assert "projection is pending" in warnings[0][1]
+
