@@ -31,6 +31,8 @@ export interface SchemaField {
   assess: boolean;
   review: boolean;
   retrieval_profile: RetrievalProfile;
+  pos_tags: string[];
+  ner_tags: string[];
 }
 export interface SchemaGroup {
   key: string;
@@ -108,6 +110,8 @@ export function blankField(group = CORE_GROUP): SchemaField {
     evidence: false,
     assess: false,
     review: false,
+    pos_tags: [],
+    ner_tags: [],
     retrieval_profile: {
       enabled: true,
       scope: "same_field",

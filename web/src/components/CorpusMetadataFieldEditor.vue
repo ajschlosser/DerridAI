@@ -62,6 +62,8 @@ const resolvedValue = computed(() => {
     hasValue(status.llm_value)
   )
     return normalizeMetadataFieldValue(props.field, status.llm_value);
+  if (status.reason_code === "human_llm_disagreement" && hasValue(status.prefilled_value))
+    return normalizeMetadataFieldValue(props.field, status.prefilled_value);
   if (
     hasValue(props.value) &&
     !(props.control === "multi-combobox" && leakedAssessment(props.value))
@@ -227,7 +229,7 @@ const autoResolved = computed(
     <div v-if="!editing" class="field-current">{{ display(resolvedValue) }}</div>
     <div v-else class="field-editor">
       <div
-        v-if="status?.reason_code === 'deterministic_llm_disagreement'"
+        v-if="['deterministic_llm_disagreement', 'human_llm_disagreement'].includes(String(status?.reason_code || ''))"
         class="disagreement"
         role="status"
       >

@@ -183,6 +183,10 @@ const fieldsOf = (key: string) =>
     .map((field, index) => ({ field, index }))
     .filter((item) => item.field.group === key);
 const addValue = (field: SchemaField) => field.values.push({ value: "", definition: "" });
+const tagText = (values: string[]) => values.join(", ");
+const setTags = (field: SchemaField, key: "pos_tags" | "ner_tags", text: string) => {
+  field[key] = [...new Set(text.split(/[,\n]/).map((value) => value.trim()).filter(Boolean))].slice(0, 16);
+};
 
 // ---- preview ---------------------------------------------------------------------------------------------------
 const previewGroup = ref(CORE_GROUP);
@@ -453,6 +457,24 @@ defineExpose({ select, draft });
                 )
               }}</small></label
             >
+            <div class="row nlp-hints">
+              <label class="schema-field"
+                ><span>{{ t("pos_tags", "POS tags (optional)") }}</span
+                ><input
+                  class="control"
+                  :value="tagText(item.field.pos_tags || [])"
+                  placeholder="NOUN, PROPN"
+                  @input="setTags(item.field, 'pos_tags', ($event.target as HTMLInputElement).value)"
+              /></label>
+              <label class="schema-field"
+                ><span>{{ t("ner_tags", "NER tags (optional)") }}</span
+                ><input
+                  class="control"
+                  :value="tagText(item.field.ner_tags || [])"
+                  placeholder="PERSON, WORK_OF_ART"
+                  @input="setTags(item.field, 'ner_tags', ($event.target as HTMLInputElement).value)"
+              /></label>
+            </div>
             <div v-if="item.field.type === 'choice'" class="values">
               <div v-for="(value, vi) in item.field.values" :key="vi" class="value-row">
                 <input
