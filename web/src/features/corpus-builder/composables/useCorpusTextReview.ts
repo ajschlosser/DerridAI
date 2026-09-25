@@ -71,10 +71,7 @@ export function useCorpusTextReview(options: CorpusTextReviewOptions) {
   function beginTextEdit(useTouchupProposal = false) {
     if (!options.selectedRecord.value) return;
     editingText.value = true;
-    if (
-      useTouchupProposal &&
-      options.selectedRecord.value.text_touchup_proposal?.proposed_text
-    ) {
+    if (useTouchupProposal && options.selectedRecord.value.text_touchup_proposal?.proposed_text) {
       textDraft.value = options.selectedRecord.value.text_touchup_proposal.proposed_text;
     } else if (!textDraft.value) {
       textDraft.value = String(options.selectedRecord.value.text || "");
@@ -87,10 +84,7 @@ export function useCorpusTextReview(options: CorpusTextReviewOptions) {
     textDraft.value = String(options.selectedRecord.value.text || "");
     try {
       localStorage.removeItem(
-        options.textDraftKey(
-          options.selectedBuildId.value,
-          options.selectedRecord.value.record_id,
-        ),
+        options.textDraftKey(options.selectedBuildId.value, options.selectedRecord.value.record_id),
       );
     } catch {
       // Browser storage is optional.
@@ -258,9 +252,7 @@ export function useCorpusTextReview(options: CorpusTextReviewOptions) {
         "dismissed",
       );
       options.selectedRecord.value = updated;
-      const index = options.records.value.findIndex(
-        (row) => row.record_id === updated.record_id,
-      );
+      const index = options.records.value.findIndex((row) => row.record_id === updated.record_id);
       if (index >= 0) options.records.value.splice(index, 1, updated);
       llmTouchupOpen.value = false;
     } catch (exc) {
