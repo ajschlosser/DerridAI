@@ -604,6 +604,10 @@ class ReviewActionsMixin:
                 self._record_human_llm_feedback(build_id, key, prior_value, value, prior_status, target)
                 self._schedule_recheck(build_id, target, key, value)
                 self._request_second_opinion(build_id, target, key, value)
+            if prior_value != value and isinstance(target.get("metadata_evidence"), dict):
+                evidence_map = dict(target.get("metadata_evidence") or {})
+                evidence_map.pop(key, None)
+                target["metadata_evidence"] = evidence_map
             target[key] = value
             if key in self._editable_fields(build_id):
                 is_override = key in MANIFEST_INHERITED_FIELDS
@@ -687,6 +691,10 @@ class ReviewActionsMixin:
                 prior_status = dict(statuses.get(key) or {}) if isinstance(statuses.get(key), dict) else {}
                 prior_value = record.get(key)
                 self._record_human_llm_feedback(build_id, key, prior_value, value, prior_status, record)
+                if prior_value != value and isinstance(record.get("metadata_evidence"), dict):
+                    evidence_map = dict(record.get("metadata_evidence") or {})
+                    evidence_map.pop(key, None)
+                    record["metadata_evidence"] = evidence_map
                 record[key] = value
                 override = key in MANIFEST_INHERITED_FIELDS
                 statuses[key] = {
@@ -763,6 +771,13 @@ class ReviewActionsMixin:
             prior_status = dict((target.get("metadata_field_status") or {}).get(field) or {})
             self._record_human_llm_feedback(build_id, field, target.get(field), None, prior_status, target)
             target[field] = None
+            evidence_map = (
+                dict(target.get("metadata_evidence") or {})
+                if isinstance(target.get("metadata_evidence"), dict)
+                else {}
+            )
+            evidence_map.pop(field, None)
+            target["metadata_evidence"] = evidence_map
             target.setdefault("metadata_field_status", {})[field] = {"status":"confirmed_absent","method":"human","confidence":1.0,"reason_code":"no_supported_value","reason":"Reviewer confirmed that no supported value applies to this record."}
             target.setdefault("metadata_decisions", []).append({"field":field,"value":None,"at":iso_now(),"source":"confirmed_absent"})
             target["metadata_decisions"] = target["metadata_decisions"][-100:]
