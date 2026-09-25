@@ -180,6 +180,12 @@ export interface CorpusBuild {
     relationship_errors?: string[];
     human_ownership_errors?: string[];
     record_content_errors?: string[];
+    validation_issues?: Array<{
+      code?: string;
+      record_id?: string;
+      field?: string;
+      reason?: string;
+    }>;
   };
   manifest?: Record<string, unknown>;
   manifest_revision?: number;
