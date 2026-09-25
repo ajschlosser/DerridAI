@@ -63,17 +63,93 @@ export function isPlaceholderValue(value: unknown): boolean {
 export function usableOptions(values: Iterable<unknown>): string[] {
   const out = new Set<string>();
   for (const value of values)
-    if (typeof value === "string" && !isPlaceholderValue(value)) out.add(value.trim());
+    if (isUsableMetadataSuggestion(value)) out.add(value.trim());
   return [...out];
 }
 
 /** Expand list-field values without splitting prose fields that may contain commas. */
 export function usableListOptions(values: Iterable<unknown>): string[] {
   const expanded: string[] = [];
-  for (const value of values) {
+  for (const raw of values) {
+    const value = unwrapMetadataValue(raw);
     if (Array.isArray(value)) expanded.push(...value);
-    else if (typeof value === "string") expanded.push(...value.split(/[,\n]/));
-    else expanded.push(value as never);
+    else if (typeof value === "string") {
+      if (!looksLikeRuntimeFragment(value)) expanded.push(...value.split(/[,\n]/));
+    } else expanded.push(value as never);
   }
   return usableOptions(expanded);
+}
+
+
+/**
+ * Unwrap the common accidental envelope shape produced by older compatibility
+ * projections. Scholarly field values themselves are scalar/list values; audit
+ * objects belong in assertion/status metadata rather than the editable value.
+ */
+export function unwrapMetadataValue(value: unknown): unknown {
+  if (
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.prototype.hasOwnProperty.call(value, "value")
+  ) {
+    const inner = (value as Record<string, unknown>).value;
+    if (
+      inner === null ||
+      ["string", "number", "boolean"].includes(typeof inner) ||
+      Array.isArray(inner)
+    ) {
+      return inner;
+    }
+  }
+  return value;
+}
+
+function looksLikeRuntimeFragment(value: string): boolean {
+  const text = value.trim();
+  if (!text) return true;
+  if (/^p\d{3,}-b\d{3,}$/i.test(text) || /^b\d{3,}$/i.test(text)) return true;
+  if (
+    /"(?:block_ids|confidence|needs_review|reason|outcome|field_evidence|field_assessments)"\s*:/i.test(
+      text,
+    )
+  )
+    return true;
+  if (/^[\[\]{}]",?$/.test(text) || /^[\[\]{}]/.test(text) || /[\[\]{}]$/.test(text))
+    return true;
+  if (/^["'][^"']+["']\s*:\s*/.test(text)) return true;
+  return false;
+}
+
+/** A candidate suitable for human-facing metadata autocomplete. */
+export function isUsableMetadataSuggestion(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const text = value.trim();
+  return (
+    text.length > 0 &&
+    text.length <= 240 &&
+    !isPlaceholderValue(text) &&
+    !looksLikeRuntimeFragment(text)
+  );
+}
+
+/** Human-readable fallback that never leaks JavaScript's "[object Object]". */
+export function metadataValueText(value: unknown): string {
+  const unwrapped = unwrapMetadataValue(value);
+  if (Array.isArray(unwrapped))
+    return unwrapped
+      .map((item) =>
+        item && typeof item === "object" ? JSON.stringify(item) : String(item ?? ""),
+      )
+      .filter(Boolean)
+      .join(", ");
+  if (unwrapped === null || unwrapped === undefined || unwrapped === "") return "";
+  if (typeof unwrapped === "object") {
+    try {
+      return JSON.stringify(unwrapped);
+    } catch {
+      return "";
+    }
+  }
+  return String(unwrapped);
 }
