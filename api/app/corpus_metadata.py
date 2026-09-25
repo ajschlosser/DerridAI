@@ -71,7 +71,7 @@ def _strip_llm_transport_suffix(value: Any) -> tuple[Any, Any | None]:
     match = _LLM_TRANSPORT_SUFFIX.search(value)
     if not match or match.start() <= 0:
         return value, None
-    clean = value[: match.start()].rstrip(" ,;")
+    clean = value[: int(match.start())].rstrip(" ,;")
     return (clean or None), value
 
 
