@@ -349,10 +349,7 @@ export function useCorpusBoundaryReview(options: CorpusBoundaryReviewOptions) {
       const beforeSelected = options.selectedRecord.value;
       const neighbor = options.records.value[neighborIndex];
       const moved = targetText
-        .slice(
-          direction === "previous" ? 0 : offset,
-          direction === "previous" ? offset : undefined,
-        )
+        .slice(direction === "previous" ? 0 : offset, direction === "previous" ? offset : undefined)
         .trim();
       const retained = targetText.slice(direction === "previous" ? offset : 0).trim();
       if (!moved || !retained) return;
