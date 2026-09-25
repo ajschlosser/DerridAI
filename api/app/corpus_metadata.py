@@ -5,6 +5,7 @@ No repository, model-provider, or job-manager dependency is permitted here.
 """
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .field_assertions import (
@@ -50,19 +51,44 @@ STRONG_STRUCTURAL_METHODS = {
     "confirmed_manifest_page_range",
 }
 
+_LLM_TRANSPORT_SUFFIX = re.compile(
+    r"\\s*,?\\s*(?:field[_ -]?evidence|field[_ -]?assessments)"
+    r"(?:-[A-Za-z0-9_.:-]+)?\\s*:",
+    re.IGNORECASE,
+)
+
+
+def _strip_llm_transport_suffix(value: Any) -> tuple[Any, Any | None]:
+    """Keep model transport/audit syntax out of scholarly metadata values.
+
+    Some small models occasionally flatten a neighbouring structured-output
+    field into a scalar value, such as a person name followed by a
+    field_evidence marker. Preserve the raw response for audit while selecting
+    only the value before that explicit structured-output marker.
+    """
+    if not isinstance(value, str):
+        return value, None
+    match = _LLM_TRANSPORT_SUFFIX.search(value)
+    if not match or match.start() <= 0:
+        return value, None
+    clean = value[: match.start()].rstrip(" ,;")
+    return (clean or None), value
+
+
 def _normalize_semantic_value(field: str, value: Any) -> tuple[Any, Any | None]:
     """Canonicalize only closed-vocabulary grammatical aliases.
 
     The raw model value is returned separately for audit. We deliberately avoid
     semantic synonym expansion: only direct inflectional variants are normalized.
     """
+    value, transport_raw = _strip_llm_transport_suffix(value)
     if isinstance(value, str) and is_placeholder(value):
-        return None, value  # the raw text is kept for audit; it is not a value
+        return None, transport_raw or value  # raw text is kept for audit; it is not a value
     if isinstance(value, list) and any(is_placeholder(item) for item in value):
         return clean_value(value), value
     if field != "stance" or not isinstance(value, str):
-        return value, None
-    raw = value
+        return value, transport_raw
+    raw = transport_raw or value
     token = value.strip().casefold()
     if token in STANCE_VALUES:
         return token, None
