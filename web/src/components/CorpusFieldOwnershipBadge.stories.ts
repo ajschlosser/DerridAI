@@ -53,7 +53,8 @@ export const Unclassified: Story = {
 export const NarrowWrappedBadges: Story = {
   args: { status: "model_inferred", audit: true },
   decorators: [
-    () => ({
+    (story) => ({
+      components: { story },
       template: '<div style="max-width: 180px"><story /></div>',
     }),
   ],
