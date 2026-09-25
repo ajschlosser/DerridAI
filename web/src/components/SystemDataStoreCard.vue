@@ -66,7 +66,7 @@ small { display: block; margin-top: 7px; color: var(--muted); overflow-wrap: any
   display: inline-flex;
   gap: 6px;
   align-items: center;
-  font-size: .74rem;
+  font-size: .75rem;
   color: var(--muted);
 }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
