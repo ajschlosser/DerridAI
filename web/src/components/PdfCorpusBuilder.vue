@@ -80,6 +80,9 @@ import {
 import { useCorpusPublication } from "../features/corpus-builder/composables/useCorpusPublication";
 import AppIcon from "./AppIcon.vue";
 import CorpusRunMonitor from "./corpus-builder/CorpusRunMonitor.vue";
+import CorpusConfigurationNav, {
+  type CorpusConfigurationSection,
+} from "./corpus-builder/CorpusConfigurationNav.vue";
 import CorpusActionMenu, { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
 import { recordState, recordIssueKinds } from "../domain/corpusReview";
 import { RecordMutationQueue } from "../domain/recordMutationQueue";
@@ -270,6 +273,7 @@ const notice = ref("");
 const statusRegion = ref<HTMLElement | null>(null);
 const acceptButtonEl = ref<HTMLButtonElement | null>(null);
 const advancedOpen = ref(false);
+const configurationSection = ref<CorpusConfigurationSection>("source");
 const recordSaveQueue = new RecordMutationQueue();
 const documentMetadataOpen = ref(false);
 const textCleanupOpen = ref(false);
@@ -1844,11 +1848,22 @@ defineExpose({
       <h2 id="pdf-corpus-config-title" class="sr-only">
         {{ i18n.t("pdf_corpus.build_configuration") }}
       </h2>
+      <CorpusConfigurationNav
+        v-model="configurationSection"
+        :has-source="Boolean(selectedAsset)"
+        :structure-available="Boolean(selectedAsset)"
+      />
 
-      <section class="setup-section setup-source-section" aria-labelledby="pdf-corpus-source-title">
+      <section
+        v-show="configurationSection === 'source'"
+        id="corpus-config-panel-source"
+        class="setup-section setup-source-section"
+        role="tabpanel"
+        aria-labelledby="corpus-config-tab-source"
+      >
         <div class="setup-section-head">
           <div>
-            <span class="setup-step">A</span>
+            
             <div>
               <h3 id="pdf-corpus-source-title">
                 {{ i18n.t("pdf_corpus.source_setup_title") }}
@@ -1892,11 +1907,14 @@ defineExpose({
 
       <section
         v-if="paginatedSource && selectedAsset?.pages?.length"
+        v-show="configurationSection === 'structure'"
+        id="corpus-config-panel-structure"
         class="setup-phase"
-        aria-labelledby="pdf-corpus-structure-phase-title"
+        role="tabpanel"
+        aria-labelledby="corpus-config-tab-structure"
       >
         <div class="phase-label">
-          <span class="setup-step">B</span>
+          
           <div>
             <h3 id="pdf-corpus-structure-phase-title">
               {{ i18n.t("pdf_corpus.document_structure") }}
@@ -1920,11 +1938,14 @@ defineExpose({
       </section>
       <section
         v-else-if="selectedAsset"
+        v-show="configurationSection === 'structure'"
+        id="corpus-config-panel-structure"
         class="setup-phase"
-        aria-labelledby="media-structure-phase-title"
+        role="tabpanel"
+        aria-labelledby="corpus-config-tab-structure"
       >
         <div class="phase-label">
-          <span class="setup-step">B</span>
+          
           <div>
             <h3 id="media-structure-phase-title">
               {{ i18n.t("pdf_corpus.source_interpretation", "Source interpretation") }}
@@ -1939,10 +1960,16 @@ defineExpose({
         />
       </section>
 
-      <details class="setup-section setup-disclosure" open>
+      <details
+        v-show="configurationSection === 'enrichment'"
+        id="corpus-config-panel-enrichment"
+        class="setup-section setup-disclosure"
+        role="tabpanel"
+        aria-labelledby="corpus-config-tab-enrichment"
+        open
+      >
         <summary>
-          <span class="setup-step">C</span
-          ><span
+          <span
             ><b>{{ i18n.t("pdf_corpus.llm_enrichment_title") }}</b
             ><small
               >{{ selectedProviderLabel
@@ -2097,10 +2124,12 @@ defineExpose({
         </div>
       </details>
 
-      <details class="setup-section setup-disclosure">
+      <details
+        v-show="configurationSection === 'structure'"
+        class="setup-section setup-disclosure"
+      >
         <summary>
-          <span class="setup-step">D</span
-          ><span
+          <span
             ><b>{{ i18n.t("pdf_corpus.record_construction") }}</b
             ><small>{{
               i18n.tf("pdf_corpus.readiness.sizing", {
@@ -2114,10 +2143,16 @@ defineExpose({
           <CorpusRecordSizingSettings v-model="recordSizing" :disabled="busy !== ''" />
         </div>
       </details>
-      <details class="setup-section setup-disclosure">
+      <details
+        v-show="configurationSection === 'metadata'"
+        id="corpus-config-panel-metadata"
+        class="setup-section setup-disclosure"
+        role="tabpanel"
+        aria-labelledby="corpus-config-tab-metadata"
+        open
+      >
         <summary>
-          <span class="setup-step">E</span
-          ><span
+          <span
             ><b>{{ i18n.t("schemas.title") }}</b
             ><small
               >{{ chosenSchema?.name || i18n.t("schemas.builtin")
@@ -2148,10 +2183,13 @@ defineExpose({
         </div>
       </details>
 
-      <details class="setup-section setup-disclosure">
+      <details
+        v-show="configurationSection === 'metadata'"
+        class="setup-section setup-disclosure"
+        open
+      >
         <summary>
-          <span class="setup-step">F</span
-          ><span
+          <span
             ><b>{{ i18n.t("pdf_corpus.run_guidance_title") }}</b
             ><small>{{ i18n.t("pdf_corpus.run_guidance_summary") }}</small></span
           >
@@ -2165,10 +2203,15 @@ defineExpose({
         </div>
       </details>
 
-      <details class="setup-section setup-disclosure">
+      <details
+        v-show="configurationSection === 'advanced'"
+        id="corpus-config-panel-advanced"
+        class="setup-section setup-disclosure"
+        role="tabpanel"
+        aria-labelledby="corpus-config-tab-advanced"
+      >
         <summary>
-          <span class="setup-step">G</span
-          ><span
+          <span
             ><b>{{ i18n.t("pdf_corpus.hands_free_title") }}</b
             ><small>{{
               handsFree.enabled
@@ -2182,10 +2225,9 @@ defineExpose({
         </div>
       </details>
 
-      <div class="setup-section execution-wrapper">
+      <div v-show="configurationSection === 'advanced'" class="setup-section execution-wrapper">
         <div class="setup-section-inline-head">
-          <span class="setup-step">H</span
-          ><span
+          <span
             ><b>{{ i18n.t("pdf_corpus.advanced_execution") }}</b
             ><small>{{ i18n.t("pdf_corpus.advanced_execution_help") }}</small></span
           >
