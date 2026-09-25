@@ -11,6 +11,7 @@ from app.field_assertions import (
     create_model_assertion,
     current_assertion_by_name,
     current_assertions,
+    get_assertions,
     migrate_record_assertions,
     project_record_assertions,
     replace_assertion_evidence,
@@ -172,7 +173,10 @@ def test_reset_fields_for_evaluation_preserves_durable_history() -> None:
     assert current.value_status == "unresolved"
     assert current.evaluation_status == "not_evaluated"
     assert "stance" not in record
-    assert any(item.assertion_id == original.assertion_id for item in current_assertions(record))
+    assert any(
+        item.assertion_id == original.assertion_id
+        for item in get_assertions(record, original.field_id)
+    )
 
 
 def test_worker_reset_discards_ephemeral_field_history() -> None:
