@@ -3,7 +3,6 @@
 import { computed } from "vue";
 import { hasPages } from "../domain/sourceMedia";
 import { useI18nStore } from "../stores/i18n";
-import UiButton from "./ui/UiButton.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -134,13 +133,14 @@ const buildActionLabel = computed(() =>
       </p>
     </div>
 
-    <UiButton
-      class="build-action"
-      variant="primary"
-      :label="buildActionLabel"
+    <button
+      type="button"
+      class="btn primary build-action"
       :disabled="!ready || busy"
       @click="emit('build')"
-    />
+    >
+      {{ buildActionLabel }}
+    </button>
   </section>
 </template>
 
@@ -247,10 +247,6 @@ dd small {
 
 .build-action {
   min-width: 160px;
-}
-
-.build-action :deep(.ui-button) {
-  width: 100%;
 }
 
 @media (max-width: 1100px) {
