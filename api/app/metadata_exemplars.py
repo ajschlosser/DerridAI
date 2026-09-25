@@ -14,8 +14,8 @@ import json
 import re
 from typing import Any
 
-TRUSTED_ASSERTION_STATUSES = frozenset({"human_confirmed", "human_override"})
-CONFIRMED_ABSENCE_STATUS = "confirmed_absent"
+from .field_assertions import FieldAssertion, current_assertion_by_name, migrate_record_assertions
+
 TRUSTED_MODEL_REVIEW_METHODS = frozenset({"human_review_of_llm_proposal"})
 DEFAULT_CONTEXT_BLOCK_RADIUS = 1
 PROMPT_EVIDENCE_CHARS = 420
@@ -41,19 +41,12 @@ def _unique_strings(values: Any) -> list[str]:
     return list(dict.fromkeys(str(value) for value in values if str(value).strip()))
 
 
-def _reviewed_evidence(status: dict[str, Any], evidence: dict[str, Any]) -> bool:
-    """Whether the field value and its evidence are safe to teach to another model.
-
-    An explicit human evidence edit is strongest.  We also accept evidence attached to
-    a model value when record acceptance promoted that exact model proposal through the
-    existing human_review_of_llm_proposal path.  A later human value edit does not
-    automatically bless the old model evidence, preventing stale evidence from becoming
-    a precedent for a corrected value.
-    """
+def _reviewed_evidence(assertion: FieldAssertion, evidence: dict[str, Any]) -> bool:
+    """Whether an authoritative assertion's evidence is safe as model precedent."""
 
     if str(evidence.get("reviewed_by") or "") == "human":
         return True
-    return str(status.get("method") or "") in TRUSTED_MODEL_REVIEW_METHODS
+    return str(assertion.method or "") in TRUSTED_MODEL_REVIEW_METHODS
 
 
 def _source_span(span: dict[str, Any]) -> dict[str, Any]:
@@ -151,15 +144,15 @@ def build_metadata_exemplar(
     if not field:
         return None
 
-    statuses = record.get("metadata_field_status")
-    if not isinstance(statuses, dict):
+    migrate_record_assertions(record)
+    assertion = current_assertion_by_name(record, field)
+    if assertion is None:
         return None
-    status = statuses.get(field)
-    if not isinstance(status, dict):
-        return None
-    status_name = str(status.get("status") or "")
-    is_confirmed_absence = status_name == CONFIRMED_ABSENCE_STATUS
-    if status_name not in TRUSTED_ASSERTION_STATUSES and not is_confirmed_absence:
+    is_confirmed_absence = assertion.value_status == "confirmed_absent"
+    if (
+        assertion.authority_status not in {"human_confirmed", "human_override"}
+        and not is_confirmed_absence
+    ):
         return None
 
     value = record.get(field)
@@ -169,9 +162,18 @@ def build_metadata_exemplar(
     elif value in (None, "", []):
         return None
 
-    evidence_map = record.get("metadata_evidence")
-    evidence = evidence_map.get(field) if isinstance(evidence_map, dict) else None
-    if not isinstance(evidence, dict) or not _reviewed_evidence(status, evidence):
+    evidence = next(
+        (
+            item
+            for item in assertion.evidence
+            if isinstance(item, dict) and item.get("block_ids")
+        ),
+        None,
+    )
+    if evidence is None:
+        evidence_map = record.get("metadata_evidence")
+        evidence = evidence_map.get(field) if isinstance(evidence_map, dict) else None
+    if not isinstance(evidence, dict) or not _reviewed_evidence(assertion, evidence):
         return None
 
     evidence_ids = _unique_strings(evidence.get("block_ids"))
