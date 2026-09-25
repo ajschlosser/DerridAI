@@ -14,7 +14,7 @@ import httpx
 
 from .chroma_store import ChromaStore
 from .config import settings
-from .models import OllamaTouchupOptions, RAGRunRequest
+from .models import OllamaTouchupOptions, RAGPromptMetadataPolicy, RAGRunRequest
 from .record_types import EvidenceItem, QueryDecomposition, RetrievalCandidate
 from .system_store import system_store
 
@@ -445,11 +445,55 @@ def _citation_strings(record: dict[str, Any]) -> tuple[str, str]:
     return inline.strip(), re.sub(r"\s+", " ", full).strip()
 
 
+def _prompt_metadata_value(record: Mapping[str, Any], selector: str) -> tuple[str, Any] | None:
+    """Resolve a prompt selector through current FieldAssertions or record projection."""
+    field = str(selector or "").strip()
+    if not field:
+        return None
+    selected = record.get("current_field_assertions")
+    buckets = record.get("field_assertions")
+    if isinstance(selected, dict) and isinstance(buckets, dict):
+        for field_id, values in buckets.items():
+            if not isinstance(values, list) or not values:
+                continue
+            selected_id = str(selected.get(field_id) or "")
+            current = next(
+                (item for item in values if isinstance(item, dict) and str(item.get("assertion_id") or "") == selected_id),
+                values[-1] if isinstance(values[-1], dict) else None,
+            )
+            if not isinstance(current, dict):
+                continue
+            name = str(current.get("field_name") or "")
+            identity = str(current.get("field_id") or field_id)
+            if field not in {name, identity}:
+                continue
+            if str(current.get("value_status") or "") == "confirmed_absent":
+                return name or field, None
+            if current.get("value_status") and str(current.get("value_status")) != "present":
+                return None
+            return name or field, current.get("value")
+    if field in record:
+        return field, record.get(field)
+    return None
+
+
+def _prompt_metadata(record: Mapping[str, Any], selectors: Sequence[str]) -> dict[str, Any]:
+    metadata: dict[str, Any] = {}
+    for selector in selectors:
+        resolved = _prompt_metadata_value(record, selector)
+        if resolved is None:
+            continue
+        field, value = resolved
+        # Preserve false/zero/null when explicitly selected; only absent selectors are omitted.
+        metadata[field] = value
+    return metadata
+
 def _context_string(
     records: list[dict[str, Any]],
     *,
     record_char_limit: int,
     total_char_limit: int,
+    prompt_metadata: RAGPromptMetadataPolicy | None = None,
 ) -> tuple[str, dict[str, str], list[EvidenceItem]]:
     blocks: list[str] = []
     works: dict[str, str] = {}
@@ -467,22 +511,29 @@ def _context_string(
             compact_text = compact_text.rstrip() + " …"
 
         tag = f"E{len(evidence)}"
+        policy = prompt_metadata or RAGPromptMetadataPolicy()
+        evidence_metadata = _prompt_metadata(record, policy.evidence)
+        context_metadata = _prompt_metadata(record, policy.context)
+        record_metadata = _prompt_metadata(record, policy.record)
+        metadata_lines = [
+            f"{field}={json.dumps(value, ensure_ascii=False)}"
+            for field, value in evidence_metadata.items()
+        ]
+        if context_metadata:
+            metadata_lines.append(
+                "context_metadata=" + json.dumps(context_metadata, ensure_ascii=False, sort_keys=True)
+            )
+        if record_metadata:
+            metadata_lines.append(
+                "record_metadata=" + json.dumps(record_metadata, ensure_ascii=False, sort_keys=True)
+            )
         block = "\n".join([
             f"<BEGIN EVIDENCE_TAG {tag}>",
             f"evidence_tag=[[{tag}]]",
             f"record_id={record.get('record_id', '')}",
             f"work={record.get('work', '')}",
             f"document_author={record.get('document_author', '')}",
-            f"speaker={record.get('speaker', '')}",
-            f"quoted_speaker={json.dumps(record.get('quoted_speaker', []), ensure_ascii=False)}",
-            f"quoted_author={json.dumps(record.get('quoted_author', []), ensure_ascii=False)}",
-            f"quoted_work={json.dumps(record.get('quoted_work', []), ensure_ascii=False)}",
-            f"quoted_position_holder={json.dumps(record.get('quoted_position_holder', []), ensure_ascii=False)}",
-            f"position_holder={record.get('position_holder', '')}",
-            f"stance={record.get('stance', '')}",
-            f"position_status={record.get('proposition_status', '')}",
-            f"target={record.get('target', '')}",
-            f"role={record.get('discourse_role', '')}",
+            *metadata_lines,
             f"citation={inline}",
             f"text={compact_text}",
             f"<END EVIDENCE_TAG {tag}>",
@@ -1253,6 +1304,7 @@ def run_rag_pipeline(
         reranked,
         record_char_limit=request.evidence_record_char_limit,
         total_char_limit=request.evidence_total_char_limit,
+        prompt_metadata=request.prompt_metadata,
     )
     sufficiency_issues = evidence_sufficiency_issues(evidence)
     stages.append({
