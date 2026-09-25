@@ -391,7 +391,7 @@ def confirm_absence(record: dict[str, Any], field_name: str, *, schema: Any | No
         method="human_review", actor=actor,
         confidence=prior.confidence if evaluated else None,
         calibration=copy.deepcopy(prior.calibration) if prior else None,
-        evidence=copy.deepcopy(prior.evidence) if prior else [],
+        evidence=[],
         model=prior.model if prior else None,
         run_id=prior.run_id if prior else None,
         schema_id=prior.schema_id if prior else None,
@@ -563,12 +563,17 @@ def project_record_assertions(record: dict[str, Any]) -> dict[str, Any]:
             # A legacy status has no assertion identity yet. Keep its public
             # vocabulary during the first read, even when the canonical state
             # distinguishes a proposed value from an unresolved absence.
-            if not prior.get("assertion_id"):
+            if not prior.get("assertion_id") and current.supersedes_assertion_id is None:
                 for key in ("status", "method", "confidence", "reason"):
                     if key in prior:
                         status[key] = copy.deepcopy(prior[key])
         if current.evaluation_status == "not_evaluated":
-            if not (isinstance(prior, dict) and not prior.get("assertion_id") and "confidence" in prior):
+            if not (
+                isinstance(prior, dict)
+                and not prior.get("assertion_id")
+                and current.supersedes_assertion_id is None
+                and "confidence" in prior
+            ):
                 status.pop("confidence", None)
         status_map[current.field_name] = status
         compatibility_by_name[current.field_name] = copy.deepcopy(status)
@@ -584,7 +589,7 @@ def project_record_assertions(record: dict[str, Any]) -> dict[str, Any]:
                         if key not in status and key not in {"status", "method", "confidence", "reason"}:
                             status[key] = value
         record["metadata_field_status"] = status_map
-    if evidence_map:
+    if status_map:
         record["metadata_evidence"] = evidence_map
     return record
 
