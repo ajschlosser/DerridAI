@@ -14,7 +14,8 @@ const corpusBuilderApi = vi.hoisted(() => ({
 }));
 
 vi.mock("../../src/api/corpus", async () => {
-  const actual = await vi.importActual<typeof import("../../src/api/corpus")>("../../src/api/corpus");
+  const actual =
+    await vi.importActual<typeof import("../../src/api/corpus")>("../../src/api/corpus");
   return { ...actual, corpusBuilderApi };
 });
 
