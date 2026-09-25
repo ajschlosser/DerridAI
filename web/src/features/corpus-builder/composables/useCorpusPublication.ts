@@ -19,7 +19,7 @@ export function useCorpusPublication(options: {
   refreshBuild: () => Promise<void>;
   refreshBuilds: () => Promise<void>;
   t: (key: string, fallback?: string) => string;
-  tf: (key: string, values: Record<string, unknown>) => string;
+  tf: (key: string, values: Record<string, string | number>) => string;
 }) {
   const jsonlPreviewOpen = ref(false);
   const jsonlPreview = ref<JsonlPreviewState>({
