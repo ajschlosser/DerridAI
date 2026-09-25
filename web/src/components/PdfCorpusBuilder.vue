@@ -1271,6 +1271,20 @@ function applyOptimisticMetadata(changes: Record<string, unknown>) {
   return { buildId, recordId, expectedRevision };
 }
 
+function applyAuthoritativeRecord(record: CorpusRecord, build?: CorpusBuild | null) {
+  const id = record.record_id;
+  const index = records.value.findIndex((item) => item.record_id === id);
+  if (index >= 0) records.value.splice(index, 1, record);
+  if (selectedRecordId.value === id) {
+    selectedRecord.value = record;
+    metadataDraft.value = JSON.stringify(recordMetadata(record), null, 2);
+  }
+  if (build && currentBuild.value?.build_id === build.build_id) {
+    currentBuild.value = build;
+    syncBuildInRail(build);
+  }
+}
+
 function queueRecordRequest(
   recordId: string | readonly string[],
   fields: string[],
@@ -2097,6 +2111,38 @@ async function openMetadataIssueQueue() {
   await nextTick();
   recordListEl.value?.focus({ preventScroll: true });
 }
+
+function firstValidationRecordId(): string {
+  const validation = currentBuild.value?.validation || {};
+  const actionable = validation.validation_issues?.find((item) => item?.record_id);
+  if (actionable?.record_id) return String(actionable.record_id);
+  for (const key of [
+    "metadata_evidence_errors",
+    "metadata_schema_errors",
+    "relationship_errors",
+    "human_ownership_errors",
+    "record_content_errors",
+  ] as const) {
+    const items = validation[key];
+    if (!Array.isArray(items)) continue;
+    const found = items.find(
+      (item) => item && typeof item === "object" && "record_id" in item && item.record_id,
+    );
+    if (found && typeof found === "object" && "record_id" in found) return String(found.record_id);
+  }
+  const citation = validation.citation_errors?.find(Boolean);
+  return citation ? String(citation) : "";
+}
+
+async function openValidationIssueQueue() {
+  reviewQueue.value = "issues";
+  recordQuery.value = "";
+  const first = firstValidationRecordId();
+  await nextTick();
+  await refreshRecords(true, first);
+  await nextTick();
+  recordListEl.value?.focus({ preventScroll: true });
+}
 async function openRejectedQueue() {
   reviewQueue.value = "rejected";
   recordQuery.value = "";
@@ -2270,24 +2316,29 @@ async function setDisposition(disposition: "pending" | "accepted" | "rejected") 
     }
     selectedRecord.value = row;
     await restoreReviewViewport(viewport, { record: true, inspector: true });
-    queueRecordRequest(id, ["review disposition"], (rebase) =>
-      disposition === "pending"
-        ? pdfCorpusApi.disposition(
-            buildId,
-            id,
-            "pending",
-            "",
-            rebase ? undefined : expectedRevision,
-          )
-        : pdfCorpusApi.reviewDecision(
-            buildId,
-            id,
-            "rejected",
-            "",
-            rebase ? undefined : expectedRevision,
-            reviewQueue.value,
-          ),
-    );
+    queueRecordRequest(id, ["review disposition"], async (rebase) => {
+      if (disposition === "pending") {
+        const result = await pdfCorpusApi.disposition(
+          buildId,
+          id,
+          "pending",
+          "",
+          rebase ? undefined : expectedRevision,
+        );
+        applyAuthoritativeRecord(result);
+        return result;
+      }
+      const result = await pdfCorpusApi.reviewDecision(
+        buildId,
+        id,
+        "rejected",
+        "",
+        rebase ? undefined : expectedRevision,
+        reviewQueue.value,
+      );
+      applyAuthoritativeRecord(result.record, result.build);
+      return result;
+    });
     return;
   }
   const buildId = currentBuild.value.build_id;
@@ -3182,19 +3233,33 @@ async function resolveMetadataField(field: string, value: unknown) {
   metadataSavingField.value = field;
   metadataSavedField.value = "";
   const context = applyOptimisticMetadata({ [field]: value });
-  if (!context) return;
-  metadataSavedField.value = field;
+  if (!context) {
+    metadataSavingField.value = "";
+    return;
+  }
   await restoreReviewViewport(viewport, { inspector: true });
-  queueRecordRequest(context.recordId, [field], (rebase) =>
-    pdfCorpusApi.metadataDecision(
-      context.buildId,
-      context.recordId,
-      field,
-      value,
-      rebase ? undefined : context.expectedRevision,
-    ),
+  queueRecordRequest(
+    context.recordId,
+    [field],
+    async (rebase) => {
+      const result = await pdfCorpusApi.metadataDecision(
+        context.buildId,
+        context.recordId,
+        field,
+        value,
+        rebase ? undefined : context.expectedRevision,
+      );
+      applyAuthoritativeRecord(result.record, result.build);
+      if (selectedRecordId.value === context.recordId) {
+        metadataSavingField.value = "";
+        metadataSavedField.value = field;
+      }
+      return result;
+    },
+    () => {
+      if (selectedRecordId.value === context.recordId) metadataSavingField.value = "";
+    },
   );
-  metadataSavingField.value = "";
 }
 
 async function resolveMetadataSuggestions(changes: Record<string, unknown>) {
@@ -3204,14 +3269,16 @@ async function resolveMetadataSuggestions(changes: Record<string, unknown>) {
   const context = applyOptimisticMetadata(changes);
   if (!context) return;
   await restoreReviewViewport(viewport, { inspector: true });
-  queueRecordRequest(context.recordId, Object.keys(changes), (rebase) =>
-    pdfCorpusApi.metadataDecisionBatch(
+  queueRecordRequest(context.recordId, Object.keys(changes), async (rebase) => {
+    const result = await pdfCorpusApi.metadataDecisionBatch(
       context.buildId,
       context.recordId,
       changes,
       rebase ? undefined : context.expectedRevision,
-    ),
-  );
+    );
+    applyAuthoritativeRecord(result.record, result.build);
+    return result;
+  });
 }
 
 function rememberMetadataValues(field: string, value: unknown) {
@@ -3226,20 +3293,36 @@ async function resolveMetadataNoValue(field: string) {
   if (!currentBuild.value || !selectedRecord.value) return;
   const viewport = captureReviewViewport();
   metadataSavingField.value = field;
+  metadataSavedField.value = "";
   const context = applyOptimisticMetadata({ [field]: null });
-  if (!context) return;
+  if (!context) {
+    metadataSavingField.value = "";
+    return;
+  }
   await restoreReviewViewport(viewport, { inspector: true });
-  queueRecordRequest(context.recordId, [field], (rebase) =>
-    pdfCorpusApi.metadataDecision(
-      context.buildId,
-      context.recordId,
-      field,
-      null,
-      rebase ? undefined : context.expectedRevision,
-      true,
-    ),
+  queueRecordRequest(
+    context.recordId,
+    [field],
+    async (rebase) => {
+      const result = await pdfCorpusApi.metadataDecision(
+        context.buildId,
+        context.recordId,
+        field,
+        null,
+        rebase ? undefined : context.expectedRevision,
+        true,
+      );
+      applyAuthoritativeRecord(result.record, result.build);
+      if (selectedRecordId.value === context.recordId) {
+        metadataSavingField.value = "";
+        metadataSavedField.value = field;
+      }
+      return result;
+    },
+    () => {
+      if (selectedRecordId.value === context.recordId) metadataSavingField.value = "";
+    },
   );
-  metadataSavingField.value = "";
 }
 async function clearMetadataSuggestionCache() {
   if (
@@ -4432,6 +4515,7 @@ defineExpose({
             :busy="busy !== ''"
             @retry-metadata="retryIncompleteMetadata"
             @review-metadata="openMetadataIssueQueue"
+            @review-validation="openValidationIssueQueue"
             @review-rejected="openRejectedQueue"
             @review-records="openAllReviewQueue"
             @review-source="openSourceIssueQueue"
@@ -5861,13 +5945,12 @@ defineExpose({
       ><CorpusRecordFocusReview
         v-if="focusView && selectedRecord"
         :record="selectedRecord"
+        :schema="currentBuild?.schema"
         :source-blocks="visibleBlocks"
         :busy="busy !== '' || reviewLocked"
         :can-merge-previous="canMergePrevious"
         :can-merge-next="canMergeNext"
-        :can-accept="
-          !selectedMetadataBlocked && !Boolean(selectedRecord.source_quality_issues?.length)
-        "
+        :can-accept="true"
         :region-types="regionTypes"
         :discourse-roles="discourseRoles"
         :recurring-lines="recurringCleanupLines"

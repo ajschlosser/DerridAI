@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import type { CorpusRecord, SourceBlock } from "../api/pdfCorpus";
+import type { MetadataSchema } from "../api/metadataSchemas";
 import { hideSourceWarnings } from "../domain/sourceQuality";
 import type { ProviderProfile } from "../api/system";
 import CorpusSourceIssuePanel from "./CorpusSourceIssuePanel.vue";
@@ -18,6 +19,7 @@ import AppIcon from "./AppIcon.vue";
 
 const props = defineProps<{
   record: CorpusRecord;
+  schema?: MetadataSchema | null;
   sourceBlocks?: SourceBlock[];
   sourcePdfUrl?: string;
   sourcePdfPage?: number;
@@ -506,6 +508,7 @@ watch(
           aria-labelledby="focus-tab-metadata"
         >
           <CorpusMetadataResolutionPanel
+            :schema="schema"
             :record="record"
             :region-types="regionTypes || []"
             :discourse-roles="discourseRoles || []"

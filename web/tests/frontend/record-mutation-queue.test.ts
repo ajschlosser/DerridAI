@@ -125,6 +125,37 @@ describe("RecordMutationQueue", () => {
     expect(errors).toHaveLength(0);
   });
 
+  it("rebases a later mutation queued behind a successful save", async () => {
+    const queue = new RecordMutationQueue();
+    const contexts: boolean[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    queue.enqueue(
+      "r1",
+      async ({ rebase }) => {
+        contexts.push(rebase);
+        await gate;
+      },
+      vi.fn(),
+    );
+    queue.enqueue(
+      "r1",
+      async ({ rebase }) => {
+        contexts.push(rebase);
+      },
+      vi.fn(),
+      { retryOnFailure: false },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(contexts).toEqual([false]);
+    release();
+    await queue.waitFor("r1");
+    expect(contexts).toEqual([false, true]);
+    expect(queue.hasPending("r1")).toBe(false);
+  });
+
   it("rebases the next queued mutation after an exhausted failure", async () => {
     const queue = new RecordMutationQueue();
     const contexts: boolean[] = [];

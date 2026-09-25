@@ -32,6 +32,7 @@ const flipped = ref(false);
 const root = ref<HTMLElement | null>(null);
 const trigger = ref<HTMLButtonElement | null>(null);
 const menu = ref<HTMLElement | null>(null);
+const menuStyle = ref<Record<string, string>>({});
 const menuId = `${useId()}-menu`;
 const itemId = (id: string) => `${menuId}-${id}`;
 
@@ -44,25 +45,55 @@ function focusItem(index: number) {
 }
 function keepInWindow() {
   const list = menu.value;
-  if (!list) return;
+  const button = trigger.value;
+  if (!list || !button) return;
   const margin = 8;
-  let box = list.getBoundingClientRect();
-  if (box.right > window.innerWidth - margin) {
+  const gap = 6;
+  const triggerBox = button.getBoundingClientRect();
+  const listBox = list.getBoundingClientRect();
+  const width = Math.min(listBox.width || 256, Math.max(160, window.innerWidth - margin * 2));
+  const height = listBox.height || 0;
+
+  let left = triggerBox.left;
+  if (left + width > window.innerWidth - margin) {
     alignEnd.value = true;
-    box = list.getBoundingClientRect();
+    left = triggerBox.right - width;
+  } else {
+    alignEnd.value = false;
   }
-  // In a right-to-left layout, or on a narrow window, the end-aligned list can itself run off the start edge.
-  if (box.left < margin) alignEnd.value = false;
-  const vertical = list.getBoundingClientRect();
-  if (vertical.bottom > window.innerHeight - margin || vertical.top < margin) flipped.value = true;
+  left = Math.max(margin, Math.min(left, window.innerWidth - width - margin));
+
+  const preferredTop =
+    props.placement === "top" ? triggerBox.top - height - gap : triggerBox.bottom + gap;
+  const alternateTop =
+    props.placement === "top" ? triggerBox.bottom + gap : triggerBox.top - height - gap;
+  const preferredFits =
+    preferredTop >= margin && preferredTop + height <= window.innerHeight - margin;
+  const top = preferredFits
+    ? preferredTop
+    : Math.max(margin, Math.min(alternateTop, window.innerHeight - height - margin));
+  flipped.value = !preferredFits;
+
+  menuStyle.value = {
+    left: `${Math.round(left)}px`,
+    top: `${Math.round(top)}px`,
+    maxHeight: `${Math.max(120, window.innerHeight - margin * 2)}px`,
+  };
 }
 function outside(event: Event) {
-  if (root.value && !root.value.contains(event.target as Node)) close(false);
+  const target = event.target as Node;
+  if (root.value && !root.value.contains(target) && (!menu.value || !menu.value.contains(target)))
+    close(false);
+}
+function reposition() {
+  if (open.value) keepInWindow();
 }
 async function show(at: "first" | "last") {
   if (props.disabled) return;
   open.value = true;
   document.addEventListener("pointerdown", outside, true);
+  window.addEventListener("resize", reposition);
+  window.addEventListener("scroll", reposition, true);
   alignEnd.value = false;
   flipped.value = false;
   await nextTick();
@@ -73,6 +104,8 @@ function close(returnFocus: boolean) {
   if (!open.value) return;
   open.value = false;
   document.removeEventListener("pointerdown", outside, true);
+  window.removeEventListener("resize", reposition);
+  window.removeEventListener("scroll", reposition, true);
   if (returnFocus) trigger.value?.focus();
 }
 function toggle() {
@@ -105,7 +138,11 @@ function choose(item: CorpusActionMenuItem) {
   close(true);
   emit("select", item.id);
 }
-onBeforeUnmount(() => document.removeEventListener("pointerdown", outside, true));
+onBeforeUnmount(() => {
+  document.removeEventListener("pointerdown", outside, true);
+  window.removeEventListener("resize", reposition);
+  window.removeEventListener("scroll", reposition, true);
+});
 </script>
 
 <template>
@@ -130,30 +167,33 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", outside, true)
       ><span class="action-menu-dots" aria-hidden="true"></span
       ><span class="action-menu-caret" aria-hidden="true"></span>
     </button>
-    <ul
-      v-if="open"
-      :id="menuId"
-      ref="menu"
-      class="action-menu-list"
-      role="menu"
-      :aria-label="menuLabel || label"
-      @keydown="onMenuKey"
-    >
-      <li v-for="item in items" :key="item.id" role="none">
-        <button
-          type="button"
-          role="menuitem"
-          class="action-menu-item"
-          :aria-disabled="item.reason ? 'true' : undefined"
-          :aria-describedby="item.reason ? itemId(item.id) : undefined"
-          tabindex="-1"
-          @click="choose(item)"
-        >
-          <span>{{ item.label }}</span>
-          <small v-if="item.reason" :id="itemId(item.id)">{{ item.reason }}</small>
-        </button>
-      </li>
-    </ul>
+    <Teleport to="body">
+      <ul
+        v-if="open"
+        :id="menuId"
+        ref="menu"
+        class="action-menu-list"
+        role="menu"
+        :aria-label="menuLabel || label"
+        :style="menuStyle"
+        @keydown="onMenuKey"
+      >
+        <li v-for="item in items" :key="item.id" role="none">
+          <button
+            type="button"
+            role="menuitem"
+            class="action-menu-item"
+            :aria-disabled="item.reason ? 'true' : undefined"
+            :aria-describedby="item.reason ? itemId(item.id) : undefined"
+            tabindex="-1"
+            @click="choose(item)"
+          >
+            <span>{{ item.label }}</span>
+            <small v-if="item.reason" :id="itemId(item.id)">{{ item.reason }}</small>
+          </button>
+        </li>
+      </ul>
+    </Teleport>
   </div>
 </template>
 
@@ -182,9 +222,9 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", outside, true)
     repeat-x;
 }
 .action-menu-list {
-  position: absolute;
-  z-index: 30;
-  inset-inline-start: 0;
+  position: fixed;
+  z-index: 1000;
+  overflow: auto;
   min-inline-size: 16rem;
   max-inline-size: min(22rem, calc(100vw - 16px));
   margin: 0;
@@ -194,16 +234,6 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", outside, true)
   border-radius: 12px;
   background: var(--surface-overlay, var(--card));
   box-shadow: var(--elev-3, 0 12px 32px rgba(0, 0, 0, 0.2));
-}
-.action-menu[data-align="end"] .action-menu-list {
-  inset-inline-start: auto;
-  inset-inline-end: 0;
-}
-.action-menu[data-placement="top"] .action-menu-list {
-  inset-block-end: calc(100% + 6px);
-}
-.action-menu[data-placement="bottom"] .action-menu-list {
-  inset-block-start: calc(100% + 6px);
 }
 .action-menu-item {
   display: grid;

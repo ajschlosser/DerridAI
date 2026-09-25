@@ -1,6 +1,6 @@
-import { mount } from "@vue/test-utils";
+import { DOMWrapper, mount } from "@vue/test-utils";
 import { defineComponent, h } from "vue";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import CorpusActionMenu from "../../src/components/CorpusActionMenu.vue";
 import { usePdfCorpusPaneSizing } from "../../src/composables/usePdfCorpusPaneSizing";
 import { useSplitter } from "../../src/composables/useSplitter";
@@ -16,17 +16,21 @@ const items = [
 ];
 const mountMenu = () =>
   mount(CorpusActionMenu, { props: { label: "More actions", items }, attachTo: document.body });
-const key = (wrapper: any, selector: string, k: string) =>
-  wrapper.get(selector).trigger("keydown", { key: k });
+const body = () => new DOMWrapper(document.body);
+const key = (selector: string, k: string) => body().get(selector).trigger("keydown", { key: k });
 
 describe("CorpusActionMenu", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
   it("is a menu button that opens with Enter or the arrows and focuses an item", async () => {
     const wrapper = mountMenu();
     const trigger = wrapper.get("button[aria-haspopup='menu']");
     expect(trigger.attributes("aria-expanded")).toBe("false");
     await trigger.trigger("click");
     expect(trigger.attributes("aria-expanded")).toBe("true");
-    expect(wrapper.get("[role=menu]").attributes("aria-label")).toBe("More actions");
+    expect(body().get("[role=menu]").attributes("aria-label")).toBe("More actions");
     expect(document.activeElement?.textContent).toContain("Combine with previous record");
     wrapper.unmount();
   });
@@ -34,13 +38,13 @@ describe("CorpusActionMenu", () => {
   it("moves with the arrows, wraps, and jumps with Home and End", async () => {
     const wrapper = mountMenu();
     await wrapper.get("button[aria-haspopup='menu']").trigger("click");
-    await key(wrapper, "[role=menu]", "ArrowDown");
+    await key("[role=menu]", "ArrowDown");
     expect(document.activeElement?.textContent).toContain("Combine with next record");
-    await key(wrapper, "[role=menu]", "End");
+    await key("[role=menu]", "End");
     expect(document.activeElement?.textContent).toContain("Slice record");
-    await key(wrapper, "[role=menu]", "ArrowDown");
+    await key("[role=menu]", "ArrowDown");
     expect(document.activeElement?.textContent).toContain("Combine with previous record");
-    await key(wrapper, "[role=menu]", "ArrowUp");
+    await key("[role=menu]", "ArrowUp");
     expect(document.activeElement?.textContent).toContain("Slice record");
     wrapper.unmount();
   });
@@ -49,8 +53,8 @@ describe("CorpusActionMenu", () => {
     const wrapper = mountMenu();
     const trigger = wrapper.get("button[aria-haspopup='menu']");
     await trigger.trigger("click");
-    await key(wrapper, "[role=menu]", "Escape");
-    expect(wrapper.find("[role=menu]").exists()).toBe(false);
+    await key("[role=menu]", "Escape");
+    expect(body().find("[role=menu]").exists()).toBe(false);
     expect(document.activeElement).toBe(trigger.element);
     wrapper.unmount();
   });
@@ -58,23 +62,23 @@ describe("CorpusActionMenu", () => {
   it("emits the chosen action and closes", async () => {
     const wrapper = mountMenu();
     await wrapper.get("button[aria-haspopup='menu']").trigger("click");
-    await wrapper.findAll("[role=menuitem]")[2].trigger("click");
+    await body().findAll("[role=menuitem]")[2].trigger("click");
     expect(wrapper.emitted("select")).toEqual([["slice"]]);
-    expect(wrapper.find("[role=menu]").exists()).toBe(false);
+    expect(body().find("[role=menu]").exists()).toBe(false);
     wrapper.unmount();
   });
 
   it("keeps an unavailable action focusable with its reason, and does not run it", async () => {
     const wrapper = mountMenu();
     await wrapper.get("button[aria-haspopup='menu']").trigger("click");
-    const unavailable = wrapper.findAll("[role=menuitem]")[1];
+    const unavailable = body().findAll("[role=menuitem]")[1];
     expect(unavailable.attributes("aria-disabled")).toBe("true");
     expect(unavailable.attributes("disabled")).toBeUndefined();
     const reasonId = unavailable.attributes("aria-describedby")!;
-    expect(wrapper.get(`#${reasonId}`).text()).toBe("There is no next record to combine with.");
+    expect(body().get(`#${reasonId}`).text()).toBe("There is no next record to combine with.");
     await unavailable.trigger("click");
     expect(wrapper.emitted("select")).toBeUndefined();
-    expect(wrapper.find("[role=menu]").exists()).toBe(true);
+    expect(body().find("[role=menu]").exists()).toBe(true);
     wrapper.unmount();
   });
 
@@ -83,7 +87,7 @@ describe("CorpusActionMenu", () => {
       props: { label: "More actions", items, disabled: true },
     });
     await wrapper.get("button[aria-haspopup='menu']").trigger("click");
-    expect(wrapper.find("[role=menu]").exists()).toBe(false);
+    expect(body().find("[role=menu]").exists()).toBe(false);
   });
 });
 

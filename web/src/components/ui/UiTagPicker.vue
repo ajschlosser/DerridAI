@@ -2,10 +2,15 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useId } from "vue";
 
+export interface UiTagPickerOption {
+  value: string;
+  label?: string;
+}
+
 const props = withDefaults(
   defineProps<{
     modelValue?: string[];
-    options: string[];
+    options: Array<string | UiTagPickerOption>;
     label: string;
     placeholder?: string;
     removeLabel: string;
@@ -27,20 +32,28 @@ const input = ref<HTMLInputElement | null>(null);
 const selected = computed(
   () => new Set((props.modelValue || []).map((value) => value.toLocaleUpperCase())),
 );
+const normalizedOptions = computed(() =>
+  props.options.map((option) =>
+    typeof option === "string" ? { value: option, label: "" } : option,
+  ),
+);
 const filtered = computed(() => {
   const needle = query.value.trim().toLocaleUpperCase();
-  return props.options
-    .filter((option) => !selected.value.has(option.toLocaleUpperCase()))
-    .filter((option) => !needle || option.toLocaleUpperCase().includes(needle))
+  return normalizedOptions.value
+    .filter((option) => !selected.value.has(option.value.toLocaleUpperCase()))
+    .filter((option) => {
+      const haystack = [option.value, option.label || ""].join(" ").toLocaleUpperCase();
+      return !needle || haystack.includes(needle);
+    })
     .slice(0, 40);
 });
 
 function commit(value: string) {
-  const option = props.options.find(
-    (item) => item.toLocaleUpperCase() === value.toLocaleUpperCase(),
+  const option = normalizedOptions.value.find(
+    (item) => item.value.toLocaleUpperCase() === value.toLocaleUpperCase(),
   );
-  if (!option || selected.value.has(option.toLocaleUpperCase())) return;
-  emit("update:modelValue", [...(props.modelValue || []), option]);
+  if (!option || selected.value.has(option.value.toLocaleUpperCase())) return;
+  emit("update:modelValue", [...(props.modelValue || []), option.value]);
   query.value = "";
   active.value = -1;
   open.value = true;
@@ -78,7 +91,7 @@ function keydown(event: KeyboardEvent) {
     const candidate = active.value >= 0 ? filtered.value[active.value] : filtered.value[0];
     if (candidate) {
       event.preventDefault();
-      commit(candidate);
+      commit(candidate.value);
     }
   } else if (event.key === "Escape") {
     open.value = false;
@@ -136,13 +149,14 @@ function keydown(event: KeyboardEvent) {
       <li
         v-for="(option, index) in filtered"
         :id="`${id}-option-${index}`"
-        :key="option"
+        :key="option.value"
         role="option"
         :aria-selected="false"
         :data-active="index === active ? 'true' : 'false'"
-        @mousedown.prevent="commit(option)"
+        @mousedown.prevent="commit(option.value)"
       >
-        {{ option }}
+        <strong>{{ option.value }}</strong>
+        <span v-if="option.label"> — {{ option.label }}</span>
       </li>
     </ul>
   </div>
@@ -226,6 +240,14 @@ function keydown(event: KeyboardEvent) {
   border-radius: var(--radius-control);
   cursor: pointer;
   font-size: 0.84rem;
+}
+.tag-options li strong {
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+}
+.tag-options li span {
+  color: var(--muted);
+  font-weight: 500;
 }
 .tag-options li:hover,
 .tag-options li[data-active="true"] {

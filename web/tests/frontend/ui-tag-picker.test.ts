@@ -62,4 +62,24 @@ describe("UiTagPicker", () => {
 
     expect(wrapper.emitted("update:modelValue")?.at(-1)?.[0]).toEqual(["ORG"]);
   });
+
+  it("shows descriptive option labels while persisting only the tag value", async () => {
+    const wrapper = mount(UiTagPicker, {
+      props: {
+        modelValue: [],
+        options: [
+          { value: "PROPN", label: "Proper noun" },
+          { value: "NOUN", label: "Common noun" },
+        ],
+        label: "POS tags",
+        removeLabel: "Remove {value}",
+      },
+    });
+    const input = wrapper.get('input[role="combobox"]');
+    await input.setValue("proper");
+    expect(wrapper.text()).toContain("PROPN");
+    expect(wrapper.text()).toContain("Proper noun");
+    await wrapper.get('[role="option"]').trigger("mousedown");
+    expect(wrapper.emitted("update:modelValue")?.at(-1)?.[0]).toEqual(["PROPN"]);
+  });
 });

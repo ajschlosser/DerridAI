@@ -19,6 +19,11 @@ const baseConfig = {
   evidence_total_char_limit: 100000,
   bind_citations: true,
   include_works_cited: true,
+  prompt_metadata: {
+    evidence: ["speaker", "position_holder", "stance", "discourse_role"],
+    context: [],
+    record: [],
+  },
   auto_grade: false,
   auto_grade_provider_profile_id: "phi4",
   provider_profile_id: "phi4",
@@ -48,6 +53,7 @@ const meta: Meta<typeof ResearchSettingsDrawer> = {
     },
     model: "phi4:14b",
     models: ["phi4:14b", "qwen3:14b"],
+    metadataFields: ["speaker", "position_holder", "stance", "discourse_role"],
     researcher: false,
   },
   render: (args) => ({

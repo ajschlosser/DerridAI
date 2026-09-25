@@ -3,6 +3,8 @@ export type ResearchStore = {
   count: number;
   collection_role?: string;
   embedding_model?: string;
+  filter_fields?: string[];
+  schema_id?: string;
 };
 
 export type ResearchProfile = {
@@ -117,6 +119,12 @@ export type ResearchJob = {
   events?: Array<Record<string, unknown>>;
 };
 
+export type ResearchPromptMetadataPolicy = {
+  evidence: string[];
+  context: string[];
+  record: string[];
+};
+
 export type ResearchConfig = {
   source_collection: string;
   locales: string[];
@@ -135,6 +143,7 @@ export type ResearchConfig = {
   evidence_total_char_limit: number;
   bind_citations: boolean;
   include_works_cited: boolean;
+  prompt_metadata: ResearchPromptMetadataPolicy;
   auto_grade: boolean;
   auto_grade_provider_profile_id: string;
   provider_profile_id: string;
