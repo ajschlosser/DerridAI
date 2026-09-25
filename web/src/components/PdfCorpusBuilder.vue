@@ -2634,6 +2634,36 @@ async function saveMetadata() {
     busy.value = "";
   }
 }
+async function assignEvidenceBlock(field: string, blockId: string) {
+  if (!currentBuild.value || !selectedRecord.value || !field || !blockId) return;
+  selectedEvidenceField.value = field;
+  const existing = selectedRecord.value.metadata_evidence?.[field];
+  const ids = new Set((existing?.block_ids || []).map(String));
+  if (ids.has(blockId)) return;
+  ids.add(blockId);
+  busy.value = "evidence";
+  try {
+    const row = await pdfCorpusApi.patchEvidence(
+      currentBuild.value.build_id,
+      selectedRecord.value.record_id,
+      field,
+      Array.from(ids),
+      existing?.confidence ?? 1,
+      existing?.reason || i18n.t("pdf_corpus.human_evidence_reason"),
+      Number(selectedRecord.value.record_revision || 1),
+    );
+    selectedRecord.value = row;
+    metadataDraft.value = JSON.stringify(recordMetadata(row), null, 2);
+    await refreshBuild();
+    await refreshRecords(false, row.record_id);
+    setMessage(i18n.t("pdf_corpus.evidence_saved"));
+  } catch (exc) {
+    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+  } finally {
+    busy.value = "";
+  }
+}
+
 async function toggleEvidenceBlock(blockId: string) {
   if (!currentBuild.value || !selectedRecord.value || !selectedEvidenceField.value) return;
   const viewport = captureReviewViewport();
@@ -5737,6 +5767,11 @@ onBeforeUnmount(() => {
         @open-source-viewer="sourceTranscriptionOpen = true"
         :just-processed-record-id="justProcessedRecordId"
         :next-record-id="nextQueueRecordId"
+        :selected-evidence-field="selectedEvidenceField"
+        :evidence-block-ids="[...evidenceBlockIds]"
+        @select-evidence="selectedEvidenceField = $event"
+        @toggle-evidence="toggleEvidenceBlock"
+        @assign-evidence="assignEvidenceBlock"
         @navigate-record="navigateToQueueRecord"
     /></Teleport>
   </section>
