@@ -141,7 +141,7 @@ onMounted(() => void load(0));
 .example-row small { margin-top:4px; color:var(--muted); }
 .example-row :deep(svg) { width:16px; height:16px; color:var(--muted); }
 .badges { display:flex; gap:5px; flex-wrap:wrap; justify-content:flex-end; }
-.badges span { padding:3px 7px; border:1px solid var(--line); border-radius:999px; font-size:.72rem; }
+.badges span { padding:3px 7px; border:1px solid var(--line); border-radius:999px; font-size:.75rem; }
 .pagination { display:flex; justify-content:space-between; gap:10px; align-items:center; color:var(--muted); font-size:.8rem; }
 .pagination > div { display:flex; gap:6px; }
 .detail-panel { position:fixed; z-index:50; top:0; right:0; width:min(520px,100vw); height:100vh; overflow:auto; padding:22px; border-left:1px solid var(--line); background:var(--card); box-shadow:-16px 0 40px color-mix(in srgb,currentColor 10%,transparent); }
@@ -149,7 +149,7 @@ onMounted(() => void load(0));
 .detail-panel h3 { margin:4px 0 0; }
 .detail-panel dl { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:22px 0; }
 .detail-panel dl div { min-width:0; }
-.detail-panel dt { color:var(--muted); font-size:.74rem; font-weight:700; }
+.detail-panel dt { color:var(--muted); font-size:.75rem; font-weight:700; }
 .detail-panel dd { margin:3px 0 0; overflow-wrap:anywhere; }
 .detail-panel section { border-top:1px solid var(--line); padding-top:16px; }
 .detail-panel section h4 { margin:0 0 8px; }
