@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import re
+import sqlite3
 import tempfile
 import threading
 import time
@@ -1075,6 +1076,55 @@ class PdfCorpusRepository:
     def build_records_path(self, build_id: str) -> Path:
         return self.root / "builds" / build_id / "records.jsonl"
 
+    def build_records_db_path(self, build_id: str) -> Path:
+        return self.root / "builds" / build_id / "records.sqlite3"
+
+    def _records_db(self, build_id: str) -> sqlite3.Connection:
+        path = self.build_records_db_path(build_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        connection = sqlite3.connect(path, timeout=30)
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS corpus_records (
+                record_id TEXT PRIMARY KEY,
+                ordinal INTEGER NOT NULL,
+                payload TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_corpus_records_ordinal "
+            "ON corpus_records (ordinal)"
+        )
+        return connection
+
+    def _bootstrap_records_db(self, build_id: str) -> None:
+        if self.build_records_db_path(build_id).exists():
+            return
+        records_path = self.build_records_path(build_id)
+        records: list[dict[str, Any]] = []
+        if records_path.exists():
+            with records_path.open("r", encoding="utf-8") as handle:
+                records = [
+                    _migrate_status_vocabulary(json.loads(line))
+                    for line in handle
+                    if line.strip()
+                ]
+        with self._records_db(build_id) as connection:
+            connection.executemany(
+                "INSERT OR REPLACE INTO corpus_records(record_id, ordinal, payload) VALUES (?, ?, ?)",
+                [
+                    (
+                        str(record.get("record_id") or ""),
+                        ordinal,
+                        json.dumps(record, ensure_ascii=False),
+                    )
+                    for ordinal, record in enumerate(records)
+                    if record.get("record_id")
+                ],
+            )
+            connection.commit()
+
     def build_checkpoint_path(self, build_id: str, name: str) -> Path:
         safe = re.sub(r"[^A-Za-z0-9._-]+", "_", str(name or "checkpoint"))
         return self.root / "builds" / build_id / "checkpoints" / f"{safe}.json"
@@ -1156,60 +1206,60 @@ class PdfCorpusRepository:
                 except OSError:
                     # Safe: best-effort temp-file cleanup; see _json_write.
                     pass
+            with self._records_db(build_id) as connection:
+                connection.execute("DELETE FROM corpus_records")
+                connection.executemany(
+                    "INSERT INTO corpus_records(record_id, ordinal, payload) VALUES (?, ?, ?)",
+                    [
+                        (
+                            str(record.get("record_id") or ""),
+                            ordinal,
+                            json.dumps(record, ensure_ascii=False),
+                        )
+                        for ordinal, record in enumerate(records)
+                        if record.get("record_id")
+                    ],
+                )
+                connection.commit()
 
     def update_record(self, build_id: str, record: dict[str, Any]) -> None:
         """Persist one validated record without rebuilding the whole JSONL file."""
         record_id = str(record.get("record_id") or "")
         if not record_id:
             raise ValueError("A record ID is required.")
-        path = self.build_records_path(build_id)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        replaced = False
         with self._lock:
-            fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
-            tmp = Path(tmp_name)
-            try:
-                with os.fdopen(fd, "w", encoding="utf-8") as output:
-                    if path.exists():
-                        with path.open("r", encoding="utf-8") as source:
-                            for line in source:
-                                if line.strip():
-                                    try:
-                                        current = json.loads(line)
-                                    except json.JSONDecodeError:
-                                        current = None
-                                    if isinstance(current, dict) and str(current.get("record_id") or "") == record_id:
-                                        output.write(json.dumps(record, ensure_ascii=False) + "\n")
-                                        replaced = True
-                                    else:
-                                        output.write(line)
-                    if not replaced:
-                        output.write(json.dumps(record, ensure_ascii=False) + "\n")
-                    output.flush()
-                    os.fsync(output.fileno())
-                os.replace(tmp, path)
-            finally:
-                try:
-                    tmp.unlink(missing_ok=True)
-                except OSError:
-                    pass
+            self._bootstrap_records_db(build_id)
+            with self._records_db(build_id) as connection:
+                row = connection.execute(
+                    "SELECT ordinal FROM corpus_records WHERE record_id = ?",
+                    (record_id,),
+                ).fetchone()
+                if row is None:
+                    raise KeyError(record_id)
+                connection.execute(
+                    "UPDATE corpus_records SET payload = ? WHERE record_id = ?",
+                    (json.dumps(record, ensure_ascii=False), record_id),
+                )
+                connection.commit()
 
     def load_records(self, build_id: str) -> list[dict[str, Any]]:
         self.get_build(build_id)
-        path = self.build_records_path(build_id)
-        if not path.exists():
-            return []
         with self._lock:
-            with path.open("r", encoding="utf-8") as handle:
-                return [_migrate_status_vocabulary(json.loads(line)) for line in handle if line.strip()]
+            self._bootstrap_records_db(build_id)
+            with self._records_db(build_id) as connection:
+                rows = connection.execute(
+                    "SELECT payload FROM corpus_records ORDER BY ordinal"
+                ).fetchall()
+                return [
+                    _migrate_status_vocabulary(json.loads(payload))
+                    for (payload,) in rows
+                ]
 
     def page_records(self, build_id: str, *, offset: int = 0, limit: int = 50, needs_review: bool | None = None, disposition: str | None = None, metadata_incomplete: bool | None = None, source_problem: bool | None = None, review_queue: str | None = None, query: str = "") -> dict[str, Any]:
-        # Stream the JSONL rather than loading the entire generated corpus for a
-        # browse request. Structural edits intentionally use load_records(); read
-        # pagination remains bounded no matter how large the generated record set.
+        # Read the transactional index so review pagination sees interactive
+        # updates immediately. Structural edits intentionally use load_records().
         self.get_build(build_id)
-        path = self.build_records_path(build_id)
-        if not path.exists():
+        if not self.build_records_path(build_id).exists() and not self.build_records_db_path(build_id).exists():
             return {
                 "items": [],
                 "total": 0,
@@ -1224,20 +1274,16 @@ class PdfCorpusRepository:
         metadata_values: dict[str, set[str]] = {field: set() for field in ALLOWED_METADATA_FIELDS}
         total = 0
         topology_count = 0
-        with path.open("r", encoding="utf-8") as handle:
-            for line in handle:
-                if not line.strip():
+        for record in self.load_records(build_id):
+            for field, value in record.items():
+                if field not in metadata_values and not isinstance(value, (str, list, tuple)):
                     continue
-                record = _migrate_status_vocabulary(json.loads(line))
-                for field, value in record.items():
-                    if field not in metadata_values and not isinstance(value, (str, list, tuple)):
-                        continue
-                    metadata_values.setdefault(field, set())
-                    value = record.get(field)
-                    values = value if isinstance(value, list) else [value]
-                    for item in values:
-                        if isinstance(item, str) and item.strip() and not is_placeholder(item):
-                            metadata_values[field].add(item.strip())
+                metadata_values.setdefault(field, set())
+                value = record.get(field)
+                values = value if isinstance(value, list) else [value]
+                for item in values:
+                    if isinstance(item, str) and item.strip() and not is_placeholder(item):
+                        metadata_values[field].add(item.strip())
                 deterministic_ingest = record.get("deterministic_ingest")
                 if isinstance(deterministic_ingest, dict):
                     speakers = deterministic_ingest.get("speakers")
@@ -1267,7 +1313,7 @@ class PdfCorpusRepository:
                     continue
                 if source_problem is not None and bool(record.get("source_quality_issues")) is not source_problem:
                     continue
-                if q and q not in line.casefold():
+                if q and q not in json.dumps(record, ensure_ascii=False).casefold():
                     continue
                 queue_records.append(record)
                 if review_queue and not _matches_review_queue(record, review_queue):

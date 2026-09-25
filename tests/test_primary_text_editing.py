@@ -156,8 +156,8 @@ def test_accept_and_bulk_accept_block_any_incomplete_metadata(tmp_path: Path):
     assert result["blocked_record_ids"] == ["r1"]
 
 
-def test_update_record_replaces_only_the_target_jsonl_row(tmp_path: Path):
-    """The targeted persistence path must preserve neighboring records byte-for-byte."""
+def test_update_record_updates_only_the_target_indexed_record(tmp_path: Path):
+    """The targeted persistence path must preserve neighboring records in SQLite."""
     record_one = {
         "record_id": "r1",
         "record_revision": 1,
@@ -183,11 +183,11 @@ def test_update_record_replaces_only_the_target_jsonl_row(tmp_path: Path):
         },
     )
 
-    updated_lines = repo.build_records_path(build["build_id"]).read_text(encoding="utf-8").splitlines()
-    assert updated_lines[0] == original_lines[0]
-    assert json.loads(updated_lines[1])["text"] == "second, reviewed"
-    assert json.loads(updated_lines[1])["record_revision"] == 2
-
+    persisted = repo.load_records(build["build_id"])
+    assert persisted[0] == record_one
+    assert persisted[1]["text"] == "second, reviewed"
+    assert persisted[1]["record_revision"] == 2
+    assert repo.build_records_path(build["build_id"]).read_text(encoding="utf-8").splitlines() == original_lines
 
 
 
