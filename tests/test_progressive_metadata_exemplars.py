@@ -767,3 +767,80 @@ def test_editorial_memory_excludes_corrections_when_field_policy_disables_them()
 
     assert len(semantic.calls) == 1
 
+
+
+def test_editorial_memory_honors_confirmed_absence_retrieval_policy():
+    from app.corpus_editorial_memory import EditorialMemoryMixin
+
+    reviewed = reviewed_record(
+        position_holder=None,
+        metadata_field_status={
+            "position_holder": {"status": "confirmed_absent", "method": "human"}
+        },
+        metadata_evidence={
+            "position_holder": {
+                "block_ids": ["b2"],
+                "reviewed_by": "human",
+                "reviewed_at": "2026-09-23T10:00:00Z",
+            }
+        },
+    )
+    current = {
+        "record_id": "r2",
+        "record_revision": 1,
+        "text": "Responsibility and alterity.",
+        "language": "en",
+        "metadata_field_status": {},
+    }
+
+    class Repo:
+        def load_records(self, build_id):
+            return [reviewed, current]
+
+        def get_build(self, build_id):
+            return {
+                "asset_id": "asset-1",
+                "schema": {
+                    "id": "derrida",
+                    "schema_version": "v7",
+                    "fields": [
+                        {
+                            "name": "position_holder",
+                            "field_id": "field.position_holder",
+                            "retrieval_profile": {
+                                "enabled": True,
+                                "use_for_metadata_enrichment": True,
+                                "include_corrections": True,
+                                "include_confirmed_absence": False,
+                                "max_items": 6,
+                                "min_similarity": 0.0,
+                            },
+                        }
+                    ],
+                },
+            }
+
+        def load_blocks(self, asset_id):
+            return list(blocks().values())
+
+    class GlobalLearning:
+        def conventions(self, *, exclude_build_id=""):
+            return {}
+
+    class SemanticIndex:
+        def retrieve(self, **kwargs):
+            raise AssertionError("Confirmed absence disabled by field policy must not be retrieved.")
+
+    class Memory(EditorialMemoryMixin):
+        repo = Repo()
+        _global_learning = GlobalLearning()
+        _progressive_metadata_index = SemanticIndex()
+        _progressive_metadata_warning_builds = set()
+
+        def _append_warning(self, build_id, message):
+            raise AssertionError(f"Unexpected editorial-memory warning: {build_id}: {message}")
+
+    memory = Memory()._editorial_memory("build-1", current, exclude_record_id="r2")
+
+    assert "position_holder" not in memory["examples"]
+
