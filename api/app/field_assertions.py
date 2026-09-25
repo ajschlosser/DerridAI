@@ -176,6 +176,19 @@ def current_assertion(record: dict[str, Any], field_id: str) -> FieldAssertion |
     return values[-1] if values else None
 
 
+def current_assertions(record: dict[str, Any]) -> list[FieldAssertion]:
+    """Return the selected assertion for every field identity on a record."""
+    selected = record.get("current_field_assertions")
+    if not isinstance(selected, dict):
+        return []
+    result: list[FieldAssertion] = []
+    for field_id in selected:
+        assertion = current_assertion(record, str(field_id))
+        if assertion is not None:
+            result.append(assertion)
+    return result
+
+
 def current_assertion_by_name(record: dict[str, Any], field_name: str) -> FieldAssertion | None:
     """Return the selected assertion for a field regardless of schema identity."""
     selected = record.get("current_field_assertions")
