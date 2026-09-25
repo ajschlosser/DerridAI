@@ -36,7 +36,7 @@ from .corpus_metadata import (
 from .corpus_models import CORPUS_PROFILES, PROFILE_VERSION
 from .corpus_record_quality import _metadata_source_quality_gate, iso_now
 from .corpus_review_state import _sync_record_metadata_state
-from .corpus_reviewer_helpers import _allowed_for, _scrub_sealed_field
+from .corpus_reviewer_helpers import _allowed_for, _scrub_canonical_transport, _scrub_sealed_field
 from .corpus_segmentation import _apply_manifest_metadata
 from .enrichment_ledger import (
     AUTOFILLED,
@@ -1083,4 +1083,37 @@ CURRENT REVIEWED RECORD TEXT:
         inline, full = _citation_strings(record)
         record["inline_citation"] = inline
         record["full_citation"] = full
-        return migrate_record_assertions(record, schema)
+        normalized = migrate_record_assertions(record, schema)
+        # Preserve compatibility-only audit markers that were attached after
+        # the canonical assertion was selected (for example blind, llm_checked,
+        # and raw_llm_value). The next migration pass persists them on the
+        # assertion's legacy metadata without changing canonical authority.
+        normalized_status = normalized.get("metadata_field_status")
+        if isinstance(normalized_status, dict):
+            canonical_keys = {
+                "status", "method", "reason", "confidence", "assertion_id",
+                "field_id", "derivation_method", "evaluation_status",
+                "authority_status", "value_status",
+            }
+            for field_name, source_status in field_status.items():
+                target_status = normalized_status.get(field_name)
+                if not isinstance(source_status, dict) or not isinstance(target_status, dict):
+                    continue
+                for key, value in source_status.items():
+                    if key not in canonical_keys:
+                        target_status.setdefault(key, value)
+            if any(
+                isinstance(status, dict) and status.get("blind")
+                for status in normalized_status.values()
+            ):
+                _scrub_canonical_transport(normalized)
+                for status in normalized_status.values():
+                    if not isinstance(status, dict) or not status.get("blind"):
+                        continue
+                    for key in (
+                        "confidence", "proposed_value", "llm_value", "raw_llm_value",
+                        "llm_confidence", "llm_corroboration", "conditions",
+                    ):
+                        status.pop(key, None)
+                    status["reason"] = ""
+        return normalized
