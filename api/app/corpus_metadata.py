@@ -152,6 +152,7 @@ def apply_metadata_constraints(
             record,
             "discourse_role",
             desired_role,
+            schema=schema,
             method="region_type_consistency",
             reason=role_reason,
         )
