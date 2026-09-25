@@ -203,6 +203,24 @@ class ReviewActionsMixin:
             self._schedule_metadata_exemplar_projection(build_id)
 
 
+    def _invalidate_metadata_exemplar_projection(
+        self,
+        build_id: str,
+        *,
+        record_id: str | None = None,
+        reason: str,
+    ) -> None:
+        """Mark the derived metadata index stale after authoritative review-state changes."""
+
+        system_store.mark_semantic_memory_dirty(
+            "metadata_exemplars",
+            scope_id=build_id,
+            record_id=record_id,
+            reason=reason,
+        )
+        self._schedule_metadata_exemplar_projection(build_id)
+
+
     @_serialize_record_mutation
     def set_disposition(self, build_id: str, record_id: str, disposition: str, reason: str = "", expected_revision: int | None = None) -> dict[str, Any]:
         if disposition not in {"pending", "accepted", "rejected"}:
@@ -424,6 +442,10 @@ class ReviewActionsMixin:
         records = entry["records"]
         self._rewrite_and_validate(build_id, records)
         self.repo.save_checkpoint(build_id, "review_history", {"undo": undo, "redo": redo[-40:]})
+        self._invalidate_metadata_exemplar_projection(
+            build_id,
+            reason="review_history_undo",
+        )
         return {"restored": True, "action": entry.get("action"), "selected_record_id": entry.get("selected_record_id"), "record_count": len(records), "can_undo": bool(undo), "can_redo": True}
 
 
@@ -443,6 +465,10 @@ class ReviewActionsMixin:
         records = entry["records"]
         self._rewrite_and_validate(build_id, records)
         self.repo.save_checkpoint(build_id, "review_history", {"undo": undo[-40:], "redo": redo})
+        self._invalidate_metadata_exemplar_projection(
+            build_id,
+            reason="review_history_redo",
+        )
         return {"restored": True, "action": entry.get("action"), "selected_record_id": entry.get("selected_record_id"), "record_count": len(records), "can_undo": True, "can_redo": bool(redo)}
 
 
@@ -852,15 +878,11 @@ class ReviewActionsMixin:
             # Evidence is part of the exemplar projection even when no trusted
             # value is currently eligible. If an older exemplar exists, removing
             # or changing its evidence must invalidate that derived row.
-            from .system_store import system_store
-
-            system_store.mark_semantic_memory_dirty(
-                "metadata_exemplars",
-                scope_id=build_id,
+            self._invalidate_metadata_exemplar_projection(
+                build_id,
                 record_id=record_id,
                 reason="reviewed_metadata_evidence_changed",
             )
-            self._schedule_metadata_exemplar_projection(build_id)
         return persisted
 
 
