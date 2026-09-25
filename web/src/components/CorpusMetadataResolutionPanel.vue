@@ -9,6 +9,7 @@ import type { MetadataSchema, SchemaField } from "../api/metadataSchemas";
 import CorpusMetadataFieldEditor from "./CorpusMetadataFieldEditor.vue";
 import CorpusFieldOwnershipBadge from "./CorpusFieldOwnershipBadge.vue";
 import CorpusEnrichmentChanges from "./CorpusEnrichmentChanges.vue";
+import CorpusFieldPolicyBadges from "./CorpusFieldPolicyBadges.vue";
 
 const props = defineProps<{
   record: CorpusRecord;
@@ -309,6 +310,11 @@ function displayValue(field: string) {
       :aria-label="i18n.t('pdf_corpus.metadata_needs_review')"
     >
       <div v-for="field in attentionFields" :key="field" class="metadata-list-item" role="listitem">
+        <CorpusFieldPolicyBadges
+          :field="field"
+          :schema-field="schemaFields[field]"
+          :core-required="requiredFields.has(field)"
+        />
         <CorpusMetadataFieldEditor
           :label="fieldLabel(field)"
           :field="field"
@@ -355,6 +361,11 @@ function displayValue(field: string) {
       </summary>
       <div class="metadata-grid" role="list">
         <div v-for="field in settledFields" :key="field" class="metadata-list-item" role="listitem">
+          <CorpusFieldPolicyBadges
+            :field="field"
+            :schema-field="schemaFields[field]"
+            :core-required="requiredFields.has(field)"
+          />
           <CorpusMetadataFieldEditor
             :label="fieldLabel(field)"
             :field="field"
@@ -391,6 +402,11 @@ function displayValue(field: string) {
       </p>
       <div class="metadata-grid" role="list">
         <div v-for="field in addableFields" :key="field" class="metadata-list-item" role="listitem">
+          <CorpusFieldPolicyBadges
+            :field="field"
+            :schema-field="schemaFields[field]"
+            :core-required="requiredFields.has(field)"
+          />
           <CorpusMetadataFieldEditor
             :label="fieldLabel(field)"
             :field="field"
