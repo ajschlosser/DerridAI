@@ -4,6 +4,25 @@ import CorpusConfigurationNav from "./CorpusConfigurationNav.vue";
 const meta = {
   title: "Corpus Builder/Setup/Configuration Navigation",
   component: CorpusConfigurationNav,
+  render: (args) => ({
+    components: { CorpusConfigurationNav },
+    setup: () => ({ args }),
+    template: `
+      <div>
+        <CorpusConfigurationNav v-bind="args" />
+        <div
+          v-for="id in ['source', 'structure', 'enrichment', 'metadata', 'advanced']"
+          :id="'corpus-config-panel-' + id"
+          :key="id"
+          role="tabpanel"
+          :aria-labelledby="'corpus-config-tab-' + id"
+          :hidden="args.modelValue !== id"
+        >
+          {{ id }}
+        </div>
+      </div>
+    `,
+  }),
   args: {
     modelValue: "source",
     hasSource: true,
