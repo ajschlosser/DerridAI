@@ -168,6 +168,40 @@ def test_explicit_human_evidence_allows_a_direct_human_value():
     assert exemplar["reviewed_at"] == "2026-09-23T10:00:00Z"
 
 
+def test_confirmed_absence_requires_human_bound_evidence_and_renders_as_absence():
+    record = reviewed_record(
+        position_holder=None,
+        metadata_field_status={
+            "position_holder": {"status": "confirmed_absent", "method": "human"}
+        },
+        metadata_evidence={
+            "position_holder": {
+                "block_ids": ["b2"],
+                "reviewed_by": "human",
+                "reviewed_at": "2026-09-23T10:00:00Z",
+            }
+        },
+    )
+
+    exemplar = build_metadata_exemplar(record, "position_holder", blocks())
+
+    assert exemplar is not None
+    assert exemplar["kind"] == "absence"
+    assert exemplar["field_value"] is None
+    rendered = prompt_example(exemplar, similarity=0.91)
+    assert rendered["kind"] == "absence"
+    assert rendered["value"] is None
+    assert rendered["evidence"] == blocks()["b2"]["text"]
+
+    stale = reviewed_record(
+        position_holder=None,
+        metadata_field_status={
+            "position_holder": {"status": "confirmed_absent", "method": "human"}
+        },
+    )
+    assert build_metadata_exemplar(stale, "position_holder", blocks()) is None
+
+
 def test_correction_exemplar_keeps_rejected_value_as_negative_only():
     record = reviewed_record(
         position_holder="Derrida",
