@@ -507,6 +507,10 @@ def _legacy_assertion(
     legacy_status_name = str(status.get("status") or "").strip()
     if not legacy_status_name and value in (None, "", []):
         return None
+    derivation: DerivationMethod
+    evaluation: EvaluationStatus
+    authority: AuthorityStatus
+    value_status: ValueStatus
     derivation, evaluation, authority, value_status = _STATUS_TO_CANONICAL.get(
         legacy_status_name,
         ("imported", "not_evaluated", "unreviewed", "present" if value not in (None, "", []) else "unresolved"),
