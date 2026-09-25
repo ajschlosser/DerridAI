@@ -13,7 +13,6 @@ from app.field_assertions import (
     confirm_assertion,
     create_model_assertion,
     current_assertion_by_name,
-    current_assertions,
     get_assertions,
     migrate_record_assertions,
     project_record_assertions,
