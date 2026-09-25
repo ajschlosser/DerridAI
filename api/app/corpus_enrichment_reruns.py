@@ -457,11 +457,8 @@ class EnrichmentRerunsMixin:
                             live,
                             old_assertion,
                             reason="A later metadata enrichment pass proposed a different value and neither was confident enough to decide.",
+                            legacy_metadata={"reason_code": "llm_disagreement"},
                         )
-                    project_record_assertions(live)
-                    compat = live.setdefault("metadata_field_status", {}).setdefault(field, {})
-                    if isinstance(compat, dict):
-                        compat["reason_code"] = "llm_disagreement"
         project_record_assertions(live)
         live["metadata_disputes"] = (list(live.get("metadata_disputes") or []) + disputes)[-100:]
         outcome = "enriched" if added or replaced else "disputed" if history_disputes else "unchanged"
