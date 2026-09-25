@@ -123,6 +123,7 @@ class MetadataEnrichmentExecutionMixin:
                 request = {**self._latest_runtime_request(build_id, request), **kept}
         request = experiment.with_arm(request, str(record.get("record_id") or ""))
         off = experiment.disabled(request)
+        schema = self._schema_for(build_id)
         _apply_manifest_metadata(record, manifest)
         apply_metadata_constraints(record, schema)
         editorial_memory = self._editorial_memory(
@@ -203,7 +204,6 @@ class MetadataEnrichmentExecutionMixin:
                 "metadata_rag_packet_tokens",
                 example_token_estimate,
             )
-        schema = self._schema_for(build_id)
         profile = {**CORPUS_PROFILES.get(profile_id, CORPUS_PROFILES[PROFILE_VERSION]), "review_metadata_fields": schema.review_fields()}
         required_metadata_fields = list(profile.get("required_metadata_fields") or [])
         if bool(request.get("llm_touchup_during_enrichment")) and "__text__" not in set(record.get("human_touched_fields") or []):
