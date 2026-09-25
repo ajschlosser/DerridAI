@@ -1117,7 +1117,6 @@ CURRENT REVIEWED RECORD TEXT:
         # the discourse task are the publication-critical metadata gate.
         discourse_ok = any(name == "discourse" and failure is None for name, _result, failure in stage_results)
         if not discourse_ok and str(record.get("metadata_stage_status", {}).get("discourse") or "") == "skipped":
-            status_map = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
             required_discourse = [field for field in required_metadata_fields if field in schema.family_fields()[CORE_GROUP]]
             human_or_deterministic = all(
                 (
