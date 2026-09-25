@@ -13,6 +13,7 @@ from typing import Any
 
 from . import experiment
 from .corpus_reviewer_helpers import _second_opinion_owed
+from .field_assertions import current_assertions, migrate_record_assertions, project_record_assertions
 from .metadata_exemplars import build_correction_exemplars, build_metadata_exemplar
 from .system_store import system_store
 
@@ -42,13 +43,11 @@ def _field_contract(
     }
     fields.update(core)
     for row in rows:
-        statuses = row.get("metadata_field_status")
-        if not isinstance(statuses, dict):
-            continue
-        for field in statuses:
-            name = str(field or "")
+        migrate_record_assertions(row)
+        for assertion in current_assertions(row):
+            name = str(assertion.field_name or "")
             if name and name not in fields:
-                fields[name] = f"legacy.{name}"
+                fields[name] = str(assertion.field_id or f"legacy.{name}")
     return schema_id, schema_version, fields
 
 
@@ -81,20 +80,16 @@ def derive_build_metadata_exemplars(
             continue
         if experiment.is_gold(record_id):
             continue
-        statuses = (
-            row.get("metadata_field_status")
-            if isinstance(row.get("metadata_field_status"), dict)
-            else {}
-        )
+        migrate_record_assertions(row)
+        project_record_assertions(row)
         row_is_trusted = False
-        for field, info in statuses.items():
-            field = str(field or "")
-            if (
-                not field
-                or not isinstance(info, dict)
-                or str(info.get("status") or "") not in {"human_confirmed", "human_override", "confirmed_absent"}
-                or _second_opinion_owed(row, field)
-            ):
+        for assertion in current_assertions(row):
+            field = str(assertion.field_name or "")
+            trusted = (
+                assertion.authority_status in {"human_confirmed", "human_override"}
+                or assertion.value_status == "confirmed_absent"
+            )
+            if not field or not trusted or _second_opinion_owed(row, field):
                 continue
             exemplar = build_metadata_exemplar(
                 row,
@@ -103,7 +98,7 @@ def derive_build_metadata_exemplars(
                 schema_id=schema_id,
                 schema_version=schema_version,
                 source_document_id=source_document_id,
-                field_id=field_ids.get(field, ""),
+                field_id=str(assertion.field_id or field_ids.get(field, "")),
             )
             if exemplar is not None:
                 exemplars.append(exemplar)
