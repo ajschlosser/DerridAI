@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from .corpus_metadata import ALLOWED_METADATA_FIELDS
-from .metadata_schema import MetadataSchema, default_schema
+from .corpus_metadata import FIXED_RECORD_METADATA_FIELDS
+from .metadata_schema import MetadataSchema
 from .reviewer_context import current_reviewer
 
 
@@ -90,8 +90,8 @@ def _human_touched(record: dict[str, Any]) -> bool:
 
 
 def _allowed_for(schema: MetadataSchema) -> set[str]:
-    """The fixed fields, minus those the default schema defines, plus this schema's: a schema that leaves a field out cannot have it set."""
-    return (ALLOWED_METADATA_FIELDS - {f.name for f in default_schema().fields}) | set(schema.field_names())
+    """Fields the active build may set: fixed document/computed fields plus its pinned schema."""
+    return set(FIXED_RECORD_METADATA_FIELDS) | set(schema.field_names())
 
 
 def _operation_from_build(build: dict[str, Any]) -> dict[str, Any]:
