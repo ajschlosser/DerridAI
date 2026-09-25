@@ -199,6 +199,70 @@ def test_human_evidence_edit_persists_confirmed_absence_as_absence_binding(tmp_p
     assert scheduled == [build["build_id"]]
 
 
+def test_human_value_change_invalidates_evidence_for_previous_assertion(tmp_path: Path, monkeypatch):
+    record = rec("r1", "b1")
+    record["position_holder"] = "Levinas"
+    record["metadata_field_status"]["position_holder"] = {
+        "status": "human_confirmed",
+        "method": "human",
+        "confidence": 1.0,
+    }
+    record["metadata_evidence"] = {
+        "position_holder": {
+            "block_ids": ["b1"],
+            "reviewed_by": "human",
+            "reviewed_at": "2026-09-24T00:00:00Z",
+        }
+    }
+    repo, build = install_repo(tmp_path, [record])
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    monkeypatch.setattr(review_actions, "persist_record_decision", lambda **kwargs: None)
+    monkeypatch.setattr(manager, "_schedule_metadata_exemplar_projection", lambda build_id: None)
+
+    updated = manager.patch_metadata(
+        build["build_id"],
+        "r1",
+        {"position_holder": "Derrida"},
+        expected_revision=1,
+    )
+
+    assert updated["position_holder"] == "Derrida"
+    assert "position_holder" not in (updated.get("metadata_evidence") or {})
+
+
+def test_confirmed_absence_invalidates_evidence_for_previous_value(tmp_path: Path, monkeypatch):
+    record = rec("r1", "b1")
+    record["position_holder"] = "Levinas"
+    record["metadata_field_status"]["position_holder"] = {
+        "status": "human_confirmed",
+        "method": "human",
+        "confidence": 1.0,
+    }
+    record["metadata_evidence"] = {
+        "position_holder": {
+            "block_ids": ["b1"],
+            "reviewed_by": "human",
+            "reviewed_at": "2026-09-24T00:00:00Z",
+        }
+    }
+    repo, build = install_repo(tmp_path, [record])
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    monkeypatch.setattr(review_actions, "persist_record_decision", lambda **kwargs: None)
+    monkeypatch.setattr(manager, "_schedule_metadata_exemplar_projection", lambda build_id: None)
+
+    updated = manager.metadata_decision(
+        build["build_id"],
+        "r1",
+        "position_holder",
+        None,
+        expected_revision=1,
+        confirm_no_supported_value=True,
+    )["record"]
+
+    assert updated["metadata_field_status"]["position_holder"]["status"] == "confirmed_absent"
+    assert "position_holder" not in (updated.get("metadata_evidence") or {})
+
+
 def test_review_decision_returns_structured_metadata_blocker(tmp_path: Path):
     """Accepting a record with unresolved required metadata is refused with details.
 
