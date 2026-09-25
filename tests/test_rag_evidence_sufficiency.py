@@ -10,7 +10,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "api"))
 sys.modules.setdefault("chromadb", types.SimpleNamespace())
 
-from app.rag import evidence_sufficiency_issues, extract_evidence_ids, strip_evidence_markers
+from app.rag import (
+    evidence_sufficiency_issues,
+    extract_evidence_ids,
+    strip_evidence_markers,
+)
 
 
 def _evidence(**record):
