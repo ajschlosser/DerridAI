@@ -81,7 +81,6 @@ export function editableRecordMetadata(
   );
 }
 
-
 function hasMeaningfulValue(value: unknown): boolean {
   if (Array.isArray(value)) return value.length > 0;
   return value !== null && value !== undefined && value !== "";
@@ -111,11 +110,11 @@ export function evidenceCandidateFieldNames(
     .map((field) => field.name);
 
   const alwaysVisible = new Set([...persistedEvidence, ...assertedEvidence]);
-  return Array.from(new Set([...configuredEvidence, ...assertedEvidence, ...persistedEvidence])).filter(
+  return Array.from(
+    new Set([...configuredEvidence, ...assertedEvidence, ...persistedEvidence]),
+  ).filter(
     (field) =>
       alwaysVisible.has(field) ||
-      hasMeaningfulValue(
-        record[field] !== undefined ? record[field] : assertionValueMap[field],
-      ),
+      hasMeaningfulValue(record[field] !== undefined ? record[field] : assertionValueMap[field]),
   );
 }
