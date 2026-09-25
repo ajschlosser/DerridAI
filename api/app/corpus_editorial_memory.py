@@ -99,6 +99,13 @@ class EditorialMemoryMixin:
             for item in schema_payload.get("fields") or []
             if isinstance(item, dict) and str(item.get("name") or "")
         }
+        group_profiles = {
+            str(item.get("key") or ""): item.get("retrieval_profile")
+            for item in schema_payload.get("groups") or []
+            if isinstance(item, dict)
+            and str(item.get("key") or "")
+            and isinstance(item.get("retrieval_profile"), dict)
+        }
         core_field_ids = {
             "region_type": "core.region_type",
             "primary_text": "core.primary_text",
@@ -132,9 +139,19 @@ class EditorialMemoryMixin:
         for field, _field_id in field_ids.items():
             item = schema_fields.get(field, {})
             profile = item.get("retrieval_profile") if isinstance(item, dict) else None
-            if profile is not None and not bool(profile.get("enabled", True)):
-                continue
-            if profile is not None and profile.get("use_for_metadata_enrichment") is False:
+            if not isinstance(profile, dict):
+                group_key = (
+                    "discourse"
+                    if field in core_field_ids
+                    else str(item.get("group") or "")
+                )
+                profile = group_profiles.get(group_key)
+            if isinstance(profile, dict) and (
+                not bool(profile.get("enabled", True))
+                # Preserve the meaning of already-copied legacy schemas while
+                # new schemas no longer serialize this redundant routing flag.
+                or profile.get("use_for_metadata_enrichment") is False
+            ):
                 continue
             enabled_fields.add(field)
             if profile is None or bool(profile.get("include_corrections", True)):
