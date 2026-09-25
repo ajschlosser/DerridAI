@@ -36,11 +36,11 @@ export function useCorpusSourceConfiguration(
       selectedAssetId.value = "";
   }
 
-  function rememberAsset(asset: PdfAsset) {
+  function rememberAsset(asset: PdfAsset, ingested = false) {
     assets.value = assets.value.map((item) => (item.asset_id === asset.asset_id ? asset : item));
     if (!assets.value.some((item) => item.asset_id === asset.asset_id)) assets.value.push(asset);
     selectedAssetId.value = asset.asset_id;
-    lastIngestedAsset.value = asset;
+    if (ingested) lastIngestedAsset.value = asset;
   }
 
   async function upload(file?: File | null) {
@@ -50,7 +50,7 @@ export function useCorpusSourceConfiguration(
     try {
       const asset = await corpusBuilderApi.uploadAsset(file, "auto", sourceIllegibility.value);
       await refreshAssets();
-      rememberAsset(asset);
+      rememberAsset(asset, true);
       setMessage(
         i18n.tf("pdf_corpus.source_ingested_blocks", {
           blocks: asset.block_count,
@@ -71,7 +71,7 @@ export function useCorpusSourceConfiguration(
     try {
       const asset = await corpusBuilderApi.importUrl(url, sourceIllegibility.value);
       await refreshAssets();
-      rememberAsset(asset);
+      rememberAsset(asset, true);
     } catch (exc) {
       setMessage(exc instanceof Error ? exc.message : String(exc), "error");
     } finally {
@@ -104,7 +104,7 @@ export function useCorpusSourceConfiguration(
     try {
       const asset = await corpusBuilderApi.importGutenberg(etextId, sourceIllegibility.value);
       await refreshAssets();
-      rememberAsset(asset);
+      rememberAsset(asset, true);
     } catch (exc) {
       setMessage(exc instanceof Error ? exc.message : String(exc), "error");
     } finally {
@@ -117,7 +117,7 @@ export function useCorpusSourceConfiguration(
     busy.value = "page-labels";
     try {
       const asset = await corpusBuilderApi.updatePageLabels(selectedAssetId.value, labels);
-      rememberAsset(asset);
+      rememberAsset(asset, true);
       setMessage(i18n.t("pdf_corpus.page_mapping_saved"));
     } catch (exc) {
       setMessage(exc instanceof Error ? exc.message : String(exc), "error");
