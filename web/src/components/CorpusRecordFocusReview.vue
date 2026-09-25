@@ -408,7 +408,12 @@ watch(
         >
           <b>{{ i18n.t("pdf_corpus.llm_touchup_proposal_available") }}</b
           ><span>{{ i18n.t("pdf_corpus.llm_touchup_proposal_help") }}</span
-          ><button class="btn small" type="button" :disabled="busy" @click="requestBeginTextEdit(true)">
+          ><button
+            class="btn small"
+            type="button"
+            :disabled="busy"
+            @click="requestBeginTextEdit(true)"
+          >
             {{ i18n.t("pdf_corpus.review_touchup_proposal") }}
           </button>
         </div>
@@ -426,15 +431,17 @@ watch(
             </button>
           </div>
           <textarea
-             :value="textDraft || ''"
+            :value="textDraft || ''"
             @input="updateTextDraft"
             class="focus-text-editor"
             :aria-label="i18n.t('pdf_corpus.reviewed_record_text')"
           ></textarea
           ><label v-if="record.source_quality_issues?.length" class="resolve-check"
-            ><input :checked="resolveSourceIssues" type="checkbox" @change="updateResolveSourceIssues" /><span>{{
-              i18n.t("pdf_corpus.resolve_source_with_correction")
-            }}</span></label
+            ><input
+              :checked="resolveSourceIssues"
+              type="checkbox"
+              @change="updateResolveSourceIssues"
+            /><span>{{ i18n.t("pdf_corpus.resolve_source_with_correction") }}</span></label
           >
           <div class="edit-actions">
             <button class="btn" type="button" @click="emit('cancelTextEdit')">
