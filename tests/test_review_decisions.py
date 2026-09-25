@@ -111,6 +111,49 @@ def test_set_disposition_persists_promoted_metadata_memory(tmp_path: Path, monke
     assert scheduled == [build["build_id"]]
 
 
+def test_human_evidence_edit_reprojects_trusted_metadata_memory(tmp_path: Path, monkeypatch):
+    """Adding reviewed evidence can make a human-confirmed field exemplar-eligible."""
+
+    record = rec("r1", "b1")
+    record["metadata_field_status"]["discourse_role"] = {
+        "status": "human_confirmed",
+        "method": "human",
+        "confidence": 1.0,
+    }
+    repo, build = install_repo(tmp_path, [record])
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    persisted: list[tuple[str, str, object]] = []
+    scheduled: list[str] = []
+    monkeypatch.setattr(
+        review_actions,
+        "persist_record_decision",
+        lambda **kwargs: persisted.append(
+            (
+                str(kwargs["record"].get("record_id") or ""),
+                str(kwargs["field_name"]),
+                kwargs["value"],
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        manager,
+        "_schedule_metadata_exemplar_projection",
+        lambda build_id: scheduled.append(build_id),
+    )
+
+    result = manager.patch_evidence(
+        build["build_id"],
+        "r1",
+        "discourse_role",
+        ["b1"],
+        expected_revision=1,
+    )
+
+    assert result["metadata_evidence"]["discourse_role"]["reviewed_by"] == "human"
+    assert persisted == [("r1", "discourse_role", "analysis")]
+    assert scheduled == [build["build_id"]]
+
+
 def test_review_decision_returns_structured_metadata_blocker(tmp_path: Path):
     """Accepting a record with unresolved required metadata is refused with details.
 
