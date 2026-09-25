@@ -23,6 +23,7 @@ Die vollständige Funktionsreferenz finden Sie im [Benutzerhandbuch](docs/USER_G
 
 ## Architektur
 
+<!-- prettier-ignore -->
 | Dienst      | Stack                                                               | Hinweise                                                                                                                                       |
 | ----------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `web`       | Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js, bereitgestellt durch nginx | Leitet `/api/` an die API weiter; Storybook ist als optionaler Entwicklungsdienst verfügbar                                                   |
