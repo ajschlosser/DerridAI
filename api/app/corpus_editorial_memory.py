@@ -19,6 +19,7 @@ from .corpus_enrichment_helpers import _editorial_tokens
 from .corpus_record_quality import iso_now
 from .corpus_reviewer_helpers import _second_opinion_owed
 from .enrichment_cycles import learn_from_pass
+from .field_assertions import current_assertions, migrate_record_assertions, project_record_assertions
 from .metadata_exemplars import (
     budget_prompt_examples,
     build_correction_exemplars,
@@ -117,20 +118,17 @@ class EditorialMemoryMixin:
         }
         field_ids.update(core_field_ids)
         if not schema_fields:
-            # Older builds did not persist the copied schema. Keep their
-            # field-name contract searchable while assigning a deterministic
-            # compatibility identity to new projections.
-            observed_fields = {
-                str(field)
-                for row in rows
-                for field in (row.get("metadata_field_status") or {})
-                if str(field).strip()
-            }
-            field_ids.update({
-                field: f"legacy.{field}"
-                for field in observed_fields
-                if field not in field_ids
-            })
+            # Older builds did not persist the copied schema. Canonicalize their
+            # legacy status maps once, then recover stable compatibility identities
+            # from the selected assertions instead of treating the status map as
+            # scholarly authority.
+            for row in rows:
+                migrate_record_assertions(row)
+            for row in rows:
+                for assertion in current_assertions(row):
+                    field = str(assertion.field_name or "")
+                    if field and field not in field_ids:
+                        field_ids[field] = str(assertion.field_id or f"legacy.{field}")
         field_limits: dict[str, int] = {}
         field_min_similarity: dict[str, float] = {}
         enabled_fields: set[str] = set()
@@ -176,13 +174,13 @@ class EditorialMemoryMixin:
                 continue
             if experiment.is_gold(record_id):
                 continue  # the frozen gold set is scored, never learned from
-            statuses = row.get("metadata_field_status") if isinstance(row.get("metadata_field_status"), dict) else {}
-            for field, info in statuses.items():
-                field = str(field)
-                if field not in enabled_fields or not isinstance(info, dict):
+            migrate_record_assertions(row)
+            project_record_assertions(row)
+            for assertion in current_assertions(row):
+                field = str(assertion.field_name or "")
+                if field not in enabled_fields:
                     continue
-                status_name = str(info.get("status") or "")
-                if status_name == "confirmed_absent":
+                if assertion.value_status == "confirmed_absent":
                     if field not in confirmed_absence_fields or _second_opinion_owed(row, field):
                         continue
                     exemplar = build_metadata_exemplar(
@@ -192,16 +190,16 @@ class EditorialMemoryMixin:
                         schema_id=schema_id,
                         schema_version=schema_version,
                         source_document_id=source_document_id,
-                        field_id=field_ids.get(field, ""),
+                        field_id=str(assertion.field_id or field_ids.get(field, "")),
                     )
                     if exemplar is not None:
                         canonical_exemplars.append(exemplar)
                         trusted_rows[record_id or str(id(row))] = row
                     continue
-                if status_name not in {"human_confirmed", "human_override"}:
+                if assertion.authority_status not in {"human_confirmed", "human_override"}:
                     continue
                 if _second_opinion_owed(row, field):
-                    continue  # a conventions list or example must not tell a second reviewer what the first one answered
+                    continue
                 value = row.get(field)
                 if value in (None, "", []):
                     continue
@@ -209,11 +207,6 @@ class EditorialMemoryMixin:
                 prior = counts.setdefault(field, {}).get(key)
                 counts[field][key] = (value, (prior[1] if prior else 0) + 1)
                 trusted_rows[record_id or str(id(row))] = row
-
-                # Semantic memory is evidence-gated, so any schema field may become
-                # a precedent when both the reviewed value and its source evidence
-                # are trustworthy. The lexical fallback below remains deliberately
-                # narrower for backward compatibility.
                 exemplar = build_metadata_exemplar(
                     row,
                     field,
@@ -221,7 +214,7 @@ class EditorialMemoryMixin:
                     schema_id=schema_id,
                     schema_version=schema_version,
                     source_document_id=source_document_id,
-                    field_id=field_ids.get(field, ""),
+                    field_id=str(assertion.field_id or field_ids.get(field, "")),
                 )
                 if exemplar is not None:
                     canonical_exemplars.append(exemplar)
