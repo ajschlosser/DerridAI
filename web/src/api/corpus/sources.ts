@@ -27,20 +27,30 @@ export const corpusSourcesApi = {
       method: "POST",
       body: JSON.stringify({ etext_id: etextId, source_illegibility: sourceIllegibility }),
     }),
-  assetContentUrl: (assetId: string) => `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/content`,
+  assetContentUrl: (assetId: string) =>
+    `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/content`,
   updatePageLabels: (assetId: string, labels: Record<number, string | null>) =>
-    apiRequest<PdfAsset>(`${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/page-labels`, {
-      method: "PATCH",
-      body: JSON.stringify({ labels }),
-    }),
+    apiRequest<PdfAsset>(
+      `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/page-labels`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ labels }),
+      },
+    ),
   updateDocumentLayout: (assetId: string, plan: DocumentLayoutPlan) =>
-    apiRequest<PdfAsset>(`${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/document-layout`, {
-      method: "PATCH",
-      body: JSON.stringify(plan),
-    }),
+    apiRequest<PdfAsset>(
+      `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/document-layout`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(plan),
+      },
+    ),
   blocks: (assetId: string, offset = 0, limit = 200, ids: string[] = []) =>
     apiRequest<{ items: SourceBlock[]; total: number }>(
-      `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/blocks?offset=${offset}&limit=${limit}${ids.length ? `&ids=${encodeURIComponent(ids.join(","))}` : ""}`,
+      `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/blocks?offset=${offset}&limit=${limit}${
+        ids.length ? `&ids=${encodeURIComponent(ids.join(","))}` : ""
+      }`,
     ),
-  profiles: () => apiRequest<{ items: Array<Record<string, unknown>> }>(legacyCorpusUrl("corpus-profiles")),
+  profiles: () =>
+    apiRequest<{ items: Array<Record<string, unknown>> }>(legacyCorpusUrl("corpus-profiles")),
 };
