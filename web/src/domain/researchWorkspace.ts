@@ -149,6 +149,8 @@ export function createResearchWorkspace(deps: Deps) {
         count: Number(store.count || 0),
         collection_role: store.collection_role || "general",
         embedding_model: store.embedding_model || store.metadata?.embedding_model || "",
+        filter_fields: Array.isArray(store.filter_fields) ? store.filter_fields.map(String) : [],
+        schema_id: String(store.schema_id || store.metadata?.schema_id || ""),
       })),
       profiles: profiles.map(researchProfileForUi).filter(Boolean),
       selected_evidence: evidence,
@@ -185,6 +187,7 @@ export function createResearchWorkspace(deps: Deps) {
       "evidence_total_char_limit",
       "bind_citations",
       "include_works_cited",
+      "prompt_metadata",
       "auto_grade",
       "auto_grade_provider_profile_id",
       "provider_profile_id",
@@ -286,6 +289,7 @@ export function createResearchWorkspace(deps: Deps) {
       evidence_total_char_limit: cfg.evidence_total_char_limit,
       locales: cfg.locales,
       search_types: cfg.search_types,
+      prompt_metadata: cfg.prompt_metadata,
     });
     const prompt = String(input.prompt ?? cfg.prompt ?? "").trim();
     const instructions = String(input.instructions ?? cfg.instructions ?? "").trim();
@@ -419,6 +423,7 @@ export function createResearchWorkspace(deps: Deps) {
             : null,
         bind_citations: Boolean(cfg.bind_citations),
         include_works_cited: Boolean(cfg.include_works_cited),
+        prompt_metadata: cfg.prompt_metadata,
         auto_grade: Boolean(cfg.auto_grade),
         auto_grade_provider: gradeConfig?.provider || null,
         auto_grade_model: gradeConfig?.model || null,
@@ -473,6 +478,7 @@ export function createResearchWorkspace(deps: Deps) {
       "evidence_total_char_limit",
       "bind_citations",
       "include_works_cited",
+      "prompt_metadata",
       "auto_grade",
       "auto_grade_provider_profile_id",
       "provider_profile_id",
@@ -571,6 +577,7 @@ export function createResearchWorkspace(deps: Deps) {
       "evidence_total_char_limit",
       "bind_citations",
       "include_works_cited",
+      "prompt_metadata",
       "auto_grade",
     ]) {
       if (request[key] !== undefined) cfg[key] = cloneAuditValue(request[key]);

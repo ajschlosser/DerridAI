@@ -7,6 +7,7 @@ const props = defineProps<{ build: CorpusBuild; busy?: boolean }>();
 const emit = defineEmits<{
   retryMetadata: [];
   reviewMetadata: [];
+  reviewValidation: [];
   reviewRejected: [];
   reviewRecords: [];
   reviewSource: [];
@@ -23,6 +24,9 @@ const publication = computed(() => props.build.publication || null);
 const next = computed(() => String(readiness.value.next_action || "inspect"));
 const blockers = computed(() => readiness.value.blockers || []);
 const validation = computed(() => props.build.validation || {});
+const validationIssues = computed(() =>
+  Array.isArray(validation.value.validation_issues) ? validation.value.validation_issues : [],
+);
 const sourceQuality = computed(() => props.build.source_quality || {});
 const noPublishable = computed(() => Boolean(readiness.value.no_publishable_records));
 const primaryLabel = computed(() => {
@@ -42,7 +46,7 @@ function act() {
   }
   if (next.value === "review_records") emit("reviewRecords");
   else if (next.value === "resolve_document_metadata") emit("editDocumentMetadata");
-  else if (next.value === "resolve_validation") emit("reviewRecords");
+  else if (next.value === "resolve_validation") emit("reviewValidation");
   else if (next.value === "publish") emit("publish");
 }
 function blockerLabel(code?: string) {
@@ -277,6 +281,32 @@ function fixBlocker(code?: string) {
             <dd>{{ Math.round(Number(validation.coverage || 0) * 100) }}%</dd>
           </div>
         </dl>
+        <div v-if="validationIssues.length" class="validation-issue-summary">
+          <div class="validation-issue-head">
+            <b>{{
+              i18n.tf("pdf_corpus.validation_issue_count", {
+                count: validationIssues.length,
+              })
+            }}</b>
+            <button type="button" class="link-action" @click="emit('reviewValidation')">
+              {{ i18n.t("pdf_corpus.review_validation_issues") }}
+            </button>
+          </div>
+          <ul>
+            <li
+              v-for="(issue, index) in validationIssues.slice(0, 5)"
+              :key="`${issue.code}-${issue.record_id}-${issue.field}-${index}`"
+            >
+              <code>{{ issue.field || issue.record_id || issue.code || "validation" }}</code>
+              <span>{{ issue.reason || blockerLabel(issue.code) }}</span>
+            </li>
+          </ul>
+          <small v-if="validationIssues.length > 5">{{
+            i18n.tf("pdf_corpus.validation_more_issues", {
+              count: validationIssues.length - 5,
+            })
+          }}</small>
+        </div>
       </article>
 
       <article
@@ -466,6 +496,45 @@ dd {
   font-size: 0.8125rem;
   font-weight: 800;
 }
+.validation-issue-summary {
+  display: grid;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--line);
+}
+.validation-issue-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: baseline;
+}
+.validation-issue-summary ul {
+  display: grid;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.validation-issue-summary li {
+  display: grid;
+  gap: 0.125rem;
+  padding: 0.375rem 0;
+  border-top: 1px solid var(--line);
+}
+.validation-issue-summary li:first-child {
+  border-top: 0;
+}
+.validation-issue-summary code {
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.validation-issue-summary li span,
+.validation-issue-summary small {
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
 .card-actions {
   display: flex;
   gap: 7px;

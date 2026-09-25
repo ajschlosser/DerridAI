@@ -5,10 +5,12 @@ import type { CorpusRecord } from "../api/pdfCorpus";
 import { useI18nStore } from "../stores/i18n";
 import { metadataConstraints } from "../domain/metadataConstraints";
 import { metadataFieldSpec, metadataSuggestions } from "../domain/metadataFieldRegistry";
+import { currentFieldAssertions } from "../domain/fieldAssertions";
 import type { MetadataSchema, SchemaField } from "../api/metadataSchemas";
 import CorpusMetadataFieldEditor from "./CorpusMetadataFieldEditor.vue";
 import CorpusFieldOwnershipBadge from "./CorpusFieldOwnershipBadge.vue";
 import CorpusEnrichmentChanges from "./CorpusEnrichmentChanges.vue";
+import CorpusFieldPolicyBadges from "./CorpusFieldPolicyBadges.vue";
 
 const props = defineProps<{
   record: CorpusRecord;
@@ -105,6 +107,44 @@ const fieldOrder = computed<string[]>(() =>
     : legacyOrder,
 );
 const fieldLabel = (field: string) => schemaFields.value[field]?.label || "";
+const assertionByField = computed(() =>
+  Object.fromEntries(
+    currentFieldAssertions(props.record as unknown as Record<string, unknown>).map((item) => [
+      item.field_name,
+      item,
+    ]),
+  ),
+);
+function canonicalStatus(field: string): Record<string, unknown> | null {
+  const assertion = assertionByField.value[field];
+  if (!assertion) return null;
+  let status = "inherited";
+  if (assertion.value_status === "confirmed_absent") status = "confirmed_absent";
+  else if (assertion.value_status === "invalid") status = "invalid";
+  else if (assertion.value_status === "unresolved") status = "unresolved";
+  else if (assertion.authority_status === "human_override") status = "human_override";
+  else if (assertion.authority_status === "human_confirmed") status = "human_confirmed";
+  else if (assertion.derivation_method === "model") status = "model_inferred";
+  else if (assertion.derivation_method === "deterministic") status = "deterministic";
+  else if (assertion.derivation_method === "inherited") status = "inherited";
+  return {
+    status,
+    method: assertion.derivation_method || "",
+    confidence: assertion.confidence,
+    assertion_id: assertion.assertion_id,
+    field_id: assertion.field_id,
+    authority_status: assertion.authority_status,
+    evaluation_status: assertion.evaluation_status,
+    value_status: assertion.value_status,
+  };
+}
+function fieldValue(field: string) {
+  const assertion = assertionByField.value[field];
+  if (!assertion) return props.record[field];
+  if (assertion.value_status === "confirmed_absent") return null;
+  if (assertion.value_status === "present") return assertion.value;
+  return props.record[field];
+}
 const unresolved = computed(
   () =>
     new Set([
@@ -151,7 +191,7 @@ const llmSuggestions = computed(() => {
   const out: Record<string, unknown> = {};
   for (const field of activeFields.value) {
     const info = status(field);
-    const value = props.record[field];
+    const value = fieldValue(field);
     if (
       String(info.method || "").includes("llm") &&
       unresolved.value.has(field) &&
@@ -165,7 +205,9 @@ const llmSuggestions = computed(() => {
 });
 const llmSuggestionCount = computed(() => Object.keys(llmSuggestions.value).length);
 function status(field: string) {
-  return (props.record.metadata_field_status?.[field] || {}) as Record<string, unknown>;
+  const legacy = (props.record.metadata_field_status?.[field] || {}) as Record<string, unknown>;
+  const canonical = canonicalStatus(field);
+  return canonical ? { ...legacy, ...canonical } : legacy;
 }
 function spec(field: string) {
   return metadataFieldSpec(
@@ -238,7 +280,7 @@ function calibrated(field: string) {
     : null;
 }
 function displayValue(field: string) {
-  const value = props.record[field];
+  const value = fieldValue(field);
   if (value === true) return i18n.t("ui.yes");
   if (value === false) return i18n.t("ui.no");
   if (Array.isArray(value)) return value.join(", ") || "—";
@@ -309,10 +351,15 @@ function displayValue(field: string) {
       :aria-label="i18n.t('pdf_corpus.metadata_needs_review')"
     >
       <div v-for="field in attentionFields" :key="field" class="metadata-list-item" role="listitem">
+        <CorpusFieldPolicyBadges
+          :field="field"
+          :schema-field="schemaFields[field]"
+          :core-required="requiredFields.has(field)"
+        />
         <CorpusMetadataFieldEditor
           :label="fieldLabel(field)"
           :field="field"
-          :value="record[field]"
+          :value="fieldValue(field)"
           :status="status(field)"
           :revealed="(record as any).blind_reveals?.[field]"
           :recheck="(record as any).recheck_results?.[field]"
@@ -337,7 +384,7 @@ function displayValue(field: string) {
           type="button"
           class="btn small primary quick-confirm"
           :disabled="fieldBusy(field)"
-          @click="emit('resolve', field, record[field])"
+          @click="emit('resolve', field, fieldValue(field))"
         >
           {{ i18n.t("pdf_corpus.confirm_llm_value", "Confirm LLM value") }}
         </button>
@@ -355,10 +402,15 @@ function displayValue(field: string) {
       </summary>
       <div class="metadata-grid" role="list">
         <div v-for="field in settledFields" :key="field" class="metadata-list-item" role="listitem">
+          <CorpusFieldPolicyBadges
+            :field="field"
+            :schema-field="schemaFields[field]"
+            :core-required="requiredFields.has(field)"
+          />
           <CorpusMetadataFieldEditor
             :label="fieldLabel(field)"
             :field="field"
-            :value="record[field]"
+            :value="fieldValue(field)"
             :status="status(field)"
             :revealed="(record as any).blind_reveals?.[field]"
             :recheck="(record as any).recheck_results?.[field]"
@@ -391,10 +443,15 @@ function displayValue(field: string) {
       </p>
       <div class="metadata-grid" role="list">
         <div v-for="field in addableFields" :key="field" class="metadata-list-item" role="listitem">
+          <CorpusFieldPolicyBadges
+            :field="field"
+            :schema-field="schemaFields[field]"
+            :core-required="requiredFields.has(field)"
+          />
           <CorpusMetadataFieldEditor
             :label="fieldLabel(field)"
             :field="field"
-            :value="record[field]"
+            :value="fieldValue(field)"
             :status="status(field)"
             :options="options(field)"
             :control="spec(field).control"

@@ -63,6 +63,24 @@ describe("research payloads", () => {
       lambda_mult: 0.7,
     });
     expect(normalizedResearchConfig().search_types).toEqual(["similarity", "lexical", "mmr"]);
+    expect(normalizedResearchConfig().prompt_metadata).toMatchObject({
+      evidence: expect.arrayContaining(["speaker", "position_holder", "discourse_role"]),
+      context: [],
+      record: [],
+    });
+    expect(
+      normalizedResearchConfig({
+        prompt_metadata: {
+          evidence: ["field-custom", "_private", "field-custom"],
+          context: ["stance"],
+          record: ["quoted_author"],
+        },
+      }).prompt_metadata,
+    ).toEqual({
+      evidence: ["field-custom"],
+      context: ["stance"],
+      record: ["quoted_author"],
+    });
   });
 
   it("preserves custom assertion metadata for Research evidence", () => {

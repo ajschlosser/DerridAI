@@ -4,6 +4,8 @@ import { useI18nStore } from "../stores/i18n";
 import type { ProviderProfile } from "../api/system";
 import UiButton from "./ui/UiButton.vue";
 import UiTagPicker from "./ui/UiTagPicker.vue";
+import UiTooltip from "./ui/UiTooltip.vue";
+import { NER_TAG_OPTIONS, UNIVERSAL_POS_TAG_OPTIONS } from "../domain/nlpTags";
 import ProviderProfileSelect from "./ProviderProfileSelect.vue";
 import {
   CORE_FIELDS,
@@ -39,6 +41,44 @@ const isNew = ref(false);
 const builtin = computed(() => selectedId.value === "default" && !isNew.value);
 const dirty = computed(() => JSON.stringify(draft.value) !== savedHash.value);
 const t = (key: string, fallback: string) => i18n.t(`schemas.${key}`, fallback);
+const schemaHelp = {
+  memory:
+    "Controls evidence-bound human-reviewed precedents used as few-shot guidance for this metadata field. These settings never change the reviewed source record itself.",
+  memoryEnabled:
+    "When enabled, DerridAI may retrieve human-reviewed evidence-bound examples for this field during metadata enrichment.",
+  memoryCorrections:
+    "Include reviewed cases where a model value was rejected and replaced. The rejected value remains negative evidence; it is never taught as a correct answer.",
+  memoryAbsence:
+    "Include reviewer-confirmed no-value examples only when that absence has explicit reviewed source evidence.",
+  memoryLimit:
+    "Maximum number of reviewed precedents for this field that may enter the bounded prompt packet. Set 0 to disable retrieval for this field without deleting its reviewed history.",
+  memorySimilarity:
+    "Discard semantic matches below this similarity threshold. 0 accepts any semantic similarity; 1 requires the strongest possible match.",
+  posTags:
+    "POS tags are retrieval/model hints. They do not write metadata by themselves; they tell enrichment to prefer values grounded in tokens with these grammatical roles.",
+  nerTags:
+    "NER tags are entity-type hints. They do not add entities automatically; they tell enrichment which named-entity classes are especially relevant to this field.",
+  strict:
+    "When enabled, values outside this list fail schema validation instead of being accepted as free text.",
+  evidence:
+    "Supported values are expected to bind to source blocks. Missing or invalid evidence keeps the field reviewable instead of discarding the whole LLM response.",
+  assess:
+    "Requires the model to return a structured assessment for this field, including confidence, outcome, and review need.",
+  review:
+    "If this field remains unresolved or model-inferred, record acceptance requires a human decision according to the review workflow.",
+} as const;
+const posTagOptions = computed(() =>
+  UNIVERSAL_POS_TAG_OPTIONS.map((option) => ({
+    ...option,
+    label: t(`pos_tag.${option.value.toLowerCase()}`, option.label),
+  })),
+);
+const nerTagOptions = computed(() =>
+  NER_TAG_OPTIONS.map((option) => ({
+    ...option,
+    label: t(`ner_tag.${option.value.toLowerCase()}`, option.label),
+  })),
+);
 
 function load(schema: MetadataSchema, fresh = false) {
   const next = JSON.parse(JSON.stringify(schema)) as MetadataSchema;
@@ -55,9 +95,16 @@ function load(schema: MetadataSchema, fresh = false) {
 async function refresh(keep?: string) {
   summaries.value = (await metadataSchemasApi.list()).items;
   const id = keep && summaries.value.some((s) => s.id === keep) ? keep : selectedId.value;
-  await select(summaries.value.some((s) => s.id === id) ? id : "default");
+  await select(summaries.value.some((s) => s.id === id) ? id : "default", true);
 }
-async function select(id: string) {
+async function select(id: string, force = false) {
+  if (
+    !force &&
+    dirty.value &&
+    id !== selectedId.value &&
+    !window.confirm(t("discard_changes", "Discard unsaved schema changes?"))
+  )
+    return;
   selectedId.value = id;
   notice.value = "";
   load(await metadataSchemasApi.get(id));
@@ -186,46 +233,6 @@ const fieldsOf = (key: string) =>
     .map((field, index) => ({ field, index }))
     .filter((item) => item.field.group === key);
 const addValue = (field: SchemaField) => field.values.push({ value: "", definition: "" });
-const UNIVERSAL_POS_TAGS = [
-  "ADJ",
-  "ADP",
-  "ADV",
-  "AUX",
-  "CCONJ",
-  "DET",
-  "INTJ",
-  "NOUN",
-  "NUM",
-  "PART",
-  "PRON",
-  "PROPN",
-  "PUNCT",
-  "SCONJ",
-  "SYM",
-  "VERB",
-  "X",
-];
-const NER_TAGS = [
-  "CARDINAL",
-  "DATE",
-  "EVENT",
-  "FAC",
-  "GPE",
-  "LANGUAGE",
-  "LAW",
-  "LOC",
-  "MONEY",
-  "NORP",
-  "ORDINAL",
-  "ORG",
-  "PERCENT",
-  "PERSON",
-  "PRODUCT",
-  "QUANTITY",
-  "TIME",
-  "WORK_OF_ART",
-];
-
 // ---- preview ---------------------------------------------------------------------------------------------------
 const previewGroup = ref(CORE_GROUP);
 const previewText = ref(
@@ -430,6 +437,27 @@ defineExpose({ select, draft });
 
           <h4>{{ t("fields", "Fields") }}</h4>
           <article v-for="item in fieldsOf(group.key)" :key="item.index" class="schema-field-card">
+            <header class="schema-field-card-head">
+              <div>
+                <strong>{{
+                  item.field.label || item.field.name || t("new_field", "New metadata field")
+                }}</strong>
+                <code v-if="item.field.name">{{ item.field.name }}</code>
+              </div>
+              <div class="schema-field-policy" :aria-label="t('field_policy', 'Field policy')">
+                <span>{{ item.field.type }}</span>
+                <span v-if="item.field.evidence">{{ t("evidence_short", "Evidence") }}</span>
+                <span v-if="item.field.assess">{{ t("assess_short", "Confidence") }}</span>
+                <span v-if="item.field.review">{{ t("review_short", "Human review") }}</span>
+                <span
+                  v-if="
+                    item.field.retrieval_profile.enabled &&
+                    Number(item.field.retrieval_profile.max_items || 0) > 0
+                  "
+                  >{{ t("memory_short", "Memory") }}</span
+                >
+              </div>
+            </header>
             <div class="row">
               <label class="schema-field"
                 ><span>{{ t("field_name", "Field name") }}</span
@@ -456,94 +484,65 @@ defineExpose({ select, draft });
                 </select></label
               >
               <fieldset class="schema-field schema-memory">
-                <legend
-                  :title="
-                    t(
-                      'memory_help',
-                      'Controls evidence-bound human-reviewed precedents used as few-shot guidance for this metadata field. These settings never change the reviewed source record itself.',
-                    )
-                  "
-                >
-                  {{ t("memory", "Memory & retrieval") }} <span aria-hidden="true">ⓘ</span>
+                <legend>
+                  {{ t("memory", "Memory & retrieval") }}
+                  <UiTooltip :text="t('memory_help', schemaHelp.memory)" />
                 </legend>
-                <label class="check"
-                  ><input v-model="item.field.retrieval_profile.enabled" type="checkbox" /><span
-                    :title="
-                      t(
-                        'memory_enabled_help',
-                        'When enabled, DerridAI may retrieve human-reviewed evidence-bound examples for this field during metadata enrichment.',
-                      )
-                    "
-                    >{{ t("memory_enabled", "Use reviewed precedents") }}
-                    <span aria-hidden="true">ⓘ</span></span
-                  ></label
-                >
-                <label class="check"
-                  ><input
+                <label class="check">
+                  <input v-model="item.field.retrieval_profile.enabled" type="checkbox" />
+                  <span>
+                    {{ t("memory_enabled", "Use reviewed precedents") }}
+                    <UiTooltip :text="t('memory_enabled_help', schemaHelp.memoryEnabled)" />
+                  </span>
+                </label>
+                <label class="check">
+                  <input
                     v-model="item.field.retrieval_profile.include_corrections"
                     type="checkbox"
-                  /><span
-                    :title="
-                      t(
-                        'memory_corrections_help',
-                        'Include reviewed cases where a model value was rejected and replaced. The rejected value remains negative evidence; it is never taught as a correct answer.',
-                      )
-                    "
-                    >{{ t("memory_corrections", "Include corrections") }}
-                    <span aria-hidden="true">ⓘ</span></span
-                  ></label
-                >
-                <label class="check"
-                  ><input
+                  />
+                  <span>
+                    {{ t("memory_corrections", "Include corrections") }}
+                    <UiTooltip :text="t('memory_corrections_help', schemaHelp.memoryCorrections)" />
+                  </span>
+                </label>
+                <label class="check">
+                  <input
                     v-model="item.field.retrieval_profile.include_confirmed_absence"
                     type="checkbox"
-                  /><span
-                    :title="
-                      t(
-                        'memory_absence_help',
-                        'Include reviewer-confirmed no-value examples only when that absence has explicit reviewed source evidence.',
-                      )
-                    "
-                    >{{ t("memory_absence", "Include confirmed absence") }}
-                    <span aria-hidden="true">ⓘ</span></span
-                  ></label
-                >
+                  />
+                  <span>
+                    {{ t("memory_absence", "Include confirmed absence") }}
+                    <UiTooltip :text="t('memory_absence_help', schemaHelp.memoryAbsence)" />
+                  </span>
+                </label>
                 <div class="schema-memory-numbers">
-                  <label
-                    ><span
-                      :title="
-                        t(
-                          'memory_limit_help',
-                          'Maximum number of reviewed precedents for this field that may enter the bounded prompt packet. Set 0 to disable retrieval for this field without deleting its reviewed history.',
-                        )
-                      "
-                      >{{ t("memory_limit", "Maximum precedents") }}
-                      <span aria-hidden="true">ⓘ</span></span
-                    ><input
+                  <label>
+                    <span>
+                      {{ t("memory_limit", "Maximum precedents") }}
+                      <UiTooltip :text="t('memory_limit_help', schemaHelp.memoryLimit)" />
+                    </span>
+                    <input
                       v-model.number="item.field.retrieval_profile.max_items"
                       class="control"
                       type="number"
                       min="0"
                       max="50"
-                  /></label>
-                  <label
-                    ><span
-                      :title="
-                        t(
-                          'memory_similarity_help',
-                          'Discard semantic matches below this similarity threshold. 0 accepts any semantic similarity; 1 requires the strongest possible match.',
-                        )
-                      "
-                      >{{ t("memory_similarity", "Minimum similarity") }}
-                      <span aria-hidden="true">ⓘ</span></span
-                    ><input
+                    />
+                  </label>
+                  <label>
+                    <span>
+                      {{ t("memory_similarity", "Minimum similarity") }}
+                      <UiTooltip :text="t('memory_similarity_help', schemaHelp.memorySimilarity)" />
+                    </span>
+                    <input
                       v-model.number="item.field.retrieval_profile.min_similarity"
                       class="control"
                       type="number"
                       min="0"
                       max="1"
                       step="0.05"
-                  /></label>
+                    />
+                  </label>
                 </div>
                 <small class="hint">{{
                   t(
@@ -565,18 +564,12 @@ defineExpose({ select, draft });
             >
             <div class="row nlp-hints">
               <label class="schema-field"
-                ><span
-                  :title="
-                    t(
-                      'pos_tags_help',
-                      'POS tags are retrieval/model hints. They do not write metadata by themselves; they tell enrichment to prefer values grounded in tokens with these grammatical roles.',
-                    )
-                  "
-                  >{{ t("pos_tags", "POS tags (optional)") }}
-                  <span aria-hidden="true">ⓘ</span></span
+                ><span>
+                  {{ t("pos_tags", "POS tags (optional)") }}
+                  <UiTooltip :text="t('pos_tags_help', schemaHelp.posTags)" /> </span
                 ><UiTagPicker
                   v-model="item.field.pos_tags"
-                  :options="UNIVERSAL_POS_TAGS"
+                  :options="posTagOptions"
                   :label="t('pos_tags', 'POS tags (optional)')"
                   :placeholder="t('pos_tags_placeholder', 'Search POS tags…')"
                   :remove-label="t('remove_tag', 'Remove {value}')"
@@ -589,18 +582,12 @@ defineExpose({ select, draft });
                 }}</small>
               </label>
               <label class="schema-field"
-                ><span
-                  :title="
-                    t(
-                      'ner_tags_help',
-                      'NER tags are entity-type hints. They do not add entities automatically; they tell enrichment which named-entity classes are especially relevant to this field.',
-                    )
-                  "
-                  >{{ t("ner_tags", "NER tags (optional)") }}
-                  <span aria-hidden="true">ⓘ</span></span
+                ><span>
+                  {{ t("ner_tags", "NER tags (optional)") }}
+                  <UiTooltip :text="t('ner_tags_help', schemaHelp.nerTags)" /> </span
                 ><UiTagPicker
                   v-model="item.field.ner_tags"
-                  :options="NER_TAGS"
+                  :options="nerTagOptions"
                   :label="t('ner_tags', 'NER tags (optional)')"
                   :placeholder="t('ner_tags_placeholder', 'Search NER tags…')"
                   :remove-label="t('remove_tag', 'Remove {value}')"
@@ -635,55 +622,27 @@ defineExpose({ select, draft });
                 {{ t("add_value", "Add a value") }}
               </button>
               <label class="check"
-                ><input v-model="item.field.strict" type="checkbox" /><span
-                  :title="
-                    t(
-                      'strict_help',
-                      'When enabled, values outside this list fail schema validation instead of being accepted as free text.',
-                    )
-                  "
-                  >{{ t("strict", "The model may only return these values") }}
-                  <span aria-hidden="true">ⓘ</span></span
-                ></label
-              >
+                ><input v-model="item.field.strict" type="checkbox" /><span>
+                  {{ t("strict", "The model may only return these values") }}
+                  <UiTooltip :text="t('strict_help', schemaHelp.strict)" /> </span
+              ></label>
             </div>
             <div class="flags">
               <label class="check"
-                ><input v-model="item.field.evidence" type="checkbox" /><span
-                  :title="
-                    t(
-                      'evidence_help',
-                      'Supported values are expected to bind to source blocks. Missing or invalid evidence keeps the field reviewable instead of discarding the whole LLM response.',
-                    )
-                  "
-                  >{{ t("evidence", "Must cite the source") }}
-                  <span aria-hidden="true">ⓘ</span></span
-                ></label
-              >
+                ><input v-model="item.field.evidence" type="checkbox" /><span>
+                  {{ t("evidence", "Must cite the source") }}
+                  <UiTooltip :text="t('evidence_help', schemaHelp.evidence)" /> </span
+              ></label>
               <label class="check"
-                ><input v-model="item.field.assess" type="checkbox" /><span
-                  :title="
-                    t(
-                      'assess_help',
-                      'Requires the model to return a structured assessment for this field, including confidence, outcome, and review need.',
-                    )
-                  "
-                  >{{ t("assess", "Report its confidence") }}
-                  <span aria-hidden="true">ⓘ</span></span
-                ></label
-              >
+                ><input v-model="item.field.assess" type="checkbox" /><span>
+                  {{ t("assess", "Report its confidence") }}
+                  <UiTooltip :text="t('assess_help', schemaHelp.assess)" /> </span
+              ></label>
               <label class="check"
-                ><input v-model="item.field.review" type="checkbox" /><span
-                  :title="
-                    t(
-                      'review_help',
-                      'If this field remains unresolved or model-inferred, record acceptance requires a human decision according to the review workflow.',
-                    )
-                  "
-                  >{{ t("review", "A person must settle it before accepting") }}
-                  <span aria-hidden="true">ⓘ</span></span
-                ></label
-              >
+                ><input v-model="item.field.review" type="checkbox" /><span>
+                  {{ t("review", "A person must settle it before accepting") }}
+                  <UiTooltip :text="t('review_help', schemaHelp.review)" /> </span
+              ></label>
               <span class="grow"></span>
               <button
                 type="button"
@@ -962,6 +921,43 @@ h4 {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--bg);
+}
+.schema-field-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.schema-field-card-head > div:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.schema-field-card-head strong {
+  font-size: 0.9375rem;
+}
+.schema-field-card-head code {
+  justify-self: start;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.schema-field-policy {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+}
+.schema-field-policy span {
+  padding: 3px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.3;
 }
 .values {
   display: grid;

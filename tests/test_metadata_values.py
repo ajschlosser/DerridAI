@@ -29,3 +29,16 @@ def test_a_model_proposal_of_a_placeholder_becomes_no_value_and_keeps_the_raw_te
     assert _normalize_semantic_value("speaker", "The author of the current record") == (None, "The author of the current record")
     assert _normalize_semantic_value("persons", ["Derrida", "null"]) == (["Derrida"], ["Derrida", "null"])
     assert _normalize_semantic_value("speaker", "Derrida") == ("Derrida", None)
+
+
+def test_structured_output_transport_suffix_is_not_persisted_as_metadata():
+    raw = (
+        "Jacques Derrida, field_evidence-p00007-b0013-b0014-b0015: "
+        "0.9, The text attributes the argument and subsequent quote to Jacques Derrida."
+    )
+    assert _normalize_semantic_value("quoted_author", raw) == ("Jacques Derrida", raw)
+
+
+def test_ordinary_metadata_text_is_not_over_sanitized():
+    value = "A discussion of evidence and confidence in testimony"
+    assert _normalize_semantic_value("concepts", value) == (value, None)

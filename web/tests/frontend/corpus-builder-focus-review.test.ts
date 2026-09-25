@@ -151,6 +151,59 @@ describe("Corpus Builder focus review interactions", () => {
     wrapper.unmount();
   });
 
+  it("passes the pinned metadata schema into focus-mode field review", () => {
+    const wrapper = mount(CorpusRecordFocusReview, {
+      props: {
+        record,
+        schema: {
+          format_version: 1,
+          schema_version: "review-schema-v1",
+          id: "review-schema",
+          name: "Review schema",
+          description: "Focus-mode schema fixture",
+          groups: [],
+          fields: [
+            {
+              field_id: "field-quoted-author",
+              name: "quoted_author",
+              label: "Quoted author",
+              type: "text",
+              group: "core",
+              instruction: "",
+              definitions_heading: "",
+              values: [],
+              strict: false,
+              evidence: true,
+              assess: true,
+              review: true,
+              pos_tags: [],
+              ner_tags: [],
+              retrieval_profile: {
+                enabled: true,
+                include_corrections: true,
+                include_confirmed_absence: false,
+                max_items: 4,
+                min_similarity: 0.8,
+              },
+            },
+          ],
+        },
+      },
+      global: {
+        stubs: {
+          ...stubs,
+          CorpusMetadataResolutionPanel: {
+            props: ["schema"],
+            template:
+              '<div data-focus-schema>{{ schema?.fields?.[0]?.label || "missing schema" }}</div>',
+          },
+        },
+      },
+    });
+    expect(wrapper.get("[data-focus-schema]").text()).toBe("Quoted author");
+    wrapper.unmount();
+  });
+
   it("disables acceptance when the parent marks the record unsafe to accept", () => {
     const wrapper = mount(CorpusRecordFocusReview, {
       props: { record, canAccept: false },
