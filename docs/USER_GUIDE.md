@@ -492,12 +492,12 @@ The LLM returns each metadata field (or `null` when unsupported) together with a
 - Deterministic values (for example reviewer-defined document structure) stay selected; the LLM check either corroborates them or records a disagreement for review.
 - If the model reports more than the threshold in confidence for a speaker, position holder, target, stance, or proposition status but returns **no value**, the field is marked unresolved with reason `no_value_returned` rather than shown as an inference. Use **No supported value** to confirm a genuine absence.
 - Reviewer-confirmed values are never overwritten by later enrichment.
-- Confirmed metadata decisions are also stored in a rebuildable, derived semantic
-  reviewer-memory collection. Later enrichment may retrieve diverse similar
-  examples with similarity/MMR, filtered by field and schema version, as
-  advisory prompt context. The current Record's evidence remains authoritative;
-  semantic memory never auto-applies a value or replaces the exact text-hash
-  cache.
+- Reviewed metadata decisions are persisted with provenance in durable application
+  state. Eligible evidence-bound decisions are projected into a rebuildable
+  semantic metadata-exemplar index. Later enrichment may retrieve diverse similar
+  examples with similarity/MMR, filtered by field/schema policy, as advisory
+  prompt context. The current Record's evidence remains authoritative; metadata
+  memory never auto-applies a value or replaces the exact adjudication cache.
 - After a pass finishes, **Run another pass** is available in the review workspace immediately. You do not need to accept every record first. The next pass is given what the last pass inferred (working conventions on this build) and any reviewer decisions already made.
 - Enrichment is persisted record by record, not only at the end. The live operation reports the selected provider, model, pass, and processed-record count; a later run can target all records, an accepted/pending scope, or an explicit subset.
 - Each record keeps activity telemetry for human opens and saves, LLM reviews, enrichment passes, and the last provider/model that touched it. This is audit information, not a replacement for field-level provenance.
@@ -723,12 +723,12 @@ Typing `NUKE` enables a full reset to a first-run install. It deletes:
 1. every Chroma collection and the persistence files under the current Chroma path (the catalog itself is recreated empty);
 2. authentication (users, sessions, lockouts, and custom roles), so the next load asks you to create the first administrator account;
 3. provider profiles, annotations, installed-language edits, researcher text policies, and job history;
-4. PDF corpus assets, builds, publications, and backup/restore temp directories;
+4. corpus source assets, builds, publications, and backup/restore temp directories;
 5. browser IndexedDB workspace state and DerridAI `localStorage` keys.
 
 Installed Ollama / embedding model files under `data/models` and `data/ollama` are not deleted.
 
-## Dashboard additions in 0.9.0
+## Dashboard details
 
 Dashboard charts include graded axes and legends.
 
@@ -802,13 +802,19 @@ Backups are blocked while background operations are active so the archive is int
 **Load from backup** validates the manifest and ZIP member paths before making changes. The API first creates a logical rollback snapshot of the current Chroma database; if Chroma restoration fails, the current vector database is restored from that rollback. After a successful server restore, the browser IndexedDB workspace and current PDF are replaced and the UI reloads.
 
 **System Data** is the administrative surface for the response cache,
-progressive metadata exemplars, and durable application databases. Metadata
+metadata exemplars, and durable application databases. Metadata
 exemplars are read-only, evidence-bound precedents derived from reviewed corpus
 metadata, including supported values, human corrections, and explicitly evidenced
 confirmed absences; the inspector shows field/value, review authority, source
 record/revision/build, schema/language, evidence block IDs/hash, and the bounded
 evidence-context window. Their current storage/index technology is an
 implementation detail and is not presented as a research corpus.
+
+The same page includes an administrator-only **System Chroma** read-only query
+console for approved system collections. `get` and `query` commands are validated
+and explained before execution; collection names, embedding details, distances,
+and raw results are operational diagnostics rather than scholarly record semantics.
+If System Chroma is unavailable, the independent database browser remains usable.
 
 The database browser exposes tables and rows through a backend-neutral contract;
 SQLite is the current adapter, not a UI-level requirement. Sensitive credentials,
@@ -857,7 +863,7 @@ docker compose up -d --build
 
 - in-flight background execution is process-local; durable job history survives restart, while interrupted work is marked failed rather than automatically replayed;
 - browser workspace persistence is origin-specific;
-- image-only PDFs do not receive built-in OCR;
+- PDF Explorer's ad hoc extraction does not OCR image-only pages; Corpus Builder can explicitly OCR PDF/image sources;
 - first use of a cross-encoder can require a model download;
 - simultaneous independent writers to the same Chroma persistence path are unsupported;
 - cancelling a Chroma upsert waits for the current batch to return;

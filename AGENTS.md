@@ -30,9 +30,11 @@ DerridAI is a local-first Docker application for building, auditing, and queryin
 ## Commands
 
 ```bash
-pytest -q                                   # backend + release regression tests (from repo root)
+pytest -q -n auto --dist=worksteal         # backend + release regression tests (from repo root)
+pytest -q -m contract tests/test_frontend_api_contract.py
 python -m compileall -q api/app             # syntax check
 cd web && npm run typecheck                 # vue-tsc
+cd web && npm run typecheck:tests           # test/config TypeScript
 cd web && npm run test:unit                 # Vitest
 cd web && npm run build                     # vue-tsc + Vite
 cd web && npm run build-storybook
@@ -65,7 +67,7 @@ Backend tests stub `chromadb` and put `api/` on `sys.path`; they do not need Doc
   - Preserve edition, translation, and page information. Keep the corpus authoritative; vector stores are derived data.
 - **Provenance and LLM output:**
   - Keep deterministic and LLM values both, with confidence, reason, and whether the field was actually checked.
-  - LLM values above the 65% confidence threshold and schema-valid populate fields; lower-confidence values stay as `proposed_value` suggestions.
+  - Every schema-valid non-empty LLM value is populated so a reviewer can inspect it; population is not verification. Missing/low confidence can keep the field pending review, while `autofilled=true` is reserved for calibrated autofill (90% blended confidence by default, valid cited evidence, and no suspension from poor reviewer precision).
   - Reviewer-confirmed document structure is authoritative over manifest and LLM inference.
   - Validate LLM output against closed vocabularies at the backend boundary, and sanitize model wrappers (fences, separators) only when absent from the source.
   - LLM output is untrusted until validated. Deterministic code owns IDs, citations, page lookup, exact-quote checks, schema checks, dedup, and embedding compatibility; prefer it over another LLM prompt.
@@ -109,7 +111,6 @@ Backend tests stub `chromadb` and put `api/` on `sys.path`; they do not need Doc
 - After an edit succeeds, do not re-read the entire file; inspect only when validation or an uncertain merge requires it.
 - Write tests once against the legacy behavior, then make a focused implementation change rather than iterating through avoidable failures.
 - Batch type-check fixes, preferably with one scripted transformation when signatures share the same cause.
-- Do not spawn subagents unless asked. Use Explore only for broad searches that cannot be handled with targeted local search.
 - If the work is consuming substantial context or tokens, preserve a concise hand-off in the relevant issue/PR or authoritative document instead of creating a repository-level progress log.
 
 ## Design and engineering principles

@@ -3,6 +3,10 @@
 
 A metadata schema says which fields a JSONL record has, what each may hold, and what the model is told to look for in each. Builds target a schema; the built-in one describes the fields DerridAI has always produced.
 
+## Versioning and field identity
+
+Schemas are semantic-versioned independently of the application and corpus contracts. New schemas start at `1.0.0`; an unchanged save retains its version; adding fields increments the minor version, removing fields increments the major version, and other definition changes increment the patch version. Each field has a stable `field_id` separate from its display name, so a deliberate rename can retain semantic/provenance identity.
+
 ## What a schema contains
 
 - **Groups.** Each group is one model call per record. It has an opening text, an optional heading for its field list, notes, a trailer, and a footer with the evidence and assessment instructions. The footer may use `{fields}` and `{assessed_fields}`.
@@ -18,7 +22,7 @@ Schema fields can provide deterministic autocomplete for Universal POS tags and 
 
 ## Reviewed-precedent retrieval
 
-A field or group can allow evidence-bound reviewed precedents to guide later enrichment. The active retrieval profile contains only:
+A field or group can allow evidence-bound reviewed precedents to guide later enrichment. A field-level profile overrides its group's profile; otherwise the group profile applies, including to locked core fields. The active retrieval profile contains only:
 
 - `enabled`;
 - `max_items` (maximum precedents);

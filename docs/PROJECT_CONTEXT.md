@@ -50,7 +50,7 @@ Conceptual hierarchy: `AUTHOR → WORK → EDITION/TRANSLATION → SOURCE DOCUME
 | --- | --- | --- |
 | Bibliographic fields (`translator`, `edition`, `original_title`, `isbn`, `canonical_work_id`) | Implemented | Carried in corpus records and work metadata; `canonical_work_id` is derived from the title |
 | Document regions (`front_matter`, `main_text`, `notes`, `bibliography`, `index`, `back_matter`, `paratext`) | Implemented | Non-primary regions are excluded from primary-text status; reviewer-confirmed layout is authoritative |
-| Attribution fields (`speaker`, `quoted_speaker`, `position_holder`, `target`, `stance`, `discourse_role`, `proposition_status`) | Implemented | Closed-vocabulary validation; >65% confidence auto-populates, lower stays a suggestion |
+| Attribution fields (`speaker`, `quoted_speaker`, `position_holder`, `target`, `stance`, `discourse_role`, `proposition_status`) | Implemented | Closed-vocabulary/schema validation; schema-valid non-empty model values remain visible for review, while calibrated autofill requires 90% blended confidence by default plus cited evidence and reviewer-precision safeguards |
 | Explicit edition/translation relationships between works | Partial | Metadata fields exist; there is no cross-edition entity model or aligned passages |
 | Cross-language passage alignment and translation comparison | Intended | English/French collections are mirrored, but passages are not aligned |
 

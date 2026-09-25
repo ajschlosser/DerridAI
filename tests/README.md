@@ -16,7 +16,8 @@ DerridAI separates tests by the kind of boundary they exercise rather than by re
 
 | Category | Pytest marker / frontend command | Purpose |
 | --- | --- | --- |
-| Unit | `unit` / `npm run test:unit` | Fast deterministic domain, component, store, and helper behavior. |\n| Regression | unmarked existing pytest suite | Broad historical regression coverage; retained without falsely relabeling persistence/route tests as pure units. |
+| Unit | `unit` / `npm run test:unit` | Fast deterministic domain, component, store, and helper behavior. |
+| Regression | unmarked existing pytest suite | Broad historical regression coverage; retained without falsely relabeling persistence/route tests as pure units. |
 | Contract | `contract` | Stable compatibility boundaries. The frontend/FastAPI route-and-method contract is enforced here. |
 | Integration | `integration` | Multiple real application subsystems exercised together. Use this only when a fake would hide the behavior being tested. |
 | Characterization | `characterization` / `npm run test:characterization` | Behavior-preservation tests for legacy/refactoring-sensitive surfaces, including the legacy DOM baseline. |
@@ -39,11 +40,11 @@ File names describe the behavior under test (for example `test_review_queues.py`
 | Area | Files |
 | --- | --- |
 | Corpus Builder: segmentation and topology | `test_corpus_build_resilience`, `test_segmentation_default_keep`, `test_segmentation_candidates`, `test_record_topology`, `test_boundary_suspects_and_undo`, `test_boundary_adjudication` |
-| Corpus Builder: metadata, provenance, review | `test_hybrid_metadata`, `test_profile_identity_and_metadata_gating`, `test_primary_text_editing`, `test_review_decisions`, `test_review_queues`, `test_metadata_stage_checkpoints`, `test_human_overrides_and_reruns`, `test_human_metadata_ownership`, `test_bulk_review_during_enrichment`, `test_metadata_constraints`, `test_editorial_memory_and_provider_switch`, `test_corpus_provider_credentials`, `test_reviewer_document_structure`, `test_confident_autofill` |
+| Corpus Builder: metadata, provenance, review | `test_hybrid_metadata`, `test_profile_identity_and_metadata_gating`, `test_primary_text_editing`, `test_review_decisions`, `test_review_queues`, `test_metadata_stage_checkpoints`, `test_human_overrides_and_reruns`, `test_human_metadata_ownership`, `test_bulk_review_during_enrichment`, `test_metadata_constraints`, `test_editorial_memory_and_provider_switch`, `test_corpus_provider_credentials`, `test_reviewer_document_structure`, `test_confident_autofill`, `test_metadata_schema`, `test_run_guidance`, `test_metadata_exemplar_projection`, `test_progressive_metadata_exemplars`, `test_progressive_metadata_retrieval`, `test_unified_memory_provenance`, `test_metadata_memory_inspector` |
 | Corpus Builder: text, layout, publication | `test_semantic_atoms_and_mla_citations`, `test_source_quality_and_publication_schema`, `test_publication_lifecycle`, `test_text_cleanup_and_adaptive_enrichment`, `test_verse_cleanup_and_rejected_records`, `test_document_layout` |
 | Failure handling | `test_failure_visibility` |
 | Authentication, roles, researcher policy | `test_roles_and_rag_request_validation`, `test_researcher_profile_generation_options`, `test_auth_hardening`, `test_researcher_rag_profile`, `test_researcher_text_policy`, `test_content_filter_false_positives`, `test_language_content_policy`, `test_researcher_route_policy` |
-| Persistence and vector store | `test_sqlite_persistence`, `test_collection_name_schema`, `test_packet_reduction`, `test_chroma_connection` |
+| Persistence and vector store | `test_sqlite_persistence`, `test_collection_name_schema`, `test_packet_reduction`, `test_chroma_connection`, `test_chroma_embedding_profiles`, `test_system_chroma_console`, `test_system_metadata_exemplars` |
 | Languages and translation | `test_locale_dictionaries`, `test_language_translation_validation`, `test_language_translation_resume`, `test_language_translation_repair`, `test_locale_and_accessibility_floor` |
 | Release housekeeping | `test_release_consistency` |
 
