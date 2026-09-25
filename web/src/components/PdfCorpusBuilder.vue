@@ -264,16 +264,6 @@ const {
   savePageLabels,
   saveDocumentLayout,
 } = useCorpusSourceConfiguration(busy, setMessage);
-const { jsonlPreviewOpen, jsonlPreview, openJsonlPreview, publish } = useCorpusPublication({
-  currentBuild,
-  selectedRecord,
-  busy,
-  setMessage,
-  refreshBuild,
-  refreshBuilds,
-  t: (key, fallback) => i18n.t(key, fallback),
-  tf: (key, values) => i18n.tf(key, values),
-});
 const error = ref("");
 const notice = ref("");
 const statusRegion = ref<HTMLElement | null>(null);
@@ -320,88 +310,7 @@ const {
   setMessage,
   t: (key, fallback) => i18n.t(key, fallback),
 });
-const {
-  metadataSavingField,
-  metadataSavedField,
-  metadataDraft,
-  bulkMetadataOpen,
-  metadataEnrichmentOpen,
-  metadataEditorDirty,
-  editorialMemoryOpen,
-  editorialMemory,
-  metadataRerunFamily,
-  metadataObservedValues,
-  metadataKnownValues,
-  rememberMetadataValues,
-  saveMetadata,
-  assignEvidenceBlock,
-  toggleEvidenceBlock,
-  requeueCurrentRecord,
-  resolveMetadataField,
-  resolveMetadataSuggestions,
-  resolveMetadataNoValue,
-  clearMetadataSuggestionCache,
-  runMetadataEnrichment,
-  openEditorialMemory,
-  resetEditorialMemory,
-  handleMetadataDirty,
-  showMetadataSource,
-  rerunMetadata,
-  applyBulkMetadata,
-} = useCorpusMetadataReview({
-  currentBuild,
-  selectedRecord,
-  selectedRecordId,
-  records,
-  busy,
-  selectedEvidenceField,
-  reviewInspectorTab,
-  selectedPdfPage,
-  sourceBlocks,
-  selectedReviewIds,
-  reviewQueue,
-  recordQuery,
-  llmActionProviderId,
-  llmActionModel,
-  selectedProviderId,
-  providerProfiles,
-  directProfilePayloadWithModel,
-  captureReviewViewport,
-  restoreReviewViewport,
-  queueRecordRequest,
-  applyAuthoritativeRecord,
-  syncBuildInRail,
-  registerBuildOperation,
-  startPolling,
-  refreshBuild,
-  refreshRecords,
-  recordMetadata,
-  metadataDraftKey,
-  setMessage,
-  t: (key, fallback) => i18n.t(key, fallback),
-  tf: (key, fallbackOrValues, values) => i18n.tf(key, fallbackOrValues, values),
-});
 const bulkActionFeedback = ref("");
-const metadataFamilyOptions = computed(
-  () =>
-    currentBuild.value?.schema?.groups?.map((group) => ({
-      key: group.key,
-      label: group.label,
-    })) || [
-      {
-        key: "discourse",
-        label: i18n.t("pdf_corpus.metadata_family.discourse"),
-      },
-      {
-        key: "quotation",
-        label: i18n.t("pdf_corpus.metadata_family.quotation"),
-      },
-      {
-        key: "indexing",
-        label: i18n.t("pdf_corpus.metadata_family.indexing"),
-      },
-    ],
-);
 const {
   reviewQueueCounts,
   pendingCount,
@@ -470,6 +379,98 @@ const {
   t: (key, fallback) => i18n.t(key, fallback),
   tf: (key, values) => i18n.tf(key, values),
 });
+
+const { jsonlPreviewOpen, jsonlPreview, openJsonlPreview, publish } = useCorpusPublication({
+  currentBuild,
+  selectedRecord,
+  busy,
+  setMessage,
+  refreshBuild,
+  refreshBuilds,
+  t: (key, fallback) => i18n.t(key, fallback),
+  tf: (key, values) => i18n.tf(key, values),
+});
+const {
+  metadataSavingField,
+  metadataSavedField,
+  metadataDraft,
+  bulkMetadataOpen,
+  metadataEnrichmentOpen,
+  metadataEditorDirty,
+  editorialMemoryOpen,
+  editorialMemory,
+  metadataRerunFamily,
+  metadataObservedValues,
+  metadataKnownValues,
+  rememberMetadataValues,
+  saveMetadata,
+  assignEvidenceBlock,
+  toggleEvidenceBlock,
+  requeueCurrentRecord,
+  resolveMetadataField,
+  resolveMetadataSuggestions,
+  resolveMetadataNoValue,
+  clearMetadataSuggestionCache,
+  runMetadataEnrichment,
+  openEditorialMemory,
+  resetEditorialMemory,
+  handleMetadataDirty,
+  showMetadataSource,
+  rerunMetadata,
+  applyBulkMetadata,
+} = useCorpusMetadataReview({
+  currentBuild,
+  selectedRecord,
+  selectedRecordId,
+  records,
+  busy,
+  selectedEvidenceField,
+  reviewInspectorTab,
+  selectedPdfPage,
+  sourceBlocks,
+  selectedReviewIds,
+  reviewQueue,
+  recordQuery,
+  llmActionProviderId,
+  llmActionModel,
+  selectedProviderId,
+  providerProfiles,
+  directProfilePayloadWithModel,
+  captureReviewViewport,
+  restoreReviewViewport,
+  queueRecordRequest,
+  applyAuthoritativeRecord,
+  syncBuildInRail,
+  registerBuildOperation,
+  startPolling,
+  refreshBuild,
+  refreshRecords,
+  recordMetadata,
+  metadataDraftKey,
+  setMessage,
+  t: (key, fallback) => i18n.t(key, fallback),
+  tf: (key, fallbackOrValues, values) => i18n.tf(key, fallbackOrValues, values),
+});
+const metadataFamilyOptions = computed(
+  () =>
+    currentBuild.value?.schema?.groups?.map((group) => ({
+      key: group.key,
+      label: group.label,
+    })) || [
+      {
+        key: "discourse",
+        label: i18n.t("pdf_corpus.metadata_family.discourse"),
+      },
+      {
+        key: "quotation",
+        label: i18n.t("pdf_corpus.metadata_family.quotation"),
+      },
+      {
+        key: "indexing",
+        label: i18n.t("pdf_corpus.metadata_family.indexing"),
+      },
+    ],
+);
 const DRAFT_KEY = "derridai.pdf-corpus-builder.draft.v2";
 function restoreBuilderDraft() {
   try {
@@ -650,7 +651,6 @@ const selectedRecordIndex = computed(() =>
 );
 const {
   openFocusView,
-  pushFocusHistory,
   focusHistoryMove,
   focusQueueMove,
   navigateToQueueRecord,
