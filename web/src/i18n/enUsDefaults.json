@@ -2940,7 +2940,7 @@
   "record.previous": "Previous record",
   "record.previous_next": "Previous / next record",
   "record.primary_text": "Primary text",
-  "record.provenance": "Provenance",
+  "record.provenance": "Attribution path",
   "record.provenance_empty": "No structured attribution fields are recorded for this passage.",
   "record.provenance_fields": "{count} attribution fields",
   "record.provenance_help": "A structured attribution view showing who speaks, whose position is represented, the stance taken, and its target.",
