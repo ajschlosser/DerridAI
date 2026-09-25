@@ -128,6 +128,7 @@ class EditorialMemoryMixin:
         field_min_similarity: dict[str, float] = {}
         enabled_fields: set[str] = set()
         correction_fields: set[str] = set()
+        confirmed_absence_fields: set[str] = set()
         for field, _field_id in field_ids.items():
             item = schema_fields.get(field, {})
             profile = item.get("retrieval_profile") if isinstance(item, dict) else None
@@ -138,6 +139,8 @@ class EditorialMemoryMixin:
             enabled_fields.add(field)
             if profile is None or bool(profile.get("include_corrections", True)):
                 correction_fields.add(field)
+            if profile is None or bool(profile.get("include_confirmed_absence", True)):
+                confirmed_absence_fields.add(field)
             if profile is not None:
                 field_limits[field] = int(profile.get("max_items", 2) or 0)
                 field_min_similarity[field] = float(profile.get("min_similarity", 0) or 0)
@@ -159,9 +162,26 @@ class EditorialMemoryMixin:
             statuses = row.get("metadata_field_status") if isinstance(row.get("metadata_field_status"), dict) else {}
             for field, info in statuses.items():
                 field = str(field)
-                if field not in enabled_fields:
+                if field not in enabled_fields or not isinstance(info, dict):
                     continue
-                if not isinstance(info, dict) or str(info.get("status") or "") not in {"human_confirmed", "human_override"}:
+                status_name = str(info.get("status") or "")
+                if status_name == "confirmed_absent":
+                    if field not in confirmed_absence_fields or _second_opinion_owed(row, field):
+                        continue
+                    exemplar = build_metadata_exemplar(
+                        row,
+                        field,
+                        blocks_by_id,
+                        schema_id=schema_id,
+                        schema_version=schema_version,
+                        source_document_id=source_document_id,
+                        field_id=field_ids.get(field, ""),
+                    )
+                    if exemplar is not None:
+                        canonical_exemplars.append(exemplar)
+                        trusted_rows[record_id or str(id(row))] = row
+                    continue
+                if status_name not in {"human_confirmed", "human_override"}:
                     continue
                 if _second_opinion_owed(row, field):
                     continue  # a conventions list or example must not tell a second reviewer what the first one answered
