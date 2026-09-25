@@ -299,10 +299,7 @@ const autoResolved = computed(
       </p>
       <div v-if="assertionAlternatives.length" class="assertion-alternatives">
         <b>{{
-          i18n.t(
-            "pdf_corpus.assertion_retained_alternatives",
-            "Retained alternative assertions",
-          )
+          i18n.t("pdf_corpus.assertion_retained_alternatives", "Retained alternative assertions")
         }}</b>
         <ul>
           <li
