@@ -212,4 +212,4 @@ Release history [CHANGELOG.md](CHANGELOG.md) और `docs/notes/<version>.md` �
 
 ## लाइसेंस
 
-फिलहाल कोई license file शामिल नहीं है। Source files पर `Copyright 2026 Aaron John Schlosser, PhD.` लिखा है। Sign-in screen, account menu और Settings → About DerridAI पर `© 2026 The New England Transcendental Club of California` दिखाया जाता है।
+Copyright © 2026 Aaron John Schlosser, PhD. DerridAI [GNU Affero General Public License, संस्करण 3](LICENSE) (`AGPL-3.0-only`) के अंतर्गत लाइसेंस प्राप्त है। Sign-in screen, account menu और Settings → About DerridAI पर `© 2026 The New England Transcendental Club of California` दिखाया जाता है।
