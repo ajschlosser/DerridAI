@@ -15,7 +15,6 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Any
 
-from .field_assertions import current_assertions, migrate_record_assertions
 from .enrichment_ledger import (
     ACCEPTED,
     AUTOFILLED,
@@ -30,6 +29,7 @@ from .enrichment_ledger import (
     SUSPENDED,
 )
 from .experiment_stats import cohens_kappa, two_proportion, wilson
+from .field_assertions import current_assertions, migrate_record_assertions
 
 THRESHOLDS = (0.7, 0.8, 0.9, 0.95)
 LEARNING_BUCKET = 10  # reviews per point on the learning curve
