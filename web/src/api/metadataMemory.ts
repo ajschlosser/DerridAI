@@ -3,7 +3,7 @@ import { apiRequest } from "./http";
 
 export interface MetadataMemoryEntry {
   id: string;
-  memory_type: "evidence_bound" | "reviewer_memory";
+  memory_type: "evidence_bound";
   kind: string;
   field: string;
   value: unknown;
