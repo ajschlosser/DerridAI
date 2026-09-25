@@ -35,12 +35,12 @@ from .corpus_models import (
     RecordMetadataModel,
 )
 from .corpus_record_quality import iso_now
-from .field_assertions import current_assertion_by_name
 from .corpus_segmentation import (
     _apply_manifest_metadata,
     _normalize_text,
     _scholarly_page_range,
 )
+from .field_assertions import current_assertion_by_name
 from .metadata_schema import (
     DEFAULT_SCHEMA_ID,
     MetadataSchema,
