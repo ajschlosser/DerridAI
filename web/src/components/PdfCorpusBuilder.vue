@@ -76,6 +76,7 @@ import { corpusReviewCommandFromKeydown } from "../features/corpus-builder/domai
 import {
   editableRecordMetadata,
   evidenceCandidateFieldNames,
+  reviewableMetadataFieldNames,
 } from "../features/corpus-builder/domain/recordMetadata";
 import { useCorpusPublication } from "../features/corpus-builder/composables/useCorpusPublication";
 import AppIcon from "./AppIcon.vue";
@@ -936,12 +937,19 @@ const discourseRoles = computed(() =>
     ? (activeCorpusProfile.value?.discourse_roles as unknown[]).map(String)
     : [],
 );
-const selectedMetadataBlocked = computed(() =>
-  Boolean(
-    (selectedRecord.value?.metadata_review_fields || []).length ||
-      (selectedRecord.value?.metadata_incomplete_fields || []).length,
-  ),
-);
+function metadataBlockingFields(record: CorpusRecord | null): string[] {
+  if (!record) return [];
+  const allowed = new Set(
+    reviewableMetadataFieldNames(
+      record as unknown as Record<string, unknown>,
+      currentBuild.value?.schema || selectedSchema.value,
+    ),
+  );
+  return Array.from(
+    new Set([...(record.metadata_incomplete_fields || []), ...(record.metadata_review_fields || [])]),
+  ).filter((field) => allowed.has(field));
+}
+const selectedMetadataBlocked = computed(() => metadataBlockingFields(selectedRecord.value).length > 0);
 const {
   setDisposition,
   attemptAccept,
@@ -987,12 +995,7 @@ const {
   tf: (key, values) => i18n.tf(key, values),
 });
 const selectedMetadataBlockingFields = computed(() =>
-  Array.from(
-    new Set([
-      ...(selectedRecord.value?.metadata_incomplete_fields || []),
-      ...(selectedRecord.value?.metadata_review_fields || []),
-    ]),
-  ),
+  metadataBlockingFields(selectedRecord.value),
 );
 const selectedMetadataBlockingLabel = computed(() =>
   selectedMetadataBlockingFields.value
