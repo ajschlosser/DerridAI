@@ -1108,11 +1108,18 @@ CURRENT REVIEWED RECORD TEXT:
             )
         record["semantic_classification_confidence"] = round(sum(evidence_confidences) / len(evidence_confidences), 4) if evidence_confidences else None
         record["attribution_confidence"] = round(min(attribution_confidences), 4) if attribution_confidences else 1.0
-        if any(isinstance(info, dict) and info.get("blind") for info in field_status.values()):
-            # These aggregates are the model's own confidence in a record whose values are sealed.
+        blind_review_active = any(
+            isinstance(info, dict) and info.get("blind")
+            for info in field_status.values()
+        )
+        if blind_review_active:
+            # These aggregates and free-form review reasons are model-derived and
+            # can disclose the sealed answer during a blind review.
             record["semantic_classification_confidence"] = None
             record["attribution_confidence"] = None
-        review_reasons.extend(model_review_reasons)
+            review_reasons = ["Blind review requires a human decision."]
+        else:
+            review_reasons.extend(model_review_reasons)
         if review_reasons:
             record["metadata_needs_attention"] = True
             record["metadata_attention_reasons"] = list(dict.fromkeys(value for value in review_reasons if value))[:50]
