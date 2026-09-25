@@ -1,11 +1,10 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
-"""Backend-neutral inspection of DerridAI's learned metadata precedents.
+"""Backend-neutral inspection of DerridAI's evidence-bound metadata precedents.
 
-The product surface exposes *metadata memory*, not Chroma collections.  Today the
-service reads the progressive evidence-bound projection and, when present, the
-semantic reviewer-memory projection introduced by PR #145.  Both are derived
-storage details: rows are normalized into one scholarly/audit contract and
-duplicate decisions prefer the richer evidence-bound representation.
+The reviewed corpus RecordRevision and its reviewed evidence are authoritative.
+The product surface exposes the single rebuildable metadata-exemplar projection;
+the superseded PR #145 reviewer-memory collection is deliberately ignored so
+DerridAI has one semantic learning path rather than competing memory systems.
 """
 
 from __future__ import annotations
@@ -17,8 +16,7 @@ from typing import Any
 
 from .metadata_exemplar_retrieval import COLLECTION_NAME
 
-PR145_COLLECTION_NAME = "derridai_metadata_memory"
-SYSTEM_KINDS = {"metadata_exemplars", "metadata_memory"}
+SYSTEM_KINDS = {"metadata_exemplars"}
 PAGE_SCAN_SIZE = 500
 
 
@@ -45,8 +43,6 @@ def _memory_kind(collection: Any) -> str:
     name = _text(getattr(collection, "name", ""))
     if name == COLLECTION_NAME:
         return "metadata_exemplars"
-    if name == PR145_COLLECTION_NAME:
-        return "metadata_memory"
     return ""
 
 
@@ -92,11 +88,7 @@ def _normalized_item(
             "context_text": str(document or metadata.get("context_text") or ""),
         }
 
-    if memory_kind == "metadata_memory":
-        field = _text(metadata.get("memory_field") or metadata.get("field"))
-        record_id = _text(metadata.get("source_record_id") or metadata.get("record_id"))
-        if not field or not record_id:
-            return None
+    return None
         return {
             "id": item_id,
             "memory_type": "reviewer_memory",
@@ -138,7 +130,7 @@ def _dedupe_key(item: Mapping[str, Any]) -> tuple[str, str, str, str]:
 
 
 class MetadataMemoryService:
-    """Read-only audit view over whichever derived metadata-memory backends exist."""
+    """Read-only audit view over the evidence-bound exemplar projection."""
 
     def __init__(self, store: Any, corpus_repository: Any | None = None) -> None:
         self.store = store
@@ -287,13 +279,7 @@ class MetadataMemoryService:
                 if item is None:
                     continue
                 key = _dedupe_key(item)
-                prior = merged.get(key)
-                # Evidence-bound exemplars win over older/general semantic
-                # reviewer memory for the same reviewed decision.
-                if prior is None or (
-                    item.get("evidence_bound") and not prior.get("evidence_bound")
-                ):
-                    merged[key] = item
+                merged[key] = item
 
         items = list(merged.values())
         if field:
