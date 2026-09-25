@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
 
 from app import corpus_builder as cb
+from app import corpus_review_actions as review_actions
 
 
 def install_repo(tmp_path: Path, records: list[dict]):
@@ -66,6 +67,48 @@ def test_review_decision_is_atomic_and_returns_next(tmp_path: Path):
     assert result["next_record"]["record_id"] == "r2"
     assert result["build"]["accepted_count"] == 1
     assert result["build"]["publication_readiness"]["records_pending"] == 1
+
+
+def test_set_disposition_persists_promoted_metadata_memory(tmp_path: Path, monkeypatch):
+    """Legacy acceptance must feed the same durable metadata-memory path as Accept & next."""
+
+    record = rec("r1", "b1")
+    record["metadata_field_status"]["discourse_role"] = {
+        "status": "model_inferred",
+        "method": "llm",
+        "confidence": 0.9,
+    }
+    repo, build = install_repo(tmp_path, [record])
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    persisted: list[tuple[str, str, object]] = []
+    scheduled: list[str] = []
+    monkeypatch.setattr(
+        review_actions,
+        "persist_record_decision",
+        lambda **kwargs: persisted.append(
+            (
+                str(kwargs["record"].get("record_id") or ""),
+                str(kwargs["field_name"]),
+                kwargs["value"],
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        manager,
+        "_schedule_metadata_exemplar_projection",
+        lambda build_id: scheduled.append(build_id),
+    )
+
+    result = manager.set_disposition(
+        build["build_id"],
+        "r1",
+        "accepted",
+        expected_revision=1,
+    )
+
+    assert result["metadata_field_status"]["discourse_role"]["status"] == "human_confirmed"
+    assert persisted == [("r1", "discourse_role", "analysis")]
+    assert scheduled == [build["build_id"]]
 
 
 def test_review_decision_returns_structured_metadata_blocker(tmp_path: Path):
