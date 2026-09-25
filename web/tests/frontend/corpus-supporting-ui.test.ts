@@ -2,12 +2,12 @@
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it } from "vitest";
+import CorpusBuildReadiness from "../../src/components/CorpusBuildReadiness.vue";
 import CorpusBuildStageNotice from "../../src/components/CorpusBuildStageNotice.vue";
-import CorpusEnrichmentChanges from "../../src/components/CorpusEnrichmentChanges.vue";
-import CorpusHandsFreeReport from "../../src/components/CorpusHandsFreeReport.vue";
-import CorpusHandsFreeSettings from "../../src/components/CorpusHandsFreeSettings.vue";
 import CorpusFieldOwnershipBadge from "../../src/components/CorpusFieldOwnershipBadge.vue";
+import CorpusReviewSessionBar from "../../src/components/CorpusReviewSessionBar.vue";
 import CorpusSourceIssuePanel from "../../src/components/CorpusSourceIssuePanel.vue";
+import CorpusWorkflowStepper from "../../src/components/CorpusWorkflowStepper.vue";
 
 describe("Corpus Builder supporting UI", () => {
   beforeEach(() => setActivePinia(createPinia()));
@@ -20,6 +20,25 @@ describe("Corpus Builder supporting UI", () => {
     expect(wrapper.attributes("role")).toBe("status");
     expect(wrapper.attributes("aria-live")).toBe("polite");
     expect(wrapper.text()).toContain("semantic segmentation");
+  });
+
+  it("keeps page-specific readiness details out of audio sources", () => {
+    const wrapper = mount(CorpusBuildReadiness, {
+      props: {
+        mediaKind: "audio",
+        sourceFilename: "seminar-session.flac",
+        pageCount: 99,
+        blockCount: 12,
+        structureSummary: "PDF page map",
+        canStart: true,
+        contextSafe: true,
+      },
+    });
+
+    expect(wrapper.text()).toContain("seminar-session.flac");
+    expect(wrapper.text()).toContain("12");
+    expect(wrapper.text()).not.toContain("99");
+    expect(wrapper.text()).not.toContain("PDF page map");
   });
 
   it("does not invent page locations for non-paginated source issues", () => {
@@ -63,99 +82,42 @@ describe("Corpus Builder supporting UI", () => {
     expect(wrapper.emitted("editText")).toHaveLength(1);
   });
 
-  it("emits enrichment resolutions through the shared action controls", async () => {
-    const wrapper = mount(CorpusEnrichmentChanges, {
-      props: {
-        record: {
-          stance: "critical",
-          metadata_field_status: {
-            stance: { status: "model_inferred" },
-          },
-          metadata_enrichment_history: [
-            {
-              replaced: [{ field: "stance", previous: "descriptive", value: "critical" }],
-            },
-          ],
-        },
-      },
-    });
-
-    await wrapper.get("button").trigger("click");
-
-    expect(wrapper.emitted("resolve")?.at(-1)).toEqual(["stance", "descriptive"]);
-  });
-
-  it("updates hands-free policy without mutating the supplied value", async () => {
-    const policy = {
-      enabled: true,
-      passes: 1,
-      min_confidence: 0.8,
-      unresolved: "leave" as const,
-      accept_records: false,
-      publish: false,
-    };
-    const wrapper = mount(CorpusHandsFreeSettings, {
-      props: { modelValue: policy },
-    });
-
-    await wrapper.get('input[type="number"]').setValue(3);
-
-    expect(policy.passes).toBe(1);
-    expect(wrapper.emitted("update:modelValue")?.at(-1)?.[0]).toEqual({
-      ...policy,
-      passes: 3,
-    });
-  });
-
-  it("opens a specific hands-free exception record", async () => {
-    const wrapper = mount(CorpusHandsFreeReport, {
-      props: {
-        report: {
-          records: 1,
-          accepted: 0,
-          fields_filled: 0,
-          left_for_review: 1,
-          passes_run: 1,
-          ran_at: "2026-09-25T12:00:00Z",
-          exceptions: [{ record_id: "record-0001", reasons: ["needs review"] }],
-          notes: [],
-          policy: {
-            enabled: true,
-            passes: 1,
-            min_confidence: 0.8,
-            unresolved: "leave",
-            accept_records: false,
-            publish: false,
-          },
-        },
-      },
-    });
-
-    await wrapper.get("button").trigger("click");
-
-    expect(wrapper.emitted("open-record")?.at(-1)).toEqual(["record-0001"]);
-  });
-
   it("keeps provenance and verification as separate visible badge concepts", () => {
     const inferred = mount(CorpusFieldOwnershipBadge, {
       props: { status: "model_inferred" },
     });
-    const confirmedModel = mount(CorpusFieldOwnershipBadge, {
-      props: {
-        status: "human_confirmed",
-        method: "llm",
-        derivationMethod: "model",
-      },
-    });
-    const confirmedHuman = mount(CorpusFieldOwnershipBadge, {
-      props: { status: "human_confirmed", derivationMethod: "human" },
+    const confirmed = mount(CorpusFieldOwnershipBadge, {
+      props: { status: "human_confirmed" },
     });
 
     expect(inferred.text()).toContain("LLM");
     expect(inferred.text()).toContain("Auto");
-    expect(confirmedModel.text()).toContain("LLM");
-    expect(confirmedModel.text()).toContain("Human");
-    expect(confirmedHuman.text()).toContain("Human");
-    expect(confirmedHuman.text()).not.toContain("LLM");
+    expect(confirmed.text()).toContain("Human");
+    expect(confirmed.text()).not.toContain("Auto");
+  });
+
+  it("keeps review focus as an explicit user action", async () => {
+    const wrapper = mount(CorpusReviewSessionBar, {
+      props: {
+        sourceFilename: "source.txt",
+        accepted: 1,
+        reviewable: 2,
+        remaining: 3,
+        issues: 4,
+      },
+    });
+
+    await wrapper.get("button").trigger("click");
+
+    expect(wrapper.emitted("focus")).toHaveLength(1);
+  });
+
+  it("marks the active workflow step semantically", () => {
+    const wrapper = mount(CorpusWorkflowStepper, {
+      props: { stage: "review", status: "awaiting_review" },
+    });
+
+    const current = wrapper.get('[aria-current="step"]');
+    expect(current.text()).toContain("Review");
   });
 });
