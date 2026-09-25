@@ -91,7 +91,10 @@ REVIEW_METADATA_FIELDS = ("region_type", "primary_text", "discourse_role", "spea
 
 NON_PRIMARY_REGION_TYPES = {"front_matter", "back_matter", "bibliography", "index", "paratext"}
 
-def apply_metadata_constraints(record: dict[str, Any]) -> list[dict[str, Any]]:
+def apply_metadata_constraints(
+    record: dict[str, Any],
+    schema: Any | None = None,
+) -> list[dict[str, Any]]:
     """Apply deterministic record-metadata relationships.
 
     Hard semantic invariants are applied consistently in single-record editing,
@@ -100,7 +103,7 @@ def apply_metadata_constraints(record: dict[str, Any]) -> list[dict[str, Any]]:
     offered as scholarly choices.
     """
     region = str(record.get("region_type") or "")
-    migrate_record_assertions(record)
+    migrate_record_assertions(record, schema)
     changes: list[dict[str, Any]] = []
 
     primary_assertion = current_assertion_by_name(record, "primary_text")
@@ -126,6 +129,7 @@ def apply_metadata_constraints(record: dict[str, Any]) -> list[dict[str, Any]]:
                 record,
                 "primary_text",
                 desired_primary,
+                schema=schema,
                 method="region_type_consistency",
                 reason=primary_reason,
             )
