@@ -212,4 +212,4 @@ npm run build
 
 ## الترخيص
 
-لا يوجد حاليًا ملف ترخيص مضمَّن. تحمل ملفات المصدر النص `Copyright 2026 Aaron John Schlosser, PhD.`. وتعرض شاشة تسجيل الدخول وقائمة الحساب والإعدادات → حول DerridAI النص `© 2026 The New England Transcendental Club of California`.
+Copyright © 2026 Aaron John Schlosser, PhD. يُوزَّع DerridAI بموجب [رخصة GNU Affero General Public License، الإصدار 3](LICENSE) (`AGPL-3.0-only`). وتعرض شاشة تسجيل الدخول وقائمة الحساب والإعدادات → حول DerridAI النص `© 2026 The New England Transcendental Club of California`.
