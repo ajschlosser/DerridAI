@@ -20,7 +20,11 @@ from pathlib import Path
 from typing import Any, Literal
 
 from .experiment import is_gold
-from .field_assertions import current_assertion_by_name, current_assertions, migrate_record_assertions
+from .field_assertions import (
+    current_assertion_by_name,
+    current_assertions,
+    migrate_record_assertions,
+)
 
 HUMAN_OWNED_STATUSES = frozenset({"human_confirmed", "human_override", "confirmed_absent"})
 MAX_PASSES = 10
