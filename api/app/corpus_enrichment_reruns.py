@@ -36,6 +36,14 @@ from .enrichment_cycles import (
     resolve_conflict,
     same_value,
 )
+from .field_assertions import (
+    current_assertion_by_name,
+    migrate_record_assertions,
+    project_record_assertions,
+    reopen_assertion,
+    reset_fields_for_evaluation,
+    store_assertion,
+)
 from .metadata_schema import MetadataSchema, default_schema
 
 
@@ -153,9 +161,15 @@ class EnrichmentRerunsMixin:
                         updated = future.result()
                     except Exception as exc:
                         updated = dict(records[index])
-                        statuses = updated.setdefault("metadata_field_status", {})
-                        for field in target_fields.get(str(updated.get("record_id") or index), []):
-                            statuses[field] = {"status": "unresolved", "method": "llm", "confidence": None, "reason_code": "llm_failed", "reason": f"Metadata retry failed: {exc}"}
+                        schema = self._schema_for(build_id)
+                        reset_fields_for_evaluation(
+                            updated,
+                            target_fields.get(str(updated.get("record_id") or index), []),
+                            schema=schema,
+                            discard_history=False,
+                            method="metadata_retry_failed",
+                            reason=f"Metadata retry failed: {exc}",
+                        )
                         updated["metadata_needs_attention"] = True
                         updated["metadata_attention_reasons"] = [f"Metadata retry failed: {exc}"]
                     records[index] = updated
@@ -501,14 +515,21 @@ class EnrichmentRerunsMixin:
 
         def candidate_for(index: int) -> tuple[dict[str, Any], dict[str, Any]]:
             candidate = json.loads(json.dumps(snapshot[index]))
-            status = candidate.get("metadata_field_status") if isinstance(candidate.get("metadata_field_status"), dict) else {}
+            reset_fields = {
+                field
+                for family in families
+                for field in pass_schema.family_fields()[family]
+            }
+            reset_fields_for_evaluation(
+                candidate,
+                reset_fields,
+                schema=pass_schema,
+                discard_history=True,
+                method="metadata_rerun_worker",
+            )
             for family in families:
-                for field in pass_schema.family_fields()[family]:
-                    candidate.pop(field, None)
-                    status.pop(field, None)
                 candidate.setdefault("metadata_stage_status", {}).pop(family, None)
                 candidate.setdefault("metadata_execution_ledger", {}).pop(family, None)
-            candidate["metadata_field_status"] = status
             neighbors = {
                 "previous_text": str(snapshot[index - 1].get("text") or "") if index > 0 else "",
                 "next_text": str(snapshot[index + 1].get("text") or "") if index + 1 < len(snapshot) else "",
@@ -688,22 +709,31 @@ class EnrichmentRerunsMixin:
         families = [str(value) for value in requested_families or [] if str(value) in rerun_groups]
         if not families:
             families = list(rerun_groups)
-        # Clear only values owned by the selected LLM family. Inherited,
-        # deterministic, human-confirmed, and human-override values are
-        # authoritative and survive reruns.
-        status_map = target.get("metadata_field_status") if isinstance(target.get("metadata_field_status"), dict) else {}
+        # Clear only non-authoritative fields in the selected families. Human,
+        # inherited, and deterministic assertions survive reruns.
+        schema = self._schema_for(build_id)
+        migrate_record_assertions(target, schema)
+        fields_to_reset: set[str] = set()
         for family in families:
             for key in rerun_groups[family]:
-                info = status_map.get(key) if isinstance(status_map.get(key), dict) else {}
-                if str(info.get("status") or "") in {"human_confirmed", "human_override", "inherited", "deterministic"}:
+                assertion = current_assertion_by_name(target, key)
+                if assertion is not None and (
+                    assertion.authority_status in {"human_confirmed", "human_override"}
+                    or assertion.derivation_method in {"inherited", "deterministic"}
+                ):
                     continue
-                if str(info.get("method") or "").startswith("llm") or str(info.get("status") or "") in {"model_inferred", "unresolved", "invalid"}:
-                    target.pop(key, None)
-                    status_map.pop(key, None)
+                fields_to_reset.add(key)
             target.setdefault("metadata_stage_status", {}).pop(family, None)
             target.setdefault("metadata_stage_results", {}).pop(family, None)
             target.setdefault("metadata_execution_ledger", {}).pop(family, None)
-        target["metadata_field_status"] = status_map
+        reset_fields_for_evaluation(
+            target,
+            fields_to_reset,
+            schema=schema,
+            discard_history=False,
+            method="human_requeue",
+            reason="Reviewer requested a fresh metadata evaluation.",
+        )
         rerun_request = dict(request)
         rerun_request["families"] = families
         rerun_request["_interactive_provider_override"] = True
