@@ -70,6 +70,7 @@ import { useCorpusBuildLifecycleController } from "../features/corpus-builder/co
 import { useCorpusReviewNavigation } from "../features/corpus-builder/composables/useCorpusReviewNavigation";
 import { useCorpusReviewDecisions } from "../features/corpus-builder/composables/useCorpusReviewDecisions";
 import { useCorpusTextReview } from "../features/corpus-builder/composables/useCorpusTextReview";
+import { useCorpusMetadataReview } from "../features/corpus-builder/composables/useCorpusMetadataReview";
 import { corpusReviewCommandFromKeydown } from "../features/corpus-builder/domain/reviewCommands";
 import {
   editableRecordMetadata,
@@ -273,21 +274,16 @@ const { jsonlPreviewOpen, jsonlPreview, openJsonlPreview, publish } = useCorpusP
   t: (key, fallback) => i18n.t(key, fallback),
   tf: (key, values) => i18n.tf(key, values),
 });
-const metadataSavingField = ref("");
-const metadataSavedField = ref("");
 const error = ref("");
 const notice = ref("");
 const statusRegion = ref<HTMLElement | null>(null);
 const acceptButtonEl = ref<HTMLButtonElement | null>(null);
 const advancedOpen = ref(false);
-const metadataDraft = ref("{}");
 const recordSaveQueue = new RecordMutationQueue();
-const bulkMetadataOpen = ref(false);
 const documentMetadataOpen = ref(false);
 const textCleanupOpen = ref(false);
 const boundarySliceOpen = ref(false);
 const sourceTranscriptionOpen = ref(false);
-const metadataEnrichmentOpen = ref(false);
 const {
   textDraft,
   editingText,
@@ -324,20 +320,68 @@ const {
   setMessage,
   t: (key, fallback) => i18n.t(key, fallback),
 });
-const metadataEditorDirty = ref(false);
-const editorialMemoryOpen = ref(false);
-const editorialMemory = ref<{
-  conventions: Record<string, { value: unknown; confirmed_records: number }>;
-  examples: Record<
-    string,
-    Array<{ record_id: string; value: unknown; similarity: number; excerpt: string }>
-  >;
-  reset_at?: string | null;
-  convention_count: number;
-  example_count: number;
-}>({ conventions: {}, examples: {}, convention_count: 0, example_count: 0 });
+const {
+  metadataSavingField,
+  metadataSavedField,
+  metadataDraft,
+  bulkMetadataOpen,
+  metadataEnrichmentOpen,
+  metadataEditorDirty,
+  editorialMemoryOpen,
+  editorialMemory,
+  metadataRerunFamily,
+  metadataObservedValues,
+  metadataKnownValues,
+  rememberMetadataValues,
+  saveMetadata,
+  assignEvidenceBlock,
+  toggleEvidenceBlock,
+  requeueCurrentRecord,
+  resolveMetadataField,
+  resolveMetadataSuggestions,
+  resolveMetadataNoValue,
+  clearMetadataSuggestionCache,
+  runMetadataEnrichment,
+  openEditorialMemory,
+  resetEditorialMemory,
+  handleMetadataDirty,
+  showMetadataSource,
+  rerunMetadata,
+  applyBulkMetadata,
+} = useCorpusMetadataReview({
+  currentBuild,
+  selectedRecord,
+  selectedRecordId,
+  records,
+  busy,
+  selectedEvidenceField,
+  reviewInspectorTab,
+  selectedPdfPage,
+  sourceBlocks,
+  selectedReviewIds,
+  reviewQueue,
+  recordQuery,
+  llmActionProviderId,
+  llmActionModel,
+  selectedProviderId,
+  providerProfiles,
+  directProfilePayloadWithModel,
+  captureReviewViewport,
+  restoreReviewViewport,
+  queueRecordRequest,
+  applyAuthoritativeRecord,
+  syncBuildInRail,
+  registerBuildOperation,
+  startPolling,
+  refreshBuild,
+  refreshRecords,
+  recordMetadata,
+  metadataDraftKey,
+  setMessage,
+  t: (key, fallback) => i18n.t(key, fallback),
+  tf: (key, fallbackOrValues, values) => i18n.tf(key, fallbackOrValues, values),
+});
 const bulkActionFeedback = ref("");
-const metadataRerunFamily = ref("all");
 const metadataFamilyOptions = computed(
   () =>
     currentBuild.value?.schema?.groups?.map((group) => ({
@@ -878,31 +922,6 @@ const discourseRoles = computed(() =>
     ? (activeCorpusProfile.value?.discourse_roles as unknown[]).map(String)
     : [],
 );
-const metadataHumanValues = ref<Record<string, Set<string>>>({});
-const metadataObservedValues = ref<Record<string, string[]>>({});
-const metadataKnownValues = computed<Record<string, string[]>>(() => {
-  const out: Record<string, Set<string>> = {};
-  for (const [field, values] of Object.entries(metadataObservedValues.value))
-    for (const value of values) (out[field] ??= new Set()).add(value);
-  for (const row of records.value) {
-    for (const [field, value] of Object.entries(row as Record<string, unknown>)) {
-      const values = Array.isArray(value) ? value : [value];
-      for (const item of values) {
-        if (typeof item !== "string" || !item.trim()) continue;
-        (out[field] ??= new Set()).add(item.trim());
-      }
-    }
-  }
-  for (const [field, values] of Object.entries(metadataHumanValues.value)) {
-    for (const value of values) (out[field] ??= new Set()).add(value);
-  }
-  return Object.fromEntries(
-    Object.entries(out).map(([field, values]) => [
-      field,
-      [...values].sort((a, b) => a.localeCompare(b)),
-    ]),
-  );
-});
 const selectedMetadataBlocked = computed(() =>
   Boolean(
     (selectedRecord.value?.metadata_review_fields || []).length ||
@@ -1059,31 +1078,6 @@ function recordMetadata(record: CorpusRecord) {
     currentBuild.value?.schema || selectedSchema.value,
   );
 }
-function applyOptimisticMetadata(changes: Record<string, unknown>) {
-  if (!currentBuild.value || !selectedRecord.value) return null;
-  const buildId = currentBuild.value.build_id;
-  const recordId = selectedRecord.value.record_id;
-  const expectedRevision = Number(selectedRecord.value.record_revision || 1);
-  const row: CorpusRecord = {
-    ...selectedRecord.value,
-    ...changes,
-    record_revision: expectedRevision + 1,
-  } as CorpusRecord;
-  // Do not invent canonical authority during an optimistic save. The server
-  // response creates the durable human assertion and becomes authoritative.
-  selectedRecord.value = row;
-  metadataDraft.value = JSON.stringify(recordMetadata(row), null, 2);
-  const index = records.value.findIndex((item) => item.record_id === recordId);
-  if (index >= 0) records.value.splice(index, 1, row);
-  metadataEditorDirty.value = false;
-  try {
-    localStorage.removeItem(metadataDraftKey(buildId, recordId));
-  } catch {
-    // Best effort: browser storage must not block review.
-  }
-  return { buildId, recordId, expectedRevision };
-}
-
 function applyAuthoritativeRecord(record: CorpusRecord, build?: CorpusBuild | null) {
   const id = record.record_id;
   const index = records.value.findIndex((item) => item.record_id === id);
@@ -1511,116 +1505,6 @@ async function saveManifest(changes: Record<string, unknown>) {
   }
 }
 
-async function saveMetadata() {
-  if (!currentBuild.value || !selectedRecord.value) return;
-  const viewport = captureReviewViewport();
-  let changes: Record<string, unknown>;
-  try {
-    changes = JSON.parse(metadataDraft.value);
-  } catch {
-    setMessage(i18n.t("pdf_corpus.metadata_invalid"), "error");
-    return;
-  }
-  const context = applyOptimisticMetadata(changes);
-  if (!context) return;
-  await restoreReviewViewport(viewport);
-  queueRecordRequest(context.recordId, Object.keys(changes), (rebase) =>
-    corpusBuilderApi.patchMetadata(
-      context.buildId,
-      context.recordId,
-      changes,
-      rebase ? undefined : context.expectedRevision,
-    ),
-  );
-}
-async function assignEvidenceBlock(field: string, blockId: string) {
-  if (!currentBuild.value || !selectedRecord.value || !field || !blockId) return;
-  const viewport = captureReviewViewport();
-  selectedEvidenceField.value = field;
-  const existing = selectedRecord.value.metadata_evidence?.[field];
-  const ids = new Set((existing?.block_ids || []).map(String));
-  if (ids.has(blockId)) {
-    await restoreReviewViewport(viewport);
-    return;
-  }
-  ids.add(blockId);
-  const buildId = currentBuild.value.build_id;
-  const recordId = selectedRecord.value.record_id;
-  const expectedRevision = Number(selectedRecord.value.record_revision || 1);
-  const evidence = {
-    ...(selectedRecord.value.metadata_evidence || {}),
-    [field]: {
-      ...(existing || {}),
-      block_ids: Array.from(ids),
-      confidence: existing?.confidence ?? 1,
-      reason: existing?.reason || i18n.t("pdf_corpus.human_evidence_reason"),
-    },
-  };
-  const row: CorpusRecord = {
-    ...selectedRecord.value,
-    metadata_evidence: evidence,
-    record_revision: expectedRevision + 1,
-  } as CorpusRecord;
-  selectedRecord.value = row;
-  metadataDraft.value = JSON.stringify(recordMetadata(row), null, 2);
-  const index = records.value.findIndex((item) => item.record_id === recordId);
-  if (index >= 0) records.value.splice(index, 1, row);
-  await restoreReviewViewport(viewport);
-  queueRecordRequest(recordId, [field], (rebase) =>
-    corpusBuilderApi.patchEvidence(
-      buildId,
-      recordId,
-      field,
-      Array.from(ids),
-      existing?.confidence ?? 1,
-      existing?.reason || i18n.t("pdf_corpus.human_evidence_reason"),
-      rebase ? undefined : expectedRevision,
-    ),
-  );
-}
-
-async function toggleEvidenceBlock(blockId: string) {
-  if (!currentBuild.value || !selectedRecord.value || !selectedEvidenceField.value) return;
-  const viewport = captureReviewViewport();
-  const field = selectedEvidenceField.value;
-  const existing = selectedRecord.value.metadata_evidence?.[field];
-  const ids = new Set((existing?.block_ids || []).map(String));
-  if (ids.has(blockId)) ids.delete(blockId);
-  else ids.add(blockId);
-  const buildId = currentBuild.value.build_id;
-  const recordId = selectedRecord.value.record_id;
-  const expectedRevision = Number(selectedRecord.value.record_revision || 1);
-  const evidence = {
-    ...(selectedRecord.value.metadata_evidence || {}),
-    [field]: {
-      ...(existing || {}),
-      block_ids: Array.from(ids),
-      confidence: existing?.confidence ?? 1,
-      reason: existing?.reason || i18n.t("pdf_corpus.human_evidence_reason"),
-    },
-  };
-  const row: CorpusRecord = {
-    ...selectedRecord.value,
-    metadata_evidence: evidence,
-    record_revision: expectedRevision + 1,
-  } as CorpusRecord;
-  selectedRecord.value = row;
-  metadataDraft.value = JSON.stringify(recordMetadata(row), null, 2);
-  const index = records.value.findIndex((item) => item.record_id === recordId);
-  if (index >= 0) records.value.splice(index, 1, row);
-  await restoreReviewViewport(viewport);
-  queueRecordRequest(recordId, [field], (rebase) =>
-    corpusBuilderApi.patchEvidence(
-      buildId,
-      recordId,
-      field,
-      Array.from(ids),
-      existing?.confidence ?? 1,
-      existing?.reason || i18n.t("pdf_corpus.human_evidence_reason"),
-      rebase ? undefined : expectedRevision,
-    ),
-  );
-}
 async function merge(direction: "previous" | "next") {
   if (!currentBuild.value || !selectedRecord.value) return;
   const id = selectedRecord.value.record_id;
@@ -1987,35 +1871,6 @@ async function sliceRecord(
   );
 }
 
-async function requeueCurrentRecord() {
-  if (!currentBuild.value || !selectedRecord.value) return;
-  busy.value = "record";
-  try {
-    const availableProfileIds = new Set(providerProfiles.value.map((profile) => profile.id));
-    const profileId =
-      [llmActionProviderId.value, selectedProviderId.value].find(
-        (id) => Boolean(id) && availableProfileIds.has(id),
-      ) ||
-      providerProfiles.value[0]?.id ||
-      "";
-    if (!profileId) throw new Error(i18n.t("pdf_corpus.no_provider_profile"));
-    const actionPayload = directProfilePayloadWithModel(profileId, llmActionModel.value) || {
-      provider_profile_id: profileId,
-      model: llmActionModel.value || undefined,
-    };
-    await corpusBuilderApi.requeueMetadata(
-      currentBuild.value.build_id,
-      selectedRecord.value.record_id,
-      actionPayload,
-    );
-    await refreshBuild();
-    setMessage(i18n.t("pdf_corpus.requeue_requested"));
-  } catch (exc) {
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
-}
 async function adjudicateBoundary(
   direction: "previous" | "next",
   profileId = llmActionProviderId.value || selectedProviderId.value,
@@ -2043,276 +1898,6 @@ async function adjudicateBoundary(
     setMessage(
       i18n.tf("pdf_corpus.boundary_check_done", {
         decision: i18n.t(`pdf_corpus.boundary_llm.${decision}`, decision),
-      }),
-    );
-  } catch (exc) {
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
-}
-async function resolveMetadataField(field: string, value: unknown) {
-  if (!currentBuild.value || !selectedRecord.value) return;
-  rememberMetadataValues(field, value);
-  const viewport = captureReviewViewport();
-  metadataSavingField.value = field;
-  metadataSavedField.value = "";
-  const context = applyOptimisticMetadata({ [field]: value });
-  if (!context) {
-    metadataSavingField.value = "";
-    return;
-  }
-  await restoreReviewViewport(viewport, { inspector: true });
-  queueRecordRequest(
-    context.recordId,
-    [field],
-    async (rebase) => {
-      const result = await corpusBuilderApi.metadataDecision(
-        context.buildId,
-        context.recordId,
-        field,
-        value,
-        rebase ? undefined : context.expectedRevision,
-      );
-      applyAuthoritativeRecord(result.record, result.build);
-      if (selectedRecordId.value === context.recordId) {
-        metadataSavingField.value = "";
-        metadataSavedField.value = field;
-      }
-      return result;
-    },
-    () => {
-      if (selectedRecordId.value === context.recordId) metadataSavingField.value = "";
-    },
-  );
-}
-
-async function resolveMetadataSuggestions(changes: Record<string, unknown>) {
-  if (!currentBuild.value || !selectedRecord.value || !Object.keys(changes).length) return;
-  for (const [field, value] of Object.entries(changes)) rememberMetadataValues(field, value);
-  const viewport = captureReviewViewport();
-  const context = applyOptimisticMetadata(changes);
-  if (!context) return;
-  await restoreReviewViewport(viewport, { inspector: true });
-  queueRecordRequest(context.recordId, Object.keys(changes), async (rebase) => {
-    const result = await corpusBuilderApi.metadataDecisionBatch(
-      context.buildId,
-      context.recordId,
-      changes,
-      rebase ? undefined : context.expectedRevision,
-    );
-    applyAuthoritativeRecord(result.record, result.build);
-    return result;
-  });
-}
-
-function rememberMetadataValues(field: string, value: unknown) {
-  const values = Array.isArray(value) ? value : [value];
-  for (const item of values) {
-    if (typeof item !== "string" || !item.trim()) continue;
-    (metadataHumanValues.value[field] ??= new Set()).add(item.trim());
-  }
-}
-
-async function resolveMetadataNoValue(field: string) {
-  if (!currentBuild.value || !selectedRecord.value) return;
-  const viewport = captureReviewViewport();
-  metadataSavingField.value = field;
-  metadataSavedField.value = "";
-  const context = applyOptimisticMetadata({ [field]: null });
-  if (!context) {
-    metadataSavingField.value = "";
-    return;
-  }
-  await restoreReviewViewport(viewport, { inspector: true });
-  queueRecordRequest(
-    context.recordId,
-    [field],
-    async (rebase) => {
-      const result = await corpusBuilderApi.metadataDecision(
-        context.buildId,
-        context.recordId,
-        field,
-        null,
-        rebase ? undefined : context.expectedRevision,
-        true,
-      );
-      applyAuthoritativeRecord(result.record, result.build);
-      if (selectedRecordId.value === context.recordId) {
-        metadataSavingField.value = "";
-        metadataSavedField.value = field;
-      }
-      return result;
-    },
-    () => {
-      if (selectedRecordId.value === context.recordId) metadataSavingField.value = "";
-    },
-  );
-}
-async function clearMetadataSuggestionCache() {
-  if (
-    !window.confirm(
-      i18n.t(
-        "pdf_corpus.clear_metadata_cache_confirm",
-        "Clear remembered metadata suggestions? This will not change reviewed records or their history.",
-      ),
-    )
-  )
-    return;
-  busy.value = "metadata-cache";
-  try {
-    const result = await corpusBuilderApi.clearAllMetadataCache();
-    setMessage(
-      i18n.tf("pdf_corpus.metadata_cache_cleared", "Cleared {count} remembered suggestion(s).", {
-        count: result.cleared,
-      }),
-    );
-  } catch (exc) {
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
-}
-async function runMetadataEnrichment(payload: {
-  providerProfileId: string;
-  model: string;
-  families: string[];
-  scope: string;
-  passes: number;
-  recordIds: string[];
-}) {
-  if (!currentBuild.value) return;
-  busy.value = "metadata-enrichment";
-  try {
-    const actionPayload = directProfilePayloadWithModel(
-      payload.providerProfileId,
-      payload.model,
-    ) || { provider_profile_id: payload.providerProfileId, model: payload.model || undefined };
-    currentBuild.value = await corpusBuilderApi.rerunMetadataEnrichment(
-      currentBuild.value.build_id,
-      {
-        ...actionPayload,
-        families: payload.families,
-        scope: payload.scope,
-        passes: payload.passes,
-        record_ids: payload.recordIds,
-      },
-    );
-    metadataEnrichmentOpen.value = false;
-    syncBuildInRail(currentBuild.value);
-    registerBuildOperation(currentBuild.value);
-    startPolling();
-    setMessage(i18n.t("pdf_corpus.metadata_enrichment_started"));
-  } catch (exc) {
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
-}
-
-async function openEditorialMemory() {
-  if (!currentBuild.value) return;
-  busy.value = "editorial-memory";
-  try {
-    editorialMemory.value = await corpusBuilderApi.editorialMemory(currentBuild.value.build_id);
-    editorialMemoryOpen.value = true;
-  } catch (exc) {
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
-}
-async function resetEditorialMemory() {
-  if (!currentBuild.value) return;
-  busy.value = "editorial-memory";
-  try {
-    editorialMemory.value = await corpusBuilderApi.resetEditorialMemory(
-      currentBuild.value.build_id,
-    );
-    setMessage(i18n.t("pdf_corpus.editorial_memory_reset_done"));
-  } catch (exc) {
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
-}
-
-function handleMetadataDirty(value: boolean) {
-  metadataEditorDirty.value = value;
-}
-
-function showMetadataSource(field: string) {
-  selectedEvidenceField.value = field;
-  reviewInspectorTab.value = "source";
-  const ids = selectedRecord.value?.metadata_evidence?.[field]?.block_ids || [];
-  const first = sourceBlocks.value.find((block) => ids.includes(block.block_id));
-  if (first) selectedPdfPage.value = Number(first.page || selectedPdfPage.value);
-}
-
-async function rerunMetadata() {
-  if (!currentBuild.value || !selectedRecord.value) return;
-  const viewport = captureReviewViewport();
-  busy.value = "record";
-  try {
-    const profileId = llmActionProviderId.value || selectedProviderId.value;
-    const payload = {
-      ...(directProfilePayloadWithModel(profileId, llmActionModel.value) || {
-        provider_profile_id: profileId,
-        model: llmActionModel.value || undefined,
-      }),
-    } as Record<string, unknown>;
-    if (metadataRerunFamily.value !== "all") payload.families = [metadataRerunFamily.value];
-    const row = await corpusBuilderApi.rerunMetadata(
-      currentBuild.value.build_id,
-      selectedRecord.value.record_id,
-      payload,
-    );
-    selectedRecord.value = row;
-    metadataDraft.value = JSON.stringify(recordMetadata(row), null, 2);
-    await refreshBuild();
-    await refreshRecords(false, row.record_id);
-    await restoreReviewViewport(viewport);
-    reviewInspectorTab.value = "metadata";
-    setMessage(
-      metadataRerunFamily.value === "all"
-        ? i18n.t("pdf_corpus.metadata_rerun")
-        : i18n.tf("pdf_corpus.metadata_family_rerun", {
-            family: i18n.t(
-              `pdf_corpus.metadata_family.${metadataRerunFamily.value}`,
-              metadataRerunFamily.value,
-            ),
-          }),
-    );
-  } catch (exc) {
-    await restoreReviewViewport(viewport);
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    busy.value = "";
-  }
-}
-async function applyBulkMetadata(payload: {
-  changes: Record<string, unknown>;
-  applyToAll: boolean;
-}) {
-  if (!currentBuild.value) return;
-  busy.value = "bulk-metadata";
-  try {
-    const result = await corpusBuilderApi.bulkMetadata(
-      currentBuild.value.build_id,
-      payload.changes,
-      {
-        recordIds: payload.applyToAll ? [] : Array.from(selectedReviewIds.value),
-        applyToAll: payload.applyToAll,
-        reviewQueue: reviewQueue.value,
-        query: recordQuery.value,
-      },
-    );
-    bulkMetadataOpen.value = false;
-    await refreshBuild();
-    await refreshRecords(false, selectedRecordId.value);
-    setMessage(
-      i18n.tf("pdf_corpus.bulk_metadata_applied", {
-        count: result.changed,
       }),
     );
   } catch (exc) {
