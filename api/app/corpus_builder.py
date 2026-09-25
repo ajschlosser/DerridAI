@@ -1269,6 +1269,14 @@ class PdfCorpusRepository:
                     record["topology_index"] = topology_index
                     _decorate_review_state(record)
                     _present_for_reviewer(record)
+                    # A blind projection must not reacquire durable assertion
+                    # identifiers through a later response filter.
+                    if any(
+                        isinstance(status, dict) and status.get("blind")
+                        for status in (record.get("metadata_field_status") or {}).values()
+                    ):
+                        record.pop("field_assertions", None)
+                        record.pop("current_field_assertions", None)
                     items.append(record)
                 total += 1
         for record in items:
@@ -2714,8 +2722,12 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         record = next((row for row in records if row.get("record_id") == record_id), None)
         if record is None:
             raise KeyError(record_id)
+        had_canonical_assertions = "field_assertions" in record
         _present_for_reviewer(record)  # the preview is built from the record as this reviewer may see it
         public = serialize_public_record(record)
+        if had_canonical_assertions and "field_assertions" not in record:
+            public.pop("field_assertions", None)
+            public.pop("current_field_assertions", None)
         errors = validate_publication_record(public)
         unresolved = list(dict.fromkeys([str(v) for v in (record.get("metadata_incomplete_fields") or []) + (record.get("metadata_review_fields") or [])]))
         return {

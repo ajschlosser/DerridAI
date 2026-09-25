@@ -112,6 +112,8 @@ class FieldAssertion(BaseModel):
     run_id: str | None = None
     schema_id: str | None = None
     schema_version: str | None = None
+    legacy_metadata: dict[str, Any] = Field(default_factory=dict)
+    legacy_status: str | None = None
     supersedes_assertion_id: str | None = None
     created_at: str = Field(default_factory=_now)
 
@@ -328,6 +330,7 @@ def confirm_assertion(record: dict[str, Any], assertion: FieldAssertion, *, acto
             "authority_status": "human_confirmed",
             "actor": actor,
             "reason": reason or assertion.reason,
+            "legacy_status": None,
             "record_revision": int(record.get("record_revision") or assertion.record_revision or 1),
             "supersedes_assertion_id": assertion.assertion_id,
             "created_at": _now(),
@@ -360,6 +363,7 @@ def confirm_absence(record: dict[str, Any], field_name: str, *, schema: Any | No
 def reopen_assertion(record: dict[str, Any], assertion: FieldAssertion, *, actor: str | None = None, reason: str = "") -> FieldAssertion:
     return store_assertion(record, assertion.model_copy(update={
         "assertion_id": f"assertion-{uuid.uuid4().hex}",
+        "legacy_status": None,
         "authority_status": "disputed",
         "value_status": "unresolved",
         "actor": actor,
@@ -372,6 +376,7 @@ def reopen_assertion(record: dict[str, Any], assertion: FieldAssertion, *, actor
 def invalidate_assertion(record: dict[str, Any], assertion: FieldAssertion, *, actor: str | None = None, reason: str = "") -> FieldAssertion:
     return store_assertion(record, assertion.model_copy(update={
         "assertion_id": f"assertion-{uuid.uuid4().hex}",
+        "legacy_status": None,
         "authority_status": "disputed",
         "value_status": "invalid",
         "actor": actor,
@@ -382,6 +387,16 @@ def invalidate_assertion(record: dict[str, Any], assertion: FieldAssertion, *, a
 
 
 def _compatibility_status(assertion: FieldAssertion) -> str:
+    if assertion.legacy_status:
+        legacy = {
+            "llm_inferred": "model_inferred",
+            "human_confirmed_absent": "confirmed_absent",
+        }.get(assertion.legacy_status, assertion.legacy_status)
+        if legacy in {
+            "model_inferred", "human_confirmed", "human_override", "deterministic",
+            "inherited", "confirmed_absent", "unresolved", "invalid",
+        }:
+            return legacy
     if assertion.value_status == "confirmed_absent":
         return "confirmed_absent"
     if assertion.value_status == "invalid":
@@ -398,6 +413,11 @@ def _compatibility_status(assertion: FieldAssertion) -> str:
         return "deterministic"
     if assertion.derivation_method == "inherited":
         return "inherited"
+    if assertion.derivation_method == "imported":
+        # Legacy records with a value but no metadata status were already
+        # accepted by the compatibility surface. Keep that state review-neutral
+        # while the canonical assertion remains explicitly not evaluated.
+        return "inherited"
     return "unresolved"
 
 
@@ -405,6 +425,9 @@ def project_record_assertions(record: dict[str, Any]) -> dict[str, Any]:
     """Materialize current values and compatibility views from assertions."""
     status_map: dict[str, Any] = {}
     evidence_map: dict[str, Any] = {}
+    prior_status_map = record.get("metadata_field_status")
+    if not isinstance(prior_status_map, dict):
+        prior_status_map = {}
     for field_id, raw_values in _assertions(record).items():
         current = current_assertion(record, field_id)
         if current is None or not current.field_name:
@@ -425,8 +448,27 @@ def project_record_assertions(record: dict[str, Any]) -> dict[str, Any]:
             "authority_status": current.authority_status,
             "value_status": current.value_status,
         }
+        prior = prior_status_map.get(current.field_name)
+        if isinstance(prior, dict):
+            # Preserve legacy audit keys (for example blind/recheck markers and
+            # raw model values) while canonical fields become authoritative once
+            # the compatibility status already points at this assertion.
+            for key, value in current.legacy_metadata.items():
+                if key not in status:
+                    status[key] = copy.deepcopy(value)
+            for key, value in prior.items():
+                if key not in status:
+                    status[key] = copy.deepcopy(value)
+            # A legacy status has no assertion identity yet. Keep its public
+            # vocabulary during the first read, even when the canonical state
+            # distinguishes a proposed value from an unresolved absence.
+            if not prior.get("assertion_id"):
+                for key in ("status", "method", "confidence", "reason"):
+                    if key in prior:
+                        status[key] = copy.deepcopy(prior[key])
         if current.evaluation_status == "not_evaluated":
-            status.pop("confidence", None)
+            if not (isinstance(prior, dict) and not prior.get("assertion_id") and "confidence" in prior):
+                status.pop("confidence", None)
         status_map[current.field_name] = status
         if current.evidence:
             evidence_map[current.field_name] = copy.deepcopy(current.evidence[0] if len(current.evidence) == 1 else {"spans": current.evidence})
@@ -487,7 +529,11 @@ def _legacy_assertion(
         authority_status=authority,  # type: ignore[arg-type]
         value_status=value_status,  # type: ignore[arg-type]
         method=str(status.get("method") or "") or None,
-        confidence=status.get("confidence") if isinstance(status.get("confidence"), (int, float)) else None,
+        confidence=(
+            status.get("confidence")
+            if evaluation != "not_evaluated" and isinstance(status.get("confidence"), (int, float))
+            else None
+        ),
         reason=str(status.get("reason") or status.get("reason_code") or "Migrated from legacy metadata state."),
         evidence=[item for item in raw_evidence if isinstance(item, dict)],
         actor=status.get("actor"),
@@ -495,6 +541,16 @@ def _legacy_assertion(
         run_id=status.get("run_id"),
         schema_id=str(getattr(schema, "id", "") or "") or None,
         schema_version=str(getattr(schema, "schema_version", "") or "") or None,
+        legacy_metadata={
+            key: copy.deepcopy(value)
+            for key, value in status.items()
+            if key not in {
+                "status", "method", "reason", "confidence", "assertion_id", "field_id",
+                "derivation_method", "evaluation_status", "authority_status", "value_status",
+                "actor", "model", "run_id", "schema_id", "schema_version",
+            }
+        },
+        legacy_status=token or None,
     )
     return candidate
 
