@@ -1,6 +1,9 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { describe, expect, it } from "vitest";
-import { editableRecordMetadata } from "../../src/features/corpus-builder/domain/recordMetadata";
+import {
+  editableRecordMetadata,
+  evidenceCandidateFieldNames,
+} from "../../src/features/corpus-builder/domain/recordMetadata";
 
 describe("Corpus Builder editable metadata packet", () => {
   it("includes schema-defined and canonical assertion fields without transporting operational state", () => {
@@ -53,5 +56,40 @@ describe("Corpus Builder editable metadata packet", () => {
       primary_text: true,
       discourse_role: "argument",
     });
+  });
+
+  it("surfaces a custom schema evidence field without a product-specific allowlist", () => {
+    const record = { custom_claim: "The supplement is constitutive." };
+    const schema = {
+      fields: [
+        { name: "custom_claim", label: "Custom claim", evidence: true },
+        { name: "internal_note", label: "Internal note", evidence: false },
+      ],
+    } as any;
+
+    expect(evidenceCandidateFieldNames(record, schema)).toEqual(["custom_claim"]);
+  });
+
+  it("keeps canonical assertion evidence visible even without a compatibility projection", () => {
+    const record = {
+      field_assertions: {
+        "schema.custom": [
+          {
+            assertion_id: "a1",
+            field_id: "schema.custom",
+            field_name: "custom_claim",
+            value: "The supplement is constitutive.",
+            derivation_method: "model",
+            evaluation_status: "value_supported",
+            authority_status: "unreviewed",
+            value_status: "present",
+            evidence: [{ block_id: "b-1" }],
+          },
+        ],
+      },
+      current_field_assertions: { "schema.custom": "a1" },
+    };
+
+    expect(evidenceCandidateFieldNames(record)).toEqual(["custom_claim"]);
   });
 });
