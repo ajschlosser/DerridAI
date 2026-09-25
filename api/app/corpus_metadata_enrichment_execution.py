@@ -120,7 +120,7 @@ class MetadataEnrichmentExecutionMixin:
         request = experiment.with_arm(request, str(record.get("record_id") or ""))
         off = experiment.disabled(request)
         _apply_manifest_metadata(record, manifest)
-        apply_metadata_constraints(record)
+        apply_metadata_constraints(record, schema)
         editorial_memory = self._editorial_memory(
             build_id,
             record,
@@ -1052,7 +1052,7 @@ CURRENT REVIEWED RECORD TEXT:
                     "reason": reason or "Model value was populated, but calibrated autofill did not approve automatic verification.",
                 }
 
-        apply_metadata_constraints(record)
+        apply_metadata_constraints(record, schema)
         for requested_field in llm_requested_fields:
             requested_status = field_status.get(requested_field)
             if isinstance(requested_status, dict):
@@ -1109,7 +1109,7 @@ CURRENT REVIEWED RECORD TEXT:
             ])),
             "review_metadata_fields": review_metadata_fields,
         }
-        _sync_record_metadata_state(record, state_profile)
+        _sync_record_metadata_state(record, state_profile, schema)
         incomplete_fields = list(record.get("metadata_incomplete_fields") or [])
         review_fields = list(record.get("metadata_review_fields") or [])
         # Optional indexing/quotation failures remain visible but do not make a structurally
