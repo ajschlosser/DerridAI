@@ -178,7 +178,7 @@ export const systemApi = {
     if (query.trim()) params.set("query", query.trim());
     return apiRequest<SystemResponseCachePage>(`/api/response-cache/records?${params}`);
   },
-  clearResponseCache: () => apiRequest<Record<string, unknown>>("/api/stores/_response_cache", { method: "DELETE" }),
+  clearResponseCache: () => apiRequest<{ deleted: number }>("/api/system/data/response-cache-records", { method: "DELETE" }),
   systemChromaCollections: () => apiRequest<{collections: SystemChromaCollection[]}>("/api/system/chroma/collections"),
   validateSystemChroma: (command: string) => apiRequest<SystemChromaCommandResult>("/api/system/chroma/validate", {method: "POST", body: JSON.stringify({command})}),
   querySystemChroma: (command: string) => apiRequest<SystemChromaCommandResult>("/api/system/chroma/query", {method: "POST", body: JSON.stringify({command})}),
