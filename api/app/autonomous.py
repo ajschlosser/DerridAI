@@ -22,8 +22,6 @@ from .field_assertions import (
     project_record_assertions,
 )
 
-# Statuses a person set. The policy never overrides them.
-HUMAN_STATUSES = {"human_confirmed", "human_override", "confirmed_absent"}
 # Why a field is waiting on a person, when a model proposed something for it.
 PROPOSAL_REASONS = {"low_confidence", "ambiguous", "llm_disagreement", "deterministic_llm_disagreement", "evidence_failed", "confidence_missing", "no_value_returned"}
 
@@ -53,11 +51,6 @@ class Policy:
 
     def public(self) -> dict[str, Any]:
         return asdict(self)
-
-
-def _confidence(info: dict[str, Any]) -> float | None:
-    value = info.get("confidence")
-    return float(value) if isinstance(value, (int, float)) else None
 
 
 def _empty(value: Any) -> bool:
