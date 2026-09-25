@@ -457,6 +457,52 @@ const {
   t: (key, fallback) => i18n.t(key, fallback),
   tf: (key, fallbackOrValues, values) => i18n.tf(key, fallbackOrValues, values),
 });
+
+function normalizedEvidenceWords(value: string) {
+  return new Set(
+    value
+      .toLocaleLowerCase()
+      .split(/[^\p{L}\p{N}]+/u)
+      .map((item) => item.trim())
+      .filter((item) => item.length > 2),
+  );
+}
+
+async function assignSelectedMetadataEvidence(field: string, selectedText: string) {
+  const selected = selectedText.replace(/\s+/g, " ").trim().toLocaleLowerCase();
+  if (!selectedRecord.value || !selected) return;
+  const allowedIds = new Set((selectedRecord.value.source_block_ids || []).map(String));
+  const candidates = sourceBlocks.value.filter((block) => allowedIds.has(String(block.block_id)));
+  let block =
+    candidates.find((item) =>
+      String(item.text || "")
+        .replace(/\s+/g, " ")
+        .toLocaleLowerCase()
+        .includes(selected),
+    ) || null;
+  if (!block) {
+    const wanted = normalizedEvidenceWords(selected);
+    let score = 0;
+    for (const item of candidates) {
+      const words = normalizedEvidenceWords(String(item.text || ""));
+      const overlap = [...wanted].filter((word) => words.has(word)).length;
+      const next = wanted.size ? overlap / wanted.size : 0;
+      if (next > score) {
+        score = next;
+        block = item;
+      }
+    }
+    if (score < 0.45) block = null;
+  }
+  if (!block?.block_id) {
+    showMetadataSource(field);
+    return;
+  }
+  await assignEvidenceBlock(field, String(block.block_id));
+  selectedEvidenceField.value = field;
+  reviewInspectorTab.value = "evidence";
+}
+
 const metadataFamilyOptions = computed(
   () =>
     currentBuild.value?.schema?.groups?.map((group) => ({
@@ -3285,6 +3331,7 @@ defineExpose({
                     @no-value="resolveMetadataNoValue"
                     @resolve-many="resolveMetadataSuggestions"
                     @source="showMetadataSource"
+                    @selection-evidence="assignSelectedMetadataEvidence"
                     @dirty="handleMetadataDirty"
                   />
                   <button
