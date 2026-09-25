@@ -127,13 +127,11 @@ function reviewableAssertionFieldNames(
   record: LooseRecord,
   schema?: MetadataSchema | null,
 ): string[] {
-  const schemaNames = new Set(
-    (schema?.fields || []).filter(isReviewVisibleSchemaField).map((field) => field.name),
-  );
+  const schemaByName = new Map((schema?.fields || []).map((field) => [field.name, field]));
   return assertionFieldNames(record).filter((field) => {
     if (OPERATIONAL_RECORD_FIELDS.has(field)) return false;
-    if (schema) return schemaNames.has(field) || (STRUCTURAL_EDITABLE_FIELDS as readonly string[]).includes(field);
-    return true;
+    const configured = schemaByName.get(field);
+    return configured ? isReviewVisibleSchemaField(configured) : true;
   });
 }
 
