@@ -23,7 +23,7 @@ DerridAI is a local-first Docker application for building, auditing, and queryin
 - `web/src/` — Vue 3 + TypeScript frontend: `views/`, `components/` (with Storybook coverage where applicable), `stores/` (Pinia), `router/`, `api/`, `composables/`, `domain/`, `runtime/` (remaining compatibility/runtime orchestration), `types/`.
 - `web/tests/frontend/` (Vitest + Vue Test Utils + happy-dom) and `web/tests/e2e/` (Playwright + axe-core).
 - `tests/` — Python regression suite; topical `test_<subject>.py` files (named for the behavior under test, not a release; see `tests/README.md`), and `tests/fixtures/`.
-- `docs/` — `USER_GUIDE.md`, design notes, and `docs/notes/<version>.md` release notes.
+- `docs/` — current architecture/domain contracts plus `docs/notes/<version>.md` historical release notes. Do not create one-off progress/status documents when an authoritative current document or release note can carry the information.
 - `data/` — runtime state (Chroma, SQLite, models), git-ignored except `.gitkeep`. Never commit its contents.
 - `docker-compose.yml`, `.env.example`, `scripts/` (diagnostics, and `migrate-css-tokens.py` for moving styles onto design tokens), `.github/workflows/frontend.yml` (CI).
 
@@ -33,6 +33,7 @@ DerridAI is a local-first Docker application for building, auditing, and queryin
 pytest -q -n auto --dist=worksteal         # backend + release regression tests (from repo root)
 pytest -q -m contract tests/test_frontend_api_contract.py
 python -m compileall -q api/app             # syntax check
+cd web && npm run format:repo:check         # repository-wide Prettier check
 cd web && npm run typecheck                 # vue-tsc
 cd web && npm run typecheck:tests           # test/config TypeScript
 cd web && npm run test:unit                 # Vitest
@@ -99,7 +100,7 @@ Backend tests stub `chromadb` and put `api/` on `sys.path`; they do not need Doc
 - Make focused changes; do not refactor or add abstractions beyond the task. Prefer editing existing files.
 - Add a regression test for each behavior change, in a new or existing `tests/test_*.py` (and Vitest/Playwright tests for frontend behavior).
 - Test behavior, not text. Do not add tests that only assert a string appears in a doc or source file, and do not hard-code the release version in tests; version agreement is covered once in `tests/test_release_consistency.py`.
-- Run the relevant checks before reporting done, and report honestly which checks could not run.
+- Run the relevant checks before reporting done, and report honestly which checks could not run. For handoff/documentation work, keep README and CONTRIBUTING setup commands executable from a clean checkout and keep the repository-wide Prettier check green.
 - Commit as the repository owner: Aaron Schlosser, PhD <aaron@aaronschlosser.com>. Only commit when asked; never push or force-push without being asked.
 
 ## Saving tokens and execution time
