@@ -1697,7 +1697,7 @@ function selectRecord(record: CorpusRecord) {
   }
   void refreshBlocks();
   if (selectedBuildId.value && !sameRecord)
-    void pdfCorpusApi
+    void corpusBuilderApi
       .markViewed(selectedBuildId.value, record.record_id)
       .then((result) => {
         if (selectedRecord.value?.record_id === record.record_id)
