@@ -1,6 +1,11 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
-export type RecordMutation = () => Promise<unknown>;
+export interface RecordMutationContext {
+  rebase: boolean;
+  attempt: number;
+}
+
+export type RecordMutation = (context: RecordMutationContext) => Promise<unknown>;
 
 /**
  * Serializes mutations by logical record identity. Review saves carry an
@@ -14,6 +19,7 @@ export class RecordMutationQueue {
     recordIds: string | readonly string[],
     mutation: RecordMutation,
     onError: (error: unknown) => void,
+    options: { retryOnFailure?: boolean } = {},
   ): void {
     const keys = Array.from(new Set(typeof recordIds === "string" ? [recordIds] : recordIds));
     if (!keys.length) return;
@@ -23,9 +29,23 @@ export class RecordMutationQueue {
     const current = previous
       .catch(() => undefined)
       .then(async () => {
+        const rebase = keys.some((recordId) => this.rebaseRequired.has(recordId));
         try {
-          await mutation();
+          await mutation({ rebase, attempt: 1 });
+          keys.forEach((recordId) => this.rebaseRequired.delete(recordId));
         } catch (error) {
+          if (options.retryOnFailure) {
+            try {
+              await mutation({ rebase: true, attempt: 2 });
+              keys.forEach((recordId) => this.rebaseRequired.delete(recordId));
+              return;
+            } catch (retryError) {
+              keys.forEach((recordId) => this.rebaseRequired.add(recordId));
+              onError(retryError);
+              return;
+            }
+          }
+          keys.forEach((recordId) => this.rebaseRequired.add(recordId));
           onError(error);
         }
       });
@@ -36,6 +56,8 @@ export class RecordMutationQueue {
       });
     });
   }
+
+  private readonly rebaseRequired = new Set<string>();
 
   hasPending(recordId: string): boolean {
     return this.pending.has(recordId);

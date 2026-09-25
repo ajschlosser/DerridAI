@@ -1079,6 +1079,24 @@ class PdfCorpusRepository:
     def build_records_db_path(self, build_id: str) -> Path:
         return self.root / "builds" / build_id / "records.sqlite3"
 
+    def _set_records_projection_state(self, build_id: str, *, dirty: bool) -> None:
+        build_path = self.build_path(build_id)
+        build = _json_read(build_path)
+        if not isinstance(build, dict):
+            raise KeyError(build_id)
+        state = dict(build.get("records_projection") or {})
+        revision = int(state.get("revision") or 0) + (1 if dirty else 0)
+        build["records_projection"] = {
+            "revision": revision,
+            "dirty": dirty,
+            "updated_at": iso_now(),
+        }
+        _json_write(build_path, build)
+
+    def records_projection_dirty(self, build_id: str) -> bool:
+        build = self.get_build(build_id)
+        return bool((build.get("records_projection") or {}).get("dirty"))
+
     def _records_db(self, build_id: str) -> sqlite3.Connection:
         path = self.build_records_db_path(build_id)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -1191,6 +1209,7 @@ class PdfCorpusRepository:
         path = self.build_records_path(build_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         with self._lock:
+            self._set_records_projection_state(build_id, dirty=True)
             fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
             tmp = Path(tmp_name)
             try:
@@ -1221,14 +1240,21 @@ class PdfCorpusRepository:
                     ],
                 )
                 connection.commit()
+            self._set_records_projection_state(build_id, dirty=False)
 
     def update_record(self, build_id: str, record: dict[str, Any]) -> None:
-        """Persist one validated record without rebuilding the whole JSONL file."""
+        """Persist one validated record without rebuilding the whole JSONL file.
+
+        The SQLite index is authoritative for interactive reads. JSONL is a
+        publication projection and is marked dirty until an explicit projection
+        refresh completes, so a process crash cannot make divergence invisible.
+        """
         record_id = str(record.get("record_id") or "")
         if not record_id:
             raise ValueError("A record ID is required.")
         with self._lock:
             self._bootstrap_records_db(build_id)
+            self._set_records_projection_state(build_id, dirty=True)
             with self._records_db(build_id) as connection:
                 row = connection.execute(
                     "SELECT ordinal FROM corpus_records WHERE record_id = ?",
@@ -1241,6 +1267,46 @@ class PdfCorpusRepository:
                     (json.dumps(record, ensure_ascii=False), record_id),
                 )
                 connection.commit()
+
+    def refresh_records_projection(self, build_id: str) -> None:
+        """Rebuild the JSONL publication projection from the transactional index."""
+        with self._lock:
+            self._bootstrap_records_db(build_id)
+            with self._records_db(build_id) as connection:
+                rows = connection.execute(
+                    "SELECT payload FROM corpus_records ORDER BY ordinal"
+                ).fetchall()
+            path = self.build_records_path(build_id)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+            tmp = Path(tmp_name)
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                    for (payload,) in rows:
+                        handle.write(payload + "\n")
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                os.replace(tmp, path)
+            finally:
+                try:
+                    tmp.unlink(missing_ok=True)
+                except OSError:
+                    pass
+            self._set_records_projection_state(build_id, dirty=False)
+
+    def get_record(self, build_id: str, record_id: str) -> dict[str, Any]:
+        """Read one interactive record without parsing the complete corpus."""
+        self.get_build(build_id)
+        with self._lock:
+            self._bootstrap_records_db(build_id)
+            with self._records_db(build_id) as connection:
+                row = connection.execute(
+                    "SELECT payload FROM corpus_records WHERE record_id = ?",
+                    (str(record_id),),
+                ).fetchone()
+        if row is None:
+            raise KeyError(record_id)
+        return _migrate_status_vocabulary(json.loads(row[0]))
 
     def load_records(self, build_id: str) -> list[dict[str, Any]]:
         self.get_build(build_id)
@@ -2744,6 +2810,86 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         self.repo.save_build(build)
         return build
 
+    def _rewrite_targeted_record(
+        self,
+        build_id: str,
+        record: dict[str, Any],
+        previous: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Validate and persist one ordinary review edit without corpus scans.
+
+        Structural edits continue through ``_rewrite_and_validate`` because they
+        change topology. Ordinary text, metadata, evidence, and disposition
+        edits only need record-local validation plus scalar build-counter deltas.
+        """
+        build = self.repo.get_build(build_id)
+        blocks = [
+            block for block in self.repo.load_blocks(str(build["asset_id"]))
+            if not block.get("excluded_reason")
+        ]
+        blocks = _manifest_main_text_blocks(
+            blocks,
+            build.get("manifest") or {},
+            bounds_confirmed=bool(build.get("manifest_confirmed_at")),
+        )
+        profile = self._profile_of_build(build)
+        _sync_record_metadata_state(record, profile)
+        _enforce_review_invariants(record)
+        local = self.validate_records(blocks, [record], profile)
+        existing = dict(build.get("validation") or {})
+        record_id = str(record.get("record_id") or "")
+        list_fields = (
+            "text_fidelity_errors", "source_order_errors", "page_mapping_errors",
+            "printed_page_label_errors", "metadata_schema_errors",
+            "relationship_errors", "human_ownership_errors", "record_content_errors",
+            "citation_errors", "suspicious_record_sizes",
+            "metadata_evidence_errors",
+        )
+        for field in list_fields:
+            prior = existing.get(field)
+            if not isinstance(prior, list):
+                continue
+            retained = [
+                item for item in prior
+                if str(item.get("record_id") if isinstance(item, dict) else item) != record_id
+            ]
+            additions = local.get(field)
+            if isinstance(additions, list):
+                existing[field] = retained + additions
+        existing["metadata_valid"] = not any(
+            existing.get(field) for field in (
+                "metadata_evidence_errors", "metadata_schema_errors",
+                "relationship_errors", "human_ownership_errors",
+                "record_content_errors", "citation_errors",
+                "printed_page_label_errors",
+            )
+        )
+        existing["valid"] = bool(existing.get("source_valid", True) and existing["metadata_valid"])
+        build["validation"] = existing
+        if build.get("publication"):
+            history = list(build.get("publication_history") or [])
+            history.append(build["publication"])
+            build["publication_history"] = history[-20:]
+            build["publication"] = None
+            build["publication_status"] = "unpublished"
+        for field in ("needs_review_count", "accepted_count", "rejected_count", "source_problem_count", "metadata_completed"):
+            before = bool(previous.get("needs_review")) if field == "needs_review_count" else (
+                str(previous.get("review_disposition") or "") == "accepted" if field == "accepted_count" else
+                str(previous.get("review_disposition") or "") == "rejected" if field == "rejected_count" else
+                bool(previous.get("source_quality_issues")) if field == "source_problem_count" else
+                bool(previous.get("metadata_complete"))
+            )
+            after = bool(record.get("needs_review")) if field == "needs_review_count" else (
+                str(record.get("review_disposition") or "") == "accepted" if field == "accepted_count" else
+                str(record.get("review_disposition") or "") == "rejected" if field == "rejected_count" else
+                bool(record.get("source_quality_issues")) if field == "source_problem_count" else
+                bool(record.get("metadata_complete"))
+            )
+            build[field] = max(0, int(build.get(field) or 0) + int(after) - int(before))
+        self.repo.save_build(build)
+        self.repo.update_record(build_id, record)
+        return build
+
     @_serialize_record_mutation
     def _write_start_page_to_layout(self, asset_id: str, start_page: Any) -> None:
         """Keep one answer for "where does the main text start" per PDF.
@@ -2878,6 +3024,8 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
     @_serialize_record_mutation
     def publish(self, build_id: str, *, require_acceptance: bool = True) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
+        if self.repo.records_projection_dirty(build_id):
+            self.repo.refresh_records_projection(build_id)
         records = self.repo.load_records(build_id)
         validation = build.get("validation") or {}
         self._refresh_workflow_fields(build)

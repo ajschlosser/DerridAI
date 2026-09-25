@@ -188,6 +188,12 @@ def test_update_record_updates_only_the_target_indexed_record(tmp_path: Path):
     assert persisted[1]["text"] == "second, reviewed"
     assert persisted[1]["record_revision"] == 2
     assert repo.build_records_path(build["build_id"]).read_text(encoding="utf-8").splitlines() == original_lines
+    assert repo.records_projection_dirty(build["build_id"])
 
+    repo.refresh_records_projection(build["build_id"])
+    assert not repo.records_projection_dirty(build["build_id"])
+    assert repo.build_records_path(build["build_id"]).read_text(encoding="utf-8").splitlines()[1] == json.dumps(
+        persisted[1], ensure_ascii=False
+    )
 
 

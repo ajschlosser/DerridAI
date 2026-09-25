@@ -62,4 +62,33 @@ describe("RecordMutationQueue", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(order).toEqual(["boundary-start", "boundary-end", "r2-after"]);
   });
+
+  it("retries a failed field mutation with a rebased request", async () => {
+    const queue = new RecordMutationQueue();
+    const contexts: boolean[] = [];
+    const errors: unknown[] = [];
+    let attempts = 0;
+    queue.enqueue("r1", async ({ rebase }) => {
+      contexts.push(rebase);
+      attempts += 1;
+      if (attempts === 1) throw new Error("transport");
+    }, (error) => errors.push(error), { retryOnFailure: true });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(contexts).toEqual([false, true]);
+    expect(errors).toHaveLength(0);
+  });
+
+  it("rebases the next queued mutation after an exhausted failure", async () => {
+    const queue = new RecordMutationQueue();
+    const contexts: boolean[] = [];
+    queue.enqueue("r1", async ({ rebase }) => {
+      contexts.push(rebase);
+      throw new Error("offline");
+    }, vi.fn(), { retryOnFailure: false });
+    queue.enqueue("r1", async ({ rebase }) => {
+      contexts.push(rebase);
+    }, vi.fn());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(contexts).toEqual([false, true]);
+  });
 });

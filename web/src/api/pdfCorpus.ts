@@ -1014,6 +1014,7 @@ export const pdfCorpusApi = {
   ) =>
     apiRequest<{
       record: CorpusRecord;
+      new_record?: CorpusRecord;
       neighbor: CorpusRecord;
       left_neighbor?: CorpusRecord;
       right_neighbor?: CorpusRecord;
