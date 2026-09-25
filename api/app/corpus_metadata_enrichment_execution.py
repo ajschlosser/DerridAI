@@ -853,7 +853,17 @@ CURRENT REVIEWED RECORD TEXT:
         # outside REVIEW_METADATA_FIELDS.
         for field in sorted(llm_populated_fields):
             current = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
-            if current.get("status") in {"deterministic", "inherited", "human_confirmed", "human_override"} or current.get("reason_code") in {"deterministic_llm_disagreement", "human_llm_disagreement"}:
+            current_assertion = current_assertion_by_name(record, field)
+            if (
+                (
+                    current_assertion is not None
+                    and (
+                        current_assertion.authority_status in {"human_confirmed", "human_override"}
+                        or current_assertion.derivation_method in {"deterministic", "inherited"}
+                    )
+                )
+                or current.get("reason_code") in {"deterministic_llm_disagreement", "human_llm_disagreement"}
+            ):
                 continue
             assessment = field_assessments.get(field) if isinstance(field_assessments.get(field), dict) else {}
             evidence_info = clean_evidence.get(field) if isinstance(clean_evidence.get(field), dict) else {}
@@ -926,7 +936,23 @@ CURRENT REVIEWED RECORD TEXT:
         for field in review_metadata_fields:
             value = record.get(field)
             current = field_status.get(field) if isinstance(field_status.get(field), dict) else {}
-            if current.get("status") in {"deterministic", "inherited", "human_confirmed", "human_override", "invalid"} or current.get("reason_code") in {"deterministic_llm_disagreement", "human_llm_disagreement", "low_confidence", "confidence_missing"}:
+            current_assertion = current_assertion_by_name(record, field)
+            if (
+                (
+                    current_assertion is not None
+                    and (
+                        current_assertion.authority_status in {"human_confirmed", "human_override"}
+                        or current_assertion.derivation_method in {"deterministic", "inherited"}
+                        or current_assertion.value_status == "invalid"
+                    )
+                )
+                or current.get("reason_code") in {
+                    "deterministic_llm_disagreement",
+                    "human_llm_disagreement",
+                    "low_confidence",
+                    "confidence_missing",
+                }
+            ):
                 continue
             evidence_info = clean_evidence.get(field) if isinstance(clean_evidence.get(field), dict) else {}
             assessment = field_assessments.get(field) if isinstance(field_assessments.get(field), dict) else {}
