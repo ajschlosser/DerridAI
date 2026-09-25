@@ -12,6 +12,7 @@ from app.corpus_metadata import (
     METADATA_FAMILY_FIELDS,
     REVIEW_METADATA_FIELDS,
 )
+from app.metadata_schema import MetadataSchema, SchemaField, SchemaGroup
 
 LEGACY = json.loads((Path(__file__).parent / "fixtures" / "legacy_prompts.json").read_text(encoding="utf-8"))
 CONTEXT = "<<CONTEXT>>\n"
