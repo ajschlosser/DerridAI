@@ -419,7 +419,7 @@ watch(
             ><button
               class="btn"
               type="button"
-              @click="emit('llmTouchup', textDraft)"
+              @click="emit('llmTouchup', textDraft || '')"
               :disabled="busy"
             >
               {{ i18n.t("pdf_corpus.llm_touchup") }}
