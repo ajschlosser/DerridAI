@@ -125,6 +125,34 @@ def custom():
     )
 
 
+def test_retrieval_profile_migrates_abandoned_routing_fields_without_losing_metadata_disable():
+    profile = ms.RetrievalProfile.model_validate(
+        {
+            "enabled": True,
+            "scope": "all_reviewed",
+            "max_items": 4,
+            "min_similarity": 0.35,
+            "include_corrections": False,
+            "include_confirmed_absence": True,
+            "use_for_metadata_enrichment": False,
+            "use_for_response_memory": True,
+            "use_for_claim_memory": True,
+        }
+    )
+
+    assert profile.enabled is False
+    assert profile.max_items == 4
+    assert profile.min_similarity == 0.35
+    dumped = profile.model_dump(mode="json")
+    assert set(dumped) == {
+        "enabled",
+        "max_items",
+        "min_similarity",
+        "include_corrections",
+        "include_confirmed_absence",
+    }
+
+
 def test_a_custom_schema_shapes_the_prompt_and_the_answer():
     schema = custom()
     text = prompt(schema, "discourse")
