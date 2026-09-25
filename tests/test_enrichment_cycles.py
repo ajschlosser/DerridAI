@@ -299,13 +299,7 @@ def test_review_action_during_a_pass_does_not_end_the_running_state(tmp_path: Pa
 
     manager._enrich_record = fake_enrich
     manager.rerun_metadata_enrichment(build_id, {"families": ["discourse"], "scope": "all"})
-    operation = repo.get_build(build_id).get("metadata_operation") or {}
-    assert seen == {"status": "running", "stage": "metadata_enrichment_rerun"}, (
-        f"operation_state={operation.get('state')} "
-        f"processed={operation.get('records_processed')} "
-        f"passes={operation.get('pass_results')} "
-        f"records={[row.get('record_id') for row in repo.load_records(build_id)]}"
-    )
+    assert seen == {"status": "running", "stage": "metadata_enrichment_rerun"}
     rows = {row["record_id"]: row for row in repo.load_records(build_id)}
     assert rows["r2"]["stance"] == "chosen by reviewer"
     assert repo.get_build(build_id)["status"] == "awaiting_review"
