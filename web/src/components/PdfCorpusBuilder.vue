@@ -715,8 +715,8 @@ const llmActionConcurrentLoad = computed(() => {
 const canStartConcurrentBuild = computed(() =>
   Boolean(
     selectedAsset.value &&
-      contextSafe.value &&
-      (selectedProviderId.value || !activeBuildCount.value),
+    contextSafe.value &&
+    (selectedProviderId.value || !activeBuildCount.value),
   ),
 );
 const transientNetworkError = computed(() =>
@@ -828,7 +828,7 @@ const metadataKnownValues = computed<Record<string, string[]>>(() => {
 const selectedMetadataBlocked = computed(() =>
   Boolean(
     (selectedRecord.value?.metadata_review_fields || []).length ||
-      (selectedRecord.value?.metadata_incomplete_fields || []).length,
+    (selectedRecord.value?.metadata_incomplete_fields || []).length,
   ),
 );
 const selectedMetadataBlockingFields = computed(() =>
@@ -1071,7 +1071,10 @@ async function switchBuildProvider(profileId: string, modelOverride = "") {
         if (Object.keys(reviewConfig).length) payload.review_provider = reviewConfig;
       }
     }
-    currentBuild.value = await corpusBuilderApi.switchProviderProfile(selectedBuildId.value, payload);
+    currentBuild.value = await corpusBuilderApi.switchProviderProfile(
+      selectedBuildId.value,
+      payload,
+    );
     selectedProviderId.value = profileId;
     syncBuildInRail(currentBuild.value);
     const profile = providerProfiles.value.find((item) => item.id === profileId);
@@ -1203,8 +1206,8 @@ async function refreshRecords(reset = false, preferredId = "") {
     const match = wanted ? records.value.find((row) => row.record_id === wanted) : undefined;
     const preserveDraft = Boolean(
       selectedRecord.value &&
-        selectedRecordId.value === wanted &&
-        (editingText.value || metadataEditorDirty.value),
+      selectedRecordId.value === wanted &&
+      (editingText.value || metadataEditorDirty.value),
     );
     if (match && !preserveDraft) {
       selectRecord(match);
@@ -2807,13 +2810,16 @@ async function runMetadataEnrichment(payload: {
       payload.providerProfileId,
       payload.model,
     ) || { provider_profile_id: payload.providerProfileId, model: payload.model || undefined };
-    currentBuild.value = await corpusBuilderApi.rerunMetadataEnrichment(currentBuild.value.build_id, {
-      ...actionPayload,
-      families: payload.families,
-      scope: payload.scope,
-      passes: payload.passes,
-      record_ids: payload.recordIds,
-    });
+    currentBuild.value = await corpusBuilderApi.rerunMetadataEnrichment(
+      currentBuild.value.build_id,
+      {
+        ...actionPayload,
+        families: payload.families,
+        scope: payload.scope,
+        passes: payload.passes,
+        record_ids: payload.recordIds,
+      },
+    );
     metadataEnrichmentOpen.value = false;
     syncBuildInRail(currentBuild.value);
     registerBuildOperation(currentBuild.value);
@@ -2842,7 +2848,9 @@ async function resetEditorialMemory() {
   if (!currentBuild.value) return;
   busy.value = "editorial-memory";
   try {
-    editorialMemory.value = await corpusBuilderApi.resetEditorialMemory(currentBuild.value.build_id);
+    editorialMemory.value = await corpusBuilderApi.resetEditorialMemory(
+      currentBuild.value.build_id,
+    );
     setMessage(i18n.t("pdf_corpus.editorial_memory_reset_done"));
   } catch (exc) {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
@@ -3014,12 +3022,16 @@ async function applyBulkMetadata(payload: {
   if (!currentBuild.value) return;
   busy.value = "bulk-metadata";
   try {
-    const result = await corpusBuilderApi.bulkMetadata(currentBuild.value.build_id, payload.changes, {
-      recordIds: payload.applyToAll ? [] : Array.from(selectedReviewIds.value),
-      applyToAll: payload.applyToAll,
-      reviewQueue: reviewQueue.value,
-      query: recordQuery.value,
-    });
+    const result = await corpusBuilderApi.bulkMetadata(
+      currentBuild.value.build_id,
+      payload.changes,
+      {
+        recordIds: payload.applyToAll ? [] : Array.from(selectedReviewIds.value),
+        applyToAll: payload.applyToAll,
+        reviewQueue: reviewQueue.value,
+        query: recordQuery.value,
+      },
+    );
     bulkMetadataOpen.value = false;
     await refreshBuild();
     await refreshRecords(false, selectedRecordId.value);
@@ -5002,12 +5014,12 @@ defineExpose({
                           providerProfiles.find(
                             (p) => p.id === (llmActionProviderId || selectedProviderId),
                           )?.type === 'ollama' &&
-                            llmActionConcurrentLoad + 1 >
-                              Number(
-                                providerProfiles.find(
-                                  (p) => p.id === (llmActionProviderId || selectedProviderId),
-                                )?.max_concurrent_requests || 1,
-                              ),
+                          llmActionConcurrentLoad + 1 >
+                            Number(
+                              providerProfiles.find(
+                                (p) => p.id === (llmActionProviderId || selectedProviderId),
+                              )?.max_concurrent_requests || 1,
+                            ),
                         )
                       "
                       :active-requests="llmActionConcurrentLoad"
@@ -5189,11 +5201,11 @@ defineExpose({
       :concurrency-risk="
         Boolean(
           providerProfiles.find((p) => p.id === llmActionProviderId)?.type === 'ollama' &&
-            llmActionConcurrentLoad + 1 >
-              Number(
-                providerProfiles.find((p) => p.id === llmActionProviderId)
-                  ?.max_concurrent_requests || 1,
-              ),
+          llmActionConcurrentLoad + 1 >
+            Number(
+              providerProfiles.find((p) => p.id === llmActionProviderId)?.max_concurrent_requests ||
+                1,
+            ),
         )
       "
       :active-requests="llmActionConcurrentLoad"
