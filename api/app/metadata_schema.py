@@ -469,12 +469,34 @@ class MetadataResponseBase(BaseModel):
             outcome = str(assessment.get("outcome") or "")
             needs_review = bool(assessment.get("needs_review"))
 
+            contradiction = ""
             if outcome == "supported_value" and missing(value):
-                raise ValueError(f"{field}: outcome=supported_value requires a non-empty metadata value")
-            if outcome == "no_supported_value" and not missing(value):
-                raise ValueError(f"{field}: outcome=no_supported_value requires an empty metadata value")
-            if outcome == "uncertain" and not needs_review:
-                raise ValueError(f"{field}: outcome=uncertain requires needs_review=true")
+                contradiction = "outcome=supported_value but the metadata value is empty"
+            elif outcome == "no_supported_value" and not missing(value):
+                contradiction = "outcome=no_supported_value but a metadata value was returned"
+            elif outcome == "uncertain" and not needs_review:
+                contradiction = "outcome=uncertain but needs_review was false"
+
+            if contradiction:
+                # A contradictory assessment is a field-level epistemic failure,
+                # not a reason to discard every otherwise-parseable value in the
+                # metadata family. Preserve the proposed value, make the
+                # contradiction explicit, and force human review. Downstream
+                # reconciliation will materialize the field as unresolved rather
+                # than treating the proposal as supported truth.
+                assessment_model = (
+                    getattr(assessments_obj, field, None)
+                    if isinstance(assessments_obj, BaseModel)
+                    else None
+                )
+                if assessment_model is not None:
+                    assessment_model.outcome = "uncertain"
+                    assessment_model.needs_review = True
+                    prior_reason = str(getattr(assessment_model, "reason", "") or "").strip()
+                    assessment_model.reason = (
+                        f"Structured-output contradiction: {contradiction}."
+                        + (f" {prior_reason}" if prior_reason else "")
+                    )[:500]
 
             # Missing/invalid evidence is a review-state problem, not a
             # structured-output failure. Reconciliation below the schema layer
