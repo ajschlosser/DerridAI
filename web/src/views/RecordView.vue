@@ -9,10 +9,7 @@ import RecordReadingPane from "../components/record/RecordReadingPane.vue";
 import RecordInspector from "../components/record/RecordInspector.vue";
 import RecordEditSheet from "../components/record/RecordEditSheet.vue";
 import type { RecordWorkspaceSnapshot } from "../types/record";
-import type {
-  DerridaiNormativeModel,
-  ResearchObjectGraph,
-} from "../types/researchObjectGraph";
+import type { DerridaiNormativeModel, ResearchObjectGraph } from "../types/researchObjectGraph";
 import { annotationsService } from "../services/annotations";
 
 const i18n = useI18nStore();
