@@ -38,6 +38,9 @@ def get_record_object_graph(body: dict[str, Any], request: Request) -> dict[str,
         raise HTTPException(status_code=422, detail="record.record_id is required")
 
     owner = None if user.role == "admin" else user.username
+    resolver_record = dict(record)
+    if not resolver_record.get("source_document_id") and resolver_record.get("source_asset_id"):
+        resolver_record["source_document_id"] = resolver_record["source_asset_id"]
     raw_bindings = system_store.list_claim_support_bindings_for_record(
         record_id,
         owner=owner,
@@ -49,7 +52,7 @@ def get_record_object_graph(body: dict[str, Any], request: Request) -> dict[str,
         try:
             binding = resolve_support_binding(
                 SupportBinding.model_validate(raw),
-                lambda requested: record if str(requested) == record_id else None,
+                lambda requested: resolver_record if str(requested) == record_id else None,
             )
             payload = binding.model_dump(mode="json")
         except Exception:
