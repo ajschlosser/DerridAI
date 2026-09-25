@@ -53,8 +53,8 @@ const metadataFields = computed(() => {
   for (const field of selectedStore?.filter_fields || []) fields.add(String(field));
   for (const item of selectedEvidence.value) {
     for (const assertion of item.assertions || []) {
-      if (assertion.field_id) fields.add(assertion.field_id);
-      else if (assertion.field_name) fields.add(assertion.field_name);
+      if (assertion.field_name) fields.add(assertion.field_name);
+      else if (assertion.field_id) fields.add(assertion.field_id);
     }
     for (const field of Object.keys(item.metadata || {})) fields.add(field);
   }
