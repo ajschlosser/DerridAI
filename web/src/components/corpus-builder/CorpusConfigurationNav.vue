@@ -79,7 +79,7 @@ function onTabKeydown(event: KeyboardEvent, id: CorpusConfigurationSection) {
         type="button"
         role="tab"
         :aria-selected="modelValue === tab.id"
-        :aria-controls="`corpus-config-panel-${tab.id}`"
+        :aria-controls="disabled(tab.id) ? undefined : `corpus-config-panel-${tab.id}`"
         :tabindex="modelValue === tab.id ? 0 : -1"
         :disabled="disabled(tab.id)"
         @click="select(tab.id)"
