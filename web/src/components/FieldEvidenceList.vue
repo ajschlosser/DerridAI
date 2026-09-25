@@ -4,7 +4,7 @@ import { useI18nStore } from "../stores/i18n";
 
 type Evidence = {
   block_ids?: string[];
-  confidence?: number;
+  confidence?: number | null;
   reason?: string;
   reviewed_by?: string;
 };
@@ -23,6 +23,10 @@ const fieldNames = computed(() =>
 function select(field: string) {
   emit("select", props.selectedField === field ? "" : field);
 }
+function confidencePercent(field: string): number | null {
+  const value = props.evidence?.[field]?.confidence;
+  return typeof value === "number" && Number.isFinite(value) ? Math.round(value * 100) : null;
+}
 </script>
 <template>
   <ul
@@ -39,8 +43,9 @@ function select(field: string) {
       >
         <b>{{ field }}</b>
         <span v-if="props.evidence?.[field]"
-          >{{ Math.round(Number(props.evidence[field]?.confidence || 0) * 100) }}% ·
-          {{
+          ><template v-if="confidencePercent(field) !== null"
+            >{{ confidencePercent(field) }}% · </template
+          >{{
             (props.evidence[field]?.block_ids || []).join(", ") ||
             i18n.t("pdf_corpus.no_source_bound")
           }}</span
