@@ -72,8 +72,8 @@ const routes: RouteRecordRaw[] = [
   {
     path: "/response-cache",
     name: "responsecache",
-    component: () => import("../views/SystemDataView.vue"),
-    meta: { view: "responsecache", capability: "page.response_cache", adminOnly: true },
+    redirect: (to) => ({ path: "/system-data", query: { ...to.query, section: "responses" } }),
+    meta: { view: "systemdata", capability: "page.response_cache", adminOnly: true, vueNative: true },
   },
   {
     path: "/system-data",
