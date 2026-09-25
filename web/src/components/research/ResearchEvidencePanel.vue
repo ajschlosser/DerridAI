@@ -201,15 +201,7 @@ function selectedRows(item: ResearchEvidenceSelection) {
         <dl v-if="relationRows.length" class="research-relation-grid">
           <template v-for="row in relationRows" :key="row.field"
             ><dt>{{ row.label }}</dt>
-            <dd>
-              {{ row.value }}
-              <small v-if="row.assertion" class="research-assertion-state">
-                {{ row.assertion.derivation_method || "" }}
-                <template v-if="row.assertion.authority_status">
-                  · {{ row.assertion.authority_status }}
-                </template>
-              </small>
-            </dd></template
+            <dd>{{ row.value }}</dd></template
           >
         </dl>
         <p v-if="display(record.text)" class="research-evidence-text">{{ display(record.text) }}</p>
@@ -278,15 +270,7 @@ function selectedRows(item: ResearchEvidenceSelection) {
               >
                 <template v-for="row in selectedRows(item)" :key="row.field"
                   ><dt>{{ row.label }}</dt>
-                  <dd>
-                    {{ row.value }}
-                    <small v-if="row.assertion" class="research-assertion-state">
-                      {{ row.assertion.derivation_method || "" }}
-                      <template v-if="row.assertion.authority_status">
-                        · {{ row.assertion.authority_status }}
-                      </template>
-                    </small>
-                  </dd></template
+                  <dd>{{ row.value }}</dd></template
                 >
               </dl>
               <p v-if="item.text_preview">
@@ -366,14 +350,6 @@ function selectedRows(item: ResearchEvidenceSelection) {
   color: var(--muted);
   font-size: 0.8125rem;
 }
-.research-assertion-state {
-  display: block;
-  margin-top: 2px;
-  color: var(--muted);
-  font-size: 0.75rem;
-  font-weight: 500;
-}
-
 .research-evidence-metadata b {
   font-size: 0.8125rem;
   text-transform: uppercase;
