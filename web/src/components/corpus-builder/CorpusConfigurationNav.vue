@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { nextTick } from "vue";
 import { useI18nStore } from "../../stores/i18n";
 
 export type CorpusConfigurationSection =
@@ -46,6 +47,26 @@ function disabled(id: CorpusConfigurationSection) {
 function select(id: CorpusConfigurationSection) {
   if (!disabled(id)) emit("update:modelValue", id);
 }
+
+async function focusTab(id: CorpusConfigurationSection) {
+  select(id);
+  await nextTick();
+  document.getElementById(`corpus-config-tab-${id}`)?.focus();
+}
+
+function onTabKeydown(event: KeyboardEvent, id: CorpusConfigurationSection) {
+  const enabled = tabs.map((tab) => tab.id).filter((tabId) => !disabled(tabId));
+  const index = enabled.indexOf(id);
+  if (index < 0) return;
+  let next: CorpusConfigurationSection | undefined;
+  if (event.key === "ArrowRight") next = enabled[(index + 1) % enabled.length];
+  else if (event.key === "ArrowLeft") next = enabled[(index - 1 + enabled.length) % enabled.length];
+  else if (event.key === "Home") next = enabled[0];
+  else if (event.key === "End") next = enabled[enabled.length - 1];
+  if (!next) return;
+  event.preventDefault();
+  void focusTab(next);
+}
 </script>
 
 <template>
@@ -62,6 +83,7 @@ function select(id: CorpusConfigurationSection) {
         :tabindex="modelValue === tab.id ? 0 : -1"
         :disabled="disabled(tab.id)"
         @click="select(tab.id)"
+        @keydown="onTabKeydown($event, tab.id)"
       >
         <span>{{ i18n.t(tab.labelKey, tab.fallback) }}</span>
         <span
