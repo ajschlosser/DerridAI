@@ -52,4 +52,31 @@ describe("Metadata schemas page", () => {
     expect(wrapper.find(".schema-editor").exists()).toBe(true);
     wrapper.unmount();
   });
+
+  it("offers a New schema that starts empty but keeps the built-in groups", async () => {
+    vi.spyOn(metadataSchemasApi, "get").mockResolvedValue({
+      format_version: 1,
+      id: "default",
+      name: "DerridAI scholarly default",
+      description: "",
+      groups: [
+        {
+          key: "discourse",
+          label: "Discourse",
+          intro: "Intro",
+          notes: [],
+          trailer: "",
+          footer: "",
+        },
+      ],
+      fields: [],
+    } as never);
+    const wrapper = mount(MetadataSchemasView, { attachTo: document.body });
+    await flushPromises();
+    await wrapper.get("button.new-schema").trigger("click");
+    await flushPromises();
+    expect(wrapper.find(".schema-row.is-new").exists()).toBe(true);
+    expect(wrapper.get(".schema-row.is-new").text()).toContain("New schema");
+    wrapper.unmount();
+  });
 });

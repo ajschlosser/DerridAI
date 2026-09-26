@@ -123,6 +123,44 @@ export function isReviewVisibleSchemaField(field: MetadataSchema["fields"][numbe
   return field.role !== "operational" && field.review_visibility !== "hidden";
 }
 
+/**
+ * Bookkeeping keys that live on a record but are not scholarly metadata (segmentation evidence,
+ * NLP hints, lineage...). Mirrors the API's `_operational_key`; a schema field of the same name
+ * is still shown because the schema, not the key, decides.
+ */
+const OPERATIONAL_PREFIXES = [
+  "boundary_",
+  "metadata_",
+  "review_",
+  "text_",
+  "source_",
+  "topology_",
+  "nlp_",
+  "slice_",
+  "human_",
+  "llm_",
+  "segmentation_",
+  "unit_",
+  "recheck",
+  "second_opinion",
+  "blind_",
+  "printed_page",
+  "extraction_",
+  "acceptance_",
+  "field_assertion",
+  "current_field",
+  "record_sizing",
+  "editorial_",
+  "autonomous_",
+  "pdf_",
+  "inline_",
+  "full_",
+];
+const OPERATIONAL_KEYS = new Set(["lineage", "media_kind", "parent_block_id"]);
+export function isOperationalKey(key: string): boolean {
+  return OPERATIONAL_KEYS.has(key) || OPERATIONAL_PREFIXES.some((prefix) => key.startsWith(prefix));
+}
+
 function reviewableAssertionFieldNames(
   record: LooseRecord,
   schema?: MetadataSchema | null,
@@ -131,7 +169,8 @@ function reviewableAssertionFieldNames(
   return assertionFieldNames(record).filter((field) => {
     if (OPERATIONAL_RECORD_FIELDS.has(field)) return false;
     const configured = schemaByName.get(field);
-    return configured ? isReviewVisibleSchemaField(configured) : true;
+    if (configured) return isReviewVisibleSchemaField(configured);
+    return !isOperationalKey(field);
   });
 }
 

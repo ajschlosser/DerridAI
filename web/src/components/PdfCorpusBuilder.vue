@@ -1401,6 +1401,33 @@ async function refreshAll() {
     if (hasRecordTopology.value && !reviewHydrated.value) void ensureReviewHydrated();
   }, 250);
 }
+// Reading the record in context is a per-browser preference.
+const showRecordContext = ref(true);
+try {
+  showRecordContext.value = localStorage.getItem("derridai-review-context") !== "off";
+} catch {
+  // Storage is optional.
+}
+watch(showRecordContext, (value) => {
+  try {
+    localStorage.setItem("derridai-review-context", value ? "on" : "off");
+  } catch {
+    // Storage is optional.
+  }
+});
+/** Jump to a neighbouring record, even if the current queue does not contain it. */
+async function selectRecordById(recordId: string) {
+  const local = records.value.find((row) => row.record_id === recordId);
+  if (local) {
+    selectRecord(local);
+    return;
+  }
+  reviewRequested.value = true;
+  reviewQueue.value = "all";
+  recordQuery.value = recordId;
+  await refreshRecords(true, recordId);
+}
+
 function selectRecord(record: CorpusRecord) {
   const viewport = captureReviewViewport();
   const sameRecord = selectedRecordId.value === record.record_id;
@@ -2688,6 +2715,10 @@ defineExpose({
                         >
                       </div>
                       <div class="record-text-head-actions">
+                        <label v-if="!editingText" class="context-toggle">
+                          <input v-model="showRecordContext" type="checkbox" />
+                          {{ i18n.t("pdf_corpus.context_show") }}
+                        </label>
                         <button
                           v-if="editingText"
                           type="button"
@@ -2732,7 +2763,15 @@ defineExpose({
                       class="record-text-editor"
                       :aria-label="i18n.t('pdf_corpus.reviewed_record_text')"
                     ></textarea>
-                    <div v-else class="record-primary-text">{{ selectedRecord.text }}</div>
+                    <RecordContextReader
+                      v-else
+                      class="record-primary-text"
+                      :build-id="currentBuild?.build_id || ''"
+                      :record-id="selectedRecord.record_id"
+                      :text="selectedRecord.text"
+                      :show-context="showRecordContext"
+                      @select="selectRecordById"
+                    />
                     <p
                       v-if="selectedRecord.text_noise?.score != null"
                       class="record-noise-summary"

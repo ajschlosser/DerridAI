@@ -109,6 +109,23 @@ export interface PdfAsset {
   };
 }
 
+export interface RecordContextItem {
+  record_id: string;
+  text: string;
+  text_length: number;
+  page_start: number | string | null;
+  page_end: number | string | null;
+  review_disposition?: string | null;
+}
+
+/** Neighbouring records' text, in document order (farthest first before, nearest first after). */
+export interface RecordContext {
+  record_id: string;
+  before: RecordContextItem[];
+  after: RecordContextItem[];
+  truncated: boolean;
+}
+
 /** Result of split / merge / create-from-selection: affected records are retired and new ones minted. */
 export interface StructuralEditResult {
   /** The new record the reviewer should land on. */
