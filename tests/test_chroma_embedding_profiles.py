@@ -1,6 +1,8 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 from __future__ import annotations
 
+import pytest
+from app import chroma_store
 from app.chroma_store import Embeddings
 from app.system_store import system_store
 
@@ -75,4 +77,44 @@ def test_profile_embedding_uses_stored_openai_compatible_configuration(monkeypat
             "https://example.invalid/v1",
             "test-key",
         )
+    ]
+
+
+def test_ollama_embedding_404_reports_modern_and_legacy_endpoint_failure(monkeypatch):
+    calls: list[str] = []
+
+    class MissingResponse:
+        status_code = 404
+        text = '{"error":"not found"}'
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def post(self, url, **kwargs):
+            calls.append(url)
+            return MissingResponse()
+
+    monkeypatch.setattr(chroma_store.httpx, "Client", FakeClient)
+    embeddings = Embeddings()
+
+    with pytest.raises(RuntimeError) as exc:
+        embeddings._ollama(
+            ["test passage"],
+            model="missing-embedding-model",
+            base_url="http://ollama.example:11434",
+        )
+
+    message = str(exc.value)
+    assert "both /api/embed and the legacy /api/embeddings endpoint returned 404" in message
+    assert "missing-embedding-model" in message
+    assert calls == [
+        "http://ollama.example:11434/api/embed",
+        "http://ollama.example:11434/api/embeddings",
     ]

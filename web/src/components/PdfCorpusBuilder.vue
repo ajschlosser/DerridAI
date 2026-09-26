@@ -312,6 +312,7 @@ const {
   captureReviewViewport,
   restoreReviewViewport,
   queueRecordRequest,
+  applyAuthoritativeRecord,
   textDraftKey,
   setMessage,
   t: (key, fallback) => i18n.t(key, fallback),
@@ -746,6 +747,8 @@ const {
   reviewMetadataRecord,
   openMetadataIssueQueue,
   openValidationIssueQueue,
+  openTopologyIssueQueue,
+  openIssueQueue,
   openRejectedQueue,
   openAllReviewQueue,
   openSourceIssueQueue,
@@ -757,6 +760,7 @@ const {
   recordTotal,
   recordOffset,
   selectedRecord,
+  selectedRecordId,
   selectedRecordIndex,
   reviewQueue,
   recordQuery,
@@ -2448,6 +2452,8 @@ defineExpose({
             @retry-metadata="retryIncompleteMetadata"
             @review-metadata="openMetadataIssueQueue"
             @review-validation="openValidationIssueQueue"
+            @review-topology="openTopologyIssueQueue"
+            @review-issues="openIssueQueue"
             @review-rejected="openRejectedQueue"
             @review-records="openAllReviewQueue"
             @review-source="openSourceIssueQueue"

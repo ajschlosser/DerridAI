@@ -91,26 +91,51 @@ Added coverage for:
 - missing derived exemplar collection creation and truthful initialization failures;
 - accessible configuration-tab composition.
 
-## Upstream synchronization
+## Post-#179 workflow reliability follow-up
 
-PR #179 was merged forward onto current `master` ancestry in merge commit
-`3100d16f359a14bfce2dd3b8c3cc1c4f4d8ded6a`.
+A fresh `task/corpus-builder-workflow-reliability` branch was created from remote
+`master` at `bd9ca93c6066a227285a61f1b494566acacac0b3`, the #179 merge commit.
 
-The branch is zero commits behind `master`. The merge preserved upstream changes and manually
-reconciled the locale dictionaries and metadata field editor. Locale delimiter fixes followed in
-`62012dd24e73e8325ed256c899236ecc5526c6f1` and
-`0300635082e54b150398a6acafadf2a50d2d4ee7`.
+Current fixes:
+
+- Review queue/context changes now clear stale Record selection before fetching the destination
+  queue, so **Continue review**, rejected/source/metadata repair actions, and other queue switches
+  cannot preserve an invisible Record from the previous queue.
+- Publication validation repair targets the validation Record directly in the all-Records scope
+  instead of assuming every validator finding is also a member of the generic Issues queue.
+- Publication blockers now route to their owning review surfaces:
+  - `record_attention` → Issues;
+  - `boundary_attention` → Topology;
+  - `required_metadata` → Metadata;
+  - `metadata_validation` → validation-targeted Record review;
+  - source blockers → Source review.
+- Text review now applies the authoritative server Record after persistence. This fixes
+  **Mark reviewed** appearing to do nothing when the server changes only
+  `text_review_status`/`text_reviewed_at`.
+- Configuration tabs now expose a stronger selected-state treatment using semantic tokens and a
+  forced-colors fallback, with regression coverage that verifies the controlled `v-model` state
+  actually moves between tabs.
+- Ollama embedding 404s now report that both the current `/api/embed` and legacy
+  `/api/embeddings` calls failed and point to base URL/version/model configuration instead of
+  leaking a raw HTTP exception as the main explanation.
+- Metadata-exemplar projection warnings now explicitly say that reviewed metadata is durable and
+  that only the rebuildable semantic example index is pending; this projection failure does not
+  block Record review or publication.
+
+Open PR #181 also touches `PdfCorpusBuilder.vue` for Source-ingestion modernization. This branch
+keeps its edits to that parent component to narrow controller/event wiring so rebasing after #181
+should remain localized.
 
 ## Validation status
 
-PR #179 remains draft until the latest head passes all required gates:
+Focused regression coverage has been added for:
 
-- format;
-- backend lint, types, and tests;
-- API contract;
-- frontend lint, static/type/unit checks, and accessibility;
-- both E2E shards;
-- both legacy/characterization shards;
-- aggregate frontend gate.
+- stale-selection clearing on review queue changes;
+- validation Record deep links;
+- topology/Issues publication repair routing;
+- authoritative **Mark reviewed** reconciliation;
+- configuration-tab active state;
+- actionable Ollama embedding 404 diagnostics.
 
-Do not mark the PR ready before the full current-head run is green.
+The branch still requires the repository CI gate set before merge. Do not claim release readiness
+until those required checks pass.

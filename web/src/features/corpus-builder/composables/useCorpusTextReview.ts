@@ -47,6 +47,7 @@ interface CorpusTextReviewOptions {
     onFailure?: () => void | Promise<void>,
     retryOnFailure?: boolean,
   ) => void;
+  applyAuthoritativeRecord: (record: CorpusRecord) => void;
   textDraftKey: (buildId: string, recordId: string) => string;
   setMessage: (message: string, tone?: MessageTone) => void;
   t: (key: string, fallback?: string) => string;
@@ -117,15 +118,21 @@ export function useCorpusTextReview(options: CorpusTextReviewOptions) {
     }
 
     await options.restoreReviewViewport(viewport, { record: true });
-    options.queueRecordRequest(recordId, ["text"], (rebase) =>
-      corpusBuilderApi.patchText(
+    options.queueRecordRequest(recordId, ["text"], async (rebase) => {
+      const updated = await corpusBuilderApi.patchText(
         buildId,
         recordId,
         text,
         rebase ? undefined : expectedRevision,
         resolveIssues,
-      ),
-    );
+      );
+      // The server owns review status, timestamps, resolved source findings,
+      // and the authoritative revision. Applying its response is essential for
+      // unchanged-text "Mark reviewed" actions, whose visible state otherwise
+      // appears to do nothing until a later refresh.
+      options.applyAuthoritativeRecord(updated);
+      return updated;
+    });
   }
 
   async function markTextReviewed() {
