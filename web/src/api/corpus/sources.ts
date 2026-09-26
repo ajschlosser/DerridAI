@@ -1,9 +1,21 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { apiRequest } from "../http";
-import type { PdfAsset, DocumentLayoutPlan, SourceBlock, GutenbergHit } from "./types";
+import type {
+  PdfAsset,
+  DocumentLayoutPlan,
+  SourceBlock,
+  GutenbergHit,
+  WikisourceHit,
+  GutenbergStatus,
+} from "./types";
 import { LEGACY_CORPUS_BASE, legacyCorpusUrl } from "./compatibility";
 
 export const corpusSourcesApi = {
+  gutenbergStatus: () => apiRequest<GutenbergStatus>("/api/gutenberg/status"),
+  refreshGutenbergCatalogue: () =>
+    apiRequest<GutenbergStatus>("/api/gutenberg/catalogue/refresh", { method: "POST" }),
+  gutenbergArchiveAction: (action: "start" | "pause" | "resume" | "refetch") =>
+    apiRequest<GutenbergStatus>(`/api/gutenberg/archive/${action}`, { method: "POST" }),
   listAssets: () => apiRequest<{ items: PdfAsset[] }>(legacyCorpusUrl("assets")),
   async uploadAsset(file: File, ocrMode = "auto", sourceIllegibility = 0) {
     const body = new FormData();
@@ -21,6 +33,10 @@ export const corpusSourcesApi = {
   searchGutenberg: (query: string) =>
     apiRequest<{ items: GutenbergHit[] }>(
       `${LEGACY_CORPUS_BASE}/gutenberg/search?q=${encodeURIComponent(query)}&limit=12`,
+    ),
+  searchWikisource: (query: string) =>
+    apiRequest<{ items: WikisourceHit[] }>(
+      `${LEGACY_CORPUS_BASE}/wikisource/search?q=${encodeURIComponent(query)}&limit=12`,
     ),
   importGutenberg: (etextId: number, sourceIllegibility = 0) =>
     apiRequest<PdfAsset>(legacyCorpusUrl("gutenberg/import"), {

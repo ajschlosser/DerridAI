@@ -34,6 +34,7 @@ describe("Corpus source ingest", () => {
         ],
       },
     });
+    await wrapper.get("button.btn-secondary").trigger("click");
     await wrapper.get("#pdf-corpus-source-url").setValue("https://example.edu/hospitality.txt");
     expect(wrapper.emitted("update:sourceUrl")?.[0]).toEqual([
       "https://example.edu/hospitality.txt",
@@ -49,18 +50,14 @@ describe("Corpus source ingest", () => {
   });
 });
 
-it("offers audio controls without OCR or Explorer actions", async () => {
+it("uses automatic media detection instead of asking users for a source type", async () => {
   const wrapper = mount(CorpusSourceIngest);
-  await wrapper.get("#source-format").setValue("audio");
-  expect(wrapper.find('input[name="source-ocr-strategy"]').exists()).toBe(false);
-  expect(wrapper.text()).not.toContain("Use current Explorer PDF");
+  expect(wrapper.text()).toContain("Format is detected automatically from the file.");
+  expect(wrapper.find("#source-format").exists()).toBe(false);
   expect(wrapper.get('input[type="file"]').attributes("accept")).toContain(".wav");
-  expect(wrapper.text()).toContain("timed speaker spans");
-  await wrapper.get("#source-format").setValue("image");
-  expect(wrapper.find('input[name="source-ocr-strategy"]').exists()).toBe(true);
 });
 
-it("distinguishes Gutenberg editions in selection controls", () => {
+it("distinguishes Gutenberg editions in selection controls", async () => {
   const wrapper = mount(CorpusSourceIngest, {
     props: {
       hits: [
@@ -69,6 +66,7 @@ it("distinguishes Gutenberg editions in selection controls", () => {
       ],
     },
   });
+  await wrapper.get("button.btn-secondary").trigger("click");
   const choices = wrapper.findAll(".gutenberg-hits button");
   expect(choices[0].text()).toContain("#12");
   expect(choices[1].text()).toContain("#13");

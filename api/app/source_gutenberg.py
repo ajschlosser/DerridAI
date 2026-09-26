@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
+import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -14,6 +16,10 @@ from urllib.parse import unquote, urlparse
 import httpx
 
 from .source_safety import MAX_SOURCE_BYTES
+
+_WIKISOURCE_RATE_LOCK = threading.Lock()
+_WIKISOURCE_LAST_REQUEST = 0.0
+logger = logging.getLogger(__name__)
 
 
 def normalize_gutenberg_hit(item: dict[str, Any]) -> dict[str, Any] | None:
@@ -61,13 +67,72 @@ def search_project_gutenberg(query: str, limit: int = 12) -> list[dict[str, Any]
     if not text:
         return []
     limit = max(1, min(30, int(limit)))
+    try:
+        from .gutenberg_catalogue import gutenberg_offline
+        if gutenberg_offline.status()["search_ready"]:
+            return gutenberg_offline.search(text, limit)
+    except Exception:
+        logger.warning("Local Gutenberg search unavailable; using Gutendex", exc_info=True)
     return _gutendex_search(text, limit)
+
+
+def search_wikisource(query: str, limit: int = 12) -> list[dict[str, Any]]:
+    """Search Wikisource through the public MediaWiki API.
+
+    The API is intentionally called only after an explicit user search.  The
+    endpoint is rate-limited by MediaWiki and requests identify this client.
+    """
+    text = str(query or "").strip()
+    if not text:
+        return []
+    limit = max(1, min(30, int(limit)))
+    global _WIKISOURCE_LAST_REQUEST
+    with _WIKISOURCE_RATE_LOCK:
+        elapsed = time.monotonic() - _WIKISOURCE_LAST_REQUEST
+        if elapsed < 0.2:
+            time.sleep(0.2 - elapsed)
+        _WIKISOURCE_LAST_REQUEST = time.monotonic()
+    response = httpx.get(
+        "https://en.wikisource.org/w/api.php",
+        params={
+            "action": "query",
+            "list": "search",
+            "srsearch": text,
+            "srlimit": limit,
+            "srnamespace": 0,
+            "format": "json",
+            "formatversion": 2,
+        },
+        headers={"User-Agent": "DerridAI/1.0 (local scholarly research tool)"},
+        timeout=httpx.Timeout(30.0, connect=10.0),
+    )
+    response.raise_for_status()
+    payload = response.json()
+    results = payload.get("query", {}).get("search", [])
+    return [
+        {
+            "source": "wikisource",
+            "title": str(item.get("title") or ""),
+            "page_id": int(item["pageid"]),
+            "snippet": re.sub(r"<[^>]+>", "", str(item.get("snippet") or "")),
+            "url": f"https://en.wikisource.org/wiki/{str(item.get('title') or '').replace(' ', '_')}",
+        }
+        for item in results
+        if isinstance(item, dict) and item.get("title") and item.get("pageid")
+    ]
 
 
 def load_gutenberg_etext(etext_id: int) -> tuple[str, dict[str, Any]]:
     etext_id = int(etext_id)
     if etext_id < 1:
         raise ValueError("Choose a Project Gutenberg text.")
+    try:
+        from .gutenberg_catalogue import gutenberg_offline
+        local = gutenberg_offline.text(etext_id)
+        if local is not None:
+            return local
+    except Exception:
+        logger.warning("Local Gutenberg text unavailable; using remote edition", exc_info=True)
     # Use one bounded catalog/download path for imports. Optional clients cannot
     # reliably expose the selected URL, encoding, timeout, or response identity.
     text, catalog = _gutendex_etext(etext_id)

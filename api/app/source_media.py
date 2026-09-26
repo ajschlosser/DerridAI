@@ -14,6 +14,7 @@ from .source_gutenberg import (
     fetch_source_url,
     load_gutenberg_etext,
     search_project_gutenberg,
+    search_wikisource,
 )
 from .source_kinds import AUDIO_SUFFIXES, IMAGE_SUFFIXES, TEXT_SUFFIXES
 from .source_text import (
@@ -52,6 +53,7 @@ __all__ = [
     "prepare_text",
     "prose_to_blocks",
     "search_project_gutenberg",
+    "search_wikisource",
     "spans_from_transcript",
 ]
 

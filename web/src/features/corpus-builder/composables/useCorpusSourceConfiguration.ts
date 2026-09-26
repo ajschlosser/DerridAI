@@ -4,6 +4,8 @@ import {
   corpusBuilderApi,
   type DocumentLayoutPlan,
   type GutenbergHit,
+  type WikisourceHit,
+  type GutenbergStatus,
   type PdfAsset,
 } from "../../../api/corpus";
 import { useI18nStore } from "../../../stores/i18n";
@@ -21,6 +23,8 @@ export function useCorpusSourceConfiguration(
   const sourceUrl = ref("");
   const gutenbergQuery = ref("");
   const gutenbergHits = ref<GutenbergHit[]>([]);
+  const wikisourceHits = ref<WikisourceHit[]>([]);
+  const gutenbergStatus = ref<GutenbergStatus | null>(null);
   const lastIngestedAsset = ref<PdfAsset | null>(null);
 
   const selectedAsset = computed(
@@ -85,12 +89,56 @@ export function useCorpusSourceConfiguration(
       gutenbergHits.value = [];
       return;
     }
+
     busy.value = "gutenberg";
     setMessage("");
     try {
       const result = await corpusBuilderApi.searchGutenberg(query);
       gutenbergHits.value = result.items || [];
       if (!gutenbergHits.value.length) setMessage(i18n.t("pdf_corpus.gutenberg_empty"));
+    } catch (exc) {
+      setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+    } finally {
+      busy.value = "";
+    }
+  }
+
+  async function searchWikisource() {
+    const query = gutenbergQuery.value.trim();
+    if (!query) return;
+    busy.value = "wikisource";
+    try {
+      wikisourceHits.value = (await corpusBuilderApi.searchWikisource(query)).items || [];
+    } catch (exc) {
+      setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+    } finally {
+      busy.value = "";
+    }
+  }
+
+  async function refreshGutenbergStatus() {
+    try {
+      gutenbergStatus.value = await corpusBuilderApi.gutenbergStatus();
+    } catch (exc) {
+      setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+    }
+  }
+
+  async function refreshGutenbergCatalogue() {
+    busy.value = "gutenberg-catalogue";
+    try {
+      gutenbergStatus.value = await corpusBuilderApi.refreshGutenbergCatalogue();
+    } catch (exc) {
+      setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+    } finally {
+      busy.value = "";
+    }
+  }
+
+  async function updateGutenbergArchive(action: "start" | "pause" | "resume" | "refetch") {
+    busy.value = "gutenberg-archive";
+    try {
+      gutenbergStatus.value = await corpusBuilderApi.gutenbergArchiveAction(action);
     } catch (exc) {
       setMessage(exc instanceof Error ? exc.message : String(exc), "error");
     } finally {
@@ -164,11 +212,17 @@ export function useCorpusSourceConfiguration(
     sourceUrl,
     gutenbergQuery,
     gutenbergHits,
+    wikisourceHits,
+    gutenbergStatus,
     lastIngestedAsset,
     refreshAssets,
     upload,
     loadSourceUrl,
     searchGutenberg,
+    searchWikisource,
+    refreshGutenbergStatus,
+    refreshGutenbergCatalogue,
+    updateGutenbergArchive,
     importGutenberg,
     savePageLabels,
     saveDocumentLayout,
