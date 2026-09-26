@@ -6,13 +6,17 @@ Verify against the code before relying on anything here; AGENTS.md rules apply.
 
 ## Open pull requests (merge in this order)
 
-| PR | Branch | State | Notes |
-| --- | --- | --- | --- |
-| #197 | `claude/audio-key-and-topology` | mergeable, CI running | **Source-unit policies** (default / paragraph / line / sentence / every n characters). This commit was pushed after #194 had merged, so it never reached master. |
-| #199 | `claude/record-length-advice` | conflicts (stacked on #197) | Structure-tab notice when source units are too coarse for the requested record length, with one-click fixes. After #197 merges, `git merge origin/master` on the branch (only locale files conflict: keep both sides). |
-| #198 | `claude/document-prefill` | conflicts | Front-matter pre-fill (computed / NLP-derived) with suggestions. Same locale-conflict recipe. |
+| PR | Branch | Notes |
+| --- | --- | --- |
+| #197 | `claude/audio-key-and-topology` | **Source-unit policies** (default / paragraph / line / sentence / every n characters). Pushed after #194 merged, so it never reached master. Mergeable. |
+| #199 | `claude/record-length-advice` | Stacked on #197: notice when source units are too coarse for the requested record length. |
+| #198 | `claude/document-prefill` | Front-matter pre-fill (computed / NLP-derived) with clickable suggestions. |
+| #201 | `claude/memory-prefill` | **Record pre-fill from metadata memory, matched on source spans** (done; see below). Adds `derridai:memory|nlp|computed` derivations. |
+| #202 | `claude/llm-page-fallback` | **Model-assisted page-number fallback** (done; see below). Small conflict expected with #197 in `sources.ts` / `useCorpusSourceConfiguration.ts`: keep both. |
+| #200 | `claude/cbii-handoff` | This file. |
 
-Already merged this session: #186–#196 (see `git log`). #196 = record context reader.
+Conflict recipe (locale files only, both sides additive): `git merge origin/master`, resolve `<<<<<<<` blocks by
+keeping both sides in `api/app/locales/*.py` and `web/src/i18n/enUsDefaults.json`, then run the two locale tests.
 
 ## What was built (all on master unless listed above)
 
@@ -24,44 +28,23 @@ Already merged this session: #186–#196 (see `git log`). #196 = record context 
 - Operational record keys kept out of scholarly review (`field_assertions._operational_key`, `isOperationalKey`).
 - Source tab redesign, review-in-context neighbours, New schema button.
 
-## Next: record-level pre-fill from metadata memory (agreed design)
+## Done since the first version of this file
 
-The user's clarification: **search with the source span, not the record text** — the span is the evidence
-associated with the value.
-
-1. New `memory_prefill.py`, run at record construction (after `annotate_record`, before topology validation).
-2. For each record, take each of its source spans/units (`source_block_ids` → block text). Batch-embed all
-   spans of the build once (`ChromaStore.embeddings.embed`), then query the exemplar collection
-   (`derridai_metadata_exemplars`, class `ChromaMetadataExemplarIndex`) with those vectors.
-   Filter: `kind in {positive, absence}`, `field_name in schema fields whose retrieval profile is enabled`,
-   `scope_id != this build` (no self-retrieval). Similarity is `1/(1+distance)`; per-field `min_similarity`
-   comes from the field's retrieval profile.
-3. Aggregate by `(field, value)`. **Obvious** = at least two distinct exemplar records agree with high
-   similarity (start ≈ 0.88) and nothing conflicts within ≈ 0.05: pre-fill the value, bind the *matching span* as
-   its evidence, confidence = mean similarity (cap 0.9). Everything else stays a **less confident hint**
-   (`record["memory_hints"][field] = [{value, similarity, exemplar_id, span_block_id}]`) shown in review and
-   passed to the prompt.
-4. Provenance: `DerivationMethod` (`field_assertions.py`) is a `Literal`; the spec allows namespaced values, so add
-   `derridai:memory`, `derridai:nlp`, `derridai:computed`. Update `_compatibility_status` (map to
-   `model_inferred`-like "unreviewed suggestion"), the two `derivation_method` checks in `corpus_builder.py` (~3031)
-   and `corpus_reviewer_helpers.py`, and the UI mapping in `CorpusMetadataResolutionPanel.vue` (~line 89).
-   Evidence must **not** be marked `reviewed_by: human` (exemplar derivation trusts that flag).
-5. Never let a pre-fill confirm anything: authority stays `unreviewed`; human-owned fields are skipped.
-6. Failure must be visible: if Chroma/embeddings are unreachable set `build["memory_prefill"] =
-   {"status": "unavailable", "error": ...}` and warn; never block the build. Bound work (≈ 3000 spans,
-   time budget) and report `truncated`.
-7. Tests: fake index returning canned hits; agreement/conflict/threshold cases; evidence = matching span;
-   human-owned skip; unavailable path. Do not regress the latency work (batch metadata persistence,
-   optimistic feedback).
+- **Memory pre-fill (#201)**: `api/app/memory_prefill.py`, called from `corpus_builder.py` right after `annotate_record`.
+  Queries the exemplar collection with each record's *source spans* (batched embeddings), excludes the current build,
+  pre-fills only when ≥ 2 distinct earlier records agree at ≥ 0.88 similarity with no close rival, binds the matching
+  span as evidence (`reviewed_by: "memory"`, never human), keeps the rest as `memory_hints` (clickable chips in the field
+  editor), enforces closed vocabularies, skips human-owned/filled fields, treats absence as hint-only, and reports failure
+  on `build["memory_prefill"]` plus a warning without blocking. Thresholds are constants at the top of the module.
+- **LLM page-number fallback (#202)**: `page_markers.llm_candidates` / `detect_with_llm`; the manager's
+  `page_marker_chooser(request)` asks the model (`PageMarkerChoiceModel`); the answer is re-verified with the same
+  sequence rules. Upload / URL / Gutenberg routes take `page_number_detection = auto | auto_llm | off` and
+  `provider_profile_id`; the Source tab has the checkbox (default on).
 
 ## Also still to do
 
-- **LLM page-number fallback**: deterministic detection (`page_markers.detect`) already runs first. When
-  `page_number_detection.status == "not_found"` and the option is on (default on, can be disabled; never for
-  audio), ask the LLM at build start (provider is known then) to classify a *sample of candidate lines*; accept
-  only if the answers form a valid sequence under the same acceptance rules. Needs an option in the Source tab
-  next to "Detect printed page numbers" and a build-request flag.
-- Label memory/NLP/computed values consistently in the record-level UI (manifest editor already shows origin chips).
+- Real-model check of the page-number fallback and memory pre-fill (only unit-tested with fakes so far).
+- A build-request switch and a Settings toggle for `memory_prefill` (the backend flag `request["memory_prefill"]` exists, default on).
 - Advanced exception limits UX (single linked range control; make invalid states impossible).
 - Digital libraries: "Start collection download" as a real background job; results UI redesign.
 - DERRIDAI spec conformance matrix (one test per MUST/MUST NOT row); PROV / RO-Crate exporters are not started.
