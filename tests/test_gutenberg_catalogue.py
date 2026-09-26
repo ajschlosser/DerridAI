@@ -42,12 +42,80 @@ def test_streamed_archive_extraction_persists_text_and_metadata(tmp_path: Path):
     service = GutenbergOfflineService(
         tmp_path / "state.sqlite", archive_path, start_worker=False
     )
+    with sqlite3.connect(service.db_path) as db:
+        db.execute(
+            """
+            INSERT INTO gutenberg_catalogue_books(
+                etext_id,title,author,language,issued,updated_at
+            ) VALUES(1342,'A Local Book','A Local Author','en','','now')
+            """
+        )
+        db.execute(
+            "UPDATE gutenberg_catalogue SET status='ready',item_count=1 WHERE id=1"
+        )
 
     assert service.extract_catalogue() == 1
     assert service.search("Local")[0]["etext_id"] == 1342
     text, metadata = service.text(1342) or ("", {})
     assert "available offline" in text
     assert metadata["document_author"] == "A Local Author"
+    with sqlite3.connect(service.db_path) as db:
+        row = db.execute(
+            "SELECT path,content FROM gutenberg_books WHERE etext_id=1342"
+        ).fetchone()
+    assert row is not None
+    assert Path(row[0]).is_file()
+    assert row[1] == ""
+
+
+def test_catalogue_refresh_indexes_local_search_before_archive_download(tmp_path: Path):
+    service = GutenbergOfflineService(
+        tmp_path / "state.sqlite", tmp_path / "archive.zip", start_worker=False
+    )
+
+    class Response:
+        content = (
+            b"Text#,Type,Issued,Title,Language,Authors\n"
+            b"1342,Text,1998-06-01,Pride and Prejudice,en,Austen Jane\n"
+        )
+
+        def raise_for_status(self):
+            return None
+
+    with patch("app.gutenberg_catalogue.httpx.get", return_value=Response()):
+        state = service.refresh_catalogue()
+
+    assert state["search_ready"] is True
+    assert state["ready"] is False
+    assert state["catalogue"]["item_count"] == 1
+    assert service.search("Prejudice")[0]["etext_id"] == 1342
+
+
+def test_first_archive_request_is_always_bounded_by_range(tmp_path: Path):
+    service = GutenbergOfflineService(
+        tmp_path / "state.sqlite", tmp_path / "archive.zip", start_worker=False
+    )
+    service.set_archive_status("start")
+    seen: dict[str, str] = {}
+
+    class Response:
+        status_code = 206
+        content = b"four"
+        headers = {"content-range": "bytes 0-3/8"}
+
+        def raise_for_status(self):
+            return None
+
+    def fake_get(_url, *, headers, **_kwargs):
+        seen.update(headers)
+        return Response()
+
+    with patch("app.gutenberg_catalogue.httpx.get", side_effect=fake_get):
+        state = service.download_chunk(chunk_size=4)
+
+    assert seen["Range"] == "bytes=0-3"
+    assert state["archive"]["bytes_done"] == 4
+    assert state["archive"]["status"] == "downloading"
 
 
 def test_download_resume_requires_range_support(tmp_path: Path):
