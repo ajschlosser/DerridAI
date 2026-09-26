@@ -5,6 +5,11 @@ export interface PageDetectionRequest {
   mode: "auto" | "auto_llm" | "off";
   /** Provider profile the model-assisted step uses (only for `auto_llm`). */
   providerProfileId?: string;
+  /**
+   * The profile's connection, for a browser-held (administrator) profile the server cannot resolve by ID alone. Sent
+   * the same way a build sends it; the server uses it for this request only.
+   */
+  connection?: { provider?: string; model?: string; base_url?: string; api_key?: string };
 }
 
 export type SourceUnitMode = "default" | "paragraph" | "line" | "sentence" | "chars";
@@ -144,9 +149,12 @@ export interface StructuralEditResult {
 
 export interface WikisourceHit {
   source: "wikisource";
+  /** The Wikisource language edition searched (en, fr, …). */
+  language?: string;
   title: string;
   page_id: number;
   snippet: string;
+  word_count?: number;
   url: string;
 }
 

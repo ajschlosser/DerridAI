@@ -75,13 +75,26 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["corpus-builder"])
 
 
-def _page_llm(mode: str, profile_id: str | None, model: str | None) -> Any:
-    """The model-assisted page-number chooser, only when asked for and a provider profile is named."""
+def _page_llm(
+    mode: str,
+    profile_id: str | None,
+    model: str | None,
+    *,
+    provider: str | None = None,
+    base_url: str | None = None,
+    api_key: str | None = None,
+) -> Any:
+    """The model-assisted page-number chooser, only when asked for and a provider profile is named.
+
+    Administrator profiles live in the browser, so their provider, endpoint and key travel on the request exactly as
+    they do for a build; a published researcher profile is resolved on the server. Nothing here is persisted.
+    """
     if mode != "auto_llm" or not profile_id:
         return None
     payload: dict[str, Any] = {"provider_profile_id": profile_id}
-    if model:
-        payload["model"] = model
+    for key, value in (("model", model), ("provider", provider), ("base_url", base_url), ("api_key", api_key)):
+        if value:
+            payload[key] = value
     return pdf_corpus_builds.page_marker_chooser(_resolve_pdf_corpus_provider(payload))
 
 
@@ -112,6 +125,9 @@ async def create_pdf_asset(
     page_number_detection: str = Form(default="auto"),
     provider_profile_id: str = Form(default=""),
     model: str = Form(default=""),
+    provider: str = Form(default=""),
+    base_url: str = Form(default=""),
+    api_key: str = Form(default=""),
 ) -> dict[str, Any]:
     if ocr_mode not in {"auto", "never", "always"}:
         raise HTTPException(status_code=422, detail="ocr_mode must be auto, never, or always")
@@ -147,7 +163,10 @@ async def create_pdf_asset(
             source_illegibility=source_illegibility,
             content_type=file.content_type or "",
             detect_page_numbers=page_number_detection != "off",
-            page_llm=_page_llm(page_number_detection, provider_profile_id, model),
+            page_llm=_page_llm(
+                page_number_detection, provider_profile_id, model,
+                provider=provider, base_url=base_url, api_key=api_key,
+            ),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -219,7 +238,10 @@ def import_pdf_asset_url(body: PdfSourceUrlImport) -> dict[str, Any]:
             data, filename=filename, source_illegibility=body.source_illegibility,
             content_type=content_type, source_url=body.url,
             detect_page_numbers=body.page_number_detection != "off",
-            page_llm=_page_llm(body.page_number_detection, body.provider_profile_id, body.model),
+            page_llm=_page_llm(
+                body.page_number_detection, body.provider_profile_id, body.model,
+                provider=body.provider, base_url=body.base_url, api_key=body.api_key,
+            ),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -247,9 +269,15 @@ def search_gutenberg_texts(q: str = Query(default="", max_length=200), limit: in
 
 
 @router.get("/api/pdf/wikisource/search")
-def search_wikisource_texts(q: str = Query(default="", max_length=200), limit: int = Query(default=12, ge=1, le=30)) -> dict[str, Any]:
+def search_wikisource_texts(
+    q: str = Query(default="", max_length=200),
+    limit: int = Query(default=12, ge=1, le=30),
+    language: str = Query(default="en", pattern="^[a-z]{2,3}$"),
+) -> dict[str, Any]:
     try:
-        return {"items": search_wikisource(q, limit)}
+        return {"items": search_wikisource(q, limit, language)}
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("Wikisource search failed")
         raise HTTPException(status_code=502, detail=f"Wikisource search failed: {exc}") from exc
@@ -264,7 +292,10 @@ def import_gutenberg_text(body: GutenbergImport) -> dict[str, Any]:
             source_illegibility=body.source_illegibility, content_type="text/plain",
             catalog_metadata=catalog, source_url=f"https://www.gutenberg.org/ebooks/{body.etext_id}",
             detect_page_numbers=body.page_number_detection != "off",
-            page_llm=_page_llm(body.page_number_detection, body.provider_profile_id, body.model),
+            page_llm=_page_llm(
+                body.page_number_detection, body.provider_profile_id, body.model,
+                provider=body.provider, base_url=body.base_url, api_key=body.api_key,
+            ),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

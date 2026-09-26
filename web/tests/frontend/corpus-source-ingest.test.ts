@@ -49,11 +49,10 @@ describe("Corpus source ingest", () => {
     await wrapper.get("form.url-source").trigger("submit");
     expect(wrapper.emitted("loadUrl")).toHaveLength(1);
     await wrapper.get("button.path-libraries").trigger("click");
-    await wrapper.get(".gutenberg-hits button").trigger("click");
+    const importButton = wrapper.get(".ls-results [data-result-primary]");
+    expect(importButton.attributes("aria-label")).toContain("Pride and Prejudice");
+    await importButton.trigger("click");
     expect(wrapper.emitted("importGutenberg")?.[0]).toEqual([1342]);
-    expect(wrapper.get(".gutenberg-hits button").attributes("aria-label")).toContain(
-      "Pride and Prejudice",
-    );
   });
 });
 
@@ -73,13 +72,14 @@ it("shows catalogue results before the collection is ready but keeps imports dis
     },
   });
   await wrapper.get("button.path-libraries").trigger("click");
-  const result = wrapper.get(".gutenberg-hits button");
-  expect(result.text()).toContain("Pride and Prejudice");
-  expect(result.attributes("disabled")).toBeDefined();
+  const row = wrapper.get(".ls-results .ls-row");
+  expect(row.text()).toContain("Pride and Prejudice");
+  expect(row.get("[data-result-primary]").attributes("disabled")).toBeDefined();
+  // The dialog says why and offers the download in place.
+  expect(wrapper.get(".ls-collection").text()).toMatch(/local collection/i);
 
-  await wrapper.get(".library-tab:nth-child(2)").trigger("click");
-  const search = wrapper.get('.gutenberg-source button[type="submit"]');
-  expect(search.attributes("disabled")).toBeUndefined();
+  await wrapper.get("#library-tab-wikisource").trigger("click");
+  expect(wrapper.get(".ls-input").attributes("disabled")).toBeUndefined();
 });
 
 it("keeps digital-library acquisition available while an existing build locks source selection", async () => {
@@ -89,7 +89,7 @@ it("keeps digital-library acquisition available while an existing build locks so
   expect(wrapper.get("button.source-choose").attributes("disabled")).toBeDefined();
   expect(wrapper.get("button.path-libraries").attributes("disabled")).toBeUndefined();
   await wrapper.get("button.path-libraries").trigger("click");
-  expect(wrapper.find("dialog.source-search-dialog").exists()).toBe(true);
+  expect(wrapper.find("dialog.library-search").exists()).toBe(true);
 });
 
 it("uses automatic media detection instead of asking users for a source type", async () => {
@@ -109,9 +109,9 @@ it("distinguishes Gutenberg editions in selection controls", async () => {
     },
   });
   await wrapper.get("button.path-libraries").trigger("click");
-  const choices = wrapper.findAll(".gutenberg-hits button");
-  expect(choices[0].text()).toContain("#12");
-  expect(choices[1].text()).toContain("#13");
+  const rows = wrapper.findAll(".ls-results .ls-row");
+  expect(rows[0].text()).toContain("#12");
+  expect(rows[1].text()).toContain("#13");
 });
 
 describe("Corpus source ingest experience", () => {
