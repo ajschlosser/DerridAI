@@ -1947,7 +1947,7 @@ defineExpose({
           :wikisource-hits="wikisourceHits"
           :gutenberg-status="gutenbergStatus"
           :selected-asset="selectedAsset"
-          :disabled="busy !== '' || buildRunning"
+          :disabled="busy === 'upload'"
           :busy="busy"
           @use-current="useCurrentPdf"
           @file="upload"
@@ -2369,7 +2369,11 @@ defineExpose({
       </div>
     </details>
 
-    <div class="builder-workspace" :class="{ 'review-mode': showReviewWorkspace }">
+    <div
+      v-if="currentBuild || !showBuildConfiguration"
+      class="builder-workspace"
+      :class="{ 'review-mode': showReviewWorkspace }"
+    >
       <aside
         v-if="!showReviewWorkspace"
         class="build-rail"
