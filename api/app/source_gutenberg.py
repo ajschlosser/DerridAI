@@ -128,9 +128,22 @@ def load_gutenberg_etext(etext_id: int) -> tuple[str, dict[str, Any]]:
         raise ValueError("Choose a Project Gutenberg text.")
     try:
         from .gutenberg_catalogue import gutenberg_offline
-        local = gutenberg_offline.text(etext_id)
-        if local is not None:
-            return local
+
+        offline_status = gutenberg_offline.status()
+        if offline_status.get("ready"):
+            local = gutenberg_offline.text(etext_id)
+            if local is not None:
+                return local
+            raise ValueError(
+                f"Project Gutenberg text {etext_id} is not present in the completed local collection."
+            )
+        if offline_status.get("search_ready"):
+            raise ValueError(
+                "The Project Gutenberg catalogue is searchable, but the local text "
+                "collection has not finished downloading and unpacking."
+            )
+    except ValueError:
+        raise
     except Exception:
         logger.warning("Local Gutenberg text unavailable; using remote edition", exc_info=True)
     # Use one bounded catalog/download path for imports. Optional clients cannot

@@ -19,7 +19,7 @@ def gutenberg_status(request: Request) -> dict:
 def refresh_catalogue(request: Request) -> dict:
     request_user(request)
     try:
-        return gutenberg_offline.refresh_catalogue()
+        return gutenberg_offline.start_catalogue_refresh()
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Catalogue refresh failed: {exc}") from exc
 
@@ -28,10 +28,10 @@ def refresh_catalogue(request: Request) -> dict:
 def archive_action(action: str, request: Request) -> dict:
     request_user(request)
     try:
-        result = gutenberg_offline.set_archive_status(action)
-        if action in {"start", "resume"}:
-            return gutenberg_offline.download_chunk()
-        return result
+        # start/resume only schedules the durable archive worker. Downloading
+        # must never run inside the request handler: the client may disconnect or
+        # refresh while the server continues the resumable operation.
+        return gutenberg_offline.set_archive_status(action)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:

@@ -1323,7 +1323,11 @@ async function refreshRecords(reset = false, preferredId = "") {
       sourceProblemDialogBuildId.value = selectedBuildId.value;
       openRecordSourceWarning(firstSourceProblem);
     }
-    if (result.total > 0 || expected === 0)
+    const filteredRecordView = reviewQueue.value !== "all" || Boolean(recordQuery.value);
+    if (result.total > 0 || expected === 0 || filteredRecordView)
+      // A zero-row filtered queue is still a successful hydration. Track the
+      // build's advertised topology, not the filtered row count, or an empty
+      // "issues" queue will be fetched again on every build-status poll.
       hydratedTopologyCount.value = Math.max(hydratedTopologyCount.value, expected, result.total);
     const wanted = preferredId || selectedRecordId.value;
     const match = wanted ? records.value.find((row) => row.record_id === wanted) : undefined;
@@ -1657,7 +1661,7 @@ watch(
       ["enriching", "review", "ready"].includes(String(stage || "")) ||
       ["awaiting_review", "ready"].includes(String(status || ""));
     if (!visibleStage) return;
-    if (!reviewHydrated.value || expected > hydratedTopologyCount.value || !selectedRecord.value) {
+    if (!reviewHydrated.value || expected > hydratedTopologyCount.value) {
       await ensureReviewHydrated(selectedRecordId.value);
     }
   },
@@ -1947,7 +1951,8 @@ defineExpose({
           :wikisource-hits="wikisourceHits"
           :gutenberg-status="gutenbergStatus"
           :selected-asset="selectedAsset"
-          :disabled="busy !== '' || buildRunning"
+          :disabled="busy === 'upload'"
+          :source-selection-disabled="buildRunning"
           :busy="busy"
           @use-current="useCurrentPdf"
           @file="upload"
@@ -2369,7 +2374,11 @@ defineExpose({
       </div>
     </details>
 
-    <div class="builder-workspace" :class="{ 'review-mode': showReviewWorkspace }">
+    <div
+      v-if="currentBuild || !showBuildConfiguration"
+      class="builder-workspace"
+      :class="{ 'review-mode': showReviewWorkspace }"
+    >
       <aside
         v-if="!showReviewWorkspace"
         class="build-rail"

@@ -133,28 +133,20 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
     stopPolling();
     pollTimer = window.setInterval(async () => {
       if (!options.selectedBuildId.value) return;
+
+      // Build polling owns build-state freshness only. PdfCorpusBuilder's build-state
+      // watcher is the single owner of incremental record hydration. Keeping record
+      // reads out of this timer prevents the poll callback and the watcher from
+      // independently issuing the same /records request every 1.4 seconds.
+      const wasRunning = buildRunning();
       await refreshBuild();
 
-      if (
-        Number(options.currentBuild.value?.record_count || 0) > options.hydratedTopologyCount.value
-      ) {
-        await nextTick();
-        await options.refreshRecords(false, options.selectedRecordId.value);
-      }
-
-      const enriched = Number(options.currentBuild.value?.metadata_enriched_count || 0);
-      if (
-        options.currentBuild.value?.stage === "enriching" &&
-        enriched > options.hydratedMetadataCount.value
-      ) {
-        options.hydratedMetadataCount.value = enriched;
-        await nextTick();
-        await options.refreshRecords(false, options.selectedRecordId.value);
-      }
-
-      if (!buildRunning()) {
+      if (wasRunning && !buildRunning()) {
         stopPolling();
         await refreshBuilds();
+        // One terminal refresh is still useful because completion can settle queue
+        // membership without changing record_count/metadata_enriched_count.
+        await nextTick();
         await options.refreshRecords(false, options.selectedRecordId.value);
       }
     }, 1400);

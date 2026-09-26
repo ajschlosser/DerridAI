@@ -465,7 +465,7 @@ defineExpose({ select, draft });
                 >
               </div>
             </header>
-            <div class="row">
+            <div class="schema-field-basics">
               <label class="schema-field"
                 ><span>{{ t("field_name", "Field name") }}</span
                 ><input v-model="item.field.name" class="control" maxlength="40" spellcheck="false"
@@ -921,9 +921,30 @@ h4 {
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
   gap: 10px;
 }
+
+/* A schema field is a form, not a dashboard. Keep its identity and policy
+   controls in predictable columns so resizing the page never reorders them. */
+.schema-field-basics {
+  display: grid;
+  grid-template-columns:
+    minmax(12rem, 1.05fr)
+    minmax(14rem, 1.35fr)
+    minmax(10rem, 0.75fr)
+    minmax(10rem, 0.75fr);
+  gap: 10px 12px;
+  align-items: start;
+}
+.schema-field-basics > .schema-field:nth-child(5),
+.schema-field-basics > .schema-field:nth-child(6) {
+  grid-column: span 2;
+}
+.schema-field-basics > .schema-memory {
+  grid-column: 1 / -1;
+}
 .schema-memory {
   display: grid;
-  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 14px;
   align-content: start;
   min-inline-size: min(100%, 18rem);
   padding: 10px;
@@ -935,6 +956,10 @@ h4 {
   padding: 0 4px;
   font-size: 0.8125rem;
   font-weight: 750;
+}
+.schema-memory-numbers,
+.schema-memory > .hint {
+  grid-column: 1 / -1;
 }
 .schema-memory-numbers {
   display: grid;
@@ -949,8 +974,8 @@ h4 {
 }
 .schema-field-card {
   display: grid;
-  gap: 10px;
-  padding: 12px;
+  gap: 14px;
+  padding: 16px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--bg);
@@ -1062,9 +1087,26 @@ h4 {
 .control {
   min-block-size: 40px;
 }
+@media (max-width: 1180px) {
+  .schema-field-basics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .schema-field-basics > .schema-field:nth-child(5),
+  .schema-field-basics > .schema-field:nth-child(6) {
+    grid-column: auto;
+  }
+}
 @media (max-width: 820px) {
-  .schema-editor {
+  .schema-editor,
+  .schema-field-basics,
+  .schema-memory {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .schema-field-card-head {
+    display: grid;
+  }
+  .schema-field-policy {
+    justify-content: flex-start;
   }
   .value-row,
   .schema-memory-numbers {

@@ -225,8 +225,11 @@ export function useCorpusProviderConfiguration(currentBuild: Ref<CorpusBuild | n
     serverProviderIds.value = new Set(serverProfiles.map((profile) => profile.id));
 
     const merged = new Map<string, ProviderProfile>();
-    for (const profile of serverProfiles) merged.set(profile.id, profile);
+    // Browser profiles are a compatibility cache. The server copy is the durable
+    // provider contract and must win for duplicate IDs so Corpus Builder does not
+    // silently discard newer model, endpoint, concurrency, or generation fields.
     for (const profile of runtimeProfiles) merged.set(profile.id, profile);
+    for (const profile of serverProfiles) merged.set(profile.id, profile);
     const mergedProfiles = Array.from(merged.values());
     publishProfiles(mergedProfiles);
 

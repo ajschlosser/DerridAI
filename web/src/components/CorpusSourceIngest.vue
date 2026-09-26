@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Copyright 2026 Aaron John Schlosser, PhD.
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import type { GutenbergHit, PdfAsset, WikisourceHit, GutenbergStatus } from "../api/corpus";
 
@@ -26,6 +26,7 @@ const props = withDefaults(
     gutenbergStatus?: GutenbergStatus | null;
     selectedAsset?: PdfAsset | null;
     disabled?: boolean;
+    sourceSelectionDisabled?: boolean;
     busy?: string;
   }>(),
   {
@@ -39,6 +40,7 @@ const props = withDefaults(
     gutenbergStatus: null,
     selectedAsset: null,
     disabled: false,
+    sourceSelectionDisabled: false,
     busy: "",
   },
 );
@@ -62,8 +64,18 @@ const emit = defineEmits<{
 const i18n = useI18nStore();
 const uploadInput = ref<HTMLInputElement | null>(null);
 const searchOpen = ref(false);
+const searchDialog = ref<HTMLDialogElement | null>(null);
 const statusPoll = ref<number | null>(null);
 const activeLibrary = ref<"gutenberg" | "wikisource">("gutenberg");
+
+const sourceSetupDisabled = computed(() => props.disabled || props.sourceSelectionDisabled);
+const catalogueRefreshing = computed(() =>
+  ["refreshing", "indexing"].includes(String(props.gutenbergStatus?.catalogue.status || "")),
+);
+const archiveStatus = computed(() => String(props.gutenbergStatus?.archive.status || ""));
+const archiveSettling = computed(() =>
+  ["downloaded", "unpacking", "ready"].includes(archiveStatus.value),
+);
 
 const ocrStrategy = computed(() => {
   if (props.illegibility >= 99.9) return "always";
@@ -92,6 +104,52 @@ function formatDate(value?: string | null) {
   }
 }
 
+function formatBytes(value?: number | null) {
+  const bytes = Math.max(0, Number(value || 0));
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let size = bytes;
+  let unit = -1;
+  do {
+    size /= 1024;
+    unit += 1;
+  } while (size >= 1024 && unit < units.length - 1);
+  return `${size.toFixed(size >= 10 ? 1 : 2)} ${units[unit]}`;
+}
+
+function archiveAction(): "start" | "pause" | "resume" {
+  if (archiveStatus.value === "downloading") return "pause";
+  if (archiveStatus.value === "paused") return "resume";
+  return "start";
+}
+
+function archiveActionLabel() {
+  if (archiveStatus.value === "ready") {
+    return i18n.t("pdf_corpus.gutenberg_collection_ready", "Collection ready");
+  }
+  if (["downloaded", "unpacking"].includes(archiveStatus.value)) {
+    return i18n.t("pdf_corpus.gutenberg_unpacking", "Unpacking collection…");
+  }
+  if (archiveStatus.value === "downloading") {
+    return i18n.t("pdf_corpus.gutenberg_pause_download");
+  }
+  if (archiveStatus.value === "paused") {
+    return i18n.t("pdf_corpus.gutenberg_resume_download");
+  }
+  return i18n.t("pdf_corpus.gutenberg_start_download");
+}
+
+function catalogueActionLabel() {
+  if (catalogueRefreshing.value) {
+    return i18n.t("pdf_corpus.gutenberg_catalogue_refreshing", "Updating catalogue…");
+  }
+  return i18n.t(
+    props.gutenbergStatus?.catalogue.status === "ready"
+      ? "pdf_corpus.gutenberg_refetch_catalogue"
+      : "pdf_corpus.gutenberg_fetch_catalogue",
+  );
+}
+
 function onOcrStrategy(strategy: string) {
   emit("update:illegibility", strategy === "always" ? 100 : strategy === "difficult" ? 50 : 0);
 }
@@ -112,13 +170,23 @@ function importLabel(hit: GutenbergHit) {
   });
 }
 
-function openSearch() {
+async function openSearch() {
   searchOpen.value = true;
   emit("refreshGutenbergStatus");
-  statusPoll.value = window.setInterval(() => emit("refreshGutenbergStatus"), 2000);
+  await nextTick();
+  const dialog = searchDialog.value;
+  if (dialog && !dialog.open) {
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+  }
+  if (statusPoll.value === null) {
+    statusPoll.value = window.setInterval(() => emit("refreshGutenbergStatus"), 2000);
+  }
 }
 
 function closeSearch() {
+  const dialog = searchDialog.value;
+  if (dialog?.open && typeof dialog.close === "function") dialog.close();
   searchOpen.value = false;
   if (statusPoll.value !== null) {
     window.clearInterval(statusPoll.value);
@@ -138,7 +206,7 @@ onBeforeUnmount(closeSearch);
           id="pdf-corpus-source"
           class="control"
           :value="assetId"
-          :disabled="disabled"
+          :disabled="sourceSetupDisabled"
           @change="emit('update:assetId', ($event.target as HTMLSelectElement).value)"
         >
           <option value="">
@@ -154,7 +222,7 @@ onBeforeUnmount(closeSearch);
         <p class="auto-detect-note">
           {{ i18n.t("pdf_corpus.source_auto_detect") }}
         </p>
-        <fieldset class="illegibility-field" :disabled="disabled">
+        <fieldset class="illegibility-field" :disabled="sourceSetupDisabled">
           <legend>{{ i18n.t("pdf_corpus.source_illegibility") }}</legend>
           <small id="source-illegibility-help">{{
             i18n.t("pdf_corpus.source_illegibility_help")
@@ -195,7 +263,7 @@ onBeforeUnmount(closeSearch);
             v-if="selectedAsset?.media_kind === 'pdf'"
             type="button"
             class="btn"
-            :disabled="disabled"
+            :disabled="sourceSetupDisabled"
             @click="emit('useCurrent')"
           >
             {{ i18n.t("pdf_corpus.use_current_pdf") }}
@@ -203,7 +271,7 @@ onBeforeUnmount(closeSearch);
           <button
             type="button"
             class="btn source-choose"
-            :disabled="disabled"
+            :disabled="sourceSetupDisabled"
             @click="uploadInput?.click()"
           >
             {{
@@ -212,7 +280,7 @@ onBeforeUnmount(closeSearch);
           </button>
           <input
             ref="uploadInput"
-            :disabled="disabled"
+            :disabled="sourceSetupDisabled"
             class="sr-only"
             tabindex="-1"
             type="file"
@@ -229,9 +297,10 @@ onBeforeUnmount(closeSearch);
 
     <dialog
       v-if="searchOpen"
-      open
+      ref="searchDialog"
       class="source-search-dialog"
       aria-labelledby="source-search-title"
+      @cancel.prevent="closeSearch"
     >
       <div class="source-search-dialog__header">
         <div>
@@ -296,41 +365,18 @@ onBeforeUnmount(closeSearch);
           <button
             type="button"
             class="btn btn-quiet"
-            :disabled="disabled || busy === 'gutenberg-catalogue'"
+            :disabled="disabled || busy === 'gutenberg-catalogue' || catalogueRefreshing"
             @click="emit('refreshGutenbergCatalogue')"
           >
-            {{
-              i18n.t(
-                gutenbergStatus?.catalogue.status === "ready"
-                  ? "pdf_corpus.gutenberg_refetch_catalogue"
-                  : "pdf_corpus.gutenberg_fetch_catalogue",
-              )
-            }}
+            {{ catalogueActionLabel() }}
           </button>
           <button
             type="button"
             class="btn btn-quiet"
-            :disabled="disabled || busy === 'gutenberg-archive'"
-            @click="
-              emit(
-                'updateGutenbergArchive',
-                gutenbergStatus?.archive.status === 'downloading'
-                  ? 'pause'
-                  : gutenbergStatus?.archive.status === 'paused'
-                    ? 'resume'
-                    : 'start',
-              )
-            "
+            :disabled="disabled || busy === 'gutenberg-archive' || archiveSettling"
+            @click="emit('updateGutenbergArchive', archiveAction())"
           >
-            {{
-              i18n.t(
-                gutenbergStatus?.archive.status === "downloading"
-                  ? "pdf_corpus.gutenberg_pause_download"
-                  : gutenbergStatus?.archive.status === "paused"
-                    ? "pdf_corpus.gutenberg_resume_download"
-                    : "pdf_corpus.gutenberg_start_download",
-              )
-            }}
+            {{ archiveActionLabel() }}
           </button>
         </div>
         <progress
@@ -340,6 +386,21 @@ onBeforeUnmount(closeSearch);
           :max="gutenbergStatus.archive.total_bytes"
           :aria-label="i18n.t('pdf_corpus.gutenberg_download_progress')"
         />
+        <small v-if="gutenbergStatus?.archive.total_bytes" class="library-note">
+          {{ formatBytes(gutenbergStatus.archive.bytes_done) }} /
+          {{ formatBytes(gutenbergStatus.archive.total_bytes) }}
+        </small>
+        <small v-if="gutenbergStatus?.search_ready && !gutenbergStatus?.ready" class="library-note">
+          {{
+            i18n.t(
+              "pdf_corpus.gutenberg_results_locked",
+              "Catalogue search is ready. Results become importable after the full text collection finishes downloading and unpacking.",
+            )
+          }}
+        </small>
+        <small v-if="gutenbergStatus?.catalogue.error" class="source-error">{{
+          gutenbergStatus.catalogue.error
+        }}</small>
         <small v-if="gutenbergStatus?.archive.error" class="source-error">{{
           gutenbergStatus.archive.error
         }}</small>
@@ -414,7 +475,15 @@ onBeforeUnmount(closeSearch);
           <button
             type="button"
             class="btn"
-            :disabled="disabled"
+            :disabled="disabled || !gutenbergStatus?.ready"
+            :title="
+              gutenbergStatus?.ready
+                ? undefined
+                : i18n.t(
+                    'pdf_corpus.gutenberg_result_unavailable',
+                    'Download and unpack the collection before importing this result.',
+                  )
+            "
             :aria-label="importLabel(hit)"
             @click="emit('importGutenberg', hit.etext_id)"
           >

@@ -33,11 +33,7 @@ const props = withDefaults(
   },
 );
 const emit = defineEmits<{ "update:modelValue": [value: string]; manage: [] }>();
-const selectableProfiles = computed(() =>
-  props.profiles.filter(
-    (profile) => profile.available !== false || profile.id === props.modelValue,
-  ),
-);
+const selectableProfiles = computed(() => props.profiles);
 const selected = computed(
   () =>
     props.profiles.find((profile) => profile.id === props.modelValue) ||
