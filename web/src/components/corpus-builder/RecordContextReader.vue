@@ -135,7 +135,15 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="window_" class="context-reader" :class="{ 'is-plain': !context }">
+  <!-- Scrollable, so it must be keyboard-focusable (WCAG 2.1.1) and named as a region. -->
+  <div
+    ref="window_"
+    class="context-reader"
+    :class="{ 'is-plain': !context }"
+    role="region"
+    tabindex="0"
+    :aria-label="i18n.t('pdf_corpus.reviewed_record_text')"
+  >
     <ol
       v-if="visible.before.length"
       class="ctx-list"

@@ -70,7 +70,6 @@ import {
   reviewableMetadataFieldNames,
 } from "../features/corpus-builder/domain/recordMetadata";
 import { useCorpusPublication } from "../features/corpus-builder/composables/useCorpusPublication";
-import AppIcon from "./AppIcon.vue";
 import CorpusRunMonitor from "./corpus-builder/CorpusRunMonitor.vue";
 import CorpusConfigurationNav, {
   type CorpusConfigurationSection,
@@ -439,7 +438,6 @@ const {
   metadataKnownValues,
   rememberMetadataValues,
   saveMetadata,
-  assignEvidenceBlock,
   toggleEvidenceBlock,
   requeueCurrentRecord,
   resolveMetadataField,
