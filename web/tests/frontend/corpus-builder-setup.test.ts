@@ -51,7 +51,7 @@ describe("Corpus Builder setup and launch controls", () => {
     expect(current.attributes("data-state")).toBe("current");
   });
 
-  it("keeps record sizing exception limits consistent when the preferred size grows", async () => {
+  it("warns about inconsistent record sizing instead of silently rewriting other limits", async () => {
     const wrapper = mount(CorpusRecordSizingSettings, {
       props: {
         modelValue: {
@@ -62,13 +62,18 @@ describe("Corpus Builder setup and launch controls", () => {
         },
       },
     });
+    expect(wrapper.find(".sizing-warning").exists()).toBe(false);
     await wrapper.get("#corpus-preferred-chars").setValue("5000");
-    const emitted = wrapper.emitted("update:modelValue");
-    expect(emitted).toBeTruthy();
-    const next = emitted![emitted!.length - 1][0] as any;
-    expect(next.preferred_record_chars).toBe(5000);
-    expect(next.long_record_chars).toBeGreaterThanOrEqual(5200);
-    expect(next.absolute_record_chars).toBeGreaterThanOrEqual(next.long_record_chars);
+    const emitted = wrapper.emitted("update:modelValue")!;
+    const next = emitted[emitted.length - 1][0] as any;
+    expect(next).toEqual({
+      preferred_record_chars: 5000,
+      record_length_tolerance: 200,
+      long_record_chars: 3500,
+      absolute_record_chars: 6000,
+    });
+    await wrapper.setProps({ modelValue: next });
+    expect(wrapper.get(".sizing-warning").attributes("role")).toBe("alert");
   });
 
   it("clamps execution concurrency and deadlines and exposes unsafe context", async () => {

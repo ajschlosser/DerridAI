@@ -1,6 +1,6 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { apiRequest } from "../http";
-import type { CorpusBuild, CorpusRecord } from "./types";
+import type { CorpusBuild, CorpusRecord, StructuralEditResult } from "./types";
 import { LEGACY_CORPUS_BASE } from "./compatibility";
 
 export const corpusRecordsApi = {
@@ -44,16 +44,44 @@ export const corpusRecordsApi = {
     direction: "previous" | "next",
     expectedRevision?: number,
   ) =>
-    apiRequest<CorpusRecord>(
+    apiRequest<StructuralEditResult>(
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/merge`,
       { method: "POST", body: JSON.stringify({ direction, expected_revision: expectedRevision }) },
     ),
-  split: (buildId: string, recordId: string, afterBlockId: string, expectedRevision?: number) =>
-    apiRequest<{ records: CorpusRecord[] }>(
+  /** Split after a source block (string) or at a character offset (number). */
+  split: (buildId: string, recordId: string, at: string | number, expectedRevision?: number) =>
+    apiRequest<StructuralEditResult>(
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/split`,
       {
         method: "POST",
-        body: JSON.stringify({ after_block_id: afterBlockId, expected_revision: expectedRevision }),
+        body: JSON.stringify({
+          ...(typeof at === "string" ? { after_block_id: at } : { offset: at }),
+          expected_revision: expectedRevision,
+        }),
+      },
+    ),
+  createFromSelection: (
+    buildId: string,
+    recordId: string,
+    selection: {
+      start: number;
+      end: number;
+      left: "distinct" | "merge_prior";
+      right: "distinct" | "merge_next";
+      expectedRevision?: number;
+    },
+  ) =>
+    apiRequest<StructuralEditResult>(
+      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/from-selection`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          start: selection.start,
+          end: selection.end,
+          left: selection.left,
+          right: selection.right,
+          expected_revision: selection.expectedRevision,
+        }),
       },
     ),
   previewRecord: (buildId: string, recordId: string) =>

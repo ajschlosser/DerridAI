@@ -202,10 +202,14 @@ def test_completed_records_unlock_progressively_while_book_enrichment_runs(tmp_p
     assert result2["applied"] is True
     assert "__review__" in repo.load_records(build["build_id"])[1].get("human_touched_fields", [])
 
-    merged = manager.merge(build["build_id"], "r1", "next", expected_revision=2)
+    result3 = manager.merge(build["build_id"], "r1", "next", expected_revision=2)
+    merged = result3["record"]
+    # The merge retires r1 and r2 and mints a new record that is requeued for enrichment.
+    assert merged["record_id"] not in {"r1", "r2"}
+    assert result3["retired_record_ids"] == ["r1", "r2"]
     assert merged["metadata_requeue_requested"] is True
     assert merged["metadata_enrichment_state"] == "stale"
-    assert repo.get_build(build["build_id"])["metadata_priority_record_ids"] == ["r1"]
+    assert repo.get_build(build["build_id"])["metadata_priority_record_ids"] == [merged["record_id"]]
 
 
 def test_authoritative_rewrite_reopens_impossibly_accepted_record_with_metadata_blocker(tmp_path: Path):

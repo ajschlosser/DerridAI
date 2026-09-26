@@ -8,12 +8,14 @@ from typing import Any
 METADATA_FAMILIES = ("discourse", "quotation", "indexing")
 
 
-def requeue_record_metadata(record: dict[str, Any], reason: str) -> bool:
+def requeue_record_metadata(record: dict[str, Any], reason: str, *, force: bool = False) -> bool:
     """Mark changed text for a second pass only after enrichment has started.
 
     A Record that is still queued will be processed once from its new text by
     the original pass. A Record whose metadata pass is running or settled needs
     an explicit requeue marker so stale worker state cannot become authoritative.
+    ``force`` requeues regardless: a newly minted Record has no prior adjudication
+    but was not part of the first worker pass either.
     """
     stage_status = record.get("metadata_stage_status") if isinstance(record.get("metadata_stage_status"), dict) else {}
     has_prior_adjudication = bool(
@@ -25,7 +27,7 @@ def requeue_record_metadata(record: dict[str, Any], reason: str) -> bool:
     record["metadata_attention_reasons"] = list(dict.fromkeys(
         [*(record.get("metadata_attention_reasons") or []), reason]
     ))[-50:]
-    if not has_prior_adjudication:
+    if not (has_prior_adjudication or force):
         return False
     record["metadata_enrichment_state"] = "stale"
     record["metadata_complete"] = False

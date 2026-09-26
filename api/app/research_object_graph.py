@@ -176,6 +176,7 @@ def build_record_graph(
     *,
     claims: list[dict[str, Any]] | None = None,
     support_bindings: list[dict[str, Any]] | None = None,
+    include_assertion_history: bool = False,
 ) -> dict[str, Any]:
     """Build a finite graph that can be re-centered client-side without losing branches."""
     record_id = str(record.get("record_id") or "").strip()
@@ -241,15 +242,27 @@ def build_record_graph(
 
     assertion_by_id: dict[str, str] = {}
     buckets = record.get("field_assertions")
+    hidden_assertions = 0
     if isinstance(buckets, dict):
-        for values in buckets.values():
+        # The map shows what each field currently says. Superseded, rejected and
+        # earlier-pass assertions stay in the record (the specification keeps that
+        # provenance) but would bury it here; they are opt-in.
+        selected = record.get("current_field_assertions")
+        selected = selected if isinstance(selected, dict) else {}
+        for field_id, values in buckets.items():
             if not isinstance(values, list):
                 continue
+            dicts = [item for item in values if isinstance(item, dict)]
+            current_id = str(selected.get(field_id) or "")
+            current_ids = {current_id} if current_id else {str(dicts[-1].get("assertion_id") or "")} if dicts else set()
             for assertion in values:
                 if not isinstance(assertion, dict):
                     continue
                 assertion_id = str(assertion.get("assertion_id") or "").strip()
                 if not assertion_id:
+                    continue
+                if not include_assertion_history and assertion_id not in current_ids:
+                    hidden_assertions += 1
                     continue
                 field_name = str(assertion.get("field_name") or assertion.get("field_id") or "field")
                 value = assertion.get("value")
@@ -444,4 +457,6 @@ def build_record_graph(
                 profile="Evidence",
             )
 
-    return graph.payload(root)
+    payload = graph.payload(root)
+    payload["hidden_assertion_count"] = hidden_assertions
+    return payload

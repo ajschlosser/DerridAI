@@ -75,6 +75,7 @@ def get_record_object_graph(body: dict[str, Any], request: Request) -> dict[str,
             record,
             claims=claims,
             support_bindings=bindings,
+            include_assertion_history=bool(body.get("include_assertion_history")),
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

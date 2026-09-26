@@ -27,6 +27,7 @@ function setup() {
   const reviewQueue = ref<any>("all");
   const recordQuery = ref("");
   const focusView = ref(false);
+  const reviewRequested = ref(false);
   const focusHistory = ref<string[]>([]);
   const focusHistoryOffsets = ref<number[]>([]);
   const focusHistoryIndex = ref(-1);
@@ -50,6 +51,7 @@ function setup() {
     reviewQueue,
     recordQuery,
     focusView,
+    reviewRequested,
     focusHistory,
     focusHistoryOffsets,
     focusHistoryIndex,
@@ -69,6 +71,7 @@ function setup() {
     reviewQueue,
     recordQuery,
     focusView,
+    reviewRequested,
     focusHistory,
     focusHistoryOffsets,
     focusHistoryIndex,
@@ -106,6 +109,8 @@ describe("Corpus Builder review navigation", () => {
     await nextTick();
 
     expect(state.reviewQueue.value).toBe("all");
+    // The "all" queue looks identical to Finish, so the review workspace is requested explicitly.
+    expect(state.reviewRequested.value).toBe(true);
     expect(state.recordQuery.value).toBe("validation-record");
     expect(state.refreshRecords).toHaveBeenCalledWith(true, "validation-record");
     expect(state.selectedRecordId.value).toBe("");

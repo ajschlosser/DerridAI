@@ -45,10 +45,10 @@ from ..models import (
     PdfCorpusPublishRequest,
     PdfCorpusRecordAccept,
     PdfCorpusRecordDisposition,
+    PdfCorpusRecordFromSelection,
     PdfCorpusRecordMerge,
     PdfCorpusRecordPatch,
     PdfCorpusRecordRerun,
-    PdfCorpusRecordSlice,
     PdfCorpusRecordSplit,
     PdfCorpusRecordTextPatch,
     PdfCorpusReviewDecision,
@@ -820,10 +820,20 @@ def merge_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecord
 
 
 
-@router.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/slice")
-def slice_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecordSlice) -> dict[str, Any]:
+@router.get("/api/pdf/corpus-builds/{build_id}/retired-records")
+def list_retired_pdf_corpus_records(build_id: str) -> dict[str, Any]:
     try:
-        return pdf_corpus_builds.slice_to_neighbor(build_id, record_id, body.direction, body.offset, body.expected_revision, body.keep_end)
+        return {"items": pdf_corpus_builds.retired_records(build_id)}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+
+
+@router.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/from-selection")
+def create_pdf_corpus_record_from_selection(build_id: str, record_id: str, body: PdfCorpusRecordFromSelection) -> dict[str, Any]:
+    try:
+        return pdf_corpus_builds.create_from_selection(
+            build_id, record_id, body.start, body.end, body.left, body.right, body.expected_revision,
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
     except ValueError as exc:
@@ -845,7 +855,7 @@ def adjudicate_pdf_corpus_boundary(build_id: str, record_id: str, body: PdfCorpu
 @router.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/split")
 def split_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecordSplit) -> dict[str, Any]:
     try:
-        return pdf_corpus_builds.split(build_id, record_id, body.after_block_id, body.expected_revision)
+        return pdf_corpus_builds.split(build_id, record_id, body.after_block_id, body.expected_revision, body.offset)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
     except ValueError as exc:

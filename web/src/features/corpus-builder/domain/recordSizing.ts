@@ -10,13 +10,18 @@ export const RECORD_SIZING_MIN = {
 } as const;
 
 /** Keys of the sizing fields that currently violate the policy. Empty when valid. */
-export function invalidRecordSizingFields(policy: RecordSizingPolicy): (keyof RecordSizingPolicy)[] {
+export function invalidRecordSizingFields(
+  policy: RecordSizingPolicy,
+): (keyof RecordSizingPolicy)[] {
   const bad = new Set<keyof RecordSizingPolicy>();
   for (const key of Object.keys(RECORD_SIZING_MIN) as (keyof typeof RECORD_SIZING_MIN)[]) {
     const value = Number(policy[key]);
     if (!Number.isFinite(value) || value < RECORD_SIZING_MIN[key]) bad.add(key);
   }
-  if (Number(policy.long_record_chars) < Number(policy.preferred_record_chars) + Number(policy.record_length_tolerance))
+  if (
+    Number(policy.long_record_chars) <
+    Number(policy.preferred_record_chars) + Number(policy.record_length_tolerance)
+  )
     bad.add("long_record_chars");
   if (Number(policy.absolute_record_chars) < Number(policy.long_record_chars))
     bad.add("absolute_record_chars");

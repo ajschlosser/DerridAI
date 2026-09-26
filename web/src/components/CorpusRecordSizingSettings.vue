@@ -70,7 +70,9 @@ function patch(key: keyof RecordSizingPolicy, event: Event) {
     <p v-if="invalid.length" class="sizing-warning" role="alert">
       {{ i18n.t("pdf_corpus.record_sizing.invalid") }}
     </p>
-    <details :open="invalid.includes('long_record_chars') || invalid.includes('absolute_record_chars')">
+    <details
+      :open="invalid.includes('long_record_chars') || invalid.includes('absolute_record_chars')"
+    >
       <summary>{{ i18n.t("pdf_corpus.record_sizing.advanced") }}</summary>
       <div class="advanced-grid">
         <label for="corpus-long-chars"

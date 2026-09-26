@@ -228,11 +228,16 @@ const sourceSummary = computed(() => {
     .join(" · ");
 });
 
-const metadataSummary = computed(() =>
-  assertionNodes.value.length
-    ? i18n.tf("traceability.assertion_count", { count: assertionNodes.value.length })
-    : i18n.t("traceability.none_retained", "None retained"),
-);
+const metadataSummary = computed(() => {
+  if (!assertionNodes.value.length) return i18n.t("traceability.none_retained", "None retained");
+  const hidden = Number(props.graph?.hidden_assertion_count || 0);
+  return [
+    i18n.tf("traceability.assertion_count", { count: assertionNodes.value.length }),
+    hidden ? i18n.tf("traceability.assertions_hidden", { count: hidden }) : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+});
 
 const researchSummary = computed(() => {
   const claims = researchNodes.value.filter((node) => node.object_type === "GeneratedClaim").length;

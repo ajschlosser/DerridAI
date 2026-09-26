@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const corpusBuilderApi = vi.hoisted(() => ({
   merge: vi.fn(),
   split: vi.fn(),
-  sliceRecord: vi.fn(),
+  createFromSelection: vi.fn(),
   adjudicateBoundary: vi.fn(),
 }));
 
@@ -57,16 +57,17 @@ function setup() {
   const llmActionModel = ref("qwen");
   const selectedProviderId = ref("local");
   const queued: Array<{
+    recordId: string | readonly string[];
     request: (rebase: boolean) => Promise<unknown>;
     onFailure?: () => void | Promise<void>;
   }> = [];
   const queueRecordRequest = vi.fn(
     (
-      _recordId: string | readonly string[],
+      recordId: string | readonly string[],
       _fields: string[],
       request: (rebase: boolean) => Promise<unknown>,
       onFailure?: () => void | Promise<void>,
-    ) => queued.push({ request, onFailure }),
+    ) => queued.push({ recordId, request, onFailure }),
   );
   const restoreReviewViewport = vi.fn(async () => undefined);
   const refreshBuild = vi.fn(async () => undefined);
@@ -151,20 +152,66 @@ describe("Corpus Builder boundary review", () => {
     expect(state.review.sliceUnavailable()).toBe("pdf_corpus.reason.finish_metadata_edit");
   });
 
-  it("merges records optimistically before the persistence request resolves", async () => {
+  it("merges through the server without optimistic edits and lands on the new record", async () => {
     const state = setup();
-    corpusBuilderApi.merge.mockResolvedValue(record("r1", "First\n\nSecond", 0));
+    corpusBuilderApi.merge.mockResolvedValue({
+      record: record("r-new", "First\n\nSecond", 0),
+      records: [],
+      retired_record_ids: ["r1", "r2"],
+    });
 
     await state.review.merge("next");
 
-    expect(state.records.value).toHaveLength(1);
-    expect(state.recordTotal.value).toBe(1);
-    expect(state.selectedRecord.value?.text).toBe("First\n\nSecond");
+    // New IDs are minted server-side, so the list is untouched until the reload.
+    expect(state.records.value).toHaveLength(2);
     expect(state.queued).toHaveLength(1);
+    expect(state.queued[0].recordId).toEqual(["r1", "r2"]);
 
     await state.queued[0].request(false);
     expect(corpusBuilderApi.merge).toHaveBeenCalledWith("b1", "r1", "next", 1);
     expect(state.refreshBuild).toHaveBeenCalled();
-    expect(state.refreshRecords).toHaveBeenCalledWith(false, "r1");
+    expect(state.refreshRecords).toHaveBeenCalledWith(false, "r-new");
+  });
+
+  it("creates a record from a selection, joining the neighbours the reviewer chose", async () => {
+    const state = setup();
+    state.selectedRecord.value = state.records.value[1];
+    state.selectedRecordId.value = "r2";
+    corpusBuilderApi.createFromSelection.mockResolvedValue({
+      record: record("r-sel", "mid", 1),
+      records: [],
+      retired_record_ids: ["r1", "r2"],
+    });
+
+    await state.review.createFromSelection(2, 5, "merge_prior", "distinct");
+
+    expect(state.queued[0].recordId).toEqual(["r2", "r1"]);
+    await state.queued[0].request(false);
+    expect(corpusBuilderApi.createFromSelection).toHaveBeenCalledWith("b1", "r2", {
+      start: 2,
+      end: 5,
+      left: "merge_prior",
+      right: "distinct",
+      expectedRevision: 1,
+    });
+    expect(state.refreshRecords).toHaveBeenCalledWith(false, "r-sel");
+  });
+
+  it("does not ask to join a neighbour that does not exist", async () => {
+    const state = setup();
+    await state.review.createFromSelection(2, 5, "merge_prior", "distinct");
+    expect(state.queued).toHaveLength(0);
+  });
+
+  it("splits at a text offset or after a source block", async () => {
+    const state = setup();
+    corpusBuilderApi.split.mockResolvedValue({
+      record: record("r-a", "First", 0),
+      records: [],
+      retired_record_ids: ["r1"],
+    });
+    await state.review.split(3);
+    await state.queued[0].request(false);
+    expect(corpusBuilderApi.split).toHaveBeenCalledWith("b1", "r1", 3, 1);
   });
 });

@@ -103,34 +103,6 @@ export const corpusReviewApi = {
     }>(`${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/review/redo`, {
       method: "POST",
     }),
-  sliceRecord: (
-    buildId: string,
-    recordId: string,
-    direction: "previous" | "next" | "keep" | "new",
-    offset: number,
-    expectedRevision?: number,
-    keepEnd?: number,
-  ) =>
-    apiRequest<{
-      record: CorpusRecord;
-      new_record?: CorpusRecord;
-      neighbor: CorpusRecord;
-      left_neighbor?: CorpusRecord;
-      right_neighbor?: CorpusRecord;
-      direction: string;
-      transaction_id: string;
-    }>(
-      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/slice`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          direction,
-          offset,
-          keep_end: keepEnd,
-          expected_revision: expectedRevision,
-        }),
-      },
-    ),
   adjudicateBoundary: (
     buildId: string,
     recordId: string,

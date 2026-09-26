@@ -128,6 +128,7 @@ function setup() {
     records,
     recordTotal,
     reviewQueue,
+    focusView,
     justProcessedRecordId,
     reviewInspectorTab,
     queued,
@@ -233,6 +234,8 @@ describe("Corpus Builder review decisions", () => {
       "all",
     );
     expect(state.selectedRecord.value?.record_id).toBe("r2");
+    // There was somewhere to go, so Focus View stays open.
+    expect(state.focusView.value).toBe(true);
   });
 
   it("falls back to queue navigation when the server has no explicit next record", async () => {
@@ -247,5 +250,20 @@ describe("Corpus Builder review decisions", () => {
     await state.queued[0].request(false);
 
     expect(state.advanceFrom).toHaveBeenCalledWith("r1");
+  });
+
+  it("closes Focus View when the accepted record was the last one in the queue", async () => {
+    const state = setup();
+    corpusBuilderApi.reviewDecision.mockResolvedValue({
+      blocked: false,
+      record: record({ record_revision: 2, accepted: true, review_disposition: "accepted" }),
+      build: { build_id: "b1", review_queue_counts: {} },
+    });
+    expect(state.focusView.value).toBe(true);
+
+    await state.decisions.setDisposition("accepted");
+    await state.queued[0].request(false);
+
+    expect(state.focusView.value).toBe(false);
   });
 });

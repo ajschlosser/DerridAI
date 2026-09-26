@@ -687,7 +687,7 @@ const {
   sliceUnavailable,
   merge,
   split,
-  sliceRecord,
+  createFromSelection,
   adjudicateBoundary,
 } = useCorpusBoundaryReview({
   currentBuild,
@@ -3259,7 +3259,8 @@ defineExpose({
         :can-next="canMergeNext"
         :busy="busy !== ''"
         @close="boundarySliceOpen = false"
-        @slice="sliceRecord"
+        @split="split"
+        @create="createFromSelection"
     /></Teleport>
     <CorpusTextCleanupDialog
       v-if="textCleanupOpen && selectedRecord"
@@ -3487,7 +3488,6 @@ defineExpose({
         @skip="skipRecord"
         @undo="undoReview"
         @redo="redoReview"
-        @slice="sliceRecord"
         @merge="merge"
         @update-llm-provider-profile="(value) => (llmActionProviderId = value)"
         @update-llm-model="(value) => (llmActionModel = value)"

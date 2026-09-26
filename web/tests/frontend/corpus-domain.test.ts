@@ -53,8 +53,9 @@ describe("corpus lifecycle composable", () => {
   it("reacts to the build/review/finish cycle without treating enrichment as structural review", () => {
     const current = ref<CorpusBuild | null>(null),
       total = ref(0),
-      queue = ref<ReviewQueue>("all");
-    const view = useCorpusBuildLifecycle(current, total, queue);
+      queue = ref<ReviewQueue>("all"),
+      requested = ref(false);
+    const view = useCorpusBuildLifecycle(current, total, queue, requested);
     expect(view.showBuildConfiguration.value).toBe(true);
     current.value = build({ status: "running", stage: "segmenting" });
     expect(view.reviewLocked.value).toBe(true);
@@ -67,12 +68,16 @@ describe("corpus lifecycle composable", () => {
     current.value = build({ accepted_count: 2, rejected_count: 1 });
     expect(view.finishPhase.value).toBe(true);
     expect(view.showReviewWorkspace.value).toBe(false);
+    // A Finish blocker that opens the "all" queue must still leave the Finish screen.
+    requested.value = true;
+    expect(view.showReviewWorkspace.value).toBe(true);
+    requested.value = false;
     queue.value = "rejected";
     expect(view.showReviewWorkspace.value).toBe(true);
   });
   it("honors manifest review, resume eligibility, and authoritative queue counts", () => {
     const current = ref<CorpusBuild | null>(build({ status: "awaiting_manifest_review" }));
-    const view = useCorpusBuildLifecycle(current, ref(3), ref<ReviewQueue>("all"));
+    const view = useCorpusBuildLifecycle(current, ref(3), ref<ReviewQueue>("all"), ref(false));
     expect(view.hasRecordTopology.value).toBe(false);
     current.value = build({
       status: "interrupted",
