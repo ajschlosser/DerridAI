@@ -183,3 +183,20 @@ def test_operational_record_keys_never_become_metadata_assertions(tmp_path):
     migrate_record_assertions(row)
     names = {a["field_name"] for bucket in row["field_assertions"].values() for a in bucket}
     assert names == {"speaker"}
+
+
+def test_record_context_returns_neighbours_in_document_order(tmp_path):
+    repo, bid, manager = _manager(tmp_path)
+    context = repo.record_context(bid, "r2", before=5, after=5)
+    assert [r["record_id"] for r in context["before"]] == ["r1"]
+    assert [r["record_id"] for r in context["after"]] == ["r3"]
+    assert set(context["before"][0]) == {"record_id", "text", "text_length", "page_start", "page_end", "review_disposition"}
+    assert repo.record_context(bid, "r2", before=0, after=0) == {"record_id": "r2", "before": [], "after": [], "truncated": False}
+    with pytest.raises(KeyError):
+        repo.record_context(bid, "nope")
+
+
+def test_record_context_is_bounded_by_a_character_budget(tmp_path):
+    repo, bid, manager = _manager(tmp_path)
+    context = repo.record_context(bid, "r2", before=5, after=5, max_chars=5)
+    assert context["truncated"] is True

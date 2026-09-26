@@ -1304,6 +1304,14 @@ summary:focus-visible {
   font-size: 0.8125rem;
   font-weight: 800;
 }
+.context-toggle {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
 .record-text-review .record-primary-text {
   padding: 20px 24px;
   min-height: 220px;
