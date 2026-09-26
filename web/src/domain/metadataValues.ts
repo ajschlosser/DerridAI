@@ -108,16 +108,32 @@ export function unwrapMetadataValue(value: unknown): unknown {
 function looksLikeRuntimeFragment(value: string): boolean {
   const text = value.trim();
   if (!text) return true;
-  if (/^p\d{3,}-b\d{3,}$/i.test(text) || /^b\d{3,}$/i.test(text)) return true;
+
+  const token = text
+    .replaceAll('"', "")
+    .replaceAll("'", "")
+    .replaceAll("[", "")
+    .replaceAll("]", "")
+    .replaceAll(",", "")
+    .trim();
+  if (/^p\d{3,}-b\d{3,}$/i.test(token) || /^b\d{3,}$/i.test(token)) return true;
+
   if (
     /"(?:block_ids|confidence|needs_review|reason|outcome|field_evidence|field_assessments)"\s*:/i.test(
       text,
     )
   )
     return true;
-  if (/^(?:\[|\]|\{|\})",?$/.test(text) || /^(?:\[|\]|\{|\})/.test(text) || /(?:\[|\]|\{|\})$/.test(text))
-    return true;
   if (/^["'][^"']+["']\s*:\s*/.test(text)) return true;
+
+  if (text.startsWith("{") || text.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed && typeof parsed === "object") return true;
+    } catch {
+      // Non-JSON prose that happens to begin with punctuation is still usable.
+    }
+  }
   return false;
 }
 
