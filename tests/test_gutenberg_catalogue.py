@@ -168,3 +168,61 @@ def test_download_resume_requires_range_support(tmp_path: Path):
             assert "range" in str(exc).lower()
         else:
             raise AssertionError("resume unexpectedly accepted an unbounded response")
+
+
+def _complete_archive(tmp_path: Path, size: int = 8):
+    service = GutenbergOfflineService(
+        tmp_path / "state.sqlite", tmp_path / "archive.zip", start_worker=False
+    )
+    service.archive_path.parent.mkdir(parents=True, exist_ok=True)
+    service.archive_path.write_bytes(b"x" * size)
+    return service
+
+
+class _Unsatisfiable:
+    status_code = 416
+    content = b""
+    headers: dict[str, str] = {}
+
+    def raise_for_status(self):
+        raise AssertionError("a 416 after a complete download is not an error")
+
+
+class _Head:
+    def __init__(self, length: int):
+        self.headers = {"content-length": str(length)}
+
+    def raise_for_status(self):
+        return None
+
+
+def test_resuming_a_finished_download_moves_on_instead_of_failing_with_416(tmp_path: Path):
+    """Start/Resume on a complete archive used to fail: the total was forgotten and the next range was past the end.
+
+    Why: an 11.29 GB archive fully on disk stayed in "error" with "416 Requested Range Not Satisfiable" and was never
+    unpacked. The known total is now kept, and a 416 whose length matches the file marks the download complete.
+    """
+    service = _complete_archive(tmp_path)
+    with sqlite3.connect(service.db_path) as db:
+        db.execute("UPDATE gutenberg_archive SET status='paused',bytes_done=8,total_bytes=8")
+    assert service.set_archive_status("resume")["archive"]["total_bytes"] == 8
+    with patch("app.gutenberg_catalogue.httpx.get", return_value=_Unsatisfiable()), patch(
+        "app.gutenberg_catalogue.httpx.head", return_value=_Head(8)
+    ):
+        state = service.download_chunk(chunk_size=4)
+    assert state["archive"]["status"] == "downloaded"
+    assert state["archive"]["error"] is None
+
+
+def test_a_file_larger_than_the_archive_is_reported_with_the_way_out(tmp_path: Path):
+    service = _complete_archive(tmp_path, size=12)
+    service.set_archive_status("start")
+    with patch("app.gutenberg_catalogue.httpx.get", return_value=_Unsatisfiable()), patch(
+        "app.gutenberg_catalogue.httpx.head", return_value=_Head(8)
+    ):
+        try:
+            service.download_chunk(chunk_size=4)
+        except ValueError as exc:
+            assert "Redownload" in str(exc)
+        else:
+            raise AssertionError("expected an explanation")

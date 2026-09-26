@@ -187,16 +187,24 @@ function formatBytes(value?: number | null) {
   } while (size >= 1024 && unit < units.length - 1);
   return `${size.toFixed(size >= 10 ? 1 : 2)} ${units[unit]}`;
 }
+const bytesOnDisk = computed(() => Number(props.gutenbergStatus?.archive.bytes_done || 0));
 function archiveAction(): "start" | "pause" | "resume" {
   if (archiveStatus.value === "downloading") return "pause";
-  if (archiveStatus.value === "paused") return "resume";
+  // After a pause or an error, bytes already on disk are kept and the download continues from them.
+  if (archiveStatus.value === "paused" || (archiveStatus.value === "error" && bytesOnDisk.value))
+    return "resume";
   return "start";
+}
+function redownload() {
+  const size = formatBytes(bytesOnDisk.value);
+  if (!window.confirm(i18n.tf("pdf_corpus.gutenberg_redownload_confirm", { size }))) return;
+  emit("updateGutenbergArchive", "refetch");
 }
 function archiveActionLabel() {
   if (["downloaded", "unpacking"].includes(archiveStatus.value))
     return i18n.t("pdf_corpus.gutenberg_unpacking", "Unpacking collection…");
   if (archiveStatus.value === "downloading") return i18n.t("pdf_corpus.gutenberg_pause_download");
-  if (archiveStatus.value === "paused") return i18n.t("pdf_corpus.gutenberg_resume_download");
+  if (archiveAction() === "resume") return i18n.t("pdf_corpus.gutenberg_resume_download");
   return i18n.t("pdf_corpus.gutenberg_start_download");
 }
 
@@ -460,6 +468,15 @@ onBeforeUnmount(() => {
             @click="emit('updateGutenbergArchive', archiveAction())"
           >
             {{ archiveActionLabel() }}
+          </button>
+          <button
+            v-if="catalogueReady && archiveStatus === 'error' && bytesOnDisk"
+            type="button"
+            class="btn small quiet"
+            :disabled="disabled || busy === 'gutenberg-archive'"
+            @click="redownload"
+          >
+            {{ i18n.t("pdf_corpus.gutenberg_redownload") }}
           </button>
           <template v-if="gutenbergStatus?.archive.total_bytes">
             <progress

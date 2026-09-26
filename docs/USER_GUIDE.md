@@ -482,7 +482,9 @@ text, mismatched identity, timeout, or undecodable content fails visibly. The
 importer does not guess another download or substitute another edition. Two
 editions with identical text remain distinct assets. Imports come from the local
 collection; until it is downloaded the dialog says so and offers the download,
-and searching still works.
+and searching still works. A paused or failed download resumes from the bytes
+already on disk, and a download that had in fact finished moves straight on to
+unpacking; **Redownload** (after a confirmation) deletes the file and starts over.
 
 Wikisource search covers one language edition at a time (English, French,
 German, and others; French is preselected in the French interface). A work's

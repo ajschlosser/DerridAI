@@ -240,8 +240,14 @@ class GutenbergOfflineService:
             with sqlite3.connect(self.db_path) as db:
                 db.execute("DELETE FROM gutenberg_books")
         with sqlite3.connect(self.db_path) as db:
-            db.execute("UPDATE gutenberg_archive SET status=?,bytes_done=?,total_bytes=NULL,error=NULL,updated_at=? WHERE id=1",
-                       (allowed[action], 0 if action == "refetch" else self._bytes_done(), _now()))
+            if action == "refetch":
+                db.execute("UPDATE gutenberg_archive SET status=?,bytes_done=0,total_bytes=NULL,error=NULL,updated_at=? WHERE id=1",
+                           (allowed[action], _now()))
+            else:
+                # Keep the known total: forgetting it made a finished download look unfinished, so the next
+                # chunk asked for bytes past the end of the file and the server answered 416.
+                db.execute("UPDATE gutenberg_archive SET status=?,bytes_done=?,error=NULL,updated_at=? WHERE id=1",
+                           (allowed[action], self._bytes_done(), _now()))
         if action in {"start", "resume"} and self._start_worker_enabled:
             self._start_worker()
         elif action == "pause":
@@ -409,6 +415,34 @@ class GutenbergOfflineService:
     def _bytes_done(self) -> int:
         return self.archive_path.stat().st_size if self.archive_path.is_file() else 0
 
+    def _finish_or_explain_unsatisfiable_range(self, response: Any, offset: int) -> dict[str, Any]:
+        """A 416 after some bytes: the file on disk may already be the whole archive.
+
+        The server states the archive's length ("Content-Range: bytes */N", or a HEAD request's Content-Length when the
+        416 omits it). When the file on disk has exactly that
+        length the download is complete and unpacking can start; any other length is reported with the way out.
+        """
+        match = re.search(r"/\s*(\d+)\s*$", str(response.headers.get("content-range", "")))
+        total = int(match.group(1)) if match else 0
+        if not total:
+            # gutenberg.org answers 416 without Content-Range; its HEAD response gives the length.
+            head = httpx.head(ARCHIVE_URL, timeout=60.0, follow_redirects=True)
+            head.raise_for_status()
+            total = int(head.headers.get("content-length") or 0)
+        if total and offset == total:
+            with sqlite3.connect(self.db_path) as db:
+                db.execute("UPDATE gutenberg_archive SET status='downloaded',bytes_done=?,total_bytes=?,error=NULL,updated_at=? WHERE id=1",
+                           (offset, total, _now()))
+            return self.status()
+        if total and offset > total:
+            raise ValueError(
+                f"The downloaded file ({offset:,} bytes) is larger than the Gutenberg archive ({total:,} bytes). "
+                "Use Redownload to fetch it again."
+            )
+        raise ValueError(
+            "The Gutenberg server could not resume the download at the current position. Use Redownload to start over."
+        )
+
     def download_chunk(self, chunk_size: int = CHUNK_SIZE) -> dict[str, Any]:
         state = self.status()["archive"]
         if state["status"] != "downloading":
@@ -425,6 +459,8 @@ class GutenbergOfflineService:
             timeout=60.0,
             follow_redirects=True,
         )
+        if response.status_code == 416 and offset:
+            return self._finish_or_explain_unsatisfiable_range(response, offset)
         response.raise_for_status()
         if response.status_code != 206:
             raise ValueError("Gutenberg server did not honor the bounded range request.")
