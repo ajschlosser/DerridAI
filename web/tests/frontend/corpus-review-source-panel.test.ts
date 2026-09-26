@@ -115,11 +115,7 @@ describe("Corpus Builder review source panel", () => {
 
     expect(wrapper.emitted("update:providerProfileId")?.at(-1)).toEqual(["remote"]);
     expect(wrapper.emitted("update:modelOverride")?.at(-1)).toEqual(["review-model"]);
-    expect(wrapper.emitted("adjudicate")?.at(-1)).toEqual([
-      "next",
-      "local",
-      "review-model",
-    ]);
+    expect(wrapper.emitted("adjudicate")?.at(-1)).toEqual(["next", "local", "review-model"]);
   });
 
   it("forwards evidence and split mutations without owning them", async () => {
