@@ -332,6 +332,7 @@ for (const scheme of ["light", "dark"] as const) {
     await page.goto(`${APP}/pdf`);
     if (scheme === "dark")
       await page.evaluate(() => document.documentElement.setAttribute("data-color-scheme", "dark"));
+    await page.getByRole("tab", { name: /Metadata/i }).click();
     const step = page.locator("summary", { hasText: "Metadata schema" }).first();
     await step.scrollIntoViewIfNeeded();
     await step.click();
