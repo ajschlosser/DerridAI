@@ -103,6 +103,7 @@ function setup(requestedBuildId = "") {
     resetReviewForBuildStart,
     applyBuildRequest,
     setMessage,
+    refreshRecords,
   };
 }
 
@@ -168,5 +169,21 @@ describe("Corpus Builder lifecycle controller", () => {
       provider_profile_id: "profile-2",
     });
     expect(state.currentBuild.value?.build_id).toBe("build-1");
+  });
+
+  it("does not poll records while build-state watchers own incremental hydration", async () => {
+    const running = { ...build("build-1"), status: "running", stage: "enriching", record_count: 2 };
+    corpusBuilderApi.build.mockResolvedValue(running);
+    const state = setup();
+    state.selectedBuildId.value = "build-1";
+    state.currentBuild.value = running;
+
+    state.controller.startPolling();
+    await vi.advanceTimersByTimeAsync(1400);
+
+    expect(corpusBuilderApi.build).toHaveBeenCalledTimes(1);
+    expect(state.refreshRecords).not.toHaveBeenCalled();
+
+    state.controller.stopPolling();
   });
 });
