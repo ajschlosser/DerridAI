@@ -205,4 +205,40 @@ describe("Corpus Builder build, review, and finish states", () => {
     await buttonByText(wrapper, "Go fix").trigger("click");
     expect(wrapper.emitted("editDocumentMetadata")).toHaveLength(1);
   });
+
+  it("routes metadata validation blockers to validation review", async () => {
+    const build: any = {
+      ...buildBase,
+      validation: { valid: false, source_valid: true, metadata_valid: false, coverage: 1 },
+      publication_readiness: {
+        ...buildBase.publication_readiness,
+        can_publish: false,
+        next_action: "resolve_validation",
+        blockers: [{ code: "metadata_validation", count: 12 }],
+      },
+    };
+    const wrapper = mount(CorpusFinishWorkspace, { props: { build } });
+
+    await buttonByText(wrapper, "Go fix").trigger("click");
+
+    expect(wrapper.emitted("reviewValidation")).toHaveLength(1);
+    expect(wrapper.emitted("reviewMetadata")).toBeUndefined();
+  });
+
+  it("routes structural boundary blockers to topology review", async () => {
+    const build: any = {
+      ...buildBase,
+      publication_readiness: {
+        ...buildBase.publication_readiness,
+        can_publish: false,
+        next_action: "review_records",
+        blockers: [{ code: "boundary_attention", count: 3 }],
+      },
+    };
+    const wrapper = mount(CorpusFinishWorkspace, { props: { build } });
+
+    await buttonByText(wrapper, "Go fix").trigger("click");
+
+    expect(wrapper.emitted("reviewTopology")).toHaveLength(1);
+  });
 });
