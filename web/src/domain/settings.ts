@@ -380,18 +380,20 @@ export function normalizeEmbedding(
   source: Partial<EmbeddingSettingsDraft> | null | undefined,
 ): EmbeddingSettingsDraft {
   const rawProvider = String(source?.embedding_provider || "").trim();
-  const provider: EmbeddingProvider =
+  let provider: EmbeddingProvider = "ollama";
+  if (
     rawProvider === "chroma" ||
     rawProvider === "precomputed" ||
     rawProvider === "ollama" ||
     rawProvider.startsWith("profile:")
-      ? (rawProvider as EmbeddingProvider)
-      : "ollama";
+  ) {
+    provider = rawProvider as EmbeddingProvider;
+  }
+
   const requestedModel = String(source?.embedding_model || "").trim();
-  const embeddingModel =
-    provider === "chroma" || provider === "precomputed"
-      ? ""
-      : requestedModel || "bge-m3:latest";
+  let embeddingModel = requestedModel || "bge-m3:latest";
+  if (provider === "chroma" || provider === "precomputed") embeddingModel = "";
+
   return {
     embedding_provider: provider,
     embedding_model: embeddingModel,
