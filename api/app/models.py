@@ -535,10 +535,10 @@ class PdfCorpusRecordSizing(BaseModel):
     post-segmentation normalization toward readable/retrievable records while
     protected attribution and discourse structure remain higher priority.
     """
-    preferred_record_chars: int = Field(default=1750, ge=600, le=12000)
-    record_length_tolerance: int = Field(default=200, ge=50, le=2000)
-    long_record_chars: int = Field(default=3500, ge=1200, le=24000)
-    absolute_record_chars: int = Field(default=6000, ge=1800, le=48000)
+    preferred_record_chars: int = Field(default=1750, ge=100, le=12000)
+    record_length_tolerance: int = Field(default=200, ge=10, le=2000)
+    long_record_chars: int = Field(default=3500, ge=100, le=24000)
+    absolute_record_chars: int = Field(default=6000, ge=100, le=48000)
 
     def model_post_init(self, __context: Any) -> None:
         preferred = self.preferred_record_chars

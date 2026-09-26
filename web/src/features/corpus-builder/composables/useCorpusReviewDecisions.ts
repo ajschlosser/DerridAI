@@ -190,6 +190,11 @@ export function useCorpusReviewDecisions(options: CorpusReviewDecisionsOptions) 
           } else if (options.selectedRecordId.value === id) {
             await options.advanceFrom(id);
           }
+          // Nothing left to advance to (the last record in the queue): leave
+          // Focus View rather than sitting on an already-decided record.
+          if (options.selectedRecordId.value === id || !options.selectedRecordId.value) {
+            options.focusView.value = false;
+          }
           options.setMessage(options.t("pdf_corpus.accepted_notice"));
         }
 

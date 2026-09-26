@@ -1,7 +1,9 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 from __future__ import annotations
 
+import json
 import logging
+from pathlib import Path
 from typing import Any
 
 from fastapi import (
@@ -133,6 +135,39 @@ async def create_pdf_asset(
     except Exception as exc:
         logger.exception("PDF asset ingestion failed")
         raise HTTPException(status_code=500, detail=f"PDF asset ingestion failed: {exc}") from exc
+
+
+@router.post("/api/corpus/ledger/decode")
+async def decode_corpus_ledger(file: UploadFile = File(...)) -> dict[str, Any]:
+    """Decode an uploaded ``.jsonl.zst`` publication into plain JSONL text.
+
+    The browser importer only reads plaintext JSONL, so archival ledgers are
+    decompressed, validated, and evidence-rehydrated here rather than guessed at
+    client-side.
+    """
+    import tempfile
+
+    from .. import derridai_ledger
+
+    name = file.filename or "ledger.jsonl.zst"
+    if not name.endswith(".zst"):
+        raise HTTPException(status_code=400, detail="Expected a .jsonl.zst ledger.")
+    limit = settings.pdf_max_upload_mb * 1024 * 1024
+    with tempfile.TemporaryDirectory() as tmp:
+        target = Path(tmp) / "ledger.jsonl.zst"
+        size = 0
+        with target.open("wb") as handle:
+            while chunk := await file.read(1024 * 1024):
+                size += len(chunk)
+                if size > limit:
+                    raise HTTPException(status_code=413, detail="The ledger exceeds the upload size limit.")
+                handle.write(chunk)
+        try:
+            records = derridai_ledger.read_jsonl_zst(target)
+        except (derridai_ledger.LedgerValidationError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    text = "\n".join(json.dumps(record, ensure_ascii=False) for record in records) + "\n"
+    return {"text": text, "record_count": len(records), "filename": name.removesuffix(".zst")}
 
 
 @router.post("/api/pdf/assets/url")

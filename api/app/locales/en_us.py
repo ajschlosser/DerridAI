@@ -3156,6 +3156,7 @@ EN_US: dict[str, str] = {'common.apply': 'Apply',
  'pdf_corpus.record_sizing.help': 'Length guides retrieval-sized topology but never overrides attribution or semantic '
                                   'integrity. The builder aims for the preferred range and permits longer coherent '
                                   'exceptions when needed.',
+ 'pdf_corpus.record_sizing.invalid': 'Record sizing is inconsistent: the long-record limit must be at least the preferred length plus flexibility, and the absolute ceiling at least the long-record limit. Adjust the values to build.',
  'pdf_corpus.record_sizing.long': 'Long-record exception',
  'pdf_corpus.record_sizing.long_help': 'A coherent thought may run this long when no good seam exists near the '
                                        'preferred range.',

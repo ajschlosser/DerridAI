@@ -3367,6 +3367,7 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'pdf_corpus.record_sizing.help': 'La longueur guide une topologie adaptée à la recherche sans jamais primer sur '
                                   'l’attribution ni l’intégrité sémantique. Le générateur vise la plage préférée et '
                                   'permet des exceptions cohérentes plus longues au besoin.',
+ 'pdf_corpus.record_sizing.invalid': 'Les tailles de notice sont incohérentes : la limite de notice longue doit être au moins égale à la longueur préférée plus la souplesse, et le plafond absolu au moins égal à la limite de notice longue. Corrigez les valeurs pour lancer la construction.',
  'pdf_corpus.record_sizing.long': 'Exception pour notice longue',
  'pdf_corpus.record_sizing.long_help': 'Une pensée cohérente peut atteindre cette longueur lorsqu’aucune bonne limite '
                                        'n’existe près de la plage préférée.',

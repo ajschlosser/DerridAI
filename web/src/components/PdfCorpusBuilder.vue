@@ -65,6 +65,7 @@ import { useCorpusReviewDecisions } from "../features/corpus-builder/composables
 import { useCorpusTextReview } from "../features/corpus-builder/composables/useCorpusTextReview";
 import { useCorpusMetadataReview } from "../features/corpus-builder/composables/useCorpusMetadataReview";
 import { useCorpusBoundaryReview } from "../features/corpus-builder/composables/useCorpusBoundaryReview";
+import { invalidRecordSizingFields } from "../features/corpus-builder/domain/recordSizing";
 import { corpusReviewCommandFromKeydown } from "../features/corpus-builder/domain/reviewCommands";
 import {
   editableRecordMetadata,
@@ -149,6 +150,9 @@ const sourceBlocks = ref<SourceBlock[]>([]);
 const selectedEvidenceField = ref("");
 const selectedPdfPage = ref(1);
 const reviewQueue = ref<ReviewQueue>("all");
+// Set when a Finish blocker sends the reviewer into the "all" queue, which
+// otherwise looks identical to the Finish workspace.
+const reviewRequested = ref(false);
 const {
   reviewQueueCollapsed,
   reviewInspectorTab,
@@ -345,7 +349,7 @@ const {
   showBuildConfiguration,
   finishPhase,
   showReviewWorkspace,
-} = useCorpusBuildLifecycle(currentBuild, recordTotal, reviewQueue);
+} = useCorpusBuildLifecycle(currentBuild, recordTotal, reviewQueue, reviewRequested);
 const {
   registerBuildOperation,
   syncBuildInRail,
@@ -728,6 +732,7 @@ const {
   previousPage,
   nextPage,
 } = useCorpusReviewNavigation({
+  reviewRequested,
   currentBuild,
   records,
   recordTotal,
@@ -872,9 +877,11 @@ const llmActionConcurrentLoad = computed(() => {
       0,
     );
 });
+const recordSizingValid = computed(() => invalidRecordSizingFields(recordSizing.value).length === 0);
 const canStartConcurrentBuild = computed(() =>
   Boolean(
-    selectedAsset.value &&
+    recordSizingValid.value &&
+      selectedAsset.value &&
       contextSafe.value &&
       (selectedProviderId.value || !activeBuildCount.value),
   ),
@@ -1083,6 +1090,7 @@ const setupWarnings = computed(() => {
         count: selectedProfileActiveBuildCount.value,
       }),
     );
+  if (!recordSizingValid.value) warnings.push(i18n.t("pdf_corpus.record_sizing.invalid"));
   return warnings;
 });
 
@@ -1500,6 +1508,7 @@ async function chooseBuild(build: CorpusBuild) {
   hydratedTopologyCount.value = 0;
   hydratedMetadataCount.value = 0;
   reviewQueue.value = "all";
+  reviewRequested.value = false;
   await refreshBuild();
   await nextTick();
   await refreshRecords(true);

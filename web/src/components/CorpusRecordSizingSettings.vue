@@ -2,6 +2,10 @@
 import { computed } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import type { RecordSizingPolicy } from "../types/corpus";
+import {
+  invalidRecordSizingFields,
+  RECORD_SIZING_MIN,
+} from "../features/corpus-builder/domain/recordSizing";
 const props = defineProps<{ modelValue: RecordSizingPolicy; disabled?: boolean }>();
 const emit = defineEmits<{ (event: "update:modelValue", value: RecordSizingPolicy): void }>();
 const i18n = useI18nStore();
@@ -17,15 +21,13 @@ const high = computed(
     Number(props.modelValue.preferred_record_chars) +
     Number(props.modelValue.record_length_tolerance),
 );
+const invalid = computed(() => invalidRecordSizingFields(props.modelValue));
 function patch(key: keyof RecordSizingPolicy, event: Event) {
   const raw = Number((event.target as HTMLInputElement).value);
   if (!Number.isFinite(raw)) return;
-  const next = { ...props.modelValue, [key]: Math.round(raw) };
-  if (next.long_record_chars < next.preferred_record_chars + next.record_length_tolerance)
-    next.long_record_chars = next.preferred_record_chars + next.record_length_tolerance;
-  if (next.absolute_record_chars < next.long_record_chars)
-    next.absolute_record_chars = next.long_record_chars;
-  emit("update:modelValue", next);
+  // Never rewrite the reviewer's other fields; an inconsistent policy is
+  // surfaced as a warning and blocks the build instead.
+  emit("update:modelValue", { ...props.modelValue, [key]: Math.round(raw) });
 }
 </script>
 <template>
@@ -39,7 +41,7 @@ function patch(key: keyof RecordSizingPolicy, event: Event) {
           id="corpus-preferred-chars"
           class="control"
           type="number"
-          min="600"
+          :min="RECORD_SIZING_MIN.preferred_record_chars"
           max="12000"
           step="50"
           :value="modelValue.preferred_record_chars"
@@ -57,7 +59,7 @@ function patch(key: keyof RecordSizingPolicy, event: Event) {
           id="corpus-tolerance-chars"
           class="control"
           type="number"
-          min="50"
+          :min="RECORD_SIZING_MIN.record_length_tolerance"
           max="2000"
           step="25"
           :value="modelValue.record_length_tolerance"
@@ -65,7 +67,10 @@ function patch(key: keyof RecordSizingPolicy, event: Event) {
         /><small>{{ i18n.t("pdf_corpus.record_sizing.tolerance_help") }}</small></label
       >
     </div>
-    <details>
+    <p v-if="invalid.length" class="sizing-warning" role="alert">
+      {{ i18n.t("pdf_corpus.record_sizing.invalid") }}
+    </p>
+    <details :open="invalid.includes('long_record_chars') || invalid.includes('absolute_record_chars')">
       <summary>{{ i18n.t("pdf_corpus.record_sizing.advanced") }}</summary>
       <div class="advanced-grid">
         <label for="corpus-long-chars"
@@ -74,7 +79,7 @@ function patch(key: keyof RecordSizingPolicy, event: Event) {
             id="corpus-long-chars"
             class="control"
             type="number"
-            min="1200"
+            :min="RECORD_SIZING_MIN.long_record_chars"
             max="24000"
             step="100"
             :value="modelValue.long_record_chars"
@@ -87,7 +92,7 @@ function patch(key: keyof RecordSizingPolicy, event: Event) {
             id="corpus-absolute-chars"
             class="control"
             type="number"
-            min="1800"
+            :min="RECORD_SIZING_MIN.absolute_record_chars"
             max="48000"
             step="100"
             :value="modelValue.absolute_record_chars"
@@ -99,6 +104,11 @@ function patch(key: keyof RecordSizingPolicy, event: Event) {
   </fieldset>
 </template>
 <style scoped>
+.sizing-warning {
+  margin: 8px 0 0;
+  color: var(--status-warning-text, var(--text));
+  font-size: var(--text-sm, 0.875rem);
+}
 .record-sizing {
   margin: 0;
   border: 1px solid var(--line);

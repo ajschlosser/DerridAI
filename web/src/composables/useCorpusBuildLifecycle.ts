@@ -7,6 +7,7 @@ export function useCorpusBuildLifecycle(
   currentBuild: Ref<CorpusBuild | null>,
   recordTotal: Ref<number>,
   reviewQueue: Ref<ReviewQueue>,
+  reviewRequested: Ref<boolean>,
 ) {
   const reviewQueueCounts = computed(() => currentBuild.value?.review_queue_counts || {});
   const reviewRemaining = computed(() =>
@@ -109,7 +110,7 @@ export function useCorpusBuildLifecycle(
     Boolean(currentBuild.value && (reviewComplete.value || currentBuild.value.publication)),
   );
   const showReviewWorkspace = computed(() =>
-    Boolean(hasRecordTopology.value && (!finishPhase.value || reviewQueue.value !== "all")),
+    Boolean(hasRecordTopology.value && (!finishPhase.value || reviewQueue.value !== "all" || reviewRequested.value)),
   );
   return {
     reviewQueueCounts,

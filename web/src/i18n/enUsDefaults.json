@@ -2194,6 +2194,7 @@
   "pdf_corpus.record_sizing.absolute_help": "Only a safety ceiling. The builder may flag review if satisfying it would break a protected attribution or syntax transition.",
   "pdf_corpus.record_sizing.advanced": "Advanced exception limits",
   "pdf_corpus.record_sizing.help": "Length guides retrieval-sized topology but never overrides attribution or semantic integrity. The builder aims for the preferred range and permits longer coherent exceptions when needed.",
+  "pdf_corpus.record_sizing.invalid": "Record sizing is inconsistent: the long-record limit must be at least the preferred length plus flexibility, and the absolute ceiling at least the long-record limit. Adjust the values to build.",
   "pdf_corpus.record_sizing.long": "Long-record exception",
   "pdf_corpus.record_sizing.long_help": "A coherent thought may run this long when no good seam exists near the preferred range.",
   "pdf_corpus.record_sizing.preferred": "Preferred record length",

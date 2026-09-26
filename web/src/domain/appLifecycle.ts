@@ -3,6 +3,8 @@
 // Application lifecycle: importing and closing corpus files, warming up an LLM provider, and the health check run at
 // start-up and after Chroma becomes available. Moved verbatim from the legacy runtime; the runtime's state object and
 // helpers are passed in as dependencies.
+import { apiRequest } from "../api/http";
+
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Parameters of these legacy functions were never typed; they keep the shape their callers give them. */
 type Any = any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -152,7 +154,25 @@ export function createAppLifecycle(deps: Deps) {
       total = 0,
       errors = 0;
     for (const file of [...fileList]) {
-      const text = await file.text();
+      let text: string;
+      let name: string = file.name;
+      if (/\.zst$/i.test(file.name)) {
+        // Archival ledgers (.jsonl.zst) are decoded and evidence-rehydrated by the API.
+        try {
+          const body = new FormData();
+          body.append("file", file);
+          const decoded = await apiRequest<{ text: string; filename: string }>(
+            "/api/corpus/ledger/decode",
+            { method: "POST", body },
+          );
+          text = decoded.text;
+          name = decoded.filename || name.replace(/\.zst$/i, "");
+        } catch (error: Any) {
+          toast(error.message);
+          errors += 1;
+          continue;
+        }
+      } else text = await file.text();
       const parsed = parseJsonl(text);
       if (!parsed.records.length) {
         errors += parsed.errors.length || 1;
@@ -168,7 +188,7 @@ export function createAppLifecycle(deps: Deps) {
       }
       const item = {
         ...identity,
-        name: file.name,
+        name,
         records: parsed.records,
         errors: parsed.errors,
         dirty: new Set(),
