@@ -4491,6 +4491,8 @@
   "schemas.group_help": "Each group is one model call per record.",
   "schemas.group_label": "Group name",
   "schemas.holds_core": "holds the locked core",
+  "schemas.new_schema": "New schema",
+  "schemas.new_schema_name": "New schema",
   "schemas.import": "Import a schema…",
   "schemas.import_not_json": "That file is not JSON.",
   "schemas.imported": "Schema imported.",

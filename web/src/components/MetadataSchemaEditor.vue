@@ -124,6 +124,24 @@ async function guarded<T>(work: () => Promise<T>): Promise<T | undefined> {
     busy.value = false;
   }
 }
+/** A new schema starts from the built-in groups and prompts with no added fields (the core stays). */
+async function newSchema() {
+  if (dirty.value && !window.confirm(t("discard_changes", "Discard unsaved schema changes?")))
+    return;
+  const base = await guarded(() => metadataSchemasApi.get("default"));
+  if (!base) return;
+  load(
+    {
+      ...JSON.parse(JSON.stringify(base)),
+      id: "",
+      name: t("new_schema_name", "New schema"),
+      fields: [],
+    },
+    true,
+  );
+  savedHash.value = "";
+  selectedId.value = "";
+}
 function duplicate() {
   if (!draft.value) return;
   load(
@@ -316,6 +334,14 @@ defineExpose({ select, draft });
           ><small>{{ t("unsaved", "Not saved yet") }}</small>
         </li>
       </ul>
+      <button
+        type="button"
+        class="btn small primary new-schema"
+        :disabled="busy"
+        @click="newSchema"
+      >
+        {{ t("new_schema", "New schema") }}
+      </button>
       <label class="import-button btn small"
         >{{ t("import", "Import a schema…")
         }}<input type="file" accept="application/json,.json" class="sr-only" @change="importFile"
