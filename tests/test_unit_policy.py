@@ -84,3 +84,39 @@ def test_repository_derives_a_sentence_asset_and_keeps_the_original(tmp_path):
     assert repo.derive_asset_with_units(derived["asset_id"], {"mode": "default"})["asset_id"] == original["asset_id"]
     # Idempotent: the same policy yields the same asset.
     assert repo.derive_asset_with_units(original["asset_id"], {"mode": "sentence"})["asset_id"] == derived["asset_id"]
+
+
+def _record_sizes(blocks, policy):
+    from app.corpus_segmentation import _normalize_topology
+
+    boundaries, _, _ = _normalize_topology(blocks, [], policy)
+    cuts = {b["after_block_id"] for b in boundaries}
+    sizes, current, count = [], 0, 0
+    for block in blocks:
+        current += len(block["text"]) + (2 if count else 0)
+        count += 1
+        if block["block_id"] in cuts:
+            sizes.append(current)
+            current = count = 0
+    if count:
+        sizes.append(current)
+    return sizes
+
+
+def test_small_records_need_small_units():
+    """A 100-character target is only reachable when the units are that small.
+
+    With whole paragraphs the segmenter has no seam to cut at, so it returns a few huge records; dividing the
+    source into sentences or windows lets it honour the target.
+    """
+    para = ("The trace is neither present nor absent, and it cannot be reduced to either. " * 4
+            + "Hospitality names the welcome of the other before any question. " * 4).strip()
+    blocks = [{"block_id": f"b{i}", "page": 1, "type": "paragraph", "text": para} for i in range(6)]
+    policy = {"preferred_record_chars": 100, "record_length_tolerance": 10, "long_record_chars": 150, "absolute_record_chars": 200}
+    assert len(_record_sizes(blocks, policy)) == 1
+    sentences, _ = up.apply_unit_policy(blocks, {"mode": "sentence"})
+    sizes = _record_sizes(sentences, policy)
+    assert len(sizes) > 20 and max(sizes) <= 150
+    windows, _ = up.apply_unit_policy(blocks, {"mode": "chars", "chars": 100})
+    sizes = _record_sizes(windows, policy)
+    assert len(sizes) > 30 and 80 <= sorted(sizes)[len(sizes) // 2] <= 110
