@@ -112,7 +112,6 @@ function recordSelectionChanged(recordId: string, event: Event) {
               record: record.record_id,
             })
           "
-          :disabled="props.disabled"
           @change="recordSelectionChanged(record.record_id, $event)"
         />
         <span class="sr-only">{{
