@@ -87,3 +87,13 @@ Metadata retrieval is advisory and must fail open with visible diagnostics:
 - never fabricate evidence text or silently substitute a newer record revision.
 
 See [METADATA_SCHEMAS.md](METADATA_SCHEMAS.md) for schema controls and [ARCHITECTURE.md](ARCHITECTURE.md) for persistence boundaries.
+
+## Why there may be bindings but no examples
+
+Saving a reviewed value writes a **metadata memory binding** and an outbox row, whether or not evidence was bound. An **exemplar** additionally needs a human-owned value, reviewer-bound evidence blocks that belong to the record, and a successful vector projection (which needs a reachable embedding provider). Bindings without exemplars therefore usually mean one of:
+
+- no evidence blocks were bound to the confirmed field;
+- the evidence does not belong to the record, or is not human-reviewed;
+- the projection is failing (for example the embedding provider or its model is unavailable). The outbox stays dirty until it succeeds.
+
+`GET /api/pdf/corpus-builds/{build_id}/metadata-exemplars/diagnosis` counts, per outcome, why each current assertion did or did not yield an exemplar. `POST …/metadata-exemplars/project` rebuilds the build's projection now and returns the real error. The **Metadata examples** page shows the number of unprojected changes and the latest failure per build.

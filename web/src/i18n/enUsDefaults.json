@@ -4287,6 +4287,8 @@
   "runtime.system_metadata_exemplars_loading": "Loading metadata exemplars…",
   "runtime.system_metadata_exemplars_not_built": "No progressive metadata exemplar index exists yet. Review evidence-bound metadata and run enrichment to create it.",
   "runtime.system_metadata_failed": "Could not load metadata examples.",
+  "runtime.system_metadata_backlog": "{count} reviewed metadata changes are waiting to be indexed.",
+  "runtime.system_metadata_backlog_help": "Reviewed values are saved, but the example index could not be refreshed. Check that the embedding provider and its model are available.",
   "runtime.system_metadata_loading": "Loading metadata examples…",
   "runtime.system_metadata_no_matches": "The index is built, but no examples match these filters.",
   "runtime.system_metadata_not_built": "The metadata exemplar index has not been built yet.",

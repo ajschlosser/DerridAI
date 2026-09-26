@@ -838,6 +838,29 @@ def list_retired_pdf_corpus_records(build_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="Corpus build not found") from exc
 
 
+@router.get("/api/pdf/corpus-builds/{build_id}/metadata-exemplars/diagnosis")
+def diagnose_pdf_corpus_metadata_exemplars(build_id: str) -> dict[str, Any]:
+    """Why a build has (or lacks) metadata exemplars; counts only, no record content."""
+    from ..metadata_exemplar_projection import diagnose_build_metadata_exemplars
+
+    try:
+        return diagnose_build_metadata_exemplars(pdf_corpus_repository, build_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+
+
+@router.post("/api/pdf/corpus-builds/{build_id}/metadata-exemplars/project")
+def project_pdf_corpus_metadata_exemplars(build_id: str) -> dict[str, Any]:
+    """Rebuild this build's exemplar projection now and report the real error, if any."""
+    try:
+        return pdf_corpus_builds._project_metadata_exemplars(build_id, force=True)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    except Exception as exc:
+        logger.exception("Metadata exemplar projection failed")
+        raise HTTPException(status_code=503, detail=f"Metadata exemplar projection failed: {exc}") from exc
+
+
 @router.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/from-selection")
 def create_pdf_corpus_record_from_selection(build_id: str, record_id: str, body: PdfCorpusRecordFromSelection) -> dict[str, Any]:
     try:

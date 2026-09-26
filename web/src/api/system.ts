@@ -130,6 +130,8 @@ export interface SystemMetadataExemplarFacets {
   schemas: string[];
 }
 export interface SystemMetadataExemplarPage {
+  /** Reviewed metadata still waiting to be indexed, with the latest failure per build. */
+  projection_backlog?: { dirty: number; scopes: string[]; errors: Record<string, string> };
   exists: boolean;
   count: number;
   limit: number;

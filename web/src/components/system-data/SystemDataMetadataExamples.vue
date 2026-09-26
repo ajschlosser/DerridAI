@@ -153,6 +153,20 @@ onMounted(() => void load(0));
       </button>
     </div>
 
+    <div v-if="page.projection_backlog?.dirty" class="state error" role="alert">
+      <strong>{{
+        i18n.tf("runtime.system_metadata_backlog", { count: page.projection_backlog.dirty })
+      }}</strong>
+      <span>{{
+        t(
+          "runtime.system_metadata_backlog_help",
+          "Reviewed values are saved, but the example index could not be refreshed. Check that the embedding provider and its model are available.",
+        )
+      }}</span>
+      <span v-for="(message, scope) in page.projection_backlog.errors" :key="scope"
+        >{{ scope }}: {{ message }}</span
+      >
+    </div>
     <div v-if="error" class="state error" role="alert">
       <strong>{{ t("runtime.system_metadata_failed", "Could not load metadata examples.") }}</strong
       ><span>{{ error }}</span>

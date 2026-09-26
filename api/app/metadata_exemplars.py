@@ -143,6 +143,7 @@ def build_metadata_exemplar(
     source_document_id: str = "",
     field_id: str = "",
     context_block_radius: int = DEFAULT_CONTEXT_BLOCK_RADIUS,
+    why: list[str] | None = None,
 ) -> dict[str, Any] | None:
     """Derive one trusted, evidence-bound positive metadata exemplar.
 
@@ -151,27 +152,33 @@ def build_metadata_exemplar(
     resolved.  Returning no exemplar is safer than manufacturing a training precedent.
     """
 
+    def skip(code: str) -> None:
+        # ``why`` lets a diagnosis say exactly why no precedent was derived.
+        if why is not None:
+            why.append(code)
+        return None
+
     field = str(field or "").strip()
     if not field:
-        return None
+        return skip("no_field")
 
     migrate_record_assertions(record)
     assertion = current_assertion_by_name(record, field)
     if assertion is None:
-        return None
+        return skip("no_assertion")
     is_confirmed_absence = assertion.value_status == "confirmed_absent"
     if (
         assertion.authority_status not in {"human_confirmed", "human_override"}
         and not is_confirmed_absence
     ):
-        return None
+        return skip("not_human_confirmed")
 
     value = record.get(field)
     if is_confirmed_absence:
         if value not in (None, "", []):
-            return None
+            return skip("absence_has_value")
     elif value in (None, "", []):
-        return None
+        return skip("no_value")
 
     evidence = next(
         (
@@ -184,12 +191,14 @@ def build_metadata_exemplar(
     if evidence is None:
         evidence_map = record.get("metadata_evidence")
         evidence = evidence_map.get(field) if isinstance(evidence_map, dict) else None
-    if not isinstance(evidence, dict) or not _reviewed_evidence(assertion, evidence):
-        return None
+    if not isinstance(evidence, dict):
+        return skip("no_evidence")
+    if not _reviewed_evidence(assertion, evidence):
+        return skip("evidence_not_human_reviewed")
 
     evidence_ids = _unique_strings(evidence.get("block_ids"))
     if not evidence_ids:
-        return None
+        return skip("no_evidence")
 
     ordered = _ordered_evidence_and_context_ids(
         record,
@@ -197,7 +206,7 @@ def build_metadata_exemplar(
         context_block_radius=context_block_radius,
     )
     if ordered is None:
-        return None
+        return skip("evidence_not_in_record")
     evidence_ids, context_ids = ordered
 
     needed_ids = set(evidence_ids)
@@ -206,7 +215,7 @@ def build_metadata_exemplar(
         or not str(blocks_by_id[block_id].get("text") or "")
         for block_id in needed_ids
     ):
-        return None
+        return skip("evidence_block_unresolved")
 
     evidence_text = "\n\n".join(str(blocks_by_id[block_id]["text"]) for block_id in evidence_ids)
     context_text = "\n\n".join(

@@ -245,6 +245,7 @@ from .main_text_start import infer_main_text_start
 from .metadata_exemplar_projection import (
     dirty_metadata_exemplar_build_ids,
     project_build_metadata_exemplars,
+    record_projection_result,
 )
 from .metadata_exemplar_retrieval import ChromaMetadataExemplarIndex
 from .metadata_schema import (
@@ -1523,8 +1524,11 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         otherwise coupling review success to vector availability.
         """
         try:
-            return self._project_metadata_exemplars(build_id)
+            result = self._project_metadata_exemplars(build_id)
+            record_projection_result(build_id)
+            return result
         except Exception as exc:
+            record_projection_result(build_id, f"{type(exc).__name__}: {exc}")
             self._append_warning(
                 build_id,
                 "Metadata exemplar projection is pending. Reviewed metadata was saved; "

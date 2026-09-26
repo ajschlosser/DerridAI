@@ -23,6 +23,29 @@ from .system_store import system_store
 
 PROJECTION = "metadata_exemplars"
 
+# Last projection failure per build (process-local). The outbox stays dirty until a
+# projection succeeds, so an unreachable embedding provider would otherwise leave
+# the Metadata examples page silently empty.
+_last_errors: dict[str, str] = {}
+
+
+def record_projection_result(build_id: str, error: str = "") -> None:
+    if error:
+        _last_errors[build_id] = error[:500]
+    else:
+        _last_errors.pop(build_id, None)
+
+
+def projection_backlog() -> dict[str, Any]:
+    """Unprojected reviewed-metadata work, with the most recent failure per build."""
+    dirty = system_store.list_semantic_memory_dirty(PROJECTION, limit=1000)
+    scopes = sorted({str(row.get("scope_id") or "") for row in dirty if str(row.get("scope_id") or "")})
+    return {
+        "dirty": len(dirty),
+        "scopes": scopes,
+        "errors": {scope: _last_errors[scope] for scope in scopes if scope in _last_errors},
+    }
+
 
 def _field_contract(
     rows: list[dict[str, Any]],
@@ -209,4 +232,78 @@ def project_build_metadata_exemplars(
         "skipped": False,
         **stats,
         "acknowledged": acknowledged,
+    }
+
+
+def diagnose_build_metadata_exemplars(repo: Any, build_id: str) -> dict[str, Any]:
+    """Explain, per current assertion, why a precedent was or was not derived.
+
+    Reviewed bindings and the semantic outbox can exist while no exemplar does:
+    an exemplar needs a human-owned value *and* reviewer-bound evidence blocks that
+    belong to the record. This reports the count of each outcome so a reviewer can
+    see what is missing instead of an empty Metadata examples page.
+    """
+
+    build = repo.get_build(build_id)
+    rows = repo.load_records(build_id)
+    asset_id = str(build.get("asset_id") or "")
+    blocks_by_id: dict[str, dict[str, Any]] = {}
+    if asset_id:
+        blocks_by_id = {
+            str(block.get("block_id") or ""): block
+            for block in repo.load_blocks(asset_id)
+            if isinstance(block, dict) and str(block.get("block_id") or "")
+        }
+    schema_id, schema_version, field_ids = _field_contract(rows, build)
+    source_document_id = str(build.get("source_document_id") or asset_id or "")
+    reset_at = str(build.get("editorial_memory_reset_at") or "")
+    outcomes: dict[str, int] = {}
+    samples: dict[str, list[dict[str, str]]] = {}
+
+    def note(code: str, record_id: str, field: str) -> None:
+        outcomes[code] = outcomes.get(code, 0) + 1
+        bucket = samples.setdefault(code, [])
+        if len(bucket) < 3:
+            bucket.append({"record_id": record_id, "field": field})
+
+    for row in rows:
+        record_id = str(row.get("record_id") or "")
+        if reset_at and str(row.get("human_touched_at") or "") <= reset_at:
+            note("before_editorial_memory_reset", record_id, "")
+            continue
+        if experiment.is_gold(record_id):
+            note("gold_record", record_id, "")
+            continue
+        migrate_record_assertions(row)
+        project_record_assertions(row)
+        for assertion in current_assertions(row):
+            field = str(assertion.field_name or "")
+            if not field:
+                continue
+            trusted = (
+                assertion.authority_status in {"human_confirmed", "human_override"}
+                or assertion.value_status == "confirmed_absent"
+            )
+            if not trusted:
+                note("not_human_confirmed", record_id, field)
+                continue
+            if _second_opinion_owed(row, field):
+                note("second_opinion_owed", record_id, field)
+                continue
+            why: list[str] = []
+            exemplar = build_metadata_exemplar(
+                row, field, blocks_by_id,
+                schema_id=schema_id, schema_version=schema_version,
+                source_document_id=source_document_id,
+                field_id=str(assertion.field_id or field_ids.get(field, "")),
+                why=why,
+            )
+            note("exemplar" if exemplar is not None else (why[-1] if why else "unknown"), record_id, field)
+    dirty = system_store.list_semantic_memory_dirty(PROJECTION, scope_id=build_id, limit=1000)
+    return {
+        "build_id": build_id,
+        "records": len(rows),
+        "outcomes": outcomes,
+        "examples": samples,
+        "outbox_dirty": len(dirty),
     }
