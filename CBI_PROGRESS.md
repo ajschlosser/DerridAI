@@ -234,7 +234,6 @@ The next monolith-reduction slice moves the record queue/list out of
 - Reduced `PdfCorpusBuilder.vue` from 3,744 lines to 3,622 lines and the shared workspace
   stylesheet from about 2,623 lines to 2,395 lines.
 
-
 ### Review toolbar extraction
 
 The Review workspace decomposition now separates the toolbar/filter/bulk-control surface from
