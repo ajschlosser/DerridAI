@@ -51,29 +51,62 @@ describe("Corpus Builder setup and launch controls", () => {
     expect(current.attributes("data-state")).toBe("current");
   });
 
-  it("warns about inconsistent record sizing instead of silently rewriting other limits", async () => {
-    const wrapper = mount(CorpusRecordSizingSettings, {
-      props: {
-        modelValue: {
-          preferred_record_chars: 1750,
-          record_length_tolerance: 200,
-          long_record_chars: 3500,
-          absolute_record_chars: 6000,
-        },
-      },
-    });
-    expect(wrapper.find(".sizing-warning").exists()).toBe(false);
+  it("keeps automatic limits valid as the target changes, without touching custom ones", async () => {
+    const value = {
+      preferred_record_chars: 1750,
+      record_length_tolerance: 200,
+      long_record_chars: 3500,
+      absolute_record_chars: 6000,
+    };
+    const wrapper = mount(CorpusRecordSizingSettings, { props: { modelValue: value } });
+    // Defaults are automatic, so the limits follow the target and are valid by construction.
     await wrapper.get("#corpus-preferred-chars").setValue("5000");
     const emitted = wrapper.emitted("update:modelValue")!;
     const next = emitted[emitted.length - 1][0] as any;
-    expect(next).toEqual({
-      preferred_record_chars: 5000,
+    expect(next.preferred_record_chars).toBe(5000);
+    expect(next.long_record_chars).toBeGreaterThanOrEqual(5200);
+    expect(next.absolute_record_chars).toBeGreaterThanOrEqual(next.long_record_chars);
+    expect(wrapper.find(".sizing-warning").exists()).toBe(false);
+  });
+
+  it("never rewrites custom limits, and explains and fixes an invalid one", async () => {
+    const custom = {
+      preferred_record_chars: 1750,
+      record_length_tolerance: 200,
+      long_record_chars: 4000,
+      absolute_record_chars: 9000,
+    };
+    const wrapper = mount(CorpusRecordSizingSettings, { props: { modelValue: custom } });
+    await wrapper.get("#corpus-preferred-chars").setValue("5000");
+    let emitted = wrapper.emitted("update:modelValue")!;
+    expect(emitted[emitted.length - 1][0]).toEqual({ ...custom, preferred_record_chars: 5000 });
+    await wrapper.setProps({ modelValue: emitted[emitted.length - 1][0] as never });
+    expect(wrapper.get("#long-hint").attributes("role")).toBe("alert");
+    expect(wrapper.get("#corpus-long-chars").attributes("aria-invalid")).toBe("true");
+    await wrapper.get("#long-hint .fix").trigger("click");
+    emitted = wrapper.emitted("update:modelValue")!;
+    expect((emitted[emitted.length - 1][0] as any).long_record_chars).toBe(5200);
+  });
+
+  it("switches back to automatic limits on request and offers common targets", async () => {
+    const custom = {
+      preferred_record_chars: 1750,
+      record_length_tolerance: 200,
+      long_record_chars: 4000,
+      absolute_record_chars: 9000,
+    };
+    const wrapper = mount(CorpusRecordSizingSettings, { props: { modelValue: custom } });
+    await wrapper.get('.auto-switch input[type="checkbox"]').setValue(true);
+    expect(wrapper.emitted("update:modelValue")!.at(-1)![0]).toEqual({
+      preferred_record_chars: 1750,
       record_length_tolerance: 200,
       long_record_chars: 3500,
       absolute_record_chars: 6000,
     });
-    await wrapper.setProps({ modelValue: next });
-    expect(wrapper.get(".sizing-warning").attributes("role")).toBe("alert");
+    await wrapper.findAll(".preset")[0].trigger("click");
+    const sentence = wrapper.emitted("update:modelValue")!.at(-1)![0] as any;
+    expect(sentence.preferred_record_chars).toBe(150);
+    expect(sentence.long_record_chars).toBeGreaterThanOrEqual(180);
   });
 
   it("clamps execution concurrency and deadlines and exposes unsafe context", async () => {
