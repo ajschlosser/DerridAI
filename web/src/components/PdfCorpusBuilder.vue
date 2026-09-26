@@ -262,6 +262,7 @@ const {
   selectedAsset,
   sourceIllegibility,
   detectPageNumbers,
+  llmPageDetection,
   sourceUrl,
   gutenbergQuery,
   gutenbergHits,
@@ -279,7 +280,7 @@ const {
   importGutenberg,
   savePageLabels,
   saveDocumentLayout,
-} = useCorpusSourceConfiguration(busy, setMessage);
+} = useCorpusSourceConfiguration(busy, setMessage, () => selectedProviderId.value);
 const error = ref("");
 const notice = ref("");
 const statusRegion = ref<HTMLElement | null>(null);
@@ -1961,6 +1962,7 @@ defineExpose({
           v-model:asset-id="selectedAssetId"
           v-model:illegibility="sourceIllegibility"
           v-model:detect-page-numbers="detectPageNumbers"
+          v-model:llm-page-detection="llmPageDetection"
           v-model:source-url="sourceUrl"
           v-model:gutenberg-query="gutenbergQuery"
           :assets="assets"

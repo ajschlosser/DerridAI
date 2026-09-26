@@ -7,6 +7,7 @@ import type {
   GutenbergHit,
   WikisourceHit,
   GutenbergStatus,
+  PageDetectionRequest,
 } from "./types";
 import { LEGACY_CORPUS_BASE, legacyCorpusUrl } from "./compatibility";
 
@@ -21,23 +22,29 @@ export const corpusSourcesApi = {
     file: File,
     ocrMode = "auto",
     sourceIllegibility = 0,
-    detectPageNumbers = true,
+    pages: PageDetectionRequest = { mode: "auto" },
   ) {
     const body = new FormData();
     body.append("file", file);
     body.append("ocr_mode", ocrMode);
     body.append("ocr_languages", "eng+fra+deu");
     body.append("source_illegibility", String(sourceIllegibility));
-    body.append("page_number_detection", detectPageNumbers ? "auto" : "off");
+    body.append("page_number_detection", pages.mode);
+    if (pages.providerProfileId) body.append("provider_profile_id", pages.providerProfileId);
     return apiRequest<PdfAsset>(legacyCorpusUrl("assets"), { method: "POST", body });
   },
-  importUrl: (url: string, sourceIllegibility = 0, detectPageNumbers = true) =>
+  importUrl: (
+    url: string,
+    sourceIllegibility = 0,
+    pages: PageDetectionRequest = { mode: "auto" },
+  ) =>
     apiRequest<PdfAsset>(legacyCorpusUrl("assets/url"), {
       method: "POST",
       body: JSON.stringify({
         url,
         source_illegibility: sourceIllegibility,
-        page_number_detection: detectPageNumbers ? "auto" : "off",
+        page_number_detection: pages.mode,
+        provider_profile_id: pages.providerProfileId || undefined,
       }),
     }),
   searchGutenberg: (query: string) =>
@@ -48,13 +55,18 @@ export const corpusSourcesApi = {
     apiRequest<{ items: WikisourceHit[] }>(
       `${LEGACY_CORPUS_BASE}/wikisource/search?q=${encodeURIComponent(query)}&limit=12`,
     ),
-  importGutenberg: (etextId: number, sourceIllegibility = 0, detectPageNumbers = true) =>
+  importGutenberg: (
+    etextId: number,
+    sourceIllegibility = 0,
+    pages: PageDetectionRequest = { mode: "auto" },
+  ) =>
     apiRequest<PdfAsset>(legacyCorpusUrl("gutenberg/import"), {
       method: "POST",
       body: JSON.stringify({
         etext_id: etextId,
         source_illegibility: sourceIllegibility,
-        page_number_detection: detectPageNumbers ? "auto" : "off",
+        page_number_detection: pages.mode,
+        provider_profile_id: pages.providerProfileId || undefined,
       }),
     }),
   assetContentUrl: (assetId: string) =>

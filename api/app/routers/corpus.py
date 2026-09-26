@@ -74,6 +74,16 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["corpus-builder"])
 
 
+def _page_llm(mode: str, profile_id: str | None, model: str | None) -> Any:
+    """The model-assisted page-number chooser, only when asked for and a provider profile is named."""
+    if mode != "auto_llm" or not profile_id:
+        return None
+    payload: dict[str, Any] = {"provider_profile_id": profile_id}
+    if model:
+        payload["model"] = model
+    return pdf_corpus_builds.page_marker_chooser(_resolve_pdf_corpus_provider(payload))
+
+
 @router.post("/api/pdf/extract")
 async def pdf_extract(
     file: UploadFile = File(...),
@@ -99,13 +109,15 @@ async def create_pdf_asset(
     ocr_languages: str = Form(default="eng+fra+deu"),
     source_illegibility: float = Form(default=0),
     page_number_detection: str = Form(default="auto"),
+    provider_profile_id: str = Form(default=""),
+    model: str = Form(default=""),
 ) -> dict[str, Any]:
     if ocr_mode not in {"auto", "never", "always"}:
         raise HTTPException(status_code=422, detail="ocr_mode must be auto, never, or always")
     if source_illegibility < 0 or source_illegibility > 100:
         raise HTTPException(status_code=422, detail="source_illegibility must be between 0 and 100")
-    if page_number_detection not in {"auto", "off"}:
-        raise HTTPException(status_code=422, detail="page_number_detection must be auto or off")
+    if page_number_detection not in {"auto", "auto_llm", "off"}:
+        raise HTTPException(status_code=422, detail="page_number_detection must be auto, auto_llm, or off")
     try:
         from ..source_safety import MAX_SOURCE_BYTES
 
@@ -133,7 +145,8 @@ async def create_pdf_asset(
             ocr_languages=ocr_languages or "eng+fra+deu",
             source_illegibility=source_illegibility,
             content_type=file.content_type or "",
-            detect_page_numbers=page_number_detection == "auto",
+            detect_page_numbers=page_number_detection != "off",
+            page_llm=_page_llm(page_number_detection, provider_profile_id, model),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -182,7 +195,8 @@ def import_pdf_asset_url(body: PdfSourceUrlImport) -> dict[str, Any]:
         return pdf_corpus_repository.save_asset(
             data, filename=filename, source_illegibility=body.source_illegibility,
             content_type=content_type, source_url=body.url,
-            detect_page_numbers=body.page_number_detection == "auto",
+            detect_page_numbers=body.page_number_detection != "off",
+            page_llm=_page_llm(body.page_number_detection, body.provider_profile_id, body.model),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -226,7 +240,8 @@ def import_gutenberg_text(body: GutenbergImport) -> dict[str, Any]:
             text.encode("utf-8"), filename=f"{catalog.get('title') or body.etext_id}.txt",
             source_illegibility=body.source_illegibility, content_type="text/plain",
             catalog_metadata=catalog, source_url=f"https://www.gutenberg.org/ebooks/{body.etext_id}",
-            detect_page_numbers=body.page_number_detection == "auto",
+            detect_page_numbers=body.page_number_detection != "off",
+            page_llm=_page_llm(body.page_number_detection, body.provider_profile_id, body.model),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

@@ -93,6 +93,12 @@ class BoundaryDecisionModel(BaseModel):
 
 
 
+class PageMarkerChoiceModel(BaseModel):
+    """A model's choice among candidate lines: which ones are printed page numbers."""
+    model_config = ConfigDict(extra="forbid")
+    page_marker_ids: list[int] = Field(default_factory=list, max_length=400)
+
+
 class SegmentationResponseModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
     boundaries: list[BoundaryDecisionModel] = Field(default_factory=list)

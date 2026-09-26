@@ -152,3 +152,88 @@ def test_turning_detection_off_yields_a_separate_asset(tmp_path):
     off = repo.save_asset(text.encode(), filename="a.txt", detect_page_numbers=False)
     assert on["asset_id"] != off["asset_id"]
     assert off["page_number_detection"]["status"] == "disabled"
+
+
+# --- model-assisted fallback -------------------------------------------------------------------------
+
+ODD = ("Some prose that never carries a recognisable marker style. " * 6).strip()
+
+
+def odd_marked(numbers):
+    """Page numbers wrapped in an unusual style the deterministic patterns do not know."""
+    return "\n\n".join(f"{ODD}\n\n~~ {n} ~~ pg\n\n{ODD}" for n in numbers)
+
+
+def test_the_llm_is_only_used_when_deterministic_detection_fails():
+    text = doc([f"[{n}]" for n in range(1, 6)])
+    called = []
+    blocks, _ = st.prose_to_blocks(text, extraction_method="text", detection_out=(summary := {}), page_llm=lambda c: called.append(c) or [])
+    assert summary["status"] == "detected" and summary["pattern"] == "bracket" and not called
+
+
+def test_the_llm_chooses_lines_and_the_answer_is_verified_deterministically():
+    text = odd_marked(range(20, 26))
+    assert pm.detect(text).status == "not_found"  # the deterministic patterns do not know "~~ 20 ~~ pg"
+    asked = {}
+
+    def ask(candidates):
+        asked["candidates"] = candidates
+        return [c["id"] for c in candidates if c["text"].startswith("~~")]
+
+    blocks, pages = st.prose_to_blocks(text, extraction_method="text", detection_out=(summary := {}), page_llm=ask)
+    assert summary["status"] == "detected" and summary["pattern"] == "llm" and summary["confidence"] <= 0.8
+    assert summary["first"] == 20 and summary["last"] == 25
+    assert [b["printed_page_label"] for b in blocks if b["type"] == "paragraph"][-1] == "25"
+    assert sum(1 for b in blocks if b.get("excluded_reason") == "page_number") == 6
+    assert len(asked["candidates"]) == 6
+
+
+def test_a_hallucinated_answer_cannot_invent_page_numbers():
+    text = "\n\n".join(f"{ODD}\n\nfig {n}\n\n{ODD}" for n in (7, 3, 9, 2, 8, 1))
+    lines = pm.llm_candidates(text)
+    assert lines
+    detection = pm.detect_with_llm(text, lambda candidates: [c["id"] for c in candidates])
+    assert detection.status == "not_found"  # 7,3,9,2,8,1 is not a page sequence, whatever the model says
+
+
+def test_a_failing_model_leaves_the_not_found_result_and_says_why():
+    text = "Just prose. " * 60
+    def boom(candidates):
+        raise RuntimeError("provider down")
+
+    blocks, _ = st.prose_to_blocks(text, extraction_method="text", detection_out=(summary := {}), page_llm=boom)
+    assert summary["status"] == "not_found" and blocks[0]["printed_page_label_source"] == "synthetic_span"
+
+
+def test_candidates_are_short_lines_with_context_and_are_bounded():
+    text = "\n\n".join(f"{ODD}\n\n{n}\n\n{ODD}" for n in range(1, 400))
+    candidates = pm.llm_candidates(text)
+    assert 0 < len(candidates) <= pm.MAX_LLM_CANDIDATES
+    assert all(len(c["text"]) <= 48 and "before" in c and "after" in c for c in candidates)
+    assert candidates[0]["text"] == "1"  # the first lines are always kept
+
+
+def test_the_chooser_asks_the_configured_model_for_ids(monkeypatch, tmp_path):
+    from app import corpus_builder as cb
+
+    manager = cb.PdfCorpusBuildManager(cb.PdfCorpusRepository(tmp_path / "repo"), max_workers=1)
+    seen = {}
+
+    def fake_chat(request, prompt, **kwargs):
+        seen["prompt"], seen["model"] = prompt, kwargs["response_model"].__name__
+        return {"page_marker_ids": [0, 2]}
+
+    monkeypatch.setattr(manager, "_chat_json", fake_chat)
+    chosen = manager.page_marker_chooser({"provider": "ollama"})([{"id": 0, "text": "12", "before": "a", "after": "b"}, {"id": 2, "text": "13", "before": "c", "after": "d"}])
+    assert chosen == [0, 2] and seen["model"] == "PageMarkerChoiceModel"
+    assert "PRINTED PAGE NUMBERS" in seen["prompt"] and '0: "12"' in seen["prompt"]
+
+
+def test_asking_the_llm_makes_a_distinct_asset(tmp_path):
+    from app import corpus_builder as cb
+
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    text = "Just prose. " * 60
+    plain = repo.save_asset(text.encode(), filename="a.txt")
+    assisted = repo.save_asset(text.encode(), filename="a.txt", page_llm=lambda c: [])
+    assert plain["asset_id"] != assisted["asset_id"]

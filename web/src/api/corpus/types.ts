@@ -1,5 +1,12 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
+/** How printed page numbers are found in text sources: deterministic patterns, optionally then a model, or not at all. */
+export interface PageDetectionRequest {
+  mode: "auto" | "auto_llm" | "off";
+  /** Provider profile the model-assisted step uses (only for `auto_llm`). */
+  providerProfileId?: string;
+}
+
 export interface PdfAsset {
   asset_id: string;
   sha256: string;

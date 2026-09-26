@@ -21,6 +21,7 @@ const props = withDefaults(
     assetId?: string;
     illegibility?: number;
     detectPageNumbers?: boolean;
+    llmPageDetection?: boolean;
     sourceUrl?: string;
     gutenbergQuery?: string;
     hits?: GutenbergHit[];
@@ -36,6 +37,7 @@ const props = withDefaults(
     assetId: "",
     illegibility: 0,
     detectPageNumbers: true,
+    llmPageDetection: true,
     sourceUrl: "",
     gutenbergQuery: "",
     hits: () => [],
@@ -52,6 +54,7 @@ const emit = defineEmits<{
   "update:assetId": [string];
   "update:illegibility": [number];
   "update:detectPageNumbers": [boolean];
+  "update:llmPageDetection": [boolean];
   "update:sourceUrl": [string];
   "update:gutenbergQuery": [string];
   useCurrent: [];
@@ -378,6 +381,22 @@ onBeforeUnmount(() => {
           <span class="page-detect-copy">
             <strong>{{ i18n.t("pdf_corpus.source_page_detect") }}</strong>
             <small>{{ i18n.t("pdf_corpus.source_page_detect_help") }}</small>
+          </span>
+        </label>
+        <label
+          v-if="detectPageNumbers"
+          class="page-detect page-detect-llm"
+          :class="{ 'is-on': llmPageDetection }"
+        >
+          <input
+            type="checkbox"
+            :checked="llmPageDetection"
+            :disabled="sourceSetupDisabled"
+            @change="emit('update:llmPageDetection', ($event.target as HTMLInputElement).checked)"
+          />
+          <span class="page-detect-copy">
+            <strong>{{ i18n.t("pdf_corpus.source_page_detect_llm") }}</strong>
+            <small>{{ i18n.t("pdf_corpus.source_page_detect_llm_help") }}</small>
           </span>
         </label>
 

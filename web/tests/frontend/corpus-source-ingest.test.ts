@@ -286,3 +286,18 @@ describe("page-number detection controls", () => {
     expect(wrapper.get(".page-detect-result").text()).toContain("No page numbers found");
   });
 });
+
+describe("model-assisted page detection control", () => {
+  it("is offered under detection, on by default, and can be turned off", async () => {
+    const wrapper = mount(CorpusSourceIngest);
+    const box = wrapper.get('.page-detect-llm input[type="checkbox"]');
+    expect((box.element as HTMLInputElement).checked).toBe(true);
+    await box.setValue(false);
+    expect(wrapper.emitted("update:llmPageDetection")?.at(-1)).toEqual([false]);
+  });
+
+  it("is hidden when page-number detection is off altogether", () => {
+    const wrapper = mount(CorpusSourceIngest, { props: { detectPageNumbers: false } });
+    expect(wrapper.find(".page-detect-llm").exists()).toBe(false);
+  });
+});

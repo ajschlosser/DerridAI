@@ -235,7 +235,7 @@ def _between(lines: list[str], a: Candidate, b: Candidate) -> int:
 def _accept(chain: list[Candidate], lines: list[str], total_candidates: int) -> tuple[bool, float, str]:
     if len(chain) < 2:
         return False, 0.0, "too few candidates"
-    strong = sum(1 for c in chain if c.style in {"bracket", "keyword", "dash", "words", "inline", "header"})
+    strong = sum(1 for c in chain if c.style in {"bracket", "keyword", "dash", "words", "inline", "header", "llm"})
     consecutive = sum(1 for a, b in zip(chain, chain[1:]) if b.value - a.value == 1)
     ratio = consecutive / (len(chain) - 1)
     # Text volume between markers: pages hold text; numbered lists and chapter numbers do not.
@@ -283,6 +283,75 @@ def detect(text: str) -> Detection:
         detection.convention = _convention(detection, lines)
         # A Roman front-matter sequence and an Arabic body sequence can both exist; the longer wins here
         # and the shorter is intentionally ignored rather than guessed at.
+    return detection
+
+
+MAX_LLM_CANDIDATES = 120
+_LLM_LINE = re.compile(r"(?:\d|\b(?:page|pg|p)\b|^[ivxlcdm]{1,8}[.)]?$)", re.I)
+
+
+def llm_candidates(text: str, limit: int = MAX_LLM_CANDIDATES) -> list[dict[str, Any]]:
+    """Short lines that *might* be page furniture, with a little context, for a model to classify.
+
+    The model only chooses among these lines; it never supplies a number or a position. Sampling keeps the
+    first and last lines and spreads the rest, so a long text costs a bounded prompt.
+    """
+    lines = _lines(text)
+    picked = [
+        i for i, raw in enumerate(lines)
+        if 0 < len(raw.strip()) <= 48 and _LLM_LINE.search(raw.strip())
+    ]
+    if len(picked) > limit:
+        head, tail = picked[: limit // 4], picked[-(limit // 4):]
+        middle = picked[limit // 4: -(limit // 4)]
+        step = max(1, len(middle) // (limit - len(head) - len(tail)))
+        picked = head + middle[::step][: limit - len(head) - len(tail)] + tail
+    out = []
+    for n, i in enumerate(picked):
+        before = next((lines[j].strip() for j in range(i - 1, max(-1, i - 4), -1) if lines[j].strip()), "")
+        after = next((lines[j].strip() for j in range(i + 1, min(len(lines), i + 4)) if lines[j].strip()), "")
+        out.append({"id": n, "line": i, "text": lines[i].strip(), "before": before[:60], "after": after[:60]})
+    return out
+
+
+def _value_in(line: str) -> tuple[int, bool] | None:
+    for token in re.findall(r"[0-9]{1,5}|[ivxlcdm]{1,8}", line, re.I):
+        parsed = _num(token)
+        if parsed:
+            return parsed
+    words = _WORDS_LINE.match(line.strip())
+    if words:
+        value = words_to_int(words.group("w"))
+        if value:
+            return value, False
+    return None
+
+
+def detect_with_llm(text: str, ask: Any) -> Detection:
+    """Let a model pick the page-number lines, then hold its answer to the same sequence rules.
+
+    ``ask(candidates)`` returns the ids of lines that are printed page numbers. A model's say-so is not
+    enough: the chosen lines must still form an increasing, mostly consecutive sequence with real text
+    between them, so a hallucinated answer cannot invent page numbers.
+    """
+    candidates = llm_candidates(text)
+    if len(candidates) < 3:
+        return Detection(reason="too few candidate lines for a model to judge")
+    chosen = set(ask(candidates))
+    lines = _lines(text)
+    picked: list[Candidate] = []
+    for item in candidates:
+        if item["id"] not in chosen:
+            continue
+        parsed = _value_in(item["text"])
+        if parsed:
+            picked.append(Candidate(0, item["line"], parsed[0], "llm", parsed[1], True, 0.7))
+    arabic = _best_chain([c for c in picked if not c.roman])
+    ok, confidence, reason = _accept(arabic, lines, len(picked))
+    if not ok:
+        return Detection(reason=f"the model's page numbers were rejected: {reason}")
+    detection = Detection("detected", arabic, "start", min(confidence, 0.8), "llm")
+    detection.convention = _convention(detection, lines)
     return detection
 
 

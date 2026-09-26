@@ -7,6 +7,7 @@ import {
   type WikisourceHit,
   type GutenbergStatus,
   type PdfAsset,
+  type PageDetectionRequest,
 } from "../../../api/corpus";
 import { useI18nStore } from "../../../stores/i18n";
 
@@ -15,6 +16,7 @@ type MessageTone = "error" | "notice";
 export function useCorpusSourceConfiguration(
   busy: Ref<string>,
   setMessage: (message: string, tone?: MessageTone) => void,
+  providerProfileId: () => string = () => "",
 ) {
   const i18n = useI18nStore();
   const assets = ref<PdfAsset[]>([]);
@@ -22,6 +24,15 @@ export function useCorpusSourceConfiguration(
   const sourceIllegibility = ref(0);
   // Printed page numbers in text sources are detected deterministically unless turned off.
   const detectPageNumbers = ref(true);
+  // If none are found, a model may pick candidate lines (its answer is still verified deterministically).
+  const llmPageDetection = ref(true);
+  function pageDetection(): PageDetectionRequest {
+    if (!detectPageNumbers.value) return { mode: "off" };
+    const profile = providerProfileId();
+    return llmPageDetection.value && profile
+      ? { mode: "auto_llm", providerProfileId: profile }
+      : { mode: "auto" };
+  }
   const sourceUrl = ref("");
   const gutenbergQuery = ref("");
   const gutenbergHits = ref<GutenbergHit[]>([]);
@@ -58,7 +69,7 @@ export function useCorpusSourceConfiguration(
         file,
         "auto",
         sourceIllegibility.value,
-        detectPageNumbers.value,
+        pageDetection(),
       );
       await refreshAssets();
       rememberAsset(asset, true);
@@ -83,7 +94,7 @@ export function useCorpusSourceConfiguration(
       const asset = await corpusBuilderApi.importUrl(
         url,
         sourceIllegibility.value,
-        detectPageNumbers.value,
+        pageDetection(),
       );
       await refreshAssets();
       rememberAsset(asset, true);
@@ -164,7 +175,7 @@ export function useCorpusSourceConfiguration(
       const asset = await corpusBuilderApi.importGutenberg(
         etextId,
         sourceIllegibility.value,
-        detectPageNumbers.value,
+        pageDetection(),
       );
       await refreshAssets();
       rememberAsset(asset, true);
@@ -225,6 +236,7 @@ export function useCorpusSourceConfiguration(
     selectedAsset,
     sourceIllegibility,
     detectPageNumbers,
+    llmPageDetection,
     sourceUrl,
     gutenbergQuery,
     gutenbergHits,
