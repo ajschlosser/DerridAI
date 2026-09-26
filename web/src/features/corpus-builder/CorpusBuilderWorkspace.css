@@ -467,33 +467,6 @@
   border-color: var(--accent);
   box-shadow: inset 3px 0 0 var(--accent);
 }
-.record-row {
-  width: 100%;
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  background: transparent;
-  padding: 10px;
-  display: grid;
-  grid-template-columns: 10px 1fr;
-  gap: 8px;
-  text-align: start;
-  cursor: pointer;
-}
-.record-row:hover,
-.record-row.active {
-  background: var(--soft);
-}
-.record-row span:last-child {
-  display: grid;
-  gap: 3px;
-}
-.record-row b {
-  font-size: 0.8125rem;
-}
-.record-row small {
-  font-size: 0.8125rem;
-  color: var(--muted);
-}
 .inspector-pane details {
   border-bottom: 1px solid var(--line);
   padding: 10px 12px;
@@ -1275,74 +1248,6 @@ summary:focus-visible {
   background: var(--soft);
   border-inline-end: 1px solid var(--line);
 }
-.records-pane .pane-head {
-  position: sticky;
-  top: 0;
-  z-index: 4;
-  background: var(--soft);
-  min-height: 46px;
-  padding: 12px;
-  font-size: 0.8125rem;
-}
-.record-row {
-  min-height: 76px;
-  padding: 10px 11px;
-  gap: 9px;
-}
-.record-row span > b {
-  font-size: 0.8125rem;
-}
-.record-row small {
-  font-size: 0.8125rem;
-  line-height: 1.35;
-}
-.record-row-status {
-  display: inline-flex;
-  width: max-content;
-  margin-top: 5px;
-  padding: 2px 7px;
-  border-radius: 999px;
-  background: var(--soft);
-  color: var(--accent-fg);
-  font-size: 0.8125rem;
-  font-weight: 800;
-}
-.record-llm-processed {
-  display: inline-flex !important;
-  width: fit-content;
-  align-items: center;
-  gap: 4px;
-  margin-top: 4px;
-  padding: 2px 6px;
-  border: 1px solid var(--tone-ok-border);
-  border-radius: 999px;
-  background: var(--tone-ok-bg);
-  color: var(--tone-ok-fg);
-  font-size: 0.75rem;
-  font-weight: 700;
-}
-.record-llm-processed svg {
-  width: 13px;
-  height: 13px;
-}
-.record-row-status[data-state="metadata"],
-.record-row-status[data-state="topology"],
-.record-row-status[data-state="source"] {
-  background: var(--tone-warn-bg);
-  color: var(--tone-warn-fg);
-}
-.record-row-status[data-state="rejected"] {
-  background: var(--tone-danger-bg);
-  color: var(--tone-danger-fg);
-}
-.record-row-status[data-state="accepted"] {
-  background: var(--tone-ok-bg);
-  color: var(--tone-ok-fg);
-}
-.record-issue-summary {
-  margin-top: 3px;
-  color: var(--muted);
-}
 .record-review-pane {
   display: flex;
   flex-direction: column;
@@ -1480,56 +1385,6 @@ summary:focus-visible {
   outline-offset: 2px;
 }
 
-.record-row-wrap {
-  display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) 36px;
-  align-items: stretch;
-  border-bottom: 1px solid var(--line);
-}
-.record-source-warn {
-  display: grid;
-  place-items: center;
-  min-width: 36px;
-  min-height: 36px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--tone-warn-fg);
-  cursor: pointer;
-}
-.record-source-warn:focus-visible {
-  outline: 3px solid var(--accent);
-  outline-offset: 2px;
-}
-.record-source-warn svg {
-  width: 18px;
-  height: 18px;
-}
-.record-row-wrap .record-row {
-  border-bottom: 0;
-}
-.record-select {
-  display: grid;
-  place-items: center;
-  min-width: 36px;
-  cursor: pointer;
-}
-.record-select input,
-.select-visible input {
-  inline-size: 18px;
-  block-size: 18px;
-  accent-color: var(--accent);
-}
-.select-visible {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.8125rem !important;
-  font-weight: 650;
-  color: var(--muted);
-  cursor: pointer;
-}
 .review-session-title small {
   font-size: 0.8125rem !important;
   color: var(--muted);
@@ -1572,8 +1427,6 @@ summary:focus-visible {
     .source-block header,
     .split-button,
     .evidence-toggle,
-    .record-row b,
-    .record-row small,
     .inspector-pane summary,
     .help,
     .active-build-settings > summary,
@@ -1587,7 +1440,6 @@ summary:focus-visible {
     .inspector-help,
     .review-readonly-banner span,
     .pager,
-    .record-row-status,
     .source-inspector-head
   ) {
   font-size: 0.8125rem !important;
@@ -2440,59 +2292,6 @@ summary:focus-visible {
   }
 }
 
-/* Queue rows: a state icon (a shape, not only a colour), the id, where it is, and the state once. */
-.review-frame .record-row {
-  display: grid;
-  grid-template-columns: 1.25rem minmax(0, 1fr);
-  gap: 0.625rem;
-  align-items: start;
-  min-height: 0;
-  padding: 0.625rem 0.75rem;
-}
-.record-state-icon {
-  display: grid;
-  place-items: center;
-  inline-size: 1.25rem;
-  block-size: 1.25rem;
-  margin-block-start: 0.0625rem;
-  box-sizing: border-box;
-  border: 2px solid var(--muted);
-  border-radius: 50%;
-  color: var(--muted);
-}
-.record-state-icon svg {
-  inline-size: 0.75rem;
-  block-size: 0.75rem;
-}
-.record-state-icon[data-state="accepted"] {
-  border-color: var(--tone-ok-border);
-  background: var(--tone-ok-bg);
-  color: var(--tone-ok-fg);
-}
-.record-state-icon[data-state="rejected"] {
-  border-color: var(--tone-danger-border);
-  background: var(--tone-danger-bg);
-  color: var(--tone-danger-fg);
-}
-.record-state-icon[data-state="metadata"],
-.record-state-icon[data-state="topology"],
-.record-state-icon[data-state="source"] {
-  border-color: var(--tone-warn-border);
-  background: var(--tone-warn-bg);
-  color: var(--tone-warn-fg);
-}
-.record-state-icon[data-state="ready"] {
-  border-color: var(--tone-ok-border);
-  color: var(--tone-ok-fg);
-}
-.record-row-main {
-  display: grid;
-  gap: 0.125rem;
-  min-width: 0;
-}
-.record-row-main b {
-  overflow-wrap: anywhere;
-}
 .record-head-actions {
   display: flex;
   flex: 0 0 auto;
@@ -2545,33 +2344,6 @@ summary:focus-visible {
   .review-frame .review-toolbar > :is(section, form, aside) {
     grid-column: 1/-1;
   }
-}
-/* The queue header: the title and count, then the select-all control and the hide control. */
-.review-frame .records-pane .pane-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: "title count" "select hide";
-  align-items: center;
-  gap: 0.25rem 0.5rem;
-  min-height: 0;
-  padding: 0.5rem 0.75rem;
-}
-.review-frame .records-pane .pane-head > b {
-  grid-area: title;
-}
-.review-frame .records-pane .pane-head > span {
-  grid-area: count;
-}
-.review-frame .records-pane .pane-head > .select-visible {
-  grid-area: select;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-height: 1.5rem;
-}
-.review-frame .records-pane .pane-head > .queue-toggle {
-  grid-area: hide;
-  justify-self: end;
 }
 @media (max-width: 650px) {
   .record-decision-dock {
