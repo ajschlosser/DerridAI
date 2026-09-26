@@ -434,3 +434,66 @@ def test_exemplar_collection_creation_failure_is_not_rewritten_as_missing_collec
     except RuntimeError as exc:
         assert "embedding provider unavailable" in str(exc)
 
+
+
+def _generic(exemplar_id, value, *, kind="positive", reviewed=None):
+    """A precedent for an arbitrary schema field; nothing here is Derrida-specific."""
+    item = exemplar(exemplar_id, "mood", value, f"Evidence for {exemplar_id}.")
+    item["kind"] = kind
+    if kind == "correction":
+        item["rejected_value"] = "angry"
+    if reviewed is not None:
+        item["reviewed_values"] = reviewed
+    return item
+
+
+def test_corrections_have_their_own_quota_and_cannot_crowd_out_positives():
+    store = FakeStore()
+    index = ChromaMetadataExemplarIndex(store, collection_name="test_metadata_exemplars")
+    canonical = [
+        _generic("mex-c1", "calm", kind="correction"),
+        _generic("mex-c2", "calm", kind="correction"),
+        _generic("mex-c3", "calm", kind="correction"),
+        _generic("mex-p1", "calm"),
+        _generic("mex-p2", "calm"),
+    ]
+    result = index.retrieve(
+        scope_id="build-1", query_text="calm letter", exemplars=canonical, fields=["mood"],
+        schema_id="schema", schema_version="v1",
+        field_limits={"mood": 2}, field_correction_limits={"mood": 1},
+    )
+    kinds = [item.get("kind", "positive") for item in result["examples"]["mood"]]
+    assert kinds.count("positive") == 2 and kinds.count("correction") == 1
+
+
+def test_declared_conditions_rank_matches_first_and_drop_contradictions():
+    store = FakeStore()
+    index = ChromaMetadataExemplarIndex(store, collection_name="test_metadata_exemplars")
+    genre_letter, genre_essay = '"letter"', '"essay"'
+    canonical = [
+        _generic("mex-unknown", "calm"),
+        _generic("mex-differs", "angry", reviewed={"genre": genre_essay}),
+        _generic("mex-matched", "calm", reviewed={"genre": genre_letter}),
+    ]
+    result = index.retrieve(
+        scope_id="build-1", query_text="calm letter", exemplars=canonical, fields=["mood"],
+        schema_id="schema", schema_version="v1",
+        field_limits={"mood": 3}, field_match_fields={"mood": ["genre"]},
+        current_values={"genre": genre_letter},
+    )
+    items = result["examples"]["mood"]
+    assert [item["record_id"] for item in items] == ["r-matched", "r-unknown"]
+    assert items[0]["match"] == {"tier": "matched", "fields": ["genre"]}
+    assert "match" not in items[1], "an uncomparable precedent is not labelled as matched"
+
+
+def test_conditions_are_skipped_when_the_current_record_is_unreviewed():
+    store = FakeStore()
+    index = ChromaMetadataExemplarIndex(store, collection_name="test_metadata_exemplars")
+    canonical = [_generic("mex-a", "calm", reviewed={"genre": '"essay"'})]
+    result = index.retrieve(
+        scope_id="build-1", query_text="calm", exemplars=canonical, fields=["mood"],
+        schema_id="schema", schema_version="v1",
+        field_limits={"mood": 2}, field_match_fields={"mood": ["genre"]}, current_values={},
+    )
+    assert [item["record_id"] for item in result["examples"]["mood"]] == ["r-a"]

@@ -91,7 +91,7 @@ A separate legacy/custom-field assertion test continues to verify stable identit
 
 When adding metadata behavior:
 
-- use stable semantic compatibility identity when behavior belongs to a particular DERRIDAI scholarly concept;
+- use stable semantic compatibility identity when behavior belongs to a particular cELF scholarly concept;
 - use MetadataSchema properties when behavior belongs to field type, group, evidence, assessment, or review policy;
 - use FieldAssertion for value provenance and authority;
 - do not add an ordinary schema field to a global hard-coded whitelist merely to make it work in another surface.

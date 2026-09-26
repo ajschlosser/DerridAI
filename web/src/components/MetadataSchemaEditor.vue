@@ -5,6 +5,9 @@ import type { ProviderProfile } from "../api/system";
 import UiButton from "./ui/UiButton.vue";
 import UiTagPicker from "./ui/UiTagPicker.vue";
 import UiTooltip from "./ui/UiTooltip.vue";
+import SchemaRetrievalProfileEditor, {
+  type RetrievalMatchOption,
+} from "./SchemaRetrievalProfileEditor.vue";
 import { NER_TAG_OPTIONS, UNIVERSAL_POS_TAG_OPTIONS } from "../domain/nlpTags";
 import ProviderProfileSelect from "./ProviderProfileSelect.vue";
 import {
@@ -42,18 +45,6 @@ const builtin = computed(() => selectedId.value === "default" && !isNew.value);
 const dirty = computed(() => JSON.stringify(draft.value) !== savedHash.value);
 const t = (key: string, fallback: string) => i18n.t(`schemas.${key}`, fallback);
 const schemaHelp = {
-  memory:
-    "Controls evidence-bound human-reviewed precedents used as few-shot guidance for this metadata field. These settings never change the reviewed source record itself.",
-  memoryEnabled:
-    "When enabled, DerridAI may retrieve human-reviewed evidence-bound examples for this field during metadata enrichment.",
-  memoryCorrections:
-    "Include reviewed cases where a model value was rejected and replaced. The rejected value remains negative evidence; it is never taught as a correct answer.",
-  memoryAbsence:
-    "Include reviewer-confirmed no-value examples only when that absence has explicit reviewed source evidence.",
-  memoryLimit:
-    "Maximum number of reviewed precedents for this field that may enter the bounded prompt packet. Set 0 to disable retrieval for this field without deleting its reviewed history.",
-  memorySimilarity:
-    "Discard semantic matches below this similarity threshold. 0 accepts any semantic similarity; 1 requires the strongest possible match.",
   posTags:
     "POS tags are retrieval/model hints. They do not write metadata by themselves; they tell enrichment to prefer values grounded in tokens with these grammatical roles.",
   nerTags:
@@ -70,6 +61,21 @@ const schemaHelp = {
   reviewVisibility:
     "Controls where this field appears in Record review. Hidden fields remain available to the data model but are not presented as ordinary metadata.",
 } as const;
+/**
+ * Fields a retrieval policy may name as analogy conditions: the locked core and every
+ * other saved field. A field without a stable identity yet (never saved) is left out,
+ * because a policy must reference identities, not names that may still change.
+ */
+function matchOptionsFor(field: SchemaField): RetrievalMatchOption[] {
+  const core = CORE_FIELDS.map((name) => ({
+    fieldId: `core.${name}`,
+    label: i18n.t(`field.${name}`, name),
+  }));
+  const others = (draft.value?.fields || [])
+    .filter((other) => other.field_id && other.field_id !== field.field_id)
+    .map((other) => ({ fieldId: other.field_id, label: other.label || other.name }));
+  return [...core, ...others];
+}
 const posTagOptions = computed(() =>
   UNIVERSAL_POS_TAG_OPTIONS.map((option) => ({
     ...option,
@@ -542,74 +548,11 @@ defineExpose({ select, draft });
                   <option value="hidden">{{ t("visibility_hidden", "Hidden") }}</option>
                 </select></label
               >
-              <fieldset class="schema-field schema-memory">
-                <legend>
-                  {{ t("memory", "Memory & retrieval") }}
-                  <UiTooltip :text="t('memory_help', schemaHelp.memory)" />
-                </legend>
-                <label class="check">
-                  <input v-model="item.field.retrieval_profile.enabled" type="checkbox" />
-                  <span>
-                    {{ t("memory_enabled", "Use reviewed precedents") }}
-                    <UiTooltip :text="t('memory_enabled_help', schemaHelp.memoryEnabled)" />
-                  </span>
-                </label>
-                <label class="check">
-                  <input
-                    v-model="item.field.retrieval_profile.include_corrections"
-                    type="checkbox"
-                  />
-                  <span>
-                    {{ t("memory_corrections", "Include corrections") }}
-                    <UiTooltip :text="t('memory_corrections_help', schemaHelp.memoryCorrections)" />
-                  </span>
-                </label>
-                <label class="check">
-                  <input
-                    v-model="item.field.retrieval_profile.include_confirmed_absence"
-                    type="checkbox"
-                  />
-                  <span>
-                    {{ t("memory_absence", "Include confirmed absence") }}
-                    <UiTooltip :text="t('memory_absence_help', schemaHelp.memoryAbsence)" />
-                  </span>
-                </label>
-                <div class="schema-memory-numbers">
-                  <label>
-                    <span>
-                      {{ t("memory_limit", "Maximum precedents") }}
-                      <UiTooltip :text="t('memory_limit_help', schemaHelp.memoryLimit)" />
-                    </span>
-                    <input
-                      v-model.number="item.field.retrieval_profile.max_items"
-                      class="control"
-                      type="number"
-                      min="0"
-                      max="50"
-                    />
-                  </label>
-                  <label>
-                    <span>
-                      {{ t("memory_similarity", "Minimum similarity") }}
-                      <UiTooltip :text="t('memory_similarity_help', schemaHelp.memorySimilarity)" />
-                    </span>
-                    <input
-                      v-model.number="item.field.retrieval_profile.min_similarity"
-                      class="control"
-                      type="number"
-                      min="0"
-                      max="1"
-                      step="0.05"
-                    />
-                  </label>
-                </div>
-                <small class="hint">{{
-                  t(
-                    "memory_help",
-                    "These controls affect only retrieval of reviewed precedents during future metadata enrichment; the canonical reviewed record and evidence remain unchanged.",
-                  )
-                }}</small>
-              </fieldset>
+              <SchemaRetrievalProfileEditor
+                v-model="item.field.retrieval_profile"
+                class="schema-field"
+                :match-options="matchOptionsFor(item.field)"
+              />
             </div>
             <label class="schema-field"
               ><span>{{ t("instruction", "What the model should look for") }}</span
@@ -967,37 +910,6 @@ h4 {
 .schema-field-basics > .schema-memory {
   grid-column: 1 / -1;
 }
-.schema-memory {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px 14px;
-  align-content: start;
-  min-inline-size: min(100%, 18rem);
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--soft);
-}
-.schema-memory legend {
-  padding: 0 4px;
-  font-size: 0.8125rem;
-  font-weight: 750;
-}
-.schema-memory-numbers,
-.schema-memory > .hint {
-  grid-column: 1 / -1;
-}
-.schema-memory-numbers {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-.schema-memory-numbers label {
-  display: grid;
-  gap: 4px;
-  font-size: 0.75rem;
-  font-weight: 650;
-}
 .schema-field-card {
   display: grid;
   gap: 14px;
@@ -1134,8 +1046,7 @@ h4 {
   .schema-field-policy {
     justify-content: flex-start;
   }
-  .value-row,
-  .schema-memory-numbers {
+  .value-row {
     grid-template-columns: minmax(0, 1fr);
   }
 }

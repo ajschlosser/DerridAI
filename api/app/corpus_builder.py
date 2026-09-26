@@ -670,7 +670,7 @@ def _json_read(path: Path, default: Any = None) -> Any:
         return default
 
 
-# 2026: renamed to match the DERRIDAI Core Specification's assertion-status vocabulary
+# 2026: renamed to match the cELF Core Specification's assertion-status vocabulary
 # (llm_inferred -> model_inferred, human_confirmed_absent -> confirmed_absent). Builds and
 # records written before the rename still have the old values on disk; normalize them the
 # first time they are read, in place, the same way _with_start_inference backfills a field

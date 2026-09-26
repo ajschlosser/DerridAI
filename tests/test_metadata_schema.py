@@ -176,6 +176,8 @@ def test_retrieval_profile_migrates_abandoned_routing_fields_without_losing_meta
         "min_similarity",
         "include_corrections",
         "include_confirmed_absence",
+        "max_corrections",
+        "match_field_ids",
     }
 
 
@@ -456,3 +458,16 @@ def test_metadata_schema_accepts_complete_supported_pos_and_ner_vocabularies():
     assert field.pos_tags == pos_tags
     assert field.ner_tags == ner_tags
 
+
+
+def test_retrieval_match_conditions_must_name_another_known_field():
+    base = custom().model_dump(mode="json")
+    first, second = base["fields"][0], base["fields"][1]
+    first["retrieval_profile"] = {"match_field_ids": [second["field_id"]]}
+    assert MetadataSchema.model_validate(base).retrieval_profile_for(first["name"]).match_field_ids == [second["field_id"]]
+    first["retrieval_profile"] = {"match_field_ids": ["field-does-not-exist"]}
+    with pytest.raises(ValueError, match="unknown field"):
+        MetadataSchema.model_validate(base)
+    first["retrieval_profile"] = {"match_field_ids": [first["field_id"]]}
+    with pytest.raises(ValueError, match="itself"):
+        MetadataSchema.model_validate(base)

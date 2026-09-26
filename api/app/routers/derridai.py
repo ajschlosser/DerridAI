@@ -1,12 +1,15 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 
-from ..claim_memory import ClaimMemoryIndex, derive_entry, similar_validated_claims
+from ..claim_memory import (
+    ClaimMemoryIndex,
+    apply_claim_validation,
+    similar_validated_claims,
+)
 from ..derridai_model import normative_model
 from ..http_auth import request_user
 from ..provenance_memory import SupportBinding, resolve_support_binding
@@ -18,7 +21,7 @@ router = APIRouter(tags=["derridai-model"])
 
 @router.get("/api/derridai/model")
 def get_derridai_model(request: Request) -> dict[str, Any]:
-    """Return the normative, walkable DERRIDAI 1.0 type graph."""
+    """Return the normative, walkable cELF 1.0 type graph."""
     request_user(request)
     return normative_model()
 
@@ -111,31 +114,18 @@ def set_claim_validation(claim_id: str, body: dict[str, Any], request: Request) 
     """
     user = request_user(request)
     claim, owner = _owned_claim(claim_id, user)
-    status = str(body.get("status") or "")
-    if status not in {"unvalidated", "validated", "rejected", "unresolved"}:
-        raise HTTPException(status_code=422, detail="status must be unvalidated, validated, rejected, or unresolved")
-    claim = {
-        **claim,
-        "validation_status": status,
-        "validated_by": None if status == "unvalidated" else user.username,
-        "validated_at": None if status == "unvalidated" else datetime.now(UTC).isoformat(),
-    }
-    system_store.put_generated_claim(claim)
-    records: dict[str, dict[str, Any]] = {}
-    record = body.get("record")
-    if isinstance(record, dict) and str(record.get("record_id") or ""):
-        records[str(record["record_id"])] = record
-    projection = {"status": "removed" if status != "validated" else "indexed", "error": ""}
     try:
-        index = _claim_memory()
-        entry = derive_entry(claim, system_store.list_claim_support_bindings(claim_id, owner=owner), records)
-        if entry is not None:
-            index.upsert(entry)
-        else:
-            index.remove(claim_id)
-    except Exception as exc:  # projection is derived; surface, do not fail the audit decision
-        projection = {"status": "failed", "error": str(exc)[:300]}
-    return {"claim": claim, "projection": projection}
+        return apply_claim_validation(
+            system_store,
+            claim,
+            status=str(body.get("status") or ""),
+            actor=user.username,
+            owner=owner,
+            record=body.get("record") if isinstance(body.get("record"), dict) else None,
+            index_factory=_claim_memory,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/api/derridai/claims/{claim_id}/similar")

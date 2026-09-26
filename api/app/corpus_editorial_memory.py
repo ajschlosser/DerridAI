@@ -30,6 +30,7 @@ from .metadata_exemplars import (
     build_metadata_exemplar,
     prompt_example,
     prompt_example_token_estimate,
+    reviewed_values,
 )
 
 
@@ -48,6 +49,7 @@ class EditorialMemoryMixin:
         _progressive_metadata_warning_builds: set[str]
 
         def _append_warning(self, build_id: str, message: str) -> None: ...
+        def _editable_fields(self, build_id: str) -> set[str]: ...
 
 
     def _editorial_memory(
@@ -135,6 +137,8 @@ class EditorialMemoryMixin:
                         field_ids[field] = str(assertion.field_id or f"legacy.{field}")
         field_limits: dict[str, int] = {}
         field_min_similarity: dict[str, float] = {}
+        field_correction_limits: dict[str, int] = {}
+        field_match_ids: dict[str, list[str]] = {}
         enabled_fields: set[str] = set()
         correction_fields: set[str] = set()
         confirmed_absence_fields: set[str] = set()
@@ -163,6 +167,20 @@ class EditorialMemoryMixin:
             if profile is not None:
                 field_limits[field] = int(profile.get("max_items", 2) or 0)
                 field_min_similarity[field] = float(profile.get("min_similarity", 0) or 0)
+                field_correction_limits[field] = int(profile.get("max_corrections", 2) or 0)
+                field_match_ids[field] = [str(item) for item in profile.get("match_field_ids") or []]
+        # Policies name analogy fields by stable identity; exemplars are compared by
+        # name inside this build's schema. Core fields have both "core." and
+        # "derridai." identities in circulation, so both resolve.
+        name_by_id: dict[str, str] = {}
+        for name, identity in field_ids.items():
+            name_by_id[identity] = name
+            name_by_id[f"core.{name}"] = name
+        field_match_fields = {
+            field: [name_by_id[item] for item in ids if item in name_by_id]
+            for field, ids in field_match_ids.items()
+            if ids
+        }
         source_document_id = str(build.get("source_document_id") or asset_id or "")
 
         counts: dict[str, dict[str, tuple[Any, int]]] = {}
@@ -224,8 +242,9 @@ class EditorialMemoryMixin:
                     canonical_exemplars.append(exemplar)
                     exemplar_by_record_field[(record_id, field)] = exemplar
 
-                if field in {"discourse_role", "region_type", "primary_text", "speaker", "position_holder", "stance"}:
-                    eligible.append((row, field, value))
+                # Lexical examples follow the schema's retrieval policy (enabled_fields),
+                # not a fixed list of field names.
+                eligible.append((row, field, value))
         conventions: dict[str, Any] = {}
         for field, values in counts.items():
             ranked = sorted(values.values(), key=lambda item: item[1], reverse=True)
@@ -328,6 +347,10 @@ class EditorialMemoryMixin:
                     language=str(current_record.get("language") or ""),
                     field_limits=field_limits or None,
                     field_min_similarity=field_min_similarity or None,
+                    field_include_corrections={field: field in correction_fields for field in enabled_fields},
+                    field_correction_limits=field_correction_limits or None,
+                    field_match_fields=field_match_fields or None,
+                    current_values=reviewed_values(current_record),
                     exclude_record_id=exclude_record_id,
                 )
                 if retrieval_fields
@@ -376,6 +399,36 @@ class EditorialMemoryMixin:
             "pass_learning": learn_from_pass([row for row in rows if str(row.get("record_id") or "") != exclude_record_id]),
         }
 
+
+    def metadata_precedents(self, build_id: str, record_id: str, field: str) -> dict[str, Any]:
+        """Reviewed precedents for one field of one record, as the enrichment prompt sees them.
+
+        Read-only and advisory: this is the same selection metadata enrichment uses
+        (schema retrieval policy, separate correction quota, declared analogy
+        conditions), shown to the reviewer beside the source evidence. Nothing here can
+        set a value; the record under review is excluded from its own precedents.
+        """
+        if field not in self._editable_fields(build_id):
+            raise ValueError(f"Unsupported review metadata field: {field}")
+        record = self.repo.get_record(build_id, record_id)
+        memory = self._editorial_memory(
+            build_id, current_record=record, exclude_record_id=record_id, use_global=False
+        )
+        items = list((memory.get("examples") or {}).get(field) or [])
+        retrieval = memory.get("progressive_retrieval") or {}
+        if field in (retrieval.get("fields_served") or []):
+            mode = "semantic"
+        elif items:
+            mode = "lexical"
+        else:
+            mode = "none"
+        return {
+            "field": field,
+            "record_id": record_id,
+            "mode": mode,
+            "fallback_reason": str(retrieval.get("fallback_reason") or ""),
+            "items": items,
+        }
 
     def _editorial_context(self, build_id: str, *, exclude_record_id: str = "") -> dict[str, Any]:
         # Retained as the small conventions-only API used by older internal tests;

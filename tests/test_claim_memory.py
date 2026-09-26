@@ -114,3 +114,22 @@ def test_similar_hits_are_rejoined_to_authority_and_stale_rows_dropped():
     assert [i["claim_id"] for i in out["items"]] == ["live"]
     assert out["items"][0]["advisory"] is True
     assert out["items"][0]["support"][0]["semantic"]["speaker"]["value"] == "Derrida"
+
+
+def test_record_review_lists_only_validated_claims_and_flags_stale_support():
+    class Store:
+        def list_claim_support_bindings_for_record(self, record_id, owner=None, limit=200):
+            return [
+                {"claim_id": "ok", "record_id": record_id, "record_revision": 3, "relation": "supports",
+                 "citation": {"inline": "(Derrida, 12)"}},
+                {"claim_id": "old", "record_id": record_id, "record_revision": 1, "relation": "supports"},
+                {"claim_id": "draft", "record_id": record_id, "record_revision": 3, "relation": "supports"},
+            ]
+
+        def get_generated_claim(self, claim_id, owner=None):
+            status = "unvalidated" if claim_id == "draft" else "validated"
+            return {"claim_id": claim_id, "claim_text": claim_id, "validation_status": status}
+
+    items = claim_memory.validated_claims_citing(Store(), {"record_id": "r1", "record_revision": 3})
+    assert {item["claim_id"]: item["binding_status"] for item in items} == {"ok": "current", "old": "stale"}
+    assert items[0]["citation"] == {"inline": "(Derrida, 12)"}

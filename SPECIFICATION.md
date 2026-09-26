@@ -1,6 +1,6 @@
-# DERRIDAI Core Specification 1.0
+# cELF Core Specification 1.0
 
-**Document-Extracted Record Retrieval Information Design for Artificial Intelligence**
+**Capta Epistemological Ledger Format**
 
 **Author:** Dr. Aaron John Schlosser  
 **Affiliation:** The New England Transcendental Club of California  
@@ -8,7 +8,13 @@
 **Date:** September 2026  
 **Status:** Normative specification
 
-DERRIDAI defines a normalized, traceable, and reproducible information architecture for AI-assisted documentary research. In the name DERRIDAI, **Retrieval** is used in both a broad research sense - the recovery of relevant documentary information for active use - and a narrower technical sense that includes vector, lexical, hybrid, filtered, and other computational search methods. Vector search is one retrieval mechanism, not the meaning of the specification as a whole.
+cELF (pronounced "self", or letter by letter as "c-elf") defines a normalized, traceable, and reproducible information architecture for AI-assisted documentary research. It is a **ledger** in the accounting sense: every value that enters the research model is entered together with who or what asserted it, on what evidence, under what authority, and in what epistemic state, and later judgments are appended rather than written over earlier ones.
+
+> **Data and capta.** The specification speaks of _capta_ rather than _data_ on purpose. _Data_ (Latin _datum_, "that which is given") suggests observations that exist independently of the observer and are simply collected. _Capta_ (Latin _captum_, "that which is taken") names what research actually works with: information that has been selected, segmented, interpreted, and recorded by someone, for some purpose, under some method - a distinction developed for the humanities by Johanna Drucker. A page number, a speaker attribution, a stance, or a transcription is never simply given by a source; it is taken from it by an extractor, a model, or a reviewer. cELF exists to keep that act of taking visible: the Records, FieldAssertions, EvidenceRefs, and SupportBindings it defines are capta, and the specification requires that their provenance, method, authority, and uncertainty remain recoverable. Where this document uses "data" in ordinary technical phrases (data model, data store, derived data), it does not withdraw that distinction.
+
+> **Name history.** Earlier drafts of this specification were titled the _DERRIDAI Core Specification_ (Document-Extracted Record Retrieval Information Design for Artificial Intelligence). The rename does not change any normative requirement, conformance identifier, or interchange identifier. Implementation identifiers such as `derridai-reference-json-v1` and `derridai-corpus-jsonl-v1` keep their names so that existing exports remain valid.
+
+Retrieval is used in this specification in both a broad research sense - the recovery of relevant documentary information for active use - and a narrower technical sense that includes vector, lexical, hybrid, filtered, and other computational search methods. Vector search is one retrieval mechanism, not the meaning of the specification as a whole.
 
 ## Contents
 
@@ -42,13 +48,13 @@ The specification deliberately uses technical object names such as **SourceSpan*
 
 #### Status and purpose
 
-Document-Extracted Record Retrieval Information Design for Artificial Intelligence (DERRIDAI) defines an information model and interoperability requirements for transforming documents into records that can be extracted, enriched, reviewed, stored, located, selected as evidence, supplied to artificial-intelligence systems, and traced back to authoritative sources.
+The Capta Epistemological Ledger Format (cELF) defines an information model and interoperability requirements for transforming documents into records that can be extracted, enriched, reviewed, stored, located, selected as evidence, supplied to artificial-intelligence systems, and traced back to authoritative sources.
 
 The specification is intended for systems in which document provenance, attribution, evidentiary support, source identity, record identity, normalization, traceability, information quality, and reproducibility materially affect the credibility of AI-assisted research.
 
-DERRIDAI is not a retrieval algorithm, model protocol, vector-database format, user-interface specification, or single application architecture. It defines the information that must remain stable across such systems and the relationships that must be preserved when information moves between them.
+cELF is not a retrieval algorithm, model protocol, vector-database format, user-interface specification, or single application architecture. It defines the information that must remain stable across such systems and the relationships that must be preserved when information moves between them.
 
-A conforming implementation MAY use local or remote databases, files, object stores, APIs, vector indexes, local models, hosted models, browser clients, desktop applications, command-line tools, or other technical means. Conformance depends on preservation of the DERRIDAI information model and invariants, not on implementation technology.
+A conforming implementation MAY use local or remote databases, files, object stores, APIs, vector indexes, local models, hosted models, browser clients, desktop applications, command-line tools, or other technical means. Conformance depends on preservation of the cELF information model and invariants, not on implementation technology.
 
 The DerridAI application is the originating reference implementation.
 
@@ -60,17 +66,17 @@ Sections explicitly marked _Non-normative_ are explanatory.
 
 #### Design goals
 
-A DERRIDAI system is designed so that: heterogeneous documentary inputs are normalized into stable research objects with declared semantics; documentary data remains traceable to source; logical record identity remains distinct from storage identity; source facts remain distinguishable from deterministic derivations, model inferences, human judgments, unresolved states, and explicit absence; retrieval diagnostics remain properties of retrieval events rather than of the source record; evidence can be bound explicitly to generated claims; research runs retain enough versioned state for substantial reproducibility; source-derived facts such as identifiers, page maps, schema validity, and citation structure are handled deterministically when possible - that is, by fixed procedures whose results do not depend on model interpretation; uncertainty remains representable; and derived indexes do not silently replace authoritative corpus state.
+A cELF system is designed so that: heterogeneous documentary inputs are normalized into stable research objects with declared semantics; documentary data remains traceable to source; logical record identity remains distinct from storage identity; source facts remain distinguishable from deterministic derivations, model inferences, human judgments, unresolved states, and explicit absence; retrieval diagnostics remain properties of retrieval events rather than of the source record; evidence can be bound explicitly to generated claims; research runs retain enough versioned state for substantial reproducibility; source-derived facts such as identifiers, page maps, schema validity, and citation structure are handled deterministically when possible - that is, by fixed procedures whose results do not depend on model interpretation; uncertainty remains representable; and derived indexes do not silently replace authoritative corpus state.
 
 > **Core rule.** The identity, provenance, and evidentiary integrity of documentary information MUST survive the transformations between source extraction and AI-assisted research, while computational mechanisms operating over that information remain replaceable.
 
 ### Architectural Model
 
-DERRIDAI standardizes scholarly identities and distinctions that must remain recoverable across implementations. It intentionally keeps the first-class semantic object model small. Extraction blocks, generic relations, schema-editor objects, storage projections, retrieval candidates, packet-item wrappers, validation-result classes, and grading-result classes MAY exist in an implementation without becoming DERRIDAI semantic objects.
+cELF standardizes scholarly identities and distinctions that must remain recoverable across implementations. It intentionally keeps the first-class semantic object model small. Extraction blocks, generic relations, schema-editor objects, storage projections, retrieval candidates, packet-item wrappers, validation-result classes, and grading-result classes MAY exist in an implementation without becoming cELF semantic objects.
 
 #### Four scholarly layers
 
-The DERRIDAI source-to-claim architecture is organized into four conceptual layers:
+The cELF source-to-claim architecture is organized into four conceptual layers:
 
 1. **Documentary Layer** - SourceDocument, SourceSpan, Record, and RecordRevision preserve documentary identity and source location.
 2. **Scholarly Assertion and Attribution Layer** - FieldAssertion preserves derivation, evaluation, authority, value state, confidence, and interpretive attribution without flattening those distinctions.
@@ -103,11 +109,11 @@ A system MUST NOT claim full claim traceability merely because a human-readable 
 
 #### Research normalization
 
-DERRIDAI normalization concerns the information model rather than stylistic normalization of source text. A conforming implementation MUST give durable research objects stable identifiers and declared semantics sufficient to distinguish source identity, Record identity, revisions, source locations, metadata assertions, evidence references, and run-specific computational state.
+cELF normalization concerns the information model rather than stylistic normalization of source text. A conforming implementation MUST give durable research objects stable identifiers and declared semantics sufficient to distinguish source identity, Record identity, revisions, source locations, metadata assertions, evidence references, and run-specific computational state.
 
 A domain profile MAY add specialized metadata fields. Such specialization MUST NOT silently redefine the semantics of Core identifiers or provenance relations. Normalization therefore establishes a common structural contract while preserving domain-specific interpretation.
 
-> **Plain-language interpretation.** Two corpora do not need the same scholarly vocabulary to conform to DERRIDAI. They do need to agree on what a Record is, how it points back to a source, how revisions are identified, and how later evidence and claims refer to it.
+> **Plain-language interpretation.** Two corpora do not need the same scholarly vocabulary to conform to cELF. They do need to agree on what a Record is, how it points back to a source, how revisions are identified, and how later evidence and claims refer to it.
 
 ## Documentary and Record Layer
 
@@ -123,7 +129,7 @@ A SourceDocument SHOULD support, where applicable: `source_document_id`, `source
 
 #### Physical and scholarly location
 
-DERRIDAI distinguishes physical navigation from scholarly citation. An implementation MUST NOT silently assume that physical PDF page number and printed page number are equivalent.
+cELF distinguishes physical navigation from scholarly citation. An implementation MUST NOT silently assume that physical PDF page number and printed page number are equivalent.
 
 A location MAY include `physical_page`, `printed_page`, `printed_page_label`, `volume`, `section`, `chapter`, `paragraph`, `column`, bounding boxes, and character offsets. When multiple page systems exist, the representation MUST identify which system a value belongs to.
 
@@ -131,7 +137,7 @@ A location MAY include `physical_page`, `printed_page`, `printed_page_label`, `v
 
 An implementation MAY use addressable extraction units such as PDF blocks, OCR regions, paragraph candidates, XML nodes, line groups, media segments, or page regions. Such units MAY carry stable local IDs, extracted text, source-document identity, location, extraction method, and extraction confidence.
 
-Extraction units are not first-class DERRIDAI semantic objects. They MUST NOT acquire scholarly significance merely because they are physical or technical extraction units. When they participate in provenance, they do so as locator material inside a SourceSpan or another DERRIDAI object.
+Extraction units are not first-class cELF semantic objects. They MUST NOT acquire scholarly significance merely because they are physical or technical extraction units. When they participate in provenance, they do so as locator material inside a SourceSpan or another cELF object.
 
 #### SourceSpan
 
@@ -143,7 +149,7 @@ A SourceSpan MUST NOT imply greater precision than the implementation actually p
 
 #### Record
 
-A **Record** is the central DERRIDAI information object. It represents a persistent research unit derived from one or more contiguous or explicitly related SourceSpans.
+A **Record** is the central cELF information object. It represents a persistent research unit derived from one or more contiguous or explicitly related SourceSpans.
 
 A conforming Record MUST contain `record_id`, `source_document_id`, `text`, and `source_spans`. It MAY also contain bibliographic, linguistic, semantic, discourse, attribution, indexing, and domain-specific metadata.
 
@@ -167,7 +173,7 @@ Evidence whose locator depends on mutable Record text or reviewed state MUST ide
 
 #### Record text and source text
 
-DERRIDAI distinguishes source-extracted text from reviewed or normalized record text. When extracted text is modified, the implementation MUST preserve sufficient information to determine what changed, by retaining the original extraction, an immutable source representation from which it can be reconstructed, or an auditable transformation trail.
+cELF distinguishes source-extracted text from reviewed or normalized record text. When extracted text is modified, the implementation MUST preserve sufficient information to determine what changed, by retaining the original extraction, an immutable source representation from which it can be reconstructed, or an auditable transformation trail.
 
 Cleaning MAY correct extraction artifacts, formatting noise, or layout reconstruction. Cleaning MUST NOT silently paraphrase, summarize, translate, alter proposition-bearing negation, remove meaningful qualification, or normalize away semantically material distinctions.
 
@@ -189,7 +195,7 @@ Implementations SHOULD distinguish at least: identity fields; source-bound field
 
 A value stored on a Record and an assertion concerning that value are distinct concepts. A **FieldAssertion** represents one assertion about one field value in Record or RecordRevision context.
 
-DERRIDAI requires four independently recoverable semantics:
+cELF requires four independently recoverable semantics:
 
 - **derivation** - how the assertion or asserted value entered the research model;
 - **evaluation outcome** - whether and how the field was assessed;
@@ -204,13 +210,13 @@ An implementation MAY materialize the currently authoritative value directly on 
 
 #### Derivation method
 
-`derivation_method` identifies how the assertion or asserted value entered the research model. DERRIDAI defines the base values `deterministic`, `model`, `human`, `inherited`, `imported`, and `other`. Profiles MAY add namespaced values.
+`derivation_method` identifies how the assertion or asserted value entered the research model. cELF defines the base values `deterministic`, `model`, `human`, `inherited`, `imported`, and `other`. Profiles MAY add namespaced values.
 
 Derivation method MUST NOT substitute for authority. A model-derived assertion can later be human-confirmed without becoming human-derived; a deterministic assertion can remain unreviewed; and a human override is both human-derived and an authority event.
 
 #### Evaluation status
 
-`evaluation_status` identifies whether the relevant field was evaluated and what the evaluation produced. DERRIDAI defines `not_evaluated`, `value_supported`, `no_supported_value`, and `evaluation_failed`.
+`evaluation_status` identifies whether the relevant field was evaluated and what the evaluation produced. cELF defines `not_evaluated`, `value_supported`, `no_supported_value`, and `evaluation_failed`.
 
 `not_evaluated` means the applicable evaluator did not assess the field. `value_supported` means the evaluation produced at least one supported value or candidate. `no_supported_value` means the evaluation completed but did not support a value. `evaluation_failed` means an attempted evaluation failed operationally or structurally and therefore MUST NOT by itself establish a semantic conclusion.
 
@@ -218,7 +224,7 @@ An implementation MUST NOT infer evaluation success merely because another field
 
 #### Authority status
 
-`authority_status` identifies the review or resolution authority currently attached to the assertion. DERRIDAI defines `unreviewed`, `human_confirmed`, `human_override`, and `disputed`.
+`authority_status` identifies the review or resolution authority currently attached to the assertion. cELF defines `unreviewed`, `human_confirmed`, `human_override`, and `disputed`.
 
 `human_confirmed` means a human reviewer explicitly accepted the assertion without changing its derivation history. `human_override` means a human supplied or selected a replacement authoritative value. `disputed` means materially incompatible assertions remain unresolved or a previously authoritative assertion has been reopened because of contradictory evidence.
 
@@ -226,7 +232,7 @@ Authority status MUST NOT erase derivation history.
 
 #### Value status
 
-`value_status` identifies the semantic state of the asserted value. DERRIDAI defines `present`, `confirmed_absent`, `invalid`, and `unresolved`.
+`value_status` identifies the semantic state of the asserted value. cELF defines `present`, `confirmed_absent`, `invalid`, and `unresolved`.
 
 `confirmed_absent` MUST NOT be treated as equivalent to `unresolved`. A failure, missing model response, or omitted confidence MUST NOT by itself establish `confirmed_absent`, `invalid`, or any other semantic conclusion.
 
@@ -252,11 +258,11 @@ When the distinctions are relevant, an implementation SHOULD support fields such
 
 A passage written by an author does not entail that every proposition within it is held by that author. An implementation claiming scholarly-attribution support MUST be able to distinguish document author or textual speaker from proposition holder when the source requires that distinction.
 
-DERRIDAI intentionally does not define a universal generic Relation object. Domain-specific semantic relationships MAY be represented as fields, namespaced predicates, linked-data relations, or extension objects. Such representations MUST preserve the relevant FieldAssertion or equivalent epistemic provenance when interpretation is material.
+cELF intentionally does not define a universal generic Relation object. Domain-specific semantic relationships MAY be represented as fields, namespaced predicates, linked-data relations, or extension objects. Such representations MUST preserve the relevant FieldAssertion or equivalent epistemic provenance when interpretation is material.
 
 #### Metadata contracts
 
-Implementations MAY support configurable metadata contracts defining fields, types, controlled values, validation rules, evidence requirements, review requirements, and model instructions. DERRIDAI does not require a first-class MetadataSchema object.
+Implementations MAY support configurable metadata contracts defining fields, types, controlled values, validation rules, evidence requirements, review requirements, and model instructions. cELF does not require a first-class MetadataSchema object.
 
 A processing run that depends on a configurable metadata contract MUST retain the exact contract snapshot or an immutable identifier for that exact version. Editing or deleting a later saved schema MUST NOT reinterpret an earlier run or publication. A content hash, immutable schema version, or equivalent evidence SHOULD be retained.
 
@@ -270,7 +276,7 @@ A run MAY apply temporary guidance, requiredness, linguistic hints, or review po
 
 #### Lifecycle
 
-DERRIDAI does not mandate a UI workflow. Implementations SHOULD nevertheless be able to represent a lifecycle such as source, extracted, segmented, enriched, reviewed, published, indexed, acquired as evidence, and used in research.
+cELF does not mandate a UI workflow. Implementations SHOULD nevertheless be able to represent a lifecycle such as source, extracted, segmented, enriched, reviewed, published, indexed, acquired as evidence, and used in research.
 
 A Record MAY be searchable before human review if the applicable profile permits it, but its review and epistemic states MUST remain inspectable.
 
@@ -314,21 +320,21 @@ Queue state, temporary credentials, UI flags, worker checkpoints, cache keys, an
 
 #### JSONL profile
 
-The DERRIDAI JSONL Profile defines one complete published Record per UTF-8 line. Line order MUST NOT be the only means of identifying records. Each Record MUST contain its own `record_id`.
+The cELF JSONL Profile defines one complete published Record per UTF-8 line. Line order MUST NOT be the only means of identifying records. Each Record MUST contain its own `record_id`.
 
-Implementation-specific public formats, including `derridai-corpus-jsonl-v1`, MAY define additional requirements while remaining mappings of the DERRIDAI Core model.
+Implementation-specific public formats, including `derridai-corpus-jsonl-v1`, MAY define additional requirements while remaining mappings of the cELF Core model.
 
 ### Storage and Derived Representations
 
 #### Authoritative corpus
 
-A DERRIDAI implementation MUST identify its authoritative corpus representation. A vector store MUST NOT be treated as the sole authoritative source of record content when the system claims the vector store is derived or rebuildable.
+A cELF implementation MUST identify its authoritative corpus representation. A vector store MUST NOT be treated as the sole authoritative source of record content when the system claims the vector store is derived or rebuildable.
 
 If a derived store differs from the authoritative corpus, the discrepancy MUST be detectable.
 
 #### Storage projections (implementation-specific)
 
-An implementation MAY maintain technology-specific storage projections of a Record containing a storage ID, Record reference, document text, metadata, embedding, or other index-specific values. Such projections are not first-class DERRIDAI semantic objects.
+An implementation MAY maintain technology-specific storage projections of a Record containing a storage ID, Record reference, document text, metadata, embedding, or other index-specific values. Such projections are not first-class cELF semantic objects.
 
 A storage ID MAY differ from `record_id`, but the mapping MUST remain recoverable. A storage projection MUST NOT silently alter semantic Record values. Storage-specific encoding is permitted only when decoding is lossless for the declared contract.
 
@@ -346,7 +352,7 @@ A derived retrieval collection SHOULD expose a manifest containing a manifest ve
 
 **Evidence Acquisition** is the process by which Records or source spans become candidates for evidentiary use. It provides a mechanism-neutral term for bringing documentary information into an evidentiary role.
 
-#### Meaning of retrieval in DERRIDAI
+#### Meaning of retrieval in cELF
 
 The term **Retrieval** has two related meanings in this specification family. In the broad sense, retrieval is the recovery of relevant documentary information from the Durable Research Layer for active research use. In the technical sense, retrieval is a computational search operation over an index, store, or corpus using a defined query and retrieval method.
 
@@ -362,7 +368,7 @@ An acquisition event SHOULD record its method, query or selection condition wher
 
 ### Retrieval Profile
 
-The DERRIDAI Retrieval Profile specifies the technical sense of retrieval: explicit search and ranking operations such as vector similarity search, lexical search, filtering, hybrid search, fusion, and reranking. It does not restrict the broader DERRIDAI concept of retrieval to vector databases.
+The cELF Retrieval Profile specifies the technical sense of retrieval: explicit search and ranking operations such as vector similarity search, lexical search, filtering, hybrid search, fusion, and reranking. It does not restrict the broader cELF concept of retrieval to vector databases.
 
 #### RetrievalRun
 
@@ -372,7 +378,7 @@ A **RetrievalRun** represents one retrieval operation. It SHOULD record a retrie
 
 An implementation MAY represent route-level retrieval hits containing collection, search type, rank, raw score, and score semantics. A distance or similarity value MUST NOT be described as confidence or probability unless the retrieval system actually defines it that way.
 
-An implementation MAY also use candidate envelopes that reference a Record and add retrieval-specific information such as collection, distance, fusion score, rerank score, MMR score, route diagnostics, and selection state. Retrieval-hit and candidate-envelope classes are not first-class DERRIDAI semantic objects.
+An implementation MAY also use candidate envelopes that reference a Record and add retrieval-specific information such as collection, distance, fusion score, rerank score, MMR score, route diagnostics, and selection state. Retrieval-hit and candidate-envelope classes are not first-class cELF semantic objects.
 
 Retrieval diagnostics MUST NOT mutate the authoritative Record merely to attach computational information. The same logical Record found through multiple routes SHOULD be deduplicated by logical identity while retaining contributing route diagnostics.
 
@@ -392,7 +398,7 @@ Selected evidence MAY bypass retrieval entirely and SHOULD be normalized into th
 
 ### Evidence Profile
 
-The Evidence layer defines how documentary material acquires an evidentiary role in a particular research operation. Its normative requirements are required for the DERRIDAI Evidence profile and for profiles that depend on EvidenceRef semantics.
+The Evidence layer defines how documentary material acquires an evidentiary role in a particular research operation. Its normative requirements are required for the cELF Evidence profile and for profiles that depend on EvidenceRef semantics.
 
 #### Evidence Acquisition
 
@@ -408,7 +414,7 @@ Evidence is a contextual role played by identified documentary material in a par
 
 #### EvidenceRef
 
-An **EvidenceRef** is the DERRIDAI semantic locator for exact source material used to support, contextualize, contrast with, quote, attribute, or otherwise bear on a downstream claim. It does not have to be a standalone database row: a packet entry or SupportBinding MAY embed the equivalent locator fields directly.
+An **EvidenceRef** is the cELF semantic locator for exact source material used to support, contextualize, contrast with, quote, attribute, or otherwise bear on a downstream claim. It does not have to be a standalone database row: a packet entry or SupportBinding MAY embed the equivalent locator fields directly.
 
 Every EvidenceRef semantic locator MUST declare exactly one authoritative `locator_kind`: `record` or `source_span`.
 
@@ -426,7 +432,7 @@ Each packet entry SHOULD identify a run-local entry ID, an EvidenceRef semantic 
 
 Evidence supplied to a model MAY be truncated. If it is, truncation MUST be declared; the authoritative EvidenceRef MUST remain unchanged; and the full authorized source SHOULD remain recoverable to an auditor. Truncated text MUST NOT be represented as the complete Record or complete SourceSpan content. Reordering packet entries MUST NOT change underlying evidence identity.
 
-Packet entries are composite implementation structures, not independent DERRIDAI first-class objects.
+Packet entries are composite implementation structures, not independent cELF first-class objects.
 
 #### Packet integrity and evidence sufficiency
 
@@ -448,13 +454,13 @@ Human-readable citation rendering and machine evidence binding are different ope
 
 #### GenerationRun
 
-A **GenerationRun** represents an AI generation operation using DERRIDAI evidence. It SHOULD identify run ID, prompt, instructions, provider, model, model revision where available, generation parameters, prompt-contract version, evidence packet, execution locality, timestamps, and answer.
+A **GenerationRun** represents an AI generation operation using cELF evidence. It SHOULD identify run ID, prompt, instructions, provider, model, model revision where available, generation parameters, prompt-contract version, evidence packet, execution locality, timestamps, and answer.
 
 Secrets such as API keys MUST NOT be stored in a public GenerationRun.
 
 #### Evidence-bounded generation
 
-A DERRIDAI Evidence-Grounded Generation implementation MUST instruct the generator that supplied evidence is the basis for substantive source claims. The generator MUST NOT be instructed to fabricate supporting citations. When evidence is insufficient, the system SHOULD permit or require an explicit statement of insufficiency.
+A cELF Evidence-Grounded Generation implementation MUST instruct the generator that supplied evidence is the basis for substantive source claims. The generator MUST NOT be instructed to fabricate supporting citations. When evidence is insufficient, the system SHOULD permit or require an explicit statement of insufficiency.
 
 #### GeneratedClaim
 
@@ -462,7 +468,7 @@ A **GeneratedClaim** is a substantive assertion identified within generated outp
 
 Claim granularity MUST be declared or inferable from the derivation method. A sentence-level extraction MAY be used as a conservative reproducible claim unit, but a sentence MUST NOT automatically be described as one atomic scholarly proposition when it contains multiple propositions, qualifications, contrasts, or citation scopes.
 
-A system MAY omit explicit GeneratedClaim objects if it does not claim proposition-level traceability. A system claiming DERRIDAI Claim-Binding conformance MUST materialize or reproducibly derive them.
+A system MAY omit explicit GeneratedClaim objects if it does not claim proposition-level traceability. A system claiming cELF Claim-Binding conformance MUST materialize or reproducibly derive them.
 
 #### SupportBinding
 
@@ -484,7 +490,7 @@ Validation systems SHOULD treat wrong-person attribution, fabricated quotation, 
 
 ### Advisory Research Memory
 
-Research systems MAY retain prior responses, generated claims, reviewed metadata decisions, editorial examples, or other memory to guide later work. DERRIDAI does not make such memory a first-class semantic object.
+Research systems MAY retain prior responses, generated claims, reviewed metadata decisions, editorial examples, or other memory to guide later work. cELF does not make such memory a first-class semantic object.
 
 Prior memory is advisory context unless it is re-resolved as current evidence. A previously generated claim, cached answer, or remembered reviewer decision MUST NOT become an EvidenceRef or SupportBinding merely because it is placed in a prompt.
 
@@ -494,7 +500,7 @@ Memory access SHOULD preserve applicable owner, visibility, and authorization co
 
 ### Traceability Matrix
 
-A DERRIDAI **traceability matrix** is the logical set of relations connecting research output to the documentary and computational state on which it depends. It MAY be implemented as relational tables, graph edges, structured JSON, event records, or another representation; a literal table is not required.
+A cELF **traceability matrix** is the logical set of relations connecting research output to the documentary and computational state on which it depends. It MAY be implemented as relational tables, graph edges, structured JSON, event records, or another representation; a literal table is not required.
 
 For a GeneratedClaim represented as evidentially supported, a Claim-Binding conforming implementation MUST identify the applicable SupportBinding and EvidenceRef.
 
@@ -518,7 +524,7 @@ A system MUST NOT describe a claim as fully traceable merely because it contains
 
 #### Reproducibility levels
 
-DERRIDAI distinguishes three levels of reproducibility. **Corpus reproducibility** identifies the source documents, publication snapshot, Record revisions, schemas, and other durable research state. **Process reproducibility** identifies the query, evidence-acquisition or retrieval configuration, candidate and selected evidence where retained, model/provider, prompt contract, generation parameters, validators, and graders. **Output reproducibility** concerns whether the same execution produces identical generated wording.
+cELF distinguishes three levels of reproducibility. **Corpus reproducibility** identifies the source documents, publication snapshot, Record revisions, schemas, and other durable research state. **Process reproducibility** identifies the query, evidence-acquisition or retrieval configuration, candidate and selected evidence where retained, model/provider, prompt contract, generation parameters, validators, and graders. **Output reproducibility** concerns whether the same execution produces identical generated wording.
 
 Core and Reproducible Research conformance MUST NOT imply byte-identical output reproduction from a stochastic or externally mutable model. The required goal is preservation of the research state and process information needed to reconstruct and evaluate the operation, with the limitations of the original execution environment made explicit.
 
@@ -526,7 +532,7 @@ Core and Reproducible Research conformance MUST NOT imply byte-identical output 
 
 A **ResearchRun** is the coherent retained audit view of one research operation. It MAY be one object or a resolvable composition of durable run records. It SHOULD identify specification version, corpus publication or snapshot, original and derived queries, evidence-acquisition and retrieval configuration, candidate identifiers where relevant, selected evidence, EvidencePacket, GenerationRun or generation configuration, prompt contract, execution locality, validation results, output, grader information, advisory-memory use, and timestamps.
 
-A ResearchRun MUST retain enough information for the reproducibility profile it claims. DERRIDAI does not require bit-identical regeneration from nondeterministic models; it requires a distinction between reproducibility of inputs and configuration and deterministic reproduction of output.
+A ResearchRun MUST retain enough information for the reproducibility profile it claims. cELF does not require bit-identical regeneration from nondeterministic models; it requires a distinction between reproducibility of inputs and configuration and deterministic reproduction of output.
 
 #### Candidate retention
 
@@ -542,7 +548,7 @@ If output is graded by an AI model, the grade SHOULD record grader provider, mod
 
 #### Minimum necessary transport
 
-DERRIDAI interfaces SHOULD send only the information necessary for the requested operation. The existence of a complete Record schema MUST NOT be interpreted as a requirement that every request transmit the complete Record.
+cELF interfaces SHOULD send only the information necessary for the requested operation. The existence of a complete Record schema MUST NOT be interpreted as a requirement that every request transmit the complete Record.
 
 #### Operation-specific envelopes
 
@@ -568,7 +574,7 @@ Transport boundaries MUST validate incoming data against the operation schema. M
 
 #### Validation classes
 
-A DERRIDAI implementation SHOULD distinguish structural, type, vocabulary, referential, source-fidelity, evidence, relational, publication, and retrieval-contract validation.
+A cELF implementation SHOULD distinguish structural, type, vocabulary, referential, source-fidelity, evidence, relational, publication, and retrieval-contract validation.
 
 #### Structural and referential validation
 
@@ -592,7 +598,7 @@ Failures that can affect provenance, attribution, evidence, publication, or corp
 
 Model timeout, malformed structured output, unavailable provider, truncated JSON, or failed schema validation MUST NOT by themselves establish a semantic conclusion. A conservative fallback MAY preserve source material or existing authoritative values.
 
-An unresolved state is a valid DERRIDAI state. Systems MUST NOT manufacture values solely to eliminate unresolved fields.
+An unresolved state is a valid cELF state. Systems MUST NOT manufacture values solely to eliminate unresolved fields.
 
 ### Security, Access, and Disclosure
 
@@ -600,7 +606,7 @@ Authorization MUST be enforced at the authoritative data boundary, not solely in
 
 An implementation MAY redact or transform source text for unauthorized clients while retaining permitted RecordRefs, evidence identifiers, citations, or metadata. Such a projection MUST NOT create a false impression that the client received the full source. Provider credentials, API keys, session secrets, and similar authentication material MUST NOT be included in public corpus publications, evidence packets, or public run manifests.
 
-DERRIDAI does not itself establish legal compliance with copyright, confidentiality, data-protection, professional-privilege, or contractual regimes. Those depend on deployment, policy, and applicable law.
+cELF does not itself establish legal compliance with copyright, confidentiality, data-protection, professional-privilege, or contractual regimes. Those depend on deployment, policy, and applicable law.
 
 ### Language and Translation
 
@@ -612,25 +618,25 @@ A translation used as evidence MUST remain distinguishable from the source-langu
 
 #### Model independence
 
-A conforming DERRIDAI implementation MUST preserve authoritative Record identity and documentary provenance independently of the language model, embedding model, retrieval engine, or provider used to process or consume those Records.
+A conforming cELF implementation MUST preserve authoritative Record identity and documentary provenance independently of the language model, embedding model, retrieval engine, or provider used to process or consume those Records.
 
 Replacing a computational model MUST NOT, by itself, alter authoritative Record identity, source relationships, or human-confirmed assertions.
 
 #### Execution locality
 
-A DERRIDAI system MAY execute locally, remotely, or in hybrid form. ResearchRun provenance SHOULD identify external computational services that receive source, Record, Evidence, or prompt content when that information is relevant to audit or policy.
+A cELF system MAY execute locally, remotely, or in hybrid form. ResearchRun provenance SHOULD identify external computational services that receive source, Record, Evidence, or prompt content when that information is relevant to audit or policy.
 
 The information model MUST NOT require remote custody of the authoritative corpus.
 
 #### Pipeline sovereignty
 
-DERRIDAI uses **pipeline sovereignty** to describe the technical capacity of a researcher or research organization to determine where stages of the documentary and AI-processing pipeline execute, where data is stored, and which external systems may receive it.
+cELF uses **pipeline sovereignty** to describe the technical capacity of a researcher or research organization to determine where stages of the documentary and AI-processing pipeline execute, where data is stored, and which external systems may receive it.
 
 Pipeline sovereignty is an architectural property, not a legal conclusion about ownership, confidentiality, or compliance.
 
 ### Local Sovereign Profile
 
-An implementation claiming **DERRIDAI Local Sovereign 1.0 Conformance** MUST permit essential research operations without mandatory remote storage, remote embedding, remote model inference, remote authentication, or remote telemetry.
+An implementation claiming **cELF Local Sovereign 1.0 Conformance** MUST permit essential research operations without mandatory remote storage, remote embedding, remote model inference, remote authentication, or remote telemetry.
 
 At minimum, the profile MUST permit within researcher-controlled infrastructure: document ingestion; source storage; Record construction; metadata and provenance storage; corpus publication; search or evidence acquisition; evidence selection; citation; AI inference; validation; and research-output storage.
 
@@ -642,23 +648,23 @@ An implementation MAY additionally support hosted services. Use of such services
 
 #### Purpose
 
-DERRIDAI defines a domain-specific information architecture for AI-assisted documentary research. It does not attempt to replace general-purpose standards for provenance, research-object packaging, linked-data publication, workflow description, archival preservation, persistent identification, or machine-readable scholarly assertions.
+cELF defines a domain-specific information architecture for AI-assisted documentary research. It does not attempt to replace general-purpose standards for provenance, research-object packaging, linked-data publication, workflow description, archival preservation, persistent identification, or machine-readable scholarly assertions.
 
-A conforming implementation MAY expose DERRIDAI data through external standards where doing so improves portability, archival preservation, interoperability, or integration with other research systems. External representations MUST preserve the semantics of the authoritative DERRIDAI objects from which they are derived.
+A conforming implementation MAY expose cELF data through external standards where doing so improves portability, archival preservation, interoperability, or integration with other research systems. External representations MUST preserve the semantics of the authoritative cELF objects from which they are derived.
 
 An external mapping MUST NOT become the authoritative source of Record identity, documentary provenance, human-confirmed metadata, or ResearchRun state merely because an export has been generated. Unless an implementation explicitly adopts an external representation as its native storage model, the normal relationship is:
 
-`DERRIDAI native model -> interoperability adapter -> external representation.`
+`cELF native model -> interoperability adapter -> external representation.`
 
-> **Why this separation exists.** A provenance standard can represent that one entity was derived from another. It does not necessarily know that the first entity is a passage from a particular edition, that Derrida is speaking while representing Levinas’s position, that a model inferred the position holder, or that a researcher later confirmed the inference. External standards provide reusable infrastructure; DERRIDAI supplies the research-specific semantics.
+> **Why this separation exists.** A provenance standard can represent that one entity was derived from another. It does not necessarily know that the first entity is a passage from a particular edition, that Derrida is speaking while representing Levinas’s position, that a model inferred the position holder, or that a researcher later confirmed the inference. External standards provide reusable infrastructure; cELF supplies the research-specific semantics.
 
 #### Three interoperability layers
 
 A conforming implementation SHOULD distinguish three layers.
 
-1.  **Native semantic layer.** The DERRIDAI objects and relations defined by this specification, including SourceDocument, SourceSpan, Record, RecordRevision, FieldAssertion, EvidenceRef, ResearchRun, GeneratedClaim, SupportBinding, and ValidationResult. This layer defines what the information means.
+1.  **Native semantic layer.** The cELF objects and relations defined by this specification, including SourceDocument, SourceSpan, Record, RecordRevision, FieldAssertion, EvidenceRef, ResearchRun, GeneratedClaim, SupportBinding, and ValidationResult. This layer defines what the information means.
 
-2.  **Interoperability mapping layer.** A translation from DERRIDAI semantics to another conceptual model, such as RecordRevision to a PROV Entity or ResearchRun to an RO-Crate contextual entity. This layer defines correspondence between information models.
+2.  **Interoperability mapping layer.** A translation from cELF semantics to another conceptual model, such as RecordRevision to a PROV Entity or ResearchRun to an RO-Crate contextual entity. This layer defines correspondence between information models.
 
 3.  **Serialization and packaging layer.** The physical encoding or package, such as JSON, JSON-LD, RDF/Turtle, PROV-N, JSONL, ZIP, or RO-Crate. This layer defines how information is transported.
 
@@ -666,29 +672,29 @@ Implementations SHOULD avoid conflating these layers. JSON-LD, for example, is a
 
 #### Interoperability must not weaken scholarly meaning
 
-An interoperability representation MUST preserve every DERRIDAI distinction necessary to interpret the exported object correctly. Where the target standard cannot directly express a DERRIDAI concept, the exporter MUST preserve the concept through a DERRIDAI-specific extension term, an associated DERRIDAI artifact, a documented companion representation, or an explicit loss-of-information declaration.
+An interoperability representation MUST preserve every cELF distinction necessary to interpret the exported object correctly. Where the target standard cannot directly express a cELF concept, the exporter MUST preserve the concept through a cELF-specific extension term, an associated cELF artifact, a documented companion representation, or an explicit loss-of-information declaration.
 
 The exporter MUST NOT silently collapse materially different scholarly states. In particular, values such as `model_inferred`, `human_confirmed`, `deterministically_established`, `unresolved`, `confirmed_absent`, and `invalid` MUST NOT become indistinguishable merely because a target standard has no direct equivalent. Likewise, `speaker`, `document_author`, `quoted_speaker`, `position_holder`, and `target` MUST NOT be collapsed into a generic creator or author relation when doing so would alter scholarly interpretation.
 
 #### Interoperability fidelity
 
-DERRIDAI defines three descriptive levels of mapping fidelity.
+cELF defines three descriptive levels of mapping fidelity.
 
-- A **lossless mapping** preserves all DERRIDAI information required to reconstruct the exported object’s relevant semantics. Lossless does not require byte-identical serialization; it requires preservation of material meaning.
+- A **lossless mapping** preserves all cELF information required to reconstruct the exported object’s relevant semantics. Lossless does not require byte-identical serialization; it requires preservation of material meaning.
 
 - A **semantically compatible mapping** preserves major identity, provenance, and research relationships while omitting nonessential implementation detail. For example, it may preserve RecordRevision, EvidenceRef, ResearchRun, model identity, and human review while omitting transient UI state.
 
-- A **lossy mapping** omits one or more material DERRIDAI distinctions. A lossy exporter MUST identify the omitted semantic classes or fields and MUST NOT describe the export as a complete DERRIDAI representation.
+- A **lossy mapping** omits one or more material cELF distinctions. A lossy exporter MUST identify the omitted semantic classes or fields and MUST NOT describe the export as a complete cELF representation.
 
 #### Stable identifiers
 
-Exporters SHOULD preserve native DERRIDAI identifiers rather than mint unrelated identifiers for every export. Where the corresponding object exists, exported representations SHOULD preserve `source_document_id`, `record_id`, `record_revision`, `publication_id`, `evidence_id`, `run_id`, and `claim_id`.
+Exporters SHOULD preserve native cELF identifiers rather than mint unrelated identifiers for every export. Where the corresponding object exists, exported representations SHOULD preserve `source_document_id`, `record_id`, `record_revision`, `publication_id`, `evidence_id`, `run_id`, and `claim_id`.
 
-External representations MAY encode these identifiers as URIs or IRIs. Global resolvability is OPTIONAL for Core conformance. A local DERRIDAI implementation MUST be able to maintain stable identifiers without depending on an external identifier service.
+External representations MAY encode these identifiers as URIs or IRIs. Global resolvability is OPTIONAL for Core conformance. A local cELF implementation MUST be able to maintain stable identifiers without depending on an external identifier service.
 
 #### Version identity
 
-An exported object SHOULD identify the applicable DERRIDAI Core version, DERRIDAI profile versions, serialization-profile version, and external-standard version where those values are known. A version declaration MUST describe the contract under which the artifact was produced, not merely the current application version.
+An exported object SHOULD identify the applicable cELF Core version, cELF profile versions, serialization-profile version, and external-standard version where those values are known. A version declaration MUST describe the contract under which the artifact was produced, not merely the current application version.
 
 #### Interoperability and reproducibility
 
@@ -696,25 +702,25 @@ Interoperability asks whether another system can understand or consume a researc
 
 A PROV graph may be interoperable but insufficient for reproducing a ResearchRun if the EvidencePacket or model configuration is missing. Conversely, a complete local ResearchRun may support substantial reproducibility even if it has not been exported through any external standard.
 
-### DERRIDAI PROV Mapping Profile
+### cELF PROV Mapping Profile
 
 #### Scope and purpose
 
-The DERRIDAI PROV Mapping Profile defines how DERRIDAI research lineage can be expressed using the W3C PROV family of standards. W3C PROV supplies a general-purpose model based on **Entity**, **Activity**, and **Agent**. DERRIDAI uses this framework to expose the history of scholarly and computational objects without replacing DERRIDAI’s domain semantics.
+The cELF PROV Mapping Profile defines how cELF research lineage can be expressed using the W3C PROV family of standards. W3C PROV supplies a general-purpose model based on **Entity**, **Activity**, and **Agent**. cELF uses this framework to expose the history of scholarly and computational objects without replacing cELF’s domain semantics.
 
-In simplified terms, PROV addresses questions such as: What depended on what? What process occurred? Which person, organization, or software agent participated? DERRIDAI adds questions such as: What scholarly object was involved? Who was speaking? Whose position was represented? What was the epistemic status of a metadata assertion? Which exact source span supported the claim?
+In simplified terms, PROV addresses questions such as: What depended on what? What process occurred? Which person, organization, or software agent participated? cELF adds questions such as: What scholarly object was involved? Who was speaking? Whose position was represented? What was the epistemic status of a metadata assertion? Which exact source span supported the claim?
 
-A DERRIDAI implementation MAY support this profile without using RDF, PROV-O, or PROV internally.
+A cELF implementation MAY support this profile without using RDF, PROV-O, or PROV internally.
 
 #### Entity mapping
 
-The first-class DERRIDAI objects SHOULD be exportable as PROV Entities when present: SourceDocument, SourceSpan, Record, RecordRevision, FieldAssertion, CorpusPublication, RetrievalRun, EvidenceRef, EvidencePacket, GenerationRun, GeneratedClaim, SupportBinding, and ResearchRun.
+The first-class cELF objects SHOULD be exportable as PROV Entities when present: SourceDocument, SourceSpan, Record, RecordRevision, FieldAssertion, CorpusPublication, RetrievalRun, EvidenceRef, EvidencePacket, GenerationRun, GeneratedClaim, SupportBinding, and ResearchRun.
 
-Implementation-specific extraction units, metadata-contract objects, retrieval candidates, validation records, grading records, and similar artifacts MAY also be represented in PROV when useful, but they MUST NOT be misrepresented as additional normative DERRIDAI semantic object classes.
+Implementation-specific extraction units, metadata-contract objects, retrieval candidates, validation records, grading records, and similar artifacts MAY also be represented in PROV when useful, but they MUST NOT be misrepresented as additional normative cELF semantic object classes.
 
 Where both Record and RecordRevision are exported, the persistent logical Record MUST remain distinguishable from a particular revision of that Record. A consumer MUST be able to determine which exact RecordRevision was used as evidence when the native ResearchRun preserves that information.
 
-| DERRIDAI object             | PROV-oriented representation                                                                        |
+| cELF object                 | PROV-oriented representation                                                                        |
 | --------------------------- | --------------------------------------------------------------------------------------------------- |
 | SourceDocument, SourceSpan  | Entity representing documentary material or an identified reproducible portion of it                |
 | Record, RecordRevision      | Entity representing persistent scholarly identity and a particular state of that identity           |
@@ -729,7 +735,7 @@ Where both Record and RecordRevision are exported, the persistent logical Record
 
 #### Record and RecordRevision
 
-DERRIDAI distinguishes a persistent logical Record from particular revisions. This distinction SHOULD survive PROV export. Successive RecordRevisions SHOULD preserve their relationship to the persistent Record and to prior revisions. An implementation MAY use PROV specialization, derivation, revision relations, or DERRIDAI extension properties as appropriate.
+cELF distinguishes a persistent logical Record from particular revisions. This distinction SHOULD survive PROV export. Successive RecordRevisions SHOULD preserve their relationship to the persistent Record and to prior revisions. An implementation MAY use PROV specialization, derivation, revision relations, or cELF extension properties as appropriate.
 
 `Record R17 -> RecordRevision R17@1 -> R17@2 -> R17@3.`
 
@@ -757,19 +763,19 @@ Where model identity is material, the export SHOULD preserve provider, model nam
 
 #### Human and machine participation
 
-A central DERRIDAI requirement is preservation of the difference between computational inference and human scholarly judgment. If Model M inferred `position_holder = Levinas` and Reviewer H later confirmed it, the exported provenance SHOULD preserve the inference and review as separate activities. It SHOULD NOT rewrite the history as though the human originally supplied the value.
+A central cELF requirement is preservation of the difference between computational inference and human scholarly judgment. If Model M inferred `position_holder = Levinas` and Reviewer H later confirmed it, the exported provenance SHOULD preserve the inference and review as separate activities. It SHOULD NOT rewrite the history as though the human originally supplied the value.
 
 Likewise, a human override SHOULD preserve the fact that an earlier computational assertion existed when that history is retained in the native system.
 
 #### Field-level epistemic provenance
 
-Generic provenance alone is insufficient for DERRIDAI metadata. A FieldAssertion MUST retain DERRIDAI-specific epistemic properties when exported. PROV MAY describe the activities that generated and reviewed the assertion, but it MUST NOT replace DERRIDAI assertion status with a generic derivation relation.
+Generic provenance alone is insufficient for cELF metadata. A FieldAssertion MUST retain cELF-specific epistemic properties when exported. PROV MAY describe the activities that generated and reviewed the assertion, but it MUST NOT replace cELF assertion status with a generic derivation relation.
 
-For example, a PROV “was derived from” relation does not by itself establish whether a DERRIDAI assertion is human-confirmed, model-inferred, deterministically established, or unresolved. Those remain DERRIDAI semantics.
+For example, a PROV “was derived from” relation does not by itself establish whether a cELF assertion is human-confirmed, model-inferred, deterministically established, or unresolved. Those remain cELF semantics.
 
 #### Retrieval and evidence-acquisition provenance
 
-The PROV mapping MUST preserve the two senses of retrieval used by DERRIDAI. In the narrow technical sense, retrieval may involve vector similarity, lexical search, hybrid search, metadata filtering, or reranking. In the broader sense, retrieval is the recovery of relevant documentary information for research use.
+The PROV mapping MUST preserve the two senses of retrieval used by cELF. In the narrow technical sense, retrieval may involve vector similarity, lexical search, hybrid search, metadata filtering, or reranking. In the broader sense, retrieval is the recovery of relevant documentary information for research use.
 
 An EvidenceAcquisition activity MAY therefore represent vector retrieval, lexical retrieval, hybrid retrieval, manual researcher selection, deterministic query, database lookup, model-located evidence, imported evidence, or another declared acquisition method. An EvidenceRef SHOULD retain its acquisition method where known.
 
@@ -799,21 +805,21 @@ A ValidationResult SHOULD preserve the object or relation it evaluated. If an LL
 
 #### Minimum PROV export
 
-A DERRIDAI PROV export claiming the minimum mapping profile MUST preserve, where applicable, SourceDocument identity, Record identity, Record revision, source derivation, EvidenceRef identity, ResearchRun identity, GenerationRun identity, generated output identity, participating human or computational agents, and claim/evidence relationships when available.
+A cELF PROV export claiming the minimum mapping profile MUST preserve, where applicable, SourceDocument identity, Record identity, Record revision, source derivation, EvidenceRef identity, ResearchRun identity, GenerationRun identity, generated output identity, participating human or computational agents, and claim/evidence relationships when available.
 
-A PROV export MUST NOT claim complete DERRIDAI provenance conformance if it omits a material lineage relationship known to the native system, such as RecordRevision, SourceSpan, human/model distinction, claim/evidence binding, or metadata epistemic status.
+A PROV export MUST NOT claim complete cELF provenance conformance if it omits a material lineage relationship known to the native system, such as RecordRevision, SourceSpan, human/model distinction, claim/evidence binding, or metadata epistemic status.
 
-### DERRIDAI RO-Crate Profile
+### cELF RO-Crate Profile
 
 #### Purpose and profile identity
 
-The DERRIDAI RO-Crate Profile defines how DERRIDAI research artifacts may be packaged into a portable research object. RO-Crate addresses a different problem from PROV: PROV describes how things came to exist and relate through processes; RO-Crate describes which research objects belong together, what they are, and how they can be packaged with machine-readable contextual metadata.
+The cELF RO-Crate Profile defines how cELF research artifacts may be packaged into a portable research object. RO-Crate addresses a different problem from PROV: PROV describes how things came to exist and relate through processes; RO-Crate describes which research objects belong together, what they are, and how they can be packaged with machine-readable contextual metadata.
 
-The DERRIDAI RO-Crate Profile SHOULD be published as a versioned RO-Crate profile with a persistent profile identifier and SHOULD identify the applicable RO-Crate version. A crate claiming the DERRIDAI profile MUST also satisfy the requirements of the declared RO-Crate version.
+The cELF RO-Crate Profile SHOULD be published as a versioned RO-Crate profile with a persistent profile identifier and SHOULD identify the applicable RO-Crate version. A crate claiming the cELF profile MUST also satisfy the requirements of the declared RO-Crate version.
 
 #### Crate scopes
 
-DERRIDAI defines three conceptual crate scopes.
+cELF defines three conceptual crate scopes.
 
 - A **Corpus Crate** represents a portable CorpusPublication and SHOULD contain or reference the corpus manifest, applicable metadata-contract snapshot, public Records, source-document descriptors, bibliographic metadata, and publication/version information. It MAY contain source documents, annotations, validation reports, PROV representation, and derived index manifests.
 
@@ -825,7 +831,7 @@ A Project Snapshot Crate SHOULD identify which artifacts are authoritative and w
 
 #### Illustrative package structure
 
-An implementation MAY serialize a Research Run Crate conceptually as follows. File names are illustrative unless separately required by the applicable RO-Crate or DERRIDAI serialization profile.
+An implementation MAY serialize a Research Run Crate conceptually as follows. File names are illustrative unless separately required by the applicable RO-Crate or cELF serialization profile.
 
     derridai-run-2026-09-22/
     |-- ro-crate-metadata.json
@@ -857,7 +863,7 @@ A crate MUST distinguish authoritative research information from derived computa
 
 #### Record identity within a crate
 
-Records contained in or referenced by a crate MUST preserve their stable DERRIDAI identifiers. If a crate contains only the Records used in a ResearchRun rather than the complete corpus, it MUST NOT imply that those Records constitute the complete CorpusPublication. The crate SHOULD preserve the parent publication identifier.
+Records contained in or referenced by a crate MUST preserve their stable cELF identifiers. If a crate contains only the Records used in a ResearchRun rather than the complete corpus, it MUST NOT imply that those Records constitute the complete CorpusPublication. The crate SHOULD preserve the parent publication identifier.
 
 #### Evidence package requirements
 
@@ -869,7 +875,7 @@ This requirement prevents reproducibility from depending on rerunning a changing
 
 A Research Run Crate SHOULD preserve enough information to distinguish corpus reproducibility, process reproducibility, and output reproducibility. Corpus reproducibility identifies the exact research corpus state. Process reproducibility identifies the procedure, evidence-acquisition settings, evidence, model/provider, prompt contract, validators, and graders. Output reproducibility concerns whether the exact generated wording can be regenerated.
 
-DERRIDAI does not assume that exact output regeneration is always possible. Remote models may change; stochastic inference, hardware, quantization, sampling implementations, or provider behavior may differ. A crate SHOULD therefore preserve the original output even when exact regeneration cannot be guaranteed.
+cELF does not assume that exact output regeneration is always possible. Remote models may change; stochastic inference, hardware, quantization, sampling implementations, or provider behavior may differ. A crate SHOULD therefore preserve the original output even when exact regeneration cannot be guaranteed.
 
 #### Source-document inclusion and restricted material
 
@@ -879,7 +885,7 @@ A crate MUST NOT imply that a SourceDocument is redistributed when it is merely 
 
 #### Local and confidential research
 
-RO-Crate export MUST NOT require public publication or network transmission. A Local Sovereign implementation MUST be able to construct a DERRIDAI research package entirely within researcher-controlled infrastructure. Packaging and publication are distinct operations.
+RO-Crate export MUST NOT require public publication or network transmission. A Local Sovereign implementation MUST be able to construct a cELF research package entirely within researcher-controlled infrastructure. Packaging and publication are distinct operations.
 
 #### External-service disclosure
 
@@ -887,23 +893,23 @@ If a ResearchRun transmitted research content to an external provider, a reprodu
 
 #### Software environment
 
-A Research Run Crate MAY preserve software-environment information such as DerridAI version, DERRIDAI specification version, operating system, runtime version, dependency snapshot, model runtime, container digest, or hardware class where those details materially affect reproducibility.
+A Research Run Crate MAY preserve software-environment information such as DerridAI version, cELF specification version, operating system, runtime version, dependency snapshot, model runtime, container digest, or hardware class where those details materially affect reproducibility.
 
 #### Relationship to other RO-Crate profiles
 
-A DERRIDAI implementation MAY reuse compatible workflow- or provenance-oriented RO-Crate conventions where they improve interoperability. It SHOULD extend or compose with a suitable generic profile rather than duplicate it, provided that research-specific DERRIDAI semantics remain preserved.
+A cELF implementation MAY reuse compatible workflow- or provenance-oriented RO-Crate conventions where they improve interoperability. It SHOULD extend or compose with a suitable generic profile rather than duplicate it, provided that research-specific cELF semantics remain preserved.
 
 #### RO-Crate validation
 
-A DERRIDAI RO-Crate exporter SHOULD support machine validation against the declared RO-Crate version, the DERRIDAI RO-Crate Profile, and applicable DERRIDAI schema versions. Validation errors SHOULD distinguish RO-Crate structural failure, DERRIDAI profile failure, missing referenced artifact, and DERRIDAI semantic inconsistency.
+A cELF RO-Crate exporter SHOULD support machine validation against the declared RO-Crate version, the cELF RO-Crate Profile, and applicable cELF schema versions. Validation errors SHOULD distinguish RO-Crate structural failure, cELF profile failure, missing referenced artifact, and cELF semantic inconsistency.
 
 ### Claim-Level Publication and Nanopublication Compatibility
 
 #### Status and rationale
 
-Nanopublication interoperability is OPTIONAL in DERRIDAI Core 1.0 and is not required for Core, Publication, Retrieval, Evidence, Reproducible Research, or Local Sovereign conformance. A future DERRIDAI Nanopublication Profile MAY define a normative serialization once GeneratedClaim and SupportBinding semantics are sufficiently stable.
+Nanopublication interoperability is OPTIONAL in cELF Core 1.0 and is not required for Core, Publication, Retrieval, Evidence, Reproducible Research, or Local Sovereign conformance. A future cELF Nanopublication Profile MAY define a normative serialization once GeneratedClaim and SupportBinding semantics are sufficiently stable.
 
-Nanopublications are relevant because DERRIDAI increasingly models research output at the level of individual claims. Conceptually, GeneratedClaim can correspond to an assertion, SupportBinding plus EvidenceRef can contribute assertion provenance, and ResearchRun plus agent/model information can contribute publication provenance.
+Nanopublications are relevant because cELF increasingly models research output at the level of individual claims. Conceptually, GeneratedClaim can correspond to an assertion, SupportBinding plus EvidenceRef can contribute assertion provenance, and ResearchRun plus agent/model information can contribute publication provenance.
 
 #### Why nanopublications are not Core
 
@@ -915,11 +921,11 @@ Before a GeneratedClaim is exported through a future nanopublication profile, th
 
 A future claim-publication profile MAY distinguish relations such as support, partial support, qualification, contrast, contradiction, and background. A serialization MAY assign compact machine-readable identifiers to those relations. The relation MUST NOT be inferred solely from the presence of a citation. Citation and evidentiary relation remain distinct.
 
-### Interoperability and the DERRIDAI Traceability Matrix
+### Interoperability and the cELF Traceability Matrix
 
 #### Preservation of the source-to-claim chain
 
-The principal reason for interoperability is not merely data export. It is preservation of the DERRIDAI traceability matrix outside a single application. At its fullest extent, the lineage is:
+The principal reason for interoperability is not merely data export. It is preservation of the cELF traceability matrix outside a single application. At its fullest extent, the lineage is:
 
 `SourceDocument -> SourceSpan -> Record -> RecordRevision -> FieldAssertions/Relations -> EvidenceAcquisition -> EvidenceRef -> EvidencePacket -> GenerationRun -> GeneratedClaim -> SupportBinding.`
 
@@ -937,29 +943,29 @@ Where practical, implementations SHOULD support both forward and reverse traceab
 
 #### Profile-specific conformance
 
-DERRIDAI interoperability SHOULD be implemented through explicit profiles rather than through an undifferentiated claim of compatibility. A formal conformance statement MUST identify the profile to which the claim applies.
+cELF interoperability SHOULD be implemented through explicit profiles rather than through an undifferentiated claim of compatibility. A formal conformance statement MUST identify the profile to which the claim applies.
 
-A statement such as _DERRIDAI compatible_ is insufficient for formal conformance. A formal statement SHOULD instead identify, for example, DERRIDAI Core 1.0, DERRIDAI Evidence 1.0, DERRIDAI PROV Mapping 1.0, and DERRIDAI RO-Crate 1.0.
+A statement such as _cELF compatible_ is insufficient for formal conformance. A formal statement SHOULD instead identify, for example, cELF Core 1.0, cELF Evidence 1.0, cELF PROV Mapping 1.0, and cELF RO-Crate 1.0.
 
 #### Partial support
 
-An implementation MAY support only some interoperability profiles. A system may conform to DERRIDAI Core and produce PROV exports without supporting RO-Crate, or may produce RO-Crate packages without implementing claim-level SupportBinding. Partial support MUST NOT be described as conformance with unsupported profiles.
+An implementation MAY support only some interoperability profiles. A system may conform to cELF Core and produce PROV exports without supporting RO-Crate, or may produce RO-Crate packages without implementing claim-level SupportBinding. Partial support MUST NOT be described as conformance with unsupported profiles.
 
 #### Validation report
 
-An interoperability exporter SHOULD be capable of producing a validation report containing export identifier, export time, DERRIDAI version, profile versions, external-standard versions, validation status, warnings, lossy-mapping declarations, missing optional information, and failed requirements.
+An interoperability exporter SHOULD be capable of producing a validation report containing export identifier, export time, cELF version, profile versions, external-standard versions, validation status, warnings, lossy-mapping declarations, missing optional information, and failed requirements.
 
 #### Loss report
 
-If an export cannot preserve all relevant DERRIDAI semantics, it SHOULD produce a loss report identifying what was preserved, what was not represented, and why. Silent degradation SHOULD be treated as a conformance failure where the omitted information is material to the claimed profile.
+If an export cannot preserve all relevant cELF semantics, it SHOULD produce a loss report identifying what was preserved, what was not represented, and why. Silent degradation SHOULD be treated as a conformance failure where the omitted information is material to the claimed profile.
 
 #### Round-trip behavior
 
-A lossless interoperability profile SHOULD define expected round-trip behavior from native DERRIDAI object to external representation and back. Round-trip conformance need not reproduce database row IDs, cache state, UI state, serialization order, or whitespace. It SHOULD preserve material research semantics.
+A lossless interoperability profile SHOULD define expected round-trip behavior from native cELF object to external representation and back. Round-trip conformance need not reproduce database row IDs, cache state, UI state, serialization order, or whitespace. It SHOULD preserve material research semantics.
 
 #### Unknown extensions
 
-Consumers SHOULD preserve unknown extension terms where practical. A consumer MUST NOT reinterpret an unknown DERRIDAI extension as a known field with different semantics. Forward-compatible parsing SHOULD prefer preservation over destructive normalization.
+Consumers SHOULD preserve unknown extension terms where practical. A consumer MUST NOT reinterpret an unknown cELF extension as a known field with different semantics. Forward-compatible parsing SHOULD prefer preservation over destructive normalization.
 
 #### Security and secrets
 
@@ -973,7 +979,7 @@ An exporter SHOULD permit research-sensitive information to be excluded or redac
 
 External-standard support MUST NOT imply cloud dependence. A Local Sovereign implementation SHOULD be able to generate PROV locally, generate RO-Crate locally, validate exported packages locally, and inspect resulting metadata locally without contacting an external service.
 
-### Relationship of DERRIDAI to External Standards
+### Relationship of cELF to External Standards
 
 #### Division of responsibility
 
@@ -981,25 +987,25 @@ The standards addressed in this section solve related but different problems.
 
 |                               |                                                                                  |
 | :---------------------------- | :------------------------------------------------------------------------------- |
-| **DERRIDAI**                  | Scholarly-AI research semantics and traceability.                                |
+| **cELF**                      | Scholarly-AI research semantics and traceability.                                |
 | **W3C PROV**                  | General provenance relationships among entities, activities, and agents.         |
 | **RO-Crate**                  | Portable research-object packaging and contextual metadata.                      |
 | **Nanopublications**          | Potential publication of small, independently identifiable scholarly assertions. |
 | **JSON, JSONL, JSON-LD, RDF** | Serialization and exchange technologies.                                         |
 
-PROV does not replace DERRIDAI concepts such as speaker, quoted speaker, position holder, stance, target, discourse role, proposition status, EvidenceRef, SupportBinding, assertion status, or review state. RO-Crate does not define what constitutes a DERRIDAI Record, how a RecordRevision differs from a Record, how evidence is bound to a claim, or which corpus state is authoritative. Nanopublications do not replace the corpus, evidence-acquisition system, Record model, or ResearchRun model.
+PROV does not replace cELF concepts such as speaker, quoted speaker, position holder, stance, target, discourse role, proposition status, EvidenceRef, SupportBinding, assertion status, or review state. RO-Crate does not define what constitutes a cELF Record, how a RecordRevision differs from a Record, how evidence is bound to a claim, or which corpus state is authoritative. Nanopublications do not replace the corpus, evidence-acquisition system, Record model, or ResearchRun model.
 
-#### What DERRIDAI contributes
+#### What cELF contributes
 
-DERRIDAI’s contribution is not a new generic provenance vocabulary or generic archive format. It specifies the scholarly information chain that more general standards can carry.
+cELF’s contribution is not a new generic provenance vocabulary or generic archive format. It specifies the scholarly information chain that more general standards can carry.
 
-A generic provenance graph might state that Entity A was derived from Entity B and that Activity C used A to generate Entity D. A DERRIDAI representation can additionally establish that B is a specific SourceDocument; A is revision 3 of a Record representing pages 97–98; the document author is Derrida; the current speaker is Derrida; the represented position is attributed to Levinas; the attribution was first model-inferred and later human-confirmed; the Record entered a ResearchRun through researcher-selected evidence rather than vector search; EvidenceRef E7 identified the exact supplied passage; GenerationRun G9 used the EvidencePacket; GeneratedClaim C12 was produced; SupportBinding SB8 states that E7 supports C12; and a deterministic citation resolver generated the scholarly citation from bibliographic and page metadata.
+A generic provenance graph might state that Entity A was derived from Entity B and that Activity C used A to generate Entity D. A cELF representation can additionally establish that B is a specific SourceDocument; A is revision 3 of a Record representing pages 97–98; the document author is Derrida; the current speaker is Derrida; the represented position is attributed to Levinas; the attribution was first model-inferred and later human-confirmed; the Record entered a ResearchRun through researcher-selected evidence rather than vector search; EvidenceRef E7 identified the exact supplied passage; GenerationRun G9 used the EvidencePacket; GeneratedClaim C12 was produced; SupportBinding SB8 states that E7 supports C12; and a deterministic citation resolver generated the scholarly citation from bibliographic and page metadata.
 
-> **Interoperability design principle.** Use established standards for the general problems they already solve; preserve DERRIDAI for the scholarly and AI-research semantics that remain domain-specific. Interoperability SHOULD preserve traceability, packaging SHOULD preserve reproducibility, local export SHOULD remain possible, and any loss of meaning MUST be explicit rather than silent.
+> **Interoperability design principle.** Use established standards for the general problems they already solve; preserve cELF for the scholarly and AI-research semantics that remain domain-specific. Interoperability SHOULD preserve traceability, packaging SHOULD preserve reproducibility, local export SHOULD remain possible, and any loss of meaning MUST be explicit rather than silent.
 
 ## Appendix A - Normative Entity Model and Object Glossary
 
-Appendix A is normative. DERRIDAI intentionally keeps the first-class object model small. Generic implementation artifacts MAY exist, but they do not become DERRIDAI semantic objects unless they preserve a distinction DERRIDAI itself needs to standardize.
+Appendix A is normative. cELF intentionally keeps the first-class object model small. Generic implementation artifacts MAY exist, but they do not become cELF semantic objects unless they preserve a distinction cELF itself needs to standardize.
 
 ### Normative entity and cardinality model
 
@@ -1009,9 +1015,9 @@ The central cardinality rules are:
 2. A Record belongs to exactly one SourceDocument and derives from one or more SourceSpans, all from that same SourceDocument.
 3. A Record may have zero or more explicitly materialized RecordRevisions; authoritative text and other evidence-affecting changes MUST advance the applicable revision identifier.
 4. An EvidenceRef semantic locator has exactly one authoritative locator mode: record-backed or direct-source-span-backed. Both modes resolve to exactly one SourceDocument; the locator MAY be named or embedded in another retained object.
-5. An EvidencePacket contains ordered composite entries that carry or refer to EvidenceRef locators; those packet entries are not independent DERRIDAI objects.
+5. An EvidencePacket contains ordered composite entries that carry or refer to EvidenceRef locators; those packet entries are not independent cELF objects.
 6. A SupportBinding binds exactly one GeneratedClaim to one or more named or embedded EvidenceRef locators.
-7. Run-local diagnostics, transport references, storage encodings, validation reports, and external-standard objects MUST NOT replace the durable DERRIDAI identities to which they refer.
+7. Run-local diagnostics, transport references, storage encodings, validation reports, and external-standard objects MUST NOT replace the durable cELF identities to which they refer.
 
 A compact cardinality view is:
 
@@ -1050,34 +1056,34 @@ ResearchRun --------------- references publication/evidence/generation/validatio
 | **SupportBinding**    | Claim-scoped evidentiary relation; run-specific/audit-retainable                             | Exactly 1 GeneratedClaim; 1..\* named or embedded EvidenceRef locators. Profile: Claim-Binding                                                                                            |
 | **ResearchRun**       | Coherent retained research-operation audit view; run/audit state                             | May be one object or a resolvable composition of durable run records; references publication, evidence, generation, validation, and advisory-memory state. Profile: Reproducible Research |
 
-DERRIDAI intentionally does **not** define first-class semantic objects for extraction units, generic relations, metadata schemas, generic transformations, storage projections, collection manifests, retrieval hits or candidates, packet items, transport RecordRefs, validation results, or grade results. Implementations MAY use such artifacts. Their semantics are governed by the relevant DERRIDAI identity, provenance, evidence, or interoperability rules rather than by additional object classes.
+cELF intentionally does **not** define first-class semantic objects for extraction units, generic relations, metadata schemas, generic transformations, storage projections, collection manifests, retrieval hits or candidates, packet items, transport RecordRefs, validation results, or grade results. Implementations MAY use such artifacts. Their semantics are governed by the relevant cELF identity, provenance, evidence, or interoperability rules rather than by additional object classes.
 
 ## Appendix B - Extensibility and Conformance
 
 ### Extensions and Versioning
 
-Implementations MAY define domain-specific fields, validators, acquisition methods, retrieval methods, evidence relations, or profiles. Extensions MUST NOT redefine DERRIDAI Core semantics without declaring an incompatible contract.
+Implementations MAY define domain-specific fields, validators, acquisition methods, retrieval methods, evidence relations, or profiles. Extensions MUST NOT redefine cELF Core semantics without declaring an incompatible contract.
 
 Namespaced extension identifiers SHOULD be used when interoperability is expected. Unknown optional extensions SHOULD be preserved where practical and MUST NOT be reinterpreted as known fields with different semantics.
 
-Application version, DERRIDAI specification version, interchange schema version, metadata-contract version, prompt-contract version, processing-profile version, publication version, and model/provider revision MUST remain conceptually distinct. Persisted data MUST NOT be silently reinterpreted under an incompatible newer contract.
+Application version, cELF specification version, interchange schema version, metadata-contract version, prompt-contract version, processing-profile version, publication version, and model/provider revision MUST remain conceptually distinct. Persisted data MUST NOT be silently reinterpreted under an incompatible newer contract.
 
 ### Conformance Profiles
 
 A conformance profile is a named bundle of requirements.
 
-- **DERRIDAI Core 1.0** establishes documentary identity, Record identity, revision, assertion provenance, validation, visible uncertainty, model independence, and version integrity.
-- **DERRIDAI Publication 1.0** adds immutable validated corpus publication.
-- **DERRIDAI Retrieval 1.0** adds explicit computational retrieval-run semantics while keeping retrieval diagnostics outside authoritative Record state.
-- **DERRIDAI Evidence 1.0** adds EvidenceRef, EvidencePacket, evidence-to-source provenance, declared truncation, and citation integrity.
-- **DERRIDAI Claim-Binding 1.0** depends on Core + Evidence and adds GeneratedClaim, SupportBinding, and the claim-to-source chain.
-- **DERRIDAI Reproducible Research 1.0** depends on Core + Evidence and adds retained ResearchRun state sufficient for substantial process reconstruction.
-- **DERRIDAI Local Sovereign 1.0** adds the ability to perform the declared essential operations within researcher-controlled infrastructure without mandatory remote dependencies.
-- **DERRIDAI PROV Mapping 1.0** and **DERRIDAI RO-Crate 1.0** are interoperability adapter profiles.
+- **cELF Core 1.0** establishes documentary identity, Record identity, revision, assertion provenance, validation, visible uncertainty, model independence, and version integrity.
+- **cELF Publication 1.0** adds immutable validated corpus publication.
+- **cELF Retrieval 1.0** adds explicit computational retrieval-run semantics while keeping retrieval diagnostics outside authoritative Record state.
+- **cELF Evidence 1.0** adds EvidenceRef, EvidencePacket, evidence-to-source provenance, declared truncation, and citation integrity.
+- **cELF Claim-Binding 1.0** depends on Core + Evidence and adds GeneratedClaim, SupportBinding, and the claim-to-source chain.
+- **cELF Reproducible Research 1.0** depends on Core + Evidence and adds retained ResearchRun state sufficient for substantial process reconstruction.
+- **cELF Local Sovereign 1.0** adds the ability to perform the declared essential operations within researcher-controlled infrastructure without mandatory remote dependencies.
+- **cELF PROV Mapping 1.0** and **cELF RO-Crate 1.0** are interoperability adapter profiles.
 
 ### Normative Conformance Requirement Catalog
 
-The following identifiers are the tracked conformance requirements for DERRIDAI 1.0. The catalog is limited to requirements that protect DERRIDAI's scholarly semantics, identity, evidence, or declared capability boundaries.
+The following identifiers are the tracked conformance requirements for cELF 1.0. The catalog is limited to requirements that protect cELF's scholarly semantics, identity, evidence, or declared capability boundaries.
 
 #### Core requirements
 
@@ -1150,15 +1156,15 @@ The following identifiers are the tracked conformance requirements for DERRIDAI 
 
 #### PROV Mapping requirements
 
-| Requirement          | Normative statement                                                                                                                                                                                                                                | Test class        |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
-| **PROV-ID-001 MUST** | A PROV export preserves applicable DERRIDAI identity/lineage semantics, human/computational distinction where known, material RecordRevision/SourceSpan, FieldAssertion state dimensions, claim/evidence binding where present, and declared loss. | external+semantic |
+| Requirement          | Normative statement                                                                                                                                                                                                                            | Test class        |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| **PROV-ID-001 MUST** | A PROV export preserves applicable cELF identity/lineage semantics, human/computational distinction where known, material RecordRevision/SourceSpan, FieldAssertion state dimensions, claim/evidence binding where present, and declared loss. | external+semantic |
 
 #### RO-Crate requirements
 
-| Requirement          | Normative statement                                                                                                                                                                                           | Test class        |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
-| **ROCR-ID-001 MUST** | A RO-Crate export declares RO-Crate and DERRIDAI adapter versions, stable object references, authoritative/derived status, sufficient ResearchRun/EvidencePacket state, and validates against both contracts. | external+semantic |
+| Requirement          | Normative statement                                                                                                                                                                                       | Test class        |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| **ROCR-ID-001 MUST** | A RO-Crate export declares RO-Crate and cELF adapter versions, stable object references, authoritative/derived status, sufficient ResearchRun/EvidencePacket state, and validates against both contracts. | external+semantic |
 
 #### Local Sovereign requirements
 
@@ -1202,13 +1208,13 @@ The following identifiers are the tracked conformance requirements for DERRIDAI 
 
 ### Reference Interchange and Automated Conformance
 
-DERRIDAI defines a reference JSON interchange profile, `derridai-reference-json-v1`, so conformance can be tested independently of an implementation's native database or programming language. Native storage MAY differ. For automated assessment, an implementation MUST be able to emit equivalent reference-interchange data or a documented lossless mapping for the claimed profile.
+cELF defines a reference JSON interchange profile, `derridai-reference-json-v1`, so conformance can be tested independently of an implementation's native database or programming language. Native storage MAY differ. For automated assessment, an implementation MUST be able to emit equivalent reference-interchange data or a documented lossless mapping for the claimed profile.
 
 The principal top-level first-class collections are:
 
 `source_documents`, `source_spans`, `records`, `record_revisions`, `field_assertions`, `corpus_publications`, `retrieval_runs`, `evidence_refs`, `evidence_packets`, `generation_runs`, `generated_claims`, `support_bindings`, and `research_runs`.
 
-Implementation-specific extraction units, storage projections, collection manifests, retrieval candidates, validation records, and similar artifacts MAY appear as namespaced extensions, but they are not required DERRIDAI object collections.
+Implementation-specific extraction units, storage projections, collection manifests, retrieval candidates, validation records, and similar artifacts MAY appear as namespaced extensions, but they are not required cELF object collections.
 
 Automated conformance distinguishes:
 
@@ -1362,30 +1368,30 @@ The following examples are illustrative serializations of the normative concepts
 
 ## Appendix D - Relationship to External Standards
 
-DERRIDAI's contribution is not a new generic provenance vocabulary, workflow engine, archive format, or serialization technology. It specifies scholarly-AI semantics that general standards can carry.
+cELF's contribution is not a new generic provenance vocabulary, workflow engine, archive format, or serialization technology. It specifies scholarly-AI semantics that general standards can carry.
 
-| Standard or technology   | Primary responsibility relative to DERRIDAI                                                                        |
+| Standard or technology   | Primary responsibility relative to cELF                                                                            |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| **DERRIDAI**             | Documentary identity, scholarly attribution and epistemic state, evidentiary use, and source-to-claim traceability |
+| **cELF**                 | Documentary identity, scholarly attribution and epistemic state, evidentiary use, and source-to-claim traceability |
 | **W3C PROV**             | General provenance relationships among entities, activities, and agents                                            |
 | **RO-Crate**             | Portable packaging and contextual metadata for research objects                                                    |
 | **JSON / JSON-LD / RDF** | Serialization and exchange technologies                                                                            |
 
-PROV does not by itself define DERRIDAI distinctions such as SourceSpan precision, Record versus RecordRevision, speaker versus position holder, FieldAssertion authority, exact EvidenceRef locator mode, or SupportBinding. RO-Crate does not define what constitutes a DERRIDAI Record, which corpus state is authoritative, or how evidence supports a GeneratedClaim.
+PROV does not by itself define cELF distinctions such as SourceSpan precision, Record versus RecordRevision, speaker versus position holder, FieldAssertion authority, exact EvidenceRef locator mode, or SupportBinding. RO-Crate does not define what constitutes a cELF Record, which corpus state is authoritative, or how evidence supports a GeneratedClaim.
 
-> **Interoperability design principle.** Use established standards for the general problems they already solve; use DERRIDAI only for the scholarly and AI-research semantics that remain domain-specific. Any loss of those semantics MUST be explicit rather than silent.
+> **Interoperability design principle.** Use established standards for the general problems they already solve; use cELF only for the scholarly and AI-research semantics that remain domain-specific. Any loss of those semantics MUST be explicit rather than silent.
 
 ## Appendix E - Reference Implementation
 
 _This appendix is non-normative._
 
-The published DERRIDAI Core Specification 1.0 PDF records a pre-publication audit of DerridAI `master` at commit `724bef420a404fb2bc24182d8218f7a56d0ed84f` on 24 September 2026. That audit is a historical implementation snapshot, not part of the normative contract. The repository may advance beyond it while remaining governed by the normative requirements above.
+The published Core Specification 1.0 PDF (issued under the earlier DERRIDAI title) records a pre-publication audit of DerridAI `master` at commit `724bef420a404fb2bc24182d8218f7a56d0ed84f` on 24 September 2026. That audit is a historical implementation snapshot, not part of the normative contract. The repository may advance beyond it while remaining governed by the normative requirements above.
 
 The DerridAI application is the originating reference implementation. Its practical scholarly-provenance shorthand is:
 
 `SOURCE -> PASSAGE -> SPEAKER -> POSITION HOLDER -> STANCE -> PROPOSITION -> EXACT EVIDENCE -> CITATION -> CLAIM`
 
-Implementation lessons incorporated into DERRIDAI 1.0 include:
+Implementation lessons incorporated into cELF 1.0 include:
 
 - **Pinned metadata contracts.** A run/build is bound to the metadata-contract snapshot it actually used; later schema edits do not reinterpret prior work. Stable field identity is recommended across non-semantic renames.
 - **Protected segmentation.** Source conservation includes avoiding attribution- and quotation-sensitive splits merely to satisfy engineering size targets.
@@ -1400,21 +1406,21 @@ Reference-implementation coverage MUST NOT be treated as a conformance score unl
 
 _This section is non-normative._
 
-DERRIDAI deliberately standardizes fewer objects than a complete application may contain. The Record is central because retrieval chunks, database rows, and cache entries are implementation artifacts while Records are intended to survive changes in retrieval infrastructure.
+cELF deliberately standardizes fewer objects than a complete application may contain. The Record is central because retrieval chunks, database rows, and cache entries are implementation artifacts while Records are intended to survive changes in retrieval infrastructure.
 
 Evidence is a role rather than a copy because the same documentary material may support one inquiry and be irrelevant in another. Attribution remains first-class because document author, speaker, position holder, target, and quoted source can differ. FieldAssertion remains first-class because derivation, evaluation, authority, and value state are scholarly distinctions that generic provenance alone does not capture.
 
-By contrast, extraction blocks, generic relations, schema-editor objects, storage projections, collection manifests, retrieval-candidate classes, packet-item wrapper classes, validation-result classes, and grading-result classes are not necessary to define DERRIDAI's scholarly semantics. Implementations may use them freely without making them part of the DERRIDAI conceptual model.
+By contrast, extraction blocks, generic relations, schema-editor objects, storage projections, collection manifests, retrieval-candidate classes, packet-item wrapper classes, validation-result classes, and grading-result classes are not necessary to define cELF's scholarly semantics. Implementations may use them freely without making them part of the cELF conceptual model.
 
 ### Specification Summary
 
-The DERRIDAI conceptual model is the scholarly source-to-claim chain:
+The cELF conceptual model is the scholarly source-to-claim chain:
 
 `SourceDocument -> SourceSpan -> Record -> RecordRevision -> FieldAssertion -> Evidence Acquisition -> EvidenceRef -> EvidencePacket -> GenerationRun -> GeneratedClaim -> SupportBinding`
 
 These are semantic roles, not mandatory class names. EvidenceRef and EvidencePacket may be embedded in retained run data, and a native FieldAssertion representation may use different field names when the required epistemic dimensions are recoverable without loss. Advisory memory remains outside the evidence chain until it is re-resolved against current documentary state.
 
-The minimum DERRIDAI Core conformance profile requires the durable documentary substrate:
+The minimum cELF Core conformance profile requires the durable documentary substrate:
 
 `SourceDocument -> SourceSpan -> Record`
 
@@ -1422,4 +1428,4 @@ with revision and assertion provenance preserved when applicable. Evidence, gene
 
 For audit, the essential chain reverses from GeneratedClaim through SupportBinding and EvidenceRef to the exact RecordRevision or SourceSpan and ultimately to the SourceDocument.
 
-The scope rule follows directly: **DERRIDAI standardizes an object only when the object preserves a scholarly identity or distinction that must survive across implementations; generic infrastructure remains implementation-specific and is constrained only where it can damage that scholarly traceability.**
+The scope rule follows directly: **cELF standardizes an object only when the object preserves a scholarly identity or distinction that must survive across implementations; generic infrastructure remains implementation-specific and is constrained only where it can damage that scholarly traceability.**

@@ -9,7 +9,7 @@ lossless for the declared contract:
 * assertion-backed root projections are removed;
 * repeated evidence on superseding assertions is replaced by a pointer to the
   preceding assertion when the evidence is byte-for-byte semantically equal;
-* nullable/empty payload members are omitted except where DERRIDAI Core requires
+* nullable/empty payload members are omitted except where cELF Core requires
   an explicit null (evaluated assertions with unavailable confidence);
 * JSONL is written atomically as a streaming Zstandard frame.
 
@@ -82,7 +82,7 @@ def _is_empty_json_value(value: Any) -> bool:
 def sparse_json(value: Any) -> Any:
     """Recursively omit null/empty object members without erasing epistemic state.
 
-    DERRIDAI Core requires confidence to be omitted when a field was not
+    cELF Core requires confidence to be omitted when a field was not
     evaluated, but *present as either a number or explicit null* when evaluation
     occurred.  Therefore evaluated ``confidence: null`` is the one intentional
     exception to the general null-elision rule.
@@ -469,7 +469,7 @@ def write_jsonl_zst(
     zstd = _import_zstandard()
     target = Path(path)
     if not str(target.name).endswith(".jsonl.zst"):
-        raise ValueError("DERRIDAI archival ledger path must end in .jsonl.zst")
+        raise ValueError("cELF archival ledger path must end in .jsonl.zst")
     target.parent.mkdir(parents=True, exist_ok=True)
 
     content_hasher = hashlib.sha256()

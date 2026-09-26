@@ -147,6 +147,10 @@ class Settings:
     llm_max_fields: int = _int_env("LLM_MAX_FIELDS", 12)
     api_batch_size: int = _int_env("API_BATCH_SIZE", 128)
 
+    # Prior Research responses steer new answers only when graded at least this
+    # well (0-10 overall score). Ungraded responses never steer.
+    research_memory_min_grade: float = _float_env("RESEARCH_MEMORY_MIN_GRADE", 7.0)
+
     rag_default_k: int = _int_env("RAG_DEFAULT_K", 64)
     rag_default_fetch_k: int = _int_env("RAG_DEFAULT_FETCH_K", 500)
     rag_default_rerank_top_n: int = _int_env("RAG_DEFAULT_RERANK_TOP_N", 24)

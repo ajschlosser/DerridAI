@@ -30,7 +30,7 @@ SEGMENTATION_PROMPT_VERSION = "derridai-local-boundaries-v7"
 
 
 
-METADATA_PROMPT_VERSION = "derridai-record-metadata-v11"
+METADATA_PROMPT_VERSION = "derridai-record-metadata-v12"
 
 
 
