@@ -68,8 +68,15 @@ const searchDialog = ref<HTMLDialogElement | null>(null);
 const statusPoll = ref<number | null>(null);
 const activeLibrary = ref<"gutenberg" | "wikisource">("gutenberg");
 
-const sourceSetupDisabled = computed(
-  () => props.disabled || props.sourceSelectionDisabled,
+const sourceSetupDisabled = computed(() => props.disabled || props.sourceSelectionDisabled);
+const catalogueRefreshing = computed(() =>
+  ["refreshing", "indexing"].includes(
+    String(props.gutenbergStatus?.catalogue.status || ""),
+  ),
+);
+const archiveStatus = computed(() => String(props.gutenbergStatus?.archive.status || ""));
+const archiveSettling = computed(() =>
+  ["downloaded", "unpacking", "ready"].includes(archiveStatus.value),
 );
 
 const ocrStrategy = computed(() => {
@@ -110,6 +117,39 @@ function formatBytes(value?: number | null) {
     unit += 1;
   } while (size >= 1024 && unit < units.length - 1);
   return `${size.toFixed(size >= 10 ? 1 : 2)} ${units[unit]}`;
+}
+
+function archiveAction(): "start" | "pause" | "resume" {
+  if (archiveStatus.value === "downloading") return "pause";
+  if (archiveStatus.value === "paused") return "resume";
+  return "start";
+}
+
+function archiveActionLabel() {
+  if (archiveStatus.value === "ready") {
+    return i18n.t("pdf_corpus.gutenberg_collection_ready", "Collection ready");
+  }
+  if (["downloaded", "unpacking"].includes(archiveStatus.value)) {
+    return i18n.t("pdf_corpus.gutenberg_unpacking", "Unpacking collection…");
+  }
+  if (archiveStatus.value === "downloading") {
+    return i18n.t("pdf_corpus.gutenberg_pause_download");
+  }
+  if (archiveStatus.value === "paused") {
+    return i18n.t("pdf_corpus.gutenberg_resume_download");
+  }
+  return i18n.t("pdf_corpus.gutenberg_start_download");
+}
+
+function catalogueActionLabel() {
+  if (catalogueRefreshing.value) {
+    return i18n.t("pdf_corpus.gutenberg_catalogue_refreshing", "Updating catalogue…");
+  }
+  return i18n.t(
+    props.gutenbergStatus?.catalogue.status === "ready"
+      ? "pdf_corpus.gutenberg_refetch_catalogue"
+      : "pdf_corpus.gutenberg_fetch_catalogue",
+  );
 }
 
 function onOcrStrategy(strategy: string) {
@@ -327,61 +367,18 @@ onBeforeUnmount(closeSearch);
           <button
             type="button"
             class="btn btn-quiet"
-            :disabled="
-              disabled ||
-              busy === 'gutenberg-catalogue' ||
-              ['refreshing', 'indexing'].includes(String(gutenbergStatus?.catalogue.status || ''))
-            "
+            :disabled="disabled || busy === 'gutenberg-catalogue' || catalogueRefreshing"
             @click="emit('refreshGutenbergCatalogue')"
           >
-            {{
-              ["refreshing", "indexing"].includes(
-                String(gutenbergStatus?.catalogue.status || ""),
-              )
-                ? i18n.t("pdf_corpus.gutenberg_catalogue_refreshing", "Updating catalogue…")
-                : i18n.t(
-                    gutenbergStatus?.catalogue.status === "ready"
-                      ? "pdf_corpus.gutenberg_refetch_catalogue"
-                      : "pdf_corpus.gutenberg_fetch_catalogue",
-                  )
-            }}
+            {{ catalogueActionLabel() }}
           </button>
           <button
             type="button"
             class="btn btn-quiet"
-            :disabled="
-              disabled ||
-              busy === 'gutenberg-archive' ||
-              ['downloaded', 'unpacking', 'ready'].includes(
-                String(gutenbergStatus?.archive.status || ''),
-              )
-            "
-            @click="
-              emit(
-                'updateGutenbergArchive',
-                gutenbergStatus?.archive.status === 'downloading'
-                  ? 'pause'
-                  : gutenbergStatus?.archive.status === 'paused'
-                    ? 'resume'
-                    : 'start',
-              )
-            "
+            :disabled="disabled || busy === 'gutenberg-archive' || archiveSettling"
+            @click="emit('updateGutenbergArchive', archiveAction())"
           >
-            {{
-              gutenbergStatus?.archive.status === "ready"
-                ? i18n.t("pdf_corpus.gutenberg_collection_ready", "Collection ready")
-                : ["downloaded", "unpacking"].includes(
-                      String(gutenbergStatus?.archive.status || ""),
-                    )
-                  ? i18n.t("pdf_corpus.gutenberg_unpacking", "Unpacking collection…")
-                  : i18n.t(
-                      gutenbergStatus?.archive.status === "downloading"
-                        ? "pdf_corpus.gutenberg_pause_download"
-                        : gutenbergStatus?.archive.status === "paused"
-                          ? "pdf_corpus.gutenberg_resume_download"
-                          : "pdf_corpus.gutenberg_start_download",
-                    )
-            }}
+            {{ archiveActionLabel() }}
           </button>
         </div>
         <progress
@@ -403,6 +400,9 @@ onBeforeUnmount(closeSearch);
             )
           }}
         </small>
+        <small v-if="gutenbergStatus?.catalogue.error" class="source-error">{{
+          gutenbergStatus.catalogue.error
+        }}</small>
         <small v-if="gutenbergStatus?.archive.error" class="source-error">{{
           gutenbergStatus.archive.error
         }}</small>
