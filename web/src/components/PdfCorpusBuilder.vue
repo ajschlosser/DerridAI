@@ -10,7 +10,6 @@ import {
 } from "../api/corpus";
 import { useI18nStore } from "../stores/i18n";
 import CorpusBuildProgress from "./CorpusBuildProgress.vue";
-import FieldEvidenceList from "./FieldEvidenceList.vue";
 import DocumentStructureConfigurator from "./DocumentStructureConfigurator.vue";
 import MediaStructureConfigurator from "./MediaStructureConfigurator.vue";
 import SourceTranscriptionDialog from "./SourceTranscriptionDialog.vue";
@@ -81,6 +80,7 @@ import CorpusConfigurationNav, {
 import CorpusBuilderWorkspaceHeader from "./corpus-builder/CorpusBuilderWorkspaceHeader.vue";
 import CorpusReviewRecordQueue from "./corpus-builder/CorpusReviewRecordQueue.vue";
 import CorpusReviewToolbar from "./corpus-builder/CorpusReviewToolbar.vue";
+import CorpusReviewEvidencePanel from "./corpus-builder/CorpusReviewEvidencePanel.vue";
 import CorpusEnrichmentConfiguration from "./corpus-builder/CorpusEnrichmentConfiguration.vue";
 import CorpusMetadataConfiguration from "./corpus-builder/CorpusMetadataConfiguration.vue";
 import CorpusAdvancedConfiguration from "./corpus-builder/CorpusAdvancedConfiguration.vue";
@@ -3052,65 +3052,22 @@ defineExpose({
                     </div>
                   </details>
                 </section>
-                <section
+                <CorpusReviewEvidencePanel
                   v-else-if="
                     selectedRecord &&
                     reviewWorkspaceMode === 'record' &&
                     reviewInspectorTab === 'evidence'
                   "
-                  id="review-panel-evidence"
-                  class="review-inspector-panel"
-                  role="tabpanel"
-                  aria-labelledby="review-tab-evidence"
-                  tabindex="0"
-                >
-                  <p class="inspector-help">
-                    {{ i18n.t("pdf_corpus.evidence_review_help") }}
-                  </p>
-                  <FieldEvidenceList
-                    :evidence="selectedRecord.metadata_evidence || {}"
-                    :fields="evidenceCandidateFields"
-                    :selected-field="selectedEvidenceField"
-                    @select="selectedEvidenceField = $event"
-                  />
-                  <div v-if="selectedEvidenceField" class="source-blocks compact-source-blocks">
-                    <article
-                      v-for="block in visibleBlocks"
-                      :key="block.block_id"
-                      class="source-block"
-                      :class="{ 'evidence-block': evidenceBlockIds.has(block.block_id) }"
-                    >
-                      <header>
-                        <span>{{ block.block_id }}</span
-                        ><span
-                          >{{
-                            block.locator_kind === "time"
-                              ? timeLabel(block.start, block.end)
-                              : paginatedSource
-                                ? block.page
-                                : block.block_id
-                          }}
-                          · {{ block.speaker || block.type }}</span
-                        >
-                      </header>
-                      <p>{{ block.text }}</p>
-                      <button
-                        type="button"
-                        class="evidence-toggle"
-                        :aria-pressed="evidenceBlockIds.has(block.block_id)"
-                        @click="toggleEvidenceBlock(block.block_id)"
-                        :disabled="busy !== ''"
-                      >
-                        {{
-                          evidenceBlockIds.has(block.block_id)
-                            ? i18n.t("pdf_corpus.remove_evidence")
-                            : i18n.t("pdf_corpus.add_evidence")
-                        }}
-                        · {{ selectedEvidenceField }}
-                      </button>
-                    </article>
-                  </div>
-                </section>
+                  :record="selectedRecord"
+                  :fields="evidenceCandidateFields"
+                  :selected-field="selectedEvidenceField"
+                  :blocks="visibleBlocks"
+                  :evidence-block-ids="evidenceBlockIds"
+                  :paginated-source="paginatedSource"
+                  :disabled="busy !== ''"
+                  @update:selected-field="selectedEvidenceField = $event"
+                  @toggle-evidence="toggleEvidenceBlock"
+                />
                 <section
                   v-else-if="
                     selectedRecord &&
