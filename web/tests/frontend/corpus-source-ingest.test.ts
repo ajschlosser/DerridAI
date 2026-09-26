@@ -81,6 +81,16 @@ it("shows catalogue results before the collection is ready but keeps imports dis
   expect(search.attributes("disabled")).toBeUndefined();
 });
 
+it("keeps digital-library acquisition available while an existing build locks source selection", async () => {
+  const wrapper = mount(CorpusSourceIngest, {
+    props: { assets: [], hits: [], sourceSelectionDisabled: true },
+  });
+  expect(wrapper.get("button.source-choose").attributes("disabled")).toBeDefined();
+  expect(wrapper.get("button.btn-secondary").attributes("disabled")).toBeUndefined();
+  await wrapper.get("button.btn-secondary").trigger("click");
+  expect(wrapper.find("dialog.source-search-dialog").exists()).toBe(true);
+});
+
 it("uses automatic media detection instead of asking users for a source type", async () => {
   const wrapper = mount(CorpusSourceIngest);
   expect(wrapper.text()).toContain("Format is detected automatically from the file.");
