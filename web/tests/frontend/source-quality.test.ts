@@ -12,7 +12,7 @@ import ProviderProfileSelect from "../../src/components/ProviderProfileSelect.vu
 import { useCorpusRunGuidance } from "../../src/composables/useCorpusRunGuidance";
 
 describe("ProviderProfileSelect availability", () => {
-  it("does not offer unavailable profiles while retaining the active one for diagnosis", () => {
+  it("shows unavailable configured profiles as disabled instead of silently hiding them", () => {
     const wrapper = mount(ProviderProfileSelect, {
       props: {
         modelValue: "missing",
@@ -26,13 +26,22 @@ describe("ProviderProfileSelect availability", () => {
             availability_error: 'Configured model "gone" was not found.',
           },
           { id: "ready", name: "Ready", type: "ollama", model: "present", available: true },
+          {
+            id: "offline",
+            name: "Offline",
+            type: "openai",
+            model: "remote",
+            available: false,
+            availability_error: "Endpoint unavailable.",
+          },
         ],
       },
     });
     const options = wrapper.findAll("option");
-    expect(options).toHaveLength(2);
+    expect(options).toHaveLength(3);
     expect(options[0].attributes("disabled")).toBeDefined();
     expect(options[1].attributes("disabled")).toBeUndefined();
+    expect(options[2].attributes("disabled")).toBeDefined();
     expect(wrapper.get(".provider-unavailable").text()).toContain("Unavailable");
     expect(wrapper.get(".provider-unavailable").text()).toContain("gone");
     wrapper.unmount();
