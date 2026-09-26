@@ -83,3 +83,55 @@ describe("Document manifest editor drafts", () => {
     expect(wrapper.text()).toContain("No unsaved changes");
   });
 });
+
+describe("Document manifest editor origins", () => {
+  const withOrigins = () =>
+    manifest({
+      publication_place: "Baltimore",
+      publication_year: 1967,
+      deterministic_ingest: {
+        applied: {
+          publication_place: {
+            value: "Baltimore",
+            method: "nlp:spacy:en_core_web_lg:place_near_publisher",
+            confidence: 0.7,
+            derivation: "nlp_derived",
+            alternatives: [{ value: "London", confidence: 0.5, derivation: "nlp_derived" }],
+          },
+          publication_year: {
+            value: "1967",
+            method: "pattern:copyright_year",
+            confidence: 0.9,
+            derivation: "computed",
+            alternatives: [{ value: "1976", confidence: 0.55, derivation: "computed" }],
+          },
+        },
+      },
+    });
+
+  it("labels pre-filled values as NLP-derived or computed", () => {
+    const wrapper = mount(DocumentManifestEditor, { props: { manifest: withOrigins() } });
+    const chips = wrapper.findAll(".origin-chip").map((chip) => chip.text());
+    expect(chips.some((text) => text.includes("NLP-derived") && text.includes("70%"))).toBe(true);
+    expect(chips.some((text) => text.includes("Computed") && text.includes("90%"))).toBe(true);
+  });
+
+  it("offers the less certain alternatives, which fill the field on click", async () => {
+    const wrapper = mount(DocumentManifestEditor, { props: { manifest: withOrigins() } });
+    const alternative = wrapper
+      .findAll(".origin-alt")
+      .find((button) => button.text().includes("London"))!;
+    await alternative.trigger("click");
+    expect(
+      (field(wrapper, /place of publication|publication place|^place/i).element as HTMLInputElement)
+        .value,
+    ).toBe("London");
+  });
+
+  it("drops the origin chip once the reviewer changes the value, but keeps the suggestions", async () => {
+    const wrapper = mount(DocumentManifestEditor, { props: { manifest: withOrigins() } });
+    await field(wrapper, /place of publication|publication place|^place/i).setValue("Paris");
+    expect(wrapper.findAll(".origin-chip").some((chip) => chip.text().includes("70%"))).toBe(false);
+    expect(wrapper.findAll(".origin-alt").length).toBeGreaterThan(0);
+  });
+});

@@ -813,6 +813,72 @@ class PdfCorpusRepository:
             _json_write(meta_path, meta)
             return meta
 
+    def preview_unit_policy(self, asset_id: str, policy: dict[str, Any] | None) -> dict[str, Any]:
+        """Counts and sample units for a source-unit policy, without saving anything."""
+        from .unit_policy import preview
+
+        return preview(self.load_blocks(asset_id), policy)
+
+    def derive_asset_with_units(self, asset_id: str, policy: dict[str, Any] | None) -> dict[str, Any]:
+        """A new source asset whose evidence units follow ``policy``.
+
+        The original asset is untouched. The derived asset shares the original bytes and content
+        digest, divides prose blocks deterministically (text conserved), and remembers where it
+        came from. Choosing ``default`` returns the asset this one was derived from, if any.
+        """
+        from .source_quality import page_source_quality_report
+        from .unit_policy import apply_unit_policy, normalize_policy
+
+        resolved = normalize_policy(policy)
+        source = _json_read(self.asset_meta_path(asset_id))
+        if not isinstance(source, dict):
+            raise KeyError(asset_id)
+        origin_id = str(source.get("derived_from_asset_id") or asset_id)
+        if resolved["mode"] == "default":
+            return self.get_asset(origin_id)
+        origin = _json_read(self.asset_meta_path(origin_id))
+        if not isinstance(origin, dict):
+            raise KeyError(origin_id)
+        digest = hashlib.sha256(f"{origin_id}|units|{resolved['mode']}|{resolved.get('chars', '')}".encode()).hexdigest()
+        derived_id = f"pdf-{digest[:24]}"
+        meta_path = self.asset_meta_path(derived_id)
+        with self._lock:
+            existing = _json_read(meta_path)
+            if isinstance(existing, dict):
+                return self.get_asset(derived_id)
+            blocks = self._load_block_rows(origin_id)
+            derived_blocks, remap = apply_unit_policy(blocks, resolved)
+            children: dict[str, list[str]] = {
+                str(block.get("block_id")): remap[index] for index, block in enumerate(blocks)
+            }
+            pages = []
+            for page in origin.get("pages") or []:
+                page = dict(page)
+                page["block_ids"] = [child for old in page.get("block_ids") or [] for child in children.get(str(old), [str(old)])]
+                pages.append(page)
+            suffix = str(origin.get("content_suffix") or ".pdf")
+            source_path = self.asset_content_path(origin_id, suffix)
+            if source_path.exists():
+                self.asset_content_path(derived_id, suffix).write_bytes(source_path.read_bytes())
+            excluded = sum(1 for block in derived_blocks if block.get("excluded_reason"))
+            meta = {
+                **origin,
+                "asset_id": derived_id,
+                "created_at": iso_now(),
+                "derived_from_asset_id": origin_id,
+                "unit_policy": resolved,
+                "pages": pages,
+                "block_count": len(derived_blocks),
+                "included_block_count": len(derived_blocks) - excluded,
+                "excluded_block_count": excluded,
+                "source_quality": page_source_quality_report(derived_blocks, pages),
+            }
+            with self.asset_blocks_path(derived_id).open("w", encoding="utf-8") as handle:
+                for block in derived_blocks:
+                    handle.write(json.dumps(block, ensure_ascii=False) + "\n")
+            _json_write(meta_path, meta)
+            return self.get_asset(derived_id)
+
     def _extract_for_ingest(
         self, data: bytes, *, filename: str, kind: str, ocr_mode: str, ocr_languages: str,
         source_illegibility: float, catalog_metadata: dict[str, Any] | None,
