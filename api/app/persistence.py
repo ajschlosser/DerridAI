@@ -93,6 +93,12 @@ class SQLiteRepositoryBase:
                 CREATE INDEX IF NOT EXISTS idx_provider_profiles_position
                     ON researcher_provider_profiles(position, id);
 
+                CREATE TABLE IF NOT EXISTS system_settings (
+                    key TEXT PRIMARY KEY,
+                    payload_json TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS annotations (
                     id TEXT PRIMARY KEY,
                     user_id INTEGER,
@@ -247,6 +253,7 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
         with self._connect() as conn:
             counts = [
                 int(conn.execute("SELECT COUNT(*) FROM researcher_provider_profiles").fetchone()[0]),
+                int(conn.execute("SELECT COUNT(*) FROM system_settings").fetchone()[0]),
                 int(conn.execute("SELECT COUNT(*) FROM annotations").fetchone()[0]),
                 int(conn.execute("SELECT COUNT(*) FROM languages").fetchone()[0]),
             ]
@@ -260,6 +267,13 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
                     "SELECT payload_json FROM researcher_provider_profiles ORDER BY position,id"
                 )
             ]
+            settings_rows = conn.execute(
+                "SELECT key,payload_json FROM system_settings ORDER BY key"
+            ).fetchall()
+            system_settings = {
+                str(row["key"]): _json_loads(row["payload_json"], None)
+                for row in settings_rows
+            }
             annotations = [
                 _json_loads(row["payload_json"], {})
                 for row in conn.execute(
@@ -274,6 +288,7 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
 
         return {
             "researcher_provider_profiles": profiles,
+            "settings": system_settings,
             "annotations": annotations,
             "languages": languages,
         }
@@ -282,15 +297,22 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
         if not isinstance(data, dict):
             raise ValueError("System repository payload must be an object.")
         profiles = data.get("researcher_provider_profiles") or []
+        system_settings = data.get("settings") or {}
         annotations = data.get("annotations") or []
         languages = data.get("languages") or {}
-        if not isinstance(profiles, list) or not isinstance(annotations, list) or not isinstance(languages, dict):
+        if (
+            not isinstance(profiles, list)
+            or not isinstance(system_settings, dict)
+            or not isinstance(annotations, list)
+            or not isinstance(languages, dict)
+        ):
             raise ValueError("System repository payload is invalid.")
 
         now = _iso_now()
         with self._lock, self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             conn.execute("DELETE FROM researcher_provider_profiles")
+            conn.execute("DELETE FROM system_settings")
             conn.execute("DELETE FROM annotations")
             conn.execute("DELETE FROM languages")
 
@@ -303,6 +325,15 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
                 conn.execute(
                     "INSERT INTO researcher_provider_profiles(id,position,payload_json,updated_at) VALUES(?,?,?,?)",
                     (profile_id, position, _json_dumps(profile), now),
+                )
+
+            for key, value in system_settings.items():
+                clean_key = str(key or "").strip()
+                if not clean_key:
+                    continue
+                conn.execute(
+                    "INSERT INTO system_settings(key,payload_json,updated_at) VALUES(?,?,?)",
+                    (clean_key, _json_dumps(value), now),
                 )
 
             for annotation in annotations:
@@ -343,6 +374,32 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
                     ),
                 )
 
+            conn.commit()
+
+    def get_setting(self, key: str) -> Any:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT payload_json FROM system_settings WHERE key=?",
+                (str(key),),
+            ).fetchone()
+        return _json_loads(row["payload_json"], None) if row else None
+
+    def put_setting(self, key: str, value: Any) -> None:
+        clean_key = str(key or "").strip()
+        if not clean_key:
+            raise ValueError("System setting key cannot be empty.")
+        now = _iso_now()
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO system_settings(key,payload_json,updated_at)
+                VALUES(?,?,?)
+                ON CONFLICT(key) DO UPDATE SET
+                    payload_json=excluded.payload_json,
+                    updated_at=excluded.updated_at
+                """,
+                (clean_key, _json_dumps(value), now),
+            )
             conn.commit()
 
     def list_provider_profiles(self) -> list[dict[str, Any]]:
