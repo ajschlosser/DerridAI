@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { useI18nStore } from "../stores/i18n";
+import UiTooltip from "./ui/UiTooltip.vue";
 import type { RecordSizingPolicy } from "../types/corpus";
 import {
   autoRecordSizingLimits,
@@ -112,7 +113,14 @@ const rulerLabel = computed(() =>
 
 <template>
   <fieldset class="record-sizing" :disabled="disabled" aria-describedby="record-sizing-help">
-    <legend>{{ i18n.t("pdf_corpus.record_sizing.title") }}</legend>
+    <legend>
+      {{ i18n.t("pdf_corpus.record_sizing.title")
+      }}<UiTooltip
+        :text="i18n.t('pdf_corpus.record_sizing.characters_help')"
+        :label="i18n.t('pdf_corpus.record_sizing.characters_help_label')"
+        placement="bottom"
+      />
+    </legend>
     <p id="record-sizing-help" class="help">{{ i18n.t("pdf_corpus.record_sizing.help") }}</p>
 
     <div class="ruler" role="img" :aria-label="rulerLabel">
@@ -169,12 +177,20 @@ const rulerLabel = computed(() =>
           step="50"
           :value="modelValue.preferred_record_chars"
           @input="patch('preferred_record_chars', $event)"
-        /><small>{{
-          i18n.tf("pdf_corpus.record_sizing.preferred_range", {
-            low: low.toLocaleString(),
-            high: high.toLocaleString(),
-          })
-        }}</small></label
+        /><small
+          >{{
+            i18n.tf("pdf_corpus.record_sizing.preferred_range", {
+              low: low.toLocaleString(),
+              high: high.toLocaleString(),
+            })
+          }}
+          ·
+          {{
+            i18n.tf("pdf_corpus.record_sizing.about_words", {
+              count: Math.max(1, Math.round(preferred / 6)).toLocaleString(),
+            })
+          }}</small
+        ></label
       >
       <label for="corpus-tolerance-chars"
         ><span>{{ i18n.t("pdf_corpus.record_sizing.tolerance") }}</span

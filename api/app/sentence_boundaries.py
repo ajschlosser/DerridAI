@@ -8,10 +8,10 @@ that enforces that after segmentation, whatever proposed the boundaries.
 
 A boundary "after block B" is clean when B ends a sentence (or is not running text, such as a
 heading) and the block after it does not continue one. An unclean boundary is moved to the nearest
-clean one between its neighbours; if there is none it is dropped, which joins the two records. When
-joining would make a record larger than `hard_max_chars` the boundary is kept and reported instead:
-a single sentence longer than the limit cannot be split without cutting it, and cutting it is worse
-than an oversized record. The report lists every such case so a reviewer sees it.
+clean one between its neighbours; if there is none it is dropped, which joins the two records. The build's record ceiling is authoritative: a boundary is moved only to a point that keeps both
+records within `hard_max_chars`, and dropped only when the joined record stays within it. Otherwise
+it is kept where it is and reported, so a reviewer sees a record that ends mid-sentence rather than
+one that silently outgrows the size the build asked for.
 
 What this cannot know: a sentence-final full stop after an abbreviation ("Dr.") looks like a clean
 end, and text with no punctuation at all (verse, lists, OCR noise) has no sentence ends to find.
@@ -28,6 +28,26 @@ _SENTENCE_END = re.compile(r"[.!?…]+[\"'’”»)\]]*\s*$")
 # A next block that plainly continues the previous sentence.
 _CONTINUATION_START = re.compile(r"^\s*(?:[a-zà-öø-ÿ]|[,;:)\]»”’])")
 _RUNNING_TEXT = {"body", "paragraph", "text"}
+# A short line with no sentence punctuation anywhere is a heading, a contents entry, a title or a list line, not the
+# middle of a sentence ("Contents", "Preface", "Chapter II", "WOMEN IN THE LIFE OF BALZAC").
+_LINE_MAX_CHARS = 120
+_ANY_SENTENCE_PUNCTUATION = re.compile(r"[.!?…;:]")
+# A fragment ending on one of these is a sentence broken by layout, not a heading.
+_CONTINUATION_WORDS = {
+    "a", "an", "and", "as", "at", "but", "by", "for", "from", "in", "into", "is", "of", "on", "or", "that", "the",
+    "to", "was", "with", "à", "au", "aux", "de", "des", "du", "en", "est", "et", "la", "le", "les", "mais", "ou",
+    "par", "pour", "que", "qui", "sur", "un", "une", "der", "die", "das", "und", "zu",
+}
+
+
+def _is_heading_line(text: str) -> bool:
+    """A short, unpunctuated line that starts like a title and does not stop on a connecting word."""
+    stripped = text.strip()
+    if not stripped or len(stripped) > _LINE_MAX_CHARS or _ANY_SENTENCE_PUNCTUATION.search(stripped):
+        return False
+    if not (stripped[0].isupper() or stripped[0].isdigit()):
+        return False
+    return stripped.split()[-1].casefold() not in _CONTINUATION_WORDS
 
 
 def ends_sentence(block: dict[str, Any]) -> bool:
@@ -37,6 +57,8 @@ def ends_sentence(block: dict[str, Any]) -> bool:
         return True
     if str(block.get("type") or "body") not in _RUNNING_TEXT:
         return True  # a heading, caption or page furniture is not the middle of a sentence
+    if _is_heading_line(text):
+        return True
     return bool(_SENTENCE_END.search(text))
 
 
@@ -71,6 +93,10 @@ def snap_boundaries_to_sentences(
     def clean(i: int) -> bool:
         return i >= last or clean_boundary(blocks[i], blocks[i + 1])
 
+    def span(start: int, end: int) -> int:
+        """Characters in blocks start..end inclusive, counted as records count them (units joined by a blank line)."""
+        return sum(lengths[start : end + 1]) + 2 * max(0, end - start)
+
     result: list[int] = []
     origin: dict[int, int] = {}
     previous = -1
@@ -83,8 +109,13 @@ def snap_boundaries_to_sentences(
             origin[cut] = cut
             previous = cut
             continue
-        # Nearest clean boundary strictly between the neighbouring cuts.
-        candidates = [i for i in range(previous + 1, min(following, last)) if clean(i)]
+        # Nearest clean boundary strictly between the neighbouring cuts that keeps both records within the ceiling.
+        candidates = [
+            i for i in range(previous + 1, min(following, last))
+            if clean(i)
+            and span(previous + 1, i) <= hard_max_chars
+            and span(i + 1, following) <= hard_max_chars
+        ]
         if candidates:
             target = min(candidates, key=lambda i: (abs(i - cut), i - cut))
             result.append(target)
@@ -93,8 +124,7 @@ def snap_boundaries_to_sentences(
             report["moved"].append({"from": str(blocks[cut]["block_id"]), "to": str(blocks[target]["block_id"])})
             continue
         # None: drop it, joining this record to the next, unless that makes it too large.
-        joined = sum(lengths[previous + 1 : following + 1])
-        if joined <= hard_max_chars:
+        if span(previous + 1, following) <= hard_max_chars:
             report["merged"].append({"dropped": str(blocks[cut]["block_id"])})
             continue
         result.append(cut)
