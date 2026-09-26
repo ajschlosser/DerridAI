@@ -1,12 +1,12 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
-from pathlib import Path
 import io
 import sqlite3
 import tarfile
 import zipfile
+from pathlib import Path
 from unittest.mock import patch
 
-from api.app.gutenberg_catalogue import GutenbergOfflineService
+from app.gutenberg_catalogue import GutenbergOfflineService
 
 
 def test_archive_state_is_resumable_without_downloading_archive(tmp_path: Path):
@@ -22,11 +22,11 @@ def test_archive_state_is_resumable_without_downloading_archive(tmp_path: Path):
 
 def _make_archive(path: Path) -> None:
     text = (
-        "Title: A Local Book\n"
-        "Author: A Local Author\n"
-        "\n"
-        "This text is available offline.\n"
-    ).encode()
+        b"Title: A Local Book\n"
+        b"Author: A Local Author\n"
+        b"\n"
+        b"This text is available offline.\n"
+    )
     tar_buffer = io.BytesIO()
     with tarfile.open(fileobj=tar_buffer, mode="w") as tar:
         info = tarfile.TarInfo("1342.txt")

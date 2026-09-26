@@ -2,12 +2,12 @@
 """Durable offline Project Gutenberg catalogue and archive bookkeeping."""
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
-import json
+import tarfile
 import threading
 import zipfile
-import tarfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any

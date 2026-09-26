@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 import threading
 import time
@@ -18,6 +19,7 @@ from .source_safety import MAX_SOURCE_BYTES
 
 _WIKISOURCE_RATE_LOCK = threading.Lock()
 _WIKISOURCE_LAST_REQUEST = 0.0
+logger = logging.getLogger(__name__)
 
 
 def normalize_gutenberg_hit(item: dict[str, Any]) -> dict[str, Any] | None:
@@ -70,7 +72,7 @@ def search_project_gutenberg(query: str, limit: int = 12) -> list[dict[str, Any]
         if gutenberg_offline.status()["search_ready"]:
             return gutenberg_offline.search(text, limit)
     except Exception:
-        pass
+        logger.warning("Local Gutenberg search unavailable; using Gutendex", exc_info=True)
     return _gutendex_search(text, limit)
 
 
@@ -130,7 +132,7 @@ def load_gutenberg_etext(etext_id: int) -> tuple[str, dict[str, Any]]:
         if local is not None:
             return local
     except Exception:
-        pass
+        logger.warning("Local Gutenberg text unavailable; using remote edition", exc_info=True)
     # Use one bounded catalog/download path for imports. Optional clients cannot
     # reliably expose the selected URL, encoding, timeout, or response identity.
     text, catalog = _gutendex_etext(etext_id)
