@@ -214,7 +214,6 @@ decomposition without moving domain policy out of the existing composables.
 - Reduced `PdfCorpusBuilder.vue` further, from 3,813 lines after the Enrichment extraction to
   3,744 lines.
 
-
 ### Review record queue extraction
 
 The next monolith-reduction slice moves the record queue/list out of
