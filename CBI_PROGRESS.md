@@ -126,6 +126,32 @@ Open PR #181 also touches `PdfCorpusBuilder.vue` for Source-ingestion modernizat
 keeps its edits to that parent component to narrow controller/event wiring so rebasing after #181
 should remain localized.
 
+## Shared embedding-provider contract
+
+System-owned derived vector projections now follow the same embedding defaults used by ordinary
+Chroma collection creation instead of independently falling back to the process-wide Ollama URL.
+
+- Embedding defaults are persisted in the durable server system store and included in full
+  configuration backup/restore.
+- Settings can select Chroma default, precomputed vectors, legacy Ollama, or a named provider
+  profile; saving the default updates both the browser workspace and the server-owned contract.
+- Existing browser-only defaults are migrated on first Settings load. An unpersisted legacy
+  `ollama` default resolves to the first configured Ollama provider profile, matching the Vector
+  Store creation wizard's existing behavior.
+- `ChromaStore` resolves omitted provider/model settings through the server-owned contract.
+- The derived `derridai_metadata_exemplars` collection records that contract and is rebuilt from
+  canonical reviewed metadata when the configured provider/model changes.
+- A precomputed-vector default is rejected for metadata exemplars because that projection needs to
+  generate query/document embeddings; canonical review data remains authoritative and unaffected.
+- Vector Store preflight now accepts `profile:<id>` providers, and Ollama model selections are no
+  longer dropped from preflight/create requests.
+- Health/config diagnostics report the effective configured embedding provider/model rather than
+  only the environment fallback.
+
+Regression coverage includes durable system-setting round trips, provider-profile defaults,
+legacy-Ollama migration, exemplar rebuild on embedding-contract changes, precomputed rejection, and
+Settings persistence.
+
 ## Validation status
 
 Focused regression coverage has been added for:
