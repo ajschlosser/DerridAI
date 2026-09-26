@@ -84,6 +84,8 @@ MAX_GROUPS = 6
 FieldType = Literal["text", "number", "boolean", "choice", "list"]
 FieldRole = Literal["scholarly", "structural", "document", "operational"]
 ReviewVisibility = Literal["primary", "details", "hidden"]
+
+
 class RetrievalProfile(BaseModel):
     """Policy for evidence-bound reviewed precedents used during metadata enrichment.
 
