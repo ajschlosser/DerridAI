@@ -342,6 +342,10 @@ def _best_record_sizing_boundary(
     seams: list[dict[str, Any]] = []
     for left, right in zip(span, span[1:]):
         cumulative += len(str(left.get("text") or "")) + 2
+        # No rule below cuts past the absolute ceiling (except at the very first seam), so seams beyond it are never
+        # chosen; scoring them made every split rescan the rest of the document.
+        if seams and cumulative > absolute:
+            break
         quality, protected, signals = _seam_quality(left, right)
         seams.append({
             "left": left, "right": right, "chars": cumulative,
@@ -360,16 +364,21 @@ def _best_record_sizing_boundary(
         if best["quality"] >= 0.30:
             return best["left"], {"reason":"coherent_exception","forced":False,"chars":best["chars"],"quality":best["quality"],"signals":best["signals"]}
     # Above the long limit, prefer any safe seam before the absolute ceiling.
+    total=sum(len(str(b.get("text") or ""))+2 for b in span)
     before_absolute=[x for x in seams if x["chars"] <= absolute and not x["protected"]]
-    if before_absolute and sum(len(str(b.get("text") or ""))+2 for b in span) > long_limit:
+    if before_absolute and total > long_limit:
         best=max(before_absolute,key=lambda x:(x["quality"]-(abs(x["chars"]-preferred)/max(preferred,1))*0.08,x["quality"]))
         return best["left"], {"reason":"long_record_repair","forced":False,"chars":best["chars"],"quality":best["quality"],"signals":best["signals"]}
     # Only when the absolute ceiling is exceeded may a protected seam be forced.
-    total=sum(len(str(b.get("text") or ""))+2 for b in span)
     if total > absolute and seams:
         best=max((x for x in seams if x["chars"] <= absolute),key=lambda x:(-x["protected"],x["quality"],-abs(x["chars"]-preferred)),default=None)
-        if best:
-            return best["left"], {"reason":"absolute_safety","forced":bool(best["protected"]),"chars":best["chars"],"quality":best["quality"],"signals":best["signals"]}
+        oversize_unit=best is None
+        if oversize_unit:
+            # The group's first source unit is itself over the ceiling, so no seam lies within it. A source unit is
+            # never cut, so it stands alone: split right after it. Returning nothing here left the rest of the
+            # document in this one group, and a whole book became a single record.
+            best=seams[0]
+        return best["left"], {"reason":"absolute_safety","forced":bool(best["protected"]),"chars":best["chars"],"quality":best["quality"],"signals":best["signals"],"oversize_unit":oversize_unit}
     return None, {"reason":"coherent_exception","forced":False}
 
 
@@ -398,47 +407,50 @@ def _normalize_topology(
         if current: out.append(current)
         return out
 
-    # Split one oversized group at a time so every new boundary immediately
-    # participates in the next pass. Existing semantic boundaries are never removed.
-    guard=0
-    while guard < max(10,len(blocks)*2):
-        guard+=1
-        changed=False
-        for span in groups():
-            size=sum(len(str(b.get("text") or "")) for b in span)+max(0,len(span)-1)*2
-            if size <= policy["preferred_record_chars"] + policy["record_length_tolerance"]:
-                continue
-            choice,info=_best_record_sizing_boundary(span,policy)
-            if choice is None:
-                if size > policy["long_record_chars"]:
-                    metrics["long_exception_records"]+=1
-                continue
-            bid=str(choice.get("block_id") or "")
-            if not bid or bid in boundary_map or bid==str(span[-1].get("block_id") or ""):
-                continue
-            kind="retrieval_size_optimized"
-            if info.get("reason")=="absolute_safety":
-                kind="absolute_size_safety"; metrics["absolute_safety_splits"]+=1
-            else:
-                metrics["size_optimized_splits"]+=1
-            boundary_map[bid]={
-                "after_block_id":bid,"decision":"split","confidence":1.0,
-                "changes":[],"source":"deterministic_topology_normalizer",
-                "boundary_kind":kind,"semantic_boundary":False,
-                "size_policy":dict(policy),"size_decision":info,
-            }
-            if info.get("forced"):
-                idx=block_index.get(bid,-1)
-                reviews.append({
-                    "after_block_id":bid,
-                    "next_block_id":str(blocks[idx+1].get("block_id") or "") if 0<=idx<len(blocks)-1 else "",
-                    "kind":"forced_protected_absolute_split",
-                    "reason":"The absolute record-size safety ceiling required a split through an attribution/syntax-protected transition.",
-                })
-            changed=True
-            break
-        if not changed:
-            break
+    # Each oversized group is split on its own: a split never changes any other group, so both halves go back on the
+    # work list and nothing else is rescanned. (Restarting from the first group after every split was quadratic.)
+    # Existing semantic boundaries are never removed.
+    pending=list(reversed(groups()))
+    guard=max(10,len(blocks)*2)
+    while pending and guard>0:
+        span=pending.pop()
+        size=sum(len(str(b.get("text") or "")) for b in span)+max(0,len(span)-1)*2
+        if size <= policy["preferred_record_chars"] + policy["record_length_tolerance"]:
+            continue
+        choice,info=_best_record_sizing_boundary(span,policy)
+        if choice is None:
+            continue
+        bid=str(choice.get("block_id") or "")
+        if not bid or bid in boundary_map or bid==str(span[-1].get("block_id") or ""):
+            continue
+        guard-=1
+        kind="retrieval_size_optimized"
+        if info.get("reason")=="absolute_safety":
+            kind="absolute_size_safety"; metrics["absolute_safety_splits"]+=1
+        else:
+            metrics["size_optimized_splits"]+=1
+        boundary_map[bid]={
+            "after_block_id":bid,"decision":"split","confidence":1.0,
+            "changes":[],"source":"deterministic_topology_normalizer",
+            "boundary_kind":kind,"semantic_boundary":False,
+            "size_policy":dict(policy),"size_decision":info,
+        }
+        if info.get("forced"):
+            idx=block_index.get(bid,-1)
+            reviews.append({
+                "after_block_id":bid,
+                "next_block_id":str(blocks[idx+1].get("block_id") or "") if 0<=idx<len(blocks)-1 else "",
+                "kind":"forced_protected_absolute_split",
+                "reason":"The absolute record-size safety ceiling required a split through an attribution/syntax-protected transition.",
+            })
+        cut=next(k for k,b in enumerate(span) if str(b.get("block_id") or "")==bid)
+        pending.append(span[cut+1:])
+        pending.append(span[:cut+1])
+    # Counted once, over the final records (it used to be incremented on every pass, for the same records again).
+    metrics["long_exception_records"]=sum(
+        1 for span in groups()
+        if sum(len(str(b.get("text") or "")) for b in span)+max(0,len(span)-1)*2 > policy["long_record_chars"]
+    )
     ordered=sorted(boundary_map.values(),key=lambda item:block_index.get(str(item.get("after_block_id") or ""),10**9))
     return ordered,reviews,metrics
 
