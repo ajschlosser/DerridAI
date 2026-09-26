@@ -26,3 +26,23 @@ export const WiderResearchChunks: Story = {
     },
   },
 };
+export const SmallRecords: Story = {
+  args: {
+    modelValue: {
+      preferred_record_chars: 100,
+      record_length_tolerance: 10,
+      long_record_chars: 200,
+      absolute_record_chars: 350,
+    },
+  },
+};
+export const CustomButInvalid: Story = {
+  args: {
+    modelValue: {
+      preferred_record_chars: 1750,
+      record_length_tolerance: 200,
+      long_record_chars: 1500,
+      absolute_record_chars: 1200,
+    },
+  },
+};
