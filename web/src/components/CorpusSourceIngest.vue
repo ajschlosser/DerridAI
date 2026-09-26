@@ -124,9 +124,9 @@ function closeSearch() {
     window.clearInterval(statusPoll.value);
     statusPoll.value = null;
   }
-
-  onBeforeUnmount(closeSearch);
 }
+
+onBeforeUnmount(closeSearch);
 </script>
 
 <template>
@@ -227,11 +227,18 @@ function closeSearch() {
       </div>
     </div>
 
-    <dialog v-if="searchOpen" open class="source-search-dialog" aria-labelledby="source-search-title">
+    <dialog
+      v-if="searchOpen"
+      open
+      class="source-search-dialog"
+      aria-labelledby="source-search-title"
+    >
       <div class="source-search-dialog__header">
         <div>
           <p class="eyebrow">{{ i18n.t("pdf_corpus.source_setup_title") }}</p>
-          <h2 id="source-search-title">{{ i18n.t("pdf_corpus.search_library", "Search digital libraries") }}</h2>
+          <h2 id="source-search-title">
+            {{ i18n.t("pdf_corpus.search_library", "Search digital libraries") }}
+          </h2>
           <p class="source-search-dialog__lede">
             {{ i18n.t("pdf_corpus.search_library_help") }}
           </p>
@@ -241,31 +248,114 @@ function closeSearch() {
           class="btn btn-icon"
           :aria-label="i18n.t('common.close')"
           @click="closeSearch"
-        >×</button>
+        >
+          ×
+        </button>
       </div>
       <div class="library-tabs" role="tablist" :aria-label="i18n.t('pdf_corpus.search_library')">
-        <button type="button" class="library-tab" :class="{ 'is-active': activeLibrary === 'gutenberg' }" role="tab" :aria-selected="activeLibrary === 'gutenberg'" @click="activeLibrary = 'gutenberg'">
+        <button
+          type="button"
+          class="library-tab"
+          :class="{ 'is-active': activeLibrary === 'gutenberg' }"
+          role="tab"
+          :aria-selected="activeLibrary === 'gutenberg'"
+          @click="activeLibrary = 'gutenberg'"
+        >
           <span class="library-tab__mark">G</span>
-          <span><strong>{{ i18n.t("pdf_corpus.project_gutenberg") }}</strong><small>{{ gutenbergStatus?.search_ready ? i18n.t("pdf_corpus.gutenberg_catalogue_ready") : i18n.t("pdf_corpus.gutenberg_catalogue_not_ready") }}</small></span>
+          <span
+            ><strong>{{ i18n.t("pdf_corpus.project_gutenberg") }}</strong
+            ><small>{{
+              gutenbergStatus?.search_ready
+                ? i18n.t("pdf_corpus.gutenberg_catalogue_ready")
+                : i18n.t("pdf_corpus.gutenberg_catalogue_not_ready")
+            }}</small></span
+          >
         </button>
-        <button type="button" class="library-tab" :class="{ 'is-active': activeLibrary === 'wikisource' }" role="tab" :aria-selected="activeLibrary === 'wikisource'" @click="activeLibrary = 'wikisource'">
+        <button
+          type="button"
+          class="library-tab"
+          :class="{ 'is-active': activeLibrary === 'wikisource' }"
+          role="tab"
+          :aria-selected="activeLibrary === 'wikisource'"
+          @click="activeLibrary = 'wikisource'"
+        >
           <span class="library-tab__mark">W</span>
-          <span><strong>{{ i18n.t("pdf_corpus.wikisource") }}</strong><small>{{ i18n.t("pdf_corpus.wikisource_search") }}</small></span>
+          <span
+            ><strong>{{ i18n.t("pdf_corpus.wikisource") }}</strong
+            ><small>{{ i18n.t("pdf_corpus.wikisource_search") }}</small></span
+          >
         </button>
       </div>
       <div v-if="activeLibrary === 'gutenberg'" class="library-status" role="status">
-        <span v-if="gutenbergStatus?.search_ready">{{ gutenbergStatus.catalogue.item_count }} {{ i18n.t("pdf_corpus.gutenberg_catalogue_ready") }}</span>
+        <span v-if="gutenbergStatus?.search_ready"
+          >{{ gutenbergStatus.catalogue.item_count }}
+          {{ i18n.t("pdf_corpus.gutenberg_catalogue_ready") }}</span
+        >
         <span v-else>{{ i18n.t("pdf_corpus.gutenberg_catalogue_not_ready") }}</span>
         <div class="library-status__actions">
-          <button type="button" class="btn btn-quiet" :disabled="disabled || busy === 'gutenberg-catalogue'" @click="emit('refreshGutenbergCatalogue')">{{ i18n.t(gutenbergStatus?.catalogue.status === "ready" ? "pdf_corpus.gutenberg_refetch_catalogue" : "pdf_corpus.gutenberg_fetch_catalogue") }}</button>
-          <button type="button" class="btn btn-quiet" :disabled="disabled || busy === 'gutenberg-archive'" @click="emit('updateGutenbergArchive', gutenbergStatus?.archive.status === 'downloading' ? 'pause' : gutenbergStatus?.archive.status === 'paused' ? 'resume' : 'start')">{{ i18n.t(gutenbergStatus?.archive.status === "downloading" ? "pdf_corpus.gutenberg_pause_download" : gutenbergStatus?.archive.status === "paused" ? "pdf_corpus.gutenberg_resume_download" : "pdf_corpus.gutenberg_start_download") }}</button>
+          <button
+            type="button"
+            class="btn btn-quiet"
+            :disabled="disabled || busy === 'gutenberg-catalogue'"
+            @click="emit('refreshGutenbergCatalogue')"
+          >
+            {{
+              i18n.t(
+                gutenbergStatus?.catalogue.status === "ready"
+                  ? "pdf_corpus.gutenberg_refetch_catalogue"
+                  : "pdf_corpus.gutenberg_fetch_catalogue",
+              )
+            }}
+          </button>
+          <button
+            type="button"
+            class="btn btn-quiet"
+            :disabled="disabled || busy === 'gutenberg-archive'"
+            @click="
+              emit(
+                'updateGutenbergArchive',
+                gutenbergStatus?.archive.status === 'downloading'
+                  ? 'pause'
+                  : gutenbergStatus?.archive.status === 'paused'
+                    ? 'resume'
+                    : 'start',
+              )
+            "
+          >
+            {{
+              i18n.t(
+                gutenbergStatus?.archive.status === "downloading"
+                  ? "pdf_corpus.gutenberg_pause_download"
+                  : gutenbergStatus?.archive.status === "paused"
+                    ? "pdf_corpus.gutenberg_resume_download"
+                    : "pdf_corpus.gutenberg_start_download",
+              )
+            }}
+          </button>
         </div>
-        <progress v-if="gutenbergStatus?.archive.total_bytes" class="archive-progress" :value="gutenbergStatus.archive.bytes_done" :max="gutenbergStatus.archive.total_bytes" :aria-label="i18n.t('pdf_corpus.gutenberg_download_progress')" />
-        <small v-if="gutenbergStatus?.archive.error" class="source-error">{{ gutenbergStatus.archive.error }}</small>
+        <progress
+          v-if="gutenbergStatus?.archive.total_bytes"
+          class="archive-progress"
+          :value="gutenbergStatus.archive.bytes_done"
+          :max="gutenbergStatus.archive.total_bytes"
+          :aria-label="i18n.t('pdf_corpus.gutenberg_download_progress')"
+        />
+        <small v-if="gutenbergStatus?.archive.error" class="source-error">{{
+          gutenbergStatus.archive.error
+        }}</small>
       </div>
-      <form class="gutenberg-source" @submit.prevent="activeLibrary === 'gutenberg' ? emit('searchGutenberg') : emit('searchWikisource')">
+      <form
+        class="gutenberg-source"
+        @submit.prevent="
+          activeLibrary === 'gutenberg' ? emit('searchGutenberg') : emit('searchWikisource')
+        "
+      >
         <label for="pdf-corpus-gutenberg">
-          <span>{{ activeLibrary === 'gutenberg' ? i18n.t("pdf_corpus.gutenberg_search") : i18n.t("pdf_corpus.wikisource_search") }}</span>
+          <span>{{
+            activeLibrary === "gutenberg"
+              ? i18n.t("pdf_corpus.gutenberg_search")
+              : i18n.t("pdf_corpus.wikisource_search")
+          }}</span>
           <input
             id="pdf-corpus-gutenberg"
             class="control"
@@ -276,7 +366,15 @@ function closeSearch() {
             @input="emit('update:gutenbergQuery', ($event.target as HTMLInputElement).value)"
           />
         </label>
-        <button type="submit" class="btn btn-primary" :disabled="disabled || !gutenbergQuery.trim() || (activeLibrary === 'gutenberg' && !gutenbergStatus?.search_ready)">
+        <button
+          type="submit"
+          class="btn btn-primary"
+          :disabled="
+            disabled ||
+            !gutenbergQuery.trim() ||
+            (activeLibrary === 'gutenberg' && !gutenbergStatus?.search_ready)
+          "
+        >
           {{
             busy === "gutenberg"
               ? i18n.t("pdf_corpus.extracting")
@@ -291,9 +389,20 @@ function closeSearch() {
         <form class="url-source" @submit.prevent="emit('loadUrl')">
           <label for="pdf-corpus-source-url">
             <span>{{ i18n.t("pdf_corpus.source_url") }}</span>
-            <input id="pdf-corpus-source-url" class="control" type="url" inputmode="url" :value="sourceUrl" :placeholder="i18n.t('pdf_corpus.url_placeholder')" :disabled="disabled" @input="emit('update:sourceUrl', ($event.target as HTMLInputElement).value)" />
+            <input
+              id="pdf-corpus-source-url"
+              class="control"
+              type="url"
+              inputmode="url"
+              :value="sourceUrl"
+              :placeholder="i18n.t('pdf_corpus.url_placeholder')"
+              :disabled="disabled"
+              @input="emit('update:sourceUrl', ($event.target as HTMLInputElement).value)"
+            />
           </label>
-          <button type="submit" class="btn" :disabled="disabled || !sourceUrl.trim()">{{ i18n.t("pdf_corpus.load_url") }}</button>
+          <button type="submit" class="btn" :disabled="disabled || !sourceUrl.trim()">
+            {{ i18n.t("pdf_corpus.load_url") }}
+          </button>
         </form>
       </details>
       <ul
@@ -320,7 +429,10 @@ function closeSearch() {
             type="button"
             class="btn"
             :disabled="disabled"
-            @click="emit('update:sourceUrl', hit.url); emit('loadUrl')"
+            @click="
+              emit('update:sourceUrl', hit.url);
+              emit('loadUrl');
+            "
           >
             <span>{{ hit.title }}</span>
             <small>{{ hit.snippet }}</small>

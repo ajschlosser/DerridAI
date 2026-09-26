@@ -88,8 +88,18 @@ export interface WikisourceHit {
 export interface GutenbergStatus {
   ready: boolean;
   search_ready: boolean;
-  catalogue: { status: string; refreshed_at?: string | null; item_count: number; error?: string | null };
-  archive: { status: string; bytes_done: number; total_bytes?: number | null; error?: string | null };
+  catalogue: {
+    status: string;
+    refreshed_at?: string | null;
+    item_count: number;
+    error?: string | null;
+  };
+  archive: {
+    status: string;
+    bytes_done: number;
+    total_bytes?: number | null;
+    error?: string | null;
+  };
 }
 
 export interface DocumentLayoutPlan {

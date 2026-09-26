@@ -57,7 +57,7 @@ it("uses automatic media detection instead of asking users for a source type", a
   expect(wrapper.get('input[type="file"]').attributes("accept")).toContain(".wav");
 });
 
-it("distinguishes Gutenberg editions in selection controls", () => {
+it("distinguishes Gutenberg editions in selection controls", async () => {
   const wrapper = mount(CorpusSourceIngest, {
     props: {
       hits: [
@@ -66,6 +66,7 @@ it("distinguishes Gutenberg editions in selection controls", () => {
       ],
     },
   });
+  await wrapper.get("button.btn-secondary").trigger("click");
   const choices = wrapper.findAll(".gutenberg-hits button");
   expect(choices[0].text()).toContain("#12");
   expect(choices[1].text()).toContain("#13");

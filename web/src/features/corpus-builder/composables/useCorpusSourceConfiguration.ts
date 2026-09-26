@@ -90,18 +90,6 @@ export function useCorpusSourceConfiguration(
       return;
     }
 
-    async function searchWikisource() {
-      const query = gutenbergQuery.value.trim();
-      if (!query) return;
-      busy.value = "wikisource";
-      try {
-        wikisourceHits.value = (await corpusBuilderApi.searchWikisource(query)).items || [];
-      } catch (exc) {
-        setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-      } finally {
-        busy.value = "";
-      }
-    }
     busy.value = "gutenberg";
     setMessage("");
     try {
@@ -113,35 +101,48 @@ export function useCorpusSourceConfiguration(
     } finally {
       busy.value = "";
     }
+  }
 
-    async function refreshGutenbergStatus() {
-      try {
-        gutenbergStatus.value = await corpusBuilderApi.gutenbergStatus();
-      } catch (exc) {
-        setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-      }
+  async function searchWikisource() {
+    const query = gutenbergQuery.value.trim();
+    if (!query) return;
+    busy.value = "wikisource";
+    try {
+      wikisourceHits.value = (await corpusBuilderApi.searchWikisource(query)).items || [];
+    } catch (exc) {
+      setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+    } finally {
+      busy.value = "";
     }
+  }
 
-    async function refreshGutenbergCatalogue() {
-      busy.value = "gutenberg-catalogue";
-      try {
-        gutenbergStatus.value = await corpusBuilderApi.refreshGutenbergCatalogue();
-      } catch (exc) {
-        setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-      } finally {
-        busy.value = "";
-      }
+  async function refreshGutenbergStatus() {
+    try {
+      gutenbergStatus.value = await corpusBuilderApi.gutenbergStatus();
+    } catch (exc) {
+      setMessage(exc instanceof Error ? exc.message : String(exc), "error");
     }
+  }
 
-    async function updateGutenbergArchive(action: "start" | "pause" | "resume" | "refetch") {
-      busy.value = "gutenberg-archive";
-      try {
-        gutenbergStatus.value = await corpusBuilderApi.gutenbergArchiveAction(action);
-      } catch (exc) {
-        setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-      } finally {
-        busy.value = "";
-      }
+  async function refreshGutenbergCatalogue() {
+    busy.value = "gutenberg-catalogue";
+    try {
+      gutenbergStatus.value = await corpusBuilderApi.refreshGutenbergCatalogue();
+    } catch (exc) {
+      setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+    } finally {
+      busy.value = "";
+    }
+  }
+
+  async function updateGutenbergArchive(action: "start" | "pause" | "resume" | "refetch") {
+    busy.value = "gutenberg-archive";
+    try {
+      gutenbergStatus.value = await corpusBuilderApi.gutenbergArchiveAction(action);
+    } catch (exc) {
+      setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+    } finally {
+      busy.value = "";
     }
   }
 
