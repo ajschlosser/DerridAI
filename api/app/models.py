@@ -499,13 +499,17 @@ class PdfSourceUnitPolicy(BaseModel):
 class PdfSourceUrlImport(BaseModel):
     url: str = Field(min_length=8, max_length=2000)
     source_illegibility: float = Field(default=0, ge=0, le=100)
-    page_number_detection: Literal["auto", "off"] = "auto"
+    page_number_detection: Literal["auto", "auto_llm", "off"] = "auto"
+    provider_profile_id: str | None = Field(default=None, max_length=200)
+    model: str | None = Field(default=None, max_length=200)
 
 
 class GutenbergImport(BaseModel):
     etext_id: int = Field(ge=1)
     source_illegibility: float = Field(default=0, ge=0, le=100)
-    page_number_detection: Literal["auto", "off"] = "auto"
+    page_number_detection: Literal["auto", "auto_llm", "off"] = "auto"
+    provider_profile_id: str | None = Field(default=None, max_length=200)
+    model: str | None = Field(default=None, max_length=200)
 
 
 class PdfDocumentLayoutPatch(BaseModel):

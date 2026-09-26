@@ -128,6 +128,7 @@ from .corpus_models import (
     CORPUS_PROFILES,
     PROFILE_VERSION,
     DocumentManifestModel,
+    PageMarkerChoiceModel,
     TextTouchupResponseModel,
 )
 from .corpus_models import (
@@ -736,6 +737,7 @@ class PdfCorpusRepository:
         self, data: bytes, *, filename: str, ocr_mode: str = "auto", ocr_languages: str = "eng+fra+deu",
         source_illegibility: float = 0, content_type: str = "", catalog_metadata: dict[str, Any] | None = None,
         source_url: str | None = None, detect_page_numbers: bool = True,
+        page_llm: Any = None,
     ) -> dict[str, Any]:
         if not data:
             raise ValueError("The uploaded source was empty.")
@@ -759,6 +761,8 @@ class PdfCorpusRepository:
             identity = hashlib.sha256(f"{digest}|{kind}|source-extraction-v2|{ocr_mode}|{illegibility:.2f}".encode()).hexdigest()
         if catalog_metadata and catalog_metadata.get("gutenberg_id"):
             identity = hashlib.sha256(f"{identity}|gutenberg|{catalog_metadata['gutenberg_id']}".encode()).hexdigest()
+        if page_llm is not None and kind not in {"pdf", "audio", "image"}:
+            identity = hashlib.sha256(f"{identity}|page-detection-llm".encode()).hexdigest()
         if not detect_page_numbers and kind not in {"pdf", "audio", "image"}:
             # A different page structure is a different asset; keep the two apart.
             identity = hashlib.sha256(f"{identity}|page-detection-off".encode()).hexdigest()
@@ -775,7 +779,7 @@ class PdfCorpusRepository:
             extracted = self._extract_for_ingest(
                 data, filename=filename, kind=kind, ocr_mode=ocr_mode, ocr_languages=ocr_languages,
                 source_illegibility=illegibility, catalog_metadata=catalog_metadata,
-                detect_page_numbers=detect_page_numbers,
+                detect_page_numbers=detect_page_numbers, page_llm=page_llm,
             )
             if catalog_metadata and catalog_metadata.get("gutenberg_id"):
                 extracted["media_kind"] = "gutenberg"
@@ -883,6 +887,7 @@ class PdfCorpusRepository:
         self, data: bytes, *, filename: str, kind: str, ocr_mode: str, ocr_languages: str,
         source_illegibility: float, catalog_metadata: dict[str, Any] | None,
         detect_page_numbers: bool = True,
+        page_llm: Any = None,
     ) -> dict[str, Any]:
         from .source_media import (
             extract_non_pdf,
@@ -918,7 +923,10 @@ class PdfCorpusRepository:
                 blocks=list(extracted.get("blocks") or []), catalog=catalog_metadata,
             )
             return extracted
-        return extract_non_pdf(data, filename=filename, kind=kind, catalog=catalog_metadata, detect_page_numbers=detect_page_numbers)
+        return extract_non_pdf(
+            data, filename=filename, kind=kind, catalog=catalog_metadata,
+            detect_page_numbers=detect_page_numbers, page_llm=page_llm,
+        )
 
     def get_asset(self, asset_id: str) -> dict[str, Any]:
         meta = _json_read(self.asset_meta_path(asset_id))
@@ -1865,6 +1873,29 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             metrics[key] = int(metrics.get(key) or 0) + int(amount)
             build["llm_metrics"] = metrics
             self.repo.save_build(build)
+
+    def page_marker_chooser(self, request: dict[str, Any]) -> Any:
+        """A callable that asks the configured model which candidate lines are printed page numbers."""
+
+        def ask(candidates: list[dict[str, Any]]) -> list[int]:
+            listing = "\n".join(
+                f'{c["id"]}: "{c["text"]}"  (before: "{c["before"]}" | after: "{c["after"]}")' for c in candidates
+            )
+            prompt = (
+                "Below are short lines from a plain-text source, each with the line before and after it. "
+                "Choose the lines that are PRINTED PAGE NUMBERS (folios or page markers such as 32, [32], "
+                "Page 32, - 32 -, xii), which appear once per page in increasing order. Do NOT choose chapter "
+                "numbers, list numbers, footnote numbers, dates, years, verse numbers, or lines that are part of "
+                "the text. If you are not confident, return an empty list.\n\n"
+                f"{listing}\n\nAnswer as JSON: {{\"page_marker_ids\": [ids]}}"
+            )
+            result = self._chat_json(
+                request, prompt, response_model=PageMarkerChoiceModel, max_tokens=1200,
+                schema_name="page_marker_choice", attempts=2,
+            )
+            return [int(i) for i in result.get("page_marker_ids") or []]
+
+        return ask
 
     def _chat_json(
         self,

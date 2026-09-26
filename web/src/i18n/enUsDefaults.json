@@ -2480,6 +2480,8 @@
   "pdf_corpus.context_after": "Following records",
   "pdf_corpus.context_unavailable": "Surrounding records could not be loaded.",
   "pdf_corpus.page_abbrev": "p.",
+  "pdf_corpus.source_page_detect_llm": "If none are found, ask the AI model",
+  "pdf_corpus.source_page_detect_llm_help": "The model only points at candidate lines; its answer must still form a believable page sequence. Uses your selected provider. Turn off to stay fully deterministic.",
   "pdf_corpus.memory_hints_title": "Suggested by earlier reviews",
   "pdf_corpus.memory_hint_support": "{count} earlier reviews",
   "pdf_corpus.derivation_memory": "Metadata memory",

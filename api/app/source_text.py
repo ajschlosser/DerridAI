@@ -64,11 +64,12 @@ def document_from_text(
     confidence: float = 0.99,
     warnings: list[str] | None = None,
     detect_pages: bool = True,
+    page_llm: Any = None,
 ) -> dict[str, Any]:
     detection: dict[str, Any] = {}
     blocks, pages = prose_to_blocks(
         text, extraction_method=extraction_method, confidence=confidence,
-        detect_pages=detect_pages, detection_out=detection,
+        detect_pages=detect_pages, detection_out=detection, page_llm=page_llm,
     )
     if not blocks:
         raise ValueError("The source did not contain extractable text.")
@@ -103,6 +104,7 @@ def prose_to_blocks(
     confidence: float = 0.99,
     detect_pages: bool = True,
     detection_out: dict[str, Any] | None = None,
+    page_llm: Any = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Blocks and pages for prose. Printed page numbers are detected first, deterministically.
 
@@ -115,6 +117,16 @@ def prose_to_blocks(
 
     if detect_pages:
         detection = page_markers.detect(text)
+        if detection.status != "detected" and page_llm is not None:
+            # Deterministic detection failed: let a model pick candidate lines, then verify them the same way.
+            try:
+                assisted = page_markers.detect_with_llm(text, page_llm)
+                if assisted.status == "detected":
+                    detection = assisted
+                else:
+                    detection.reason = f"{detection.reason}; {assisted.reason}".strip("; ")
+            except Exception as exc:  # a model failure leaves the deterministic (not found) result
+                detection.reason = f"{detection.reason}; model-assisted detection failed: {type(exc).__name__}".strip("; ")
     else:
         detection = page_markers.Detection(status="disabled", reason="page-number detection was turned off")
     if detection_out is not None:
