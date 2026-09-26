@@ -748,6 +748,7 @@ const {
   openMetadataIssueQueue,
   openValidationIssueQueue,
   openTopologyIssueQueue,
+  openIssueQueue,
   openRejectedQueue,
   openAllReviewQueue,
   openSourceIssueQueue,
@@ -2452,6 +2453,7 @@ defineExpose({
             @review-metadata="openMetadataIssueQueue"
             @review-validation="openValidationIssueQueue"
             @review-topology="openTopologyIssueQueue"
+            @review-issues="openIssueQueue"
             @review-rejected="openRejectedQueue"
             @review-records="openAllReviewQueue"
             @review-source="openSourceIssueQueue"
