@@ -20,6 +20,7 @@ function setup() {
   const recordTotal = ref(4);
   const recordOffset = ref(0);
   const selectedRecord = ref<any | null>(records.value[0]);
+  const selectedRecordId = ref("r1");
   const selectedRecordIndex = computed(() =>
     records.value.findIndex((item) => item.record_id === selectedRecord.value?.record_id),
   );
@@ -44,6 +45,7 @@ function setup() {
     recordTotal,
     recordOffset,
     selectedRecord,
+    selectedRecordId,
     selectedRecordIndex,
     reviewQueue,
     recordQuery,
@@ -63,6 +65,7 @@ function setup() {
     records,
     recordOffset,
     selectedRecord,
+    selectedRecordId,
     reviewQueue,
     recordQuery,
     focusView,
@@ -96,16 +99,39 @@ describe("Corpus Builder review navigation", () => {
     expect(state.refreshRecords).toHaveBeenCalledWith(false, "r1");
   });
 
-  it("targets the first validation record when opening the issues queue", async () => {
+  it("targets validation records directly without assuming they belong to Issues", async () => {
     const state = setup();
 
     await state.navigation.openValidationIssueQueue();
     await nextTick();
 
-    expect(state.reviewQueue.value).toBe("issues");
-    expect(state.recordQuery.value).toBe("");
+    expect(state.reviewQueue.value).toBe("all");
+    expect(state.recordQuery.value).toBe("validation-record");
     expect(state.refreshRecords).toHaveBeenCalledWith(true, "validation-record");
+    expect(state.selectedRecordId.value).toBe("");
     expect(state.recordListEl.value?.focus).toHaveBeenCalled();
+  });
+
+  it("clears stale record selection before changing review queues", async () => {
+    const state = setup();
+    state.selectedRecordId.value = "r1";
+    state.selectedRecord.value = record("r1");
+
+    await state.navigation.openRejectedQueue();
+
+    expect(state.reviewQueue.value).toBe("rejected");
+    expect(state.selectedRecordId.value).toBe("");
+    expect(state.selectedRecord.value).toBeNull();
+    expect(state.refreshRecords).toHaveBeenCalledWith(true, "");
+  });
+
+  it("opens structural repair work in the topology queue", async () => {
+    const state = setup();
+
+    await state.navigation.openTopologyIssueQueue();
+
+    expect(state.reviewQueue.value).toBe("topology");
+    expect(state.refreshRecords).toHaveBeenCalledWith(true, "");
   });
 
   it("moves across local records before requesting another page", async () => {
