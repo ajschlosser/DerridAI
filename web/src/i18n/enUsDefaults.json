@@ -5657,18 +5657,5 @@
   "pdf_corpus.configure_advanced": "Advanced",
   "pdf_corpus.readiness.review_setup": "Review setup",
   "pdf_corpus.readiness.configuration_summary": "Build configuration summary",
-  "pdf_corpus.workspace.record_progress": "{accepted} of {total} Records accepted",
-  "pdf_corpus.metadata_suggestions_saved": "Saved {count} metadata suggestion(s).",
-  "schemas.field_role": "Role",
-  "schemas.field_role_help": "Role describes what the field means to the product independently of its storage name.",
-  "schemas.role_scholarly": "Scholarly metadata",
-  "schemas.role_structural": "Structural metadata",
-  "schemas.role_document": "Document metadata",
-  "schemas.role_operational": "Operational / utility",
-  "schemas.review_visibility": "Record review visibility",
-  "schemas.review_visibility_help": "Controls where this field appears in Record review.",
-  "schemas.visibility_primary": "Show in review",
-  "schemas.visibility_details": "Show in details",
-  "schemas.visibility_hidden": "Hidden",
-  "schemas.hidden_short": "Hidden"
+  "pdf_corpus.workspace.record_progress": "{accepted} of {total} Records accepted"
 }
