@@ -5657,5 +5657,6 @@
   "pdf_corpus.configure_advanced": "Advanced",
   "pdf_corpus.readiness.review_setup": "Review setup",
   "pdf_corpus.readiness.configuration_summary": "Build configuration summary",
-  "pdf_corpus.workspace.record_progress": "{accepted} of {total} Records accepted"
+  "pdf_corpus.workspace.record_progress": "{accepted} of {total} Records accepted",
+  "pdf_corpus.review_workspace_title": "Scholarly review"
 }
