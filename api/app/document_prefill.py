@@ -15,11 +15,13 @@ kept beside the value that won so they can be offered as suggestions.
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 from dataclasses import field as dc_field
 from typing import Any
 
+logger = logging.getLogger(__name__)
 HEAD_CHARS = 6000
 _STOPWORDS = {
     "en": {"the", "and", "of", "to", "in", "is", "that", "it", "with", "for", "as", "was", "by"},
@@ -188,5 +190,5 @@ def extract(text: str, *, language: str = "", use_nlp: bool = True) -> list[Cand
         try:
             found += nlp_candidates(head, language)
         except Exception:  # a broken model removes hints, never the ingest
-            pass
+            logger.warning("NLP front-matter pre-fill skipped", exc_info=True)
     return found
