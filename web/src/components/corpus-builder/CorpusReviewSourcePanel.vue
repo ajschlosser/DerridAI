@@ -63,6 +63,14 @@ const concurrencyRisk = computed(
     activeProfile.value?.type === "ollama" &&
     props.activeRequests + 1 > concurrencyLimit.value,
 );
+
+function adjudicate(
+  direction: "previous" | "next",
+  providerProfileId: string,
+  model: string,
+) {
+  emit("adjudicate", direction, providerProfileId, model);
+}
 </script>
 
 <template>
@@ -109,7 +117,7 @@ const concurrencyRisk = computed(
         :concurrency-limit="concurrencyLimit"
         @update:provider-profile-id="emit('update:providerProfileId', $event)"
         @update:model-override="emit('update:modelOverride', $event)"
-        @adjudicate="emit('adjudicate', $event, $event1, $event2)"
+        @adjudicate="adjudicate"
       />
     </details>
 
