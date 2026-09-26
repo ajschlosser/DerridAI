@@ -163,3 +163,29 @@ describe("the digital-library search", () => {
     wrapper.unmount();
   });
 });
+
+describe("the Project Gutenberg collection after a failed download", () => {
+  beforeEach(() => setActivePinia(createPinia()));
+  const failed = {
+    ready: false,
+    search_ready: true,
+    catalogue: { status: "ready", item_count: 1 },
+    archive: { status: "error", bytes_done: 11_291_965_468, total_bytes: null, error: "416" },
+  };
+
+  it("resumes from the bytes on disk, and offers a confirmed Redownload", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const wrapper = mount(CorpusLibrarySearch, {
+      props: { query: "", gutenbergStatus: failed as never },
+      attachTo: document.body,
+    });
+    const buttons = wrapper.findAll(".ls-collection-actions button");
+    expect(buttons[0].text()).toBe("Resume collection download");
+    await buttons[0].trigger("click");
+    await buttons[1].trigger("click");
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(wrapper.emitted("updateGutenbergArchive")).toEqual([["resume"], ["refetch"]]);
+    confirm.mockRestore();
+    wrapper.unmount();
+  });
+});
