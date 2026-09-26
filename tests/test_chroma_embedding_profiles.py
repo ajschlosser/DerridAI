@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import pytest
-
 from app import chroma_store
 from app.chroma_store import Embeddings
 from app.system_store import system_store
