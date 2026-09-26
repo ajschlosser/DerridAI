@@ -136,10 +136,18 @@ describe("SettingsView", () => {
     runtime.state.appConfig.ui_color_theme = "green";
     runtime.state.appConfig.ui_color_scheme = "system";
     runtime.state.appConfig.ui_contrast = "system";
+    runtime.state.appConfig.embedding_provider = "ollama";
+    runtime.state.appConfig.embedding_model = "bge-m3:latest";
     runtime.state.ragConfig.k = 64;
     runtime.state.ragConfig.fetch_k = 500;
     runtime.state.ragConfig.locales = ["en", "fr"];
     runtime.state.ragConfig.search_types = ["similarity", "lexical", "mmr"];
+  });
+
+  it("does not request server embedding defaults for researcher accounts", async () => {
+    await mountView("researcher");
+    expect(systemApi.embeddingDefaults).not.toHaveBeenCalled();
+    expect(systemApi.setEmbeddingDefaults).not.toHaveBeenCalled();
   });
 
   it("keeps researcher accounts off administrative sections", async () => {
