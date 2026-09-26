@@ -335,8 +335,9 @@ for (const scheme of ["light", "dark"] as const) {
     await page.getByRole("tab", { name: /Metadata/i }).click();
     const step = page.locator("summary", { hasText: "Metadata schema" }).first();
     await step.scrollIntoViewIfNeeded();
-    await step.click();
-    await page.getByRole("button", { name: /manage schemas/i }).click();
+    const manageSchemas = page.getByRole("button", { name: /manage schemas/i });
+    if (!(await manageSchemas.isVisible())) await step.click();
+    await manageSchemas.click();
     const dialog = page.getByRole("dialog", { name: /metadata schemas/i });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText(/locked core/i).first()).toBeVisible();
