@@ -70,9 +70,7 @@ const activeLibrary = ref<"gutenberg" | "wikisource">("gutenberg");
 
 const sourceSetupDisabled = computed(() => props.disabled || props.sourceSelectionDisabled);
 const catalogueRefreshing = computed(() =>
-  ["refreshing", "indexing"].includes(
-    String(props.gutenbergStatus?.catalogue.status || ""),
-  ),
+  ["refreshing", "indexing"].includes(String(props.gutenbergStatus?.catalogue.status || "")),
 );
 const archiveStatus = computed(() => String(props.gutenbergStatus?.archive.status || ""));
 const archiveSettling = computed(() =>
