@@ -39,9 +39,7 @@ const tabs: Array<{
 ];
 
 function disabled(id: CorpusConfigurationSection) {
-  if (id === "structure") return !props.hasSource || !props.structureAvailable;
-  if (id === "enrichment" || id === "metadata" || id === "advanced") return !props.hasSource;
-  return false;
+  return id === "structure" && (!props.hasSource || !props.structureAvailable);
 }
 
 function select(id: CorpusConfigurationSection) {
