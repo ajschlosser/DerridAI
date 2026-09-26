@@ -140,7 +140,6 @@ Focused regression coverage has been added for:
 The branch still requires the repository CI gate set before merge. Do not claim release readiness
 until those required checks pass.
 
-
 ## Configuration workspace decomposition
 
 A follow-up branch, `task/corpus-builder-configuration-workspaces-v2`, continues the post-#179
