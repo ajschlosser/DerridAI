@@ -44,8 +44,10 @@ async function loadModels() {
     loadingModels.value = false;
   }
 }
+// Follow the resolved profile, not just the selected id: the profile list can arrive after the id is set, and the
+// model choices (and the current model) must load then too instead of waiting for another visit.
 watch(
-  () => props.modelValue,
+  () => [selected.value?.id, selected.value?.type, selected.value?.base_url, selected.value?.model],
   () => {
     void loadModels();
   },

@@ -1,14 +1,16 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { corpusBuilderApi, type RecordContext, type RecordContextItem } from "../../api/corpus";
 import { useI18nStore } from "../../stores/i18n";
+import { fitContext } from "../../features/corpus-builder/domain/contextWindow";
 
 /**
  * The record under review, centred in a reading window with the records around it above and below.
  * Neighbours fade with distance so the reviewer sees full context (short records, sentence-level
  * units) without losing which text is under review. The window is scrollable: neighbours fill
- * whatever room the focus record leaves, and more can be scrolled into view.
+ * whatever room the focus record leaves: a long record has few or no neighbours so it stays in the reader's line
+ * of sight, a short one has many. The window is scrollable and the record is centred in it.
  */
 const props = withDefaults(
   defineProps<{
@@ -31,6 +33,33 @@ const cache = new Map<string, RecordContext>();
 let ticket = 0;
 
 const enabled = computed(() => props.showContext);
+
+// The window's capacity in characters, from its size and type; unmeasured (0) falls back to a modest default.
+const capacity = ref(0);
+const DEFAULT_CAPACITY = 2400;
+/**
+ * Estimate how many characters fit the window: its usable height in lines times its width in characters, from the
+ * computed font size (a line is ~1.65em tall, an average glyph ~0.52em wide). It is deliberately approximate: it only
+ * decides how many neighbours to offer (see fitContext); the record is centred by real layout afterwards.
+ */
+function measure() {
+  const box = window_.value;
+  if (!box || !box.clientWidth) return;
+  const style = getComputedStyle(box);
+  const size = parseFloat(style.fontSize) || 16;
+  const maxHeight = parseFloat(style.maxHeight) || window.innerHeight * 0.62;
+  const width = box.clientWidth - (parseFloat(style.paddingInline) || 48);
+  const lines = maxHeight / (size * 1.65);
+  capacity.value = Math.max(0, Math.floor(lines * (width / (size * 0.52))));
+}
+const visible = computed(() => {
+  const before = context.value?.before ?? [];
+  const after = context.value?.after ?? [];
+  const cap = capacity.value || DEFAULT_CAPACITY;
+  // The focus block's padding and each neighbour's heading cost about a line and a half of text each.
+  const line = Math.max(20, Math.floor(cap / 24));
+  return fitContext(before, after, props.text.length + line * 2, cap, { overhead: line * 1.5 });
+});
 
 async function load() {
   context.value = null;
@@ -83,23 +112,40 @@ watch(
   () => props.text,
   () => nextTick(centre),
 );
+let observer: ResizeObserver | null = null;
+let lastWidth = 0;
+onMounted(() => {
+  measure();
+  if (typeof ResizeObserver === "undefined" || !window_.value) return;
+  // Only a change of width re-fits: the window's own height follows its content, so watching it would loop.
+  observer = new ResizeObserver(() => {
+    const width = window_.value?.clientWidth ?? 0;
+    if (width === lastWidth) return;
+    lastWidth = width;
+    measure();
+    void nextTick(centre);
+  });
+  observer.observe(window_.value);
+});
+watch(capacity, () => nextTick(centre));
 onBeforeUnmount(() => {
   ticket += 1;
+  observer?.disconnect();
 });
 </script>
 
 <template>
   <div ref="window_" class="context-reader" :class="{ 'is-plain': !context }">
     <ol
-      v-if="context?.before.length"
+      v-if="visible.before.length"
       class="ctx-list"
       :aria-label="i18n.t('pdf_corpus.context_before')"
     >
       <li
-        v-for="(item, index) in context.before"
+        v-for="(item, index) in visible.before"
         :key="item.record_id"
         class="ctx-item"
-        :style="{ opacity: opacity(context.before.length - index) }"
+        :style="{ opacity: opacity(visible.before.length - index) }"
       >
         <button type="button" class="ctx-jump" @click="emit('select', item.record_id)">
           <span>{{ item.record_id }}</span>
@@ -108,16 +154,21 @@ onBeforeUnmount(() => {
         <p>{{ item.text }}</p>
       </li>
     </ol>
-    <div ref="focus" class="ctx-focus" :aria-label="i18n.t('pdf_corpus.reviewed_record_text')">
+    <div
+      ref="focus"
+      class="ctx-focus"
+      data-record-text
+      :aria-label="i18n.t('pdf_corpus.reviewed_record_text')"
+    >
       {{ text }}
     </div>
     <ol
-      v-if="context?.after.length"
+      v-if="visible.after.length"
       class="ctx-list"
       :aria-label="i18n.t('pdf_corpus.context_after')"
     >
       <li
-        v-for="(item, index) in context.after"
+        v-for="(item, index) in visible.after"
         :key="item.record_id"
         class="ctx-item"
         :style="{ opacity: opacity(index + 1) }"

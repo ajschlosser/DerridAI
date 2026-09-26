@@ -6,6 +6,9 @@ import AppIcon from "./AppIcon.vue";
 import CorpusFieldOwnershipBadge from "./CorpusFieldOwnershipBadge.vue";
 import UiCombobox from "./ui/UiCombobox.vue";
 import { normalizeMetadataFieldValue } from "../domain/metadataFieldRegistry";
+import { groupOptionsBySuggestion, suggestedValues } from "../domain/metadataSuggestion";
+import { useRecordTextSelection } from "../composables/useRecordTextSelection";
+import CorpusFieldSelectionPreview from "./CorpusFieldSelectionPreview.vue";
 import {
   metadataValueText,
   unwrapMetadataValue,
@@ -87,6 +90,14 @@ function displayTimestamp(value: unknown) {
   const date = new Date(String(value));
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
 }
+const modelSuggestion = computed(() =>
+  suggestedValues(props.status, props.value, isLlm.value, hasValue),
+);
+const optionGroups = computed(() =>
+  groupOptionsBySuggestion(props.options || [], modelSuggestion.value),
+);
+const suggestedOptions = computed(() => optionGroups.value.suggested);
+const otherOptions = computed(() => optionGroups.value.others);
 const autocompleteOptions = computed(() =>
   isMultiCombobox.value ? usableListOptions(props.options || []) : props.options || [],
 );
@@ -215,6 +226,7 @@ function saveWithSelection() {
   }
   selectionMissing.value = false;
   emit("saveWithSelectionEvidence", normalized(), selected);
+  liveSelection.value = "";
   dirty.value = false;
   emit("dirty", false);
   editing.value = Boolean(props.open);
@@ -223,9 +235,7 @@ function markDirty() {
   dirty.value = true;
   emit("dirty", true);
 }
-function selectedRecordText() {
-  return String(window.getSelection()?.toString() || "").trim();
-}
+const { selection: liveSelection, capture: selectedRecordText } = useRecordTextSelection(editing);
 function selectFromText() {
   const selected = selectedRecordText();
   if (!selected) return;
@@ -389,9 +399,23 @@ const autoResolved = computed(
           <option value="" disabled>
             {{ i18n.t("pdf_corpus.choose_value") }}
           </option>
-          <option v-for="option in options || []" :key="option" :value="option">
-            {{ i18n.t(`record.enum.${field}.${option}`, option.replaceAll("_", " ")) }}
-          </option>
+          <optgroup v-if="suggestedOptions.length" :label="i18n.t('pdf_corpus.model_suggested')">
+            <option v-for="option in suggestedOptions" :key="option" :value="option">
+              ★ {{ i18n.t(`record.enum.${field}.${option}`, option.replaceAll("_", " ")) }} ({{
+                i18n.t("pdf_corpus.model_suggested_short")
+              }})
+            </option>
+          </optgroup>
+          <optgroup v-if="suggestedOptions.length" :label="i18n.t('pdf_corpus.all_values')">
+            <option v-for="option in otherOptions" :key="option" :value="option">
+              {{ i18n.t(`record.enum.${field}.${option}`, option.replaceAll("_", " ")) }}
+            </option>
+          </optgroup>
+          <template v-else>
+            <option v-for="option in otherOptions" :key="option" :value="option">
+              {{ i18n.t(`record.enum.${field}.${option}`, option.replaceAll("_", " ")) }}
+            </option>
+          </template>
         </select>
         <fieldset v-else-if="control === 'boolean'" class="boolean-choice">
           <legend class="sr-only">{{ fieldLabel }}</legend>
@@ -417,6 +441,8 @@ const autoResolved = computed(
           v-else-if="control === 'combobox'"
           :model-value="String(draft ?? '')"
           :options="autocompleteOptions"
+          :recommended="modelSuggestion"
+          :recommended-label="i18n.t('pdf_corpus.model_suggested_short')"
           :label="fieldLabel"
           @update:model-value="
             (value) => {
@@ -429,6 +455,8 @@ const autoResolved = computed(
           v-else-if="isMultiCombobox"
           :model-value="String(draft ?? '')"
           :options="autocompleteOptions"
+          :recommended="modelSuggestion"
+          :recommended-label="i18n.t('pdf_corpus.model_suggested_short')"
           :label="fieldLabel"
           :multiple="true"
           @update:model-value="
@@ -442,6 +470,8 @@ const autoResolved = computed(
           v-else-if="control === 'text' || control === 'number'"
           :model-value="String(draft ?? '')"
           :options="autocompleteOptions"
+          :recommended="modelSuggestion"
+          :recommended-label="i18n.t('pdf_corpus.model_suggested_short')"
           :type="control === 'number' ? 'number' : 'text'"
           :label="fieldLabel"
           @update:model-value="
@@ -500,6 +530,7 @@ const autoResolved = computed(
           {{ i18n.t("ui.cancel") }}
         </button>
       </div>
+      <CorpusFieldSelectionPreview :selection="liveSelection" @clear="liveSelection = ''" />
       <div class="field-tools">
         <template v-if="textSelectable">
           <button
@@ -635,6 +666,8 @@ const autoResolved = computed(
 
 <style scoped>
 .metadata-field {
+  /* Layout follows the width the field is given (workspace inspector, Focus View, a dialog), not the window. */
+  container: metadata-field / inline-size;
   min-width: 0;
   display: grid;
   gap: var(--space-2, 8px);
@@ -971,7 +1004,7 @@ const autoResolved = computed(
 .hint-chip small {
   color: var(--text-tertiary);
 }
-@media (max-width: 520px) {
+@container metadata-field (max-width: 32rem) {
   .field-row {
     grid-template-columns: minmax(0, 1fr) auto;
   }
