@@ -3111,12 +3111,19 @@ defineExpose({
                       "
                       @click="focusFirstMetadataBlocker"
                     >
-                      <AppIcon name="warning" /><span class="dock-blocker-text">{{
-                        i18n.tf("pdf_corpus.dock_metadata_required", {
+                      <AppIcon name="warning" /><b class="dock-blocker-count">{{
+                        i18n.tf("pdf_corpus.metadata_decisions_count", {
                           count: selectedMetadataBlockingFields.length,
-                          fields: selectedMetadataBlockingLabel,
                         })
-                      }}</span
+                      }}</b
+                      ><b class="dock-blocker-short"
+                        ><span aria-hidden="true">{{ selectedMetadataBlockingFields.length }}</span
+                        ><span class="sr-only">{{
+                          i18n.tf("pdf_corpus.metadata_decisions_count", {
+                            count: selectedMetadataBlockingFields.length,
+                          })
+                        }}</span></b
+                      ><span class="dock-blocker-text">{{ selectedMetadataBlockingLabel }}</span
                       ><kbd aria-hidden="true">{{ i18n.t("pdf_corpus.shortcut.metadata") }}</kbd>
                     </button>
                     <span v-else class="dock-ready" role="status"

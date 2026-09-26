@@ -79,6 +79,26 @@ test.describe("at a wide desktop", () => {
     );
   });
 
+  test("the record's text is shown, and its metadata can be decided from the keyboard", async ({
+    page,
+  }) => {
+    await open(page);
+    await expect(page.locator(".record-primary-text .ctx-focus")).toContainText(/hospitality/);
+    // The dock says what blocks the record; M jumps to the first field to decide.
+    const blocker = page.locator("#record-metadata-blocker");
+    await expect(blocker).toContainText(/3 decision/);
+    await page.locator("body").press("m");
+    const first = page.locator('.decision-list [data-unresolved-field="true"]').first();
+    await expect(first.locator("input, select").first()).toBeFocused();
+    // The dock sits under the inspector, on one row, with the primary action last.
+    const [inspector, dock] = await Promise.all([
+      rect(page, ".review-inspector"),
+      rect(page, ".record-decision-dock"),
+    ]);
+    expect(dock.y).toBeGreaterThanOrEqual(inspector.bottom - 1);
+    expect(dock.right).toBeGreaterThanOrEqual(inspector.right - 1);
+  });
+
   test("each pane scrolls on its own, and the page does not move", async ({ page }) => {
     await open(page);
     const before = await page.evaluate(() => scrollY);

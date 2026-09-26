@@ -39,8 +39,14 @@ async function load() {
   const key = `${props.buildId}:${props.recordId}`;
   const mine = ++ticket;
   try {
-    const result =
+    const raw =
       cache.get(key) ?? (await corpusBuilderApi.recordContext(props.buildId, props.recordId));
+    // A malformed or older response must never take the record's own text down with it.
+    const result: RecordContext = {
+      ...raw,
+      before: Array.isArray(raw?.before) ? raw.before : [],
+      after: Array.isArray(raw?.after) ? raw.after : [],
+    };
     cache.set(key, result);
     if (mine !== ticket) return;
     context.value = result;

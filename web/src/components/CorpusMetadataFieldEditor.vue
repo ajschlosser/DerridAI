@@ -475,9 +475,9 @@ const autoResolved = computed(
             :title="i18n.t('pdf_corpus.select_from_text_help')"
             @click="selectFromText"
           >
-            {{ i18n.t("pdf_corpus.select_from_text") }}</button
-          ><span aria-hidden="true">·</span>
-        </template>
+            {{ i18n.t("pdf_corpus.select_from_text") }}
+          </button></template
+        >
         <button
           type="button"
           class="link-button"
@@ -485,8 +485,7 @@ const autoResolved = computed(
           :title="i18n.t('pdf_corpus.assign_selected_evidence_help')"
           @click="saveWithSelection"
         >
-          {{ i18n.t("pdf_corpus.assign_selected_evidence") }}</button
-        ><span aria-hidden="true">·</span
+          {{ i18n.t("pdf_corpus.assign_selected_evidence_short") }}</button
         ><button type="button" class="link-button" @click="emit('source')">
           {{ i18n.t("pdf_corpus.view_evidence") }}
         </button>
@@ -653,14 +652,21 @@ const autoResolved = computed(
   gap: 6px;
   flex-wrap: wrap;
 }
+/* Title first on its own terms; the provenance badges sit at the end and drop below it when the card is narrow. */
 .field-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
+  flex-wrap: wrap;
   gap: 4px 10px;
   align-items: center;
 }
+.field-head > .field-title {
+  flex: 1 1 10rem;
+}
+.field-head > .field-head-aside {
+  margin-inline-start: auto;
+}
 .field-head > :deep(.field-policy) {
-  grid-column: 1 / -1;
+  flex-basis: 100%;
 }
 .field-title {
   display: flex;
@@ -709,16 +715,20 @@ const autoResolved = computed(
 }
 .field-tools {
   display: flex;
-  gap: 2px 6px;
+  gap: 0 14px;
   align-items: center;
   flex-wrap: wrap;
   color: var(--text-tertiary);
   font-size: var(--fs-sm);
 }
 .field-tools .link-button {
+  display: inline-flex;
+  align-items: center;
+  width: auto;
   min-height: 28px;
   padding: 0;
   font-size: var(--fs-sm);
+  text-align: start;
 }
 .field-tools .link-button:disabled {
   color: var(--text-tertiary);

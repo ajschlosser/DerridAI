@@ -1894,6 +1894,7 @@ summary:focus-visible {
   font-weight: 700;
 }
 .dock-blocker {
+  overflow: hidden;
   border: 1px solid var(--tone-warn-edge);
   background: var(--tone-warn-bg);
   color: var(--tone-warn-fg);
@@ -1909,7 +1910,16 @@ summary:focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
+.dock-blocker-count,
+.dock-blocker-short {
+  flex: none;
+  white-space: nowrap;
+}
+.dock-blocker-short {
+  display: none;
+}
 .dock-blocker-text {
+  font-weight: 500;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1963,8 +1973,14 @@ summary:focus-visible {
 }
 /* A narrower dock drops the key hints first, then More actions shrinks to its dots, so it stays on one row. */
 @container dock (max-width: 56rem) {
-  .record-decision-dock .decision-actions kbd {
+  .record-decision-dock .decision-actions kbd,
+  .dock-blocker kbd,
+  .dock-blocker-text,
+  .dock-blocker-count {
     display: none;
+  }
+  .dock-blocker-short {
+    display: inline;
   }
 }
 @container dock (max-width: 44rem) {
@@ -1983,9 +1999,6 @@ summary:focus-visible {
   .record-decision-dock :deep(.action-menu-trigger) {
     min-inline-size: 2.25rem;
     justify-content: center;
-  }
-  .dock-blocker kbd {
-    display: none;
   }
 }
 @container dock (max-width: 30rem) {
@@ -2043,7 +2056,7 @@ summary:focus-visible {
   margin: 2px 0 0;
 }
 .review-frame .record-text-review > header {
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   padding: 6px 10px;
 }
 .review-frame .record-text-review > header b {
@@ -2051,9 +2064,12 @@ summary:focus-visible {
 }
 .review-frame .record-text-head-actions {
   display: flex;
-  flex-wrap: nowrap;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
   gap: 6px;
-  flex: none;
 }
 .review-frame .record-text-head-actions .btn {
   white-space: nowrap;
