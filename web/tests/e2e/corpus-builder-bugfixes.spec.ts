@@ -133,6 +133,7 @@ test("the providers page lists installed models with their sizes, and the list i
     },
   });
   await page.goto(`${APP}/providers`);
+  await page.locator(".provider-summary").first().click();
   await page
     .getByRole("button", { name: /view models/i })
     .first()
@@ -213,6 +214,7 @@ for (const scheme of ["light", "dark"] as const) {
     await page.goto(`${APP}/providers`);
     if (scheme === "dark")
       await page.evaluate(() => document.documentElement.setAttribute("data-color-scheme", "dark"));
+    await page.locator(".provider-summary").first().click();
     await page
       .getByRole("button", { name: /view models/i })
       .first()
