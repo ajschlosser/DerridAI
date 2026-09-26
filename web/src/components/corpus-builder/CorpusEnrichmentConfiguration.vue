@@ -63,14 +63,16 @@ function reviewProviderChanged(event: Event) {
   );
 }
 
-function checkboxChanged(
-  event: Event,
-  name:
-    | "update:semanticIndexing"
-    | "update:autoCleanText"
-    | "update:llmTouchupDuringEnrichment",
-) {
-  emit(name, (event.target as HTMLInputElement).checked);
+function semanticIndexingChanged(event: Event) {
+  emit("update:semanticIndexing", (event.target as HTMLInputElement).checked);
+}
+
+function autoCleanTextChanged(event: Event) {
+  emit("update:autoCleanText", (event.target as HTMLInputElement).checked);
+}
+
+function llmTouchupChanged(event: Event) {
+  emit("update:llmTouchupDuringEnrichment", (event.target as HTMLInputElement).checked);
 }
 
 function manualProviderChanged(event: Event) {
@@ -80,14 +82,20 @@ function manualProviderChanged(event: Event) {
   );
 }
 
-function manualInputChanged(
-  event: Event,
-  name:
-    | "update:manualModel"
-    | "update:manualBaseUrl"
-    | "update:manualApiKey",
-) {
-  emit(name, (event.target as HTMLInputElement).value);
+function manualModelChanged(event: Event) {
+  emit("update:manualModel", (event.target as HTMLInputElement).value);
+}
+
+function manualBaseUrlChanged(event: Event) {
+  emit("update:manualBaseUrl", (event.target as HTMLInputElement).value);
+}
+
+function manualApiKeyChanged(event: Event) {
+  emit("update:manualApiKey", (event.target as HTMLInputElement).value);
+}
+
+function manualDisclosureToggled(event: Event) {
+  manualOpen.value = (event.currentTarget as HTMLDetailsElement).open;
 }
 </script>
 
@@ -206,7 +214,7 @@ function manualInputChanged(
           <input
             type="checkbox"
             :checked="props.semanticIndexing"
-            @change="checkboxChanged($event, 'update:semanticIndexing')"
+            @change="semanticIndexingChanged"
           />
           <span>
             <b>{{ i18n.t("pdf_corpus.semantic_indexing") }}</b>
@@ -218,7 +226,7 @@ function manualInputChanged(
           <input
             type="checkbox"
             :checked="props.autoCleanText"
-            @change="checkboxChanged($event, 'update:autoCleanText')"
+            @change="autoCleanTextChanged"
           />
           <span>
             <b>{{ i18n.t("pdf_corpus.auto_clean_all_records") }}</b>
@@ -230,12 +238,7 @@ function manualInputChanged(
           <input
             type="checkbox"
             :checked="props.llmTouchupDuringEnrichment"
-            @change="
-              checkboxChanged(
-                $event,
-                'update:llmTouchupDuringEnrichment',
-              )
-            "
+            @change="llmTouchupChanged"
           />
           <span>
             <b>{{ i18n.t("pdf_corpus.llm_touchup_during_enrichment") }}</b>
@@ -256,7 +259,7 @@ function manualInputChanged(
         v-if="!props.selectedProviderId"
         :open="manualOpen"
         class="advanced-config"
-        @toggle="manualOpen = ($event.currentTarget as HTMLDetailsElement).open"
+        @toggle="manualDisclosureToggled"
       >
         <summary>{{ i18n.t("pdf_corpus.manual_provider") }}</summary>
         <p class="help">{{ i18n.t("pdf_corpus.manual_provider_help") }}</p>
@@ -284,7 +287,7 @@ function manualInputChanged(
             class="control"
             :value="props.manualModel"
             :placeholder="i18n.t('pdf_corpus.provider_default')"
-            @input="manualInputChanged($event, 'update:manualModel')"
+            @input="manualModelChanged"
           />
 
           <label for="pdf-corpus-url">
@@ -295,7 +298,7 @@ function manualInputChanged(
             class="control"
             :value="props.manualBaseUrl"
             :placeholder="i18n.t('pdf_corpus.provider_default')"
-            @input="manualInputChanged($event, 'update:manualBaseUrl')"
+            @input="manualBaseUrlChanged"
           />
 
           <label for="pdf-corpus-key">
@@ -308,7 +311,7 @@ function manualInputChanged(
             autocomplete="off"
             :value="props.manualApiKey"
             :placeholder="i18n.t('pdf_corpus.not_persisted')"
-            @input="manualInputChanged($event, 'update:manualApiKey')"
+            @input="manualApiKeyChanged"
           />
         </div>
       </details>
