@@ -83,7 +83,12 @@ function recordSelectionChanged(recordId: string, event: Event) {
 </script>
 
 <template>
-  <nav ref="queueRoot" class="records-pane" tabindex="-1" aria-labelledby="pdf-corpus-records-pane">
+  <nav
+    ref="queueRoot"
+    class="records-pane"
+    tabindex="-1"
+    aria-labelledby="pdf-corpus-records-pane"
+  >
     <div class="pane-head">
       <b id="pdf-corpus-records-pane">{{ i18n.t("pdf_corpus.review_queue") }}</b>
       <button type="button" class="link-button queue-toggle" @click="emit('collapse')">
@@ -127,7 +132,11 @@ function recordSelectionChanged(recordId: string, event: Event) {
         :aria-current="record.record_id === props.selectedRecordId ? 'true' : undefined"
         @click="emit('selectRecord', record)"
       >
-        <span class="record-state-icon" :data-state="recordState(record)" aria-hidden="true">
+        <span
+          class="record-state-icon"
+          :data-state="recordState(record)"
+          aria-hidden="true"
+        >
           <AppIcon v-if="recordStateIcon(record)" :name="recordStateIcon(record)" />
         </span>
         <span class="record-row-main">
