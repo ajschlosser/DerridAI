@@ -500,40 +500,44 @@ onMounted(async () => {
   const browserEmbedding = normalizeEmbedding(
     workspace.appConfig as unknown as EmbeddingSettingsDraft,
   );
-  try {
-    const serverEmbedding = await systemApi.embeddingDefaults();
-    if (serverEmbedding.persisted) {
-      const normalized = normalizeEmbedding({
-        embedding_provider:
-          serverEmbedding.embedding_provider as EmbeddingSettingsDraft["embedding_provider"],
-        embedding_model: serverEmbedding.embedding_model || "",
-      });
-      Object.assign(workspace.appConfig, normalized);
-      embeddingSaved.value = normalized;
-    } else {
-      const migrateFrom =
-        browserEmbedding.embedding_provider === "ollama" &&
-        serverEmbedding.embedding_provider.startsWith("profile:")
-          ? normalizeEmbedding({
-              embedding_provider:
-                serverEmbedding.embedding_provider as EmbeddingSettingsDraft["embedding_provider"],
-              embedding_model: serverEmbedding.embedding_model || "",
-            })
-          : browserEmbedding;
-      const migrated = await systemApi.setEmbeddingDefaults({
-        embedding_provider: migrateFrom.embedding_provider,
-        embedding_model: migrateFrom.embedding_model || null,
-      });
-      embeddingSaved.value = normalizeEmbedding({
-        embedding_provider:
-          migrated.embedding_provider as EmbeddingSettingsDraft["embedding_provider"],
-        embedding_model: migrated.embedding_model || "",
-      });
-      Object.assign(workspace.appConfig, embeddingSaved.value);
+  if (isAdmin.value) {
+    try {
+      const serverEmbedding = await systemApi.embeddingDefaults();
+      if (serverEmbedding.persisted) {
+        const normalized = normalizeEmbedding({
+          embedding_provider:
+            serverEmbedding.embedding_provider as EmbeddingSettingsDraft["embedding_provider"],
+          embedding_model: serverEmbedding.embedding_model || "",
+        });
+        Object.assign(workspace.appConfig, normalized);
+        embeddingSaved.value = normalized;
+      } else {
+        const migrateFrom =
+          browserEmbedding.embedding_provider === "ollama" &&
+          serverEmbedding.embedding_provider.startsWith("profile:")
+            ? normalizeEmbedding({
+                embedding_provider:
+                  serverEmbedding.embedding_provider as EmbeddingSettingsDraft["embedding_provider"],
+                embedding_model: serverEmbedding.embedding_model || "",
+              })
+            : browserEmbedding;
+        const migrated = await systemApi.setEmbeddingDefaults({
+          embedding_provider: migrateFrom.embedding_provider,
+          embedding_model: migrateFrom.embedding_model || null,
+        });
+        embeddingSaved.value = normalizeEmbedding({
+          embedding_provider:
+            migrated.embedding_provider as EmbeddingSettingsDraft["embedding_provider"],
+          embedding_model: migrated.embedding_model || "",
+        });
+        Object.assign(workspace.appConfig, embeddingSaved.value);
+      }
+    } catch {
+      // The browser copy remains usable if the backend configuration endpoint is
+      // temporarily unavailable; save will surface a persistence error explicitly.
+      embeddingSaved.value = browserEmbedding;
     }
-  } catch {
-    // The browser copy remains usable if the backend configuration endpoint is
-    // temporarily unavailable; save will surface a persistence error explicitly.
+  } else {
     embeddingSaved.value = browserEmbedding;
   }
   embeddingDraft.value = cloneJson(embeddingSaved.value);
