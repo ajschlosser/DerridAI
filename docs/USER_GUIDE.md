@@ -217,7 +217,7 @@ Provider profiles can be added/removed without overwriting other endpoints.
 - advanced OpenAI-compatible options JSON
 - model discovery/test and warmup
 
-One provider profile is designated as the default, but run dialogs can switch profiles before launch. **Save provider profiles** stays locked at the bottom of the page and writes every profile at once. Cards can be collapsed after that save so the registry is easier to scan. Use **Set fields across profiles** to copy context tokens, output limits, sampling, and other shared parameters onto every profile or a selection, then save.
+The LLM Providers page lists each profile as one row: status, name, type, model, and a **Test** button. Open a row for its essentials (name, endpoint, model, API key, researcher access); **Capacity** and **Advanced** fold away further settings. One profile is the default, but run dialogs can switch profiles before launch. Test, Warm, and Set default never discard unsaved edits. When you have unsaved changes, a **Save** / **Discard** bar appears at the bottom of the page and writes every profile at once. Open **Bulk values** to copy context tokens, output limits, sampling, and other shared parameters onto every profile or a selection, then save.
 
 Dashboard LLM readiness reports every configured profile rather than only the most recently used endpoint.
 
