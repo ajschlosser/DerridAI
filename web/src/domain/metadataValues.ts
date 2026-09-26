@@ -62,8 +62,7 @@ export function isPlaceholderValue(value: unknown): boolean {
 /** Options for a dropdown: trimmed, without placeholders, without duplicates. */
 export function usableOptions(values: Iterable<unknown>): string[] {
   const out = new Set<string>();
-  for (const value of values)
-    if (isUsableMetadataSuggestion(value)) out.add(value.trim());
+  for (const value of values) if (isUsableMetadataSuggestion(value)) out.add(value.trim());
   return [...out];
 }
 
@@ -79,7 +78,6 @@ export function usableListOptions(values: Iterable<unknown>): string[] {
   }
   return usableOptions(expanded);
 }
-
 
 /**
  * Unwrap the common accidental envelope shape produced by older compatibility
@@ -154,9 +152,7 @@ export function metadataValueText(value: unknown): string {
   const unwrapped = unwrapMetadataValue(value);
   if (Array.isArray(unwrapped))
     return unwrapped
-      .map((item) =>
-        item && typeof item === "object" ? JSON.stringify(item) : String(item ?? ""),
-      )
+      .map((item) => (item && typeof item === "object" ? JSON.stringify(item) : String(item ?? "")))
       .filter(Boolean)
       .join(", ");
   if (unwrapped === null || unwrapped === undefined || unwrapped === "") return "";

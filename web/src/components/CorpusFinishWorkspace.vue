@@ -144,7 +144,9 @@ function fixBlocker(code?: string) {
         <b>{{ i18n.t("pdf_corpus.publication") }}</b>
       </div>
       <p>
-        {{ i18n.tf("pdf_corpus.publication_snapshot_summary", { count: publication.record_count }) }}
+        {{
+          i18n.tf("pdf_corpus.publication_snapshot_summary", { count: publication.record_count })
+        }}
       </p>
       <code>{{ publication.publication_id }}</code>
     </section>
@@ -302,10 +304,7 @@ function fixBlocker(code?: string) {
         </div>
       </section>
 
-      <section
-        class="readiness-row"
-        :data-state="validation.valid ? 'complete' : 'attention'"
-      >
+      <section class="readiness-row" :data-state="validation.valid ? 'complete' : 'attention'">
         <div class="readiness-row-copy">
           <span class="readiness-state">
             {{

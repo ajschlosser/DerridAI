@@ -63,5 +63,4 @@ describe("metadata values that are not answers", () => {
       ]),
     ).toEqual(["hospitality", "cosmopolitanism", "Levinas"]);
   });
-
 });

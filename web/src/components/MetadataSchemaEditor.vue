@@ -66,8 +66,7 @@ const schemaHelp = {
     "Requires the model to return a structured assessment for this field, including confidence, outcome, and review need.",
   review:
     "If this field remains unresolved or model-inferred, record acceptance requires a human decision according to the review workflow.",
-  role:
-    "Role describes what the field means to the product independently of its storage name. Scholarly fields are ordinary research metadata; structural fields participate in corpus structure; document fields describe the source edition; operational fields are utility/runtime data and are not ordinary scholarly metadata.",
+  role: "Role describes what the field means to the product independently of its storage name. Scholarly fields are ordinary research metadata; structural fields participate in corpus structure; document fields describe the source edition; operational fields are utility/runtime data and are not ordinary scholarly metadata.",
   reviewVisibility:
     "Controls where this field appears in Record review. Hidden fields remain available to the data model but are not presented as ordinary metadata.",
 } as const;
@@ -497,15 +496,20 @@ defineExpose({ select, draft });
                   <UiTooltip :text="t('field_role_help', schemaHelp.role)" /></span
                 ><select v-model="item.field.role" class="control">
                   <option value="scholarly">{{ t("role_scholarly", "Scholarly metadata") }}</option>
-                  <option value="structural">{{ t("role_structural", "Structural metadata") }}</option>
+                  <option value="structural">
+                    {{ t("role_structural", "Structural metadata") }}
+                  </option>
                   <option value="document">{{ t("role_document", "Document metadata") }}</option>
-                  <option value="operational">{{ t("role_operational", "Operational / utility") }}</option>
+                  <option value="operational">
+                    {{ t("role_operational", "Operational / utility") }}
+                  </option>
                 </select></label
               >
               <label class="schema-field"
                 ><span
                   >{{ t("review_visibility", "Record review visibility") }}
-                  <UiTooltip :text="t('review_visibility_help', schemaHelp.reviewVisibility)" /></span
+                  <UiTooltip
+                    :text="t('review_visibility_help', schemaHelp.reviewVisibility)" /></span
                 ><select v-model="item.field.review_visibility" class="control">
                   <option value="primary">{{ t("visibility_primary", "Show in review") }}</option>
                   <option value="details">{{ t("visibility_details", "Show in details") }}</option>

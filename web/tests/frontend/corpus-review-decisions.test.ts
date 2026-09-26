@@ -248,5 +248,4 @@ describe("Corpus Builder review decisions", () => {
 
     expect(state.advanceFrom).toHaveBeenCalledWith("r1");
   });
-
 });

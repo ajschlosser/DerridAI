@@ -68,7 +68,10 @@ function onTabKeydown(event: KeyboardEvent, id: CorpusConfigurationSection) {
 </script>
 
 <template>
-  <nav class="corpus-config-nav" :aria-label="i18n.t('pdf_corpus.configure_sections', 'Build configuration')">
+  <nav
+    class="corpus-config-nav"
+    :aria-label="i18n.t('pdf_corpus.configure_sections', 'Build configuration')"
+  >
     <div class="corpus-config-tabs" role="tablist">
       <button
         v-for="tab in tabs"
@@ -88,7 +91,8 @@ function onTabKeydown(event: KeyboardEvent, id: CorpusConfigurationSection) {
           v-if="tab.id === 'source' && hasSource"
           class="corpus-config-tab-status"
           aria-hidden="true"
-        >✓</span>
+          >✓</span
+        >
       </button>
     </div>
   </nav>

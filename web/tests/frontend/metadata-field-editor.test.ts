@@ -223,5 +223,4 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
     expect((wrapper.get("input").element as HTMLInputElement).value).toBe("Jacques Derrida");
     wrapper.unmount();
   });
-
 });

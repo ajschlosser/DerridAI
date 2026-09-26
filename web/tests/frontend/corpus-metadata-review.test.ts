@@ -220,5 +220,4 @@ describe("Corpus Builder metadata review", () => {
     expect(state.review.metadataSavingField.value).toBe("");
     expect(state.applyAuthoritativeRecord).toHaveBeenCalled();
   });
-
 });

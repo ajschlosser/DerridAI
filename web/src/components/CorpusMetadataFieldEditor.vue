@@ -4,7 +4,11 @@ import { useI18nStore } from "../stores/i18n";
 import CorpusFieldOwnershipBadge from "./CorpusFieldOwnershipBadge.vue";
 import UiCombobox from "./ui/UiCombobox.vue";
 import { normalizeMetadataFieldValue } from "../domain/metadataFieldRegistry";
-import { metadataValueText, unwrapMetadataValue, usableListOptions } from "../domain/metadataValues";
+import {
+  metadataValueText,
+  unwrapMetadataValue,
+  usableListOptions,
+} from "../domain/metadataValues";
 
 const props = defineProps<{
   field: string;
@@ -291,11 +295,9 @@ const autoResolved = computed(
       <p v-if="status?.reason" class="assertion-reason">{{ status.reason }}</p>
       <p v-if="Array.isArray(status?.evidence)" class="assertion-evidence-count">
         {{
-          i18n.tf(
-            "pdf_corpus.assertion_evidence_count",
-            "{count} evidence reference(s)",
-            { count: status.evidence.length },
-          )
+          i18n.tf("pdf_corpus.assertion_evidence_count", "{count} evidence reference(s)", {
+            count: status.evidence.length,
+          })
         }}
       </p>
       <div v-if="assertionAlternatives.length" class="assertion-alternatives">

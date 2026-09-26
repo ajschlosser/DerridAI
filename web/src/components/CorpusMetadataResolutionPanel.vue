@@ -12,9 +12,7 @@ import { metadataConstraints } from "../domain/metadataConstraints";
 import { metadataFieldSpec, metadataSuggestions } from "../domain/metadataFieldRegistry";
 import { assertionConflict, currentFieldAssertions } from "../domain/fieldAssertions";
 import type { MetadataSchema, SchemaField } from "../api/metadataSchemas";
-import {
-  reviewableMetadataFieldNames,
-} from "../features/corpus-builder/domain/recordMetadata";
+import { reviewableMetadataFieldNames } from "../features/corpus-builder/domain/recordMetadata";
 import CorpusMetadataFieldEditor from "./CorpusMetadataFieldEditor.vue";
 import CorpusFieldOwnershipBadge from "./CorpusFieldOwnershipBadge.vue";
 import CorpusEnrichmentChanges from "./CorpusEnrichmentChanges.vue";
@@ -72,14 +70,8 @@ const canonicalAssertions = computed(() =>
 );
 const fieldOrder = computed<string[]>(() =>
   props.schema
-    ? reviewableMetadataFieldNames(
-        props.record as unknown as Record<string, unknown>,
-        props.schema,
-      )
-    : reviewableMetadataFieldNames(
-        props.record as unknown as Record<string, unknown>,
-        null,
-      ),
+    ? reviewableMetadataFieldNames(props.record as unknown as Record<string, unknown>, props.schema)
+    : reviewableMetadataFieldNames(props.record as unknown as Record<string, unknown>, null),
 );
 const fieldLabel = (field: string) => schemaFields.value[field]?.label || "";
 const assertionByField = computed(() =>

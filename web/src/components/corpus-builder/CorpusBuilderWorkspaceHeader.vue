@@ -31,14 +31,10 @@ const lifecycleLabel = computed(() => {
 });
 const progressLabel = computed(() => {
   if (!props.recordCount) return "";
-  return i18n.tf(
-    "pdf_corpus.workspace.record_progress",
-    "{accepted} of {total} Records accepted",
-    {
-      accepted: props.acceptedCount.toLocaleString(),
-      total: props.recordCount.toLocaleString(),
-    },
-  );
+  return i18n.tf("pdf_corpus.workspace.record_progress", "{accepted} of {total} Records accepted", {
+    accepted: props.acceptedCount.toLocaleString(),
+    total: props.recordCount.toLocaleString(),
+  });
 });
 </script>
 

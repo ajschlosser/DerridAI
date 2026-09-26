@@ -239,7 +239,6 @@ describe("Corpus Builder focus review interactions", () => {
     wrapper.unmount();
   });
 
-
   it("disables acceptance when the parent marks the record unsafe to accept", () => {
     const wrapper = mount(CorpusRecordFocusReview, {
       props: { record, canAccept: false },

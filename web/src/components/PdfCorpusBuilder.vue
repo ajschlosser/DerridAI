@@ -992,10 +992,15 @@ function metadataBlockingFields(record: CorpusRecord | null): string[] {
     ),
   );
   return Array.from(
-    new Set([...(record.metadata_incomplete_fields || []), ...(record.metadata_review_fields || [])]),
+    new Set([
+      ...(record.metadata_incomplete_fields || []),
+      ...(record.metadata_review_fields || []),
+    ]),
   ).filter((field) => allowed.has(field));
 }
-const selectedMetadataBlocked = computed(() => metadataBlockingFields(selectedRecord.value).length > 0);
+const selectedMetadataBlocked = computed(
+  () => metadataBlockingFields(selectedRecord.value).length > 0,
+);
 const {
   setDisposition,
   attemptAccept,
@@ -1040,9 +1045,7 @@ const {
   t: (key, fallback) => i18n.t(key, fallback),
   tf: (key, values) => i18n.tf(key, values),
 });
-const selectedMetadataBlockingFields = computed(() =>
-  metadataBlockingFields(selectedRecord.value),
-);
+const selectedMetadataBlockingFields = computed(() => metadataBlockingFields(selectedRecord.value));
 const selectedMetadataBlockingLabel = computed(() =>
   selectedMetadataBlockingFields.value
     .map((field) => i18n.t(`record.${field}`, field.replace(/_/g, " ")))
@@ -1913,7 +1916,6 @@ defineExpose({
       >
         <div class="setup-section-head">
           <div>
-            
             <div>
               <h3 id="pdf-corpus-source-title">
                 {{ i18n.t("pdf_corpus.source_setup_title") }}
@@ -1964,7 +1966,6 @@ defineExpose({
         aria-labelledby="corpus-config-tab-structure"
       >
         <div class="phase-label">
-          
           <div>
             <h3 id="pdf-corpus-structure-phase-title">
               {{ i18n.t("pdf_corpus.document_structure") }}
@@ -1995,7 +1996,6 @@ defineExpose({
         aria-labelledby="corpus-config-tab-structure"
       >
         <div class="phase-label">
-          
           <div>
             <h3 id="media-structure-phase-title">
               {{ i18n.t("pdf_corpus.source_interpretation", "Source interpretation") }}
@@ -2174,10 +2174,7 @@ defineExpose({
         </div>
       </details>
 
-      <details
-        v-show="configurationSection === 'structure'"
-        class="setup-section setup-disclosure"
-      >
+      <details v-show="configurationSection === 'structure'" class="setup-section setup-disclosure">
         <summary>
           <span
             ><b>{{ i18n.t("pdf_corpus.record_construction") }}</b

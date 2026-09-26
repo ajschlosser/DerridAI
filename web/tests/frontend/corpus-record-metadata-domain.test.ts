@@ -142,5 +142,4 @@ describe("Corpus Builder editable metadata packet", () => {
 
     expect(editableRecordMetadata(record, schema)).toEqual({ public_note: "review me" });
   });
-
 });

@@ -77,10 +77,7 @@ const providerSummary = computed(() =>
           }}
         </h3>
         <p>
-          {{
-            sourceFilename ||
-            i18n.t("pdf_corpus.choose_source_prompt")
-          }}
+          {{ sourceFilename || i18n.t("pdf_corpus.choose_source_prompt") }}
         </p>
       </div>
     </div>
