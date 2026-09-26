@@ -7,6 +7,7 @@ import threading
 from datetime import UTC
 from typing import Any
 
+from .config import settings as app_settings
 from .locales.en_us import EN_US as DEFAULT_EN_US
 from .locales.fr_ca import FR_CA as DEFAULT_FR_CA
 from .persistence import SQLiteJobRepository, system_repository
@@ -56,6 +57,7 @@ class SystemStore:
     def _default(self) -> dict[str, Any]:
         return {
             "researcher_provider_profiles": [],
+            "settings": {},
             "annotations": [],
             "languages": {code: dict(language) for code, language in BUILT_IN_LANGUAGES.items()},
         }
@@ -218,6 +220,59 @@ class SystemStore:
     ) -> dict[str, Any] | None:
         with self._lock:
             return self.repository.get_generated_claim(claim_id, owner=owner)
+
+    def embedding_defaults(self) -> dict[str, Any]:
+        with self._lock:
+            stored = self.repository.get_setting("embedding_defaults")
+        value = stored if isinstance(stored, dict) else {}
+        provider = str(value.get("embedding_provider") or app_settings.embedding_provider).strip()
+        if not provider.startswith("profile:"):
+            provider = provider.lower()
+        model = str(value.get("embedding_model") or "").strip() or None
+        if provider == "ollama" and not model:
+            model = app_settings.ollama_embed_model
+        if provider.startswith("profile:") and not model:
+            profile_id = provider.split(":", 1)[1].strip()
+            profile = self.researcher_profile(profile_id)
+            model = str((profile or {}).get("model") or "").strip() or None
+        return {
+            "embedding_provider": provider,
+            "embedding_model": model,
+        }
+
+    def set_embedding_defaults(self, provider: str, model: str | None = None) -> dict[str, Any]:
+        normalized_provider = str(provider or "").strip()
+        if not normalized_provider.startswith("profile:"):
+            normalized_provider = normalized_provider.lower()
+        if normalized_provider not in {"ollama", "chroma", "precomputed"} and not normalized_provider.startswith("profile:"):
+            raise ValueError(
+                "Embedding provider must be ollama, chroma, precomputed, or profile:<provider-id>."
+            )
+
+        normalized_model = str(model or "").strip() or None
+        if normalized_provider == "ollama" and not normalized_model:
+            normalized_model = app_settings.ollama_embed_model
+        if normalized_provider.startswith("profile:"):
+            profile_id = normalized_provider.split(":", 1)[1].strip()
+            if not profile_id:
+                raise ValueError("Embedding provider profile ID cannot be empty.")
+            profile = self.researcher_profile(profile_id)
+            if not profile:
+                raise ValueError(f"Embedding provider profile {profile_id!r} was not found.")
+            if not normalized_model:
+                normalized_model = str(profile.get("model") or "").strip() or None
+            if not normalized_model:
+                raise ValueError("Select an embedding model for the provider profile.")
+        if normalized_provider in {"chroma", "precomputed"}:
+            normalized_model = None
+
+        payload = {
+            "embedding_provider": normalized_provider,
+            "embedding_model": normalized_model,
+        }
+        with self._lock:
+            self.repository.put_setting("embedding_defaults", payload)
+        return copy.deepcopy(payload)
 
     def researcher_profiles(self, *, include_secrets: bool = False) -> list[dict[str, Any]]:
         with self._lock:
