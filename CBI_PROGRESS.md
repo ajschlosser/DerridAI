@@ -165,3 +165,31 @@ Focused regression coverage has been added for:
 
 The branch still requires the repository CI gate set before merge. Do not claim release readiness
 until those required checks pass.
+
+## Configuration workspace decomposition
+
+A follow-up branch, `task/corpus-builder-configuration-workspaces-v2`, continues the post-#179
+monolith reduction from current `master` after Source ingestion (#181), compact publication
+ledgers (#183), the shared embedding-provider contract (#184), and source-library reliability
+work (#186) merged.
+
+Current slice:
+
+- Extracted the full **Enrichment** configuration tab into
+  `CorpusEnrichmentConfiguration.vue`.
+- Kept provider/build request state in `useCorpusProviderConfiguration`; the extracted component
+  owns presentation and emits typed changes rather than duplicating domain logic.
+- Moved the tabpanel semantics, provider/escalation UI, enrichment strategy, semantic indexing,
+  text-cleanup/touch-up controls, text-noise policy, and manual-provider disclosure out of
+  `PdfCorpusBuilder.vue`.
+- Removed the parent-only `advancedOpen` disclosure state and direct
+  `ProviderProfileSelect`/`CorpusTextNoiseSettings` dependencies.
+- Preserved the configuration-navigation `aria-controls` contract by making the extracted
+  component root `#corpus-config-panel-enrichment`.
+- Moved the relevant scoped presentation rules into the extracted component so Vue scoped-style
+  boundaries do not cause a visual regression after extraction.
+- Added focused unit coverage and Storybook states for fast/deep/manual-provider configurations.
+- Reduced `PdfCorpusBuilder.vue` from 3,945 lines to 3,813 lines in this first extraction slice.
+
+Next extraction targets are the Metadata and Advanced tab workspaces, followed by the Review shell
+and Finish/repair-intent orchestration.

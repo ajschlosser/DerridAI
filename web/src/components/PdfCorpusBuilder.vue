@@ -9,7 +9,6 @@ import {
   type AutonomousPolicy,
 } from "../api/corpus";
 import { useI18nStore } from "../stores/i18n";
-import ProviderProfileSelect from "./ProviderProfileSelect.vue";
 import CorpusBuildProgress from "./CorpusBuildProgress.vue";
 import FieldEvidenceList from "./FieldEvidenceList.vue";
 import DocumentStructureConfigurator from "./DocumentStructureConfigurator.vue";
@@ -50,7 +49,6 @@ import CorpusBoundaryAdjudication from "./CorpusBoundaryAdjudication.vue";
 import MetadataEnrichmentDialog from "./MetadataEnrichmentDialog.vue";
 import CorpusModelActivity from "./CorpusModelActivity.vue";
 import CorpusHandsFreeSettings from "./CorpusHandsFreeSettings.vue";
-import CorpusTextNoiseSettings from "./CorpusTextNoiseSettings.vue";
 import MetadataSchemaEditor from "./MetadataSchemaEditor.vue";
 import {
   metadataSchemasApi,
@@ -85,6 +83,7 @@ import CorpusConfigurationNav, {
   type CorpusConfigurationSection,
 } from "./corpus-builder/CorpusConfigurationNav.vue";
 import CorpusBuilderWorkspaceHeader from "./corpus-builder/CorpusBuilderWorkspaceHeader.vue";
+import CorpusEnrichmentConfiguration from "./corpus-builder/CorpusEnrichmentConfiguration.vue";
 import CorpusActionMenu, { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
 import { recordState, recordIssueKinds } from "../domain/corpusReview";
 import { RecordMutationQueue } from "../domain/recordMutationQueue";
@@ -280,7 +279,6 @@ const error = ref("");
 const notice = ref("");
 const statusRegion = ref<HTMLElement | null>(null);
 const acceptButtonEl = ref<HTMLButtonElement | null>(null);
-const advancedOpen = ref(false);
 const configurationSection = ref<CorpusConfigurationSection>("source");
 const recordSaveQueue = new RecordMutationQueue();
 const documentMetadataOpen = ref(false);
@@ -2032,169 +2030,39 @@ defineExpose({
         />
       </section>
 
-      <details
+      <CorpusEnrichmentConfiguration
         v-show="configurationSection === 'enrichment'"
-        id="corpus-config-panel-enrichment"
-        class="setup-section setup-disclosure"
-        role="tabpanel"
-        aria-labelledby="corpus-config-tab-enrichment"
-        open
-      >
-        <summary>
-          <span
-            ><b>{{ i18n.t("pdf_corpus.llm_enrichment_title") }}</b
-            ><small
-              >{{ selectedProviderLabel
-              }}<template v-if="selectedProfileModel"> · {{ selectedProfileModel }}</template> ·
-              {{
-                enrichmentMode === "deep"
-                  ? i18n.t("pdf_corpus.enrichment_deep")
-                  : i18n.t("pdf_corpus.enrichment_fast")
-              }}</small
-            ></span
-          >
-        </summary>
-        <div class="setup-disclosure-body">
-          <div class="provider-area">
-            <ProviderProfileSelect
-              v-model="selectedProviderId"
-              :profiles="providerProfiles"
-              :default-profile-id="runtime.getDefaultProviderProfileId?.() || ''"
-              :label="i18n.t('pdf_corpus.provider_profile')"
-              :help="i18n.t('pdf_corpus.provider_profile_help')"
-              :empty-title="i18n.t('pdf_corpus.no_provider_profiles')"
-              :empty-help="i18n.t('pdf_corpus.no_provider_profiles_help')"
-              :manage-label="i18n.t('pdf_corpus.manage_providers')"
-              :model-not-set-label="i18n.t('pdf_corpus.model_not_set')"
-              :default-label="i18n.t('ui.default')"
-              :concurrent-label="i18n.t('pdf_corpus.concurrent_requests')"
-              :context-label="i18n.t('providers.context_tokens')"
-              @manage="manageProviders"
-            />
-            <label
-              v-if="selectedProviderId && providerProfiles.length > 1"
-              class="escalation-field"
-              for="pdf-corpus-review-provider"
-              ><span
-                ><b>{{ i18n.t("pdf_corpus.escalation_provider") }}</b
-                ><small>{{ i18n.t("pdf_corpus.escalation_provider_help") }}</small></span
-              ><select
-                id="pdf-corpus-review-provider"
-                v-model="selectedReviewProviderId"
-                class="control"
-              >
-                <option value="">
-                  {{ i18n.t("pdf_corpus.no_escalation_provider") }}
-                </option>
-                <option
-                  v-for="profile in providerProfiles"
-                  :key="profile.id"
-                  :value="profile.id"
-                  :disabled="profile.id === selectedProviderId"
-                >
-                  {{ profile.name || profile.id }} ·
-                  {{ profile.model || i18n.t("pdf_corpus.model_not_set") }}
-                </option>
-              </select></label
-            >
-          </div>
-          <section class="enrichment-strategy" aria-labelledby="pdf-corpus-enrichment-mode-title">
-            <div class="setup-card-heading">
-              <b id="pdf-corpus-enrichment-mode-title">{{
-                i18n.t("pdf_corpus.enrichment_strategy")
-              }}</b
-              ><small>{{ i18n.t("pdf_corpus.enrichment_strategy_help") }}</small>
-            </div>
-            <div
-              class="mode-options"
-              role="radiogroup"
-              :aria-label="i18n.t('pdf_corpus.enrichment_strategy')"
-            >
-              <label
-                ><input v-model="enrichmentMode" type="radio" value="fast" /><span
-                  ><b>{{ i18n.t("pdf_corpus.enrichment_fast") }}</b
-                  ><small>{{ i18n.t("pdf_corpus.enrichment_fast_help") }}</small></span
-                ></label
-              ><label
-                ><input v-model="enrichmentMode" type="radio" value="deep" /><span
-                  ><b>{{ i18n.t("pdf_corpus.enrichment_deep") }}</b
-                  ><small>{{ i18n.t("pdf_corpus.enrichment_deep_help") }}</small></span
-                ></label
-              >
-            </div>
-            <div v-if="enrichmentMode === 'deep'" class="included-feature">
-              <b>{{ i18n.t("pdf_corpus.semantic_indexing") }}</b
-              ><span>{{ i18n.t("pdf_corpus.semantic_indexing_included") }}</span>
-            </div>
-            <label v-else class="semantic-index-toggle"
-              ><input v-model="semanticIndexing" type="checkbox" /><span
-                ><b>{{ i18n.t("pdf_corpus.semantic_indexing") }}</b
-                ><small>{{ i18n.t("pdf_corpus.semantic_indexing_help") }}</small></span
-              ></label
-            >
-            <label class="semantic-index-toggle"
-              ><input v-model="autoCleanText" type="checkbox" /><span
-                ><b>{{ i18n.t("pdf_corpus.auto_clean_all_records") }}</b
-                ><small>{{ i18n.t("pdf_corpus.auto_clean_all_records_help") }}</small></span
-              ></label
-            ><label class="semantic-index-toggle"
-              ><input v-model="llmTouchupDuringEnrichment" type="checkbox" /><span
-                ><b>{{ i18n.t("pdf_corpus.llm_touchup_during_enrichment") }}</b
-                ><small>{{ i18n.t("pdf_corpus.llm_touchup_during_enrichment_help") }}</small></span
-              ></label
-            >
-            <CorpusTextNoiseSettings
-              :threshold="noiseUnusableThreshold"
-              :llm-assist="llmAssessTextNoise"
-              :disabled="busy !== ''"
-              @update:threshold="noiseUnusableThreshold = $event"
-              @update:llm-assist="llmAssessTextNoise = $event"
-            />
-          </section>
-          <details
-            v-if="!selectedProviderId"
-            :open="advancedOpen"
-            class="advanced-config"
-            @toggle="advancedOpen = ($event.currentTarget as HTMLDetailsElement).open"
-          >
-            <summary>
-              {{ i18n.t("pdf_corpus.manual_provider") }}
-            </summary>
-            <p class="help">
-              {{ i18n.t("pdf_corpus.manual_provider_help") }}
-            </p>
-            <div class="advanced-grid">
-              <label for="pdf-corpus-provider">{{ i18n.t("pdf_corpus.provider") }}</label
-              ><select id="pdf-corpus-provider" v-model="manualProvider" class="control">
-                <option value="ollama">Ollama</option>
-                <option value="openai">
-                  {{ i18n.t("pdf_corpus.openai_compatible") }}
-                </option></select
-              ><label for="pdf-corpus-model">{{ i18n.t("pdf_corpus.model") }}</label
-              ><input
-                id="pdf-corpus-model"
-                v-model="manualModel"
-                class="control"
-                :placeholder="i18n.t('pdf_corpus.provider_default')"
-              /><label for="pdf-corpus-url">{{ i18n.t("pdf_corpus.base_url") }}</label
-              ><input
-                id="pdf-corpus-url"
-                v-model="manualBaseUrl"
-                class="control"
-                :placeholder="i18n.t('pdf_corpus.provider_default')"
-              /><label for="pdf-corpus-key">{{ i18n.t("pdf_corpus.api_key") }}</label
-              ><input
-                id="pdf-corpus-key"
-                v-model="manualApiKey"
-                class="control"
-                type="password"
-                autocomplete="off"
-                :placeholder="i18n.t('pdf_corpus.not_persisted')"
-              />
-            </div>
-          </details>
-        </div>
-      </details>
+        :selected-provider-id="selectedProviderId"
+        :selected-review-provider-id="selectedReviewProviderId"
+        :provider-profiles="providerProfiles"
+        :default-profile-id="runtime.getDefaultProviderProfileId?.() || ''"
+        :selected-provider-label="selectedProviderLabel"
+        :selected-profile-model="selectedProfileModel"
+        :enrichment-mode="enrichmentMode"
+        :semantic-indexing="semanticIndexing"
+        :auto-clean-text="autoCleanText"
+        :llm-touchup-during-enrichment="llmTouchupDuringEnrichment"
+        :noise-unusable-threshold="noiseUnusableThreshold"
+        :llm-assess-text-noise="llmAssessTextNoise"
+        :manual-provider="manualProvider"
+        :manual-model="manualModel"
+        :manual-base-url="manualBaseUrl"
+        :manual-api-key="manualApiKey"
+        :disabled="busy !== ''"
+        @update:selected-provider-id="selectedProviderId = $event"
+        @update:selected-review-provider-id="selectedReviewProviderId = $event"
+        @update:enrichment-mode="enrichmentMode = $event"
+        @update:semantic-indexing="semanticIndexing = $event"
+        @update:auto-clean-text="autoCleanText = $event"
+        @update:llm-touchup-during-enrichment="llmTouchupDuringEnrichment = $event"
+        @update:noise-unusable-threshold="noiseUnusableThreshold = $event"
+        @update:llm-assess-text-noise="llmAssessTextNoise = $event"
+        @update:manual-provider="manualProvider = $event"
+        @update:manual-model="manualModel = $event"
+        @update:manual-base-url="manualBaseUrl = $event"
+        @update:manual-api-key="manualApiKey = $event"
+        @manage-providers="manageProviders"
+      />
 
       <details v-show="configurationSection === 'structure'" class="setup-section setup-disclosure">
         <summary>
