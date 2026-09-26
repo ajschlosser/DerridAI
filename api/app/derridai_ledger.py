@@ -25,9 +25,10 @@ import io
 import json
 import os
 import tempfile
+from collections.abc import Callable, Iterable, Iterator, Mapping, MutableMapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Iterable, Iterator, Mapping, MutableMapping
+from typing import Any
 
 JsonObject = dict[str, Any]
 RecordSerializer = Callable[[dict[str, Any]], dict[str, Any]]
@@ -431,7 +432,7 @@ def compact_public_record(
 
 def _import_zstandard() -> Any:
     try:
-        import zstandard as zstd  # type: ignore
+        import zstandard as zstd
     except ImportError as exc:  # pragma: no cover - environment dependent
         raise RuntimeError(
             "Zstandard support requires the 'zstandard' package. "
