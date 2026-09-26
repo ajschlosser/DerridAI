@@ -58,6 +58,7 @@ from ..models import (
     PdfCorpusTextTouchupRequest,
     PdfDocumentLayoutPatch,
     PdfPageLabelsPatch,
+    PdfSourceUnitPolicy,
     PdfSourceUrlImport,
 )
 from ..pdf_tools import extract_pdf_text
@@ -186,6 +187,28 @@ async def decode_corpus_ledger(file: UploadFile = File(...)) -> dict[str, Any]:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
     text = "\n".join(json.dumps(record, ensure_ascii=False) for record in records) + "\n"
     return {"text": text, "record_count": len(records), "filename": name.removesuffix(".zst")}
+
+
+@router.post("/api/pdf/assets/{asset_id}/units/preview")
+def preview_pdf_asset_units(asset_id: str, body: PdfSourceUnitPolicy) -> dict[str, Any]:
+    """How a source-unit policy would divide this source (counts and samples; nothing is saved)."""
+    try:
+        return pdf_corpus_repository.preview_unit_policy(asset_id, body.model_dump(exclude_none=True))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Source asset not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/api/pdf/assets/{asset_id}/units")
+def derive_pdf_asset_units(asset_id: str, body: PdfSourceUnitPolicy) -> dict[str, Any]:
+    """Create a source asset whose evidence units follow the policy; the original is kept."""
+    try:
+        return pdf_corpus_repository.derive_asset_with_units(asset_id, body.model_dump(exclude_none=True))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Source asset not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/api/pdf/assets/url")

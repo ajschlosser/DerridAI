@@ -14,6 +14,7 @@ from .source_safety import check_size, safe_xml, validate_docx, validate_rtf
 MANIFEST_FIELDS = (
     "title", "document_author", "speaker", "language", "publisher",
     "publication_year", "document_type", "translator", "edition",
+    "publication_place", "isbn",
 )
 _LABEL_FIELDS = {
     "title": {"title", "titre"},
@@ -22,6 +23,8 @@ _LABEL_FIELDS = {
     "speaker": {"speaker", "locuteur", "intervenant"},
     "publisher": {"publisher", "editeur", "éditeur"},
     "translator": {"translator", "traducteur"},
+    "publication_place": {"place of publication", "place", "lieu d'édition", "lieu de publication"},
+    "isbn": {"isbn"},
 }
 _NOT_SPEAKERS = {
     "title", "author", "auteur", "by", "note", "notes", "chapter", "chapitre",
@@ -311,7 +314,12 @@ def infer_initial_metadata(
     values: dict[str, Any] = {}
     provenance: dict[str, dict[str, Any]] = {}
 
-    def put(field: str, value: Any, method: str, confidence: float) -> None:
+    def put(
+        field: str, value: Any, method: str, confidence: float, *,
+        derivation: str = "deterministic", reason: str = "", span: tuple[int, int] | None = None,
+    ) -> None:
+        """Record a value with its provenance. A value that loses to a more confident one is kept as
+        an alternative (a suggestion for the reviewer), never silently discarded."""
         if value in (None, "", []):
             return
         cleaned = value
@@ -319,11 +327,27 @@ def infer_initial_metadata(
             cleaned = re.sub(r"\s+", " ", cleaned).strip()
             if not cleaned:
                 return
+        entry: dict[str, Any] = {"method": method, "confidence": round(confidence, 3), "derivation": derivation}
+        if reason:
+            entry["reason"] = reason
+        if span:
+            entry["span"] = [span[0], span[1]]
         current = provenance.get(field)
         if current and float(current.get("confidence") or 0) > confidence:
+            if cleaned != values.get(field):
+                alternatives = current.setdefault("alternatives", [])
+                if all(alt["value"] != cleaned for alt in alternatives):
+                    alternatives.append({"value": cleaned, **entry})
             return
+        if current and values.get(field) != cleaned:
+            entry["alternatives"] = [
+                {"value": values.get(field), **{k: v for k, v in current.items() if k != "alternatives"}},
+                *current.get("alternatives", []),
+            ]
+        elif current and current.get("alternatives"):
+            entry["alternatives"] = current["alternatives"]
         values[field] = cleaned
-        provenance[field] = {"method": method, "confidence": round(confidence, 3)}
+        provenance[field] = entry
 
     embedded = embedded or {}
     for source_key, field, confidence in (
@@ -368,6 +392,15 @@ def infer_initial_metadata(
     if catalog.get("gutenberg_id"):
         values["gutenberg_id"] = int(catalog["gutenberg_id"])
 
+    # Front-matter pre-fill: exact patterns ("computed") and a statistical tagger ("nlp_derived").
+    from .document_prefill import extract
+
+    for candidate in sorted(extract(text, language=str(values.get("language") or "")), key=lambda c: -c.confidence):
+        put(
+            candidate.field, candidate.value, candidate.method, candidate.confidence,
+            derivation=candidate.derivation, reason=candidate.reason, span=candidate.span,
+        )
+
     if "speakers" not in values and speakers:
         values["speakers"] = speakers
     values["field_provenance"] = provenance
@@ -388,7 +421,12 @@ def apply_deterministic_ingest_metadata(result: dict[str, Any], asset: dict[str,
         confidence = float(info.get("confidence") or 0)
         if result.get(field) in (None, "", []) or confidence >= 0.8:
             result[field] = value
-            applied[field] = {"value": value, "method": info.get("method") or "deterministic_ingest", "confidence": confidence}
+            applied[field] = {
+                "value": value, "method": info.get("method") or "deterministic_ingest", "confidence": confidence,
+                "derivation": info.get("derivation") or "deterministic",
+                **({"reason": info["reason"]} if info.get("reason") else {}),
+                **({"alternatives": info["alternatives"]} if info.get("alternatives") else {}),
+            }
     result["deterministic_ingest"] = {
         "checked_at": asset.get("deterministic_checked_at"),
         "applied": applied,

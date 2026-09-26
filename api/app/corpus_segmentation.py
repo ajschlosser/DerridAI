@@ -689,7 +689,27 @@ def _apply_manifest_metadata(record: dict[str, Any], manifest: dict[str, Any]) -
         assertion = assertion_for(field)
         return bool(assertion and assertion.authority_status in {"human_confirmed", "human_override"})
 
-    def inherited(field: str, value: Any) -> None:
+    origin_labels = {"nlp_derived": "NLP-derived", "computed": "computed from an exact pattern"}
+    applied_at_ingest = (
+        (manifest.get("deterministic_ingest") or {}).get("applied")
+        if isinstance(manifest.get("deterministic_ingest"), dict) else None
+    ) or {}
+
+    def origin_note(key: str | None, value: Any) -> str:
+        """Say where an inherited value first came from when a tagger or pattern proposed it.
+
+        Only while the manifest still holds the value the ingest proposed: a value a reviewer
+        edited is theirs and carries no automatic origin.
+        """
+        info = applied_at_ingest.get(key or "") if key else None
+        if not isinstance(info, dict) or str(info.get("value")) != str(value):
+            return ""
+        label = origin_labels.get(str(info.get("derivation") or ""))
+        if not label:
+            return ""
+        return f" Origin: {label} ({info.get('method')}, {round(float(info.get('confidence') or 0) * 100)}% confidence)."
+
+    def inherited(field: str, value: Any, manifest_key: str | None = None) -> None:
         if value in (None, "", []):
             return
         assertion = assertion_for(field)
@@ -702,7 +722,7 @@ def _apply_manifest_metadata(record: dict[str, Any], manifest: dict[str, Any]) -
             field,
             value,
             method="document_manifest",
-            reason="Inherited from the reviewed document manifest.",
+            reason="Inherited from the reviewed document manifest." + origin_note(manifest_key, value),
         )
 
     title = manifest.get("title")
@@ -713,26 +733,26 @@ def _apply_manifest_metadata(record: dict[str, Any], manifest: dict[str, Any]) -
     language = manifest.get("language")
     original_language = manifest.get("original_language")
     if title:
-        inherited("work", title)
-        inherited("document_title", title)
+        inherited("work", title, "title")
+        inherited("document_title", title, "title")
         inherited(
             "canonical_work_id",
             re.sub(r"[^a-z0-9]+", "-", str(title).casefold()).strip("-")[:120],
         )
     inherited("short_title", manifest.get("short_title"))
     inherited("original_title", manifest.get("original_title"))
-    inherited("document_author", author)
+    inherited("document_author", author, "document_author")
     inherited("speaker", manifest.get("speaker"))
-    inherited("translator", translator)
+    inherited("translator", translator, "translator")
     inherited("edition", edition)
-    inherited("publisher", manifest.get("publisher"))
-    inherited("publication_place", manifest.get("publication_place"))
-    inherited("isbn", manifest.get("isbn"))
+    inherited("publisher", manifest.get("publisher"), "publisher")
+    inherited("publication_place", manifest.get("publication_place"), "publication_place")
+    inherited("isbn", manifest.get("isbn"), "isbn")
     if year is not None:
         try:
             parsed_year = int(year)
-            inherited("year", parsed_year)
-            inherited("publication_year", parsed_year)
+            inherited("year", parsed_year, "publication_year")
+            inherited("publication_year", parsed_year, "publication_year")
         except (TypeError, ValueError):
             inherited("publication_year", year)
     if language:

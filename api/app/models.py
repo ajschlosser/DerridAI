@@ -490,6 +490,12 @@ class PdfPageLabelsPatch(BaseModel):
     labels: dict[int, str | None] = Field(default_factory=dict)
 
 
+class PdfSourceUnitPolicy(BaseModel):
+    """How finely a source is divided into evidence units."""
+    mode: Literal["default", "paragraph", "line", "sentence", "chars"] = "default"
+    chars: int | None = Field(default=None, ge=60, le=20000)
+
+
 class PdfSourceUrlImport(BaseModel):
     url: str = Field(min_length=8, max_length=2000)
     source_illegibility: float = Field(default=0, ge=0, le=100)

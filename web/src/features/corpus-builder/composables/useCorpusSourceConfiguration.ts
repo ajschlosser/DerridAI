@@ -8,6 +8,7 @@ import {
   type GutenbergStatus,
   type PdfAsset,
   type PageDetectionRequest,
+  type SourceUnitPolicy,
 } from "../../../api/corpus";
 import { useI18nStore } from "../../../stores/i18n";
 
@@ -78,6 +79,23 @@ export function useCorpusSourceConfiguration(
           blocks: asset.block_count,
         }),
       );
+    } catch (exc) {
+      setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+    } finally {
+      busy.value = "";
+    }
+  }
+
+  /** Switch the selected source to one whose evidence units follow `policy` (the original is kept). */
+  async function applyUnitPolicy(policy: SourceUnitPolicy) {
+    if (!selectedAssetId.value) return;
+    busy.value = "units";
+    setMessage("");
+    try {
+      const asset = await corpusBuilderApi.deriveUnits(selectedAssetId.value, policy);
+      await refreshAssets();
+      rememberAsset(asset);
+      setMessage(i18n.tf("pdf_corpus.units_applied", { count: asset.block_count }));
     } catch (exc) {
       setMessage(exc instanceof Error ? exc.message : String(exc), "error");
     } finally {
@@ -245,6 +263,7 @@ export function useCorpusSourceConfiguration(
     lastIngestedAsset,
     refreshAssets,
     upload,
+    applyUnitPolicy,
     loadSourceUrl,
     searchGutenberg,
     searchWikisource,
