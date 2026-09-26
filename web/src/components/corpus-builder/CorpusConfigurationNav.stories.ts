@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
+import { ref } from "vue";
 import CorpusConfigurationNav from "./CorpusConfigurationNav.vue";
 
 const meta = {
@@ -6,17 +7,20 @@ const meta = {
   component: CorpusConfigurationNav,
   render: (args) => ({
     components: { CorpusConfigurationNav },
-    setup: () => ({ args }),
+    setup: () => {
+      const value = ref(args.modelValue);
+      return { args, value };
+    },
     template: `
       <div>
-        <CorpusConfigurationNav v-bind="args" />
+        <CorpusConfigurationNav v-bind="args" v-model="value" />
         <div
           v-for="id in ['source', 'structure', 'enrichment', 'metadata', 'advanced']"
           :id="'corpus-config-panel-' + id"
           :key="id"
           role="tabpanel"
           :aria-labelledby="'corpus-config-tab-' + id"
-          :hidden="args.modelValue !== id"
+          :hidden="value !== id"
         >
           {{ id }}
         </div>
