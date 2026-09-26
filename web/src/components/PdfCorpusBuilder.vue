@@ -746,6 +746,7 @@ const {
   reviewMetadataRecord,
   openMetadataIssueQueue,
   openValidationIssueQueue,
+  openTopologyIssueQueue,
   openRejectedQueue,
   openAllReviewQueue,
   openSourceIssueQueue,
@@ -757,6 +758,7 @@ const {
   recordTotal,
   recordOffset,
   selectedRecord,
+  selectedRecordId,
   selectedRecordIndex,
   reviewQueue,
   recordQuery,
@@ -2448,6 +2450,7 @@ defineExpose({
             @retry-metadata="retryIncompleteMetadata"
             @review-metadata="openMetadataIssueQueue"
             @review-validation="openValidationIssueQueue"
+            @review-topology="openTopologyIssueQueue"
             @review-rejected="openRejectedQueue"
             @review-records="openAllReviewQueue"
             @review-source="openSourceIssueQueue"
