@@ -12,6 +12,7 @@ from ..metadata_memory import MetadataMemoryService
 from ..models import (
     ResearcherProviderProfilesUpdate,
     ResearcherProviderStatusRequest,
+    SystemEmbeddingDefaultsProbe,
     SystemEmbeddingDefaultsUpdate,
 )
 from ..services import store
@@ -60,6 +61,21 @@ def update_embedding_defaults(
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/api/system/embedding-defaults/status")
+def embedding_defaults_status(
+    request: Request,
+    body: SystemEmbeddingDefaultsProbe | None = None,
+) -> dict[str, Any]:
+    """Is the configured (or a not-yet-saved draft) embedding model reachable?"""
+    require_admin(request)
+    from ..embedding_health import check_embedding_defaults
+
+    return check_embedding_defaults(
+        body.embedding_provider if body else None,
+        body.embedding_model if body else None,
+    )
 
 
 @router.get("/api/system/storage")

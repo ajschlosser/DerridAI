@@ -4,7 +4,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 import * as runtime from "../runtime/runtime.js";
 import { apiRequest } from "../api/http";
-import { systemApi, type ProviderProfile } from "../api/system";
+import { systemApi, type ProviderProfile, type SystemEmbeddingStatus } from "../api/system";
 import { useAuthStore } from "../stores/auth";
 import { useI18nStore } from "../stores/i18n";
 import { useShellStore } from "../stores/shell";
@@ -128,6 +128,30 @@ const section = computed<SettingsSectionId>({
 });
 const appearanceDirty = computed(() => !sameSettings(appearanceDraft.value, appearanceSaved.value));
 const reviewDirty = computed(() => !sameSettings(reviewDraft.value, reviewSaved.value));
+const embeddingProbe = ref<SystemEmbeddingStatus | null>(null);
+const embeddingProbing = ref(false);
+async function testEmbedding() {
+  if (!isAdmin.value) return;
+  embeddingProbing.value = true;
+  try {
+    embeddingProbe.value = await systemApi.embeddingStatus({
+      embedding_provider: embeddingDraft.value.embedding_provider,
+      embedding_model: embeddingDraft.value.embedding_model || null,
+    });
+  } catch (error) {
+    embeddingProbe.value = {
+      provider: embeddingDraft.value.embedding_provider,
+      model: embeddingDraft.value.embedding_model || null,
+      reachable: false,
+      dimension: null,
+      latency_ms: null,
+      error: error instanceof Error ? error.message : String(error),
+      hint: "",
+    };
+  } finally {
+    embeddingProbing.value = false;
+  }
+}
 const embeddingDirty = computed(() => !sameSettings(embeddingDraft.value, embeddingSaved.value));
 const ragDirty = computed(() => !sameSettings(ragDraft.value, ragSaved.value));
 const dirty = computed(
@@ -253,6 +277,7 @@ function saveEmbedding() {
     embeddingDraft.value = normalized;
     Object.assign(workspace.appConfig, normalized);
     embeddingSaved.value = cloneJson(normalized);
+    void testEmbedding();
   });
 }
 function saveRag() {
@@ -541,6 +566,7 @@ onMounted(async () => {
     embeddingSaved.value = browserEmbedding;
   }
   embeddingDraft.value = cloneJson(embeddingSaved.value);
+  void testEmbedding();
 
   ragSaved.value = normalizeRag(workspace.ragConfig as unknown as RagSettingsDraft);
   ragDraft.value = cloneJson(ragSaved.value);
@@ -1038,7 +1064,44 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                 />
               </UiField>
             </div>
+            <div
+              v-if="isAdmin"
+              class="embedding-probe"
+              :data-state="
+                embeddingProbing ? 'checking' : embeddingProbe?.reachable ? 'ok' : 'failed'
+              "
+              role="status"
+              aria-live="polite"
+            >
+              <strong v-if="embeddingProbing">{{ i18n.t("settings.embedding_checking") }}</strong>
+              <template v-else-if="embeddingProbe?.reachable">
+                <strong>{{ i18n.t("settings.embedding_reachable") }}</strong>
+                <span>{{
+                  i18n.tf("settings.embedding_reachable_detail", {
+                    provider: embeddingProbe.provider,
+                    model: embeddingProbe.model || "—",
+                    dimension: embeddingProbe.dimension ?? "—",
+                    ms: embeddingProbe.latency_ms ?? "—",
+                  })
+                }}</span>
+              </template>
+              <template v-else-if="embeddingProbe">
+                <strong>{{ i18n.t("settings.embedding_unreachable") }}</strong>
+                <span>{{ embeddingProbe.error }}</span>
+                <span v-if="embeddingProbe.hint">{{ embeddingProbe.hint }}</span>
+              </template>
+              <span v-else>{{ i18n.t("settings.embedding_untested") }}</span>
+              <span class="embedding-probe-scope">{{
+                i18n.t("settings.embedding_probe_scope")
+              }}</span>
+            </div>
             <template #actions>
+              <UiButton
+                v-if="isAdmin"
+                :disabled="embeddingProbing"
+                :label="i18n.t('settings.embedding_test')"
+                @click="testEmbedding"
+              />
               <UiButton
                 variant="primary"
                 :label="i18n.t('settings.save_embedding', 'Save embedding defaults')"
@@ -1603,5 +1666,26 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
   .settings-page * {
     transition: none !important;
   }
+}
+.embedding-probe {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+.embedding-probe[data-state="ok"] {
+  border-color: var(--tone-ok-fg, var(--line));
+}
+.embedding-probe[data-state="failed"] {
+  border-color: var(--tone-warn-fg, var(--line));
+}
+.embedding-probe-scope {
+  color: var(--muted);
+  font-size: 0.8125rem;
 }
 </style>

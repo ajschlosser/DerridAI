@@ -84,6 +84,12 @@ class SystemEmbeddingDefaultsUpdate(BaseModel):
     embedding_model: str | None = Field(default=None, max_length=512)
 
 
+class SystemEmbeddingDefaultsProbe(BaseModel):
+    """A draft embedding default to test before saving it."""
+    embedding_provider: str = Field(min_length=1, max_length=256)
+    embedding_model: str | None = Field(default=None, max_length=512)
+
+
 class StoreCreate(BaseModel):
     name: str = Field(min_length=3, max_length=128)
     metadata: dict[str, Any] | None = None
