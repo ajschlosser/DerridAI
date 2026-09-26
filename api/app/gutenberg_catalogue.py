@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import csv
 import io
-import json
 import re
 import sqlite3
 import tarfile
@@ -83,8 +82,22 @@ class GutenbergOfflineService:
             columns = {row[1] for row in db.execute("PRAGMA table_info(gutenberg_books)")}
             if "content" not in columns:
                 db.execute("ALTER TABLE gutenberg_books ADD COLUMN content TEXT NOT NULL DEFAULT ''")
-            db.execute("INSERT OR IGNORE INTO gutenberg_catalogue(id,source_url) VALUES(1,?)", (CATALOGUE_URL,))
-            db.execute("INSERT OR IGNORE INTO gutenberg_archive(id,url,path,updated_at) VALUES(1,?,?,?)", (ARCHIVE_URL,str(self.archive_path),_now()))
+            db.execute(
+                "INSERT OR IGNORE INTO gutenberg_catalogue(id,source_url) VALUES(1,?)",
+                (CATALOGUE_URL,),
+            )
+            db.execute(
+                "UPDATE gutenberg_catalogue SET source_url=? WHERE id=1",
+                (CATALOGUE_URL,),
+            )
+            db.execute(
+                "INSERT OR IGNORE INTO gutenberg_archive(id,url,path,updated_at) VALUES(1,?,?,?)",
+                (ARCHIVE_URL, str(self.archive_path), _now()),
+            )
+            db.execute(
+                "UPDATE gutenberg_archive SET url=?,path=? WHERE id=1",
+                (ARCHIVE_URL, str(self.archive_path)),
+            )
 
     def status(self) -> dict[str, Any]:
         with sqlite3.connect(self.db_path) as db:
@@ -236,10 +249,16 @@ class GutenbergOfflineService:
         return self.status()
 
     def _start_worker(self) -> None:
+        # Clear pause before checking the worker. A quick pause→resume may reuse
+        # the still-alive worker instead of accidentally leaving it stopped.
+        self._stop.clear()
         if self._worker and self._worker.is_alive():
             return
-        self._stop.clear()
-        self._worker = threading.Thread(target=self._run_worker, name="gutenberg-archive", daemon=True)
+        self._worker = threading.Thread(
+            target=self._run_worker,
+            name="gutenberg-archive",
+            daemon=True,
+        )
         self._worker.start()
 
     def _run_worker(self) -> None:
