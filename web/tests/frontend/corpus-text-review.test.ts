@@ -41,6 +41,11 @@ function setup() {
     ) => queued.push(request),
   );
   const restoreReviewViewport = vi.fn(async () => undefined);
+  const applyAuthoritativeRecord = vi.fn((record: any) => {
+    selectedRecord.value = record;
+    const index = records.value.findIndex((item) => item.record_id === record.record_id);
+    if (index >= 0) records.value.splice(index, 1, record);
+  });
   const setMessage = vi.fn();
 
   const review = useCorpusTextReview({
@@ -66,6 +71,7 @@ function setup() {
     }),
     restoreReviewViewport,
     queueRecordRequest,
+    applyAuthoritativeRecord,
     textDraftKey: (buildId, recordId) => `draft.${buildId}.${recordId}`,
     setMessage,
     t: (key) => key,
@@ -78,6 +84,7 @@ function setup() {
     llmActionProviderId,
     llmActionModel,
     queued,
+    applyAuthoritativeRecord,
   };
 }
 
@@ -102,6 +109,26 @@ describe("Corpus Builder text review", () => {
     corpusBuilderApi.patchText.mockResolvedValue(state.selectedRecord.value);
     await state.queued[0](false);
     expect(corpusBuilderApi.patchText).toHaveBeenCalledWith("b1", "r1", "Edited text", 1, false);
+  });
+
+
+  it("applies the authoritative human-reviewed state after Mark reviewed persists", async () => {
+    const state = setup();
+    const authoritative = {
+      ...state.selectedRecord.value,
+      record_revision: 2,
+      text_review_status: "human_reviewed",
+      text_reviewed_at: "2026-09-26T02:30:00Z",
+    };
+    corpusBuilderApi.patchText.mockResolvedValue(authoritative);
+
+    await state.review.markTextReviewed();
+    expect(state.queued).toHaveLength(1);
+
+    await state.queued[0](false);
+
+    expect(state.applyAuthoritativeRecord).toHaveBeenCalledWith(authoritative);
+    expect(state.selectedRecord.value?.text_review_status).toBe("human_reviewed");
   });
 
   it("opens touch-up with the shared provider/model defaults", () => {
