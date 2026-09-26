@@ -5169,6 +5169,7 @@ EN_US: dict[str, str] = {'common.apply': 'Apply',
  'vector.provider_chroma_help': 'Let Chroma use its default embedding function.',
  'vector.provider_ollama': 'Ollama',
  'vector.provider_ollama_help': 'Generate embeddings with a configured local Ollama model.',
+ 'vector.precomputed_missing_embeddings': 'Precomputed vectors need an "embedding" array on every selected record, and these records have none. Choose Ollama, Chroma default, or a provider profile so DerridAI computes the embeddings.',
  'vector.provider_precomputed': 'Precomputed',
  'vector.provider_precomputed_help': 'Records must already contain embedding vectors; semantic query embedding is '
                                      'unavailable.',

@@ -5453,6 +5453,7 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'vector.provider_chroma_help': 'Laisser Chroma utiliser sa fonction de vectorisation par défaut.',
  'vector.provider_ollama': 'Ollama',
  'vector.provider_ollama_help': 'Générer les vecteurs avec un modèle Ollama local configuré.',
+ 'vector.precomputed_missing_embeddings': 'Les vecteurs précalculés exigent un tableau « embedding » sur chaque notice sélectionnée, et ces notices n’en ont pas. Choisissez Ollama, Chroma par défaut ou un profil de fournisseur pour que DerridAI calcule les embeddings.',
  'vector.provider_precomputed': 'Pré-calculés',
  'vector.provider_precomputed_help': 'Les fiches doivent déjà contenir des vecteurs; la recherche sémantique par '
                                      'requête n’est pas disponible.',

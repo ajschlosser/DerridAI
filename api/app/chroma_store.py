@@ -139,7 +139,10 @@ class Embeddings:
                 value = record.get(embedding_field)
                 if not isinstance(value, list) or not value:
                     raise ValueError(
-                        f"Record {index + 1} has no non-empty '{embedding_field}' array."
+                        f"Record {index + 1} has no non-empty '{embedding_field}' array. "
+                        "This collection uses precomputed vectors, so every record must carry "
+                        "its own embedding. Use Ollama, Chroma's default, or a provider profile "
+                        "to have DerridAI compute embeddings instead."
                     )
                 vectors.append([float(x) for x in value])
             return vectors

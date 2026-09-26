@@ -57,7 +57,7 @@ export function createVectorCollectionBridge({
     );
     const initialProvider = String(defaultProvider || "").startsWith("profile:")
       ? String(defaultProvider)
-      : ["chroma", "precomputed", "ollama"].includes(requestedProvider)
+      : ["chroma", "ollama"].includes(requestedProvider)
         ? requestedProvider
         : profileDefault
           ? `profile:${profileDefault.id}`
@@ -88,6 +88,9 @@ export function createVectorCollectionBridge({
     const selectedRows = () =>
       works.filter((item) => form.selectedWorks.has(item.work)).flatMap((item) => item.rows);
     const selectedCount = () => selectedRows().length;
+    const precomputedMissing = () =>
+      form.provider === "precomputed" &&
+      selectedRows().some((row) => !Array.isArray(row.embedding) || !row.embedding.length);
     const persistFields = () => {
       const name = dialog.querySelector("#wizardCollectionName");
       if (name) form.name = name.value.trim();
@@ -157,6 +160,10 @@ export function createVectorCollectionBridge({
       step === 0 ? sourceStep() : step === 1 ? retrievalStep() : reviewStep();
     const runPreflight = async (button) => {
       persistFields();
+      if (precomputedMissing()) {
+        toast(tr("vector.precomputed_missing_embeddings"));
+        return false;
+      }
       if ((form.provider === "ollama" || form.provider.startsWith("profile:")) && !form.model) {
         toast(tr("vector.embedding_model_required"));
         return false;
@@ -247,6 +254,7 @@ export function createVectorCollectionBridge({
       dialog.querySelector("#wizardCreate")?.addEventListener("click", async () => {
         persistFields();
         if (!form.name) return toast(tr("vector.collection_name_required"));
+        if (precomputedMissing()) return toast(tr("vector.precomputed_missing_embeddings"));
         const button = dialog.querySelector("#wizardCreate");
         button.disabled = true;
         button.textContent = tr("vector.creating_collection");
