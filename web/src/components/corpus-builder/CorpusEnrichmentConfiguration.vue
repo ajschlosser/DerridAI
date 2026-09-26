@@ -1,6 +1,6 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, toRefs } from "vue";
 import type { ProviderProfile } from "../../api/system";
 import { useI18nStore } from "../../stores/i18n";
 import CorpusTextNoiseSettings from "../CorpusTextNoiseSettings.vue";
@@ -19,7 +19,9 @@ const props = defineProps<{
 const emit = defineEmits<{ manageProviders: [] }>();
 
 const selectedProviderId = defineModel<string>("selectedProviderId", { required: true });
-const selectedReviewProviderId = defineModel<string>("selectedReviewProviderId", { required: true });
+const selectedReviewProviderId = defineModel<string>("selectedReviewProviderId", {
+  required: true,
+});
 const enrichmentMode = defineModel<EnrichmentMode>("enrichmentMode", { required: true });
 const semanticIndexing = defineModel<boolean>("semanticIndexing", { required: true });
 const autoCleanText = defineModel<boolean>("autoCleanText", { required: true });
@@ -34,6 +36,7 @@ const manualBaseUrl = defineModel<string>("manualBaseUrl", { required: true });
 const manualApiKey = defineModel<string>("manualApiKey", { required: true });
 
 const i18n = useI18nStore();
+const { selectedProviderLabel, selectedProfileModel } = toRefs(props);
 const advancedOpen = ref(false);
 </script>
 
