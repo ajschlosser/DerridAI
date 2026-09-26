@@ -108,9 +108,7 @@ const advancedOpen = ref(false);
       </div>
       <section class="enrichment-strategy" aria-labelledby="pdf-corpus-enrichment-mode-title">
         <div class="setup-card-heading">
-          <b id="pdf-corpus-enrichment-mode-title">{{
-            i18n.t("pdf_corpus.enrichment_strategy")
-          }}</b
+          <b id="pdf-corpus-enrichment-mode-title">{{ i18n.t("pdf_corpus.enrichment_strategy") }}</b
           ><small>{{ i18n.t("pdf_corpus.enrichment_strategy_help") }}</small>
         </div>
         <div
