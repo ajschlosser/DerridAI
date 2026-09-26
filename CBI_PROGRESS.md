@@ -293,3 +293,21 @@ every mutation.
 - Reduced `PdfCorpusBuilder.vue` to about 3,430 lines.
 - Validation: `vue-tsc`, the full Vitest suite and the production build pass; Storybook and
   Playwright were not run.
+
+### Source workspace redesign
+
+The Source tab of Source & configure is now a two-stage surface (`CorpusSourceIngest.vue`).
+
+- **Add a source:** OCR strategy as three explained choices (still decided before a file is
+  added), a large drag-and-drop zone (files, or a dragged link becomes a URL import), format chips,
+  and three doors: digital libraries, a web address (recognises Wikisource and Gutenberg and says
+  Wikisource uses its official API), and the Explorer PDF.
+- **Current source:** a card with type mark, ready state, page/unit/OCR stats, load date, copyable
+  SHA-256, the deterministic title/author/speaker check, and a **Continue to structure** action.
+- **Your sources:** filterable cards replace the dropdown; selection is toggled, and the list is
+  locked (with a reason) while a build is running.
+- Removed the duplicated facts strip from `PdfCorpusBuilder.vue`; only tokens, no literal colours;
+  motion respects `prefers-reduced-motion`.
+- Validation: `vue-tsc`, full Vitest (733), production build, and axe on the Storybook states in
+  light and dark (no violations). Screenshots reviewed at 1280px and 420px. Playwright suites were
+  not run.

@@ -1952,20 +1952,8 @@ defineExpose({
           @refresh-gutenberg-catalogue="refreshGutenbergCatalogue"
           @update-gutenberg-archive="updateGutenbergArchive"
           @import-gutenberg="importGutenberg"
+          @continue="configurationSection = 'structure'"
         />
-        <div v-if="selectedAsset && paginatedSource" class="source-facts">
-          <span>{{ selectedAsset.page_count }} {{ i18n.t("pdf_corpus.pages") }}</span
-          ><span>{{ selectedAsset.block_count }} {{ i18n.t("pdf_corpus.source_units") }}</span
-          ><span>{{ selectedAsset.ocr_pages }} {{ i18n.t("pdf_corpus.ocr_pages") }}</span
-          ><span v-if="selectedAsset.metadata?.author"
-            ><b>{{ i18n.t("pdf_corpus.pdf_author") }}</b
-            >: {{ String(selectedAsset.metadata.author) }}</span
-          ><span>SHA-256 {{ selectedAsset.sha256.slice(0, 16) }}…</span
-          ><span>{{ formatDate(selectedAsset.created_at) }}</span>
-        </div>
-        <p v-if="selectedAsset && paginatedSource" class="source-facts-help">
-          {{ i18n.t("pdf_corpus.source_facts_help") }}
-        </p>
       </section>
 
       <section
