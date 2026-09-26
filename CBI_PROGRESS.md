@@ -275,7 +275,6 @@ The Review inspector decomposition now separates the evidence-assignment surface
 - Reduced `PdfCorpusBuilder.vue` to 3,500 lines and the shared Corpus
   Builder workspace stylesheet to 2,216 lines.
 
-
 ### Review source panel extraction
 
 The Review inspector decomposition now separates the Source workspace from
