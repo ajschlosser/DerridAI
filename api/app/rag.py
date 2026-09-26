@@ -585,6 +585,37 @@ def evidence_sufficiency_issues(evidence: Sequence[Mapping[str, Any]]) -> list[d
     return issues
 
 
+_EVIDENCE_TAG_GROUP = r"((?:E\d+)(?:\s*[,;]\s*E\d+)*)"
+EVIDENCE_MARKER_PATTERNS = (
+    rf"\[\[\s*{_EVIDENCE_TAG_GROUP}\s*\]\]",
+    rf"\(\(\s*{_EVIDENCE_TAG_GROUP}\s*\)\)",
+    rf"\{{\{{\s*{_EVIDENCE_TAG_GROUP}\s*\}}\}}",
+    rf"\[\s*{_EVIDENCE_TAG_GROUP}\s*\]",
+    rf"\(\s*{_EVIDENCE_TAG_GROUP}\s*\)",
+    rf"\{{\s*{_EVIDENCE_TAG_GROUP}\s*\}}",
+)
+
+
+def extract_evidence_ids(text: str) -> list[str]:
+    """Return evidence IDs from every marker syntax accepted by citation binding."""
+    ids: list[str] = []
+    for pattern in EVIDENCE_MARKER_PATTERNS:
+        for match in re.finditer(pattern, str(text or "")):
+            for tag in re.findall(r"\bE\d+\b", match.group(1)):
+                if tag not in ids:
+                    ids.append(tag)
+    return ids
+
+
+def strip_evidence_markers(text: str) -> str:
+    """Remove citation markers without changing the substantive claim text."""
+    value = str(text or "")
+    for pattern in EVIDENCE_MARKER_PATTERNS:
+        value = re.sub(pattern, "", value)
+    value = re.sub(r"\s+([.,;:!?])", r"\1", value)
+    return re.sub(r"\s{2,}", " ", value).strip()
+
+
 def _bind_sources(answer: str, evidence: list[EvidenceItem], include_works_cited: bool) -> str:
     citation_map = {
         item["evidence_id"]: item["inline_citation"]
@@ -602,21 +633,11 @@ def _bind_sources(answer: str, evidence: list[EvidenceItem], include_works_cited
         ]
         return "(" + "; ".join(dict.fromkeys(rendered)) + ")"
 
-    used_ids = set(re.findall(r"\bE\d+\b", answer))
-    # Generators do not always obey one citation wrapper exactly.  Accept the
-    # six common forms while keeping [[E0]] as the prompt/default format.  Run
-    # double wrappers before single wrappers so a valid [[E0]] token is not
-    # partially consumed by the [E0] expression.
-    tag_group = r"((?:E\d+)(?:\s*[,;]\s*E\d+)*)"
+    used_ids = set(extract_evidence_ids(answer))
+    # Generators do not always obey one citation wrapper exactly. Keep rendering
+    # and durable claim/support persistence on the same accepted marker syntax.
     bound = answer
-    for pattern in (
-        rf"\[\[\s*{tag_group}\s*\]\]",
-        rf"\(\(\s*{tag_group}\s*\)\)",
-        rf"\{{\{{\s*{tag_group}\s*\}}\}}",
-        rf"\[\s*{tag_group}\s*\]",
-        rf"\(\s*{tag_group}\s*\)",
-        rf"\{{\s*{tag_group}\s*\}}",
-    ):
+    for pattern in EVIDENCE_MARKER_PATTERNS:
         bound = re.sub(pattern, replace_group, bound)
 
     if include_works_cited:

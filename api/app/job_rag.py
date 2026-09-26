@@ -20,7 +20,7 @@ from .job_state import (
 from .llm_tools import run_rag_grade
 from .models import RAGGradeRequest, RAGRunRequest
 from .persistence import job_repository
-from .rag import run_rag_pipeline
+from .rag import extract_evidence_ids, run_rag_pipeline, strip_evidence_markers
 
 
 def _optional_int(value: Any) -> int | None:
@@ -28,6 +28,13 @@ def _optional_int(value: Any) -> int | None:
         return int(value) if value is not None and str(value).strip() else None
     except (TypeError, ValueError):
         return None
+
+
+def _first_present(*values: Any) -> Any:
+    for value in values:
+        if value is not None and value != "":
+            return value
+    return None
 
 
 class RAGJobManager(PersistentJobStateMixin):
@@ -204,7 +211,10 @@ class RAGJobManager(PersistentJobStateMixin):
             persist_support_binding,
         )
 
-        answer = str(result.get("answer") or "")
+        # Persist support from the structured/raw generation before citation
+        # rendering removes evidence markers. Fall back to the rendered answer
+        # only for historical or externally supplied results without raw_answer.
+        answer = str(result.get("raw_answer") or result.get("answer") or "")
         evidence_by_id = {
             str(item.get("evidence_id") or ""): item
             for item in result.get("evidence") or []
@@ -214,59 +224,76 @@ class RAGJobManager(PersistentJobStateMixin):
         bindings: list[dict[str, Any]] = []
         for match in re.finditer(r"(?P<sentence>[^.!?]+(?:[.!?]|$))", answer):
             sentence = match.group("sentence").strip()
-            marker_groups = re.findall(r"\[\[(E\d+(?:\s*,\s*E\d+)*)\]\]", sentence)
-            if not marker_groups:
+            evidence_ids = extract_evidence_ids(sentence)
+            if not evidence_ids:
                 continue
             claim = persist_generated_claim(GeneratedClaim(
                 run_id=run_id,
                 response_record_id=response_record_id or None,
                 owner=owner,
-                claim_text=re.sub(r"\s*\[\[[^\]]+\]\]", "", sentence).strip(),
+                claim_text=strip_evidence_markers(sentence),
                 answer_start=match.start(),
                 answer_end=match.end(),
             ))
             claims.append(claim.model_dump(mode="json"))
-            for marker_group in marker_groups:
-                for evidence_id in re.findall(r"E\d+", marker_group):
-                    item = evidence_by_id.get(evidence_id) or {}
-                    record = item.get("record") if isinstance(item.get("record"), dict) else {}
-                    if not record.get("record_id"):
-                        continue
-                    source_document_id = str(record.get("source_document_id") or "").strip()
-                    source_spans = []
-                    if source_document_id:
-                        from .provenance_memory import EvidenceSpan
+            for evidence_id in evidence_ids:
+                item = evidence_by_id.get(evidence_id) or {}
+                record = item.get("record") if isinstance(item.get("record"), dict) else {}
+                if not record.get("record_id"):
+                    continue
+                source_document_id = str(
+                    record.get("source_document_id") or record.get("source_asset_id") or ""
+                ).strip()
+                source_spans = []
+                if source_document_id:
+                    from .provenance_memory import EvidenceSpan
 
-                        for span in record.get("source_spans") or []:
-                            if not isinstance(span, dict):
-                                continue
-                            unit_ids = list(span.get("source_unit_ids") or [])
-                            if span.get("block_id"):
-                                unit_ids.append(span["block_id"])
-                            source_spans.append(EvidenceSpan(
-                                source_document_id=source_document_id,
-                                source_unit_ids=list(dict.fromkeys(str(value) for value in unit_ids if str(value).strip())),
-                                physical_page_start=_optional_int(span.get("pdf_page") or span.get("page")),
-                                physical_page_end=_optional_int(span.get("pdf_page") or span.get("page")),
-                                printed_page_start=span.get("printed_page_label"),
-                                printed_page_end=span.get("printed_page_label"),
-                                character_start=_optional_int(span.get("char_start") or span.get("start")),
-                                character_end=_optional_int(span.get("char_end") or span.get("end")),
-                            ))
-                    binding = persist_support_binding(SupportBinding(
-                        claim_id=claim.claim_id,
-                        owner=owner,
-                        record_id=str(record["record_id"]),
-                        record_revision=int(record.get("record_revision") or 1),
-                        source_document_id=source_document_id or None,
-                        source_spans=source_spans,
-                        relation="supports",
-                        citation={
-                            "inline": item.get("inline_citation"),
-                            "full": item.get("full_citation"),
-                        },
-                    ))
-                    bindings.append(binding.model_dump(mode="json"))
+                    for span in record.get("source_spans") or []:
+                        if not isinstance(span, dict):
+                            continue
+                        unit_ids = list(span.get("source_unit_ids") or [])
+                        for key in ("source_unit_id", "block_id"):
+                            if span.get(key):
+                                unit_ids.append(span[key])
+                        source_spans.append(EvidenceSpan(
+                            source_document_id=source_document_id,
+                            source_unit_ids=list(
+                                dict.fromkeys(
+                                    str(value)
+                                    for value in unit_ids
+                                    if str(value).strip()
+                                )
+                            ),
+                            physical_page_start=_optional_int(
+                                _first_present(span.get("pdf_page"), span.get("page"))
+                            ),
+                            physical_page_end=_optional_int(
+                                _first_present(span.get("pdf_page"), span.get("page"))
+                            ),
+                            printed_page_start=span.get("printed_page_label"),
+                            printed_page_end=span.get("printed_page_label"),
+                            character_start=_optional_int(
+                                _first_present(span.get("char_start"), span.get("start"))
+                            ),
+                            character_end=_optional_int(
+                                _first_present(span.get("char_end"), span.get("end"))
+                            ),
+                        ))
+                binding = persist_support_binding(SupportBinding(
+                    claim_id=claim.claim_id,
+                    owner=owner,
+                    record_id=str(record["record_id"]),
+                    record_revision=int(record.get("record_revision") or 1),
+                    source_document_id=source_document_id or None,
+                    source_spans=source_spans,
+                    relation="supports",
+                    citation={
+                        "inline": item.get("inline_citation"),
+                        "full": item.get("full_citation"),
+                        "evidence_marker": evidence_id,
+                    },
+                ))
+                bindings.append(binding.model_dump(mode="json"))
         return {"claims": claims, "support_bindings": bindings}
 
     def _acquire_ollama_slot(self, job_id: str) -> bool:

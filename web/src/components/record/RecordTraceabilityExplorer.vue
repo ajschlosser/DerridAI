@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { useI18nStore } from "../../stores/i18n";
+import UiButton from "../ui/UiButton.vue";
+import UiCard from "../ui/UiCard.vue";
+import UiDialog from "../ui/UiDialog.vue";
+import UiStatusBadge from "../ui/UiStatusBadge.vue";
+import UiTabs from "../ui/UiTabs.vue";
+import UiTooltip from "../ui/UiTooltip.vue";
+import ResearchObjectDiagram from "./ResearchObjectDiagram.vue";
 import type {
   DerridaiNormativeModel,
   ResearchObjectEdge,
@@ -18,26 +25,49 @@ const props = withDefaults(
   { graph: null, model: null, loading: false, error: "" },
 );
 const i18n = useI18nStore();
-const mode = ref<"instance" | "model">("instance");
+const mode = ref<"trace" | "model">("trace");
 const focusId = ref("");
-const history = ref<string[]>([]);
-const historyIndex = ref(-1);
+const diagramOpen = ref(false);
+
+type GraphNeighbor = {
+  edge: ResearchObjectEdge;
+  node: ResearchObjectNode;
+  relation: string;
+  cardinality?: string | null;
+  direction: "in" | "out";
+};
+type RelationshipGroup = {
+  id: "source" | "record" | "metadata" | "research";
+  title: string;
+  items: GraphNeighbor[];
+};
+
+const modeTabs = computed(() => {
+  const tabs = [{ id: "trace", label: i18n.t("traceability.this_record", "This record") }];
+  if (props.model)
+    tabs.push({ id: "model", label: i18n.t("traceability.data_model", "DERRIDAI model") });
+  return tabs;
+});
 
 const nodes = computed<ResearchObjectNode[]>(() => {
-  if (mode.value === "instance") return props.graph?.nodes || [];
+  if (mode.value === "trace") return props.graph?.nodes || [];
   return (props.model?.nodes || []).map((node) => ({
     id: `model:${node.type}`,
     object_type: node.type,
     object_id: node.type,
     label: node.label,
-    summary: `${node.profile} · ${node.persistence.replaceAll("_", " ")}`,
+    summary: node.profile,
     materialization: "derived_view",
-    details: { profile: node.profile, persistence: node.persistence, normative: node.normative },
+    details: {
+      profile: node.profile,
+      persistence: node.persistence,
+      normative: node.normative,
+    },
   }));
 });
 
 const edges = computed<ResearchObjectEdge[]>(() => {
-  if (mode.value === "instance") return props.graph?.edges || [];
+  if (mode.value === "trace") return props.graph?.edges || [];
   return (props.model?.edges || []).map((edge) => ({
     id: `model:${edge.id}`,
     source: `model:${edge.source_type}`,
@@ -53,18 +83,55 @@ const edges = computed<ResearchObjectEdge[]>(() => {
 
 const nodeMap = computed(() => new Map(nodes.value.map((node) => [node.id, node])));
 const focus = computed(() => nodeMap.value.get(focusId.value) || null);
-const canBack = computed(() => historyIndex.value > 0);
-const canForward = computed(
-  () => historyIndex.value >= 0 && historyIndex.value < history.value.length - 1,
+const rootNode = computed(() =>
+  props.graph?.root_id
+    ? props.graph.nodes.find((node) => node.id === props.graph?.root_id) || null
+    : null,
 );
 
-type GraphNeighbor = {
-  edge: ResearchObjectEdge;
-  node: ResearchObjectNode;
-  relation: string;
-  cardinality?: string | null;
-  direction: "in" | "out";
-};
+function typeLabel(type: string) {
+  const fallback: Record<string, string> = {
+    SourceDocument: "Source document",
+    SourceSpan: "Source passage",
+    Record: "Corpus record",
+    RecordRevision: "Record revision",
+    FieldAssertion: "Metadata assertion",
+    CorpusPublication: "Corpus publication",
+    RetrievalRun: "Retrieval run",
+    EvidenceRef: "Evidence reference",
+    EvidencePacket: "Evidence packet",
+    GenerationRun: "Generation run",
+    GeneratedClaim: "Generated claim",
+    SupportBinding: "Claim support link",
+    ResearchRun: "Research run",
+  };
+  return i18n.t(`traceability.type.${type}`, fallback[type] || type);
+}
+
+function typeDescription(type: string) {
+  const fallback: Record<string, string> = {
+    SourceDocument:
+      "The ingested document or source asset from which this material ultimately comes.",
+    SourceSpan: "An exact page, passage, region, or source segment connected to the record.",
+    Record: "The scholarly corpus record currently being inspected.",
+    RecordRevision:
+      "A specific version of the record, used when evidence must be pinned to an exact state.",
+    FieldAssertion: "A metadata value together with how it was derived, evaluated, and reviewed.",
+    CorpusPublication:
+      "An immutable published corpus snapshot that contains or references records.",
+    RetrievalRun: "A retrieval operation that selected material for possible evidentiary use.",
+    EvidenceRef:
+      "A durable pointer to the exact record revision or source passage used as evidence.",
+    EvidencePacket: "The ordered evidence context supplied to a research operation.",
+    GenerationRun: "The model-generation operation that produced research output.",
+    GeneratedClaim: "A substantive claim identified in generated research output.",
+    SupportBinding:
+      "The explicit link between a generated claim and the evidence said to support, qualify, contrast with, quote, or attribute it.",
+    ResearchRun:
+      "The retained research operation that ties corpus state, evidence, generation, and validation together.",
+  };
+  return i18n.t(`traceability.description.${type}`, fallback[type] || "");
+}
 
 const neighbors = computed<GraphNeighbor[]>(() => {
   const current = focus.value;
@@ -96,422 +163,834 @@ const neighbors = computed<GraphNeighbor[]>(() => {
     }
   }
   return result.sort((a, b) =>
-    `${a.relation} ${a.node.label}`.localeCompare(`${b.relation} ${b.node.label}`),
+    `${connectionGroup(a.node.object_type)} ${a.relation} ${a.node.label}`.localeCompare(
+      `${connectionGroup(b.node.object_type)} ${b.relation} ${b.node.label}`,
+    ),
   );
 });
 
-const visibleHistory = computed(() =>
-  history.value
-    .map((id, index) => ({ id, index, node: nodeMap.value.get(id) }))
-    .filter((item) => item.node),
-);
-
-function setHistoryRoot(id: string) {
-  focusId.value = id;
-  history.value = id ? [id] : [];
-  historyIndex.value = id ? 0 : -1;
+function connectionGroup(type: string): RelationshipGroup["id"] {
+  if (["SourceDocument", "SourceSpan", "CorpusPublication"].includes(type)) return "source";
+  if (["Record", "RecordRevision"].includes(type)) return "record";
+  if (type === "FieldAssertion") return "metadata";
+  return "research";
 }
 
+const relationshipGroups = computed<RelationshipGroup[]>(() => {
+  const labels: Record<RelationshipGroup["id"], string> = {
+    source: i18n.t("traceability.group_source", "Source lineage"),
+    record: i18n.t("traceability.group_record", "Record state"),
+    metadata: i18n.t("traceability.group_metadata", "Metadata & review"),
+    research: i18n.t("traceability.group_research", "Research use"),
+  };
+  return (["source", "record", "metadata", "research"] as RelationshipGroup["id"][])
+    .map((id) => ({
+      id,
+      title: labels[id],
+      items: neighbors.value.filter((item) => connectionGroup(item.node.object_type) === id),
+    }))
+    .filter((group) => group.items.length);
+});
+
+const sourceNodes = computed(() =>
+  nodes.value.filter((node) =>
+    ["SourceDocument", "SourceSpan", "CorpusPublication"].includes(node.object_type),
+  ),
+);
+const assertionNodes = computed(() =>
+  nodes.value.filter((node) => node.object_type === "FieldAssertion"),
+);
+const researchNodes = computed(() =>
+  nodes.value.filter((node) =>
+    [
+      "RetrievalRun",
+      "EvidenceRef",
+      "EvidencePacket",
+      "SupportBinding",
+      "GenerationRun",
+      "GeneratedClaim",
+      "ResearchRun",
+    ].includes(node.object_type),
+  ),
+);
+
+const sourceSummary = computed(() => {
+  const documents = sourceNodes.value.filter(
+    (node) => node.object_type === "SourceDocument",
+  ).length;
+  const spans = sourceNodes.value.filter((node) => node.object_type === "SourceSpan").length;
+  if (!documents && !spans) return i18n.t("traceability.none_retained", "None retained");
+  return [
+    documents ? i18n.tf("traceability.document_count", { count: documents }) : "",
+    spans ? i18n.tf("traceability.passage_count", { count: spans }) : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+});
+
+const metadataSummary = computed(() =>
+  assertionNodes.value.length
+    ? i18n.tf("traceability.assertion_count", { count: assertionNodes.value.length })
+    : i18n.t("traceability.none_retained", "None retained"),
+);
+
+const researchSummary = computed(() => {
+  const claims = researchNodes.value.filter((node) => node.object_type === "GeneratedClaim").length;
+  const bindings = researchNodes.value.filter(
+    (node) => node.object_type === "SupportBinding",
+  ).length;
+  if (!claims && !bindings) return i18n.t("traceability.no_claim_use", "No retained claim use");
+  return [
+    claims ? i18n.tf("traceability.claim_count", { count: claims }) : "",
+    bindings ? i18n.tf("traceability.binding_count", { count: bindings }) : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+});
+
+const scopeLabel = computed(() =>
+  i18n.tf("traceability.scope_count", {
+    objects: nodes.value.length,
+    relationships: edges.value.length,
+  }),
+);
+
 function defaultFocus() {
-  if (mode.value === "instance") {
+  if (mode.value === "trace") {
     return props.graph?.root_id && nodeMap.value.has(props.graph.root_id)
       ? props.graph.root_id
       : nodes.value[0]?.id || "";
   }
-  const instanceType =
-    props.graph?.nodes.find((node) => node.id === props.graph?.root_id)?.object_type || "Record";
-  const preferred = `model:${instanceType}`;
+  const preferredType = rootNode.value?.object_type || "Record";
+  const preferred = `model:${preferredType}`;
   return nodeMap.value.has(preferred) ? preferred : nodes.value[0]?.id || "";
 }
 
-function reset() {
-  setHistoryRoot(defaultFocus());
+function setMode(value: string) {
+  mode.value = value === "model" && props.model ? "model" : "trace";
 }
 
-function walk(id: string) {
-  if (!nodeMap.value.has(id) || id === focusId.value) return;
-  history.value = history.value.slice(0, historyIndex.value + 1);
-  history.value.push(id);
-  historyIndex.value = history.value.length - 1;
-  focusId.value = id;
+function selectFocus(id: string) {
+  if (nodeMap.value.has(id)) focusId.value = id;
 }
 
-function goBack() {
-  if (!canBack.value) return;
-  historyIndex.value -= 1;
-  focusId.value = history.value[historyIndex.value];
+function resetFocus() {
+  focusId.value = defaultFocus();
 }
 
-function goForward() {
-  if (!canForward.value) return;
-  historyIndex.value += 1;
-  focusId.value = history.value[historyIndex.value];
+function presentDetail(value: unknown) {
+  if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "object") {
+    const text = JSON.stringify(value);
+    return text.length > 180 ? `${text.slice(0, 177)}…` : text;
+  }
+  return String(value).replaceAll("_", " ");
 }
 
-function jump(index: number) {
-  if (index < 0 || index >= history.value.length) return;
-  historyIndex.value = index;
-  focusId.value = history.value[index];
+function detailLabel(key: string) {
+  return key.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function switchMode(next: "instance" | "model") {
-  if (mode.value === next) return;
-  const priorType = focus.value?.object_type;
-  mode.value = next;
-  const preferred =
-    next === "model" && priorType && nodeMap.value.has(`model:${priorType}`)
-      ? `model:${priorType}`
-      : defaultFocus();
-  setHistoryRoot(preferred);
+function statusTone(
+  status: string | null | undefined,
+): "neutral" | "info" | "success" | "warning" | "danger" {
+  const value = String(status || "").toLowerCase();
+  if (["validated", "human_confirmed", "verified", "present"].includes(value)) return "success";
+  if (["stale", "disputed", "unresolved"].includes(value)) return "warning";
+  if (["rejected", "invalid", "evaluation_failed"].includes(value)) return "danger";
+  return value ? "info" : "neutral";
 }
 
 watch(
   () => [props.graph?.root_id, props.graph?.nodes?.length, props.model?.nodes?.length],
   () => {
-    if (!focusId.value || !nodeMap.value.has(focusId.value)) reset();
+    if (!focusId.value || !nodeMap.value.has(focusId.value)) resetFocus();
   },
   { immediate: true },
 );
+
+watch(mode, () => resetFocus());
 </script>
 
 <template>
-  <section class="object-graph" aria-labelledby="objectGraphTitle">
-    <header class="object-graph-head">
+  <section class="traceability-explorer" aria-labelledby="traceabilityHeading">
+    <header class="traceability-head">
       <div>
-        <p>{{ i18n.t("traceability.kicker", "Research object graph") }}</p>
-        <h2 id="objectGraphTitle">{{ i18n.t("traceability.title", "Traceability") }}</h2>
+        <p>{{ i18n.t("traceability.kicker", "Source-to-claim provenance") }}</p>
+        <h2 id="traceabilityHeading">
+          {{
+            mode === "trace"
+              ? i18n.t("traceability.title_record", "Trace this record")
+              : i18n.t("traceability.title_model", "Explore the DERRIDAI model")
+          }}
+        </h2>
       </div>
-      <div class="object-graph-modes" :aria-label="i18n.t('traceability.mode', 'Graph mode')">
-        <button
-          type="button"
-          :class="{ active: mode === 'instance' }"
-          :aria-pressed="mode === 'instance'"
-          @click="switchMode('instance')"
-        >
-          {{ i18n.t("traceability.instance", "Instance") }}
-        </button>
-        <button
-          type="button"
-          :class="{ active: mode === 'model' }"
-          :aria-pressed="mode === 'model'"
-          :disabled="!model"
-          @click="switchMode('model')"
-        >
-          {{ i18n.t("traceability.model", "Model") }}
-        </button>
-      </div>
+      <UiTooltip
+        :text="
+          mode === 'trace'
+            ? i18n.t(
+                'traceability.trace_help',
+                'This view shows provenance actually retained for the selected record. It does not infer missing links.',
+              )
+            : i18n.t(
+                'traceability.model_help',
+                'This view shows the object types and relationships allowed by DERRIDAI 1.0. It is a model, not this record’s stored data.',
+              )
+        "
+        :label="i18n.t('traceability.about_view', 'About this view')"
+        placement="bottom"
+      />
     </header>
 
-    <p class="object-graph-help">
-      {{
-        i18n.t(
-          "traceability.help",
-          "Select any connected object to make it the new focus. Your path is history, not a limit on the graph.",
-        )
-      }}
-    </p>
+    <UiTabs
+      :model-value="mode"
+      :tabs="modeTabs"
+      :tablist-label="i18n.t('traceability.mode', 'Traceability view')"
+      id-prefix="traceability-view"
+      @update:model-value="setMode"
+    />
 
-    <div v-if="loading" class="object-graph-state" role="status">
-      {{ i18n.t("traceability.loading", "Loading traceability…") }}
+    <div v-if="loading" class="traceability-state" role="status">
+      <strong>{{ i18n.t("traceability.loading_title", "Building the trace…") }}</strong>
+      <span>{{
+        i18n.t("traceability.loading", "Loading retained provenance relationships.")
+      }}</span>
     </div>
-    <div v-else-if="error" class="object-graph-state error" role="alert">{{ error }}</div>
-    <div v-else-if="!focus" class="object-graph-state">
-      {{
+    <div v-else-if="error" class="traceability-state error" role="alert">
+      <strong>{{ i18n.t("traceability.error_title", "Trace unavailable") }}</strong>
+      <span>{{ error }}</span>
+    </div>
+    <div v-else-if="!focus" class="traceability-state">
+      <strong>{{ i18n.t("traceability.empty_title", "Nothing to trace yet") }}</strong>
+      <span>{{
         i18n.t(
           "traceability.empty",
-          "No traceability relationships are available for this object yet.",
+          "This record does not currently expose retained provenance relationships.",
         )
-      }}
+      }}</span>
     </div>
 
     <template v-else>
-      <nav
-        class="object-graph-history"
-        :aria-label="i18n.t('traceability.walk_history', 'Traversal history')"
-      >
-        <div class="object-graph-history-actions">
-          <button type="button" :disabled="!canBack" @click="goBack">
-            {{ i18n.t("common.previous", "Previous") }}
-          </button>
-          <button type="button" :disabled="!canForward" @click="goForward">
-            {{ i18n.t("common.next", "Next") }}
-          </button>
+      <section class="traceability-orientation" aria-labelledby="traceabilityOrientation">
+        <div class="traceability-scope">
+          <UiStatusBadge
+            :label="
+              mode === 'trace'
+                ? i18n.t('traceability.bounded_trace', 'Bounded record trace')
+                : i18n.t('traceability.normative_model', 'Normative model')
+            "
+            tone="info"
+          />
+          <span>{{ scopeLabel }}</span>
         </div>
-        <ol>
-          <li v-for="item in visibleHistory" :key="`${item.index}-${item.id}`">
-            <button
-              type="button"
-              :aria-current="item.index === historyIndex ? 'location' : undefined"
-              @click="jump(item.index)"
-            >
-              {{ item.node?.object_type }}
-            </button>
-          </li>
-        </ol>
-      </nav>
+        <p id="traceabilityOrientation">
+          {{
+            mode === "trace"
+              ? i18n.t(
+                  "traceability.scope_help",
+                  "This is a finite map of the provenance currently loaded for this record. Selecting an object changes the focus; it does not extend the graph.",
+                )
+              : i18n.t(
+                  "traceability.model_scope_help",
+                  "This is the finite DERRIDAI 1.0 relationship model. Selecting an object highlights the relationships allowed for that type.",
+                )
+          }}
+        </p>
+      </section>
 
-      <article class="object-graph-focus" :data-object-id="focus.id">
-        <div class="object-graph-focus-type">{{ focus.object_type }}</div>
-        <h3>{{ focus.label }}</h3>
-        <p v-if="focus.summary">{{ focus.summary }}</p>
-        <div class="object-graph-badges">
-          <span v-if="focus.materialization">{{ focus.materialization.replaceAll("_", " ") }}</span>
-          <span v-if="focus.status">{{ focus.status.replaceAll("_", " ") }}</span>
+      <section v-if="mode === 'trace'" class="traceability-overview" aria-label="Trace summary">
+        <div class="trace-stage">
+          <small>{{ i18n.t("traceability.stage_source", "Where it came from") }}</small>
+          <strong>{{ i18n.t("traceability.source_lineage", "Source lineage") }}</strong>
+          <span>{{ sourceSummary }}</span>
         </div>
-      </article>
+        <div class="trace-connector" aria-hidden="true">↓</div>
+        <div class="trace-stage record">
+          <small>{{ i18n.t("traceability.stage_record", "What you are inspecting") }}</small>
+          <strong>{{ i18n.t("traceability.current_record", "This corpus record") }}</strong>
+          <span>{{ rootNode?.summary || rootNode?.label || "—" }}</span>
+        </div>
+        <div class="trace-branch" aria-hidden="true"><span>↙</span><span>↘</span></div>
+        <div class="trace-branch-cards">
+          <div class="trace-stage">
+            <small>{{
+              i18n.t("traceability.stage_metadata", "How metadata was established")
+            }}</small>
+            <strong>{{ i18n.t("traceability.metadata_review", "Metadata & review") }}</strong>
+            <span>{{ metadataSummary }}</span>
+          </div>
+          <div class="trace-stage">
+            <small>{{ i18n.t("traceability.stage_research", "How it was later used") }}</small>
+            <strong>{{ i18n.t("traceability.research_use", "Research use") }}</strong>
+            <span>{{ researchSummary }}</span>
+          </div>
+        </div>
+      </section>
 
-      <section class="object-graph-neighbors" aria-labelledby="objectGraphNeighbors">
-        <div class="object-graph-section-title">
-          <h3 id="objectGraphNeighbors">{{ i18n.t("traceability.connections", "Connections") }}</h3>
+      <div class="traceability-map-action">
+        <div>
+          <strong>{{ i18n.t("traceability.visual_map", "Visual relationship map") }}</strong>
+          <span>{{
+            i18n.t(
+              "traceability.visual_map_help",
+              "See every retained object and relationship at once. Click any node to inspect its direct links.",
+            )
+          }}</span>
+        </div>
+        <UiButton
+          size="small"
+          icon="chart"
+          :label="i18n.t('traceability.open_map', 'Open map')"
+          @click="diagramOpen = true"
+        />
+      </div>
+
+      <UiCard as="article" class="traceability-focus-card">
+        <div class="focus-head">
+          <div>
+            <small>{{ i18n.t("traceability.selected_object", "Selected object") }}</small>
+            <h3>{{ typeLabel(focus.object_type) }}</h3>
+          </div>
+          <UiButton
+            v-if="focus.id !== defaultFocus()"
+            variant="ghost"
+            size="small"
+            :label="i18n.t('traceability.back_to_record', 'Back to record')"
+            @click="resetFocus"
+          />
+        </div>
+        <p class="focus-name">{{ focus.label }}</p>
+        <p v-if="focus.summary" class="focus-summary">{{ focus.summary }}</p>
+        <p class="focus-explanation">{{ typeDescription(focus.object_type) }}</p>
+        <div class="focus-badges">
+          <UiStatusBadge
+            v-if="focus.status"
+            :label="presentDetail(focus.status)"
+            :tone="statusTone(focus.status)"
+          />
+          <UiStatusBadge
+            v-if="!focus.status && mode === 'model'"
+            :label="String(focus.details?.profile || 'DERRIDAI')"
+            tone="neutral"
+          />
+        </div>
+
+        <details class="technical-details">
+          <summary>{{ i18n.t("traceability.technical_details", "Technical details") }}</summary>
+          <dl>
+            <div>
+              <dt>{{ i18n.t("traceability.object_type", "Object type") }}</dt>
+              <dd>
+                <code>{{ focus.object_type }}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>{{ i18n.t("traceability.object_id", "Object ID") }}</dt>
+              <dd>
+                <code>{{ focus.object_id }}</code>
+              </dd>
+            </div>
+            <div v-if="focus.materialization">
+              <dt>{{ i18n.t("traceability.materialization", "Representation") }}</dt>
+              <dd>{{ presentDetail(focus.materialization) }}</dd>
+            </div>
+            <div v-for="(value, key) in focus.details || {}" :key="String(key)">
+              <dt>{{ detailLabel(String(key)) }}</dt>
+              <dd>{{ presentDetail(value) }}</dd>
+            </div>
+          </dl>
+        </details>
+      </UiCard>
+
+      <section class="traceability-connections" aria-labelledby="traceabilityConnections">
+        <div class="section-head">
+          <div>
+            <small>{{ i18n.t("traceability.direct_relationships", "Direct relationships") }}</small>
+            <h3 id="traceabilityConnections">
+              {{ i18n.tf("traceability.connected_count", { count: neighbors.length }) }}
+            </h3>
+          </div>
           <span>{{ neighbors.length }}</span>
         </div>
-        <ul v-if="neighbors.length">
-          <li v-for="item in neighbors" :key="item.edge.id">
-            <div>
-              <small>
-                {{ item.relation }}
-                <template v-if="item.cardinality"> · {{ item.cardinality }}</template>
-              </small>
-              <b>{{ item.node.object_type }}</b>
-              <span>{{ item.node.label }}</span>
-              <em v-if="!item.edge.normative">{{
-                i18n.t("traceability.application_link", "DerridAI link")
-              }}</em>
-            </div>
+
+        <div v-if="relationshipGroups.length" class="relationship-groups">
+          <section v-for="group in relationshipGroups" :key="group.id" class="relationship-group">
+            <h4>{{ group.title }}</h4>
             <button
+              v-for="item in group.items"
+              :key="item.edge.id"
               type="button"
+              class="relationship-row"
               :data-object-id="item.node.id"
-              :aria-label="`${i18n.t('traceability.walk_to', 'Walk to')} ${item.node.label}`"
-              @click="walk(item.node.id)"
+              @click="selectFocus(item.node.id)"
             >
-              {{ i18n.t("traceability.open", "Open") }}
+              <span class="relationship-copy">
+                <small>{{ item.relation }}</small>
+                <strong>{{ typeLabel(item.node.object_type) }}</strong>
+                <span>{{ item.node.label }}</span>
+              </span>
+              <span class="relationship-arrow" aria-hidden="true">→</span>
             </button>
-          </li>
-        </ul>
-        <p v-else class="object-graph-none">
+          </section>
+        </div>
+        <p v-else class="traceability-none">
           {{
             i18n.t(
               "traceability.no_connections",
-              "No connected objects are retained from this focus.",
+              "No direct relationships are retained from this object in the current scope.",
             )
           }}
         </p>
       </section>
     </template>
+
+    <UiDialog
+      :open="diagramOpen"
+      size="xlarge"
+      :title="
+        mode === 'trace'
+          ? i18n.t('traceability.map_title_record', 'Record relationship map')
+          : i18n.t('traceability.map_title_model', 'DERRIDAI relationship model')
+      "
+      :description="
+        mode === 'trace'
+          ? i18n.t(
+              'traceability.map_description_record',
+              'A finite map of the provenance retained for this record. Solid lines are DERRIDAI relationships; dashed lines are DerridAI application links.',
+            )
+          : i18n.t(
+              'traceability.map_description_model',
+              'The normative DERRIDAI 1.0 object model. Select a node to highlight its direct relationships.',
+            )
+      "
+      :close-label="i18n.t('ui.close')"
+      @close="diagramOpen = false"
+    >
+      <div class="diagram-dialog-content">
+        <ResearchObjectDiagram
+          :nodes="nodes"
+          :edges="edges"
+          :focus-id="focusId"
+          :aria-label="i18n.t('traceability.diagram_label', 'Traceability relationship diagram')"
+          @focus="selectFocus"
+        />
+        <section v-if="focus" class="diagram-selection">
+          <div>
+            <small>{{ i18n.t("traceability.selected_object", "Selected object") }}</small>
+            <strong>{{ typeLabel(focus.object_type) }} · {{ focus.label }}</strong>
+            <p>{{ typeDescription(focus.object_type) }}</p>
+          </div>
+          <UiStatusBadge
+            :label="i18n.tf('traceability.connected_count', { count: neighbors.length })"
+            tone="neutral"
+          />
+        </section>
+        <div class="diagram-legend" aria-label="Diagram legend">
+          <span
+            ><i class="solid"></i
+            >{{ i18n.t("traceability.legend_normative", "DERRIDAI relationship") }}</span
+          >
+          <span
+            ><i class="dashed"></i
+            >{{ i18n.t("traceability.legend_application", "DerridAI application link") }}</span
+          >
+          <span
+            ><i class="focus"></i
+            >{{ i18n.t("traceability.legend_focus", "Selected object and direct links") }}</span
+          >
+        </div>
+      </div>
+    </UiDialog>
   </section>
 </template>
 
 <style scoped>
-.object-graph {
+.traceability-explorer {
   display: grid;
-  gap: 14px;
+  gap: var(--space-4);
   min-width: 0;
 }
-.object-graph-head {
+.traceability-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
 }
-.object-graph-head p,
-.object-graph-focus-type {
+.traceability-head p,
+.focus-head small,
+.section-head small,
+.trace-stage small,
+.diagram-selection small {
   margin: 0;
-  color: var(--muted);
-  font-size: 0.75rem;
-  font-weight: 800;
-  letter-spacing: 0.055em;
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.045em;
   text-transform: uppercase;
 }
-.object-graph-head h2,
-.object-graph-focus h3,
-.object-graph-section-title h3 {
+.traceability-head h2 {
   margin: 2px 0 0;
-  color: var(--text-2);
+  color: var(--text-primary);
+  font-size: var(--fs-lg);
+  line-height: var(--lh-tight);
 }
-.object-graph-head h2 {
-  font-size: 1.0625rem;
-}
-.object-graph-modes {
-  display: flex;
-  gap: 3px;
-  padding: 3px;
-  border: 1px solid var(--line);
+.traceability-state {
+  display: grid;
+  gap: 4px;
+  padding: var(--space-4);
+  border: 1px dashed var(--border-subtle);
   border-radius: var(--radius-control);
-  background: var(--surface-raised);
+  background: var(--surface-inset);
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-normal);
 }
-.object-graph-modes button,
-.object-graph-history button,
-.object-graph-neighbors button {
-  min-height: 30px;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--text-2);
-  font: inherit;
-  font-size: 0.75rem;
-  font-weight: 750;
-  cursor: pointer;
+.traceability-state strong {
+  color: var(--text-primary);
 }
-.object-graph-modes button.active {
-  border-color: var(--line);
-  background: var(--surface-card);
-  box-shadow: var(--shadow-card);
-}
-.object-graph-modes button:disabled,
-.object-graph-history button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-.object-graph-help,
-.object-graph-none,
-.object-graph-state {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.8125rem;
-  line-height: 1.5;
-}
-.object-graph-state {
-  padding: 14px;
-  border: 1px dashed var(--line);
-  border-radius: var(--radius-control);
-}
-.object-graph-state.error {
+.traceability-state.error {
+  border-color: var(--tone-danger-edge);
+  background: var(--tone-danger-bg);
   color: var(--tone-danger-fg);
 }
-.object-graph-history {
-  display: grid;
-  gap: 7px;
-}
-.object-graph-history-actions {
-  display: flex;
-  gap: 5px;
-}
-.object-graph-history-actions button {
-  border-color: var(--line);
-  background: var(--surface-card);
-  padding: 0 9px;
-}
-.object-graph-history ol {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.object-graph-history li:not(:last-child)::after {
-  content: "›";
-  margin-left: 4px;
-  color: var(--muted);
-}
-.object-graph-history button[aria-current="location"] {
-  color: var(--ui-accent);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.object-graph-focus {
-  display: grid;
-  gap: 5px;
-  padding: 13px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  background: var(--surface-raised);
-}
-.object-graph-focus h3 {
-  font-size: 0.9375rem;
-  overflow-wrap: anywhere;
-}
-.object-graph-focus > p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.8125rem;
-  line-height: 1.45;
-}
-.object-graph-badges {
-  display: flex;
-  gap: 5px;
-  flex-wrap: wrap;
-}
-.object-graph-badges span,
-.object-graph-neighbors em {
-  width: max-content;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 2px 6px;
-  color: var(--muted);
-  font-size: 0.75rem;
-  font-style: normal;
-  font-weight: 700;
-}
-.object-graph-neighbors {
+.traceability-orientation {
   display: grid;
   gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-inset);
 }
-.object-graph-section-title {
+.traceability-scope {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.traceability-scope > span {
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.traceability-orientation p {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-normal);
+}
+.traceability-overview {
+  display: grid;
+  justify-items: stretch;
+}
+.trace-stage {
+  display: grid;
+  gap: 3px;
+  padding: 10px 11px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-card);
+}
+.trace-stage.record {
+  border-color: var(--border-interactive);
+  background: var(--surface-selected);
+}
+.trace-stage strong {
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+}
+.trace-stage span {
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-normal);
+}
+.trace-connector {
+  height: 24px;
+  display: grid;
+  place-items: center;
+  color: var(--text-tertiary);
+  font-size: 1rem;
+}
+.trace-branch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: 25px;
+  color: var(--text-tertiary);
+  font-size: 1rem;
+  text-align: center;
+}
+.trace-branch-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+.traceability-map-action {
   display: flex;
   align-items: center;
   justify-content: space-between;
-}
-.object-graph-section-title h3 {
-  font-size: 0.8125rem;
-}
-.object-graph-section-title > span {
-  min-width: 23px;
-  height: 23px;
-  display: grid;
-  place-items: center;
-  border-radius: 999px;
-  background: var(--soft);
-  font-size: 0.75rem;
-  font-weight: 800;
-}
-.object-graph-neighbors ul {
-  display: grid;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.object-graph-neighbors li {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 9px;
-  padding: 9px 9px 9px 10px;
-  border: 1px solid var(--line);
+  gap: var(--space-3);
+  padding: 11px 12px;
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-control);
   background: var(--surface-card);
 }
-.object-graph-neighbors li > div {
+.traceability-map-action > div {
   min-width: 0;
   display: grid;
   gap: 2px;
 }
-.object-graph-neighbors small,
-.object-graph-neighbors span {
-  color: var(--muted);
-  font-size: 0.75rem;
+.traceability-map-action strong {
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+}
+.traceability-map-action span {
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-normal);
+}
+.traceability-focus-card {
+  display: grid;
+  gap: 8px;
+}
+.focus-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: flex-start;
+}
+.focus-head h3 {
+  margin: 2px 0 0;
+  color: var(--text-primary);
+  font-size: var(--fs-md);
+}
+.focus-name {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--fs-base);
+  font-weight: var(--fw-semibold);
   overflow-wrap: anywhere;
 }
-.object-graph-neighbors b {
-  color: var(--text-2);
-  font-size: 0.75rem;
+.focus-summary,
+.focus-explanation {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-normal);
 }
-.object-graph-neighbors button {
-  border-color: var(--line);
-  background: var(--surface-raised);
-  padding: 0 9px;
+.focus-explanation {
+  color: var(--text-secondary);
 }
-button:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--ui-accent, #3c8d62) 42%, var(--card));
-  outline-offset: 2px;
+.focus-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
 }
-@media (max-width: 520px) {
-  .object-graph-head {
-    display: grid;
+.technical-details {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 8px;
+}
+.technical-details summary {
+  width: max-content;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+}
+.technical-details dl {
+  display: grid;
+  gap: 0;
+  margin: 8px 0 0;
+}
+.technical-details dl > div {
+  display: grid;
+  grid-template-columns: minmax(104px, 0.7fr) minmax(0, 1fr);
+  gap: 8px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border-subtle);
+}
+.technical-details dt,
+.technical-details dd {
+  min-width: 0;
+  margin: 0;
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+.technical-details dt {
+  color: var(--text-tertiary);
+}
+.technical-details dd {
+  color: var(--text-secondary);
+}
+.technical-details code {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+}
+.traceability-connections {
+  display: grid;
+  gap: 9px;
+}
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+.section-head h3 {
+  margin: 2px 0 0;
+  color: var(--text-primary);
+  font-size: var(--fs-base);
+}
+.section-head > span {
+  min-width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-pill);
+  background: var(--surface-inset);
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+}
+.relationship-groups {
+  display: grid;
+  gap: 12px;
+}
+.relationship-group {
+  display: grid;
+  gap: 5px;
+}
+.relationship-group h4 {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+.relationship-row {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-card);
+  padding: 8px 10px;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+.relationship-row:hover {
+  border-color: var(--border-interactive);
+  background: var(--surface-hover);
+}
+.relationship-row:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+.relationship-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.relationship-copy small {
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+}
+.relationship-copy strong {
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+}
+.relationship-copy > span {
+  min-width: 0;
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+.relationship-arrow {
+  color: var(--accent-fg);
+  font-size: 1rem;
+}
+.traceability-none {
+  margin: 0;
+  padding: 10px 11px;
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-control);
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-normal);
+}
+.diagram-dialog-content {
+  display: grid;
+  gap: var(--space-4);
+}
+.diagram-selection {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-inset);
+}
+.diagram-selection > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.diagram-selection strong {
+  color: var(--text-primary);
+  font-size: var(--fs-base);
+  overflow-wrap: anywhere;
+}
+.diagram-selection p {
+  margin: 0;
+  max-width: 72ch;
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-normal);
+}
+.diagram-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+}
+.diagram-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.diagram-legend i {
+  width: 26px;
+  height: 0;
+  border-top: 2px solid var(--border-strong);
+}
+.diagram-legend i.dashed {
+  border-top-style: dashed;
+}
+.diagram-legend i.focus {
+  border-top-color: var(--accent);
+  border-top-width: 3px;
+}
+@media (max-width: 380px) {
+  .trace-branch-cards {
+    grid-template-columns: 1fr;
   }
-  .object-graph-modes {
-    width: max-content;
+  .trace-branch {
+    display: none;
+  }
+  .traceability-map-action,
+  .diagram-selection {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .technical-details dl > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
   }
 }
 </style>
