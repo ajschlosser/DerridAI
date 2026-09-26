@@ -58,7 +58,7 @@ def test_ledger_decode_endpoint_returns_plain_jsonl(tmp_path):
     from app.routers.corpus import decode_corpus_ledger
     from fastapi import UploadFile
 
-    record = {"record_id": "r1", "source_document_id": "d1", "text": "Il n'y a pas de hors-texte."}
+    record = {"record_id": "r1", "source_document_id": "d1", "text": "Il n'y a pas de hors-texte.", "source_spans": [{"source_document_id": "d1", "block_id": "b1", "page": 1}]}
     raw = zstd.ZstdCompressor().compress((json.dumps(record) + "\n").encode())
     upload = UploadFile(io.BytesIO(raw), filename="corpus.jsonl.zst")
     result = asyncio.run(decode_corpus_ledger(upload))
