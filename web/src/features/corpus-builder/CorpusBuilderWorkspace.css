@@ -777,9 +777,6 @@ summary:focus-visible {
 .technical-details > section {
   border-top: 1px solid var(--line);
 }
-.review-toolbar {
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.7fr) auto auto;
-}
 .record-first-review {
   grid-template-columns: minmax(220px, 0.52fr) minmax(500px, 1.45fr) minmax(360px, 0.9fr);
 }
