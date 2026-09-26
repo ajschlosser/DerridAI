@@ -12,7 +12,15 @@ const blocks: SourceBlock[] = [
     extraction_method: "native",
     confidence: 1,
   },
-  { block_id: "b2", page: 12, type: "paragraph", text: "Derrida reads this against Husserl." },
+  {
+    block_id: "b2",
+    page: 12,
+    type: "paragraph",
+    text: "Derrida reads this against Husserl.",
+    bbox: [0, 0, 1, 1],
+    extraction_method: "native",
+    confidence: 1,
+  },
 ];
 
 const meta = {
