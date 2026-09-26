@@ -228,14 +228,6 @@ export function useCorpusReviewDecisions(options: CorpusReviewDecisionsOptions) 
     await attemptAccept();
   }
 
-  async function acceptFromFocus() {
-    if (options.selectedMetadataBlocked.value) {
-      options.focusView.value = false;
-      await nextTick();
-    }
-    await attemptAccept();
-  }
-
   async function rejectRecord() {
     await setDisposition("rejected");
   }
@@ -416,7 +408,6 @@ export function useCorpusReviewDecisions(options: CorpusReviewDecisionsOptions) 
     setDisposition,
     attemptAccept,
     toggleAccept,
-    acceptFromFocus,
     rejectRecord,
     skipRecord,
     acceptCleanRecords,

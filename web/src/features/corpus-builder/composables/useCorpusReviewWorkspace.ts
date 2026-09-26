@@ -79,7 +79,10 @@ export function useCorpusReviewWorkspace() {
   function focusFirstMetadataBlocker() {
     reviewInspectorTab.value = "metadata";
     void nextTick(() => {
-      const root = reviewInspectorEl.value;
+      // Focus View has its own inspector; the workspace's is hidden underneath it.
+      const root = focusView.value
+        ? document.querySelector<HTMLElement>(".focus-inspector-body")
+        : reviewInspectorEl.value;
       const field = root?.querySelector<HTMLElement>('[data-unresolved-field="true"]');
       // The field's Confirm button first, so Enter confirms the proposed value; otherwise its value control.
       const control =

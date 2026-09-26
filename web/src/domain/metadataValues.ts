@@ -70,7 +70,7 @@ export function usableOptions(values: Iterable<unknown>): string[] {
 export function usableListOptions(values: Iterable<unknown>): string[] {
   const expanded: string[] = [];
   for (const raw of values) {
-    const value = unwrapMetadataValue(raw);
+    const value = withoutTransportItems(unwrapMetadataValue(raw));
     if (Array.isArray(value)) expanded.push(...value);
     else if (typeof value === "string") {
       if (!looksLikeRuntimeFragment(value)) expanded.push(...value.split(/[,\n]/));
@@ -103,6 +103,31 @@ export function unwrapMetadataValue(value: unknown): unknown {
   return value;
 }
 
+/**
+ * A list item that is structured-output residue, not a value: an evidence reference, a confidence score, an assessment
+ * key or a source-block ID. Mirrors _LLM_TRANSPORT_ITEM in api/app/corpus_metadata.py.
+ */
+const TRANSPORT_ITEM = new RegExp(
+  [
+    String.raw`^\s*(?:field[_ -]?(?:evidence|assessments?)|evidence[_ -]?(?:ids?|blocks?)|block[_ -]?ids?)(?:\b|_)`,
+    String.raw`^\s*confidence(?:[_ -]?score)?\s*[_:=]?\s*(?:0|1)?\.?\d`,
+    String.raw`^\s*(?:needs[_ -]?review|reason)\s*[:=]`,
+    String.raw`:p\d{3,}-b\d{3,}|^\s*p\d{3,}-b\d{3,}\s*$`,
+  ].join("|"),
+  "i",
+);
+
+/**
+ * The items of a list value before the first residue item. A model that flattened {value, evidence, confidence,
+ * reason} into one list gets its value back; the evidence ID, score and explanation are dropped. Values stored before
+ * the API applied the same rule are shown and saved without them.
+ */
+export function withoutTransportItems(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+  const cut = value.findIndex((item) => typeof item === "string" && TRANSPORT_ITEM.test(item));
+  return cut === -1 ? value : value.slice(0, cut);
+}
+
 function looksLikeRuntimeFragment(value: string): boolean {
   const text = value.trim();
   if (!text) return true;
@@ -115,6 +140,7 @@ function looksLikeRuntimeFragment(value: string): boolean {
     .replaceAll(",", "")
     .trim();
   if (/^p\d{3,}-b\d{3,}$/i.test(token) || /^b\d{3,}$/i.test(token)) return true;
+  if (TRANSPORT_ITEM.test(text)) return true;
 
   if (
     /"(?:block_ids|confidence|needs_review|reason|outcome|field_evidence|field_assessments)"\s*:/i.test(

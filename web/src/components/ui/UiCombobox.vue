@@ -10,6 +10,9 @@ const props = withDefaults(
     allowCustom?: boolean;
     multiple?: boolean;
     type?: "text" | "number";
+    /** Values the model proposed: listed first and marked, in words as well as colour. */
+    recommended?: string[];
+    recommendedLabel?: string;
   }>(),
   {
     options: () => [],
@@ -18,6 +21,8 @@ const props = withDefaults(
     allowCustom: true,
     multiple: false,
     type: "text",
+    recommended: () => [],
+    recommendedLabel: "Suggested",
   },
 );
 const emit = defineEmits<{ "update:modelValue": [value: string]; change: [value: string] }>();
@@ -39,16 +44,24 @@ const currentValues = computed(
         .map((v) => v.toLocaleLowerCase()),
     ),
 );
+// Suggested values are matched case-insensitively so "Derrida" and "derrida" are one suggestion.
+const recommendedSet = computed(
+  () => new Set(props.recommended.map((v) => String(v).trim().toLocaleLowerCase()).filter(Boolean)),
+);
+const isRecommended = (value: string) => recommendedSet.value.has(value.toLocaleLowerCase());
 const filtered = computed(() => {
   const raw = String(props.modelValue || "");
   const q = (props.multiple ? raw.split(/[\n,]/).at(-1) || raw : raw).trim().toLocaleLowerCase();
-  return unique.value
-    .filter((v) => {
-      const lower = v.toLocaleLowerCase();
-      if (props.multiple && currentValues.value.has(lower)) return false;
-      return !q || lower.includes(q) || q.includes(lower);
-    })
-    .slice(0, 60);
+  const matches = unique.value.filter((v) => {
+    const lower = v.toLocaleLowerCase();
+    if (props.multiple && currentValues.value.has(lower)) return false;
+    return !q || lower.includes(q) || q.includes(lower);
+  });
+  // The model's proposal leads the list (stable, so the rest keep their order) and is never cut by the cap.
+  return [...matches.filter(isRecommended), ...matches.filter((v) => !isRecommended(v))].slice(
+    0,
+    60,
+  );
 });
 watch(
   () => props.modelValue,
@@ -182,9 +195,13 @@ onBeforeUnmount(() => {
           role="option"
           :aria-selected="option === modelValue"
           :data-active="index === active ? 'true' : 'false'"
+          :data-recommended="isRecommended(option) ? 'true' : undefined"
           @mousedown.prevent="commit(option)"
         >
-          {{ option }}
+          <span class="combo-option-text">{{ option }}</span>
+          <span v-if="isRecommended(option)" class="combo-badge"
+            ><span aria-hidden="true">★</span> {{ recommendedLabel }}</span
+          >
         </li>
       </ul></Teleport
     >
@@ -218,6 +235,23 @@ onBeforeUnmount(() => {
   cursor: pointer;
   font-size: 0.875rem;
   overflow-wrap: anywhere;
+}
+.combo-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.combo-list li[data-recommended="true"] {
+  border-inline-start: 3px solid var(--tone-info-edge);
+  background: var(--tone-info-bg);
+  color: var(--tone-info-fg);
+  font-weight: 650;
+}
+.combo-badge {
+  flex: none;
+  font-size: 0.75rem;
+  font-weight: 700;
 }
 .combo-list li:hover,
 .combo-list li[data-active="true"] {

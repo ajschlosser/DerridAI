@@ -58,6 +58,34 @@ _LLM_TRANSPORT_SUFFIX = re.compile(
 )
 
 
+# A list item that is structured-output residue rather than a value: an evidence reference, a confidence score, an
+# assessment key, or a source-block ID. Small models sometimes flatten {value, evidence, confidence, reason} into one
+# list ("Balzac", "field_evidence_id-…:p00001-b0001", "confidence_score_0.95", "The text presents…").
+_LLM_TRANSPORT_ITEM = re.compile(
+    r"^\s*(?:field[_ -]?(?:evidence|assessments?)|evidence[_ -]?(?:ids?|blocks?)|block[_ -]?ids?)(?:\b|_)"
+    r"|^\s*confidence(?:[_ -]?score)?\s*[_:=]?\s*(?:0|1)?\.?\d"
+    r"|^\s*(?:needs[_ -]?review|reason)\s*[:=]"
+    r"|:p\d{3,}-b\d{3,}|^\s*p\d{3,}-b\d{3,}\s*$",
+    re.IGNORECASE,
+)
+
+
+def _strip_llm_transport_items(value: list[Any]) -> tuple[list[Any], list[Any] | None]:
+    """List items before the first transport marker; everything from it on is residue (its reason included)."""
+    kept: list[Any] = []
+    for item in value:
+        if isinstance(item, str) and _LLM_TRANSPORT_ITEM.search(item):
+            return kept, list(value)
+        if isinstance(item, str):
+            cleaned, raw = _strip_llm_transport_suffix(item)
+            if raw is not None:
+                if cleaned:
+                    kept.append(cleaned)
+                return kept, list(value)
+        kept.append(item)
+    return value, None
+
+
 def _strip_llm_transport_suffix(value: Any) -> tuple[Any, Any | None]:
     """Keep model transport/audit syntax out of scholarly metadata values.
 
@@ -66,6 +94,8 @@ def _strip_llm_transport_suffix(value: Any) -> tuple[Any, Any | None]:
     field_evidence marker. Preserve the raw response for audit while selecting
     only the value before that explicit structured-output marker.
     """
+    if isinstance(value, list):
+        return _strip_llm_transport_items(value)
     if not isinstance(value, str):
         return value, None
     text: str = value
@@ -86,7 +116,7 @@ def _normalize_semantic_value(field: str, value: Any) -> tuple[Any, Any | None]:
     if isinstance(value, str) and is_placeholder(value):
         return None, transport_raw or value  # raw text is kept for audit; it is not a value
     if isinstance(value, list) and any(is_placeholder(item) for item in value):
-        return clean_value(value), value
+        return clean_value(value), transport_raw or value
     if field != "stance" or not isinstance(value, str):
         return value, transport_raw
     raw = transport_raw or value
