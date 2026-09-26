@@ -1262,7 +1262,10 @@ summary:focus-visible {
   display: none;
 }
 .builder-workspace.review-mode .run-monitor {
+  position: relative;
+  z-index: 13;
   order: 0;
+  scroll-margin-top: calc(var(--ref-topbar, 60px) + var(--space-2));
 }
 .builder-workspace.review-mode .review-session,
 .builder-workspace.review-mode .review-session-bar {
