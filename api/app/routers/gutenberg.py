@@ -19,7 +19,7 @@ def gutenberg_status(request: Request) -> dict:
 def refresh_catalogue(request: Request) -> dict:
     request_user(request)
     try:
-        return gutenberg_offline.refresh_catalogue()
+        return gutenberg_offline.start_catalogue_refresh()
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Catalogue refresh failed: {exc}") from exc
 
