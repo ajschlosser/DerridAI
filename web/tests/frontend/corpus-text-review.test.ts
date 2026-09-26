@@ -111,7 +111,6 @@ describe("Corpus Builder text review", () => {
     expect(corpusBuilderApi.patchText).toHaveBeenCalledWith("b1", "r1", "Edited text", 1, false);
   });
 
-
   it("applies the authoritative human-reviewed state after Mark reviewed persists", async () => {
     const state = setup();
     const authoritative = {
