@@ -143,3 +143,37 @@ def test_acceptance_fixture_invariants():
         assert not reviews,case["id"]
         assert len({bid for r in records for bid in r["source_block_ids"]})==len(blocks)
         assert validation["max_record_chars"]<=case.get("max_expected_chars",6000)
+
+
+def _record_sizes(blocks, boundaries):
+    split={b["after_block_id"] for b in boundaries}
+    sizes=[]; current=[]
+    for item in blocks:
+        current.append(item)
+        if item["block_id"] in split:
+            sizes.append(current); current=[]
+    if current: sizes.append(current)
+    return sizes
+
+
+def test_a_unit_larger_than_the_ceiling_does_not_swallow_the_rest_of_the_document():
+    """An oversize first unit stands alone; the document after it is still sized.
+
+    Why: with a small sentence-level target (150 characters, ceiling 550), a 75-page PDF whose opening paragraph
+    alone exceeded the ceiling became six records, one of them 110,000 characters: the safety splitter looked only
+    for seams within the ceiling, found none, and left the whole remainder in one group.
+    """
+    policy={"preferred_record_chars":150,"record_length_tolerance":30,"long_record_chars":300,"absolute_record_chars":550}
+    blocks=[block(0,1800)]+[block(i,70) for i in range(1,200)]
+    boundaries,_,metrics=cb._normalize_topology(blocks,[],policy)
+    groups=_record_sizes(blocks,boundaries)
+    assert groups[0]==[blocks[0]], "the oversize unit is a record of its own"
+    assert len(groups)>50
+    for group in groups[1:]:
+        assert sum(len(b["text"]) for b in group)+2*(len(group)-1)<=policy["absolute_record_chars"]
+    # Text is conserved: every unit once, in order.
+    assert [b["block_id"] for g in groups for b in g]==[b["block_id"] for b in blocks]
+    # Counted once per final record, not once per normalization pass.
+    assert metrics["long_exception_records"]==sum(
+        1 for g in groups if sum(len(b["text"]) for b in g)+2*(len(g)-1)>policy["long_record_chars"]
+    )
