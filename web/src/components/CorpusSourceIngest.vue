@@ -93,6 +93,19 @@ function formatDate(value?: string | null) {
   }
 }
 
+function formatBytes(value?: number | null) {
+  const bytes = Math.max(0, Number(value || 0));
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let size = bytes;
+  let unit = -1;
+  do {
+    size /= 1024;
+    unit += 1;
+  } while (size >= 1024 && unit < units.length - 1);
+  return `${size.toFixed(size >= 10 ? 1 : 2)} ${units[unit]}`;
+}
+
 function onOcrStrategy(strategy: string) {
   emit("update:illegibility", strategy === "always" ? 100 : strategy === "difficult" ? 50 : 0);
 }
@@ -308,15 +321,23 @@ onBeforeUnmount(closeSearch);
           <button
             type="button"
             class="btn btn-quiet"
-            :disabled="disabled || busy === 'gutenberg-catalogue'"
+            :disabled="
+              disabled ||
+              busy === 'gutenberg-catalogue' ||
+              ['refreshing', 'indexing'].includes(String(gutenbergStatus?.catalogue.status || ''))
+            "
             @click="emit('refreshGutenbergCatalogue')"
           >
             {{
-              i18n.t(
-                gutenbergStatus?.catalogue.status === "ready"
-                  ? "pdf_corpus.gutenberg_refetch_catalogue"
-                  : "pdf_corpus.gutenberg_fetch_catalogue",
+              ["refreshing", "indexing"].includes(
+                String(gutenbergStatus?.catalogue.status || ""),
               )
+                ? i18n.t("pdf_corpus.gutenberg_catalogue_refreshing", "Updating catalogue…")
+                : i18n.t(
+                    gutenbergStatus?.catalogue.status === "ready"
+                      ? "pdf_corpus.gutenberg_refetch_catalogue"
+                      : "pdf_corpus.gutenberg_fetch_catalogue",
+                  )
             }}
           </button>
           <button
@@ -364,6 +385,10 @@ onBeforeUnmount(closeSearch);
           :max="gutenbergStatus.archive.total_bytes"
           :aria-label="i18n.t('pdf_corpus.gutenberg_download_progress')"
         />
+        <small v-if="gutenbergStatus?.archive.total_bytes" class="library-note">
+          {{ formatBytes(gutenbergStatus.archive.bytes_done) }} /
+          {{ formatBytes(gutenbergStatus.archive.total_bytes) }}
+        </small>
         <small v-if="gutenbergStatus?.search_ready && !gutenbergStatus?.ready" class="library-note">
           {{
             i18n.t(
