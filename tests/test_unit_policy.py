@@ -106,14 +106,15 @@ def _record_sizes(blocks, policy):
 def test_small_records_need_small_units():
     """A 100-character target is only reachable when the units are that small.
 
-    With whole paragraphs the segmenter has no seam to cut at, so it returns a few huge records; dividing the
-    source into sentences or windows lets it honour the target.
+    With whole paragraphs the segmenter can only cut between them, so each paragraph is a record far over the
+    target (a unit is never cut; it used to be worse, with all of them merged into one record); dividing the source
+    into sentences or windows lets it honour the target.
     """
     para = ("The trace is neither present nor absent, and it cannot be reduced to either. " * 4
             + "Hospitality names the welcome of the other before any question. " * 4).strip()
     blocks = [{"block_id": f"b{i}", "page": 1, "type": "paragraph", "text": para} for i in range(6)]
     policy = {"preferred_record_chars": 100, "record_length_tolerance": 10, "long_record_chars": 150, "absolute_record_chars": 200}
-    assert len(_record_sizes(blocks, policy)) == 1
+    assert _record_sizes(blocks, policy) == [len(para)] * 6
     sentences, _ = up.apply_unit_policy(blocks, {"mode": "sentence"})
     sizes = _record_sizes(sentences, policy)
     assert len(sizes) > 20 and max(sizes) <= 150

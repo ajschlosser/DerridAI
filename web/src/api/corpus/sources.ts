@@ -33,6 +33,8 @@ export const corpusSourcesApi = {
     body.append("source_illegibility", String(sourceIllegibility));
     body.append("page_number_detection", pages.mode);
     if (pages.providerProfileId) body.append("provider_profile_id", pages.providerProfileId);
+    for (const [key, value] of Object.entries(pages.connection || {}))
+      if (value) body.append(key, String(value));
     return apiRequest<PdfAsset>(legacyCorpusUrl("assets"), { method: "POST", body });
   },
   importUrl: (
@@ -47,15 +49,16 @@ export const corpusSourcesApi = {
         source_illegibility: sourceIllegibility,
         page_number_detection: pages.mode,
         provider_profile_id: pages.providerProfileId || undefined,
+        ...pages.connection,
       }),
     }),
   searchGutenberg: (query: string) =>
     apiRequest<{ items: GutenbergHit[] }>(
       `${LEGACY_CORPUS_BASE}/gutenberg/search?q=${encodeURIComponent(query)}&limit=12`,
     ),
-  searchWikisource: (query: string) =>
+  searchWikisource: (query: string, language = "en") =>
     apiRequest<{ items: WikisourceHit[] }>(
-      `${LEGACY_CORPUS_BASE}/wikisource/search?q=${encodeURIComponent(query)}&limit=12`,
+      `${LEGACY_CORPUS_BASE}/wikisource/search?q=${encodeURIComponent(query)}&limit=20&language=${encodeURIComponent(language)}`,
     ),
   importGutenberg: (
     etextId: number,
@@ -69,6 +72,7 @@ export const corpusSourcesApi = {
         source_illegibility: sourceIllegibility,
         page_number_detection: pages.mode,
         provider_profile_id: pages.providerProfileId || undefined,
+        ...pages.connection,
       }),
     }),
   previewUnitPolicy: (assetId: string, policy: SourceUnitPolicy) =>

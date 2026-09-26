@@ -273,6 +273,12 @@ const {
   gutenbergQuery,
   gutenbergHits,
   wikisourceHits,
+  wikisourceLanguage,
+  librarySearched,
+  libraryError,
+  libraryImporting,
+  libraryImported,
+  importLibraryUrl,
   gutenbergStatus,
   lastIngestedAsset,
   refreshAssets,
@@ -287,7 +293,12 @@ const {
   importGutenberg,
   savePageLabels,
   saveDocumentLayout,
-} = useCorpusSourceConfiguration(busy, setMessage, () => selectedProviderId.value);
+} = useCorpusSourceConfiguration(
+  busy,
+  setMessage,
+  () => selectedProviderId.value,
+  (profileId) => directProfilePayload(profileId),
+);
 const error = ref("");
 const notice = ref("");
 const statusRegion = ref<HTMLElement | null>(null);
@@ -1979,9 +1990,14 @@ defineExpose({
           v-model:llm-page-detection="llmPageDetection"
           v-model:source-url="sourceUrl"
           v-model:gutenberg-query="gutenbergQuery"
+          v-model:wikisource-language="wikisourceLanguage"
           :assets="assets"
           :hits="gutenbergHits"
           :wikisource-hits="wikisourceHits"
+          :library-searched="librarySearched"
+          :library-error="libraryError"
+          :library-importing="libraryImporting"
+          :library-imported="libraryImported"
           :gutenberg-status="gutenbergStatus"
           :selected-asset="selectedAsset"
           :disabled="busy === 'upload'"
@@ -1996,6 +2012,7 @@ defineExpose({
           @refresh-gutenberg-catalogue="refreshGutenbergCatalogue"
           @update-gutenberg-archive="updateGutenbergArchive"
           @import-gutenberg="importGutenberg"
+          @import-wikisource="importLibraryUrl"
           @continue="configurationSection = 'structure'"
         />
       </section>

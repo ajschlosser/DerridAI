@@ -502,6 +502,10 @@ class PdfSourceUrlImport(BaseModel):
     page_number_detection: Literal["auto", "auto_llm", "off"] = "auto"
     provider_profile_id: str | None = Field(default=None, max_length=200)
     model: str | None = Field(default=None, max_length=200)
+    # A browser-held (administrator) profile sends its connection with the request, as a build does.
+    provider: str | None = Field(default=None, max_length=80)
+    base_url: str | None = Field(default=None, max_length=2000)
+    api_key: str | None = Field(default=None, max_length=4000)
 
 
 class GutenbergImport(BaseModel):
@@ -510,6 +514,10 @@ class GutenbergImport(BaseModel):
     page_number_detection: Literal["auto", "auto_llm", "off"] = "auto"
     provider_profile_id: str | None = Field(default=None, max_length=200)
     model: str | None = Field(default=None, max_length=200)
+    # A browser-held (administrator) profile sends its connection with the request, as a build does.
+    provider: str | None = Field(default=None, max_length=80)
+    base_url: str | None = Field(default=None, max_length=2000)
+    api_key: str | None = Field(default=None, max_length=4000)
 
 
 class PdfDocumentLayoutPatch(BaseModel):

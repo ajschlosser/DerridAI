@@ -442,6 +442,71 @@ function defaults(url: URL, method: string, role: Role): unknown {
     );
     return { items: rows.slice(offset, offset + limit), total: rows.length, offset, limit };
   }
+  if (path === "/api/gutenberg/status")
+    return {
+      ready: true,
+      search_ready: true,
+      catalogue: { status: "ready", item_count: 74213 },
+      archive: { status: "ready", bytes_done: 1, total_bytes: 1 },
+    };
+  if (path === "/api/pdf/gutenberg/search")
+    return {
+      items: [
+        {
+          etext_id: 46333,
+          title: "The Social Contract & Discourses",
+          author: "Jean-Jacques Rousseau",
+          language: "en",
+        },
+        {
+          etext_id: 3913,
+          title: "The Confessions of Jean Jacques Rousseau — Complete",
+          author: "Jean-Jacques Rousseau",
+          language: "en",
+        },
+        {
+          etext_id: 5427,
+          title: "Émile ou de l'éducation",
+          author: "Jean-Jacques Rousseau",
+          language: "fr",
+        },
+      ],
+    };
+  if (path === "/api/pdf/wikisource/search") {
+    const host = `https://${url.searchParams.get("language") || "en"}.wikisource.org/wiki/`;
+    const hit = (title: string, snippet: string, words: number) => ({
+      source: "wikisource",
+      title,
+      page_id: title.length,
+      snippet,
+      word_count: words,
+      url: host + encodeURIComponent(title.replaceAll(" ", "_")),
+    });
+    return {
+      items: [
+        hit(
+          "Du contrat social/Édition 1762/Livre I",
+          "L’homme est né libre, et partout il est dans les fers.",
+          4120,
+        ),
+        hit(
+          "Du contrat social/Édition 1762/Livre II",
+          "La première et la plus importante conséquence des principes…",
+          6023,
+        ),
+        hit(
+          "Discours sur l’origine et les fondements de l’inégalité parmi les hommes",
+          "C’est de l’homme que j’ai à parler…",
+          31877,
+        ),
+        hit(
+          "Les Confessions (Rousseau)/Livre I",
+          "Je forme une entreprise qui n’eut jamais d’exemple…",
+          15210,
+        ),
+      ],
+    };
+  }
   const context = path.match(
     new RegExp(`^/api/pdf/corpus-builds/${CORPUS_BUILD_ID}/records/([^/]+)/context$`),
   );
