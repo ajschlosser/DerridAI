@@ -65,3 +65,14 @@ def test_ledger_decode_endpoint_returns_plain_jsonl(tmp_path):
     assert result["record_count"] == 1
     assert json.loads(result["text"].strip())["text"] == record["text"]
     assert result["filename"] == "corpus.jsonl"
+
+
+def test_small_reviewer_sizing_is_not_silently_raised_by_segmentation():
+    from app.corpus_segmentation import _record_sizing_policy
+
+    policy = _record_sizing_policy(
+        {"record_sizing": {"preferred_record_chars": 300, "record_length_tolerance": 30,
+                           "long_record_chars": 400, "absolute_record_chars": 500}}, {},
+    )
+    assert policy == {"preferred_record_chars": 300, "record_length_tolerance": 30,
+                      "long_record_chars": 400, "absolute_record_chars": 500}

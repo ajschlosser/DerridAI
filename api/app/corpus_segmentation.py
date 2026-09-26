@@ -281,8 +281,9 @@ def _record_sizing_policy(request: dict[str, Any], profile: dict[str, Any]) -> d
     tolerance = int(supplied.get("record_length_tolerance") or profile.get("record_length_tolerance") or 200)
     long_limit = int(supplied.get("long_record_chars") or profile.get("long_record_chars") or 3500)
     absolute = int(supplied.get("absolute_record_chars") or profile.get("absolute_record_chars") or 6000)
-    preferred = max(600, min(12000, preferred))
-    tolerance = max(50, min(2000, tolerance))
+    # Floors mirror PdfCorpusRecordSizing; a reviewer's small target must not be silently raised.
+    preferred = max(100, min(12000, preferred))
+    tolerance = max(10, min(2000, tolerance))
     long_limit = max(preferred + tolerance, min(24000, long_limit))
     absolute = max(long_limit, min(48000, absolute))
     return {
