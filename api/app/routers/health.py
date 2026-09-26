@@ -9,6 +9,7 @@ from ..config import APP_GIT_COMMIT, APP_VERSION, settings
 from ..http_auth import request_user, require_admin
 from ..llm import llm_status
 from ..services import rag_jobs, store
+from ..system_store import system_store
 
 router = APIRouter(tags=["system"])
 
@@ -38,6 +39,7 @@ def health(request: Request) -> dict[str, Any]:
             "chroma": public_chroma,
         }
     ollama = llm_status("ollama")
+    embedding_defaults = system_store.embedding_defaults()
     return {
         "ok": True,
         "version": APP_VERSION,
@@ -45,7 +47,8 @@ def health(request: Request) -> dict[str, Any]:
         "chroma": chroma,
         "chroma_path": settings.chroma_path,
         "chroma_mode": chroma.get("mode") or settings.chroma_mode,
-        "embedding_provider": settings.embedding_provider,
+        "embedding_provider": embedding_defaults["embedding_provider"],
+        "embedding_model": embedding_defaults.get("embedding_model"),
         "ollama": ollama,
         "ollama_model": settings.ollama_model,
         "ollama_embed_model": settings.ollama_embed_model,
@@ -81,12 +84,13 @@ def health(request: Request) -> dict[str, Any]:
 @router.get("/api/config")
 def config(request: Request) -> dict[str, Any]:
     require_admin(request)
+    embedding_defaults = system_store.embedding_defaults()
     return {
         "version": APP_VERSION,
         "git_commit": APP_GIT_COMMIT or None,
         "defaults": {
-            "embedding_provider": settings.embedding_provider,
-            "embedding_model": settings.ollama_embed_model,
+            "embedding_provider": embedding_defaults["embedding_provider"],
+            "embedding_model": embedding_defaults.get("embedding_model"),
             "chat_provider": "ollama",
             "chat_model": settings.ollama_model,
             "ollama_base_url": settings.ollama_base_url,
