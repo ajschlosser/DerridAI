@@ -9,6 +9,8 @@ import {
 import type { ProviderProfile } from "../../../api/system";
 import type { ReviewQueue } from "../../../types/corpus";
 import type { ReviewViewport } from "./useCorpusReviewWorkspace";
+import { reviewableMetadataFieldNames } from "../domain/recordMetadata";
+import { isUsableMetadataSuggestion } from "../../../domain/metadataValues";
 
 type MessageTone = "error" | "notice";
 type I18nValues = Record<string, string | number>;
@@ -91,13 +93,21 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
   const metadataKnownValues = computed<Record<string, string[]>>(() => {
     const out: Record<string, Set<string>> = {};
     for (const [field, values] of Object.entries(metadataObservedValues.value)) {
-      for (const value of values) (out[field] ??= new Set()).add(value);
+      for (const value of values) {
+        if (!isUsableMetadataSuggestion(value)) continue;
+        (out[field] ??= new Set()).add(value.trim());
+      }
     }
     for (const row of options.records.value) {
-      for (const [field, value] of Object.entries(row as Record<string, unknown>)) {
+      const source = row as unknown as Record<string, unknown>;
+      const allowed = new Set(
+        reviewableMetadataFieldNames(source, options.currentBuild.value?.schema || null),
+      );
+      for (const field of allowed) {
+        const value = source[field];
         const values = Array.isArray(value) ? value : [value];
         for (const item of values) {
-          if (typeof item !== "string" || !item.trim()) continue;
+          if (!isUsableMetadataSuggestion(item)) continue;
           (out[field] ??= new Set()).add(item.trim());
         }
       }
@@ -116,7 +126,7 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
   function rememberMetadataValues(field: string, value: unknown) {
     const values = Array.isArray(value) ? value : [value];
     for (const item of values) {
-      if (typeof item !== "string" || !item.trim()) continue;
+      if (!isUsableMetadataSuggestion(item)) continue;
       (metadataHumanValues.value[field] ??= new Set()).add(item.trim());
     }
   }
@@ -319,19 +329,40 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
       rememberMetadataValues(field, value);
     }
     const viewport = options.captureReviewViewport();
+    metadataSavingField.value = "__batch__";
+    metadataSavedField.value = "";
     const context = applyOptimisticMetadata(changes);
-    if (!context) return;
+    if (!context) {
+      metadataSavingField.value = "";
+      return;
+    }
     await options.restoreReviewViewport(viewport, { inspector: true });
-    options.queueRecordRequest(context.recordId, Object.keys(changes), async (rebase) => {
-      const result = await corpusBuilderApi.metadataDecisionBatch(
-        context.buildId,
-        context.recordId,
-        changes,
-        rebase ? undefined : context.expectedRevision,
-      );
-      options.applyAuthoritativeRecord(result.record, result.build);
-      return result;
-    });
+    options.queueRecordRequest(
+      context.recordId,
+      Object.keys(changes),
+      async (rebase) => {
+        const result = await corpusBuilderApi.metadataDecisionBatch(
+          context.buildId,
+          context.recordId,
+          changes,
+          rebase ? undefined : context.expectedRevision,
+        );
+        options.applyAuthoritativeRecord(result.record, result.build);
+        metadataSavingField.value = "";
+        options.setMessage(
+          options.tf(
+            "pdf_corpus.metadata_suggestions_saved",
+            "Saved {count} metadata suggestion(s).",
+            { count: Object.keys(changes).length },
+          ),
+        );
+        return result;
+      },
+      async () => {
+        metadataSavingField.value = "";
+        await options.refreshRecords(false, context.recordId);
+      },
+    );
   }
 
   async function resolveMetadataNoValue(field: string) {

@@ -167,9 +167,7 @@ describe("PdfCorpusBuilder characterization", () => {
     expect(metadataSchemasApi.list).toHaveBeenCalledTimes(1);
     expect(metadataSchemasApi.get).toHaveBeenCalledWith("default");
 
-    expect(wrapper.get("#pdf-corpus-builder-title").text()).toBe(
-      "Build auditable records from source media",
-    );
+    expect(wrapper.findComponent({ name: "CorpusBuilderWorkspaceHeader" }).exists()).toBe(true);
     expect(wrapper.findComponent({ name: "CorpusWorkflowStepper" }).exists()).toBe(true);
     expect(wrapper.findComponent({ name: "CorpusSourceIngest" }).exists()).toBe(true);
     expect(wrapper.findComponent({ name: "CorpusBuildReadiness" }).exists()).toBe(true);

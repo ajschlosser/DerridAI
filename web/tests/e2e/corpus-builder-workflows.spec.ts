@@ -32,6 +32,42 @@ test.describe("Corpus Builder composed workflow", () => {
     await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
   });
 
+  test("configuration workspace tabs support roving keyboard navigation", async ({ page }) => {
+    await page.goto(story("corpus-builder-setup-configuration-navigation--source"));
+    const source = page.getByRole("tab", { name: /Source/i });
+    await expect(source).toHaveAttribute("aria-selected", "true");
+    await source.focus();
+    await source.press("ArrowRight");
+    await expect(page.getByRole("tab", { name: /Structure/i })).toBeFocused();
+    await expect(page.getByRole("tab", { name: /Structure/i })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await page.keyboard.press("End");
+    await expect(page.getByRole("tab", { name: /Advanced/i })).toBeFocused();
+    await expectWcag2AA(page, ".corpus-config-nav");
+
+    await page.goto(story("corpus-builder-setup-configuration-navigation--no-source"));
+    await expect(page.getByRole("tab", { name: /Structure/i })).toBeDisabled();
+    await expect(page.getByRole("tab", { name: /Enrichment/i })).toBeEnabled();
+    await expect(page.getByRole("tab", { name: /Metadata/i })).toBeEnabled();
+    await expect(page.getByRole("tab", { name: /Advanced/i })).toBeEnabled();
+  });
+
+  test("workspace header shifts from introduction to active build context", async ({ page }) => {
+    await page.goto(story("corpus-builder-workflow-workspace-header--empty-workspace"));
+    const header = page.locator(".corpus-workspace-header");
+    await expect(header).not.toHaveClass(/contextual/);
+    await expect(header).toContainText(/Corpus Builder/i);
+
+    await page.goto(story("corpus-builder-workflow-workspace-header--active-build"));
+    const active = page.locator(".corpus-workspace-header");
+    await expect(active).toHaveClass(/contextual/);
+    await expect(active).toContainText("Of Grammatology.pdf");
+    await expect(active).toContainText(/31 of 84 Records accepted/i);
+    await expectWcag2AA(page, ".corpus-workspace-header");
+  });
+
   test("lifecycle stepper maps configure, build, review, and publish states", async ({ page }) => {
     const states = [
       ["corpus-builder-workflow-lifecycle-stepper--configure", "Source & configure"],

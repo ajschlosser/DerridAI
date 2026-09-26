@@ -82,6 +82,10 @@ MAX_FIELDS = 60
 MAX_GROUPS = 6
 
 FieldType = Literal["text", "number", "boolean", "choice", "list"]
+FieldRole = Literal["scholarly", "structural", "document", "operational"]
+ReviewVisibility = Literal["primary", "details", "hidden"]
+
+
 class RetrievalProfile(BaseModel):
     """Policy for evidence-bound reviewed precedents used during metadata enrichment.
 
@@ -127,6 +131,10 @@ class SchemaField(BaseModel):
     label: str = Field(min_length=1, max_length=80)
     type: FieldType = "text"
     group: str = "discourse"
+    # Storage/display names are arbitrary. These properties describe how a field
+    # participates in the product without hard-coding behavior to its name.
+    role: FieldRole = "scholarly"
+    review_visibility: ReviewVisibility = "primary"
     # For "choice": the allowed values. `strict` makes them the only values the model may return; otherwise they are
     # what it is told to prefer, and a person may still type another.
     values: list[SchemaValue] = Field(default_factory=list, max_length=60)
@@ -300,7 +308,19 @@ class MetadataSchema(BaseModel):
         return {f.name for f in self.fields if f.evidence}
 
     def review_fields(self) -> list[str]:
-        return list(CORE_FIELDS) + [f.name for f in self.fields if f.review]
+        return list(CORE_FIELDS) + [
+            f.name
+            for f in self.fields
+            if f.review and f.role != "operational" and f.review_visibility != "hidden"
+        ]
+
+    def record_review_fields(self) -> list[str]:
+        """Fields intended for the ordinary human Record-review surface."""
+        return list(CORE_FIELDS) + [
+            f.name
+            for f in self.fields
+            if f.role != "operational" and f.review_visibility != "hidden"
+        ]
 
     def by_name(self) -> dict[str, SchemaField]:
         return {f.name: f for f in self.fields}
@@ -451,12 +471,34 @@ class MetadataResponseBase(BaseModel):
             outcome = str(assessment.get("outcome") or "")
             needs_review = bool(assessment.get("needs_review"))
 
+            contradiction = ""
             if outcome == "supported_value" and missing(value):
-                raise ValueError(f"{field}: outcome=supported_value requires a non-empty metadata value")
-            if outcome == "no_supported_value" and not missing(value):
-                raise ValueError(f"{field}: outcome=no_supported_value requires an empty metadata value")
-            if outcome == "uncertain" and not needs_review:
-                raise ValueError(f"{field}: outcome=uncertain requires needs_review=true")
+                contradiction = "outcome=supported_value but the metadata value is empty"
+            elif outcome == "no_supported_value" and not missing(value):
+                contradiction = "outcome=no_supported_value but a metadata value was returned"
+            elif outcome == "uncertain" and not needs_review:
+                contradiction = "outcome=uncertain but needs_review was false"
+
+            if contradiction:
+                # A contradictory assessment is a field-level epistemic failure,
+                # not a reason to discard every otherwise-parseable value in the
+                # metadata family. Preserve the proposed value, make the
+                # contradiction explicit, and force human review. Downstream
+                # reconciliation will materialize the field as unresolved rather
+                # than treating the proposal as supported truth.
+                assessment_model = (
+                    getattr(assessments_obj, field, None)
+                    if isinstance(assessments_obj, BaseModel)
+                    else None
+                )
+                if assessment_model is not None:
+                    assessment_model.outcome = "uncertain"
+                    assessment_model.needs_review = True
+                    prior_reason = str(getattr(assessment_model, "reason", "") or "").strip()
+                    assessment_model.reason = (
+                        f"Structured-output contradiction: {contradiction}."
+                        + (f" {prior_reason}" if prior_reason else "")
+                    )[:500]
 
             # Missing/invalid evidence is a review-state problem, not a
             # structured-output failure. Reconciliation below the schema layer

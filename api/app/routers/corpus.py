@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from ..config import settings
 from ..corpus_builder import CORPUS_PROFILES, pdf_corpus_builds, pdf_corpus_repository
 from ..corpus_review_state import _queue_counts
+from ..field_assertions import field_identity
 from ..http_auth import require_admin
 from ..llm import TouchupFailure
 from ..metadata_adjudication_cache import clear as clear_adjudication_cache
@@ -582,6 +583,7 @@ def decide_pdf_corpus_record_metadata_batch(
         )
         if record is None:
             raise KeyError(record_id)
+        schema = pdf_corpus_builds._schema_for(build_id)
         for field, value in body.changes.items():
             remember_adjudication(
                 record_id=record_id,
@@ -589,7 +591,7 @@ def decide_pdf_corpus_record_metadata_batch(
                 field=field,
                 value=value,
                 schema_version=str(build.get("schema_version") or ""),
-                field_id=pdf_corpus_builds._schema_for(build_id).field_id(field),
+                field_id=field_identity(field, schema),
             )
         return {
             "applied": True,

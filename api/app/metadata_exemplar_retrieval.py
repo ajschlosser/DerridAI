@@ -290,10 +290,13 @@ class ChromaMetadataExemplarIndex:
                     "derridai_exemplar_schema": PROJECTION_VERSION,
                 },
             )
-        except Exception:
-            # A concurrent request may have created the collection after our
-            # existence check. Re-open it before treating creation as failure.
-            return self.store.client.get_collection(name=self.collection_name)
+        except Exception as exc:
+            # Only an actual create race should be converted into a reopen. The
+            # previous broad catch masked provider/configuration failures with the
+            # misleading follow-up error "Collection ... does not exist".
+            message = str(exc).casefold()
+            if "already exists" not in message and "unique" not in message:
+                raise
         return self.store.client.get_collection(name=self.collection_name)
 
     def sync(self, scope_id: str, exemplars: list[dict[str, Any]]) -> dict[str, int]:

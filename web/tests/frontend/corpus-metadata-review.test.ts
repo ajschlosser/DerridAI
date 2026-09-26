@@ -191,4 +191,33 @@ describe("Corpus Builder metadata review", () => {
     expect(state.reviewInspectorTab.value).toBe("source");
     expect(state.selectedPdfPage.value).toBe(4);
   });
+
+  it("persists Save all suggestions through the batch decision endpoint", async () => {
+    const state = setup();
+    corpusBuilderApi.metadataDecisionBatch.mockResolvedValue({
+      record: row({ speaker: "Jacques Derrida", target: "hospitality", record_revision: 2 }),
+      build: { build_id: "b1" },
+      changed_fields: ["speaker", "target"],
+    });
+
+    await state.review.resolveMetadataSuggestions({
+      speaker: "Jacques Derrida",
+      target: "hospitality",
+    });
+
+    expect(state.review.metadataSavingField.value).toBe("__batch__");
+    expect(state.selectedRecord.value?.target).toBe("hospitality");
+    expect(state.queued).toHaveLength(1);
+
+    await state.queued[0](false);
+
+    expect(corpusBuilderApi.metadataDecisionBatch).toHaveBeenCalledWith(
+      "b1",
+      "r1",
+      { speaker: "Jacques Derrida", target: "hospitality" },
+      1,
+    );
+    expect(state.review.metadataSavingField.value).toBe("");
+    expect(state.applyAuthoritativeRecord).toHaveBeenCalled();
+  });
 });

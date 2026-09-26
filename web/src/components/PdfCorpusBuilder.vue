@@ -76,10 +76,15 @@ import { corpusReviewCommandFromKeydown } from "../features/corpus-builder/domai
 import {
   editableRecordMetadata,
   evidenceCandidateFieldNames,
+  reviewableMetadataFieldNames,
 } from "../features/corpus-builder/domain/recordMetadata";
 import { useCorpusPublication } from "../features/corpus-builder/composables/useCorpusPublication";
 import AppIcon from "./AppIcon.vue";
 import CorpusRunMonitor from "./corpus-builder/CorpusRunMonitor.vue";
+import CorpusConfigurationNav, {
+  type CorpusConfigurationSection,
+} from "./corpus-builder/CorpusConfigurationNav.vue";
+import CorpusBuilderWorkspaceHeader from "./corpus-builder/CorpusBuilderWorkspaceHeader.vue";
 import CorpusActionMenu, { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
 import { recordState, recordIssueKinds } from "../domain/corpusReview";
 import { RecordMutationQueue } from "../domain/recordMutationQueue";
@@ -270,6 +275,7 @@ const notice = ref("");
 const statusRegion = ref<HTMLElement | null>(null);
 const acceptButtonEl = ref<HTMLButtonElement | null>(null);
 const advancedOpen = ref(false);
+const configurationSection = ref<CorpusConfigurationSection>("source");
 const recordSaveQueue = new RecordMutationQueue();
 const documentMetadataOpen = ref(false);
 const textCleanupOpen = ref(false);
@@ -451,6 +457,52 @@ const {
   t: (key, fallback) => i18n.t(key, fallback),
   tf: (key, fallbackOrValues, values) => i18n.tf(key, fallbackOrValues, values),
 });
+
+function normalizedEvidenceWords(value: string) {
+  return new Set(
+    value
+      .toLocaleLowerCase()
+      .split(/[^\p{L}\p{N}]+/u)
+      .map((item) => item.trim())
+      .filter((item) => item.length > 2),
+  );
+}
+
+async function assignSelectedMetadataEvidence(field: string, selectedText: string) {
+  const selected = selectedText.replace(/\s+/g, " ").trim().toLocaleLowerCase();
+  if (!selectedRecord.value || !selected) return;
+  const allowedIds = new Set((selectedRecord.value.source_block_ids || []).map(String));
+  const candidates = sourceBlocks.value.filter((block) => allowedIds.has(String(block.block_id)));
+  let block =
+    candidates.find((item) =>
+      String(item.text || "")
+        .replace(/\s+/g, " ")
+        .toLocaleLowerCase()
+        .includes(selected),
+    ) || null;
+  if (!block) {
+    const wanted = normalizedEvidenceWords(selected);
+    let score = 0;
+    for (const item of candidates) {
+      const words = normalizedEvidenceWords(String(item.text || ""));
+      const overlap = [...wanted].filter((word) => words.has(word)).length;
+      const next = wanted.size ? overlap / wanted.size : 0;
+      if (next > score) {
+        score = next;
+        block = item;
+      }
+    }
+    if (score < 0.45) block = null;
+  }
+  if (!block?.block_id) {
+    showMetadataSource(field);
+    return;
+  }
+  await assignEvidenceBlock(field, String(block.block_id));
+  selectedEvidenceField.value = field;
+  reviewInspectorTab.value = "evidence";
+}
+
 const metadataFamilyOptions = computed(
   () =>
     currentBuild.value?.schema?.groups?.map((group) => ({
@@ -931,11 +983,23 @@ const discourseRoles = computed(() =>
     ? (activeCorpusProfile.value?.discourse_roles as unknown[]).map(String)
     : [],
 );
-const selectedMetadataBlocked = computed(() =>
-  Boolean(
-    (selectedRecord.value?.metadata_review_fields || []).length ||
-      (selectedRecord.value?.metadata_incomplete_fields || []).length,
-  ),
+function metadataBlockingFields(record: CorpusRecord | null): string[] {
+  if (!record) return [];
+  const allowed = new Set(
+    reviewableMetadataFieldNames(
+      record as unknown as Record<string, unknown>,
+      currentBuild.value?.schema || selectedSchema.value,
+    ),
+  );
+  return Array.from(
+    new Set([
+      ...(record.metadata_incomplete_fields || []),
+      ...(record.metadata_review_fields || []),
+    ]),
+  ).filter((field) => allowed.has(field));
+}
+const selectedMetadataBlocked = computed(
+  () => metadataBlockingFields(selectedRecord.value).length > 0,
 );
 const {
   setDisposition,
@@ -981,14 +1045,7 @@ const {
   t: (key, fallback) => i18n.t(key, fallback),
   tf: (key, values) => i18n.tf(key, values),
 });
-const selectedMetadataBlockingFields = computed(() =>
-  Array.from(
-    new Set([
-      ...(selectedRecord.value?.metadata_incomplete_fields || []),
-      ...(selectedRecord.value?.metadata_review_fields || []),
-    ]),
-  ),
-);
+const selectedMetadataBlockingFields = computed(() => metadataBlockingFields(selectedRecord.value));
 const selectedMetadataBlockingLabel = computed(() =>
   selectedMetadataBlockingFields.value
     .map((field) => i18n.t(`record.${field}`, field.replace(/_/g, " ")))
@@ -1598,6 +1655,7 @@ watch(
 );
 watch(selectedAssetId, () => {
   if (selectedAssetId.value) void refreshBuilds();
+  else configurationSection.value = "source";
 });
 watch(selectedBuildId, () => {
   sourceProblemDialogBuildId.value = "";
@@ -1747,17 +1805,17 @@ defineExpose({
 
 <template>
   <section class="corpus-builder" :aria-labelledby="'pdf-corpus-builder-title'">
-    <header class="builder-header">
-      <div>
-        <span class="eyebrow">{{ i18n.t("pdf_corpus.eyebrow") }}</span>
-        <h1 id="pdf-corpus-builder-title">
-          {{ i18n.t("pdf_corpus.title") }}
-        </h1>
-        <p>
-          {{ i18n.t("pdf_corpus.subtitle") }}
-        </p>
-      </div>
-      <div class="header-actions">
+    <CorpusBuilderWorkspaceHeader
+      :source-filename="selectedAsset?.filename || ''"
+      :build-id="currentBuild?.build_id || ''"
+      :publication-id="currentBuild?.publication?.publication_id || ''"
+      :stage="currentBuild?.stage || ''"
+      :status="currentBuild?.status || ''"
+      :record-count="currentBuild?.record_count || 0"
+      :accepted-count="currentBuild?.accepted_count || 0"
+      :sticky="!showReviewWorkspace"
+    >
+      <template #actions>
         <CorpusBuildHistoryMenu
           :builds="builds"
           :total="buildsTotal"
@@ -1785,8 +1843,8 @@ defineExpose({
               : i18n.t("pdf_corpus.start_new_build")
           }}
         </button>
-      </div>
-    </header>
+      </template>
+    </CorpusBuilderWorkspaceHeader>
 
     <div
       ref="statusRegion"
@@ -1844,11 +1902,21 @@ defineExpose({
       <h2 id="pdf-corpus-config-title" class="sr-only">
         {{ i18n.t("pdf_corpus.build_configuration") }}
       </h2>
+      <CorpusConfigurationNav
+        v-model="configurationSection"
+        :has-source="Boolean(selectedAsset)"
+        :structure-available="Boolean(selectedAsset)"
+      />
 
-      <section class="setup-section setup-source-section" aria-labelledby="pdf-corpus-source-title">
+      <section
+        v-show="configurationSection === 'source'"
+        id="corpus-config-panel-source"
+        class="setup-section setup-source-section"
+        role="tabpanel"
+        aria-labelledby="corpus-config-tab-source"
+      >
         <div class="setup-section-head">
           <div>
-            <span class="setup-step">A</span>
             <div>
               <h3 id="pdf-corpus-source-title">
                 {{ i18n.t("pdf_corpus.source_setup_title") }}
@@ -1892,11 +1960,13 @@ defineExpose({
 
       <section
         v-if="paginatedSource && selectedAsset?.pages?.length"
+        v-show="configurationSection === 'structure'"
+        id="corpus-config-panel-structure"
         class="setup-phase"
-        aria-labelledby="pdf-corpus-structure-phase-title"
+        role="tabpanel"
+        aria-labelledby="corpus-config-tab-structure"
       >
         <div class="phase-label">
-          <span class="setup-step">B</span>
           <div>
             <h3 id="pdf-corpus-structure-phase-title">
               {{ i18n.t("pdf_corpus.document_structure") }}
@@ -1920,11 +1990,13 @@ defineExpose({
       </section>
       <section
         v-else-if="selectedAsset"
+        v-show="configurationSection === 'structure'"
+        id="corpus-config-panel-structure"
         class="setup-phase"
-        aria-labelledby="media-structure-phase-title"
+        role="tabpanel"
+        aria-labelledby="corpus-config-tab-structure"
       >
         <div class="phase-label">
-          <span class="setup-step">B</span>
           <div>
             <h3 id="media-structure-phase-title">
               {{ i18n.t("pdf_corpus.source_interpretation", "Source interpretation") }}
@@ -1939,10 +2011,16 @@ defineExpose({
         />
       </section>
 
-      <details class="setup-section setup-disclosure" open>
+      <details
+        v-show="configurationSection === 'enrichment'"
+        id="corpus-config-panel-enrichment"
+        class="setup-section setup-disclosure"
+        role="tabpanel"
+        aria-labelledby="corpus-config-tab-enrichment"
+        open
+      >
         <summary>
-          <span class="setup-step">C</span
-          ><span
+          <span
             ><b>{{ i18n.t("pdf_corpus.llm_enrichment_title") }}</b
             ><small
               >{{ selectedProviderLabel
@@ -2097,10 +2175,9 @@ defineExpose({
         </div>
       </details>
 
-      <details class="setup-section setup-disclosure">
+      <details v-show="configurationSection === 'structure'" class="setup-section setup-disclosure">
         <summary>
-          <span class="setup-step">D</span
-          ><span
+          <span
             ><b>{{ i18n.t("pdf_corpus.record_construction") }}</b
             ><small>{{
               i18n.tf("pdf_corpus.readiness.sizing", {
@@ -2114,10 +2191,16 @@ defineExpose({
           <CorpusRecordSizingSettings v-model="recordSizing" :disabled="busy !== ''" />
         </div>
       </details>
-      <details class="setup-section setup-disclosure">
+      <details
+        v-show="configurationSection === 'metadata'"
+        id="corpus-config-panel-metadata"
+        class="setup-section setup-disclosure"
+        role="tabpanel"
+        aria-labelledby="corpus-config-tab-metadata"
+        open
+      >
         <summary>
-          <span class="setup-step">E</span
-          ><span
+          <span
             ><b>{{ i18n.t("schemas.title") }}</b
             ><small
               >{{ chosenSchema?.name || i18n.t("schemas.builtin")
@@ -2148,10 +2231,13 @@ defineExpose({
         </div>
       </details>
 
-      <details class="setup-section setup-disclosure">
+      <details
+        v-show="configurationSection === 'metadata'"
+        class="setup-section setup-disclosure"
+        open
+      >
         <summary>
-          <span class="setup-step">F</span
-          ><span
+          <span
             ><b>{{ i18n.t("pdf_corpus.run_guidance_title") }}</b
             ><small>{{ i18n.t("pdf_corpus.run_guidance_summary") }}</small></span
           >
@@ -2165,10 +2251,15 @@ defineExpose({
         </div>
       </details>
 
-      <details class="setup-section setup-disclosure">
+      <details
+        v-show="configurationSection === 'advanced'"
+        id="corpus-config-panel-advanced"
+        class="setup-section setup-disclosure"
+        role="tabpanel"
+        aria-labelledby="corpus-config-tab-advanced"
+      >
         <summary>
-          <span class="setup-step">G</span
-          ><span
+          <span
             ><b>{{ i18n.t("pdf_corpus.hands_free_title") }}</b
             ><small>{{
               handsFree.enabled
@@ -2182,10 +2273,9 @@ defineExpose({
         </div>
       </details>
 
-      <div class="setup-section execution-wrapper">
+      <div v-show="configurationSection === 'advanced'" class="setup-section execution-wrapper">
         <div class="setup-section-inline-head">
-          <span class="setup-step">H</span
-          ><span
+          <span
             ><b>{{ i18n.t("pdf_corpus.advanced_execution") }}</b
             ><small>{{ i18n.t("pdf_corpus.advanced_execution_help") }}</small></span
           >
@@ -3230,6 +3320,7 @@ defineExpose({
                     :region-types="regionTypes"
                     :discourse-roles="discourseRoles"
                     :busy="busy !== '' && busy !== 'metadata-field'"
+                    :batch-saving="metadataSavingField === '__batch__'"
                     :saving-field="metadataSavingField"
                     :saved-field="metadataSavedField"
                     :confidence-calibration="currentBuild?.llm_confidence_calibration || {}"
@@ -3238,6 +3329,7 @@ defineExpose({
                     @no-value="resolveMetadataNoValue"
                     @resolve-many="resolveMetadataSuggestions"
                     @source="showMetadataSource"
+                    @selection-evidence="assignSelectedMetadataEvidence"
                     @dirty="handleMetadataDirty"
                   />
                   <button
@@ -3803,6 +3895,7 @@ defineExpose({
         @resolve-source-issues-change="resolveSourceOnTextSave = $event"
         @open-text-cleanup="textCleanupOpen = true"
         @resolve-metadata="resolveMetadataField"
+        @resolve-metadata-many="resolveMetadataSuggestions"
         @confirm-no-metadata-value="resolveMetadataNoValue"
         @metadata-dirty="handleMetadataDirty"
         @preview-jsonl="openJsonlPreview"

@@ -28,6 +28,72 @@ const DOCUMENT_EDITABLE_FIELDS = [
   "language",
 ] as const;
 
+export const OPERATIONAL_RECORD_FIELDS = new Set([
+  "record_id",
+  "record_revision",
+  "source_document_id",
+  "source_asset_id",
+  "source_spans",
+  "source_units",
+  "source_unit_ids",
+  "source_block_ids",
+  "source_extracted_text",
+  "text",
+  "text_length",
+  "text_review_status",
+  "text_reviewed_at",
+  "text_revision_history",
+  "page_start",
+  "page_end",
+  "pdf_file",
+  "pdf_page",
+  "pdf_pages",
+  "accepted",
+  "rejected",
+  "review_disposition",
+  "review_state",
+  "needs_review",
+  "review_reason",
+  "metadata_complete",
+  "metadata_incomplete_fields",
+  "metadata_review_fields",
+  "metadata_attention_reasons",
+  "metadata_needs_attention",
+  "metadata_stage_status",
+  "metadata_execution_ledger",
+  "metadata_decisions",
+  "metadata_enrichment_state",
+  "metadata_enrichment_history",
+  "metadata_disputes",
+  "human_touched_fields",
+  "human_touched_at",
+  "activity",
+  "updates",
+  "review_events",
+  "source_quality_issues",
+  "resolved_source_quality_issues",
+  "text_noise",
+  "can_accept",
+  "build_id",
+  "publication_id",
+  "field_assertions",
+  "current_field_assertions",
+  "metadata_field_status",
+  "metadata_evidence",
+  "field_assessments",
+  "field_evidence",
+  "recheck_results",
+  "second_opinion",
+  "blind_reveals",
+  "slice_lineage",
+  "boundary_review",
+  "boundary_suspicion",
+  "boundary_quality_issues",
+  "text_cleanup_status",
+  "text_cleanup_report",
+  "text_touchup_proposal",
+]);
+
 const LEGACY_SCHOLARLY_FIELDS = [
   "region_author",
   "speaker",
@@ -53,6 +119,39 @@ const LEGACY_SCHOLARLY_FIELDS = [
 
 type LooseRecord = Record<string, unknown>;
 
+export function isReviewVisibleSchemaField(field: MetadataSchema["fields"][number]): boolean {
+  return field.role !== "operational" && field.review_visibility !== "hidden";
+}
+
+function reviewableAssertionFieldNames(
+  record: LooseRecord,
+  schema?: MetadataSchema | null,
+): string[] {
+  const schemaByName = new Map((schema?.fields || []).map((field) => [field.name, field]));
+  return assertionFieldNames(record).filter((field) => {
+    if (OPERATIONAL_RECORD_FIELDS.has(field)) return false;
+    const configured = schemaByName.get(field);
+    return configured ? isReviewVisibleSchemaField(configured) : true;
+  });
+}
+
+export function reviewableMetadataFieldNames(
+  record: LooseRecord,
+  schema?: MetadataSchema | null,
+): string[] {
+  const scholarlyFields = schema?.fields?.length
+    ? schema.fields.filter(isReviewVisibleSchemaField).map((field) => field.name)
+    : [...LEGACY_SCHOLARLY_FIELDS];
+  return Array.from(
+    new Set([
+      ...STRUCTURAL_EDITABLE_FIELDS,
+      ...scholarlyFields,
+      ...reviewableAssertionFieldNames(record, schema),
+      ...DOCUMENT_EDITABLE_FIELDS,
+    ]),
+  ).filter((field) => !OPERATIONAL_RECORD_FIELDS.has(field));
+}
+
 /**
  * Shape the advanced human-editable metadata packet from canonical schema and
  * assertion identity. Operational/source fields are intentionally excluded.
@@ -65,17 +164,7 @@ export function editableRecordMetadata(
   record: LooseRecord,
   schema?: MetadataSchema | null,
 ): Record<string, unknown> {
-  const scholarlyFields = schema?.fields?.length
-    ? schema.fields.map((field) => field.name)
-    : [...LEGACY_SCHOLARLY_FIELDS];
-  const fields = Array.from(
-    new Set([
-      ...STRUCTURAL_EDITABLE_FIELDS,
-      ...scholarlyFields,
-      ...assertionFieldNames(record),
-      ...DOCUMENT_EDITABLE_FIELDS,
-    ]),
-  );
+  const fields = reviewableMetadataFieldNames(record, schema);
   return Object.fromEntries(
     fields.filter((field) => record[field] !== undefined).map((field) => [field, record[field]]),
   );

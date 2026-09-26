@@ -36,7 +36,7 @@ def test_the_built_in_schema_prompts_require_complete_assessments():
     assert "even when the corresponding metadata list is empty" in indexing
 
 
-def test_response_consistency_rejects_assessment_value_contradictions():
+def test_response_consistency_degrades_assessment_value_contradictions_to_review():
     schema = ms.default_schema()
     model = ms.response_model_for(schema, "discourse")
     fields = {
@@ -58,25 +58,51 @@ def test_response_consistency_rejects_assessment_value_contradictions():
     }
     model.model_validate({"metadata": fields, "field_assessments": assessments, "field_evidence": evidence})
 
-    bad = json.loads(json.dumps({"metadata": fields, "field_assessments": assessments, "field_evidence": evidence}))
-    bad["field_assessments"]["speaker"] = {"confidence": 0.95, "needs_review": False, "reason": "The speaker is clearly Derrida.", "outcome": "supported_value"}
-    with pytest.raises(Exception, match="supported_value requires a non-empty metadata value"):
-        model.model_validate(bad)
+    missing_value = json.loads(json.dumps({"metadata": fields, "field_assessments": assessments, "field_evidence": evidence}))
+    missing_value["field_assessments"]["speaker"] = {
+        "confidence": 0.95,
+        "needs_review": False,
+        "reason": "The speaker is clearly Derrida.",
+        "outcome": "supported_value",
+    }
+    accepted = model.model_validate(missing_value)
+    assert accepted.field_assessments.speaker.outcome == "uncertain"
+    assert accepted.field_assessments.speaker.needs_review is True
+    assert "contradiction" in accepted.field_assessments.speaker.reason.lower()
 
-    bad = json.loads(json.dumps({"metadata": fields, "field_assessments": assessments, "field_evidence": evidence}))
-    bad["metadata"]["speaker"] = "Jacques Derrida"
-    bad["field_assessments"]["speaker"] = {"confidence": 0.95, "needs_review": False, "reason": "No speaker applies.", "outcome": "no_supported_value"}
-    with pytest.raises(Exception, match="no_supported_value requires an empty metadata value"):
-        model.model_validate(bad)
+    contradictory_value = json.loads(json.dumps({"metadata": fields, "field_assessments": assessments, "field_evidence": evidence}))
+    contradictory_value["metadata"]["speaker"] = "Jacques Derrida"
+    contradictory_value["field_assessments"]["speaker"] = {
+        "confidence": 0.95,
+        "needs_review": False,
+        "reason": "No speaker applies.",
+        "outcome": "no_supported_value",
+    }
+    accepted = model.model_validate(contradictory_value)
+    assert accepted.metadata.speaker == "Jacques Derrida"
+    assert accepted.field_assessments.speaker.outcome == "uncertain"
+    assert accepted.field_assessments.speaker.needs_review is True
+    assert "no_supported_value" in accepted.field_assessments.speaker.reason
 
-    bad = json.loads(json.dumps({"metadata": fields, "field_assessments": assessments, "field_evidence": evidence}))
-    bad["field_assessments"]["speaker"] = {"confidence": 0.5, "needs_review": False, "reason": "uncertain", "outcome": "uncertain"}
-    with pytest.raises(Exception, match="uncertain requires needs_review=true"):
-        model.model_validate(bad)
+    uncertain = json.loads(json.dumps({"metadata": fields, "field_assessments": assessments, "field_evidence": evidence}))
+    uncertain["field_assessments"]["speaker"] = {
+        "confidence": 0.5,
+        "needs_review": False,
+        "reason": "uncertain",
+        "outcome": "uncertain",
+    }
+    accepted = model.model_validate(uncertain)
+    assert accepted.field_assessments.speaker.outcome == "uncertain"
+    assert accepted.field_assessments.speaker.needs_review is True
 
     missing_evidence = json.loads(json.dumps({"metadata": fields, "field_assessments": assessments, "field_evidence": evidence}))
     missing_evidence["metadata"]["speaker"] = "Jacques Derrida"
-    missing_evidence["field_assessments"]["speaker"] = {"confidence": 0.95, "needs_review": False, "reason": "clear", "outcome": "supported_value"}
+    missing_evidence["field_assessments"]["speaker"] = {
+        "confidence": 0.95,
+        "needs_review": False,
+        "reason": "clear",
+        "outcome": "supported_value",
+    }
     # Structured-output validation preserves the usable family response. Evidence
     # sufficiency is reconciled against current-record block IDs afterward, where
     # this field becomes evidence_failed/reviewable instead of failing the whole call.

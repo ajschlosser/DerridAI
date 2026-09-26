@@ -1,6 +1,8 @@
 import { apiRequest } from "./http";
 
 export type SchemaFieldType = "text" | "number" | "boolean" | "choice" | "list";
+export type SchemaFieldRole = "scholarly" | "structural" | "document" | "operational";
+export type SchemaReviewVisibility = "primary" | "details" | "hidden";
 export interface RetrievalProfile {
   enabled: boolean;
   max_items: number;
@@ -19,6 +21,8 @@ export interface SchemaField {
   label: string;
   type: SchemaFieldType;
   group: string;
+  role?: SchemaFieldRole;
+  review_visibility?: SchemaReviewVisibility;
   values: SchemaValue[];
   strict: boolean;
   instruction: string;
@@ -99,6 +103,8 @@ export function blankField(group = CORE_GROUP): SchemaField {
     label: "",
     type: "text",
     group,
+    role: "scholarly",
+    review_visibility: "primary",
     values: [],
     strict: false,
     instruction: "",

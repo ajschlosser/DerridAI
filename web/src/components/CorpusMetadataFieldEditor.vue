@@ -4,7 +4,11 @@ import { useI18nStore } from "../stores/i18n";
 import CorpusFieldOwnershipBadge from "./CorpusFieldOwnershipBadge.vue";
 import UiCombobox from "./ui/UiCombobox.vue";
 import { normalizeMetadataFieldValue } from "../domain/metadataFieldRegistry";
-import { usableListOptions } from "../domain/metadataValues";
+import {
+  metadataValueText,
+  unwrapMetadataValue,
+  usableListOptions,
+} from "../domain/metadataValues";
 
 const props = defineProps<{
   field: string;
@@ -102,8 +106,8 @@ const resolvedValue = computed(() => {
   );
 });
 function editableValue() {
-  const value = resolvedValue.value;
-  return Array.isArray(value) ? value.join(", ") : (value ?? "");
+  const value = unwrapMetadataValue(resolvedValue.value);
+  return Array.isArray(value) ? value.join(", ") : metadataValueText(value);
 }
 watch(
   () => [
@@ -173,10 +177,10 @@ function selectFromText() {
   markDirty();
 }
 function display(value: unknown) {
-  if (value === true) return i18n.t("ui.yes");
-  if (value === false) return i18n.t("ui.no");
-  if (Array.isArray(value)) return value.join(", ") || "—";
-  return value === null || value === undefined || value === "" ? "—" : String(value);
+  const unwrapped = unwrapMetadataValue(value);
+  if (unwrapped === true) return i18n.t("ui.yes");
+  if (unwrapped === false) return i18n.t("ui.no");
+  return metadataValueText(unwrapped) || "—";
 }
 const confidenceLabel = computed(() =>
   confidence.value === null
@@ -318,7 +322,7 @@ const autoResolved = computed(
         </ul>
       </div>
     </details>
-    <div v-else class="field-editor">
+    <div v-if="editing" class="field-editor">
       <div
         v-if="
           ['deterministic_llm_disagreement', 'human_llm_disagreement'].includes(
@@ -331,13 +335,13 @@ const autoResolved = computed(
         <b>{{ i18n.t("pdf_corpus.metadata_disagreement") }}</b
         ><span>{{
           i18n.tf("pdf_corpus.deterministic_value", {
-            value: String(status?.deterministic_value ?? "—"),
+            value: display(status?.deterministic_value),
           })
         }}</span
         ><span
           >{{
             i18n.tf("pdf_corpus.llm_value", {
-              value: String(status?.llm_value ?? value ?? "—"),
+              value: display(status?.llm_value ?? value),
             })
           }}<template v-if="typeof status?.llm_confidence === 'number'">
             · {{ Math.round(Number(status.llm_confidence) * 100) }}%</template
@@ -494,8 +498,8 @@ const autoResolved = computed(
         }}</span>
         <span v-if="status?.raw_llm_value && status?.raw_llm_value !== resolvedValue">{{
           i18n.tf("pdf_corpus.llm_value_normalized", {
-            raw: String(status?.raw_llm_value),
-            value: String(resolvedValue),
+            raw: display(status?.raw_llm_value),
+            value: display(resolvedValue),
           })
         }}</span>
         <span>{{ confidenceLabel }}</span>

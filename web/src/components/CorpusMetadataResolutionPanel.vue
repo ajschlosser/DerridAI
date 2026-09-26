@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import { isPlaceholderValue, usableListOptions } from "../domain/metadataValues";
+import {
+  metadataValueText,
+  unwrapMetadataValue,
+  usableListOptions,
+  usableOptions,
+} from "../domain/metadataValues";
 import { computed, ref } from "vue";
 import type { CorpusRecord } from "../api/pdfCorpus";
 import { useI18nStore } from "../stores/i18n";
@@ -7,6 +12,7 @@ import { metadataConstraints } from "../domain/metadataConstraints";
 import { metadataFieldSpec, metadataSuggestions } from "../domain/metadataFieldRegistry";
 import { assertionConflict, currentFieldAssertions } from "../domain/fieldAssertions";
 import type { MetadataSchema, SchemaField } from "../api/metadataSchemas";
+import { reviewableMetadataFieldNames } from "../features/corpus-builder/domain/recordMetadata";
 import CorpusMetadataFieldEditor from "./CorpusMetadataFieldEditor.vue";
 import CorpusFieldOwnershipBadge from "./CorpusFieldOwnershipBadge.vue";
 import CorpusEnrichmentChanges from "./CorpusEnrichmentChanges.vue";
@@ -17,6 +23,7 @@ const props = defineProps<{
   regionTypes: string[];
   discourseRoles: string[];
   busy?: boolean;
+  batchSaving?: boolean;
   savingField?: string;
   savedField?: string;
   confidenceCalibration?: Record<string, Record<string, Record<string, number>>>;
@@ -39,59 +46,22 @@ const inheritedFieldSet = new Set([
   "document_title",
   "short_title",
   "original_title",
+  "canonical_work_id",
   "document_author",
   "translator",
   "edition",
+  "year",
   "publication_year",
   "publisher",
   "publication_place",
   "isbn",
   "document_language",
   "original_language",
+  "language",
   "document_is_translation",
 ]);
 // Which fields a record shows, in order: the locked core, then the fields of the build's schema, then the document-level ones
 // records inherit. Without a schema (an old build), the fixed list.
-const legacyOrder = [
-  "region_type",
-  "primary_text",
-  "discourse_role",
-  "region_author",
-  "speaker",
-  "position_holder",
-  "target",
-  "stance",
-  "proposition_status",
-  "claim_scope",
-  "semantic_function",
-  "is_direct_quote",
-  "quoted_speaker",
-  "quoted_author",
-  "quoted_work",
-  "quoted_position_holder",
-  "quoted_addressee",
-  "quoted_referent",
-  "quotation_chain",
-  "topics",
-  "concepts",
-  "persons",
-  "works_referenced",
-  "work",
-  "document_title",
-  "short_title",
-  "original_title",
-  "document_author",
-  "translator",
-  "edition",
-  "publication_year",
-  "publisher",
-  "publication_place",
-  "isbn",
-  "document_language",
-  "original_language",
-  "document_is_translation",
-];
-const documentFields = legacyOrder.slice(legacyOrder.indexOf("work"));
 const schemaFields = computed<Record<string, SchemaField>>(() =>
   Object.fromEntries((props.schema?.fields || []).map((field) => [field.name, field])),
 );
@@ -99,20 +69,9 @@ const canonicalAssertions = computed(() =>
   currentFieldAssertions(props.record as unknown as Record<string, unknown>),
 );
 const fieldOrder = computed<string[]>(() =>
-  Array.from(
-    new Set(
-      props.schema
-        ? [
-            "region_type",
-            "primary_text",
-            "discourse_role",
-            ...props.schema.fields.map((field) => field.name),
-            ...canonicalAssertions.value.map((item) => item.field_name),
-            ...documentFields,
-          ]
-        : [...legacyOrder, ...canonicalAssertions.value.map((item) => item.field_name)],
-    ),
-  ),
+  props.schema
+    ? reviewableMetadataFieldNames(props.record as unknown as Record<string, unknown>, props.schema)
+    : reviewableMetadataFieldNames(props.record as unknown as Record<string, unknown>, null),
 );
 const fieldLabel = (field: string) => schemaFields.value[field]?.label || "";
 const assertionByField = computed(() =>
@@ -159,10 +118,10 @@ function canonicalStatus(field: string): Record<string, unknown> | null {
 }
 function fieldValue(field: string) {
   const assertion = assertionByField.value[field];
-  if (!assertion) return props.record[field];
+  if (!assertion) return unwrapMetadataValue(props.record[field]);
   if (assertion.value_status === "confirmed_absent") return null;
-  if (assertion.value_status === "present") return assertion.value;
-  return props.record[field];
+  if (assertion.value_status === "present") return unwrapMetadataValue(assertion.value);
+  return unwrapMetadataValue(props.record[field]);
 }
 const unresolved = computed(
   () =>
@@ -276,9 +235,7 @@ function options(field: string) {
     }
   }
   const cleaned =
-    item.control === "multi-combobox"
-      ? usableListOptions(values)
-      : values.filter((value) => !isPlaceholderValue(value)).map((value) => value.trim());
+    item.control === "multi-combobox" ? usableListOptions(values) : usableOptions(values);
   return [...new Set(cleaned)].sort((a, b) => a.localeCompare(b));
 }
 function fieldBusy(field: string) {
@@ -300,11 +257,10 @@ function calibrated(field: string) {
     : null;
 }
 function displayValue(field: string) {
-  const value = fieldValue(field);
+  const value = unwrapMetadataValue(fieldValue(field));
   if (value === true) return i18n.t("ui.yes");
   if (value === false) return i18n.t("ui.no");
-  if (Array.isArray(value)) return value.join(", ") || "—";
-  return value === null || value === undefined || value === "" ? "—" : String(value);
+  return metadataValueText(value) || "—";
 }
 </script>
 
@@ -357,7 +313,7 @@ function displayValue(field: string) {
       <button
         type="button"
         class="btn primary"
-        :disabled="busy"
+        :disabled="busy || batchSaving"
         @click="emit('resolveMany', llmSuggestions)"
       >
         {{ i18n.t("pdf_corpus.accept_all_suggestions") }}

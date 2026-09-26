@@ -133,6 +133,8 @@ function setup() {
     queued,
     applyAuthoritativeRecord,
     syncBuildInRail,
+    selectRecord,
+    advanceFrom,
     setMessage,
     focusFirstMetadataBlocker,
   };
@@ -200,5 +202,50 @@ describe("Corpus Builder review decisions", () => {
     expect(state.reviewInspectorTab.value).toBe("source");
     expect(state.reviewQueue.value).toBe("source");
     expect(state.setMessage).toHaveBeenCalledWith("pdf_corpus.accept_blocked_source", "error");
+  });
+
+  it("advances to the next local record immediately after Accept & next", async () => {
+    const state = setup();
+    const second = record({ record_id: "r2", record_revision: 1 });
+    state.records.value = [state.selectedRecord.value, second];
+    state.recordTotal.value = 2;
+    corpusBuilderApi.reviewDecision.mockResolvedValue({
+      blocked: false,
+      record: record({ record_revision: 2, accepted: true, review_disposition: "accepted" }),
+      build: { build_id: "b1", review_queue_counts: {} },
+      next_record: second,
+    });
+
+    await state.decisions.setDisposition("accepted");
+
+    expect(state.selectedRecord.value?.record_id).toBe("r2");
+    expect(state.selectRecord).toHaveBeenCalledWith(second);
+    expect(state.queued).toHaveLength(1);
+
+    await state.queued[0].request(false);
+
+    expect(corpusBuilderApi.reviewDecision).toHaveBeenCalledWith(
+      "b1",
+      "r1",
+      "accepted",
+      "",
+      1,
+      "all",
+    );
+    expect(state.selectedRecord.value?.record_id).toBe("r2");
+  });
+
+  it("falls back to queue navigation when the server has no explicit next record", async () => {
+    const state = setup();
+    corpusBuilderApi.reviewDecision.mockResolvedValue({
+      blocked: false,
+      record: record({ record_revision: 2, accepted: true, review_disposition: "accepted" }),
+      build: { build_id: "b1", review_queue_counts: {} },
+    });
+
+    await state.decisions.setDisposition("accepted");
+    await state.queued[0].request(false);
+
+    expect(state.advanceFrom).toHaveBeenCalledWith("r1");
   });
 });
