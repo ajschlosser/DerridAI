@@ -49,7 +49,9 @@ test.describe("Corpus Builder composed workflow", () => {
 
     await page.goto(story("corpus-builder-setup-configuration-navigation--no-source"));
     await expect(page.getByRole("tab", { name: /Structure/i })).toBeDisabled();
-    await expect(page.getByRole("tab", { name: /Enrichment/i })).toBeDisabled();
+    await expect(page.getByRole("tab", { name: /Enrichment/i })).toBeEnabled();
+    await expect(page.getByRole("tab", { name: /Metadata/i })).toBeEnabled();
+    await expect(page.getByRole("tab", { name: /Advanced/i })).toBeEnabled();
   });
 
   test("workspace header shifts from introduction to active build context", async ({ page }) => {
