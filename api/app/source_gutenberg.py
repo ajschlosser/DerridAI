@@ -279,7 +279,8 @@ def _gutendex_etext(etext_id: int) -> tuple[str, dict[str, Any]]:
 
 
 _WIKISOURCE_HOST = re.compile(r"^([a-z\-]+\.)?wikisource\.org$", re.IGNORECASE)
-_USER_AGENT = "DerridAI/1.0 (local scholarly research tool)"
+# Wikimedia asks API clients to identify the tool and a way to reach its maintainers.
+_USER_AGENT = "DerridAI/1.0 (https://github.com/ajschlosser/DerridAI; local scholarly research tool)"
 
 
 def _wikisource_page_title(parsed: Any) -> str:

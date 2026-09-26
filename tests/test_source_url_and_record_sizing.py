@@ -76,3 +76,27 @@ def test_small_reviewer_sizing_is_not_silently_raised_by_segmentation():
     )
     assert policy == {"preferred_record_chars": 300, "record_length_tolerance": 30,
                       "long_record_chars": 400, "absolute_record_chars": 500}
+
+
+def test_upstream_http_errors_are_reported_as_bad_gateway_not_server_faults():
+    import httpx
+    from app.models import PdfSourceUrlImport
+    from app.routers import corpus as routes
+    from fastapi import HTTPException
+
+    request = httpx.Request("GET", "https://example.org/x")
+    error = httpx.HTTPStatusError("nope", request=request, response=httpx.Response(403, request=request))
+    with patch.object(routes, "fetch_source_url", side_effect=error):
+        with pytest.raises(HTTPException) as info:
+            routes.import_pdf_asset_url(PdfSourceUrlImport(url="https://example.org/x"))
+    assert info.value.status_code == 502 and "403" in info.value.detail
+
+
+def test_wikisource_subpage_urls_use_the_api():
+    payload = {"parse": {"title": "Balzac/Preface", "text": "<p>x</p>"}}
+    with patch("app.source_gutenberg.httpx.get", return_value=_response(payload)) as get, patch(
+        "app.source_gutenberg.httpx.stream"
+    ) as stream:
+        _, name, _ = fetch_source_url("https://en.wikisource.org/wiki/Balzac/Preface", max_bytes=10_000)
+    stream.assert_not_called()
+    assert get.call_args.kwargs["params"]["page"] == "Balzac/Preface" and name.endswith(".html")

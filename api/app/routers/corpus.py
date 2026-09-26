@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+import httpx
 from fastapi import (
     APIRouter,
     File,
@@ -180,6 +181,15 @@ def import_pdf_asset_url(body: PdfSourceUrlImport) -> dict[str, Any]:
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except httpx.HTTPStatusError as exc:
+        # The remote site refused or lacked the page: an upstream problem, not a server fault.
+        logger.warning("URL source fetch returned %s for %s", exc.response.status_code, body.url)
+        raise HTTPException(
+            status_code=502,
+            detail=f"The source site returned HTTP {exc.response.status_code} for {body.url}.",
+        ) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"Could not reach the source site: {exc}") from exc
     except Exception as exc:
         logger.exception("URL source ingestion failed")
         raise HTTPException(status_code=500, detail=f"URL source ingestion failed: {exc}") from exc
