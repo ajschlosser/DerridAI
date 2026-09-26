@@ -9,11 +9,10 @@ How: uses SQLiteSystemRepository / SQLiteJobRepository on temp database files.
 
 from __future__ import annotations
 
-from dataclasses import replace
-
 import json
 import sqlite3
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
