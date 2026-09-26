@@ -17,6 +17,7 @@ describe("Corpus Builder review commands", () => {
     ["ArrowUp", "previous"],
     ["z", "undo"],
     ["f", "focus"],
+    ["m", "metadata"],
   ])("maps %s to %s", (key, command) => {
     expect(corpusReviewCommandFromKeydown(keydown(key))).toBe(command);
   });

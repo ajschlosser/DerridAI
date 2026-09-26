@@ -82,6 +82,7 @@ import CorpusReviewEvidencePanel from "./corpus-builder/CorpusReviewEvidencePane
 import CorpusRecordSizeAdvice from "./CorpusRecordSizeAdvice.vue";
 import CorpusUnitPolicy from "./CorpusUnitPolicy.vue";
 import CorpusReviewSourcePanel from "./corpus-builder/CorpusReviewSourcePanel.vue";
+import RecordContextReader from "./corpus-builder/RecordContextReader.vue";
 import CorpusEnrichmentConfiguration from "./corpus-builder/CorpusEnrichmentConfiguration.vue";
 import CorpusMetadataConfiguration from "./corpus-builder/CorpusMetadataConfiguration.vue";
 import CorpusAdvancedConfiguration from "./corpus-builder/CorpusAdvancedConfiguration.vue";
@@ -211,7 +212,9 @@ async function loadSelectedSchema(id: string) {
 }
 async function loadSchemaChoices() {
   try {
-    schemaChoices.value = (await metadataSchemasApi.list()).items;
+    // A response without a list must not leave the choices undefined: every lookup below would then throw.
+    const items = (await metadataSchemasApi.list())?.items;
+    schemaChoices.value = Array.isArray(items) ? items : [];
     if (!schemaChoices.value.some((item) => item.id === schemaId.value)) schemaId.value = "default";
   } catch {
     /* the built-in schema still works without the list */
@@ -1634,6 +1637,14 @@ function reviewShortcut(event: KeyboardEvent) {
   else if (command === "next") void focusQueueMove(1);
   else if (command === "previous") void focusQueueMove(-1);
   else if (command === "focus") focusView.value = !focusView.value;
+  else if (command === "metadata" && !focusView.value) {
+    if (reviewWorkspaceMode.value === "source") setReviewWorkspaceMode("record");
+    focusFirstMetadataBlocker();
+  }
+}
+/** Every field is decided from the panel: hand the keyboard to the record decision, so Enter accepts. */
+function handleMetadataComplete() {
+  void nextTick(() => acceptButtonEl.value?.focus({ preventScroll: true }));
 }
 watch(selectedProviderId, (profileId) => {
   if (!profileId) return;
@@ -2649,31 +2660,6 @@ defineExpose({
                       </p>
                     </div>
                     <div class="record-head-actions">
-                      <div
-                        class="decision-history"
-                        role="group"
-                        :aria-label="i18n.t('pdf_corpus.record_history')"
-                      >
-                        <button
-                          type="button"
-                          class="btn small"
-                          @click="undoReview"
-                          :disabled="busy !== ''"
-                        >
-                          <AppIcon name="history" /><span class="btn-text">{{
-                            i18n.t("pdf_corpus.undo")
-                          }}</span></button
-                        ><button
-                          type="button"
-                          class="btn small"
-                          @click="redoReview"
-                          :disabled="busy !== ''"
-                        >
-                          <AppIcon name="history" class="flip-inline" /><span class="btn-text">{{
-                            i18n.t("pdf_corpus.redo")
-                          }}</span>
-                        </button>
-                      </div>
                       <button type="button" class="btn small" @click="openFocusView">
                         {{ i18n.t("pdf_corpus.focus_view") }}
                       </button>
@@ -2685,7 +2671,9 @@ defineExpose({
                     role="status"
                   >
                     <b>{{ i18n.t("pdf_corpus.llm_touchup_proposal_available") }}</b
-                    ><span>{{ i18n.t("pdf_corpus.llm_touchup_proposal_help") }}</span
+                    ><span class="review-reason-text">{{
+                      i18n.t("pdf_corpus.llm_touchup_proposal_help")
+                    }}</span
                     ><button
                       type="button"
                       class="btn small"
@@ -2710,7 +2698,7 @@ defineExpose({
                             .join(" · ")
                         : i18n.t("pdf_corpus.why_review")
                     }}</b
-                    ><span>{{ selectedRecord.review_reason }}</span>
+                    ><span class="review-reason-text">{{ selectedRecord.review_reason }}</span>
                   </aside>
                   <section class="record-text-review" aria-labelledby="reviewed-record-text-title">
                     <header>
@@ -2814,95 +2802,6 @@ defineExpose({
                       >
                     </div>
                   </section>
-                  <footer class="record-decision-dock">
-                    <p
-                      v-if="selectedMetadataBlocked"
-                      id="record-metadata-blocker"
-                      class="metadata-accept-blocker"
-                      role="status"
-                    >
-                      <b>{{ i18n.t("pdf_corpus.metadata_decision_required") }}</b>
-                      {{
-                        i18n.tf("pdf_corpus.resolve_metadata_before_accept_fields", {
-                          fields: selectedMetadataBlockingLabel,
-                        })
-                      }}
-                    </p>
-                    <div
-                      v-if="editingText"
-                      class="decision-bar text-edit-bar"
-                      role="group"
-                      :aria-label="i18n.t('pdf_corpus.edit_text')"
-                    >
-                      <span class="text-save-hint">{{ i18n.t("pdf_corpus.text_save_hint") }}</span>
-                      <div class="decision-actions">
-                        <button type="button" class="btn small" @click="cancelTextEdit">
-                          {{ i18n.t("ui.cancel") }}
-                        </button>
-                        <button
-                          type="button"
-                          class="btn small primary"
-                          @click="saveReviewedText()"
-                          :disabled="busy !== '' || !textDraft.trim()"
-                        >
-                          {{
-                            busy === "text"
-                              ? i18n.t("ui.saving")
-                              : i18n.t("pdf_corpus.save_and_mark_reviewed")
-                          }}
-                        </button>
-                      </div>
-                    </div>
-                    <div
-                      v-else
-                      class="decision-bar"
-                      role="group"
-                      :aria-label="i18n.t('pdf_corpus.record_decision')"
-                    >
-                      <CorpusActionMenu
-                        :label="i18n.t('pdf_corpus.more_actions')"
-                        :menu-label="i18n.t('pdf_corpus.more_record_actions')"
-                        :items="recordActionItems"
-                        :disabled="busy !== ''"
-                        placement="top"
-                        @select="runRecordAction"
-                      />
-                      <div class="decision-actions">
-                        <button
-                          type="button"
-                          class="btn small"
-                          @click="skipRecord"
-                          :disabled="busy !== ''"
-                        >
-                          {{ i18n.t("pdf_corpus.skip") }}
-                        </button>
-                        <button
-                          type="button"
-                          class="btn small danger"
-                          @click="rejectRecord"
-                          :disabled="busy !== ''"
-                        >
-                          {{ i18n.t("pdf_corpus.reject_next") }}
-                        </button>
-                        <button
-                          ref="acceptButtonEl"
-                          type="button"
-                          class="btn small primary"
-                          @click="toggleAccept"
-                          :disabled="busy !== '' || reviewLocked"
-                          :aria-describedby="
-                            selectedMetadataBlocked ? 'record-metadata-blocker' : undefined
-                          "
-                        >
-                          {{
-                            selectedRecord.accepted
-                              ? i18n.t("pdf_corpus.reopen")
-                              : i18n.t("pdf_corpus.accept_next")
-                          }}
-                        </button>
-                      </div>
-                    </div>
-                  </footer>
                 </template>
                 <div v-else class="inspector-empty">
                   {{ i18n.t("pdf_corpus.select_record") }}
@@ -3021,6 +2920,8 @@ defineExpose({
                     :saved-field="metadataSavedField"
                     :confidence-calibration="currentBuild?.llm_confidence_calibration || {}"
                     :known-values="metadataKnownValues"
+                    :blocking-fields="selectedMetadataBlockingFields"
+                    @complete="handleMetadataComplete"
                     @resolve="resolveMetadataField"
                     @no-value="resolveMetadataNoValue"
                     @resolve-many="resolveMetadataSuggestions"
@@ -3028,28 +2929,6 @@ defineExpose({
                     @resolve-with-evidence="resolveMetadataWithSelectionEvidence"
                     @dirty="handleMetadataDirty"
                   />
-                  <button
-                    type="button"
-                    class="btn small metadata-cache-clear"
-                    :disabled="busy !== ''"
-                    @click="clearMetadataSuggestionCache"
-                  >
-                    {{ i18n.t("pdf_corpus.clear_metadata_cache") }}
-                  </button>
-                  <section v-if="currentBuild?.manifest" class="document-metadata-launch">
-                    <div>
-                      <b>{{ i18n.t("pdf_corpus.document_metadata_defaults") }}</b
-                      ><span>{{ i18n.t("pdf_corpus.document_metadata_defaults_help") }}</span>
-                    </div>
-                    <button
-                      type="button"
-                      class="btn"
-                      :disabled="busy !== ''"
-                      @click="documentMetadataOpen = true"
-                    >
-                      {{ i18n.t("pdf_corpus.edit_document_metadata") }}
-                    </button>
-                  </section>
                   <details class="record-data">
                     <summary>
                       {{ i18n.t("pdf_corpus.advanced_metadata") }}
@@ -3057,6 +2936,29 @@ defineExpose({
                     <p class="help">
                       {{ i18n.t("pdf_corpus.metadata_help") }}
                     </p>
+                    <button
+                      type="button"
+                      class="btn small metadata-cache-clear"
+                      :disabled="busy !== ''"
+                      @click="clearMetadataSuggestionCache"
+                    >
+                      {{ i18n.t("pdf_corpus.clear_metadata_cache") }}
+                    </button>
+                    <section v-if="currentBuild?.manifest" class="document-metadata-launch">
+                      <div>
+                        <b>{{ i18n.t("pdf_corpus.document_metadata_defaults") }}</b
+                        ><span>{{ i18n.t("pdf_corpus.document_metadata_defaults_help") }}</span>
+                      </div>
+                      <button
+                        type="button"
+                        class="btn"
+                        :disabled="busy !== ''"
+                        @click="documentMetadataOpen = true"
+                      >
+                        {{ i18n.t("pdf_corpus.edit_document_metadata") }}
+                      </button>
+                    </section>
+
                     <LlmExecutionControl
                       :model-value="llmActionProviderId || selectedProviderId"
                       :model-override="llmActionModel"
@@ -3193,6 +3095,155 @@ defineExpose({
                   {{ i18n.t("pdf_corpus.select_record") }}
                 </div>
               </aside>
+              <!-- One decision dock for the whole workspace, under the inspector where adjudication ends: what still
+                   blocks the record, history, and the record decision, always in the same place. -->
+              <footer v-if="selectedRecord" class="record-decision-dock">
+                <div
+                  v-if="editingText"
+                  class="decision-bar text-edit-bar"
+                  role="group"
+                  :aria-label="i18n.t('pdf_corpus.edit_text')"
+                >
+                  <span class="text-save-hint">{{ i18n.t("pdf_corpus.text_save_hint") }}</span>
+                  <div class="decision-actions">
+                    <button type="button" class="btn small" @click="cancelTextEdit">
+                      {{ i18n.t("ui.cancel") }}
+                    </button>
+                    <button
+                      type="button"
+                      class="btn small primary"
+                      @click="saveReviewedText()"
+                      :disabled="busy !== '' || !textDraft.trim()"
+                    >
+                      {{
+                        busy === "text"
+                          ? i18n.t("ui.saving")
+                          : i18n.t("pdf_corpus.save_and_mark_reviewed")
+                      }}
+                    </button>
+                  </div>
+                </div>
+                <div
+                  v-else
+                  class="decision-bar"
+                  role="group"
+                  :aria-label="i18n.t('pdf_corpus.record_decision')"
+                >
+                  <div class="dock-status">
+                    <button
+                      v-if="selectedMetadataBlocked"
+                      id="record-metadata-blocker"
+                      type="button"
+                      class="dock-blocker"
+                      aria-keyshortcuts="M"
+                      :title="
+                        i18n.tf('pdf_corpus.resolve_metadata_before_accept_fields', {
+                          fields: selectedMetadataBlockingLabel,
+                        })
+                      "
+                      @click="focusFirstMetadataBlocker"
+                    >
+                      <AppIcon name="warning" /><b class="dock-blocker-count">{{
+                        i18n.tf("pdf_corpus.metadata_decisions_count", {
+                          count: selectedMetadataBlockingFields.length,
+                        })
+                      }}</b
+                      ><b class="dock-blocker-short"
+                        ><span aria-hidden="true">{{ selectedMetadataBlockingFields.length }}</span
+                        ><span class="sr-only">{{
+                          i18n.tf("pdf_corpus.metadata_decisions_count", {
+                            count: selectedMetadataBlockingFields.length,
+                          })
+                        }}</span></b
+                      ><span class="dock-blocker-text">{{ selectedMetadataBlockingLabel }}</span
+                      ><kbd aria-hidden="true">{{ i18n.t("pdf_corpus.shortcut.metadata") }}</kbd>
+                    </button>
+                    <span v-else class="dock-ready" role="status"
+                      ><AppIcon name="check" />{{
+                        selectedRecord.accepted
+                          ? i18n.t("pdf_corpus.dock_record_accepted")
+                          : i18n.t("pdf_corpus.dock_metadata_complete")
+                      }}</span
+                    >
+                  </div>
+                  <div
+                    class="decision-history"
+                    role="group"
+                    :aria-label="i18n.t('pdf_corpus.record_history')"
+                  >
+                    <button
+                      type="button"
+                      class="btn small icon-only"
+                      :title="i18n.t('pdf_corpus.undo')"
+                      aria-keyshortcuts="Z"
+                      @click="undoReview"
+                      :disabled="busy !== ''"
+                    >
+                      <AppIcon name="history" /><span class="sr-only">{{
+                        i18n.t("pdf_corpus.undo")
+                      }}</span></button
+                    ><button
+                      type="button"
+                      class="btn small icon-only"
+                      :title="i18n.t('pdf_corpus.redo')"
+                      aria-keyshortcuts="Shift+Z"
+                      @click="redoReview"
+                      :disabled="busy !== ''"
+                    >
+                      <AppIcon name="history" class="flip-inline" /><span class="sr-only">{{
+                        i18n.t("pdf_corpus.redo")
+                      }}</span>
+                    </button>
+                  </div>
+                  <CorpusActionMenu
+                    :label="i18n.t('pdf_corpus.more_actions')"
+                    :menu-label="i18n.t('pdf_corpus.more_record_actions')"
+                    :items="recordActionItems"
+                    :disabled="busy !== ''"
+                    placement="top"
+                    @select="runRecordAction"
+                  />
+                  <div class="decision-actions">
+                    <button
+                      type="button"
+                      class="btn small"
+                      @click="skipRecord"
+                      :disabled="busy !== ''"
+                    >
+                      {{ i18n.t("pdf_corpus.skip") }}
+                    </button>
+                    <button
+                      type="button"
+                      class="btn small danger"
+                      aria-keyshortcuts="R"
+                      @click="rejectRecord"
+                      :disabled="busy !== ''"
+                    >
+                      {{ i18n.t("pdf_corpus.reject_next")
+                      }}<kbd aria-hidden="true">{{ i18n.t("pdf_corpus.shortcut.reject") }}</kbd>
+                    </button>
+                    <button
+                      ref="acceptButtonEl"
+                      type="button"
+                      class="btn small primary"
+                      aria-keyshortcuts="A"
+                      @click="toggleAccept"
+                      :disabled="busy !== '' || reviewLocked"
+                      :aria-describedby="
+                        selectedMetadataBlocked ? 'record-metadata-blocker' : undefined
+                      "
+                    >
+                      {{
+                        selectedRecord.accepted
+                          ? i18n.t("pdf_corpus.reopen")
+                          : i18n.t("pdf_corpus.accept_next")
+                      }}<kbd v-if="!selectedRecord.accepted" aria-hidden="true">{{
+                        i18n.t("pdf_corpus.shortcut.accept")
+                      }}</kbd>
+                    </button>
+                  </div>
+                </div>
+              </footer>
             </section>
             <div
               class="review-height-splitter"

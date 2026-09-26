@@ -94,4 +94,12 @@ describe("RecordContextReader", () => {
     await flushPromises();
     expect(corpusBuilderApi.recordContext).toHaveBeenCalledTimes(2);
   });
+
+  it("still shows the record when the context response has no neighbour lists", async () => {
+    corpusBuilderApi.recordContext.mockResolvedValue({ record_id: "r3" });
+    const wrapper = mountReader();
+    await flushPromises();
+    expect(wrapper.find(".ctx-focus").text()).toBe("Focus text.");
+    expect(wrapper.findAll(".ctx-item")).toHaveLength(0);
+  });
 });

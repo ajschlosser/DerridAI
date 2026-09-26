@@ -1609,9 +1609,6 @@ summary:focus-visible {
 .detail-mode .review-inspector-tabs {
   top: 94px;
 }
-.detail-mode .metadata-review {
-  padding: 16px 18px;
-}
 .detail-mode .review-inspector {
   overflow-x: hidden;
 }
@@ -1847,32 +1844,19 @@ summary:focus-visible {
     overflow: visible;
   }
 }
-/* The decision dock: one row, always in reach, primary action last. */
+/* The decision dock: one row across the bottom of the workspace, always in the same place, primary action last and
+   directly under the inspector where adjudication ends. */
 .review-frame .record-review-pane {
   display: flex;
   flex-direction: column;
-  container: record/inline-size;
 }
 .record-decision-dock {
-  position: sticky;
-  inset-block-end: 0;
+  grid-column: 1 / -1;
+  container: dock / inline-size;
   z-index: 8;
   border-top: 1px solid var(--line);
   background: var(--surface-overlay, var(--card));
-  box-shadow: 0 -0.75rem 2rem color-mix(in srgb, var(--text) 12%, transparent);
   padding-bottom: env(safe-area-inset-bottom);
-}
-.review-frame .record-review-pane {
-  padding-bottom: 0;
-}
-.record-decision-dock .metadata-accept-blocker {
-  margin: 0;
-  padding: 0.5rem 0.875rem;
-  border-bottom: 1px solid var(--line);
-  background: var(--tone-warn-bg);
-  color: var(--tone-warn-fg);
-  font-size: 0.8125rem;
-  line-height: 1.45;
 }
 .record-decision-dock .text-edit-bar .text-save-hint {
   flex: 1 1 14rem;
@@ -1882,53 +1866,124 @@ summary:focus-visible {
 .record-decision-dock .decision-bar {
   position: static;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem 0.75rem;
+  gap: 0.5rem;
   min-height: 0;
-  padding: 0.625rem 0.875rem;
+  padding: 0.5rem 0.75rem;
   border-top: 0;
   background: transparent;
   backdrop-filter: none;
 }
+.dock-status {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.dock-blocker,
+.dock-ready {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 2.25rem;
+  padding: 0 0.75rem;
+  border-radius: var(--radius-control);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.dock-blocker {
+  overflow: hidden;
+  border: 1px solid var(--tone-warn-edge);
+  background: var(--tone-warn-bg);
+  color: var(--tone-warn-fg);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.dock-blocker:hover {
+  border-color: var(--tone-warn-border);
+}
+.dock-blocker:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.dock-blocker-count,
+.dock-blocker-short {
+  flex: none;
+  white-space: nowrap;
+}
+.dock-blocker-short {
+  display: none;
+}
+.dock-blocker-text {
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dock-ready {
+  color: var(--tone-ok-fg);
+}
+.dock-blocker svg,
+.dock-ready svg {
+  flex: none;
+  inline-size: 1rem;
+  block-size: 1rem;
+}
+.record-decision-dock kbd {
+  margin-inline-start: 0.5rem;
+  padding: 0 0.3rem;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.35;
+  opacity: 0.85;
+}
 .decision-history,
 .decision-actions {
   display: flex;
+  flex: none;
   align-items: center;
   gap: 0.5rem;
 }
-.decision-actions {
-  margin-inline-start: auto;
-}
-.decision-history .btn {
+.decision-history .btn.icon-only {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
+  justify-content: center;
+  min-inline-size: 2.25rem;
+  padding-inline: 0.5rem;
 }
 .decision-history .btn svg {
   inline-size: 1rem;
   block-size: 1rem;
 }
+.decision-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
 .flip-inline {
   transform: scaleX(-1);
 }
-/* A narrow record pane keeps Undo and Redo to their icons (the words stay for assistive technology). */
-@container record (max-width:30rem) {
-  .decision-history .btn-text {
-    position: absolute;
-    inline-size: 1px;
-    block-size: 1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
+/* A narrower dock drops the key hints first, then More actions shrinks to its dots, so it stays on one row. */
+@container dock (max-width: 56rem) {
+  .record-decision-dock .decision-actions kbd,
+  .dock-blocker kbd,
+  .dock-blocker-text,
+  .dock-blocker-count {
+    display: none;
   }
-  .decision-history .btn {
-    padding-inline: 0.625rem;
+  .dock-blocker-short {
+    display: inline;
   }
 }
-/* When the pane is tight, More actions shrinks to its dots so the dock stays on one row. */
-@container record (max-width:33rem) {
+@container dock (max-width: 44rem) {
   .record-decision-dock :deep(.action-menu-label),
   .record-decision-dock :deep(.action-menu-caret) {
     position: absolute;
@@ -1942,32 +1997,31 @@ summary:focus-visible {
     display: inline-block;
   }
   .record-decision-dock :deep(.action-menu-trigger) {
-    min-inline-size: 2.5rem;
+    min-inline-size: 2.25rem;
     justify-content: center;
   }
-  .record-head-actions {
-    flex-wrap: nowrap;
-  }
 }
-@container record (max-width:24rem) {
+@container dock (max-width: 30rem) {
   .record-decision-dock .decision-bar {
-    flex-direction: column-reverse;
-    align-items: stretch;
+    flex-wrap: wrap;
   }
-  @media (max-width: 720px) {
-    .record-decision-dock {
-      inset-inline-start: 0;
-    }
+  .dock-status {
+    flex-basis: 100%;
   }
   .decision-actions {
-    margin-inline-start: 0;
+    flex: 1 1 100%;
   }
   .decision-actions .btn {
     flex: 1 1 0;
+    justify-content: center;
   }
-  .record-decision-dock .action-menu,
-  .record-decision-dock :deep(.action-menu-trigger) {
-    inline-size: 100%;
+}
+/* Phones: the page scrolls, so the dock stays pinned to the bottom of the window. */
+@media (max-width: 799.98px), (max-height: 33.99rem) {
+  .record-decision-dock {
+    position: sticky;
+    inset-block-end: 0;
+    box-shadow: 0 -0.75rem 2rem color-mix(in srgb, var(--text) 12%, transparent);
   }
 }
 
@@ -1986,11 +2040,6 @@ summary:focus-visible {
 .review-frame .record-review-head h3 {
   overflow-wrap: anywhere;
 }
-@media (max-width: 650px) {
-  .record-decision-dock {
-    bottom: 52px;
-  }
-}
 /* Compact review. A 768-pixel laptop should show a record, its controls and its decisions without scrolling the page: the
    headings that repeat what the queue row already says give way to the text, and the actions stay on one line. */
 .review-frame .record-review-head {
@@ -2007,7 +2056,7 @@ summary:focus-visible {
   margin: 2px 0 0;
 }
 .review-frame .record-text-review > header {
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   padding: 6px 10px;
 }
 .review-frame .record-text-review > header b {
@@ -2015,21 +2064,70 @@ summary:focus-visible {
 }
 .review-frame .record-text-head-actions {
   display: flex;
-  flex-wrap: nowrap;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
   gap: 6px;
-  flex: none;
 }
 .review-frame .record-text-head-actions .btn {
   white-space: nowrap;
 }
-.review-frame .record-decision-dock .metadata-accept-blocker {
-  padding: 0.375rem 0.875rem;
-}
 @media (max-height: 860px) {
-  .review-frame .record-decision-dock .metadata-accept-blocker b {
-    display: none;
-  }
   .review-frame .record-review-head p {
     font-size: 0.75rem;
   }
+}
+
+/* Per-record notices are one quiet line, so moving between records does not push the text around. */
+.review-frame .review-reason {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  margin: 10px 16px 0;
+  padding: 0.375rem 0.625rem;
+  border: 1px solid var(--tone-warn-edge);
+  border-radius: var(--radius-control);
+}
+.review-frame .review-reason > b {
+  flex: none;
+}
+.review-frame .review-reason-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.review-frame .review-reason .btn {
+  flex: none;
+}
+.review-frame .record-text-review {
+  margin: 10px 16px 14px;
+}
+.review-frame .review-inspector-panel {
+  padding: 12px 14px 16px;
+}
+.review-frame .review-inspector-panel > .record-data {
+  margin: 16px -14px -16px;
+}
+.review-frame .review-inspector-panel .record-data > .metadata-cache-clear,
+.review-frame .review-inspector-panel .record-data > .document-metadata-launch {
+  margin-block: 0.5rem;
+}
+.review-frame .document-metadata-launch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.review-frame .document-metadata-launch > div {
+  display: grid;
+  gap: 2px;
+  font-size: 0.8125rem;
+}
+.review-frame .document-metadata-launch span {
+  color: var(--muted);
 }

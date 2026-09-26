@@ -442,6 +442,25 @@ function defaults(url: URL, method: string, role: Role): unknown {
     );
     return { items: rows.slice(offset, offset + limit), total: rows.length, offset, limit };
   }
+  const context = path.match(
+    new RegExp(`^/api/pdf/corpus-builds/${CORPUS_BUILD_ID}/records/([^/]+)/context$`),
+  );
+  if (context) {
+    const index = CORPUS_RECORDS.findIndex((r) => r.record_id === decodeURIComponent(context[1]));
+    const item = (r: (typeof CORPUS_RECORDS)[number]) => ({
+      record_id: r.record_id,
+      text: r.text,
+      text_length: r.text.length,
+      page_start: null,
+      page_end: null,
+    });
+    return {
+      record_id: decodeURIComponent(context[1]),
+      before: index > 0 ? CORPUS_RECORDS.slice(Math.max(0, index - 2), index).map(item) : [],
+      after: index >= 0 ? CORPUS_RECORDS.slice(index + 1, index + 3).map(item) : [],
+      truncated: false,
+    };
+  }
   if (/^\/api\/pdf\/assets\/[^/]+\/blocks$/.test(path)) return { items: [], total: 0 };
   return {};
 }
