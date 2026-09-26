@@ -28,8 +28,7 @@
 }
 .header-actions,
 .summary-actions,
-.inspector-actions,
-.pager {
+.inspector-actions {
   display: flex;
   gap: 8px;
   align-items: center;
@@ -347,28 +346,10 @@
 .review-handoff[data-state="published"] {
   background: var(--tone-ok-bg);
 }
-.review-toolbar {
-  display: grid;
-  grid-template-columns: auto minmax(180px, 1fr) auto auto auto;
-  gap: 10px;
-  align-items: center;
-  padding: 9px 12px;
-  border-bottom: 1px solid var(--line);
-  font-size: 0.8125rem;
-}
 .check {
   display: flex;
   gap: 6px;
   align-items: center;
-}
-.bulk-metadata-workspace {
-  grid-column: 1/-1;
-  margin: 0 10px 10px;
-}
-.review-bulk {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
 }
 .danger {
   border-color: var(--tone-danger-border) !important;
@@ -719,9 +700,6 @@ summary:focus-visible {
     border-bottom: 1px solid var(--line);
     max-height: 220px;
   }
-  .review-toolbar {
-    grid-template-columns: 1fr 1fr;
-  }
   .review-grid {
     grid-template-columns: 1fr;
   }
@@ -798,9 +776,6 @@ summary:focus-visible {
 .technical-details > div,
 .technical-details > section {
   border-top: 1px solid var(--line);
-}
-.review-toolbar {
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.7fr) auto auto;
 }
 .record-first-review {
   grid-template-columns: minmax(220px, 0.52fr) minmax(500px, 1.45fr) minmax(360px, 0.9fr);
@@ -923,9 +898,6 @@ summary:focus-visible {
   }
 }
 @media (max-width: 1100px) {
-  .review-toolbar {
-    grid-template-columns: 1fr 1fr;
-  }
   .record-first-review {
     grid-template-columns: minmax(210px, 0.5fr) minmax(0, 1.5fr);
   }
@@ -941,9 +913,6 @@ summary:focus-visible {
   }
 }
 @media (max-width: 760px) {
-  .review-toolbar {
-    grid-template-columns: 1fr;
-  }
   .record-first-review {
     grid-template-columns: 1fr;
   }
@@ -1095,12 +1064,6 @@ summary:focus-visible {
 .decision-bar {
   min-height: 56px;
 }
-.review-toolbar {
-  grid-template-columns: minmax(0, 1fr) minmax(210px, 0.7fr) auto auto;
-}
-.review-bulk .btn {
-  min-height: 34px;
-}
 @media (max-width: 1300px) {
   .record-first-review {
     grid-template-columns: minmax(200px, 0.48fr) minmax(460px, 1.4fr) minmax(330px, 0.9fr);
@@ -1119,9 +1082,6 @@ summary:focus-visible {
   .review-stage-summary {
     grid-template-columns: 1fr;
   }
-  .review-toolbar {
-    grid-template-columns: 1fr 1fr;
-  }
 }
 @media (max-width: 760px) {
   .record-first-review {
@@ -1129,9 +1089,6 @@ summary:focus-visible {
   }
   .review-inspector {
     max-height: none;
-  }
-  .review-toolbar {
-    grid-template-columns: 1fr;
   }
   .review-stage-summary {
     grid-template-columns: 1fr;
@@ -1186,37 +1143,6 @@ summary:focus-visible {
 }
 .builder-workspace.review-mode .review-frame {
   order: 2;
-}
-.review-toolbar {
-  position: sticky;
-  top: 66px;
-  z-index: 11;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 320px) auto;
-  gap: var(--space-3);
-  align-items: center;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-card);
-  background: color-mix(in srgb, var(--surface-card) 96%, transparent);
-  backdrop-filter: blur(12px);
-}
-.review-toolbar .control {
-  min-height: 40px;
-  font-size: 0.8125rem;
-}
-.review-bulk {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
-.pager {
-  grid-column: 1/-1;
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  font-size: 0.8125rem;
-  color: var(--muted);
 }
 .record-first-review {
   display: grid;
@@ -1422,7 +1348,6 @@ summary:focus-visible {
     .review-handoff b,
     .review-handoff span,
     .review-handoff > strong,
-    .review-toolbar,
     .source-page-nav,
     .source-block header,
     .split-button,
@@ -1439,7 +1364,6 @@ summary:focus-visible {
     .review-inspector-tabs button span,
     .inspector-help,
     .review-readonly-banner span,
-    .pager,
     .source-inspector-head
   ) {
   font-size: 0.8125rem !important;
@@ -1638,18 +1562,6 @@ summary:focus-visible {
   line-height: 1.45;
 }
 /* 0.48.1 Gifted Grungus — visible review feedback and dedicated metadata workspaces. */
-.review-action-feedback {
-  grid-column: 1/-1;
-  margin: 0;
-  padding: 9px 11px;
-  border: 1px solid var(--tone-ok-edge);
-  border-radius: 9px;
-  background: var(--tone-ok-bg);
-  color: var(--tone-ok-fg);
-  font-size: 0.8125rem;
-  line-height: 1.5;
-  font-weight: 650;
-}
 .document-metadata-launch {
   display: flex;
   justify-content: space-between;
@@ -1808,27 +1720,6 @@ summary:focus-visible {
 .build-launch-row {
   display: none;
 }
-.workspace-switcher {
-  display: inline-flex;
-  gap: 2px;
-  align-items: center;
-  flex-wrap: nowrap;
-  padding: 2px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-control);
-  background: var(--surface-subtle);
-}
-.workspace-switcher .btn {
-  border-color: transparent;
-  background: transparent;
-  box-shadow: none;
-}
-.workspace-switcher .btn[aria-pressed="true"] {
-  border-color: var(--border-subtle);
-  background: var(--surface-card);
-  color: var(--text-primary);
-  box-shadow: var(--shadow-card);
-}
 .record-first-review.detail-mode {
   grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
 }
@@ -1930,9 +1821,6 @@ summary:focus-visible {
   }
 }
 @media (max-width: 1050px) {
-  .workspace-switcher {
-    grid-column: 1/-1;
-  }
   .record-first-review.detail-mode {
     grid-template-columns: 1fr;
   }
@@ -2142,32 +2030,6 @@ summary:focus-visible {
     overflow: visible;
   }
 }
-/* Below the wide layout the toolbar wraps instead of overflowing. */
-@media (max-width: 1279.98px) {
-  .review-frame .review-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-  }
-  .review-frame .review-toolbar > :first-child {
-    flex: 1 1 100%;
-  }
-  .review-frame .review-toolbar .pager {
-    order: 9;
-    margin-inline-start: auto;
-  }
-  .review-frame .review-toolbar #pdf-corpus-record-search {
-    flex: 1 1 12rem;
-  }
-  .review-frame .review-toolbar .review-bulk {
-    flex-wrap: wrap;
-  }
-  .review-frame .review-toolbar .review-action-feedback,
-  .review-frame .review-toolbar > :is(section, form, aside) {
-    flex: 1 1 100%;
-  }
-}
-
 /* The decision dock: one row, always in reach, primary action last. */
 .review-frame .record-review-pane {
   display: flex;
@@ -2306,44 +2168,6 @@ summary:focus-visible {
 }
 .review-frame .record-review-head h3 {
   overflow-wrap: anywhere;
-}
-/* The toolbar is two rows on a wide screen: the queues, then search, workspace and bulk actions. */
-.review-frame .review-toolbar {
-  gap: 0.5rem 0.75rem;
-  align-items: center;
-  padding: 0.5rem 0.75rem;
-}
-@media (min-width: 1280px) {
-  .review-frame .review-toolbar {
-    display: grid;
-    grid-template-columns: minmax(10rem, 1fr) auto auto;
-  }
-  .review-frame .review-toolbar > :first-child {
-    grid-column: 1/3;
-  }
-  .review-frame .review-toolbar .pager {
-    grid-column: 3;
-    grid-row: 1;
-    justify-self: end;
-  }
-  .review-frame .review-toolbar #pdf-corpus-record-search {
-    grid-column: 1;
-  }
-  .review-frame .review-toolbar .workspace-switcher {
-    grid-column: 2;
-  }
-  .review-frame .review-toolbar .review-bulk {
-    grid-column: 3;
-    flex-wrap: nowrap;
-    justify-content: flex-end;
-  }
-  .review-frame .review-toolbar .review-action-feedback {
-    grid-column: 1/-1;
-    margin: 0;
-  }
-  .review-frame .review-toolbar > :is(section, form, aside) {
-    grid-column: 1/-1;
-  }
 }
 @media (max-width: 650px) {
   .record-decision-dock {

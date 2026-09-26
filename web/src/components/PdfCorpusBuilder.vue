@@ -26,7 +26,6 @@ import CorpusBuildHistoryMenu from "./CorpusBuildHistoryMenu.vue";
 import CorpusQualitySummary from "./CorpusQualitySummary.vue";
 import CorpusRecordSizingSettings from "./CorpusRecordSizingSettings.vue";
 import CorpusRecordFocusReview from "./CorpusRecordFocusReview.vue";
-import CorpusReviewQueueTabs from "./CorpusReviewQueueTabs.vue";
 import type { ReviewQueue } from "../types/corpus";
 import CorpusBuildLifecycleCard from "./CorpusBuildLifecycleCard.vue";
 import CorpusMetadataIssues from "./CorpusMetadataIssues.vue";
@@ -35,7 +34,6 @@ import CorpusFinishWorkspace from "./CorpusFinishWorkspace.vue";
 import CorpusMetadataResolutionPanel from "./CorpusMetadataResolutionPanel.vue";
 import CorpusBuildStageNotice from "./CorpusBuildStageNotice.vue";
 import CorpusSourceQualityDialog from "./CorpusSourceQualityDialog.vue";
-import CorpusBulkMetadataEditor from "./CorpusBulkMetadataEditor.vue";
 import CorpusTextCleanupDialog from "./CorpusTextCleanupDialog.vue";
 import CorpusEditorialMemoryDialog from "./CorpusEditorialMemoryDialog.vue";
 import CorpusReviewSessionBar from "./CorpusReviewSessionBar.vue";
@@ -82,6 +80,7 @@ import CorpusConfigurationNav, {
 } from "./corpus-builder/CorpusConfigurationNav.vue";
 import CorpusBuilderWorkspaceHeader from "./corpus-builder/CorpusBuilderWorkspaceHeader.vue";
 import CorpusReviewRecordQueue from "./corpus-builder/CorpusReviewRecordQueue.vue";
+import CorpusReviewToolbar from "./corpus-builder/CorpusReviewToolbar.vue";
 import CorpusEnrichmentConfiguration from "./corpus-builder/CorpusEnrichmentConfiguration.vue";
 import CorpusMetadataConfiguration from "./corpus-builder/CorpusMetadataConfiguration.vue";
 import CorpusAdvancedConfiguration from "./corpus-builder/CorpusAdvancedConfiguration.vue";
@@ -2467,123 +2466,45 @@ defineExpose({
           />
 
           <div ref="reviewFrameEl" class="review-frame">
-            <section class="review-toolbar" :aria-label="i18n.t('pdf_corpus.review_controls')">
-              <CorpusReviewQueueTabs
-                v-if="currentBuild"
-                v-model="reviewQueue"
-                :total="currentBuild.record_count || 0"
-                :ready="readyCount"
-                :issues="issueCount"
-                :metadata="Number(reviewQueueCounts.metadata ?? metadataIssueCount)"
-                :topology="topologyIssueCount"
-                :source-problems="
-                  Number(reviewQueueCounts.source ?? currentBuild.source_problem_count ?? 0)
-                "
-                :accepted="Number(reviewQueueCounts.accepted ?? currentBuild.accepted_count ?? 0)"
-                :rejected="Number(reviewQueueCounts.rejected ?? currentBuild.rejected_count ?? 0)"
-                :disabled="busy !== ''"
-              />
-              <label class="sr-only" for="pdf-corpus-record-search">{{
-                i18n.t("pdf_corpus.search_records")
-              }}</label
-              ><input
-                id="pdf-corpus-record-search"
-                v-model="recordQuery"
-                class="control"
-                :placeholder="i18n.t('pdf_corpus.search_records')"
-              />
-              <div
-                class="workspace-switcher"
-                role="group"
-                :aria-label="i18n.t('pdf_corpus.review_workspace')"
-              >
-                <button
-                  type="button"
-                  class="btn small"
-                  :aria-pressed="reviewWorkspaceMode === 'record'"
-                  @click="setReviewWorkspaceMode('record')"
-                >
-                  {{ i18n.t("pdf_corpus.workspace.record") }}</button
-                ><button
-                  type="button"
-                  class="btn small"
-                  :aria-pressed="reviewWorkspaceMode === 'metadata'"
-                  :aria-label="i18n.t('pdf_corpus.workspace.metadata')"
-                  :disabled="!selectedRecord"
-                  @click="setReviewWorkspaceMode('metadata')"
-                >
-                  {{ i18n.t("pdf_corpus.workspace.metadata_short") }}</button
-                ><button
-                  type="button"
-                  class="btn small"
-                  :aria-pressed="reviewWorkspaceMode === 'source'"
-                  :aria-label="i18n.t('pdf_corpus.workspace.source')"
-                  :disabled="!selectedRecord"
-                  @click="setReviewWorkspaceMode('source')"
-                >
-                  {{ i18n.t("pdf_corpus.workspace.source_short") }}
-                </button>
-              </div>
-              <div class="review-bulk">
-                <button
-                  type="button"
-                  class="btn small primary"
-                  @click="acceptCleanRecords"
-                  :disabled="busy !== '' || readyCount === 0"
-                >
-                  {{
-                    i18n.tf("pdf_corpus.accept_clean", {
-                      count: readyCount,
-                    })
-                  }}</button
-                ><CorpusActionMenu
-                  :label="i18n.t('pdf_corpus.bulk_actions')"
-                  :items="bulkActionItems"
-                  :disabled="busy !== ''"
-                  placement="bottom"
-                  @select="runBulkAction"
-                />
-              </div>
-              <p
-                v-if="bulkActionFeedback"
-                class="review-action-feedback"
-                role="status"
-                aria-live="polite"
-              >
-                {{ bulkActionFeedback }}
-              </p>
-              <CorpusBulkMetadataEditor
-                v-if="bulkMetadataOpen"
-                :schema="currentBuild?.schema"
-                :records="records"
-                :known-values="metadataKnownValues"
-                :region-types="regionTypes"
-                :discourse-roles="discourseRoles"
-                :selected-count="selectedReviewCount"
-                :total-count="Number(currentBuild?.record_count || recordTotal)"
-                :disabled="busy !== '' || reviewLocked"
-                @apply="applyBulkMetadata"
-                @close="bulkMetadataOpen = false"
-              />
-              <div class="pager">
-                <button
-                  type="button"
-                  class="btn small"
-                  @click="previousPage"
-                  :disabled="recordOffset === 0"
-                >
-                  {{ i18n.t("ui.previous") }}</button
-                ><span>{{ pageNumber }} / {{ pageCount }}</span
-                ><button
-                  type="button"
-                  class="btn small"
-                  @click="nextPage"
-                  :disabled="recordOffset + pageSize >= recordTotal"
-                >
-                  {{ i18n.t("ui.next") }}
-                </button>
-              </div>
-            </section>
+            <CorpusReviewToolbar
+              v-model:queue="reviewQueue"
+              v-model:query="recordQuery"
+              :total="Number(currentBuild?.record_count || 0)"
+              :ready="readyCount"
+              :issues="issueCount"
+              :metadata="Number(reviewQueueCounts.metadata ?? metadataIssueCount)"
+              :topology="topologyIssueCount"
+              :source-problems="
+                Number(reviewQueueCounts.source ?? currentBuild?.source_problem_count ?? 0)
+              "
+              :accepted="Number(reviewQueueCounts.accepted ?? currentBuild?.accepted_count ?? 0)"
+              :rejected="Number(reviewQueueCounts.rejected ?? currentBuild?.rejected_count ?? 0)"
+              :workspace-mode="reviewWorkspaceMode"
+              :has-selected-record="Boolean(selectedRecord)"
+              :bulk-action-items="bulkActionItems"
+              :bulk-action-feedback="bulkActionFeedback"
+              :bulk-metadata-open="bulkMetadataOpen"
+              :schema="currentBuild?.schema"
+              :records="records"
+              :known-values="metadataKnownValues"
+              :region-types="regionTypes"
+              :discourse-roles="discourseRoles"
+              :selected-count="selectedReviewCount"
+              :bulk-total-count="Number(currentBuild?.record_count || recordTotal)"
+              :bulk-disabled="busy !== '' || reviewLocked"
+              :page-number="pageNumber"
+              :page-count="pageCount"
+              :has-previous-page="recordOffset > 0"
+              :has-next-page="recordOffset + pageSize < recordTotal"
+              :disabled="busy !== ''"
+              @workspace="setReviewWorkspaceMode"
+              @accept-clean="acceptCleanRecords"
+              @bulk-action="runBulkAction"
+              @bulk-apply="applyBulkMetadata"
+              @bulk-close="bulkMetadataOpen = false"
+              @previous-page="previousPage"
+              @next-page="nextPage"
+            />
 
             <section
               ref="reviewGridEl"

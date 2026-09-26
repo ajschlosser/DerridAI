@@ -233,3 +233,25 @@ The next monolith-reduction slice moves the record queue/list out of
   loading/empty queues, selection, and Canadian French length stress.
 - Reduced `PdfCorpusBuilder.vue` from 3,744 lines to 3,622 lines and the shared workspace
   stylesheet from about 2,623 lines to 2,395 lines.
+
+### Review toolbar extraction
+
+The Review workspace decomposition now separates the toolbar/filter/bulk-control surface from
+`PdfCorpusBuilder.vue` while leaving review state and mutations in the existing controllers.
+
+- Extracted queue tabs, record search, workspace switching, clean-record acceptance, bulk-action
+  menu, bulk metadata editor, feedback, and pagination into `CorpusReviewToolbar.vue`.
+- Kept queue/query state in the parent through typed models; workspace changes, bulk operations,
+  pagination, and clean-record acceptance are emitted back to the existing parent handlers.
+- Preserved the original busy-state behavior: queue/bulk actions disable while busy, while search
+  and paging retain their prior behavior; Metadata/Source workspace buttons still require a
+  selected record.
+- Removed toolbar-local CSS from `CorpusBuilderWorkspace.css` and removed an obsolete
+  four-column grid override that could conflict with the extracted toolbar root.
+- Retained only the shell-level `.review-frame .review-toolbar` rule in the parent stylesheet,
+  because frame positioning/border integration belongs to the three-pane Review shell.
+- Added focused component tests and Storybook states for queue/search models, workspace switching,
+  bulk mutation forwarding, paging, busy/no-selection states, feedback, and Canadian French
+  length stress.
+- Reduced `PdfCorpusBuilder.vue` to 3,543 lines and the shared Corpus
+  Builder workspace stylesheet to 2,219 lines.
