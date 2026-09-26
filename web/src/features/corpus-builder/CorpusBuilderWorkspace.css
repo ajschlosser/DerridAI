@@ -1037,9 +1037,6 @@ summary:focus-visible {
   line-height: 1.45;
   color: var(--muted);
 }
-.compact-source-blocks {
-  padding-top: 6px;
-}
 .source-review-panel {
   background: var(--card);
   min-height: 100%;
