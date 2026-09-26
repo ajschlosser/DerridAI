@@ -2,17 +2,41 @@
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it } from "vitest";
+import type { CorpusRecord, SourceBlock } from "../../src/api/corpus";
 import CorpusReviewSourcePanel from "../../src/components/corpus-builder/CorpusReviewSourcePanel.vue";
 
-const blocks = [
-  { block_id: "b1", page: 1, type: "paragraph", text: "First block." },
-  { block_id: "b2", page: 1, type: "paragraph", text: "Second block." },
+const blocks: SourceBlock[] = [
+  {
+    block_id: "b1",
+    page: 1,
+    type: "paragraph",
+    text: "First block.",
+    bbox: [0, 0, 1, 1],
+    extraction_method: "native",
+    confidence: 1,
+  },
+  {
+    block_id: "b2",
+    page: 1,
+    type: "paragraph",
+    text: "Second block.",
+    bbox: [0, 0, 1, 1],
+    extraction_method: "native",
+    confidence: 1,
+  },
 ];
 
 function mountPanel(props: Record<string, unknown> = {}) {
   return mount(CorpusReviewSourcePanel, {
     props: {
-      record: { record_id: "r1", source_extracted_text: "Original extraction." },
+      record: {
+        record_id: "r1",
+        text: "Original extraction.",
+        text_length: 20,
+        source_block_ids: ["b1"],
+        source_spans: [],
+        source_extracted_text: "Original extraction.",
+      } as CorpusRecord,
       showPdfExplorer: false,
       page: 1,
       pageCount: 1,

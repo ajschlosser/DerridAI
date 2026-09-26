@@ -1,0 +1,8 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
+# Deterministic offline POS/NER candidates. Installed into the Docker image at build time (no runtime
+# download). Kept out of requirements.txt so CI and lightweight dev installs do not fetch ~1 GB of models;
+# without them annotation reports itself as unavailable.
+spacy>=3.8,<4
+en_core_web_lg @ https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl
+fr_core_news_lg @ https://github.com/explosion/spacy-models/releases/download/fr_core_news_lg-3.8.0/fr_core_news_lg-3.8.0-py3-none-any.whl
+de_core_news_lg @ https://github.com/explosion/spacy-models/releases/download/de_core_news_lg-3.8.0/de_core_news_lg-3.8.0-py3-none-any.whl

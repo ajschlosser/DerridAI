@@ -110,7 +110,10 @@ export function useCorpusBuildLifecycle(
     Boolean(currentBuild.value && (reviewComplete.value || currentBuild.value.publication)),
   );
   const showReviewWorkspace = computed(() =>
-    Boolean(hasRecordTopology.value && (!finishPhase.value || reviewQueue.value !== "all" || reviewRequested.value)),
+    Boolean(
+      hasRecordTopology.value &&
+        (!finishPhase.value || reviewQueue.value !== "all" || reviewRequested.value),
+    ),
   );
   return {
     reviewQueueCounts,

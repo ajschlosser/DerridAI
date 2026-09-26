@@ -152,7 +152,7 @@ def build_metadata_exemplar(
     resolved.  Returning no exemplar is safer than manufacturing a training precedent.
     """
 
-    def skip(code: str) -> None:
+    def skip(code: str) -> dict[str, Any] | None:
         # ``why`` lets a diagnosis say exactly why no precedent was derived.
         if why is not None:
             why.append(code)
