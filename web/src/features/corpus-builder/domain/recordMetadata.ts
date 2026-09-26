@@ -155,6 +155,7 @@ const OPERATIONAL_PREFIXES = [
   "pdf_",
   "inline_",
   "full_",
+  "memory_",
 ];
 const OPERATIONAL_KEYS = new Set(["lineage", "media_kind", "parent_block_id"]);
 export function isOperationalKey(key: string): boolean {
