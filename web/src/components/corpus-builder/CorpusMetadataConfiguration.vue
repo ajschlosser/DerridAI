@@ -2,10 +2,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { SchemaSummary } from "../../api/metadataSchemas";
-import type {
-  RunGuidanceEntry,
-  RunGuidanceField,
-} from "../CorpusRunGuidance.vue";
+import type { RunGuidanceEntry, RunGuidanceField } from "../CorpusRunGuidance.vue";
 import { useI18nStore } from "../../stores/i18n";
 import CorpusRunGuidance from "../CorpusRunGuidance.vue";
 
