@@ -322,7 +322,13 @@ onBeforeUnmount(closeSearch);
           <button
             type="button"
             class="btn btn-quiet"
-            :disabled="disabled || busy === 'gutenberg-archive'"
+            :disabled="
+              disabled ||
+              busy === 'gutenberg-archive' ||
+              ['downloaded', 'unpacking', 'ready'].includes(
+                String(gutenbergStatus?.archive.status || ''),
+              )
+            "
             @click="
               emit(
                 'updateGutenbergArchive',
@@ -335,13 +341,19 @@ onBeforeUnmount(closeSearch);
             "
           >
             {{
-              i18n.t(
-                gutenbergStatus?.archive.status === "downloading"
-                  ? "pdf_corpus.gutenberg_pause_download"
-                  : gutenbergStatus?.archive.status === "paused"
-                    ? "pdf_corpus.gutenberg_resume_download"
-                    : "pdf_corpus.gutenberg_start_download",
-              )
+              gutenbergStatus?.archive.status === "ready"
+                ? i18n.t("pdf_corpus.gutenberg_collection_ready", "Collection ready")
+                : ["downloaded", "unpacking"].includes(
+                      String(gutenbergStatus?.archive.status || ""),
+                    )
+                  ? i18n.t("pdf_corpus.gutenberg_unpacking", "Unpacking collection…")
+                  : i18n.t(
+                      gutenbergStatus?.archive.status === "downloading"
+                        ? "pdf_corpus.gutenberg_pause_download"
+                        : gutenbergStatus?.archive.status === "paused"
+                          ? "pdf_corpus.gutenberg_resume_download"
+                          : "pdf_corpus.gutenberg_start_download",
+                    )
             }}
           </button>
         </div>
@@ -352,6 +364,14 @@ onBeforeUnmount(closeSearch);
           :max="gutenbergStatus.archive.total_bytes"
           :aria-label="i18n.t('pdf_corpus.gutenberg_download_progress')"
         />
+        <small v-if="gutenbergStatus?.search_ready && !gutenbergStatus?.ready" class="library-note">
+          {{
+            i18n.t(
+              "pdf_corpus.gutenberg_results_locked",
+              "Catalogue search is ready. Results become importable after the full text collection finishes downloading and unpacking.",
+            )
+          }}
+        </small>
         <small v-if="gutenbergStatus?.archive.error" class="source-error">{{
           gutenbergStatus.archive.error
         }}</small>
@@ -426,7 +446,15 @@ onBeforeUnmount(closeSearch);
           <button
             type="button"
             class="btn"
-            :disabled="disabled"
+            :disabled="disabled || !gutenbergStatus?.ready"
+            :title="
+              gutenbergStatus?.ready
+                ? undefined
+                : i18n.t(
+                    'pdf_corpus.gutenberg_result_unavailable',
+                    'Download and unpack the collection before importing this result.',
+                  )
+            "
             :aria-label="importLabel(hit)"
             @click="emit('importGutenberg', hit.etext_id)"
           >
