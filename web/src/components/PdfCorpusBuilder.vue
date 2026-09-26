@@ -1657,7 +1657,7 @@ watch(
       ["enriching", "review", "ready"].includes(String(stage || "")) ||
       ["awaiting_review", "ready"].includes(String(status || ""));
     if (!visibleStage) return;
-    if (!reviewHydrated.value || expected > hydratedTopologyCount.value || !selectedRecord.value) {
+    if (!reviewHydrated.value || expected > hydratedTopologyCount.value) {
       await ensureReviewHydrated(selectedRecordId.value);
     }
   },
