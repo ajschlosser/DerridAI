@@ -121,11 +121,7 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
     await options.refreshRecords();
   }
 
-  async function openQueue(
-    queue: ReviewQueue,
-    preferredId = "",
-    recordQuery = "",
-  ) {
+  async function openQueue(queue: ReviewQueue, preferredId = "", recordQuery = "") {
     // Queue navigation is an explicit context change. Clear the previous
     // selection before refreshing so refreshRecords can select the first row
     // in the destination queue instead of preserving a stale record that no
