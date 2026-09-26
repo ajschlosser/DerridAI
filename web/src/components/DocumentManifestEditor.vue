@@ -127,6 +127,24 @@ const visibleGroups = computed(() =>
 const fieldKeys = computed(() =>
   visibleGroups.value.flatMap((group) => group.fields.map((field) => field.key)),
 );
+// Where a pre-filled value came from, and what else the ingest thought it might be. Shown only while the
+// field still holds the value the ingest proposed; a value the reviewer changed is theirs.
+type IngestOrigin = {
+  value?: unknown;
+  method?: string;
+  confidence?: number;
+  derivation?: string;
+  reason?: string;
+  alternatives?: { value: unknown; method?: string; confidence?: number; derivation?: string }[];
+};
+function ingestOrigin(key: string): IngestOrigin | null {
+  const applied = (
+    props.manifest?.deterministic_ingest as { applied?: Record<string, IngestOrigin> } | undefined
+  )?.applied;
+  const info = applied?.[key];
+  if (!info || !["nlp_derived", "computed"].includes(String(info.derivation))) return null;
+  return String(info.value) === text(key) || (info.alternatives?.length ?? 0) > 0 ? info : null;
+}
 const draft = reactive<Record<string, string>>({});
 // A number input hands v-model a number, not a string. Everything below compares and saves text, or editing a page
 // number would throw when saved (a number has no trim) and never look unchanged when typed back to its old value.
@@ -271,6 +289,35 @@ function reset() {
           :min="field.type === 'number' ? 1 : undefined"
           :disabled="props.disabled"
         />
+        <div v-if="ingestOrigin(field.key)" class="manifest-origin">
+          <span
+            v-if="String(ingestOrigin(field.key)?.value) === text(field.key)"
+            class="origin-chip"
+            :data-kind="ingestOrigin(field.key)?.derivation"
+            :title="ingestOrigin(field.key)?.reason"
+            >{{
+              i18n.t(
+                ingestOrigin(field.key)?.derivation === "nlp_derived"
+                  ? "pdf_corpus.origin_nlp"
+                  : "pdf_corpus.origin_computed",
+              )
+            }}
+            · {{ Math.round(Number(ingestOrigin(field.key)?.confidence || 0) * 100) }}%</span
+          >
+          <span v-if="ingestOrigin(field.key)?.alternatives?.length" class="origin-alternatives">
+            <small>{{ i18n.t("pdf_corpus.origin_alternatives") }}</small>
+            <button
+              v-for="alt in ingestOrigin(field.key)?.alternatives"
+              :key="String(alt.value)"
+              type="button"
+              class="origin-alt"
+              :disabled="props.disabled"
+              @click="draft[field.key] = String(alt.value)"
+            >
+              {{ alt.value }} <small>{{ Math.round(Number(alt.confidence || 0) * 100) }}%</small>
+            </button>
+          </span>
+        </div>
         <p
           v-if="serverChanged[field.key] !== undefined"
           class="manifest-server-change"
@@ -516,5 +563,52 @@ function reset() {
 .manifest-editor :is(input, select, textarea):focus-visible {
   outline: 3px solid var(--focus-ring, var(--accent));
   outline-offset: 2px;
+}
+.manifest-origin {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+}
+.origin-chip {
+  padding: 1px 8px;
+  border: 1px solid var(--tone-info-edge);
+  border-radius: var(--radius-pill);
+  color: var(--tone-info-fg);
+  background: var(--tone-info-bg);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+}
+.origin-chip[data-kind="computed"] {
+  border-color: var(--tone-ok-edge);
+  color: var(--tone-ok-fg);
+  background: var(--tone-ok-bg);
+}
+.origin-alternatives {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.origin-alternatives > small {
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+}
+.origin-alt {
+  padding: 1px 10px;
+  border: 1px dashed var(--border-interactive);
+  border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+  background: var(--surface-card);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.origin-alt:hover {
+  color: var(--accent-fg);
+  border-style: solid;
+}
+.origin-alt small {
+  color: var(--text-tertiary);
 }
 </style>
