@@ -312,6 +312,7 @@ const {
   captureReviewViewport,
   restoreReviewViewport,
   queueRecordRequest,
+  applyAuthoritativeRecord,
   textDraftKey,
   setMessage,
   t: (key, fallback) => i18n.t(key, fallback),
