@@ -52,8 +52,7 @@ const advancedOpen = ref(false);
       <span
         ><b>{{ i18n.t("pdf_corpus.llm_enrichment_title") }}</b
         ><small
-          >{{ selectedProviderLabel
-          }}<template v-if="selectedProfileModel"> · {{ selectedProfileModel }}</template>
+          >{{ selectedProviderLabel }}<template v-if="selectedProfileModel"> · {{ selectedProfileModel }}</template>
           ·
           {{
             enrichmentMode === "deep"
@@ -367,7 +366,7 @@ const advancedOpen = ref(false);
   color: var(--muted);
   font-size: 0.8125rem;
 }
-@container (max-width:760px) {
+@container (max-width: 760px) {
   .mode-options {
     grid-template-columns: 1fr;
   }
