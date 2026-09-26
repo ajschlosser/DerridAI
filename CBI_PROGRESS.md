@@ -194,7 +194,6 @@ Current slice:
 Next extraction targets are the Metadata and Advanced tab workspaces, followed by the Review shell
 and Finish/repair-intent orchestration.
 
-
 ### Metadata and Advanced workspace extraction
 
 The stacked `task/corpus-builder-metadata-advanced-workspaces` follow-up continues the setup
