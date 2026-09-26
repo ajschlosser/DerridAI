@@ -380,7 +380,7 @@ onBeforeUnmount(() => {
               ? i18n.t('pdf_corpus.gutenberg_search')
               : i18n.t('pdf_corpus.wikisource_search')
           "
-          aria-controls="library-results"
+          :aria-controls="resultCount ? 'library-results' : undefined"
           :disabled="disabled"
           @input="onInput"
           @keydown.down="focusFirstResult"
