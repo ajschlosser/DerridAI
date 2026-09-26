@@ -1,3 +1,4 @@
+<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import {
   metadataValueText,
@@ -5,7 +6,7 @@ import {
   usableListOptions,
   usableOptions,
 } from "../domain/metadataValues";
-import { computed, ref } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import type { CorpusRecord } from "../api/pdfCorpus";
 import { useI18nStore } from "../stores/i18n";
 import { metadataConstraints } from "../domain/metadataConstraints";
@@ -17,6 +18,7 @@ import CorpusMetadataFieldEditor from "./CorpusMetadataFieldEditor.vue";
 import CorpusFieldOwnershipBadge from "./CorpusFieldOwnershipBadge.vue";
 import CorpusEnrichmentChanges from "./CorpusEnrichmentChanges.vue";
 import CorpusFieldPolicyBadges from "./CorpusFieldPolicyBadges.vue";
+import UiTooltip from "./ui/UiTooltip.vue";
 
 const props = defineProps<{
   record: CorpusRecord;
@@ -29,6 +31,8 @@ const props = defineProps<{
   confidenceCalibration?: Record<string, Record<string, Record<string, number>>>;
   knownValues?: Record<string, string[]>;
   schema?: MetadataSchema | null;
+  /** Fields the server requires before it will accept the record; they are listed first and marked. */
+  blockingFields?: string[];
 }>();
 const emit = defineEmits<{
   resolve: [field: string, value: unknown];
@@ -37,6 +41,8 @@ const emit = defineEmits<{
   source: [field: string];
   resolveWithEvidence: [field: string, value: unknown, text: string];
   dirty: [dirty: boolean];
+  /** Every pending field has been decided from this panel: the record is ready for its decision. */
+  complete: [];
 }>();
 const i18n = useI18nStore();
 const populatedOpen = ref(true);
@@ -147,9 +153,33 @@ const attentionFields = computed(() =>
       ["unresolved", "invalid"].includes(String(status(field).status || "")),
   ),
 );
-const activeField = computed(() => attentionFields.value[0] || activeFields.value[0] || "");
+const blocking = computed(() => new Set(props.blockingFields || []));
+const pendingSet = computed(() => new Set(attentionFields.value));
+// The fields to decide keep the order they had when the record opened. A field that is decided stays where it was, folded
+// to one line, instead of jumping to another list; the reviewer's place, and everything below it, stays put.
+const sessionFields = ref<string[]>([]);
+let sessionRecordId = "";
+watch(
+  [() => props.record.record_id, attentionFields],
+  ([recordId, fields]) => {
+    if (recordId !== sessionRecordId) {
+      sessionRecordId = recordId;
+      sessionFields.value = [
+        ...fields.filter((field) => blocking.value.has(field)),
+        ...fields.filter((field) => !blocking.value.has(field)),
+      ];
+      return;
+    }
+    const added = fields.filter((field) => !sessionFields.value.includes(field));
+    if (added.length) sessionFields.value = [...sessionFields.value, ...added];
+  },
+  { immediate: true },
+);
+const decisionFields = computed(() =>
+  sessionFields.value.filter((field) => activeFields.value.includes(field)),
+);
 const settledFields = computed(() =>
-  activeFields.value.filter((field) => !attentionFields.value.includes(field)),
+  activeFields.value.filter((field) => !decisionFields.value.includes(field)),
 );
 // Optional details a record simply does not have yet (a quoted speaker, topics…) have no value and no status, so they
 // were never listed, and there was nowhere to add one. They are offered here, empty, for the person to fill in.
@@ -256,6 +286,45 @@ function calibrated(field: string) {
     ? { reviewed: Number(row.reviewed || 0), acceptanceRate: Number(row.acceptance_rate || 0) }
     : null;
 }
+// After a decision, focus moves to the next field still to decide (its Confirm button, so Enter confirms it), and once
+// none is left the parent is told, so it can offer the record decision. It waits for the save to finish, since the
+// other fields' buttons are disabled while one field is being written.
+const root = ref<HTMLElement | null>(null);
+const advanceFrom = ref<string | null>(null);
+function decided(field: string) {
+  advanceFrom.value = field;
+  void nextTick(tryAdvance);
+}
+function tryAdvance() {
+  const from = advanceFrom.value;
+  if (from === null || props.busy || props.savingField || props.batchSaving) return;
+  advanceFrom.value = null;
+  const order = decisionFields.value;
+  const start = Math.max(0, order.indexOf(from));
+  const next = [...order.slice(start + 1), ...order.slice(0, start)].find(
+    (field) => field !== from && pendingSet.value.has(field),
+  );
+  if (!next) {
+    if (!attentionFields.value.some((field) => field !== from)) emit("complete");
+    return;
+  }
+  focusField(next);
+}
+function focusField(field: string) {
+  const card = [...(root.value?.querySelectorAll<HTMLElement>("[data-field]") || [])].find(
+    (item) => item.dataset.field === field,
+  );
+  if (!card) return;
+  const target =
+    card.querySelector<HTMLElement>("[data-primary-action]:not([disabled])") ||
+    card.querySelector<HTMLElement>("select:not([disabled]), input:not([disabled])");
+  card.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+  target?.focus({ preventScroll: true });
+}
+watch(
+  () => [props.busy, props.savingField, props.batchSaving, attentionFields.value.length],
+  () => void nextTick(tryAdvance),
+);
 function displayValue(field: string) {
   const value = unwrapMetadataValue(fieldValue(field));
   if (value === true) return i18n.t("ui.yes");
@@ -265,20 +334,17 @@ function displayValue(field: string) {
 </script>
 
 <template>
-  <section class="metadata-review" aria-labelledby="metadata-review-title">
+  <section ref="root" class="metadata-review" aria-labelledby="metadata-review-title">
     <header class="metadata-head">
-      <div>
-        <h3 id="metadata-review-title">{{ i18n.t("pdf_corpus.metadata_tab") }}</h3>
-        <p>
-          {{ i18n.t("pdf_corpus.metadata_streamlined_help") }}
-        </p>
-      </div>
-      <p v-if="activeField" class="active-field" role="status">
-        {{ i18n.t("pdf_corpus.active_metadata_field", "Active field") }}:
-        <b>{{ fieldLabel(activeField) || activeField.replaceAll("_", " ") }}</b>
-      </p>
+      <h3 id="metadata-review-title">{{ i18n.t("pdf_corpus.metadata_tab") }}</h3>
+      <UiTooltip
+        :text="i18n.t('pdf_corpus.metadata_streamlined_help')"
+        :label="i18n.t('pdf_corpus.metadata_review_help_label')"
+        placement="bottom"
+      />
       <span
         class="review-status"
+        role="status"
         :data-state="
           enrichmentPending ? 'processing' : attentionFields.length ? 'attention' : 'ready'
         "
@@ -302,36 +368,38 @@ function displayValue(field: string) {
       {{ i18n.t("pdf_corpus.metadata_enrichment_pending_help") }}
     </p>
     <div v-if="llmSuggestionCount" class="suggestion-toolbar">
-      <div>
-        <b>{{
-          i18n.tf("pdf_corpus.llm_suggestions_ready", {
-            count: llmSuggestionCount,
-          })
-        }}</b
-        ><span>{{ i18n.t("pdf_corpus.llm_suggestions_ready_help") }}</span>
-      </div>
+      <b>{{
+        i18n.tf("pdf_corpus.llm_suggestions_ready", {
+          count: llmSuggestionCount,
+        })
+      }}</b>
       <button
         type="button"
-        class="btn primary"
+        class="btn small primary"
+        :title="i18n.t('pdf_corpus.llm_suggestions_ready_help')"
         :disabled="busy || batchSaving"
-        @click="emit('resolveMany', llmSuggestions)"
+        @click="
+          emit('resolveMany', llmSuggestions);
+          decided('');
+        "
       >
         {{ i18n.t("pdf_corpus.accept_all_suggestions") }}
       </button>
     </div>
 
     <div
-      v-if="attentionFields.length"
-      class="metadata-grid"
+      v-if="decisionFields.length"
+      class="metadata-grid decision-list"
       role="list"
       :aria-label="i18n.t('pdf_corpus.metadata_needs_review')"
     >
-      <div v-for="field in attentionFields" :key="field" class="metadata-list-item" role="listitem">
-        <CorpusFieldPolicyBadges
-          :field="field"
-          :schema-field="schemaFields[field]"
-          :core-required="requiredFields.has(field)"
-        />
+      <div
+        v-for="field in decisionFields"
+        :key="field"
+        class="metadata-list-item"
+        role="listitem"
+        :data-decided="pendingSet.has(field) ? undefined : 'true'"
+      >
         <CorpusMetadataFieldEditor
           :label="fieldLabel(field)"
           :field="field"
@@ -343,29 +411,40 @@ function displayValue(field: string) {
           :control="spec(field).control"
           :allow-custom="Boolean(spec(field).allowCustom)"
           :required="requiredFields.has(field)"
+          :required-to-accept="blocking.has(field)"
           :busy="fieldBusy(field)"
           :saving="savingField === field"
           :saved="savedField === field"
           :constraint="constraint(field)"
           :calibrated-acceptance="calibrated(field)"
-          :open="field === activeField"
-          @save="(value) => emit('resolve', field, value)"
-          @no-value="emit('noValue', field)"
+          :open="pendingSet.has(field)"
+          @save="
+            (value) => {
+              emit('resolve', field, value);
+              decided(field);
+            }
+          "
+          @no-value="
+            emit('noValue', field);
+            decided(field);
+          "
           @source="emit('source', field)"
           @save-with-selection-evidence="
-            (value, text) => emit('resolveWithEvidence', field, value, text)
+            (value, text) => {
+              emit('resolveWithEvidence', field, value, text);
+              decided(field);
+            }
           "
           @dirty="(value) => emit('dirty', value)"
-        />
-        <button
-          v-if="String(status(field).method || '').includes('llm') && status(field).autofilled"
-          type="button"
-          class="btn small primary quick-confirm"
-          :disabled="fieldBusy(field)"
-          @click="emit('resolve', field, fieldValue(field))"
         >
-          {{ i18n.t("pdf_corpus.confirm_llm_value", "Confirm LLM value") }}
-        </button>
+          <template #policy>
+            <CorpusFieldPolicyBadges
+              :field="field"
+              :schema-field="schemaFields[field]"
+              :core-required="requiredFields.has(field)"
+            />
+          </template>
+        </CorpusMetadataFieldEditor>
       </div>
     </div>
     <details
@@ -378,13 +457,8 @@ function displayValue(field: string) {
         {{ i18n.t("pdf_corpus.populated_metadata") }}
         <span>{{ settledFields.length }}</span>
       </summary>
-      <div class="metadata-grid" role="list">
+      <div class="metadata-grid field-rows" role="list">
         <div v-for="field in settledFields" :key="field" class="metadata-list-item" role="listitem">
-          <CorpusFieldPolicyBadges
-            :field="field"
-            :schema-field="schemaFields[field]"
-            :core-required="requiredFields.has(field)"
-          />
           <CorpusMetadataFieldEditor
             :label="fieldLabel(field)"
             :field="field"
@@ -408,7 +482,15 @@ function displayValue(field: string) {
               (value, text) => emit('resolveWithEvidence', field, value, text)
             "
             @dirty="(value) => emit('dirty', value)"
-          />
+          >
+            <template #policy>
+              <CorpusFieldPolicyBadges
+                :field="field"
+                :schema-field="schemaFields[field]"
+                :core-required="requiredFields.has(field)"
+              />
+            </template>
+          </CorpusMetadataFieldEditor>
         </div>
       </div>
     </details>
@@ -421,13 +503,8 @@ function displayValue(field: string) {
       <p class="add-metadata-help">
         {{ i18n.t("pdf_corpus.add_metadata_help") }}
       </p>
-      <div class="metadata-grid" role="list">
+      <div class="metadata-grid field-rows" role="list">
         <div v-for="field in addableFields" :key="field" class="metadata-list-item" role="listitem">
-          <CorpusFieldPolicyBadges
-            :field="field"
-            :schema-field="schemaFields[field]"
-            :core-required="requiredFields.has(field)"
-          />
           <CorpusMetadataFieldEditor
             :label="fieldLabel(field)"
             :field="field"
@@ -447,7 +524,15 @@ function displayValue(field: string) {
               (value, text) => emit('resolveWithEvidence', field, value, text)
             "
             @dirty="(value) => emit('dirty', value)"
-          />
+          >
+            <template #policy>
+              <CorpusFieldPolicyBadges
+                :field="field"
+                :schema-field="schemaFields[field]"
+                :core-required="requiredFields.has(field)"
+              />
+            </template>
+          </CorpusMetadataFieldEditor>
         </div>
       </div>
     </details>
@@ -467,17 +552,16 @@ function displayValue(field: string) {
           class="inherited-row"
           role="listitem"
         >
-          <div>
-            <b>{{ i18n.t(`record.${field}`, field.replaceAll("_", " ")) }}</b
+          <b>{{ i18n.t(`record.${field}`, field.replaceAll("_", " ")) }}</b>
+          <span>{{ displayValue(field) }}</span>
+          <span class="inherited-aside"
             ><CorpusFieldOwnershipBadge
               :status="String(status(field).status || 'inherited')"
               :method="String(status(field).method || 'manifest')"
-            />
-          </div>
-          <span>{{ displayValue(field) }}</span
-          ><button type="button" class="link-button" @click="emit('source', field)">
-            {{ i18n.t("pdf_corpus.view_evidence") }}
-          </button>
+            /><button type="button" class="link-button" @click="emit('source', field)">
+              {{ i18n.t("pdf_corpus.view_evidence") }}
+            </button></span
+          >
         </article>
       </div>
     </details>
@@ -487,142 +571,133 @@ function displayValue(field: string) {
 <style scoped>
 .metadata-review {
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
 .metadata-head {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
 }
 .metadata-head h3 {
   margin: 0;
-  font-size: 1.125rem;
-}
-.metadata-head p {
-  margin: 5px 0 0;
-  max-width: 72ch;
-  color: var(--muted);
-  font-size: 0.875rem;
-  line-height: 1.5;
+  font-size: var(--fs-md);
 }
 .review-status {
-  padding: 6px 9px;
+  margin-inline-start: auto;
+  padding: 3px 10px;
+  border: 1px solid var(--border-subtle);
   border-radius: 999px;
-  background: var(--soft);
-  font-size: 0.8125rem;
-  font-weight: 800;
+  background: var(--surface-inset, var(--soft));
+  font-size: var(--fs-sm);
+  font-weight: 700;
   white-space: nowrap;
 }
 .review-status[data-state="attention"] {
-  border: 1px solid var(--warning, #a16207);
+  border-color: var(--tone-warn-edge);
+  background: var(--tone-warn-bg);
+  color: var(--tone-warn-fg);
 }
-.active-field {
-  margin: -4px 0 0;
-  padding: 9px 12px;
-  border-inline-start: 3px solid var(--accent);
-  background: var(--soft);
-  color: var(--muted);
-  font-size: 0.875rem;
-}
-.active-field b {
-  color: var(--text);
+.review-status[data-state="ready"] {
+  border-color: var(--tone-ok-edge);
+  background: var(--tone-ok-bg);
+  color: var(--tone-ok-fg);
 }
 .enrichment-note {
   margin: 0;
-  padding: 10px 12px;
-  border-radius: 9px;
-  background: var(--soft);
-  font-size: 0.875rem;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  background: var(--surface-inset, var(--soft));
+  font-size: var(--fs-sm);
   line-height: 1.5;
 }
 .suggestion-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 14px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 11px;
-  background: var(--soft);
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--tone-info-edge);
+  border-radius: var(--radius-control);
+  background: var(--tone-info-bg);
+  color: var(--tone-info-fg);
 }
-.suggestion-toolbar > div {
-  display: grid;
-  gap: 2px;
-}
-.suggestion-toolbar b {
-  font-size: 0.875rem;
-}
-.suggestion-toolbar span {
-  font-size: 0.8125rem;
-  color: var(--muted);
-  line-height: 1.4;
+.suggestion-toolbar > b {
+  font-size: var(--fs-sm);
 }
 .metadata-grid {
   min-width: 0;
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 .metadata-list-item {
   min-width: 0;
 }
-.settled-metadata {
-  border-top: 1px solid var(--line);
-  padding-top: 8px;
+/* A field decided during this visit stays in place as a row, separated from the open cards around it. */
+.decision-list > [data-decided="true"] {
+  padding-inline: 12px;
+  border-radius: var(--radius-control);
+  background: var(--surface-inset, var(--soft));
 }
-.settled-metadata > summary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 42px;
-  font-weight: 800;
-  cursor: pointer;
+.field-rows {
+  gap: 0;
 }
-.settled-metadata > summary span {
-  font-size: 0.8125rem;
-  color: var(--muted);
+.field-rows > .metadata-list-item + .metadata-list-item {
+  border-top: 1px solid var(--border-subtle);
 }
-.settled-metadata[open] > .metadata-grid {
-  padding-top: 8px;
-}
+.settled-metadata,
 .inherited-metadata {
-  margin-top: 8px;
-  border-top: 1px solid var(--line);
-  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 4px;
 }
-.inherited-metadata summary {
-  cursor: pointer;
-  min-height: 40px;
+.settled-metadata > summary,
+.inherited-metadata > summary {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: 800;
+  min-height: 40px;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  cursor: pointer;
 }
-.inherited-metadata summary span {
-  font-size: 0.8125rem;
-  color: var(--muted);
+.settled-metadata > summary span,
+.inherited-metadata > summary span {
+  color: var(--text-tertiary);
+  font-weight: 600;
 }
+.add-metadata-help,
 .inherited-metadata > p {
-  color: var(--muted);
-  font-size: 0.875rem;
+  margin: 0 0 6px;
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
   line-height: 1.5;
 }
 .inherited-grid {
   display: grid;
-  gap: 7px;
 }
 .inherited-row {
   display: grid;
-  grid-template-columns: minmax(180px, 0.7fr) 1fr auto;
-  gap: 12px;
+  grid-template-columns: minmax(7rem, 0.8fr) minmax(0, 1.4fr) auto;
+  gap: 4px 12px;
   align-items: center;
-  padding: 10px 0;
-  border-top: 1px solid var(--line);
+  min-height: 40px;
+  padding: 4px 0;
+  border-top: 1px solid var(--border-subtle);
 }
-.inherited-row > div {
-  display: flex;
-  gap: 7px;
+.inherited-row > b {
+  color: var(--text-secondary, var(--muted));
+  font-size: var(--fs-sm);
+}
+.inherited-row > span {
+  min-width: 0;
+  font-size: var(--fs-base);
+  overflow-wrap: anywhere;
+}
+.inherited-aside {
+  display: inline-flex;
+  gap: 6px;
   align-items: center;
+  justify-content: flex-end;
   flex-wrap: wrap;
 }
 .link-button {
@@ -630,36 +705,22 @@ function displayValue(field: string) {
   background: none;
   color: var(--accent-fg);
   font: inherit;
+  font-size: var(--fs-sm);
   font-weight: 700;
-  min-height: 36px;
+  min-height: 32px;
   cursor: pointer;
 }
 :is(button, summary):focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
-@media (max-width: 720px) {
-  .metadata-head,
+@media (max-width: 520px) {
   .suggestion-toolbar {
     flex-direction: column;
     align-items: stretch;
   }
   .inherited-row {
     grid-template-columns: 1fr;
-  }
-  .review-status {
-    white-space: normal;
-  }
-}
-@media (max-height: 860px) {
-  .metadata-head p {
-    display: none;
-  }
-  .metadata-head h3 {
-    font-size: 1rem;
-  }
-  .metadata-review {
-    gap: 10px;
   }
 }
 </style>

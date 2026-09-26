@@ -1,6 +1,8 @@
+<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref, useId, watch } from "vue";
 import { useI18nStore } from "../stores/i18n";
+import AppIcon from "./AppIcon.vue";
 import CorpusFieldOwnershipBadge from "./CorpusFieldOwnershipBadge.vue";
 import UiCombobox from "./ui/UiCombobox.vue";
 import { normalizeMetadataFieldValue } from "../domain/metadataFieldRegistry";
@@ -27,6 +29,8 @@ const props = defineProps<{
   recheck?: { first: unknown; second: unknown; agreed: boolean };
   constraint?: { value: unknown; reason: string } | null;
   calibratedAcceptance?: { reviewed: number; acceptanceRate: number } | null;
+  /** The server will not accept the record until this field is decided. */
+  requiredToAccept?: boolean;
 }>();
 const emit = defineEmits<{
   save: [value: unknown];
@@ -36,6 +40,7 @@ const emit = defineEmits<{
   dirty: [dirty: boolean];
 }>();
 const i18n = useI18nStore();
+const labelId = `${useId()}-label`;
 const editing = ref(Boolean(props.open));
 const dirty = ref(false);
 const draft = ref<unknown>("");
@@ -130,6 +135,9 @@ watch(
       editing.value = true;
       dirty.value = false;
       draft.value = editableValue();
+    } else if (!dirty.value) {
+      // A pending field that has just been decided folds back into its one-line summary.
+      editing.value = false;
     }
   },
 );
@@ -148,13 +156,41 @@ function normalized() {
   return normalizeMetadataFieldValue(props.field, draft.value);
 }
 const selectionMissing = ref(false);
+const canSave = computed(
+  () =>
+    !props.busy &&
+    !props.saving &&
+    draft.value !== "" &&
+    draft.value !== undefined &&
+    !(props.required && draft.value === null),
+);
 function save() {
+  if (!canSave.value) return;
   emit("save", normalized());
   dirty.value = false;
   emit("dirty", false);
+  // A pending field stays open until the saved record says it is decided; an optional edit closes at once.
+  editing.value = Boolean(props.open);
+}
+function startEdit() {
   editing.value = true;
+  dirty.value = false;
+  draft.value = editableValue();
+}
+function cancelEdit() {
+  dirty.value = false;
+  draft.value = editableValue();
+  editing.value = false;
+  emit("dirty", false);
+}
+/** Ctrl/Cmd+Enter confirms from anywhere in the field, including inside its value control. */
+function onKeydown(event: KeyboardEvent) {
+  if (event.key !== "Enter" || !(event.ctrlKey || event.metaKey) || !editing.value) return;
+  event.preventDefault();
+  save();
 }
 function saveWithSelection() {
+  if (!canSave.value) return;
   const selected = selectedRecordText();
   if (!selected) {
     selectionMissing.value = true;
@@ -164,7 +200,7 @@ function saveWithSelection() {
   emit("saveWithSelectionEvidence", normalized(), selected);
   dirty.value = false;
   emit("dirty", false);
-  editing.value = true;
+  editing.value = Boolean(props.open);
 }
 function markDirty() {
   dirty.value = true;
@@ -195,6 +231,13 @@ function display(value: unknown) {
   if (unwrapped === false) return i18n.t("ui.no");
   return metadataValueText(unwrapped) || "—";
 }
+const fieldLabel = computed(() =>
+  i18n.t(`record.${props.field}`, props.label || props.field.replaceAll("_", " ")),
+);
+const textSelectable = computed(
+  () =>
+    props.control === "combobox" || props.control === "multi-combobox" || props.control === "text",
+);
 const confidenceLabel = computed(() =>
   confidence.value === null
     ? i18n.t("pdf_corpus.confidence_not_reported")
@@ -211,13 +254,50 @@ const autoResolved = computed(
 <template>
   <article
     class="metadata-field"
+    :data-field="field"
+    :data-mode="editing ? 'edit' : 'view'"
     :data-attention="
       status?.status === 'unresolved' || status?.status === 'invalid' ? 'true' : 'false'
     "
+    :data-unresolved-field="open ? 'true' : undefined"
+    :aria-labelledby="labelId"
+    @keydown="onKeydown"
   >
-    <div class="field-topline">
-      <div class="field-name">
-        <b>{{ i18n.t(`record.${field}`, label || field.replaceAll("_", " ")) }}</b
+    <!-- A decided field is one line: what it is, its value, where the value came from. -->
+    <div v-if="!editing" class="field-row">
+      <span :id="labelId" class="field-label">{{ fieldLabel }}</span>
+      <span class="field-current">{{ display(resolvedValue) }}</span>
+      <span class="field-row-aside">
+        <span v-if="saved" class="saved" role="status"
+          ><AppIcon name="check" />{{ i18n.t("pdf_corpus.field_saved_short") }}</span
+        ><CorpusFieldOwnershipBadge
+          :status="String(status?.status || '')"
+          :method="String(status?.method || '')"
+          :derivation-method="String(status?.derivation_method || '')"
+          :source="String(status?.value_source || '')"
+          :verification="String(status?.verification_status || '')"
+          :audit="Boolean(status?.audit_sample)"
+        /><button
+          type="button"
+          class="btn small quiet field-edit"
+          :disabled="busy"
+          :aria-label="i18n.tf('pdf_corpus.edit_field', { field: fieldLabel })"
+          @click="startEdit"
+        >
+          {{ i18n.t("ui.edit") }}
+        </button>
+      </span>
+    </div>
+    <header v-else class="field-head">
+      <div class="field-title">
+        <b :id="labelId" class="field-label">{{ fieldLabel }}</b
+        ><span v-if="requiredToAccept" class="field-required">{{
+          i18n.t("pdf_corpus.required_to_accept")
+        }}</span>
+      </div>
+      <span class="field-head-aside">
+        <span v-if="saved" class="saved" role="status"
+          ><AppIcon name="check" />{{ i18n.t("pdf_corpus.field_saved_short") }}</span
         ><CorpusFieldOwnershipBadge
           :status="String(status?.status || '')"
           :method="String(status?.method || '')"
@@ -226,23 +306,9 @@ const autoResolved = computed(
           :verification="String(status?.verification_status || '')"
           :audit="Boolean(status?.audit_sample)"
         />
-      </div>
-      <div class="field-actions">
-        <button type="button" class="link-button" @click="emit('source')">
-          {{ i18n.t("pdf_corpus.view_evidence") }}</button
-        ><button
-          type="button"
-          class="btn small"
-          :disabled="busy"
-          @click="
-            editing = !editing;
-            if (!editing) emit('dirty', false);
-          "
-        >
-          {{ editing ? i18n.t("ui.done") : i18n.t("ui.edit") }}
-        </button>
-      </div>
-    </div>
+      </span>
+      <slot name="policy" />
+    </header>
     <p v-if="status?.recheck" class="blind-note" role="status">
       {{ i18n.t("pdf_corpus.recheck_prompt") }}
     </p>
@@ -263,78 +329,6 @@ const autoResolved = computed(
         })
       }}
     </p>
-    <div v-if="!editing" class="field-current">{{ display(resolvedValue) }}</div>
-    <details v-if="status?.assertion_id" class="assertion-provenance">
-      <summary>
-        <span>{{ i18n.t("pdf_corpus.assertion_details", "Assertion details") }}</span>
-        <span v-if="status?.disputed" class="assertion-disputed">{{
-          i18n.t("pdf_corpus.assertion_disputed", "Disputed")
-        }}</span>
-      </summary>
-      <dl class="assertion-facts">
-        <div v-if="status?.derivation_method">
-          <dt>{{ i18n.t("pdf_corpus.assertion_derivation", "Derivation") }}</dt>
-          <dd>{{ humanizeToken(status.derivation_method) }}</dd>
-        </div>
-        <div v-if="status?.evaluation_status">
-          <dt>{{ i18n.t("pdf_corpus.assertion_evaluation", "Evaluation") }}</dt>
-          <dd>{{ humanizeToken(status.evaluation_status) }}</dd>
-        </div>
-        <div v-if="status?.authority_status">
-          <dt>{{ i18n.t("pdf_corpus.assertion_authority", "Authority") }}</dt>
-          <dd>{{ humanizeToken(status.authority_status) }}</dd>
-        </div>
-        <div v-if="status?.value_status">
-          <dt>{{ i18n.t("pdf_corpus.assertion_value_state", "Value state") }}</dt>
-          <dd>{{ humanizeToken(status.value_status) }}</dd>
-        </div>
-        <div v-if="status?.model">
-          <dt>{{ i18n.t("pdf_corpus.assertion_model", "Model") }}</dt>
-          <dd>{{ status.model }}</dd>
-        </div>
-        <div v-if="status?.actor">
-          <dt>{{ i18n.t("pdf_corpus.assertion_actor", "Actor") }}</dt>
-          <dd>{{ status.actor }}</dd>
-        </div>
-        <div v-if="status?.record_revision">
-          <dt>{{ i18n.t("pdf_corpus.assertion_revision", "Record revision") }}</dt>
-          <dd>{{ status.record_revision }}</dd>
-        </div>
-        <div v-if="status?.created_at">
-          <dt>{{ i18n.t("pdf_corpus.assertion_created", "Created") }}</dt>
-          <dd>{{ displayTimestamp(status.created_at) }}</dd>
-        </div>
-      </dl>
-      <p v-if="status?.reason" class="assertion-reason">{{ status.reason }}</p>
-      <p v-if="Array.isArray(status?.evidence)" class="assertion-evidence-count">
-        {{
-          i18n.tf("pdf_corpus.assertion_evidence_count", {
-            count: status.evidence.length,
-          })
-        }}
-      </p>
-      <div v-if="assertionAlternatives.length" class="assertion-alternatives">
-        <b>{{
-          i18n.t("pdf_corpus.assertion_retained_alternatives", "Retained alternative assertions")
-        }}</b>
-        <ul>
-          <li
-            v-for="item in assertionAlternatives"
-            :key="String(item.assertion_id || item.created_at || item.value)"
-          >
-            <span>{{ display(item.value) }}</span>
-            <small>
-              {{ humanizeToken(item.derivation_method) }}
-              <template v-if="item.authority_status">
-                · {{ humanizeToken(item.authority_status) }}</template
-              >
-              <template v-if="item.model"> · {{ item.model }}</template>
-              <template v-if="item.actor"> · {{ item.actor }}</template>
-            </small>
-          </li>
-        </ul>
-      </div>
-    </details>
     <div v-if="editing" class="field-editor">
       <div
         v-if="
@@ -372,7 +366,7 @@ const autoResolved = computed(
           v-if="control === 'enum'"
           v-model="draft"
           class="control"
-          :aria-label="i18n.t(`record.${field}`, label || field.replaceAll('_', ' '))"
+          :aria-label="fieldLabel"
           @change="markDirty"
         >
           <option value="" disabled>
@@ -383,7 +377,7 @@ const autoResolved = computed(
           </option>
         </select>
         <fieldset v-else-if="control === 'boolean'" class="boolean-choice">
-          <legend class="sr-only">{{ i18n.t(`record.${field}`, field) }}</legend>
+          <legend class="sr-only">{{ fieldLabel }}</legend>
           <label
             ><input
               v-model="draft"
@@ -406,7 +400,7 @@ const autoResolved = computed(
           v-else-if="control === 'combobox'"
           :model-value="String(draft ?? '')"
           :options="autocompleteOptions"
-          :label="i18n.t(`record.${field}`, field)"
+          :label="fieldLabel"
           @update:model-value="
             (value) => {
               draft = value;
@@ -418,7 +412,7 @@ const autoResolved = computed(
           v-else-if="isMultiCombobox"
           :model-value="String(draft ?? '')"
           :options="autocompleteOptions"
-          :label="i18n.t(`record.${field}`, field)"
+          :label="fieldLabel"
           :multiple="true"
           @update:model-value="
             (value) => {
@@ -432,7 +426,7 @@ const autoResolved = computed(
           :model-value="String(draft ?? '')"
           :options="autocompleteOptions"
           :type="control === 'number' ? 'number' : 'text'"
-          :label="i18n.t(`record.${field}`, field)"
+          :label="fieldLabel"
           @update:model-value="
             (value) => {
               draft = value;
@@ -441,51 +435,64 @@ const autoResolved = computed(
           "
         />
       </div>
+      <!-- The decision row keeps the same shape in every field: confirm, no value, and (for an optional edit) cancel. -->
       <div class="editor-actions">
         <button
           type="button"
-          class="btn primary"
-          :disabled="
-            busy || saving || draft === '' || draft === undefined || (required && draft === null)
-          "
+          class="btn small primary"
+          data-primary-action
+          :disabled="!canSave"
+          aria-keyshortcuts="Control+Enter Meta+Enter"
           @click="save"
         >
           {{
-            saving ? i18n.t("pdf_corpus.saving_decision") : i18n.t("pdf_corpus.save_field_value")
-          }}
-        </button>
-        <button type="button" class="btn" :disabled="busy" @click="emit('noValue')">
-          {{ i18n.t("pdf_corpus.confirm_no_value") }}
+            saving
+              ? i18n.t("pdf_corpus.saving_decision")
+              : dirty || !hasValue(resolvedValue)
+                ? i18n.t("pdf_corpus.save_field_value")
+                : i18n.t("pdf_corpus.confirm_field_value")
+          }}<kbd aria-hidden="true">{{ i18n.t("pdf_corpus.shortcut.confirm_field") }}</kbd>
         </button>
         <button
-          v-if="control === 'combobox' || control === 'multi-combobox' || control === 'text'"
           type="button"
-          class="btn subtle"
+          class="btn small"
           :disabled="busy"
-          @click="selectFromText"
+          :title="i18n.t('pdf_corpus.confirm_no_value')"
+          @click="emit('noValue')"
         >
-          {{ i18n.t("pdf_corpus.select_from_text") }}
+          {{ i18n.t("pdf_corpus.no_value_short") }}
         </button>
+        <button v-if="!open" type="button" class="btn small quiet" @click="cancelEdit">
+          {{ i18n.t("ui.cancel") }}
+        </button>
+      </div>
+      <div class="field-tools">
+        <template v-if="textSelectable">
+          <button
+            type="button"
+            class="link-button"
+            :disabled="busy"
+            :title="i18n.t('pdf_corpus.select_from_text_help')"
+            @click="selectFromText"
+          >
+            {{ i18n.t("pdf_corpus.select_from_text") }}</button
+          ><span aria-hidden="true">·</span>
+        </template>
         <button
           type="button"
-          class="btn subtle"
-          :disabled="
-            busy || saving || draft === '' || draft === undefined || (required && draft === null)
-          "
+          class="link-button"
+          :disabled="!canSave"
           :title="i18n.t('pdf_corpus.assign_selected_evidence_help')"
           @click="saveWithSelection"
         >
-          {{ i18n.t("pdf_corpus.assign_selected_evidence") }}
+          {{ i18n.t("pdf_corpus.assign_selected_evidence") }}</button
+        ><span aria-hidden="true">·</span
+        ><button type="button" class="link-button" @click="emit('source')">
+          {{ i18n.t("pdf_corpus.view_evidence") }}
         </button>
       </div>
       <p v-if="selectionMissing" class="selection-help" role="alert">
         {{ i18n.t("pdf_corpus.select_text_first") }}
-      </p>
-      <p
-        v-if="control === 'combobox' || control === 'multi-combobox' || control === 'text'"
-        class="selection-help"
-      >
-        {{ i18n.t("pdf_corpus.select_from_text_help") }}
       </p>
       <div class="field-meta">
         <span v-if="isLlm && hasValue(resolvedValue)" class="proposal">{{
@@ -517,10 +524,78 @@ const autoResolved = computed(
             count: calibratedAcceptance.reviewed,
           })
         }}</span>
-        <span v-if="saved" class="saved" role="status">{{
-          i18n.t("pdf_corpus.decision_saved_editable")
-        }}</span>
       </div>
+      <details v-if="status?.assertion_id" class="assertion-provenance">
+        <summary>
+          <span>{{ i18n.t("pdf_corpus.assertion_details", "Assertion details") }}</span>
+          <span v-if="status?.disputed" class="assertion-disputed">{{
+            i18n.t("pdf_corpus.assertion_disputed", "Disputed")
+          }}</span>
+        </summary>
+        <dl class="assertion-facts">
+          <div v-if="status?.derivation_method">
+            <dt>{{ i18n.t("pdf_corpus.assertion_derivation", "Derivation") }}</dt>
+            <dd>{{ humanizeToken(status.derivation_method) }}</dd>
+          </div>
+          <div v-if="status?.evaluation_status">
+            <dt>{{ i18n.t("pdf_corpus.assertion_evaluation", "Evaluation") }}</dt>
+            <dd>{{ humanizeToken(status.evaluation_status) }}</dd>
+          </div>
+          <div v-if="status?.authority_status">
+            <dt>{{ i18n.t("pdf_corpus.assertion_authority", "Authority") }}</dt>
+            <dd>{{ humanizeToken(status.authority_status) }}</dd>
+          </div>
+          <div v-if="status?.value_status">
+            <dt>{{ i18n.t("pdf_corpus.assertion_value_state", "Value state") }}</dt>
+            <dd>{{ humanizeToken(status.value_status) }}</dd>
+          </div>
+          <div v-if="status?.model">
+            <dt>{{ i18n.t("pdf_corpus.assertion_model", "Model") }}</dt>
+            <dd>{{ status.model }}</dd>
+          </div>
+          <div v-if="status?.actor">
+            <dt>{{ i18n.t("pdf_corpus.assertion_actor", "Actor") }}</dt>
+            <dd>{{ status.actor }}</dd>
+          </div>
+          <div v-if="status?.record_revision">
+            <dt>{{ i18n.t("pdf_corpus.assertion_revision", "Record revision") }}</dt>
+            <dd>{{ status.record_revision }}</dd>
+          </div>
+          <div v-if="status?.created_at">
+            <dt>{{ i18n.t("pdf_corpus.assertion_created", "Created") }}</dt>
+            <dd>{{ displayTimestamp(status.created_at) }}</dd>
+          </div>
+        </dl>
+        <p v-if="status?.reason" class="assertion-reason">{{ status.reason }}</p>
+        <p v-if="Array.isArray(status?.evidence)" class="assertion-evidence-count">
+          {{
+            i18n.tf("pdf_corpus.assertion_evidence_count", {
+              count: status.evidence.length,
+            })
+          }}
+        </p>
+        <div v-if="assertionAlternatives.length" class="assertion-alternatives">
+          <b>{{
+            i18n.t("pdf_corpus.assertion_retained_alternatives", "Retained alternative assertions")
+          }}</b>
+          <ul>
+            <li
+              v-for="item in assertionAlternatives"
+              :key="String(item.assertion_id || item.created_at || item.value)"
+            >
+              <span>{{ display(item.value) }}</span>
+              <small>
+                {{ humanizeToken(item.derivation_method) }}
+                <template v-if="item.authority_status">
+                  · {{ humanizeToken(item.authority_status) }}</template
+                >
+                <template v-if="item.model"> · {{ item.model }}</template>
+                <template v-if="item.actor"> · {{ item.actor }}</template>
+              </small>
+            </li>
+          </ul>
+        </div>
+      </details>
     </div>
   </article>
 </template>
@@ -528,118 +603,81 @@ const autoResolved = computed(
 <style scoped>
 .metadata-field {
   min-width: 0;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--card);
-  padding: 14px;
   display: grid;
-  gap: 10px;
+  gap: var(--space-2, 8px);
 }
-.metadata-field[data-attention="true"] {
-  border-inline-start: 4px solid var(--warning, #a16207);
+/* An open field is a card; a decided one is a quiet row in a list. */
+.metadata-field[data-mode="edit"] {
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-card);
 }
-.field-topline {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: flex-start;
+.metadata-field[data-mode="edit"][data-attention="true"] {
+  border-inline-start: 3px solid var(--tone-warn-border);
 }
-.field-name {
+.metadata-field[data-mode="edit"]:focus-within {
+  border-color: var(--ui-accent, var(--accent));
+  box-shadow: 0 0 0 1px var(--ui-accent, var(--accent));
+}
+.field-row {
+  display: grid;
+  grid-template-columns: minmax(7rem, 0.8fr) minmax(0, 1.4fr) auto;
+  gap: 4px 12px;
+  align-items: center;
+  min-height: 40px;
+  padding: 4px 0;
+}
+.field-label {
   min-width: 0;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
+  color: var(--text-secondary, var(--muted));
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  overflow-wrap: anywhere;
 }
-.field-actions,
-.field-meta,
-.editor-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
+.field-head .field-label {
+  color: var(--text);
+  font-size: var(--fs-base);
 }
 .field-current {
-  font-size: 0.9375rem;
-  line-height: 1.5;
+  min-width: 0;
+  font-size: var(--fs-base);
+  line-height: 1.45;
   overflow-wrap: anywhere;
+}
+.field-row-aside,
+.field-head-aside {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.field-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  align-items: center;
+}
+.field-head > :deep(.field-policy) {
+  grid-column: 1 / -1;
+}
+.field-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.field-required {
+  color: var(--tone-warn-fg);
+  font-size: var(--fs-xs);
+  font-weight: 700;
 }
 .field-editor {
   min-width: 0;
   display: grid;
-  gap: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--line);
-}
-.assertion-provenance {
-  min-width: 0;
-  padding: 9px 10px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--soft);
-}
-.assertion-provenance summary {
-  display: flex;
   gap: 8px;
-  align-items: center;
-  cursor: pointer;
-  font-size: 0.8125rem;
-  font-weight: 750;
-}
-.assertion-disputed {
-  padding: 2px 6px;
-  border-radius: 999px;
-  background: var(--tone-warn-bg);
-  color: var(--tone-warn-fg);
-  font-size: 0.75rem;
-}
-.assertion-facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
-  gap: 7px 12px;
-  margin: 10px 0 0;
-}
-.assertion-facts div {
-  min-width: 0;
-}
-.assertion-facts dt {
-  color: var(--muted);
-  font-size: 0.75rem;
-}
-.assertion-facts dd {
-  margin: 2px 0 0;
-  overflow-wrap: anywhere;
-  font-size: 0.8125rem;
-  font-weight: 650;
-}
-.assertion-reason,
-.assertion-evidence-count {
-  margin: 8px 0 0;
-  color: var(--muted);
-  font-size: 0.8125rem;
-  line-height: 1.45;
-}
-.assertion-alternatives {
-  display: grid;
-  gap: 6px;
-  margin-top: 10px;
-  padding-top: 9px;
-  border-top: 1px solid var(--line);
-  font-size: 0.8125rem;
-}
-.assertion-alternatives ul {
-  display: grid;
-  gap: 5px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.assertion-alternatives li {
-  display: grid;
-  gap: 1px;
-}
-.assertion-alternatives small {
-  color: var(--muted);
 }
 .value-control {
   min-width: 0;
@@ -651,54 +689,78 @@ const autoResolved = computed(
   max-width: 100%;
 }
 .editor-actions {
-  align-items: stretch;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 .editor-actions .btn {
-  min-height: 40px;
+  min-height: 36px;
 }
-.editor-actions .subtle {
-  order: 3;
+.editor-actions kbd {
+  margin-inline-start: 8px;
+  padding: 0 4px;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  border-radius: 4px;
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  opacity: 0.85;
+}
+.field-tools {
+  display: flex;
+  gap: 2px 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+}
+.field-tools .link-button {
+  min-height: 28px;
+  padding: 0;
+  font-size: var(--fs-sm);
+}
+.field-tools .link-button:disabled {
+  color: var(--text-tertiary);
+  cursor: default;
 }
 .selection-help {
   margin: 0;
-  color: var(--muted);
-  font-size: 0.8125rem;
+  color: var(--tone-warn-fg);
+  font-size: var(--fs-sm);
   line-height: 1.4;
 }
 .field-reason {
   margin: 0;
-  color: var(--muted);
-  font-size: 0.875rem;
+  color: var(--text-secondary, var(--muted));
+  font-size: var(--fs-sm);
   line-height: 1.5;
 }
 .disagreement {
   display: grid;
   gap: 3px;
-  padding: 10px;
-  border: 1px solid var(--warning, #a16207);
-  border-radius: 9px;
-  background: var(--soft);
-  font-size: 0.875rem;
+  padding: 8px 10px;
+  border: 1px solid var(--tone-warn-edge);
+  border-radius: var(--radius-control);
+  background: var(--tone-warn-bg);
+  color: var(--tone-warn-fg);
+  font-size: var(--fs-sm);
 }
 .disagreement small {
-  color: var(--muted);
   line-height: 1.4;
 }
 .constraint {
   display: grid;
   gap: 2px;
-  padding: 9px 10px;
-  border-radius: 9px;
-  background: var(--soft);
-  font-size: 0.875rem;
-}
-.constraint b {
-  font-size: 0.8125rem;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  background: var(--surface-inset, var(--soft));
+  font-size: var(--fs-sm);
 }
 .control {
   width: 100%;
   min-width: 0;
-  min-height: 42px;
+  min-height: 40px;
 }
 .boolean-choice {
   display: flex;
@@ -712,19 +774,104 @@ const autoResolved = computed(
   display: flex;
   gap: 6px;
   align-items: center;
-  min-height: 40px;
+  min-height: 36px;
 }
 .field-meta {
-  font-size: 0.8125rem;
-  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
 }
 .proposal {
-  font-weight: 750;
-  color: var(--text);
+  font-weight: 700;
+  color: var(--text-secondary, var(--text));
 }
 .saved {
-  color: var(--success, #166534);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--tone-ok-fg);
+  font-size: var(--fs-xs);
   font-weight: 700;
+}
+.saved :deep(svg) {
+  inline-size: 0.875rem;
+  block-size: 0.875rem;
+}
+.assertion-provenance {
+  min-width: 0;
+  font-size: var(--fs-sm);
+}
+.assertion-provenance summary {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 28px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+.assertion-provenance[open] {
+  padding: 4px 10px 10px;
+  border-radius: var(--radius-control);
+  background: var(--surface-inset, var(--soft));
+}
+.assertion-disputed {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--tone-warn-bg);
+  color: var(--tone-warn-fg);
+  font-size: var(--fs-xs);
+}
+.assertion-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
+  gap: 7px 12px;
+  margin: 6px 0 0;
+}
+.assertion-facts div {
+  min-width: 0;
+}
+.assertion-facts dt {
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+}
+.assertion-facts dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+.assertion-reason,
+.assertion-evidence-count {
+  margin: 8px 0 0;
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+.assertion-alternatives {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: var(--fs-sm);
+}
+.assertion-alternatives ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.assertion-alternatives li {
+  display: grid;
+  gap: 1px;
+}
+.assertion-alternatives small {
+  color: var(--text-tertiary);
 }
 .link-button {
   border: 0;
@@ -732,32 +879,45 @@ const autoResolved = computed(
   color: var(--accent-fg);
   font: inherit;
   font-weight: 700;
-  min-height: 36px;
   cursor: pointer;
 }
-:is(button, input, select):focus-visible {
+.btn.quiet {
+  border-color: transparent;
+  background: transparent;
+}
+.btn.quiet:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+:is(button, input, select, summary):focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
-@media (max-width: 520px) {
-  .field-topline {
-    flex-direction: column;
-  }
-  .field-actions,
-  .editor-actions {
-    width: 100%;
-  }
-  .editor-actions .btn {
-    flex: 1 1 100%;
-  }
-}
 .blind-note {
-  margin: 0.25rem 0;
+  margin: 0;
   padding: 0.375rem 0.625rem;
   border: 1px solid var(--tone-info-border);
   border-radius: 8px;
   background: var(--tone-info-bg);
   color: var(--tone-info-fg);
-  font-size: 0.8125rem;
+  font-size: var(--fs-sm);
+}
+@media (max-width: 520px) {
+  .field-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .field-row .field-current {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .editor-actions .btn {
+    flex: 1 1 auto;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .metadata-field[data-mode="edit"] {
+    transition:
+      border-color var(--motion-base, 120ms) var(--ease-standard, ease),
+      box-shadow var(--motion-base, 120ms) var(--ease-standard, ease);
+  }
 }
 </style>

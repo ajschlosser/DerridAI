@@ -8,7 +8,8 @@ export type CorpusReviewCommand =
   | "needs-attention"
   | "undo"
   | "redo"
-  | "focus";
+  | "focus"
+  | "metadata";
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -38,6 +39,7 @@ export function corpusReviewCommandFromKeydown(event: KeyboardEvent): CorpusRevi
   if (key === "r") return "reject";
   if (key === "n") return "needs-attention";
   if (key === "f") return "focus";
+  if (key === "m") return "metadata";
   if (key === "z") return event.shiftKey ? "redo" : "undo";
   if (key === "j" || event.key === "ArrowDown") return "next";
   if (key === "k" || event.key === "ArrowUp") return "previous";

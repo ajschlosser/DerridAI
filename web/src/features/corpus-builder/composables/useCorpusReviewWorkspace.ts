@@ -81,9 +81,12 @@ export function useCorpusReviewWorkspace() {
     void nextTick(() => {
       const root = reviewInspectorEl.value;
       const field = root?.querySelector<HTMLElement>('[data-unresolved-field="true"]');
-      const control = field?.querySelector<HTMLElement>(
-        "input:not([disabled]),select:not([disabled]),button:not([disabled]),textarea:not([disabled])",
-      );
+      // The field's Confirm button first, so Enter confirms the proposed value; otherwise its value control.
+      const control =
+        field?.querySelector<HTMLElement>("[data-primary-action]:not([disabled])") ||
+        field?.querySelector<HTMLElement>(
+          "input:not([disabled]),select:not([disabled]),button:not([disabled]),textarea:not([disabled])",
+        );
       if (field && root) {
         const top = Math.max(0, field.offsetTop - root.offsetTop - 56);
         root.scrollTo({ top, behavior: "smooth" });
