@@ -13,7 +13,7 @@ from .field_assertions import migrate_record_assertions
 
 def warning_key(text: str) -> str:
     """A stable identity for a build warning, so an acknowledgement stays attached to the warning it names."""
-    return hashlib.sha256(str(text).encode("utf-8")).hexdigest()[:16]
+    return hashlib.blake2b(str(text).encode("utf-8"), digest_size=8).hexdigest()
 
 
 _RECORD_SCOPED = re.compile(r"^\s*([\w.\-]+):\s")
