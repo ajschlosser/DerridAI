@@ -9,6 +9,8 @@ How: uses SQLiteSystemRepository / SQLiteJobRepository on temp database files.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import json
 import sqlite3
 import sys
@@ -113,11 +115,15 @@ def test_unpersisted_ollama_default_uses_configured_ollama_profile(
 
     repository = SQLiteSystemRepository(tmp_path / "derridai-system.sqlite3")
     monkeypatch.setattr(module, "system_repository", repository)
-    # Settings is a frozen dataclass; object.__setattr__ is the supported test-only
-    # escape hatch for exercising environment-default migration behavior.
-    monkeypatch.setattr(module.app_settings, "embedding_provider", "ollama", raising=False)
-    object.__setattr__(module.app_settings, "embedding_provider", "ollama")
-    object.__setattr__(module.app_settings, "ollama_embed_model", "legacy-env-model")
+    monkeypatch.setattr(
+        module,
+        "app_settings",
+        replace(
+            module.app_settings,
+            embedding_provider="ollama",
+            ollama_embed_model="legacy-env-model",
+        ),
+    )
     store = module.SystemStore()
     store.set_researcher_profiles(
         [
