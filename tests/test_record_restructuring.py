@@ -200,3 +200,15 @@ def test_record_context_is_bounded_by_a_character_budget(tmp_path):
     repo, bid, manager = _manager(tmp_path)
     context = repo.record_context(bid, "r2", before=5, after=5, max_chars=5)
     assert context["truncated"] is True
+
+
+def test_context_route_reads_from_the_repository(tmp_path, monkeypatch):
+    from app.routers import corpus as routes
+
+    repo, bid, manager = _manager(tmp_path)
+    monkeypatch.setattr(routes, "pdf_corpus_repository", repo)
+    result = routes.get_pdf_corpus_record_context(bid, "r2", before=3, after=3)
+    assert [r["record_id"] for r in result["before"]] == ["r1"]
+    with pytest.raises(Exception) as info:
+        routes.get_pdf_corpus_record_context(bid, "missing", before=1, after=1)
+    assert getattr(info.value, "status_code", None) == 404

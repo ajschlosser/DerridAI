@@ -871,7 +871,7 @@ def project_pdf_corpus_metadata_exemplars(build_id: str) -> dict[str, Any]:
 def get_pdf_corpus_record_context(build_id: str, record_id: str, before: int = Query(default=6, ge=0, le=30), after: int = Query(default=6, ge=0, le=30)) -> dict[str, Any]:
     """The text of neighbouring records, in document order, for reading a record in context."""
     try:
-        return pdf_corpus_builds.record_context(build_id, record_id, before=before, after=after)
+        return pdf_corpus_repository.record_context(build_id, record_id, before=before, after=after)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
 
