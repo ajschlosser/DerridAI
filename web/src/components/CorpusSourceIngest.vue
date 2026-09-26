@@ -26,6 +26,7 @@ const props = withDefaults(
     gutenbergStatus?: GutenbergStatus | null;
     selectedAsset?: PdfAsset | null;
     disabled?: boolean;
+    sourceSelectionDisabled?: boolean;
     busy?: string;
   }>(),
   {
@@ -39,6 +40,7 @@ const props = withDefaults(
     gutenbergStatus: null,
     selectedAsset: null,
     disabled: false,
+    sourceSelectionDisabled: false,
     busy: "",
   },
 );
@@ -65,6 +67,10 @@ const searchOpen = ref(false);
 const searchDialog = ref<HTMLDialogElement | null>(null);
 const statusPoll = ref<number | null>(null);
 const activeLibrary = ref<"gutenberg" | "wikisource">("gutenberg");
+
+const sourceSetupDisabled = computed(
+  () => props.disabled || props.sourceSelectionDisabled,
+);
 
 const ocrStrategy = computed(() => {
   if (props.illegibility >= 99.9) return "always";
@@ -162,7 +168,7 @@ onBeforeUnmount(closeSearch);
           id="pdf-corpus-source"
           class="control"
           :value="assetId"
-          :disabled="disabled"
+          :disabled="sourceSetupDisabled"
           @change="emit('update:assetId', ($event.target as HTMLSelectElement).value)"
         >
           <option value="">
@@ -178,7 +184,7 @@ onBeforeUnmount(closeSearch);
         <p class="auto-detect-note">
           {{ i18n.t("pdf_corpus.source_auto_detect") }}
         </p>
-        <fieldset class="illegibility-field" :disabled="disabled">
+        <fieldset class="illegibility-field" :disabled="sourceSetupDisabled">
           <legend>{{ i18n.t("pdf_corpus.source_illegibility") }}</legend>
           <small id="source-illegibility-help">{{
             i18n.t("pdf_corpus.source_illegibility_help")
@@ -219,7 +225,7 @@ onBeforeUnmount(closeSearch);
             v-if="selectedAsset?.media_kind === 'pdf'"
             type="button"
             class="btn"
-            :disabled="disabled"
+            :disabled="sourceSetupDisabled"
             @click="emit('useCurrent')"
           >
             {{ i18n.t("pdf_corpus.use_current_pdf") }}
@@ -227,7 +233,7 @@ onBeforeUnmount(closeSearch);
           <button
             type="button"
             class="btn source-choose"
-            :disabled="disabled"
+            :disabled="sourceSetupDisabled"
             @click="uploadInput?.click()"
           >
             {{
@@ -236,7 +242,7 @@ onBeforeUnmount(closeSearch);
           </button>
           <input
             ref="uploadInput"
-            :disabled="disabled"
+            :disabled="sourceSetupDisabled"
             class="sr-only"
             tabindex="-1"
             type="file"
