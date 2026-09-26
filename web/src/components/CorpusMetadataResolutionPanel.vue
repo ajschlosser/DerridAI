@@ -5,6 +5,7 @@ import {
   unwrapMetadataValue,
   usableListOptions,
   usableOptions,
+  withoutTransportItems,
 } from "../domain/metadataValues";
 import { computed, nextTick, ref, watch } from "vue";
 import type { CorpusRecord } from "../api/pdfCorpus";
@@ -126,12 +127,15 @@ function canonicalStatus(field: string): Record<string, unknown> | null {
     conflicting_assertions: history?.alternatives || [],
   };
 }
+// Values stored before the API dropped structured-output residue from lists (an evidence ID, a confidence score) are
+// read without it, so neither the editor nor "Accept all suggestions" can save it back.
 function fieldValue(field: string) {
   const assertion = assertionByField.value[field];
-  if (!assertion) return unwrapMetadataValue(props.record[field]);
+  if (!assertion) return withoutTransportItems(unwrapMetadataValue(props.record[field]));
   if (assertion.value_status === "confirmed_absent") return null;
-  if (assertion.value_status === "present") return unwrapMetadataValue(assertion.value);
-  return unwrapMetadataValue(props.record[field]);
+  if (assertion.value_status === "present")
+    return withoutTransportItems(unwrapMetadataValue(assertion.value));
+  return withoutTransportItems(unwrapMetadataValue(props.record[field]));
 }
 const unresolved = computed(
   () =>

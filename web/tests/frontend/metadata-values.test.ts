@@ -3,6 +3,7 @@ import {
   isPlaceholderValue,
   usableListOptions,
   usableOptions,
+  withoutTransportItems,
 } from "../../src/domain/metadataValues";
 import { metadataSuggestions } from "../../src/domain/metadataFieldRegistry";
 
@@ -62,5 +63,27 @@ describe("metadata values that are not answers", () => {
         ["Levinas", "p00014-b0002"],
       ]),
     ).toEqual(["hospitality", "cosmopolitanism", "Levinas"]);
+  });
+});
+
+describe("structured-output residue in list values", () => {
+  const leaked = [
+    "Balzac",
+    "field_evidence_id-12b1b026d14aebb21198d716:p00001-b0001",
+    "confidence_score_0.95",
+    "The text presents a quote from Balzac's 'Lettres a l'Etrangere'.",
+  ];
+
+  it("reads a stored list up to its first residue item, and never offers the residue as an option", () => {
+    expect(withoutTransportItems(leaked)).toEqual(["Balzac"]);
+    expect(usableListOptions([leaked, ["Honoré de Balzac"]])).toEqual([
+      "Balzac",
+      "Honoré de Balzac",
+    ]);
+  });
+
+  it("keeps real values that happen to begin like a key", () => {
+    const values = ["Reason and faith", "Confidence", "Evidence"];
+    expect(withoutTransportItems(values)).toEqual(values);
   });
 });

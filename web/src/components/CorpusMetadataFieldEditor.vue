@@ -13,6 +13,7 @@ import {
   metadataValueText,
   unwrapMetadataValue,
   usableListOptions,
+  withoutTransportItems,
 } from "../domain/metadataValues";
 
 const props = defineProps<{
@@ -125,7 +126,7 @@ const resolvedValue = computed(() => {
     hasValue(props.value) &&
     !(props.control === "multi-combobox" && leakedAssessment(props.value))
   )
-    return normalizeMetadataFieldValue(props.field, props.value);
+    return normalizeMetadataFieldValue(props.field, withoutTransportItems(props.value));
   // Backward compatibility for records created before populated-but-unverified
   // proposals were written into the record itself. Confidence affects review
   // state, not whether the reviewer may see the proposed value.
