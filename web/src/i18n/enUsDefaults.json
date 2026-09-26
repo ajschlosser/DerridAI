@@ -1169,6 +1169,8 @@
   "pdf_corpus.accept_clean_done": "Accepted {count} clean record(s). Only exceptions remain.",
   "pdf_corpus.accept_clean_none_changed": "No records changed. The remaining records need review or were already dispositioned.",
   "pdf_corpus.accept_next": "Accept & next",
+  "pdf_corpus.gutenberg_redownload": "Redownload",
+  "pdf_corpus.gutenberg_redownload_confirm": "Delete the downloaded collection ({size}) and download it again from the start?",
   "pdf_corpus.library.placeholder_gutenberg": "Title, author or subject",
   "pdf_corpus.library.placeholder_wikisource": "Title or author",
   "pdf_corpus.library.language_label": "Wikisource edition",
