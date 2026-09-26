@@ -173,6 +173,10 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
     await openQueue("topology");
   }
 
+  async function openIssueQueue() {
+    await openQueue("issues");
+  }
+
   async function openRejectedQueue() {
     await openQueue("rejected");
   }
@@ -210,6 +214,7 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
     openMetadataIssueQueue,
     openValidationIssueQueue,
     openTopologyIssueQueue,
+    openIssueQueue,
     openRejectedQueue,
     openAllReviewQueue,
     openSourceIssueQueue,
