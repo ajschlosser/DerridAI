@@ -120,37 +120,15 @@ describe("Corpus Builder focus review interactions", () => {
     wrapper.unmount();
   });
 
-  it("binds selected review text to the nearest source block and opens Evidence", async () => {
+  it("saves the value with the selected text as evidence and stays on the metadata tab", async () => {
     const wrapper = mount(CorpusRecordFocusReview, {
-      props: {
-        record,
-        sourceBlocks: [
-          {
-            block_id: "p24-b1",
-            page: 24,
-            bbox: [0, 0, 1, 1],
-            type: "paragraph",
-            text: "Derrida frames the question.",
-            extraction_method: "native",
-            confidence: 1,
-          },
-          {
-            block_id: "p24-b2",
-            page: 24,
-            bbox: [0, 0, 1, 1],
-            type: "paragraph",
-            text: "For Levinas, responsibility precedes freedom.",
-            extraction_method: "native",
-            confidence: 1,
-          },
-        ],
-      },
+      props: { record, sourceBlocks: [] },
       global: {
         stubs: {
           ...stubs,
           CorpusMetadataResolutionPanel: {
             template:
-              "<button data-selection-evidence @click=\"$emit('selectionEvidence','position_holder','Levinas responsibility precedes freedom')\">Bind evidence</button>",
+              "<button data-selection-evidence @click=\"$emit('resolveWithEvidence','position_holder','Levinas','responsibility precedes freedom')\">Save with evidence</button>",
           },
         },
       },
@@ -158,10 +136,14 @@ describe("Corpus Builder focus review interactions", () => {
 
     await wrapper.get("[data-selection-evidence]").trigger("click");
 
-    expect(lastEmission(wrapper, "selectEvidence")).toEqual(["position_holder"]);
-    expect(lastEmission(wrapper, "assignEvidence")).toEqual(["position_holder", "p24-b2"]);
-    expect(wrapper.get("#focus-tab-evidence").attributes("aria-selected")).toBe("true");
-    wrapper.unmount();
+    expect(lastEmission(wrapper, "resolveMetadataWithEvidence")).toEqual([
+      "position_holder",
+      "Levinas",
+      "responsibility precedes freedom",
+    ]);
+    // The reviewer proceeds to the next value; the evidence tab is not opened.
+    expect(wrapper.get("#focus-tab-metadata").attributes("aria-selected")).toBe("true");
+    expect(wrapper.emitted("assignEvidence")).toBeUndefined();
   });
 
   it("passes the pinned metadata schema into focus-mode field review", () => {

@@ -11,6 +11,7 @@ export const corpusMetadataApi = {
     value: unknown,
     expectedRevision?: number,
     confirmNoSupportedValue = false,
+    evidenceBlockIds?: string[],
   ) =>
     apiRequest<{
       applied: boolean;
@@ -29,6 +30,8 @@ export const corpusMetadataApi = {
           value,
           expected_revision: expectedRevision,
           confirm_no_supported_value: confirmNoSupportedValue,
+          // Only sent when the reviewer saved with selected text as evidence.
+          evidence_block_ids: evidenceBlockIds,
         }),
       },
     ),

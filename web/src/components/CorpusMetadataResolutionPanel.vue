@@ -35,7 +35,7 @@ const emit = defineEmits<{
   noValue: [field: string];
   resolveMany: [changes: Record<string, unknown>];
   source: [field: string];
-  selectionEvidence: [field: string, text: string];
+  resolveWithEvidence: [field: string, value: unknown, text: string];
   dirty: [dirty: boolean];
 }>();
 const i18n = useI18nStore();
@@ -352,7 +352,9 @@ function displayValue(field: string) {
           @save="(value) => emit('resolve', field, value)"
           @no-value="emit('noValue', field)"
           @source="emit('source', field)"
-          @assign-selection-evidence="(text) => emit('selectionEvidence', field, text)"
+          @save-with-selection-evidence="
+            (value, text) => emit('resolveWithEvidence', field, value, text)
+          "
           @dirty="(value) => emit('dirty', value)"
         />
         <button
@@ -402,7 +404,9 @@ function displayValue(field: string) {
             @save="(value) => emit('resolve', field, value)"
             @no-value="emit('noValue', field)"
             @source="emit('source', field)"
-            @assign-selection-evidence="(text) => emit('selectionEvidence', field, text)"
+            @save-with-selection-evidence="
+              (value, text) => emit('resolveWithEvidence', field, value, text)
+            "
             @dirty="(value) => emit('dirty', value)"
           />
         </div>
@@ -439,7 +443,9 @@ function displayValue(field: string) {
             @save="(value) => emit('resolve', field, value)"
             @no-value="emit('noValue', field)"
             @source="emit('source', field)"
-            @assign-selection-evidence="(text) => emit('selectionEvidence', field, text)"
+            @save-with-selection-evidence="
+              (value, text) => emit('resolveWithEvidence', field, value, text)
+            "
             @dirty="(value) => emit('dirty', value)"
           />
         </div>

@@ -609,7 +609,7 @@ def patch_pdf_corpus_record_text(build_id: str, record_id: str, body: PdfCorpusR
 @router.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/metadata-decision")
 def decide_pdf_corpus_record_metadata(build_id: str, record_id: str, body: PdfCorpusMetadataDecision) -> dict[str, Any]:
     try:
-        return pdf_corpus_builds.metadata_decision(build_id, record_id, body.field, body.value, body.expected_revision, body.confirm_no_supported_value)
+        return pdf_corpus_builds.metadata_decision(build_id, record_id, body.field, body.value, body.expected_revision, body.confirm_no_supported_value, body.evidence_block_ids)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
     except ValueError as exc:

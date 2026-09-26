@@ -700,6 +700,8 @@ class PdfCorpusMetadataDecision(BaseModel):
     value: Any = None
     confirm_no_supported_value: bool = False
     expected_revision: int | None = Field(default=None, ge=1)
+    # Save the value and bind these source blocks as its evidence in one request.
+    evidence_block_ids: list[str] | None = Field(default=None, max_length=500)
 
 
 class PdfCorpusMetadataCacheClear(BaseModel):

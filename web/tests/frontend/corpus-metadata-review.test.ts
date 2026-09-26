@@ -152,8 +152,42 @@ describe("Corpus Builder metadata review", () => {
     expect(state.queued).toHaveLength(1);
 
     await state.queued[0](false);
-    expect(corpusBuilderApi.metadataDecision).toHaveBeenCalledWith("b1", "r1", "target", "Kant", 1);
+    expect(corpusBuilderApi.metadataDecision).toHaveBeenCalledWith(
+      "b1",
+      "r1",
+      "target",
+      "Kant",
+      1,
+      false,
+      undefined,
+    );
     expect(state.applyAuthoritativeRecord).toHaveBeenCalled();
+  });
+
+  it("saves a value and its selected-text evidence in one optimistic request", async () => {
+    const state = setup();
+    corpusBuilderApi.metadataDecision.mockResolvedValue({
+      record: row({ speaker: "Derrida", record_revision: 2 }),
+      build: { build_id: "b1" },
+    });
+
+    await state.review.resolveMetadataField("speaker", "Derrida", "block-9");
+
+    expect(state.selectedRecord.value?.speaker).toBe("Derrida");
+    expect(state.selectedRecord.value?.metadata_evidence?.speaker?.block_ids).toEqual(["block-9"]);
+    expect(state.queued).toHaveLength(1);
+    await state.queued[0](false);
+    expect(corpusBuilderApi.metadataDecision).toHaveBeenCalledWith(
+      "b1",
+      "r1",
+      "speaker",
+      "Derrida",
+      1,
+      false,
+      ["block-9"],
+    );
+    // No separate evidence round trip.
+    expect(corpusBuilderApi.patchEvidence).not.toHaveBeenCalled();
   });
 
   it("adds evidence through the shared metadata evidence path", async () => {
