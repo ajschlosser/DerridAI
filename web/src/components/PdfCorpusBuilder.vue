@@ -13,7 +13,7 @@ import CorpusBuildProgress from "./CorpusBuildProgress.vue";
 import DocumentStructureConfigurator from "./DocumentStructureConfigurator.vue";
 import MediaStructureConfigurator from "./MediaStructureConfigurator.vue";
 import SourceTranscriptionDialog from "./SourceTranscriptionDialog.vue";
-import { sourceMediaCapabilities, timeLabel } from "../domain/sourceMedia";
+import { sourceMediaCapabilities } from "../domain/sourceMedia";
 import DocumentManifestEditor from "./DocumentManifestEditor.vue";
 import DocumentManifestDialog from "./DocumentManifestDialog.vue";
 import CorpusInitializationDialog from "./CorpusInitializationDialog.vue";
