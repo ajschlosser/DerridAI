@@ -213,3 +213,24 @@ decomposition without moving domain policy out of the existing composables.
   and Canadian French length stress.
 - Reduced `PdfCorpusBuilder.vue` further, from 3,813 lines after the Enrichment extraction to
   3,744 lines.
+
+
+### Review record queue extraction
+
+The next monolith-reduction slice moves the record queue/list out of
+`PdfCorpusBuilder.vue` without moving review decisions or mutation ownership.
+
+- Extracted queue rendering into `CorpusReviewRecordQueue.vue`.
+- Moved row-state presentation, non-colour WCAG state icons, “LLM processed” markers,
+  source-warning affordances, selected-record styling, select-visible controls, and empty/loading
+  states into the queue component.
+- Kept queue selection, record navigation, pagination, search/filter state, and all review
+  mutations in the existing parent/composables.
+- Preserved the existing `recordListEl` focus/viewport-restoration contract through an explicit
+  root-element handoff from the child component.
+- Moved queue-local CSS out of `CorpusBuilderWorkspace.css` while retaining three-pane grid,
+  splitter, collapse, and responsive layout rules in the parent workspace stylesheet.
+- Added focused component coverage and Storybook states for mixed record states, source warnings,
+  loading/empty queues, selection, and Canadian French length stress.
+- Reduced `PdfCorpusBuilder.vue` from 3,744 lines to 3,622 lines and the shared workspace
+  stylesheet from about 2,623 lines to 2,395 lines.
