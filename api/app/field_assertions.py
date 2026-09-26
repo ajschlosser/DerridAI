@@ -67,6 +67,22 @@ _NON_ASSERTION_FIELDS = {
 }
 
 
+# Bookkeeping keys that live on a Record but are not scholarly metadata. Anything matching is never
+# turned into a legacy assertion, however new: without this every operational key added to a Record
+# (segmentation evidence, NLP hints, lineage...) would surface as a "metadata assertion" in review.
+_OPERATIONAL_PREFIXES = (
+    "boundary_", "metadata_", "review_", "text_", "source_", "topology_", "nlp_", "slice_",
+    "human_", "llm_", "segmentation_", "unit_", "recheck", "second_opinion", "blind_",
+    "printed_page", "extraction_", "acceptance_", "field_assertion", "current_field", "record_sizing",
+    "editorial_", "autonomous_", "pdf_", "inline_", "full_",
+)
+_OPERATIONAL_KEYS = {"lineage", "media_kind", "parent_block_id"}
+
+
+def _operational_key(key: str) -> bool:
+    return key in _OPERATIONAL_KEYS or key.startswith(_OPERATIONAL_PREFIXES)
+
+
 def _now() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -826,7 +842,7 @@ def migrate_record_assertions(record: dict[str, Any], schema: Any | None = None)
     evidence_map = record.get("metadata_evidence") if isinstance(record.get("metadata_evidence"), dict) else {}
     names = set(statuses) | {
         key for key in record
-        if key not in _NON_ASSERTION_FIELDS and not key.startswith("_")
+        if key not in _NON_ASSERTION_FIELDS and not key.startswith("_") and not _operational_key(key)
         and key not in {"field_assertions", "current_field_assertions", "metadata_field_status", "metadata_evidence"}
     }
     if schema is not None:
