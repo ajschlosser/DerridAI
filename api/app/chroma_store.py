@@ -224,18 +224,40 @@ class Embeddings:
     ) -> list[list[float]]:
         if not model:
             raise ValueError("An Ollama embedding model is required.")
+        root = str(base_url or settings.ollama_base_url).rstrip("/")
+        modern_endpoint = f"{root}/api/embed"
+        legacy_endpoint = f"{root}/api/embeddings"
         with httpx.Client(timeout=180.0) as client:
             response = client.post(
-                f"{str(base_url or settings.ollama_base_url).rstrip('/')}/api/embed",
+                modern_endpoint,
                 json={"model": model, "input": texts},
             )
             if response.status_code == 404:
                 vectors: list[list[float]] = []
+                modern_detail = response.text.strip()
                 for text in texts:
                     legacy = client.post(
-                        f"{str(base_url or settings.ollama_base_url).rstrip('/')}/api/embeddings",
+                        legacy_endpoint,
                         json={"model": model, "prompt": text},
                     )
+                    if legacy.status_code == 404:
+                        legacy_detail = legacy.text.strip()
+                        detail_parts = [
+                            part
+                            for part in (
+                                f"modern response: {modern_detail}" if modern_detail else "",
+                                f"legacy response: {legacy_detail}" if legacy_detail else "",
+                            )
+                            if part
+                        ]
+                        detail = f" ({'; '.join(detail_parts)})" if detail_parts else ""
+                        raise RuntimeError(
+                            "Ollama embeddings are unavailable: both /api/embed and the "
+                            "legacy /api/embeddings endpoint returned 404. Verify that the "
+                            "configured base URL points to Ollama, the installed Ollama "
+                            f"version supports embeddings, and embedding model '{model}' is installed"
+                            f"{detail}."
+                        )
                     legacy.raise_for_status()
                     embedding = legacy.json().get("embedding")
                     if not isinstance(embedding, list):
