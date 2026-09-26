@@ -6450,7 +6450,7 @@ EN_US: dict[str, str] = {'common.apply': 'Apply',
  'schemas.ner_tag.quantity': 'Measurement',
  'schemas.ner_tag.time': 'Time',
  'schemas.ner_tag.work_of_art': 'Creative work',
- 'research.configure_prompt_metadata': 'Configure prompt metadata'
+ 'research.configure_prompt_metadata': 'Configure prompt metadata',
  'pdf_corpus.configure_sections': "Build configuration",
  'pdf_corpus.configure_source': "Source",
  'pdf_corpus.configure_structure': "Structure",
