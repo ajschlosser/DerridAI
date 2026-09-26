@@ -939,4 +939,6 @@ def download_pdf_corpus_publication(publication_id: str) -> FileResponse:
     path = pdf_corpus_repository.publication_path(publication_id)
     if not path.exists():
         raise HTTPException(status_code=404, detail="Publication not found")
+    if path.name.endswith(".jsonl.zst"):
+        return FileResponse(path, media_type="application/zstd", filename=f"{publication_id}.jsonl.zst")
     return FileResponse(path, media_type="application/x-ndjson", filename=f"{publication_id}.jsonl")
