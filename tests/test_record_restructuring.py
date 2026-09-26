@@ -168,3 +168,18 @@ def test_evidence_outside_the_record_is_refused_before_anything_is_saved(tmp_pat
         manager.metadata_decision(bid, "r2", "speaker", "Derrida", 1, False, ["b1"])
     row = repo.load_records(bid)[1]
     assert row.get("speaker") in (None, "") and row["record_revision"] == 1
+
+
+def test_operational_record_keys_never_become_metadata_assertions(tmp_path):
+    from app.field_assertions import migrate_record_assertions
+
+    row = {
+        "record_id": "r1", "source_document_id": "d", "text": "t",
+        "source_spans": [{"source_document_id": "d", "block_id": "b"}],
+        "boundary_evidence": {"after_block_id": "b1"}, "lineage": {"operation": "split"},
+        "nlp_candidates": {"status": "ok"}, "text_review_source": "human_split", "unit_policy": "sentence",
+        "speaker": "Derrida",
+    }
+    migrate_record_assertions(row)
+    names = {a["field_name"] for bucket in row["field_assertions"].values() for a in bucket}
+    assert names == {"speaker"}
