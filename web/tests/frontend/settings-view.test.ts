@@ -4,6 +4,17 @@ import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
 
+const systemApi = vi.hoisted(() => ({
+  embeddingDefaults: vi.fn(async () => ({
+    embedding_provider: "ollama",
+    embedding_model: "bge-m3:latest",
+    persisted: true,
+  })),
+  setEmbeddingDefaults: vi.fn(async (payload) => ({ ...payload, persisted: true })),
+}));
+
+vi.mock("../../src/api/system", () => ({ systemApi }));
+
 const runtime = vi.hoisted(() => ({
   persistPrefs: vi.fn(),
   flushWorkspacePrefs: vi.fn(async () => undefined),
@@ -111,13 +122,32 @@ describe("SettingsView", () => {
   beforeEach(() => {
     runtime.flushWorkspacePrefs.mockClear();
     runtime.flushWorkspacePrefs.mockResolvedValue(undefined);
+    systemApi.embeddingDefaults.mockClear();
+    systemApi.embeddingDefaults.mockResolvedValue({
+      embedding_provider: "ollama",
+      embedding_model: "bge-m3:latest",
+      persisted: true,
+    });
+    systemApi.setEmbeddingDefaults.mockClear();
+    systemApi.setEmbeddingDefaults.mockImplementation(async (payload) => ({
+      ...payload,
+      persisted: true,
+    }));
     runtime.state.appConfig.ui_color_theme = "green";
     runtime.state.appConfig.ui_color_scheme = "system";
     runtime.state.appConfig.ui_contrast = "system";
+    runtime.state.appConfig.embedding_provider = "ollama";
+    runtime.state.appConfig.embedding_model = "bge-m3:latest";
     runtime.state.ragConfig.k = 64;
     runtime.state.ragConfig.fetch_k = 500;
     runtime.state.ragConfig.locales = ["en", "fr"];
     runtime.state.ragConfig.search_types = ["similarity", "lexical", "mmr"];
+  });
+
+  it("does not request server embedding defaults for researcher accounts", async () => {
+    await mountView("researcher");
+    expect(systemApi.embeddingDefaults).not.toHaveBeenCalled();
+    expect(systemApi.setEmbeddingDefaults).not.toHaveBeenCalled();
   });
 
   it("keeps researcher accounts off administrative sections", async () => {
@@ -178,6 +208,46 @@ describe("SettingsView", () => {
     expect(wrapper.text()).toContain("Save failed");
     expect(wrapper.text()).toContain("IndexedDB preference persistence failed");
     expect((dark.element as HTMLSelectElement).value).toBe("dark");
+  });
+
+  it("persists provider-profile embedding defaults to the backend", async () => {
+    const { wrapper } = await mountView("admin", { section: "retrieval" });
+    await wrapper.get("#settings-field-embedding-provider").setValue("profile:p1");
+    await flushPromises();
+
+    expect((wrapper.get("#settings-field-embedding-model").element as HTMLInputElement).value).toBe(
+      "gemma",
+    );
+
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text().includes("Save embedding defaults"))
+      ?.trigger("click");
+    await flushPromises();
+
+    expect(systemApi.setEmbeddingDefaults).toHaveBeenCalledWith({
+      embedding_provider: "profile:p1",
+      embedding_model: "gemma",
+    });
+    expect(runtime.state.appConfig.embedding_provider).toBe("profile:p1");
+    expect(runtime.state.appConfig.embedding_model).toBe("gemma");
+  });
+
+  it("migrates a browser embedding default to the server once", async () => {
+    systemApi.embeddingDefaults.mockResolvedValueOnce({
+      embedding_provider: "ollama",
+      embedding_model: "bge-m3:latest",
+      persisted: false,
+    });
+    runtime.state.appConfig.embedding_provider = "chroma";
+    runtime.state.appConfig.embedding_model = "";
+
+    await mountView("admin", { section: "retrieval" });
+
+    expect(systemApi.setEmbeddingDefaults).toHaveBeenCalledWith({
+      embedding_provider: "chroma",
+      embedding_model: null,
+    });
   });
 
   it("warns before leaving with unsaved changes", async () => {

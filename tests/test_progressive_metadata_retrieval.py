@@ -331,6 +331,86 @@ def test_missing_metadata_exemplar_collection_is_created_on_first_use():
     assert store.created == 1
 
 
+def test_exemplar_collection_rebuilds_when_configured_embedding_contract_changes():
+    class Client:
+        def __init__(self):
+            self.deleted = 0
+            self.collection = FakeCollection()
+            self.collection.metadata = {
+                "derridai_exemplar_schema": 3,
+                "__derridai_embedding_provider": "ollama",
+                "__derridai_embedding_model": "old-model",
+            }
+
+        def get_collection(self, *, name):
+            assert name == "test_metadata_exemplars"
+            if self.collection is None:
+                raise RuntimeError("Collection [test_metadata_exemplars] does not exist")
+            return self.collection
+
+        def delete_collection(self, *, name):
+            assert name == "test_metadata_exemplars"
+            self.deleted += 1
+            self.collection = None
+
+    class Store:
+        def __init__(self):
+            self.client = Client()
+            self.created = []
+
+        @staticmethod
+        def _is_missing_collection_error(exc):
+            return "does not exist" in str(exc).casefold()
+
+        @staticmethod
+        def default_embedding_spec():
+            return "profile:embedding-lab", "text-embedding-model"
+
+        @staticmethod
+        def _embedding_spec(collection):
+            return (
+                collection.metadata.get("__derridai_embedding_provider"),
+                collection.metadata.get("__derridai_embedding_model"),
+            )
+
+        def create_store(self, name, **kwargs):
+            self.created.append(kwargs)
+            collection = FakeCollection()
+            collection.metadata = {
+                "derridai_exemplar_schema": 3,
+                "__derridai_embedding_provider": kwargs["embedding_provider"],
+                "__derridai_embedding_model": kwargs["embedding_model"],
+            }
+            self.client.collection = collection
+            return {"name": name}
+
+    store = Store()
+    index = ChromaMetadataExemplarIndex(store, collection_name="test_metadata_exemplars")
+
+    collection = index._ensure()
+
+    assert store.client.deleted == 1
+    assert len(store.created) == 1
+    assert store.created[0]["embedding_provider"] == "profile:embedding-lab"
+    assert store.created[0]["embedding_model"] == "text-embedding-model"
+    assert collection.metadata["__derridai_embedding_provider"] == "profile:embedding-lab"
+
+
+def test_exemplar_collection_rejects_precomputed_default_without_losing_canonical_state():
+    class Store:
+        @staticmethod
+        def default_embedding_spec():
+            return "precomputed", None
+
+    index = ChromaMetadataExemplarIndex(Store(), collection_name="test_metadata_exemplars")
+
+    try:
+        index._ensure()
+        raise AssertionError("precomputed defaults cannot generate exemplar vectors")
+    except ValueError as exc:
+        assert "query-capable embedding provider" in str(exc)
+
+
 def test_exemplar_collection_creation_failure_is_not_rewritten_as_missing_collection():
     class Client:
         def get_collection(self, *, name):

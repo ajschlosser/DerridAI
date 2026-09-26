@@ -340,6 +340,8 @@ Embedding choices are explicit per collection:
 
 Provider-profile collections persist the profile identity and embedding model as part of the collection contract, so retrieval uses the same configured endpoint/credentials instead of falling back to the global Ollama URL. Embedding configuration can change while a collection is empty and is locked once records exist.
 
+DerridAI-owned derived vector collections, including the reviewed metadata-example index, use the same server-owned embedding default. If that default changes, derived collections whose stored embedding contract no longer matches are rebuilt from canonical data rather than mixing vectors from different providers or models. Existing installations with the legacy `ollama` default resolve to the configured Ollama provider profile when one is available; an explicitly saved default remains authoritative.
+
 ## English / French vector-store model
 
 Chroma language collections use only:
@@ -700,7 +702,7 @@ Settings is a Vue-native control center at **System → Settings**. A contents r
 - **Review and AI behavior** — default provider profile, review preset, and interactive vs background LLM review.
 - **Providers and models** — readiness summary only; credentials and endpoints stay on **LLM Providers**.
 - Record field definitions live on **System → Metadata schemas**, not in Settings. Corpus Builder still offers **Manage schemas…** as a shortcut to the same editor.
-- **Vector stores and retrieval** — default embedding provider/model (browser-local) and RAG retrieval budgets, with advanced MMR/RRF options behind a disclosure. The current Chroma path is read-only here; change the backend on **Vector Stores**.
+- **Vector stores and retrieval** — the default embedding provider/model is server-owned and shared by ordinary Chroma collection creation and DerridAI's rebuildable internal vector projections; RAG retrieval budgets remain browser workspace preferences, with advanced MMR/RRF options behind a disclosure. Named provider profiles can be selected as the embedding default so endpoint credentials and model identity stay aligned. The current Chroma path is read-only here; change the backend on **Vector Stores**.
 - **Security, users, and permissions** — links to **Users** and **Roles & permissions**.
 - **System and operations** — backup/restore, viewer resets, desktop notifications, and NUKE.
 

@@ -250,13 +250,35 @@ class ChromaMetadataExemplarIndex:
         return self._disabled_reason
 
     def _ensure(self) -> Any:
+        default_spec = getattr(self.store, "default_embedding_spec", None)
+        expected_provider: str | None = None
+        expected_model: str | None = None
+        if callable(default_spec):
+            expected_provider, expected_model = default_spec()
+            if expected_provider == "precomputed":
+                raise ValueError(
+                    "Metadata exemplar retrieval requires a query-capable embedding "
+                    "provider; the configured default is precomputed vectors."
+                )
+
         try:
             collection = self.store.client.get_collection(name=self.collection_name)
             metadata = dict(getattr(collection, "metadata", None) or {})
-            if int(metadata.get("derridai_exemplar_schema") or 0) == PROJECTION_VERSION:
+            schema_current = (
+                int(metadata.get("derridai_exemplar_schema") or 0) == PROJECTION_VERSION
+            )
+            embedding_current = True
+            embedding_spec = getattr(self.store, "_embedding_spec", None)
+            if callable(embedding_spec) and expected_provider:
+                current_provider, current_model = embedding_spec(collection)
+                embedding_current = (
+                    current_provider == expected_provider
+                    and (current_model or None) == (expected_model or None)
+                )
+            if schema_current and embedding_current:
                 return collection
-            # This collection is derived. A projection-contract change is safer
-            # to rebuild than to query with stale metadata semantics.
+            # This collection is derived. Schema or embedding-contract changes
+            # are safer to rebuild than to query with stale/incompatible vectors.
             self.store.client.delete_collection(name=self.collection_name)
         except Exception as exc:
             missing = getattr(self.store, "_is_missing_collection_error", None)
@@ -269,6 +291,8 @@ class ChromaMetadataExemplarIndex:
             self.store.create_store(
                 self.collection_name,
                 description="Derived evidence-bound metadata exemplars for progressive enrichment.",
+                embedding_provider=expected_provider,
+                embedding_model=expected_model,
                 retrieval_mode="semantic",
                 text_field="context_text",
                 filter_fields=[

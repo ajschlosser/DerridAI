@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -32,6 +33,12 @@ def test_system_repository_round_trip_is_transactional_sqlite(tmp_path: Path):
         "researcher_provider_profiles": [
             {"id": "local", "name": "Local", "type": "ollama", "api_key": "write-only-secret"}
         ],
+        "settings": {
+            "embedding_defaults": {
+                "embedding_provider": "profile:local",
+                "embedding_model": "nomic-embed-text",
+            }
+        },
         "annotations": [
             {"id": "a1", "user_id": 7, "created_at": "2026-09-15T10:00:00+00:00", "note": "note"}
         ],
@@ -59,7 +66,13 @@ def test_system_repository_round_trip_is_transactional_sqlite(tmp_path: Path):
         tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert "schema_migrations" not in tables
     assert "system_meta" not in tables
-    assert {"researcher_provider_profiles", "annotations", "languages", "jobs"} <= tables
+    assert {
+        "researcher_provider_profiles",
+        "system_settings",
+        "annotations",
+        "languages",
+        "jobs",
+    } <= tables
 
 
 def test_system_store_bootstraps_current_defaults_and_ignores_old_json(tmp_path: Path, monkeypatch):
@@ -91,6 +104,78 @@ def test_system_store_bootstraps_current_defaults_and_ignores_old_json(tmp_path:
 
 
 
+
+
+def test_unpersisted_ollama_default_uses_configured_ollama_profile(
+    tmp_path: Path,
+    monkeypatch,
+):
+    import app.system_store as module
+
+    repository = SQLiteSystemRepository(tmp_path / "derridai-system.sqlite3")
+    monkeypatch.setattr(module, "system_repository", repository)
+    monkeypatch.setattr(
+        module,
+        "app_settings",
+        replace(
+            module.app_settings,
+            embedding_provider="ollama",
+            ollama_embed_model="legacy-env-model",
+        ),
+    )
+    store = module.SystemStore()
+    store.set_researcher_profiles(
+        [
+            {
+                "id": "local-embeddings",
+                "name": "Local embeddings",
+                "type": "ollama",
+                "base_url": "http://configured-ollama:11434",
+                "model": "nomic-embed-text",
+            }
+        ]
+    )
+
+    defaults = store.embedding_defaults()
+
+    assert defaults["embedding_provider"] == "profile:local-embeddings"
+    assert defaults["embedding_model"] == "nomic-embed-text"
+    assert defaults["persisted"] is False
+
+
+def test_embedding_defaults_are_server_owned_and_can_reference_provider_profiles(
+    tmp_path: Path,
+    monkeypatch,
+):
+    import app.system_store as module
+
+    repository = SQLiteSystemRepository(tmp_path / "derridai-system.sqlite3")
+    monkeypatch.setattr(module, "system_repository", repository)
+    store = module.SystemStore()
+    store.set_researcher_profiles(
+        [
+            {
+                "id": "embedding-lab",
+                "name": "Embedding Lab",
+                "type": "openai",
+                "base_url": "https://embeddings.example/v1",
+                "model": "text-embedding-model",
+                "api_key": "secret",
+            }
+        ]
+    )
+
+    saved = store.set_embedding_defaults("profile:embedding-lab", None)
+
+    assert saved["embedding_provider"] == "profile:embedding-lab"
+    assert saved["embedding_model"] == "text-embedding-model"
+    assert saved["persisted"] is True
+
+    restarted = module.SystemStore()
+    loaded = restarted.embedding_defaults()
+    assert loaded["embedding_provider"] == "profile:embedding-lab"
+    assert loaded["embedding_model"] == "text-embedding-model"
+    assert loaded["persisted"] is True
 
 
 def test_job_repository_survives_restart_and_marks_active_job_interrupted(tmp_path: Path):
@@ -137,6 +222,7 @@ def test_jobs_and_system_state_share_one_durable_database(tmp_path: Path):
 
     system.replace({
         "researcher_provider_profiles": [],
+        "settings": {},
         "annotations": [],
         "languages": {"en-US": {"name": "English", "flag": "🇺🇸", "dictionary": {}}},
     })

@@ -72,6 +72,11 @@ class ChromaConnectionUpdate(BaseModel):
     database: str | None = Field(default=None, max_length=128)
 
 
+class SystemEmbeddingDefaultsUpdate(BaseModel):
+    embedding_provider: str = Field(min_length=1, max_length=256)
+    embedding_model: str | None = Field(default=None, max_length=512)
+
+
 class StoreCreate(BaseModel):
     name: str = Field(min_length=3, max_length=128)
     metadata: dict[str, Any] | None = None
@@ -116,7 +121,7 @@ class StoreCreate(BaseModel):
 
 
 class EmbeddingPreflightRequest(BaseModel):
-    embedding_provider: Literal["chroma", "ollama", "precomputed"] = "ollama"
+    embedding_provider: str = Field(default="ollama", min_length=1, max_length=256)
     embedding_model: str | None = None
     embedding_dimension: int | None = Field(default=None, ge=1, le=65536)
     distance_metric: DistanceMetric = "cosine"

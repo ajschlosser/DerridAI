@@ -9,7 +9,11 @@ from ..corpus_builder import pdf_corpus_repository
 from ..http_auth import request_user, require_admin
 from ..llm import llm_status
 from ..metadata_memory import MetadataMemoryService
-from ..models import ResearcherProviderProfilesUpdate, ResearcherProviderStatusRequest
+from ..models import (
+    ResearcherProviderProfilesUpdate,
+    ResearcherProviderStatusRequest,
+    SystemEmbeddingDefaultsUpdate,
+)
 from ..services import store
 from ..system_chroma_console import (
     execute_system_chroma_command,
@@ -35,6 +39,27 @@ def researcher_provider_profiles(request: Request) -> dict[str, Any]:
 def update_researcher_provider_profiles(body: ResearcherProviderProfilesUpdate, request: Request) -> dict[str, Any]:
     require_admin(request)
     return {"profiles": system_store.set_researcher_profiles(body.profiles)}
+
+
+@router.get("/api/system/embedding-defaults")
+def embedding_defaults(request: Request) -> dict[str, Any]:
+    require_admin(request)
+    return system_store.embedding_defaults()
+
+
+@router.put("/api/system/embedding-defaults")
+def update_embedding_defaults(
+    body: SystemEmbeddingDefaultsUpdate,
+    request: Request,
+) -> dict[str, Any]:
+    require_admin(request)
+    try:
+        return system_store.set_embedding_defaults(
+            body.embedding_provider,
+            body.embedding_model,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/api/system/storage")

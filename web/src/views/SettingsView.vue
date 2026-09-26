@@ -4,7 +4,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 import * as runtime from "../runtime/runtime.js";
 import { apiRequest } from "../api/http";
-import type { ProviderProfile } from "../api/system";
+import { systemApi, type ProviderProfile } from "../api/system";
 import { useAuthStore } from "../stores/auth";
 import { useI18nStore } from "../stores/i18n";
 import { useShellStore } from "../stores/shell";
@@ -188,7 +188,7 @@ async function persistWorkspace() {
   else runtime.persistPrefs();
   shell.sync();
 }
-async function saveGroup(group: string, apply: () => void) {
+async function saveGroup(group: string, apply: () => void | Promise<void>) {
   pageError.value = "";
   mark(group, "saving");
   announce(i18n.t("settings.status.saving"));
@@ -199,7 +199,7 @@ async function saveGroup(group: string, apply: () => void) {
   const previousEmbedding = cloneJson(embeddingSaved.value);
   const previousRagSaved = cloneJson(ragSaved.value);
   try {
-    apply();
+    await apply();
     await persistWorkspace();
     mark(group, "success");
     announce(i18n.t("settings.status.saved_ok"));
@@ -240,10 +240,19 @@ function saveReview() {
   });
 }
 function saveEmbedding() {
-  void saveGroup("embedding", () => {
+  void saveGroup("embedding", async () => {
     embeddingDraft.value = normalizeEmbedding(embeddingDraft.value);
-    Object.assign(workspace.appConfig, embeddingDraft.value);
-    embeddingSaved.value = cloneJson(embeddingDraft.value);
+    const saved = await systemApi.setEmbeddingDefaults({
+      embedding_provider: embeddingDraft.value.embedding_provider,
+      embedding_model: embeddingDraft.value.embedding_model || null,
+    });
+    const normalized = normalizeEmbedding({
+      embedding_provider: saved.embedding_provider as EmbeddingSettingsDraft["embedding_provider"],
+      embedding_model: saved.embedding_model || "",
+    });
+    embeddingDraft.value = normalized;
+    Object.assign(workspace.appConfig, normalized);
+    embeddingSaved.value = cloneJson(normalized);
   });
 }
 function saveRag() {
@@ -269,6 +278,23 @@ function saveRag() {
     ragSaved.value = cloneJson(ragDraft.value);
   });
 }
+function syncEmbeddingModelForProvider() {
+  const provider = String(embeddingDraft.value.embedding_provider || "");
+  if (provider === "chroma" || provider === "precomputed") {
+    embeddingDraft.value.embedding_model = "";
+    return;
+  }
+  if (provider.startsWith("profile:")) {
+    const profileId = provider.slice("profile:".length);
+    const profile = profiles.value.find((item) => item.id === profileId);
+    embeddingDraft.value.embedding_model = String(profile?.model || "");
+    return;
+  }
+  if (!embeddingDraft.value.embedding_model) {
+    embeddingDraft.value.embedding_model = "bge-m3:latest";
+  }
+}
+
 function resetAppearance() {
   appearanceDraft.value = cloneJson(APPEARANCE_DEFAULTS);
   saveAppearance();
@@ -462,7 +488,7 @@ watch([appearanceDirty, reviewDirty, embeddingDirty, ragDirty], () => {
   if (embeddingDirty.value) mark("embedding", "dirty");
   if (ragDirty.value) mark("rag", "dirty");
 });
-onMounted(() => {
+onMounted(async () => {
   window.addEventListener("beforeunload", onBeforeUnload);
   appearanceSaved.value = normalizeAppearance(
     workspace.appConfig as unknown as AppearanceSettingsDraft,
@@ -470,10 +496,52 @@ onMounted(() => {
   appearanceDraft.value = cloneJson(appearanceSaved.value);
   reviewSaved.value = normalizeReview(workspace.appConfig as unknown as ReviewSettingsDraft);
   reviewDraft.value = cloneJson(reviewSaved.value);
-  embeddingSaved.value = normalizeEmbedding(
+
+  const browserEmbedding = normalizeEmbedding(
     workspace.appConfig as unknown as EmbeddingSettingsDraft,
   );
+  if (isAdmin.value) {
+    try {
+      const serverEmbedding = await systemApi.embeddingDefaults();
+      if (serverEmbedding.persisted) {
+        const normalized = normalizeEmbedding({
+          embedding_provider:
+            serverEmbedding.embedding_provider as EmbeddingSettingsDraft["embedding_provider"],
+          embedding_model: serverEmbedding.embedding_model || "",
+        });
+        Object.assign(workspace.appConfig, normalized);
+        embeddingSaved.value = normalized;
+      } else {
+        const migrateFrom =
+          browserEmbedding.embedding_provider === "ollama" &&
+          serverEmbedding.embedding_provider.startsWith("profile:")
+            ? normalizeEmbedding({
+                embedding_provider:
+                  serverEmbedding.embedding_provider as EmbeddingSettingsDraft["embedding_provider"],
+                embedding_model: serverEmbedding.embedding_model || "",
+              })
+            : browserEmbedding;
+        const migrated = await systemApi.setEmbeddingDefaults({
+          embedding_provider: migrateFrom.embedding_provider,
+          embedding_model: migrateFrom.embedding_model || null,
+        });
+        embeddingSaved.value = normalizeEmbedding({
+          embedding_provider:
+            migrated.embedding_provider as EmbeddingSettingsDraft["embedding_provider"],
+          embedding_model: migrated.embedding_model || "",
+        });
+        Object.assign(workspace.appConfig, embeddingSaved.value);
+      }
+    } catch {
+      // The browser copy remains usable if the backend configuration endpoint is
+      // temporarily unavailable; save will surface a persistence error explicitly.
+      embeddingSaved.value = browserEmbedding;
+    }
+  } else {
+    embeddingSaved.value = browserEmbedding;
+  }
   embeddingDraft.value = cloneJson(embeddingSaved.value);
+
   ragSaved.value = normalizeRag(workspace.ragConfig as unknown as RagSettingsDraft);
   ragDraft.value = cloneJson(ragSaved.value);
   notificationsOn.value = Boolean(workspace.appConfig.desktop_notifications);
@@ -920,7 +988,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
             section-id="retrieval"
             :title="i18n.t('settings.vector_title')"
             :description="i18n.t('settings.vector_help')"
-            :persistence="persistKind('browser')"
+            :persistence="persistKind('backend')"
             :status="groupStatus.embedding"
             :status-label="statusLabel(groupStatus.embedding)"
           >
@@ -930,10 +998,19 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                   id="settings-field-embedding-provider"
                   class="control"
                   v-model="embeddingDraft.embedding_provider"
+                  @change="syncEmbeddingModelForProvider"
                 >
                   <option value="ollama">{{ i18n.t("settings.provider_ollama") }}</option>
                   <option value="chroma">{{ i18n.t("vector.provider_chroma") }}</option>
                   <option value="precomputed">{{ i18n.t("vector.provider_precomputed") }}</option>
+                  <option
+                    v-for="profile in profiles"
+                    :key="`embedding-${profile.id}`"
+                    :value="`profile:${profile.id}`"
+                  >
+                    {{ profile.name || profile.id }} ·
+                    {{ profile.model || i18n.t("language.model_not_set") }}
+                  </option>
                 </select>
               </UiField>
               <UiField :label="i18n.t('settings.embedding_model')">
@@ -941,6 +1018,10 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                   id="settings-field-embedding-model"
                   class="control"
                   v-model="embeddingDraft.embedding_model"
+                  :disabled="
+                    embeddingDraft.embedding_provider === 'chroma' ||
+                    embeddingDraft.embedding_provider === 'precomputed'
+                  "
                 />
               </UiField>
               <UiField

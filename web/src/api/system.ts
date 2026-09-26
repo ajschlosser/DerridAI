@@ -14,6 +14,12 @@ export interface ProviderProfile {
   [key: string]: unknown;
 }
 
+export interface SystemEmbeddingDefaults {
+  embedding_provider: string;
+  embedding_model: string | null;
+  persisted?: boolean;
+}
+
 export interface LanguageInfo {
   code: string;
   name: string;
@@ -171,6 +177,13 @@ export interface SystemMetadataExemplarFilters {
 export const systemApi = {
   researcherProviders: () =>
     apiRequest<{ profiles: ProviderProfile[] }>("/api/system/researcher-providers"),
+  embeddingDefaults: () => apiRequest<SystemEmbeddingDefaults>("/api/system/embedding-defaults"),
+  setEmbeddingDefaults: (payload: SystemEmbeddingDefaults) =>
+    apiRequest<SystemEmbeddingDefaults>("/api/system/embedding-defaults", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+
   setResearcherProviders: (profiles: ProviderProfile[]) =>
     apiRequest<{ profiles: ProviderProfile[] }>("/api/system/researcher-providers", {
       method: "PUT",
