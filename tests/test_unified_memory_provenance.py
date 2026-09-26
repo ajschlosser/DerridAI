@@ -181,3 +181,58 @@ def test_record_support_lookup_is_owner_scoped(tmp_path: Path):
     assert repository.get_generated_claim("claim-a", owner="alice")["claim_text"] == "A claim"
     assert repository.get_generated_claim("claim-b", owner="alice") is None
 
+
+
+def test_claim_support_persistence_uses_raw_markers_before_citation_rendering(
+    tmp_path: Path,
+    monkeypatch,
+):
+    import app.provenance_memory as memory_module
+    import app.system_store as store_module
+    from app.job_rag import RAGJobManager
+
+    repository = SQLiteSystemRepository(tmp_path / "system.sqlite3")
+    monkeypatch.setattr(store_module, "system_repository", repository)
+    store = SystemStore()
+    monkeypatch.setattr(memory_module, "system_store", store)
+
+    result = {
+        "answer": "The passage resists a simple hierarchy (Derrida 1967: 12).",
+        "raw_answer": "The passage resists a simple hierarchy [[E0]].",
+        "evidence": [
+            {
+                "evidence_id": "E0",
+                "inline_citation": "Derrida 1967: 12",
+                "full_citation": "Derrida, Jacques. Of Grammatology. 1967.",
+                "record": {
+                    "record_id": "r1",
+                    "record_revision": 3,
+                    "source_document_id": "doc-1",
+                    "source_spans": [
+                        {
+                            "source_document_id": "doc-1",
+                            "source_unit_id": "b1",
+                            "page": 12,
+                            "char_start": 0,
+                            "char_end": 80,
+                        }
+                    ],
+                },
+            }
+        ],
+    }
+
+    persisted = RAGJobManager._persist_response_provenance(
+        result,
+        run_id="run-1",
+        response_record_id="response-1",
+        owner="alice",
+    )
+
+    assert len(persisted["claims"]) == 1
+    assert persisted["claims"][0]["claim_text"] == "The passage resists a simple hierarchy."
+    assert len(persisted["support_bindings"]) == 1
+    binding = persisted["support_bindings"][0]
+    assert binding["citation"]["evidence_marker"] == "E0"
+    assert binding["source_spans"][0]["source_unit_ids"] == ["b1"]
+    assert binding["source_spans"][0]["character_start"] == 0

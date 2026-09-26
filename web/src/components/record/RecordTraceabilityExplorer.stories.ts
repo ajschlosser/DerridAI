@@ -129,3 +129,83 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const BranchingRecord: Story = {};
+
+export const WithResearchUse: Story = {
+  args: {
+    graph: {
+      ...graph,
+      nodes: [
+        ...graph.nodes,
+        {
+          id: "RecordRevision:r1@3",
+          object_type: "RecordRevision",
+          object_id: "r1@3",
+          label: "Revision 3",
+          summary: "Evidence-bearing state",
+          materialization: "materialized",
+        },
+        {
+          id: "EvidenceRef:e1",
+          object_type: "EvidenceRef",
+          object_id: "e1",
+          label: "Evidence reference e1",
+          summary: "Record r1 · revision 3",
+          materialization: "embedded",
+        },
+        {
+          id: "SupportBinding:b1",
+          object_type: "SupportBinding",
+          object_id: "b1",
+          label: "Support binding b1",
+          summary: "supports",
+          materialization: "materialized",
+          status: "validated",
+        },
+        {
+          id: "GeneratedClaim:c1",
+          object_type: "GeneratedClaim",
+          object_id: "c1",
+          label: "Generated claim",
+          summary: "Writing is not simply secondary to speech.",
+          materialization: "materialized",
+          status: "validated",
+        },
+      ],
+      edges: [
+        ...graph.edges,
+        {
+          id: "r-rev",
+          source: "Record:r1",
+          target: "RecordRevision:r1@3",
+          relation: "has revision",
+          inverse_relation: "revision of",
+          normative: true,
+        },
+        {
+          id: "e-rev",
+          source: "EvidenceRef:e1",
+          target: "RecordRevision:r1@3",
+          relation: "locates revision",
+          inverse_relation: "referenced by evidence",
+          normative: true,
+        },
+        {
+          id: "b-e",
+          source: "SupportBinding:b1",
+          target: "EvidenceRef:e1",
+          relation: "binds evidence",
+          inverse_relation: "bound by",
+          normative: true,
+        },
+        {
+          id: "c-b",
+          source: "GeneratedClaim:c1",
+          target: "SupportBinding:b1",
+          relation: "has support binding",
+          inverse_relation: "binds claim",
+          normative: true,
+        },
+      ],
+    },
+  },
+};

@@ -37,10 +37,19 @@ from test_human_overrides_and_reruns import install_review_build
 
 
 def archive(entries):
+    """Build deterministic ZIP fixtures for xdist collection.
+
+    zipfile.writestr(name, data) stamps members with the current local time.
+    These archives are created at module import time inside parametrization, so
+    parallel pytest workers can otherwise collect different binary parameter
+    IDs when they cross a ZIP timestamp boundary.
+    """
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as package:
         for name, data in entries.items():
-            package.writestr(name, data)
+            info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            package.writestr(info, data)
     return output.getvalue()
 
 

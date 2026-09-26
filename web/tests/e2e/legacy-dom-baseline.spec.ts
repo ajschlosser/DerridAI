@@ -1054,7 +1054,7 @@ const scenarios: Scenario[] = [
     nav: "Record View",
     load: true,
     steps: async (page) => {
-      await page.getByRole("tab", { name: "Provenance" }).click();
+      await page.getByRole("tab", { name: "Attribution" }).click();
       await page.waitForTimeout(600);
     },
   },

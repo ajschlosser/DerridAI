@@ -291,10 +291,9 @@ const autoResolved = computed(
       <p v-if="status?.reason" class="assertion-reason">{{ status.reason }}</p>
       <p v-if="Array.isArray(status?.evidence)" class="assertion-evidence-count">
         {{
-          i18n.t(
-            "pdf_corpus.assertion_evidence_count",
-            `${status.evidence.length} evidence reference(s)`,
-          )
+          i18n.tf("pdf_corpus.assertion_evidence_count", {
+            count: status.evidence.length,
+          })
         }}
       </p>
       <div v-if="assertionAlternatives.length" class="assertion-alternatives">

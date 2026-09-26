@@ -114,6 +114,9 @@ def test_record_graph_can_walk_document_assertion_and_claim_branches():
 
     root_neighbors = _neighbors(graph, root)
     assert by_type["SourceDocument"][0] in root_neighbors
+    # The Record and persisted SupportBinding describe the same source unit in
+    # different serialization shapes; the graph must show one documentary span.
+    assert len(by_type["SourceSpan"]) == 1
     assert by_type["SourceSpan"][0] in root_neighbors
     assert by_type["RecordRevision"][0] in root_neighbors
     assert by_type["FieldAssertion"][0] in root_neighbors
