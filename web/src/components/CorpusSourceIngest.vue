@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Copyright 2026 Aaron John Schlosser, PhD.
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import type { GutenbergHit, PdfAsset, WikisourceHit, GutenbergStatus } from "../api/corpus";
 
@@ -62,6 +62,7 @@ const emit = defineEmits<{
 const i18n = useI18nStore();
 const uploadInput = ref<HTMLInputElement | null>(null);
 const searchOpen = ref(false);
+const searchDialog = ref<HTMLDialogElement | null>(null);
 const statusPoll = ref<number | null>(null);
 const activeLibrary = ref<"gutenberg" | "wikisource">("gutenberg");
 
@@ -112,13 +113,23 @@ function importLabel(hit: GutenbergHit) {
   });
 }
 
-function openSearch() {
+async function openSearch() {
   searchOpen.value = true;
   emit("refreshGutenbergStatus");
-  statusPoll.value = window.setInterval(() => emit("refreshGutenbergStatus"), 2000);
+  await nextTick();
+  const dialog = searchDialog.value;
+  if (dialog && !dialog.open) {
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+  }
+  if (statusPoll.value === null) {
+    statusPoll.value = window.setInterval(() => emit("refreshGutenbergStatus"), 2000);
+  }
 }
 
 function closeSearch() {
+  const dialog = searchDialog.value;
+  if (dialog?.open && typeof dialog.close === "function") dialog.close();
   searchOpen.value = false;
   if (statusPoll.value !== null) {
     window.clearInterval(statusPoll.value);
@@ -229,9 +240,10 @@ onBeforeUnmount(closeSearch);
 
     <dialog
       v-if="searchOpen"
-      open
+      ref="searchDialog"
       class="source-search-dialog"
       aria-labelledby="source-search-title"
+      @cancel.prevent="closeSearch"
     >
       <div class="source-search-dialog__header">
         <div>
