@@ -55,20 +55,12 @@ const i18n = useI18nStore();
 const activeProfile = computed(() =>
   props.profiles.find((profile) => profile.id === props.providerProfileId),
 );
-const concurrencyLimit = computed(() =>
-  Number(activeProfile.value?.max_concurrent_requests || 1),
-);
+const concurrencyLimit = computed(() => Number(activeProfile.value?.max_concurrent_requests || 1));
 const concurrencyRisk = computed(
-  () =>
-    activeProfile.value?.type === "ollama" &&
-    props.activeRequests + 1 > concurrencyLimit.value,
+  () => activeProfile.value?.type === "ollama" && props.activeRequests + 1 > concurrencyLimit.value,
 );
 
-function adjudicate(
-  direction: "previous" | "next",
-  providerProfileId: string,
-  model: string,
-) {
+function adjudicate(direction: "previous" | "next", providerProfileId: string, model: string) {
   emit("adjudicate", direction, providerProfileId, model);
 }
 </script>
