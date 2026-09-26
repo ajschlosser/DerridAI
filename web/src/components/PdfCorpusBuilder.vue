@@ -79,6 +79,7 @@ import CorpusBuilderWorkspaceHeader from "./corpus-builder/CorpusBuilderWorkspac
 import CorpusReviewRecordQueue from "./corpus-builder/CorpusReviewRecordQueue.vue";
 import CorpusReviewToolbar from "./corpus-builder/CorpusReviewToolbar.vue";
 import CorpusReviewEvidencePanel from "./corpus-builder/CorpusReviewEvidencePanel.vue";
+import CorpusRecordSizeAdvice from "./CorpusRecordSizeAdvice.vue";
 import CorpusUnitPolicy from "./CorpusUnitPolicy.vue";
 import CorpusReviewSourcePanel from "./corpus-builder/CorpusReviewSourcePanel.vue";
 import CorpusEnrichmentConfiguration from "./corpus-builder/CorpusEnrichmentConfiguration.vue";
@@ -2085,6 +2086,17 @@ defineExpose({
         @update:manual-base-url="manualBaseUrl = $event"
         @update:manual-api-key="manualApiKey = $event"
         @manage-providers="manageProviders"
+      />
+
+      <CorpusRecordSizeAdvice
+        v-if="selectedAsset && selectedAsset.media_kind !== 'audio'"
+        v-show="configurationSection === 'structure'"
+        :asset="selectedAsset"
+        :sizing="recordSizing"
+        :disabled="
+          Boolean(buildRunning && currentBuild?.asset_id === selectedAssetId) || busy !== ''
+        "
+        @apply="applyUnitPolicy"
       />
 
       <details v-show="configurationSection === 'structure'" class="setup-section setup-disclosure">
