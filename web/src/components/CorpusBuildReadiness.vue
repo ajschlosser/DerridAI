@@ -64,7 +64,7 @@ const providerSummary = computed(() =>
 
 <template>
   <section
-    class="build-command-bar"
+    class="build-command-bar build-readiness"
     :data-ready="ready ? 'true' : 'false'"
     aria-labelledby="build-readiness-title"
   >
