@@ -16,7 +16,11 @@ export type ColorScheme = "system" | "light" | "dark";
 export type ContrastPref = "system" | "more";
 export type ReviewPreset = "text" | "attribution" | "semantic";
 export type LlmRunMode = "foreground" | "background";
-export type EmbeddingProvider = "ollama" | "chroma" | "precomputed";
+export type EmbeddingProvider =
+  | "ollama"
+  | "chroma"
+  | "precomputed"
+  | `profile:${string}`;
 export type Reranker = "cross_encoder" | "lexical" | "none";
 export type ResponseLanguage = "auto" | "en" | "fr";
 export type RetrievalRoute = "similarity" | "lexical" | "mmr";
@@ -379,10 +383,21 @@ export function normalizeReview(
 export function normalizeEmbedding(
   source: Partial<EmbeddingSettingsDraft> | null | undefined,
 ): EmbeddingSettingsDraft {
-  const provider = source?.embedding_provider;
+  const rawProvider = String(source?.embedding_provider || "").trim();
+  const provider: EmbeddingProvider =
+    rawProvider === "chroma" ||
+    rawProvider === "precomputed" ||
+    rawProvider === "ollama" ||
+    rawProvider.startsWith("profile:")
+      ? (rawProvider as EmbeddingProvider)
+      : "ollama";
+  const requestedModel = String(source?.embedding_model || "").trim();
   return {
-    embedding_provider: provider === "chroma" || provider === "precomputed" ? provider : "ollama",
-    embedding_model: String(source?.embedding_model || "bge-m3:latest").trim() || "bge-m3:latest",
+    embedding_provider: provider,
+    embedding_model:
+      provider === "chroma" || provider === "precomputed"
+        ? ""
+        : requestedModel || "bge-m3:latest",
   };
 }
 
