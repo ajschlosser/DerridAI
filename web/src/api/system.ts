@@ -177,8 +177,7 @@ export interface SystemMetadataExemplarFilters {
 export const systemApi = {
   researcherProviders: () =>
     apiRequest<{ profiles: ProviderProfile[] }>("/api/system/researcher-providers"),
-  embeddingDefaults: () =>
-    apiRequest<SystemEmbeddingDefaults>("/api/system/embedding-defaults"),
+  embeddingDefaults: () => apiRequest<SystemEmbeddingDefaults>("/api/system/embedding-defaults"),
   setEmbeddingDefaults: (payload: SystemEmbeddingDefaults) =>
     apiRequest<SystemEmbeddingDefaults>("/api/system/embedding-defaults", {
       method: "PUT",
