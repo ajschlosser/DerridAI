@@ -1,102 +1,40 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { ref } from "vue";
 import type { ProviderProfile } from "../../api/system";
 import { useI18nStore } from "../../stores/i18n";
 import CorpusTextNoiseSettings from "../CorpusTextNoiseSettings.vue";
 import ProviderProfileSelect from "../ProviderProfileSelect.vue";
 
+type EnrichmentMode = "fast" | "deep";
+type ManualProvider = "ollama" | "openai";
+
 const props = defineProps<{
-  selectedProviderId: string;
-  selectedReviewProviderId: string;
   providerProfiles: ProviderProfile[];
   defaultProfileId: string;
   selectedProviderLabel: string;
   selectedProfileModel: string;
-  enrichmentMode: "fast" | "deep";
-  semanticIndexing: boolean;
-  autoCleanText: boolean;
-  llmTouchupDuringEnrichment: boolean;
-  noiseUnusableThreshold: number;
-  llmAssessTextNoise: boolean;
-  manualProvider: "ollama" | "openai";
-  manualModel: string;
-  manualBaseUrl: string;
-  manualApiKey: string;
   disabled?: boolean;
 }>();
+const emit = defineEmits<{ manageProviders: [] }>();
 
-const emit = defineEmits<{
-  "update:selectedProviderId": [value: string];
-  "update:selectedReviewProviderId": [value: string];
-  "update:enrichmentMode": [value: "fast" | "deep"];
-  "update:semanticIndexing": [value: boolean];
-  "update:autoCleanText": [value: boolean];
-  "update:llmTouchupDuringEnrichment": [value: boolean];
-  "update:noiseUnusableThreshold": [value: number];
-  "update:llmAssessTextNoise": [value: boolean];
-  "update:manualProvider": [value: "ollama" | "openai"];
-  "update:manualModel": [value: string];
-  "update:manualBaseUrl": [value: string];
-  "update:manualApiKey": [value: string];
-  manageProviders: [];
-}>();
+const selectedProviderId = defineModel<string>("selectedProviderId", { required: true });
+const selectedReviewProviderId = defineModel<string>("selectedReviewProviderId", { required: true });
+const enrichmentMode = defineModel<EnrichmentMode>("enrichmentMode", { required: true });
+const semanticIndexing = defineModel<boolean>("semanticIndexing", { required: true });
+const autoCleanText = defineModel<boolean>("autoCleanText", { required: true });
+const llmTouchupDuringEnrichment = defineModel<boolean>("llmTouchupDuringEnrichment", {
+  required: true,
+});
+const noiseUnusableThreshold = defineModel<number>("noiseUnusableThreshold", { required: true });
+const llmAssessTextNoise = defineModel<boolean>("llmAssessTextNoise", { required: true });
+const manualProvider = defineModel<ManualProvider>("manualProvider", { required: true });
+const manualModel = defineModel<string>("manualModel", { required: true });
+const manualBaseUrl = defineModel<string>("manualBaseUrl", { required: true });
+const manualApiKey = defineModel<string>("manualApiKey", { required: true });
 
 const i18n = useI18nStore();
-const manualOpen = ref(false);
-const enrichmentSummary = computed(() =>
-  [
-    props.selectedProviderLabel,
-    props.selectedProfileModel,
-    props.enrichmentMode === "deep"
-      ? i18n.t("pdf_corpus.enrichment_deep")
-      : i18n.t("pdf_corpus.enrichment_fast"),
-  ]
-    .filter(Boolean)
-    .join(" · "),
-);
-
-function reviewProviderChanged(event: Event) {
-  emit(
-    "update:selectedReviewProviderId",
-    (event.target as HTMLSelectElement).value,
-  );
-}
-
-function semanticIndexingChanged(event: Event) {
-  emit("update:semanticIndexing", (event.target as HTMLInputElement).checked);
-}
-
-function autoCleanTextChanged(event: Event) {
-  emit("update:autoCleanText", (event.target as HTMLInputElement).checked);
-}
-
-function llmTouchupChanged(event: Event) {
-  emit("update:llmTouchupDuringEnrichment", (event.target as HTMLInputElement).checked);
-}
-
-function manualProviderChanged(event: Event) {
-  emit(
-    "update:manualProvider",
-    (event.target as HTMLSelectElement).value as "ollama" | "openai",
-  );
-}
-
-function manualModelChanged(event: Event) {
-  emit("update:manualModel", (event.target as HTMLInputElement).value);
-}
-
-function manualBaseUrlChanged(event: Event) {
-  emit("update:manualBaseUrl", (event.target as HTMLInputElement).value);
-}
-
-function manualApiKeyChanged(event: Event) {
-  emit("update:manualApiKey", (event.target as HTMLInputElement).value);
-}
-
-function manualDisclosureToggled(event: Event) {
-  manualOpen.value = (event.currentTarget as HTMLDetailsElement).open;
-}
+const advancedOpen = ref(false);
 </script>
 
 <template>
@@ -108,16 +46,24 @@ function manualDisclosureToggled(event: Event) {
     open
   >
     <summary>
-      <span>
-        <b>{{ i18n.t("pdf_corpus.llm_enrichment_title") }}</b>
-        <small>{{ enrichmentSummary }}</small>
-      </span>
+      <span
+        ><b>{{ i18n.t("pdf_corpus.llm_enrichment_title") }}</b
+        ><small
+          >{{ props.selectedProviderLabel
+          }}<template v-if="props.selectedProfileModel"> · {{ props.selectedProfileModel }}</template>
+          ·
+          {{
+            enrichmentMode === "deep"
+              ? i18n.t("pdf_corpus.enrichment_deep")
+              : i18n.t("pdf_corpus.enrichment_fast")
+          }}</small
+        ></span
+      >
     </summary>
-
     <div class="setup-disclosure-body">
       <div class="provider-area">
         <ProviderProfileSelect
-          :model-value="props.selectedProviderId"
+          v-model="selectedProviderId"
           :profiles="props.providerProfiles"
           :default-profile-id="props.defaultProfileId"
           :label="i18n.t('pdf_corpus.provider_profile')"
@@ -129,24 +75,19 @@ function manualDisclosureToggled(event: Event) {
           :default-label="i18n.t('ui.default')"
           :concurrent-label="i18n.t('pdf_corpus.concurrent_requests')"
           :context-label="i18n.t('providers.context_tokens')"
-          @update:model-value="emit('update:selectedProviderId', $event)"
           @manage="emit('manageProviders')"
         />
-
         <label
-          v-if="props.selectedProviderId && props.providerProfiles.length > 1"
+          v-if="selectedProviderId && props.providerProfiles.length > 1"
           class="escalation-field"
           for="pdf-corpus-review-provider"
-        >
-          <span>
-            <b>{{ i18n.t("pdf_corpus.escalation_provider") }}</b>
-            <small>{{ i18n.t("pdf_corpus.escalation_provider_help") }}</small>
-          </span>
-          <select
+          ><span
+            ><b>{{ i18n.t("pdf_corpus.escalation_provider") }}</b
+            ><small>{{ i18n.t("pdf_corpus.escalation_provider_help") }}</small></span
+          ><select
             id="pdf-corpus-review-provider"
+            v-model="selectedReviewProviderId"
             class="control"
-            :value="props.selectedReviewProviderId"
-            @change="reviewProviderChanged"
           >
             <option value="">
               {{ i18n.t("pdf_corpus.no_escalation_provider") }}
@@ -155,163 +96,106 @@ function manualDisclosureToggled(event: Event) {
               v-for="profile in props.providerProfiles"
               :key="profile.id"
               :value="profile.id"
-              :disabled="profile.id === props.selectedProviderId"
+              :disabled="profile.id === selectedProviderId"
             >
               {{ profile.name || profile.id }} ·
               {{ profile.model || i18n.t("pdf_corpus.model_not_set") }}
             </option>
-          </select>
-        </label>
+          </select></label
+        >
       </div>
-
-      <section
-        class="enrichment-strategy"
-        aria-labelledby="pdf-corpus-enrichment-mode-title"
-      >
+      <section class="enrichment-strategy" aria-labelledby="pdf-corpus-enrichment-mode-title">
         <div class="setup-card-heading">
-          <b id="pdf-corpus-enrichment-mode-title">
-            {{ i18n.t("pdf_corpus.enrichment_strategy") }}
-          </b>
-          <small>{{ i18n.t("pdf_corpus.enrichment_strategy_help") }}</small>
+          <b id="pdf-corpus-enrichment-mode-title">{{
+            i18n.t("pdf_corpus.enrichment_strategy")
+          }}</b
+          ><small>{{ i18n.t("pdf_corpus.enrichment_strategy_help") }}</small>
         </div>
-
         <div
           class="mode-options"
           role="radiogroup"
           :aria-label="i18n.t('pdf_corpus.enrichment_strategy')"
         >
-          <label>
-            <input
-              type="radio"
-              value="fast"
-              :checked="props.enrichmentMode === 'fast'"
-              @change="emit('update:enrichmentMode', 'fast')"
-            />
-            <span>
-              <b>{{ i18n.t("pdf_corpus.enrichment_fast") }}</b>
-              <small>{{ i18n.t("pdf_corpus.enrichment_fast_help") }}</small>
-            </span>
-          </label>
-          <label>
-            <input
-              type="radio"
-              value="deep"
-              :checked="props.enrichmentMode === 'deep'"
-              @change="emit('update:enrichmentMode', 'deep')"
-            />
-            <span>
-              <b>{{ i18n.t("pdf_corpus.enrichment_deep") }}</b>
-              <small>{{ i18n.t("pdf_corpus.enrichment_deep_help") }}</small>
-            </span>
-          </label>
+          <label
+            ><input v-model="enrichmentMode" type="radio" value="fast" /><span
+              ><b>{{ i18n.t("pdf_corpus.enrichment_fast") }}</b
+              ><small>{{ i18n.t("pdf_corpus.enrichment_fast_help") }}</small></span
+            ></label
+          ><label
+            ><input v-model="enrichmentMode" type="radio" value="deep" /><span
+              ><b>{{ i18n.t("pdf_corpus.enrichment_deep") }}</b
+              ><small>{{ i18n.t("pdf_corpus.enrichment_deep_help") }}</small></span
+            ></label
+          >
         </div>
-
-        <div v-if="props.enrichmentMode === 'deep'" class="included-feature">
-          <b>{{ i18n.t("pdf_corpus.semantic_indexing") }}</b>
-          <span>{{ i18n.t("pdf_corpus.semantic_indexing_included") }}</span>
+        <div v-if="enrichmentMode === 'deep'" class="included-feature">
+          <b>{{ i18n.t("pdf_corpus.semantic_indexing") }}</b
+          ><span>{{ i18n.t("pdf_corpus.semantic_indexing_included") }}</span>
         </div>
-        <label v-else class="semantic-index-toggle">
-          <input
-            type="checkbox"
-            :checked="props.semanticIndexing"
-            @change="semanticIndexingChanged"
-          />
-          <span>
-            <b>{{ i18n.t("pdf_corpus.semantic_indexing") }}</b>
-            <small>{{ i18n.t("pdf_corpus.semantic_indexing_help") }}</small>
-          </span>
-        </label>
-
-        <label class="semantic-index-toggle">
-          <input
-            type="checkbox"
-            :checked="props.autoCleanText"
-            @change="autoCleanTextChanged"
-          />
-          <span>
-            <b>{{ i18n.t("pdf_corpus.auto_clean_all_records") }}</b>
-            <small>{{ i18n.t("pdf_corpus.auto_clean_all_records_help") }}</small>
-          </span>
-        </label>
-
-        <label class="semantic-index-toggle">
-          <input
-            type="checkbox"
-            :checked="props.llmTouchupDuringEnrichment"
-            @change="llmTouchupChanged"
-          />
-          <span>
-            <b>{{ i18n.t("pdf_corpus.llm_touchup_during_enrichment") }}</b>
-            <small>{{ i18n.t("pdf_corpus.llm_touchup_during_enrichment_help") }}</small>
-          </span>
-        </label>
-
+        <label v-else class="semantic-index-toggle"
+          ><input v-model="semanticIndexing" type="checkbox" /><span
+            ><b>{{ i18n.t("pdf_corpus.semantic_indexing") }}</b
+            ><small>{{ i18n.t("pdf_corpus.semantic_indexing_help") }}</small></span
+          ></label
+        >
+        <label class="semantic-index-toggle"
+          ><input v-model="autoCleanText" type="checkbox" /><span
+            ><b>{{ i18n.t("pdf_corpus.auto_clean_all_records") }}</b
+            ><small>{{ i18n.t("pdf_corpus.auto_clean_all_records_help") }}</small></span
+          ></label
+        ><label class="semantic-index-toggle"
+          ><input v-model="llmTouchupDuringEnrichment" type="checkbox" /><span
+            ><b>{{ i18n.t("pdf_corpus.llm_touchup_during_enrichment") }}</b
+            ><small>{{ i18n.t("pdf_corpus.llm_touchup_during_enrichment_help") }}</small></span
+          ></label
+        >
         <CorpusTextNoiseSettings
-          :threshold="props.noiseUnusableThreshold"
-          :llm-assist="props.llmAssessTextNoise"
+          :threshold="noiseUnusableThreshold"
+          :llm-assist="llmAssessTextNoise"
           :disabled="props.disabled"
-          @update:threshold="emit('update:noiseUnusableThreshold', $event)"
-          @update:llm-assist="emit('update:llmAssessTextNoise', $event)"
+          @update:threshold="noiseUnusableThreshold = $event"
+          @update:llm-assist="llmAssessTextNoise = $event"
         />
       </section>
-
       <details
-        v-if="!props.selectedProviderId"
-        :open="manualOpen"
+        v-if="!selectedProviderId"
+        :open="advancedOpen"
         class="advanced-config"
-        @toggle="manualDisclosureToggled"
+        @toggle="advancedOpen = ($event.currentTarget as HTMLDetailsElement).open"
       >
-        <summary>{{ i18n.t("pdf_corpus.manual_provider") }}</summary>
-        <p class="help">{{ i18n.t("pdf_corpus.manual_provider_help") }}</p>
+        <summary>
+          {{ i18n.t("pdf_corpus.manual_provider") }}
+        </summary>
+        <p class="help">
+          {{ i18n.t("pdf_corpus.manual_provider_help") }}
+        </p>
         <div class="advanced-grid">
-          <label for="pdf-corpus-provider">
-            {{ i18n.t("pdf_corpus.provider") }}
-          </label>
-          <select
-            id="pdf-corpus-provider"
-            class="control"
-            :value="props.manualProvider"
-            @change="manualProviderChanged"
-          >
+          <label for="pdf-corpus-provider">{{ i18n.t("pdf_corpus.provider") }}</label
+          ><select id="pdf-corpus-provider" v-model="manualProvider" class="control">
             <option value="ollama">Ollama</option>
             <option value="openai">
               {{ i18n.t("pdf_corpus.openai_compatible") }}
-            </option>
-          </select>
-
-          <label for="pdf-corpus-model">
-            {{ i18n.t("pdf_corpus.model") }}
-          </label>
-          <input
+            </option></select
+          ><label for="pdf-corpus-model">{{ i18n.t("pdf_corpus.model") }}</label
+          ><input
             id="pdf-corpus-model"
+            v-model="manualModel"
             class="control"
-            :value="props.manualModel"
             :placeholder="i18n.t('pdf_corpus.provider_default')"
-            @input="manualModelChanged"
-          />
-
-          <label for="pdf-corpus-url">
-            {{ i18n.t("pdf_corpus.base_url") }}
-          </label>
-          <input
+          /><label for="pdf-corpus-url">{{ i18n.t("pdf_corpus.base_url") }}</label
+          ><input
             id="pdf-corpus-url"
+            v-model="manualBaseUrl"
             class="control"
-            :value="props.manualBaseUrl"
             :placeholder="i18n.t('pdf_corpus.provider_default')"
-            @input="manualBaseUrlChanged"
-          />
-
-          <label for="pdf-corpus-key">
-            {{ i18n.t("pdf_corpus.api_key") }}
-          </label>
-          <input
+          /><label for="pdf-corpus-key">{{ i18n.t("pdf_corpus.api_key") }}</label
+          ><input
             id="pdf-corpus-key"
+            v-model="manualApiKey"
             class="control"
             type="password"
             autocomplete="off"
-            :value="props.manualApiKey"
             :placeholder="i18n.t('pdf_corpus.not_persisted')"
-            @input="manualApiKeyChanged"
           />
         </div>
       </details>
@@ -345,7 +229,7 @@ function manualDisclosureToggled(event: Event) {
 }
 .setup-disclosure > summary small {
   color: var(--muted);
-  font-size: 0.8125rem;
+  font-size: 0.8125rem !important;
   font-weight: 500;
 }
 .setup-disclosure[open] > summary {
@@ -357,10 +241,11 @@ function manualDisclosureToggled(event: Event) {
   gap: var(--space-4);
   padding: var(--space-4) 0 var(--space-5);
 }
-.provider-area,
-.enrichment-strategy {
+.provider-area {
   display: grid;
-  gap: 12px;
+  gap: 8px;
+  padding: 0;
+  border: 0;
 }
 .setup-card-heading {
   display: grid;
@@ -370,8 +255,7 @@ function manualDisclosureToggled(event: Event) {
   font-size: 0.8125rem;
 }
 .setup-card-heading small {
-  color: var(--muted);
-  font-size: 0.8125rem;
+  font-size: 0.8125rem !important;
   line-height: 1.45;
 }
 .escalation-field {
@@ -388,14 +272,33 @@ function manualDisclosureToggled(event: Event) {
   display: grid;
   gap: 2px;
 }
-.escalation-field b,
-.escalation-field small {
+.escalation-field b {
   font-size: 0.8125rem;
 }
-.escalation-field small,
-.help {
-  color: var(--muted);
+.escalation-field small {
+  font-size: 0.8125rem;
   line-height: 1.4;
+  color: var(--muted);
+}
+.advanced-config {
+  grid-column: 1/-1;
+}
+.advanced-config summary {
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.advanced-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr max-content 1fr;
+  gap: 8px 10px;
+  margin-top: 8px;
+  align-items: center;
+}
+.enrichment-strategy {
+  display: grid;
+  gap: 12px;
+  padding-top: 2px;
 }
 .mode-options {
   display: grid;
@@ -427,15 +330,13 @@ function manualDisclosureToggled(event: Event) {
   gap: 4px;
 }
 .mode-options b,
-.semantic-index-toggle b,
-.included-feature b {
+.semantic-index-toggle b {
   font-size: 0.875rem;
 }
 .mode-options small,
-.semantic-index-toggle small,
-.included-feature span {
+.semantic-index-toggle small {
+  font-size: 0.8125rem !important;
   color: var(--muted);
-  font-size: 0.8125rem;
 }
 .mode-options > label:has(input:checked) {
   border-color: var(--accent);
@@ -456,30 +357,14 @@ function manualDisclosureToggled(event: Event) {
   border-radius: 10px;
   background: var(--soft);
 }
-.advanced-config {
-  grid-column: 1 / -1;
+.included-feature b {
+  font-size: 0.875rem;
 }
-.advanced-config summary {
-  cursor: pointer;
-  font-size: 0.8125rem;
-  font-weight: 700;
-}
-.advanced-grid {
-  display: grid;
-  grid-template-columns: max-content 1fr max-content 1fr;
-  gap: 8px 10px;
-  margin-top: 8px;
-  align-items: center;
-}
-.advanced-grid label {
+.included-feature span {
   color: var(--muted);
   font-size: 0.8125rem;
-  font-weight: 700;
 }
-.help {
-  font-size: 0.8125rem;
-}
-@container (max-width: 760px) {
+@container (max-width:760px) {
   .mode-options {
     grid-template-columns: 1fr;
   }
