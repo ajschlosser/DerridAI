@@ -229,6 +229,25 @@ class SystemStore:
         if not provider.startswith("profile:"):
             provider = provider.lower()
         model = str(value.get("embedding_model") or "").strip() or None
+
+        # Before embedding defaults were server-owned, the browser Vector Store
+        # wizard interpreted the legacy "ollama" default as the first configured
+        # Ollama provider profile. Preserve that behavior for an unpersisted
+        # default so background/system projections use the same endpoint/model.
+        if not isinstance(stored, dict) and provider == "ollama":
+            profile = next(
+                (
+                    item
+                    for item in self.researcher_profiles(include_secrets=True)
+                    if str(item.get("type") or "").strip().lower() == "ollama"
+                    and str(item.get("id") or "").strip()
+                ),
+                None,
+            )
+            if profile:
+                provider = f"profile:{str(profile.get('id')).strip()}"
+                model = str(profile.get("model") or "").strip() or None
+
         if provider == "ollama" and not model:
             model = app_settings.ollama_embed_model
         if provider.startswith("profile:") and not model:
