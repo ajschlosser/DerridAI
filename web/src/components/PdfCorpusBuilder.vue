@@ -81,16 +81,16 @@ import CorpusConfigurationNav, {
   type CorpusConfigurationSection,
 } from "./corpus-builder/CorpusConfigurationNav.vue";
 import CorpusBuilderWorkspaceHeader from "./corpus-builder/CorpusBuilderWorkspaceHeader.vue";
+import CorpusReviewRecordQueue from "./corpus-builder/CorpusReviewRecordQueue.vue";
 import CorpusEnrichmentConfiguration from "./corpus-builder/CorpusEnrichmentConfiguration.vue";
 import CorpusMetadataConfiguration from "./corpus-builder/CorpusMetadataConfiguration.vue";
 import CorpusAdvancedConfiguration from "./corpus-builder/CorpusAdvancedConfiguration.vue";
 import CorpusActionMenu, { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
-import { recordState, recordIssueKinds } from "../domain/corpusReview";
+import { recordIssueKinds } from "../domain/corpusReview";
 import { RecordMutationQueue } from "../domain/recordMutationQueue";
 import {
   firstRecordWithSourceWarning,
   hideSourceWarnings,
-  recordHasSourceWarning,
   sourceWarningsHidden,
 } from "../domain/sourceQuality";
 import { recurringShortLines } from "../domain/textCleanup";
@@ -170,6 +170,9 @@ const {
   setReviewWorkspaceMode,
   reviewInspectorKeydown,
 } = useCorpusReviewWorkspace();
+function setRecordListElement(element: HTMLElement | null) {
+  recordListEl.value = element;
+}
 // Hands-free mode: nobody reviews, a stated policy decides (see the server's autonomous.py). Off unless turned on.
 const handsFree = ref<AutonomousPolicy>({
   enabled: false,
@@ -605,39 +608,6 @@ function metadataDraftKey(buildId: string, recordId: string) {
 function textDraftKey(buildId: string, recordId: string) {
   return `derridai.pdf-corpus.text-draft.${buildId}.${recordId}`;
 }
-function recordStateLabel(record: CorpusRecord) {
-  const state = recordState(record);
-  return i18n.t(
-    `pdf_corpus.record_state.${state}`,
-    state === "ready" ? "Ready" : state.replace(/_/g, " "),
-  );
-}
-// A shape as well as a colour, so a record's state never depends on colour alone (WCAG 1.4.1).
-function recordStateIcon(record: CorpusRecord) {
-  const state = recordState(record);
-  return state === "accepted"
-    ? "check"
-    : state === "rejected"
-      ? "close"
-      : state === "metadata" || state === "topology" || state === "source"
-        ? "warning"
-        : state === "preparing"
-          ? "refresh"
-          : "";
-}
-// The status already says the primary state; list only the other issues, so a row never says "Metadata" twice.
-function extraIssueKinds(record: CorpusRecord) {
-  const state = recordState(record);
-  return recordIssueKinds(record).filter((kind: string) => kind !== state);
-}
-function recordLlmProcessed(record: CorpusRecord) {
-  if (record.metadata_enrichment_finished) return true;
-  if (String(record.metadata_enrichment_state || "") === "complete") return true;
-  return Object.values(record.metadata_stage_status || {}).some((value) =>
-    ["complete", "needs_review"].includes(String(value || "")),
-  );
-}
-
 const {
   open: ingestWarningOpen,
   maybeOpen: maybeOpenIngestWarning,
@@ -2631,118 +2601,26 @@ defineExpose({
               }"
               :aria-busy="recordsLoading"
             >
-              <nav
-                ref="recordListEl"
-                class="records-pane"
-                tabindex="-1"
-                :aria-labelledby="'pdf-corpus-records-pane'"
-              >
-                <div class="pane-head">
-                  <b id="pdf-corpus-records-pane">{{ i18n.t("pdf_corpus.review_queue") }}</b
-                  ><button
-                    type="button"
-                    class="link-button queue-toggle"
-                    @click="reviewQueueCollapsed = true"
-                  >
-                    {{ i18n.t("pdf_corpus.hide_queue") }}</button
-                  ><label class="select-visible"
-                    ><input
-                      type="checkbox"
-                      :checked="allVisibleSelected"
-                      :disabled="!records.length || busy !== ''"
-                      @change="toggleVisibleSelection(($event.target as HTMLInputElement).checked)"
-                    /><span>{{ i18n.t("pdf_corpus.select_visible") }}</span></label
-                  ><span>{{ recordTotal }}</span>
-                </div>
-                <div v-for="record in records" :key="record.record_id" class="record-row-wrap">
-                  <label class="record-select"
-                    ><input
-                      type="checkbox"
-                      :checked="selectedReviewIds.has(record.record_id)"
-                      :aria-label="
-                        i18n.tf('pdf_corpus.select_record_id', {
-                          record: record.record_id,
-                        })
-                      "
-                      @change="
-                        toggleReviewSelection(
-                          record.record_id,
-                          ($event.target as HTMLInputElement).checked,
-                        )
-                      "
-                    /><span class="sr-only">{{
-                      i18n.tf("pdf_corpus.select_record_id", {
-                        record: record.record_id,
-                      })
-                    }}</span></label
-                  >
-                  <button
-                    type="button"
-                    class="record-row"
-                    :class="{ active: record.record_id === selectedRecordId }"
-                    :aria-current="record.record_id === selectedRecordId ? 'true' : undefined"
-                    @click="selectRecord(record)"
-                  >
-                    <span
-                      class="record-state-icon"
-                      :data-state="recordState(record)"
-                      aria-hidden="true"
-                      ><AppIcon v-if="recordStateIcon(record)" :name="recordStateIcon(record)"
-                    /></span>
-                    <span class="record-row-main"
-                      ><b>{{ record.record_id }}</b
-                      ><small
-                        >{{ record.inline_citation }} · {{ record.text_length.toLocaleString() }}
-                        {{ i18n.t("pdf_corpus.characters") }}</small
-                      ><span class="record-row-status" :data-state="recordState(record)">{{
-                        recordStateLabel(record)
-                      }}</span
-                      ><span
-                        v-if="recordState(record) === 'ready' && recordLlmProcessed(record)"
-                        class="record-llm-processed"
-                        :title="
-                          i18n.t(
-                            'pdf_corpus.llm_processed_help',
-                            'The metadata enrichment run finished for this record; it is now waiting for human review.',
-                          )
-                        "
-                        ><AppIcon name="spark" />{{
-                          i18n.t("pdf_corpus.llm_processed", "LLM processed")
-                        }}</span
-                      ><small v-if="extraIssueKinds(record).length" class="record-issue-summary">{{
-                        extraIssueKinds(record)
-                          .map((kind) => i18n.t(`pdf_corpus.record_state.${kind}`, kind))
-                          .join(" · ")
-                      }}</small></span
-                    >
-                  </button>
-                  <button
-                    v-if="recordHasSourceWarning(record)"
-                    type="button"
-                    class="record-source-warn"
-                    :aria-label="i18n.t('pdf_corpus.source_warning_icon')"
-                    @click.stop="openRecordSourceWarning(record)"
-                  >
-                    <AppIcon name="warning" />
-                  </button>
-                </div>
-                <div v-if="recordsLoading && !reviewHydrated" class="rail-empty" role="status">
-                  {{ i18n.t("pdf_corpus.loading_records") }}
-                </div>
-                <div v-else-if="!records.length" class="rail-empty">
-                  {{ i18n.t("pdf_corpus.no_records_filter") }}
-                  <button
-                    type="button"
-                    class="btn small"
-                    @click="
-                      reviewQueue = 'all';
-                      recordQuery = '';
-                    "
-                  >
-                    {{ i18n.t("pdf_corpus.show_all_records") }}
-                  </button>
-                </div>
-              </nav>
+              <CorpusReviewRecordQueue
+                :records="records"
+                :record-total="recordTotal"
+                :selected-record-id="selectedRecordId"
+                :selected-review-ids="selectedReviewIds"
+                :all-visible-selected="allVisibleSelected"
+                :loading="recordsLoading"
+                :hydrated="reviewHydrated"
+                :disabled="busy !== ''"
+                @root-change="setRecordListElement"
+                @collapse="reviewQueueCollapsed = true"
+                @toggle-visible="toggleVisibleSelection"
+                @toggle-record="toggleReviewSelection"
+                @select-record="selectRecord"
+                @source-warning="openRecordSourceWarning"
+                @show-all="
+                  reviewQueue = 'all';
+                  recordQuery = '';
+                "
+              />
               <div
                 v-if="!reviewQueueCollapsed"
                 class="review-splitter"
