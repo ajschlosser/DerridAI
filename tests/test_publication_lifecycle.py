@@ -16,6 +16,7 @@ sys.modules.setdefault("chromadb", types.SimpleNamespace())
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"api"))
 from app import corpus_builder as cb
+from app.derridai_ledger import iter_jsonl_zst
 from app.field_assertions import reset_fields_for_evaluation
 
 
@@ -42,7 +43,9 @@ def test_publication_emits_clean_scholarly_records_and_finishes_progress(tmp_pat
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
     build=_install_publishable(repo)
     publication=manager.publish(build["build_id"])
-    row=json.loads(repo.publication_path(publication["publication_id"]).read_text().splitlines()[0])
+    path = repo.publication_path(publication["publication_id"])
+    assert path.name.endswith(".jsonl.zst")
+    row = next(iter_jsonl_zst(path, rehydrate_evidence=False))
     assert row["record_id"]=="r1"
     assert row["text"]=="Record text"
     assert "corpus_build_details" not in row
