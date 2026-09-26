@@ -193,3 +193,24 @@ Current slice:
 
 Next extraction targets are the Metadata and Advanced tab workspaces, followed by the Review shell
 and Finish/repair-intent orchestration.
+
+
+### Metadata and Advanced workspace extraction
+
+The stacked `task/corpus-builder-metadata-advanced-workspaces` follow-up continues the setup
+decomposition without moving domain policy out of the existing composables.
+
+- Extracted **Metadata** configuration into `CorpusMetadataConfiguration.vue`.
+  - The schema selector and per-field run guidance now share one
+    `#corpus-config-panel-metadata` tabpanel instead of being separate sibling surfaces.
+  - Schema choice and run-guidance state remain parent/composable-owned through typed models.
+- Extracted **Advanced** configuration into `CorpusAdvancedConfiguration.vue`.
+  - Hands-free policy and execution tuning now share one
+    `#corpus-config-panel-advanced` tabpanel.
+  - Generation, stage limits/timeouts, concurrency, and profile-default policy remain owned by
+    `useCorpusProviderConfiguration`; the component only forwards typed changes.
+- Added focused component tests for tabpanel ownership and execution-setting forwarding.
+- Added Storybook states for built-in/custom metadata schemas, hands-free policy, custom execution,
+  and Canadian French length stress.
+- Reduced `PdfCorpusBuilder.vue` further, from 3,813 lines after the Enrichment extraction to
+  3,744 lines.
