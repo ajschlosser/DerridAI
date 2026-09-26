@@ -29,6 +29,12 @@ describe("Corpus source ingest", () => {
       props: {
         sourceUrl: "",
         gutenbergQuery: "austen",
+        gutenbergStatus: {
+          ready: true,
+          search_ready: true,
+          catalogue: { status: "ready", item_count: 1 },
+          archive: { status: "ready", bytes_done: 1, total_bytes: 1 },
+        },
         hits: [
           { etext_id: 1342, title: "Pride and Prejudice", author: "Jane Austen", language: "en" },
         ],
@@ -48,6 +54,31 @@ describe("Corpus source ingest", () => {
       "Pride and Prejudice",
     );
   });
+});
+
+it("shows catalogue results before the collection is ready but keeps imports disabled", async () => {
+  const wrapper = mount(CorpusSourceIngest, {
+    props: {
+      gutenbergQuery: "austen",
+      gutenbergStatus: {
+        ready: false,
+        search_ready: true,
+        catalogue: { status: "ready", item_count: 1 },
+        archive: { status: "downloading", bytes_done: 4, total_bytes: 10 },
+      },
+      hits: [
+        { etext_id: 1342, title: "Pride and Prejudice", author: "Jane Austen", language: "en" },
+      ],
+    },
+  });
+  await wrapper.get("button.btn-secondary").trigger("click");
+  const result = wrapper.get(".gutenberg-hits button");
+  expect(result.text()).toContain("Pride and Prejudice");
+  expect(result.attributes("disabled")).toBeDefined();
+
+  await wrapper.get(".library-tab:nth-child(2)").trigger("click");
+  const search = wrapper.get('button[type="submit"]');
+  expect(search.attributes("disabled")).toBeUndefined();
 });
 
 it("uses automatic media detection instead of asking users for a source type", async () => {
