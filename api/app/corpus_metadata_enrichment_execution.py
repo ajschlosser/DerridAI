@@ -61,6 +61,7 @@ from .metadata_schema import (
     default_schema,
     response_model_for,
 )
+from .nlp_annotations import prompt_hints
 from .rag import _citation_strings
 from .run_guidance import find_guidance_matches, format_group_guidance
 
@@ -326,7 +327,7 @@ If a retrieved example has kind="correction", its value is the human-supported c
 How earlier enrichment in this build went (advisory only; evidence in THIS record remains authoritative). Includes reviewer accepted/rejected counts when present, plus values the previous pass inferred on two or more other records (working conventions, not confirmed). Do not copy these; use them only when THIS record's evidence supports the same reading: {json.dumps(pass_learning or {}, ensure_ascii=False)}
 Human-owned fields on this record (authoritative; DO NOT propose replacements): {json.dumps({field: record.get(field) for field in human_locked_fields}, ensure_ascii=False)}
 Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor_context, ensure_ascii=False)}
-Current source block IDs: {source_id_json}
+{_nlp_hint_line(record, group_fields)}Current source block IDs: {source_id_json}
 CURRENT REVIEWED RECORD TEXT:
 {source_text}
 """
@@ -1214,3 +1215,15 @@ CURRENT REVIEWED RECORD TEXT:
                     status["auto_populated"] = False
                     status["reason"] = ""
         return normalized
+
+
+def _nlp_hint_line(record: dict[str, Any], group_fields: list[str]) -> str:
+    """Deterministic POS/NER surface forms for this family's fields (hints, not evidence)."""
+    hints = prompt_hints(record, group_fields)
+    if not hints:
+        return ""
+    return (
+        "Linguistic candidates found by a deterministic tagger in THIS text, per field (exact surface forms). "
+        "They are hints only: a name appearing here is not thereby the speaker, quoted speaker or position holder, "
+        f"and you must still justify each value from the text: {json.dumps(hints, ensure_ascii=False)}\n"
+    )

@@ -253,6 +253,7 @@ from .metadata_schema import (
 from .metadata_schema_store import SchemaStore
 from .metadata_values import is_placeholder
 from .models import WorkMetadataRequest, WorkMetadataSeed
+from .nlp_annotations import annotate_record
 from .rag import _citation_strings, chat_complete
 from .run_guidance import find_guidance_matches
 from .sentence_boundaries import snap_boundaries_to_sentences
@@ -2412,11 +2413,14 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 "boundary_second_reader_deferred_count": int(second_reader.get("deferred") or 0),
             })
             self.repo.save_build(current_build)
+            nlp_schema = self._schema_for(build_id)
             for record in records:
                 _apply_manifest_metadata(record, manifest)
                 inline, full = _citation_strings(record)
                 record["inline_citation"] = inline
                 record["full_citation"] = full
+                # Deterministic POS/NER candidates: hints for the metadata prompt, never values.
+                annotate_record(record, nlp_schema, language=str(manifest.get("language") or ""))
             # Validate topology before spending time on metadata enrichment.
             # At this point all source-derived text and boundaries are deterministic;
             # any failure is therefore an implementation/topology problem, not an

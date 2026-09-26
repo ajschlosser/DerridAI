@@ -61,6 +61,7 @@ from .field_assertions import (
 )
 from .metadata_adjudication_cache import remember as remember_adjudication
 from .metadata_schema import MetadataSchema
+from .nlp_annotations import annotate_record
 from .provenance_memory import persist_record_decision
 from .rag import _citation_strings
 from .system_store import system_store
@@ -1109,6 +1110,7 @@ class ReviewActionsMixin:
         asset = self.repo.get_asset(build["asset_id"])
         blocks = {block["block_id"]: block for block in self.repo.load_blocks(build["asset_id"])}
         manifest = build.get("manifest") or {}
+        schema = self._schema_for(build_id)
         transaction_id = f"{operation}-{uuid.uuid4().hex[:12]}"
         taken = {str(row.get("record_id")) for row in records} | self._retired_ids(build_id)
         seed = str(retiring[0].get("record_id") or "pdf")
@@ -1118,6 +1120,7 @@ class ReviewActionsMixin:
             inline, full = _citation_strings(record)
             record["inline_citation"] = inline
             record["full_citation"] = full
+            annotate_record(record, schema, language=str(manifest.get("language") or ""))
 
         created: list[dict[str, Any]] = []
         for piece in pieces:
