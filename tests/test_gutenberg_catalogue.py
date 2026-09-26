@@ -68,7 +68,7 @@ def test_download_resume_requires_range_support(tmp_path: Path):
         def raise_for_status(self):
             return None
 
-    with patch("api.app.gutenberg_catalogue.httpx.get", return_value=Response()):
+    with patch("app.gutenberg_catalogue.httpx.get", return_value=Response()):
         try:
             service.download_chunk(chunk_size=4)
         except ValueError as exc:
