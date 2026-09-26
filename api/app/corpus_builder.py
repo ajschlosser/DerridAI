@@ -1520,8 +1520,11 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         except Exception as exc:
             self._append_warning(
                 build_id,
-                "Metadata exemplar projection is pending because the derived vector "
-                f"index could not be updated ({exc}).",
+                "Metadata exemplar projection is pending. Reviewed metadata was saved; "
+                "only the rebuildable semantic example index could not be refreshed. "
+                "This projection failure does not block review or publication. Check "
+                "vector-store and embedding-provider health; DerridAI will retry the "
+                "derived index.",
             )
             return {
                 "scope_id": build_id,
