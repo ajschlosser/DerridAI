@@ -16,16 +16,25 @@ const schemaChoices = [
     groups: ["discourse"],
     hash: "hash",
   },
+  {
+    id: "custom",
+    name: "Attribution study",
+    description: "Custom scholarly metadata",
+    builtin: false,
+    field_count: 12,
+    groups: ["discourse", "attribution"],
+    hash: "custom-hash",
+  },
 ];
 
 describe("Corpus Builder configuration workspaces", () => {
   it("owns both metadata schema and run-guidance surfaces in one tabpanel", async () => {
     const wrapper = mount(CorpusMetadataConfiguration, {
       props: {
-        schemaId: "default",
+        schemaId: "custom",
         runGuidance: {},
         schemaChoices,
-        chosenSchema: schemaChoices[0],
+        chosenSchema: schemaChoices[1],
         runGuidanceFields: [{ name: "speaker", label: "Speaker", group: "Discourse" }],
         disabled: false,
       },
