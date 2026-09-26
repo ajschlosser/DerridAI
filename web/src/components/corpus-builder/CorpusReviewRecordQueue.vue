@@ -30,6 +30,10 @@ const emit = defineEmits<{
 
 const i18n = useI18nStore();
 const queueRoot = ref<HTMLElement | null>(null);
+const llmProcessedHelp = i18n.t(
+  "pdf_corpus.llm_processed_help",
+  "The metadata enrichment run finished for this record; it is now waiting for human review.",
+);
 
 onMounted(() => emit("rootChange", queueRoot.value));
 onBeforeUnmount(() => emit("rootChange", null));
@@ -147,12 +151,7 @@ function recordSelectionChanged(recordId: string, event: Event) {
           <span
             v-if="recordState(record) === 'ready' && recordLlmProcessed(record)"
             class="record-llm-processed"
-            :title="
-              i18n.t(
-                'pdf_corpus.llm_processed_help',
-                'The metadata enrichment run finished for this record; it is now waiting for human review.',
-              )
-            "
+            :title="llmProcessedHelp"
           >
             <AppIcon name="spark" />
             {{ i18n.t("pdf_corpus.llm_processed", "LLM processed") }}
