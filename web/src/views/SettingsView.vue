@@ -511,12 +511,22 @@ onMounted(async () => {
       Object.assign(workspace.appConfig, normalized);
       embeddingSaved.value = normalized;
     } else {
+      const migrateFrom =
+        browserEmbedding.embedding_provider === "ollama" &&
+        serverEmbedding.embedding_provider.startsWith("profile:")
+          ? normalizeEmbedding({
+              embedding_provider:
+                serverEmbedding.embedding_provider as EmbeddingSettingsDraft["embedding_provider"],
+              embedding_model: serverEmbedding.embedding_model || "",
+            })
+          : browserEmbedding;
       const migrated = await systemApi.setEmbeddingDefaults({
-        embedding_provider: browserEmbedding.embedding_provider,
-        embedding_model: browserEmbedding.embedding_model || null,
+        embedding_provider: migrateFrom.embedding_provider,
+        embedding_model: migrateFrom.embedding_model || null,
       });
       embeddingSaved.value = normalizeEmbedding({
-        embedding_provider: migrated.embedding_provider as EmbeddingSettingsDraft["embedding_provider"],
+        embedding_provider:
+          migrated.embedding_provider as EmbeddingSettingsDraft["embedding_provider"],
         embedding_model: migrated.embedding_model || "",
       });
       Object.assign(workspace.appConfig, embeddingSaved.value);
