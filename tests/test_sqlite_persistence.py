@@ -32,6 +32,12 @@ def test_system_repository_round_trip_is_transactional_sqlite(tmp_path: Path):
         "researcher_provider_profiles": [
             {"id": "local", "name": "Local", "type": "ollama", "api_key": "write-only-secret"}
         ],
+        "settings": {
+            "embedding_defaults": {
+                "embedding_provider": "profile:local",
+                "embedding_model": "nomic-embed-text",
+            }
+        },
         "annotations": [
             {"id": "a1", "user_id": 7, "created_at": "2026-09-15T10:00:00+00:00", "note": "note"}
         ],
@@ -59,7 +65,13 @@ def test_system_repository_round_trip_is_transactional_sqlite(tmp_path: Path):
         tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert "schema_migrations" not in tables
     assert "system_meta" not in tables
-    assert {"researcher_provider_profiles", "annotations", "languages", "jobs"} <= tables
+    assert {
+        "researcher_provider_profiles",
+        "system_settings",
+        "annotations",
+        "languages",
+        "jobs",
+    } <= tables
 
 
 def test_system_store_bootstraps_current_defaults_and_ignores_old_json(tmp_path: Path, monkeypatch):
@@ -137,6 +149,7 @@ def test_jobs_and_system_state_share_one_durable_database(tmp_path: Path):
 
     system.replace({
         "researcher_provider_profiles": [],
+        "settings": {},
         "annotations": [],
         "languages": {"en-US": {"name": "English", "flag": "🇺🇸", "dictionary": {}}},
     })
