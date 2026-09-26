@@ -62,6 +62,7 @@ from ..source_media import (
     fetch_source_url,
     load_gutenberg_etext,
     search_project_gutenberg,
+    search_wikisource,
 )
 from ..system_store import system_store
 
@@ -155,6 +156,15 @@ def search_gutenberg_texts(q: str = Query(default="", max_length=200), limit: in
     except Exception as exc:
         logger.exception("Project Gutenberg search failed")
         raise HTTPException(status_code=502, detail=f"Project Gutenberg search failed: {exc}") from exc
+
+
+@router.get("/api/pdf/wikisource/search")
+def search_wikisource_texts(q: str = Query(default="", max_length=200), limit: int = Query(default=12, ge=1, le=30)) -> dict[str, Any]:
+    try:
+        return {"items": search_wikisource(q, limit)}
+    except Exception as exc:
+        logger.exception("Wikisource search failed")
+        raise HTTPException(status_code=502, detail=f"Wikisource search failed: {exc}") from exc
 
 
 @router.post("/api/pdf/gutenberg/import")

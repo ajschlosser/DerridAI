@@ -92,6 +92,7 @@ class Settings:
     auth_login_max_failures: int = _int_env("AUTH_LOGIN_MAX_FAILURES", 5)
     auth_login_lockout_seconds: int = _int_env("AUTH_LOGIN_LOCKOUT_SECONDS", 300)
     system_db_path: str = os.getenv("SYSTEM_DB_PATH", "/data/.home/derridai-system.sqlite3")
+    gutenberg_archive_path: str = os.getenv("GUTENBERG_ARCHIVE_PATH", "/data/gutenberg/txt-files.tar.zip")
     researcher_text_max_chars: int = _int_env("RESEARCHER_TEXT_MAX_CHARS", 1600)
     pdf_max_upload_mb: int = _int_env("PDF_MAX_UPLOAD_MB", 500)
     # How many metadata-enrichment runs may work at once, across all builds. One model per run.

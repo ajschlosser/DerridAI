@@ -256,11 +256,17 @@ const {
   sourceUrl,
   gutenbergQuery,
   gutenbergHits,
+  wikisourceHits,
+  gutenbergStatus,
   lastIngestedAsset,
   refreshAssets,
   upload,
   loadSourceUrl,
   searchGutenberg,
+  searchWikisource,
+  refreshGutenbergStatus,
+  refreshGutenbergCatalogue,
+  updateGutenbergArchive,
   importGutenberg,
   savePageLabels,
   saveDocumentLayout,
@@ -1866,6 +1872,8 @@ defineExpose({
           v-model:gutenberg-query="gutenbergQuery"
           :assets="assets"
           :hits="gutenbergHits"
+          :wikisource-hits="wikisourceHits"
+          :gutenberg-status="gutenbergStatus"
           :selected-asset="selectedAsset"
           :disabled="busy !== '' || buildRunning"
           :busy="busy"
@@ -1873,6 +1881,10 @@ defineExpose({
           @file="upload"
           @load-url="loadSourceUrl"
           @search-gutenberg="searchGutenberg"
+          @search-wikisource="searchWikisource"
+          @refresh-gutenberg-status="refreshGutenbergStatus"
+          @refresh-gutenberg-catalogue="refreshGutenbergCatalogue"
+          @update-gutenberg-archive="updateGutenbergArchive"
           @import-gutenberg="importGutenberg"
         />
         <div v-if="selectedAsset && paginatedSource" class="source-facts">
