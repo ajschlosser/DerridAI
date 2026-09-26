@@ -4,7 +4,11 @@ import { useI18nStore } from "../stores/i18n";
 import CorpusFieldOwnershipBadge from "./CorpusFieldOwnershipBadge.vue";
 import UiCombobox from "./ui/UiCombobox.vue";
 import { normalizeMetadataFieldValue } from "../domain/metadataFieldRegistry";
-import { metadataValueText, unwrapMetadataValue, usableListOptions } from "../domain/metadataValues";
+import {
+  metadataValueText,
+  unwrapMetadataValue,
+  usableListOptions,
+} from "../domain/metadataValues";
 
 const props = defineProps<{
   field: string;
