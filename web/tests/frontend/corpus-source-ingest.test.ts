@@ -226,3 +226,63 @@ describe("Corpus source ingest experience", () => {
     expect(wrapper.find("button.continue").exists()).toBe(false);
   });
 });
+
+describe("page-number detection controls", () => {
+  it("is on by default and reports the choice", async () => {
+    const wrapper = mount(CorpusSourceIngest);
+    const box = wrapper.get('.page-detect input[type="checkbox"]');
+    expect((box.element as HTMLInputElement).checked).toBe(true);
+    await box.setValue(false);
+    expect(wrapper.emitted("update:detectPageNumbers")?.at(-1)).toEqual([false]);
+  });
+
+  it("shows what was detected on the current source", () => {
+    const wrapper = mount(CorpusSourceIngest, {
+      props: {
+        selectedAsset: {
+          asset_id: "a",
+          sha256: "abcdef0123456789abcdef",
+          filename: "essay.txt",
+          created_at: "2026-09-23T08:00:00Z",
+          page_count: 4,
+          block_count: 9,
+          ocr_pages: 0,
+          warnings: [],
+          metadata: {},
+          media_kind: "text",
+          page_number_detection: {
+            status: "detected",
+            pattern: "bracket",
+            marker_count: 4,
+            first: 31,
+            last: 34,
+            confidence: 0.93,
+          },
+        } as never,
+      },
+    });
+    expect(wrapper.get(".page-detect-result").text()).toContain("4 markers, 31–34");
+    expect(wrapper.get(".page-detect-result").attributes("data-status")).toBe("detected");
+  });
+
+  it("says when nothing was found", () => {
+    const wrapper = mount(CorpusSourceIngest, {
+      props: {
+        selectedAsset: {
+          asset_id: "a",
+          sha256: "abcdef0123456789abcdef",
+          filename: "essay.txt",
+          created_at: "2026-09-23T08:00:00Z",
+          page_count: 1,
+          block_count: 2,
+          ocr_pages: 0,
+          warnings: [],
+          metadata: {},
+          media_kind: "text",
+          page_number_detection: { status: "not_found" },
+        } as never,
+      },
+    });
+    expect(wrapper.get(".page-detect-result").text()).toContain("No page numbers found");
+  });
+});

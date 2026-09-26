@@ -32,7 +32,7 @@ const emit = defineEmits<{
   save: [value: unknown];
   noValue: [];
   source: [];
-  assignSelectionEvidence: [text: string];
+  saveWithSelectionEvidence: [value: unknown, text: string];
   dirty: [dirty: boolean];
 }>();
 const i18n = useI18nStore();
@@ -147,8 +147,21 @@ function normalized() {
   if (props.control === "number" && draft.value !== "") return Number(draft.value);
   return normalizeMetadataFieldValue(props.field, draft.value);
 }
+const selectionMissing = ref(false);
 function save() {
   emit("save", normalized());
+  dirty.value = false;
+  emit("dirty", false);
+  editing.value = true;
+}
+function saveWithSelection() {
+  const selected = selectedRecordText();
+  if (!selected) {
+    selectionMissing.value = true;
+    return;
+  }
+  selectionMissing.value = false;
+  emit("saveWithSelectionEvidence", normalized(), selected);
   dirty.value = false;
   emit("dirty", false);
   editing.value = true;
@@ -456,23 +469,18 @@ const autoResolved = computed(
         <button
           type="button"
           class="btn subtle"
-          :disabled="busy || !editing"
-          :title="
-            i18n.t(
-              'pdf_corpus.assign_selected_evidence_help',
-              'Select supporting text in the record, then attach the nearest source span as evidence for this field.',
-            )
+          :disabled="
+            busy || saving || draft === '' || draft === undefined || (required && draft === null)
           "
-          @click="
-            () => {
-              const selected = selectedRecordText();
-              if (selected) emit('assignSelectionEvidence', selected);
-            }
-          "
+          :title="i18n.t('pdf_corpus.assign_selected_evidence_help')"
+          @click="saveWithSelection"
         >
-          {{ i18n.t("pdf_corpus.assign_selected_evidence", "Use selection as evidence") }}
+          {{ i18n.t("pdf_corpus.assign_selected_evidence") }}
         </button>
       </div>
+      <p v-if="selectionMissing" class="selection-help" role="alert">
+        {{ i18n.t("pdf_corpus.select_text_first") }}
+      </p>
       <p
         v-if="control === 'combobox' || control === 'multi-combobox' || control === 'text'"
         class="selection-help"

@@ -20,6 +20,8 @@ export function useCorpusSourceConfiguration(
   const assets = ref<PdfAsset[]>([]);
   const selectedAssetId = ref("");
   const sourceIllegibility = ref(0);
+  // Printed page numbers in text sources are detected deterministically unless turned off.
+  const detectPageNumbers = ref(true);
   const sourceUrl = ref("");
   const gutenbergQuery = ref("");
   const gutenbergHits = ref<GutenbergHit[]>([]);
@@ -52,7 +54,12 @@ export function useCorpusSourceConfiguration(
     busy.value = "upload";
     setMessage("");
     try {
-      const asset = await corpusBuilderApi.uploadAsset(file, "auto", sourceIllegibility.value);
+      const asset = await corpusBuilderApi.uploadAsset(
+        file,
+        "auto",
+        sourceIllegibility.value,
+        detectPageNumbers.value,
+      );
       await refreshAssets();
       rememberAsset(asset, true);
       setMessage(
@@ -73,7 +80,11 @@ export function useCorpusSourceConfiguration(
     busy.value = "upload";
     setMessage("");
     try {
-      const asset = await corpusBuilderApi.importUrl(url, sourceIllegibility.value);
+      const asset = await corpusBuilderApi.importUrl(
+        url,
+        sourceIllegibility.value,
+        detectPageNumbers.value,
+      );
       await refreshAssets();
       rememberAsset(asset, true);
     } catch (exc) {
@@ -150,7 +161,11 @@ export function useCorpusSourceConfiguration(
     busy.value = "upload";
     setMessage("");
     try {
-      const asset = await corpusBuilderApi.importGutenberg(etextId, sourceIllegibility.value);
+      const asset = await corpusBuilderApi.importGutenberg(
+        etextId,
+        sourceIllegibility.value,
+        detectPageNumbers.value,
+      );
       await refreshAssets();
       rememberAsset(asset, true);
     } catch (exc) {
@@ -209,6 +224,7 @@ export function useCorpusSourceConfiguration(
     selectedAssetId,
     selectedAsset,
     sourceIllegibility,
+    detectPageNumbers,
     sourceUrl,
     gutenbergQuery,
     gutenbergHits,

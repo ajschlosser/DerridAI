@@ -143,14 +143,20 @@ def test_record_sizing_normalizer_adds_retrieval_boundaries_without_review(monke
 
 
 def test_topology_sanity_catches_absolute_oversize_and_reports_distribution():
-    """A 1,800-char record is valid (median reported); a 6,500-char record is not."""
+    """A 1,800-char record is fine (median reported); a 6,500-char record is flagged, not fatal.
+
+    The absolute ceiling used to fail the whole build. A single source block can exceed any
+    ceiling, so it is now a warning the reviewer resolves by splitting the record.
+    """
     policy={"preferred_record_chars":1750,"record_length_tolerance":200,"long_record_chars":3500,"absolute_record_chars":6000}
     ok=cb._topology_sanity([{"record_id":"r1","text":"x"*1800,"text_length":1800,"source_block_ids":[]}],policy)
     bad=cb._topology_sanity([{"record_id":"r1","text":"x"*6500,"text_length":6500,"source_block_ids":[]}],policy)
     assert ok["valid"] is True
     assert ok["median_record_chars"]==1800
-    assert bad["valid"] is False
-    assert "topology.over_absolute_limit" in bad["issues"]
+    assert bad["valid"] is True
+    assert "topology.over_absolute_limit" not in bad["issues"]
+    finding=next(f for f in bad["findings"] if f["code"]=="topology.over_absolute_limit")
+    assert finding["severity"]=="warning" and finding["record_id"]=="r1"
 
 
 def test_segmentation_cache_fingerprint_changes_with_prompt_or_text(tmp_path):

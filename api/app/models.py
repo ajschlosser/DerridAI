@@ -84,6 +84,14 @@ class SystemEmbeddingDefaultsUpdate(BaseModel):
     embedding_model: str | None = Field(default=None, max_length=512)
 
 
+class SystemAudioTranscriptionUpdate(BaseModel):
+    base_url: str = Field(min_length=8, max_length=512)
+    model: str = Field(min_length=1, max_length=200)
+    # Omitted keeps the stored key; an empty string is treated as omitted. Use clear_key to remove it.
+    api_key: str | None = Field(default=None, max_length=512)
+    clear_key: bool = False
+
+
 class SystemEmbeddingDefaultsProbe(BaseModel):
     """A draft embedding default to test before saving it."""
     embedding_provider: str = Field(min_length=1, max_length=256)
@@ -485,11 +493,13 @@ class PdfPageLabelsPatch(BaseModel):
 class PdfSourceUrlImport(BaseModel):
     url: str = Field(min_length=8, max_length=2000)
     source_illegibility: float = Field(default=0, ge=0, le=100)
+    page_number_detection: Literal["auto", "off"] = "auto"
 
 
 class GutenbergImport(BaseModel):
     etext_id: int = Field(ge=1)
     source_illegibility: float = Field(default=0, ge=0, le=100)
+    page_number_detection: Literal["auto", "off"] = "auto"
 
 
 class PdfDocumentLayoutPatch(BaseModel):
@@ -692,6 +702,8 @@ class PdfCorpusMetadataDecision(BaseModel):
     value: Any = None
     confirm_no_supported_value: bool = False
     expected_revision: int | None = Field(default=None, ge=1)
+    # Save the value and bind these source blocks as its evidence in one request.
+    evidence_block_ids: list[str] | None = Field(default=None, max_length=500)
 
 
 class PdfCorpusMetadataCacheClear(BaseModel):

@@ -79,6 +79,7 @@ const emit = defineEmits<{
   selectEvidence: [field: string];
   toggleEvidence: [blockId: string];
   assignEvidence: [field: string, blockId: string];
+  resolveMetadataWithEvidence: [field: string, value: unknown, text: string];
 }>();
 const i18n = useI18nStore();
 const dialog = ref<HTMLElement | null>(null);
@@ -179,50 +180,6 @@ function updateResolveSourceIssues(event: Event) {
 }
 function openFieldEvidence(field: string) {
   emit("selectEvidence", field);
-  tab.value = "evidence";
-}
-function normalizedWords(value: string) {
-  return new Set(
-    value
-      .toLocaleLowerCase()
-      .split(/[^\p{L}\p{N}]+/u)
-      .map((item) => item.trim())
-      .filter((item) => item.length > 2),
-  );
-}
-function nearestEvidenceBlock(selectedText: string): SourceBlock | null {
-  const selected = selectedText.replace(/\s+/g, " ").trim().toLocaleLowerCase();
-  if (!selected) return null;
-  const exact = blocks.value.find((block) =>
-    String(block.text || "")
-      .replace(/\s+/g, " ")
-      .toLocaleLowerCase()
-      .includes(selected),
-  );
-  if (exact) return exact;
-  const wanted = normalizedWords(selected);
-  if (!wanted.size) return null;
-  let best: SourceBlock | null = null;
-  let bestScore = 0;
-  for (const block of blocks.value) {
-    const words = normalizedWords(String(block.text || ""));
-    const overlap = [...wanted].filter((word) => words.has(word)).length;
-    const score = overlap / wanted.size;
-    if (score > bestScore) {
-      best = block;
-      bestScore = score;
-    }
-  }
-  return bestScore >= 0.45 ? best : null;
-}
-function assignSelectedEvidence(field: string, selectedText: string) {
-  const block = nearestEvidenceBlock(selectedText);
-  if (!block?.block_id) {
-    openFieldEvidence(field);
-    return;
-  }
-  emit("selectEvidence", field);
-  emit("assignEvidence", field, String(block.block_id));
   tab.value = "evidence";
 }
 function preventBackgroundScroll() {
@@ -516,7 +473,9 @@ watch(
             @no-value="(field) => emit('confirmNoMetadataValue', field)"
             @dirty="(value) => emit('metadataDirty', value)"
             @source="openFieldEvidence($event)"
-            @selection-evidence="assignSelectedEvidence"
+            @resolve-with-evidence="
+              (field, value, text) => emit('resolveMetadataWithEvidence', field, value, text)
+            "
           />
         </div>
         <div

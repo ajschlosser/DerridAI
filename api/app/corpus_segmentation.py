@@ -462,7 +462,7 @@ def _topology_sanity(records: list[dict[str, Any]], policy: dict[str, int], sour
     for record,size in zip(records,sizes):
         rid=str(record.get("record_id") or "")
         if size<=0: add("topology.empty_record","error",record_id=rid)
-        if size>policy["absolute_record_chars"]: add("topology.over_absolute_limit","error",record_id=rid,chars=size,limit=policy["absolute_record_chars"])
+        if size>policy["absolute_record_chars"]: add("topology.over_absolute_limit","warning",record_id=rid,chars=size,limit=policy["absolute_record_chars"])
         elif size>policy["long_record_chars"]: add("topology.long_exception","warning",record_id=rid,chars=size,limit=policy["long_record_chars"])
         elif size>policy["preferred_record_chars"]+policy["record_length_tolerance"]: add("topology.over_preferred_range","info",record_id=rid,chars=size,preferred=policy["preferred_record_chars"])
         if 0<size<180: add("topology.micro_record","warning",record_id=rid,chars=size,auto_repairable=True)

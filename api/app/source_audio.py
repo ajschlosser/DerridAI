@@ -14,7 +14,6 @@ from typing import Any
 
 import httpx
 
-from .config import settings
 from .source_kinds import AUDIO_SUFFIXES
 from .source_safety import check_size, executable_version, tool_version
 from .source_text import infer_initial_metadata
@@ -69,14 +68,17 @@ def probe_audio(path: Path) -> float:
 
 def transcribe_entire_file(path: Path) -> dict[str, Any]:
     """Send the whole audio file to OpenAI Whisper before any span splitting."""
-    api_key = (
-        os.getenv("OPENAI_API_KEY", "").strip()
-        or settings.openai_compat_api_key.strip()
-    )
+    from .system_store import system_store
+
+    config = system_store.audio_transcription_settings(include_key=True)
+    api_key = str(config.get("api_key") or "").strip()
     if not api_key:
-        raise ValueError("OpenAI Whisper requires OPENAI_API_KEY.")
-    base = os.getenv("OPENAI_WHISPER_BASE_URL", "https://api.openai.com/v1").rstrip("/")
-    model = os.getenv("OPENAI_WHISPER_MODEL", "whisper-1")
+        raise ValueError(
+            "Audio transcription needs an API key. Add one under Settings → Providers → "
+            "Audio transcription (or set OPENAI_API_KEY on the server)."
+        )
+    base = str(config["base_url"])
+    model = str(config["model"])
     # Only segment timestamps are requested; HTTPX multipart expects a mapping.
     form = {
         "model": model,

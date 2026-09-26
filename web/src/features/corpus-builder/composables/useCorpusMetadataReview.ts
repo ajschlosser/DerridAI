@@ -279,13 +279,37 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
     }
   }
 
-  async function resolveMetadataField(field: string, value: unknown) {
+  /**
+   * Save one reviewed value. With `evidenceBlockId` the selected text's source block is bound
+   * as that value's evidence in the same request (and the same optimistic update), so the
+   * reviewer never leaves the field list.
+   */
+  async function resolveMetadataField(field: string, value: unknown, evidenceBlockId = "") {
     if (!options.currentBuild.value || !options.selectedRecord.value) return;
     rememberMetadataValues(field, value);
+    const existingEvidence = options.selectedRecord.value.metadata_evidence?.[field];
+    const evidenceIds = evidenceBlockId
+      ? Array.from(new Set([...(existingEvidence?.block_ids || []).map(String), evidenceBlockId]))
+      : undefined;
     const viewport = options.captureReviewViewport();
     metadataSavingField.value = field;
     metadataSavedField.value = "";
-    const context = applyOptimisticMetadata({ [field]: value });
+    const context = applyOptimisticMetadata({
+      [field]: value,
+      ...(evidenceIds
+        ? {
+            metadata_evidence: {
+              ...(options.selectedRecord.value.metadata_evidence || {}),
+              [field]: {
+                ...(existingEvidence || {}),
+                block_ids: evidenceIds,
+                confidence: existingEvidence?.confidence ?? 1,
+                reason: existingEvidence?.reason || options.t("pdf_corpus.human_evidence_reason"),
+              },
+            },
+          }
+        : {}),
+    });
     if (!context) {
       metadataSavingField.value = "";
       return;
@@ -301,6 +325,8 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
           field,
           value,
           rebase ? undefined : context.expectedRevision,
+          false,
+          evidenceIds,
         );
         options.applyAuthoritativeRecord(result.record, result.build);
         if (options.selectedRecordId.value === context.recordId) {

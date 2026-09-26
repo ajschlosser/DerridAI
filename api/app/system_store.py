@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import os
 import re
 import threading
 from datetime import UTC
@@ -259,6 +260,45 @@ class SystemStore:
             "embedding_model": model,
             "persisted": isinstance(stored, dict),
         }
+
+    _AUDIO_SETTING = "audio_transcription"
+
+    def audio_transcription_settings(self, *, include_key: bool = False) -> dict[str, Any]:
+        """Settings for audio transcription, kept apart from chat/embedding provider profiles.
+
+        The API key is stored server-side and never returned unless ``include_key``.
+        Environment variables remain a fallback so existing deployments keep working.
+        """
+        with self._lock:
+            stored = self.repository.get_setting(self._AUDIO_SETTING)
+        value = stored if isinstance(stored, dict) else {}
+        key = str(value.get("api_key") or "").strip()
+        env_key = (os.getenv("OPENAI_API_KEY", "") or app_settings.openai_compat_api_key or "").strip()
+        result: dict[str, Any] = {
+            "base_url": str(value.get("base_url") or os.getenv("OPENAI_WHISPER_BASE_URL") or "https://api.openai.com/v1").rstrip("/"),
+            "model": str(value.get("model") or os.getenv("OPENAI_WHISPER_MODEL") or "whisper-1"),
+            "has_key": bool(key or env_key),
+            "key_source": "settings" if key else ("environment" if env_key else "none"),
+        }
+        if include_key:
+            result["api_key"] = key or env_key
+        return result
+
+    def set_audio_transcription_settings(
+        self, *, base_url: str, model: str, api_key: str | None = None, clear_key: bool = False,
+    ) -> dict[str, Any]:
+        base = str(base_url or "").strip().rstrip("/")
+        if not re.match(r"^https?://\S+$", base):
+            raise ValueError("The transcription base URL must be an http(s) address.")
+        chosen = str(model or "").strip()
+        if not chosen:
+            raise ValueError("Choose a transcription model.")
+        with self._lock:
+            current = self.repository.get_setting(self._AUDIO_SETTING)
+            current = current if isinstance(current, dict) else {}
+            key = "" if clear_key else (str(api_key).strip() if api_key else str(current.get("api_key") or ""))
+            self.repository.put_setting(self._AUDIO_SETTING, {"base_url": base, "model": chosen, "api_key": key})
+        return self.audio_transcription_settings()
 
     def set_embedding_defaults(self, provider: str, model: str | None = None) -> dict[str, Any]:
         normalized_provider = str(provider or "").strip()

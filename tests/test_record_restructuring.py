@@ -151,3 +151,20 @@ def test_split_request_needs_exactly_one_split_point():
     with pytest.raises(ValueError):
         PdfCorpusRecordSplit(after_block_id="b1", offset=3)
     assert PdfCorpusRecordSplit(offset=3).offset == 3
+
+
+def test_metadata_decision_can_save_value_and_evidence_in_one_call(tmp_path):
+    repo, bid, manager = _manager(tmp_path)
+    result = manager.metadata_decision(bid, "r2", "speaker", "Derrida", 1, False, ["b2"])
+    record = result["record"]
+    assert record["speaker"] == "Derrida"
+    assert record["metadata_evidence"]["speaker"]["block_ids"] == ["b2"]
+    assert record["metadata_evidence"]["speaker"]["reviewed_by"] == "human"
+
+
+def test_evidence_outside_the_record_is_refused_before_anything_is_saved(tmp_path):
+    repo, bid, manager = _manager(tmp_path)
+    with pytest.raises(ValueError, match="belong to the selected record"):
+        manager.metadata_decision(bid, "r2", "speaker", "Derrida", 1, False, ["b1"])
+    row = repo.load_records(bid)[1]
+    assert row.get("speaker") in (None, "") and row["record_revision"] == 1

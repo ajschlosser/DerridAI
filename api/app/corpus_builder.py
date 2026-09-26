@@ -255,6 +255,7 @@ from .metadata_schema_store import SchemaStore
 from .metadata_values import is_placeholder
 from .models import WorkMetadataRequest, WorkMetadataSeed
 from .nlp_annotations import annotate_record
+from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
 from .rag import _citation_strings, chat_complete
 from .run_guidance import find_guidance_matches
 from .sentence_boundaries import snap_boundaries_to_sentences
@@ -733,7 +734,7 @@ class PdfCorpusRepository:
     def save_asset(
         self, data: bytes, *, filename: str, ocr_mode: str = "auto", ocr_languages: str = "eng+fra+deu",
         source_illegibility: float = 0, content_type: str = "", catalog_metadata: dict[str, Any] | None = None,
-        source_url: str | None = None,
+        source_url: str | None = None, detect_page_numbers: bool = True,
     ) -> dict[str, Any]:
         if not data:
             raise ValueError("The uploaded source was empty.")
@@ -757,6 +758,11 @@ class PdfCorpusRepository:
             identity = hashlib.sha256(f"{digest}|{kind}|source-extraction-v2|{ocr_mode}|{illegibility:.2f}".encode()).hexdigest()
         if catalog_metadata and catalog_metadata.get("gutenberg_id"):
             identity = hashlib.sha256(f"{identity}|gutenberg|{catalog_metadata['gutenberg_id']}".encode()).hexdigest()
+        if not detect_page_numbers and kind not in {"pdf", "audio", "image"}:
+            # A different page structure is a different asset; keep the two apart.
+            identity = hashlib.sha256(f"{identity}|page-detection-off".encode()).hexdigest()
+        else:
+            identity = hashlib.sha256(f"{identity}|page-detect-v{PAGE_DETECTOR_VERSION}".encode()).hexdigest() if kind not in {"pdf", "audio", "image"} else identity
         asset_id = f"pdf-{identity[:24]}"
         suffix = ".pdf" if kind == "pdf" else content_suffix_for(kind, filename)
         meta_path = self.asset_meta_path(asset_id)
@@ -768,6 +774,7 @@ class PdfCorpusRepository:
             extracted = self._extract_for_ingest(
                 data, filename=filename, kind=kind, ocr_mode=ocr_mode, ocr_languages=ocr_languages,
                 source_illegibility=illegibility, catalog_metadata=catalog_metadata,
+                detect_page_numbers=detect_page_numbers,
             )
             if catalog_metadata and catalog_metadata.get("gutenberg_id"):
                 extracted["media_kind"] = "gutenberg"
@@ -808,6 +815,7 @@ class PdfCorpusRepository:
     def _extract_for_ingest(
         self, data: bytes, *, filename: str, kind: str, ocr_mode: str, ocr_languages: str,
         source_illegibility: float, catalog_metadata: dict[str, Any] | None,
+        detect_page_numbers: bool = True,
     ) -> dict[str, Any]:
         from .source_media import (
             extract_non_pdf,
@@ -843,7 +851,7 @@ class PdfCorpusRepository:
                 blocks=list(extracted.get("blocks") or []), catalog=catalog_metadata,
             )
             return extracted
-        return extract_non_pdf(data, filename=filename, kind=kind, catalog=catalog_metadata)
+        return extract_non_pdf(data, filename=filename, kind=kind, catalog=catalog_metadata, detect_page_numbers=detect_page_numbers)
 
     def get_asset(self, asset_id: str) -> dict[str, Any]:
         meta = _json_read(self.asset_meta_path(asset_id))
@@ -2433,6 +2441,21 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             sizing_policy = _record_sizing_policy(request, active_profile)
             topology_validation = _topology_sanity(records, sizing_policy, source_blocks)
             topology_quality = _topology_quality_report(records, source_blocks, sizing_policy, topology_validation)
+            # Records above the absolute ceiling are not a build failure: keep them, flag them
+            # for review, and let the reviewer split them (a single block may be larger than
+            # any configured ceiling, and a reviewer's small targets are legitimate).
+            oversize = {
+                str(f.get("record_id")): f for f in topology_validation.get("findings") or []
+                if f.get("code") == "topology.over_absolute_limit"
+            }
+            for record in records:
+                found = oversize.get(str(record.get("record_id")))
+                if found:
+                    record["needs_review"] = True
+                    record["review_reason"] = (
+                        f"Record is {found['params'].get('chars')} characters, above the "
+                        f"{found['params'].get('limit')}-character ceiling; split it during review."
+                    )
             current_build = self.repo.get_build(build_id)
             current_build["topology_validation"] = topology_validation
             current_build["topology_quality"] = topology_quality

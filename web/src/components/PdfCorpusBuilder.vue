@@ -261,6 +261,7 @@ const {
   selectedAssetId,
   selectedAsset,
   sourceIllegibility,
+  detectPageNumbers,
   sourceUrl,
   gutenbergQuery,
   gutenbergHits,
@@ -477,39 +478,51 @@ function normalizedEvidenceWords(value: string) {
   );
 }
 
-async function assignSelectedMetadataEvidence(field: string, selectedText: string) {
+function evidenceBlockForSelection(selectedText: string) {
   const selected = selectedText.replace(/\s+/g, " ").trim().toLocaleLowerCase();
-  if (!selectedRecord.value || !selected) return;
+  if (!selectedRecord.value || !selected) return null;
   const allowedIds = new Set((selectedRecord.value.source_block_ids || []).map(String));
   const candidates = sourceBlocks.value.filter((block) => allowedIds.has(String(block.block_id)));
-  let block =
-    candidates.find((item) =>
-      String(item.text || "")
-        .replace(/\s+/g, " ")
-        .toLocaleLowerCase()
-        .includes(selected),
-    ) || null;
-  if (!block) {
-    const wanted = normalizedEvidenceWords(selected);
-    let score = 0;
-    for (const item of candidates) {
-      const words = normalizedEvidenceWords(String(item.text || ""));
-      const overlap = [...wanted].filter((word) => words.has(word)).length;
-      const next = wanted.size ? overlap / wanted.size : 0;
-      if (next > score) {
-        score = next;
-        block = item;
-      }
+  const exact = candidates.find((item) =>
+    String(item.text || "")
+      .replace(/\s+/g, " ")
+      .toLocaleLowerCase()
+      .includes(selected),
+  );
+  if (exact) return exact;
+  const wanted = normalizedEvidenceWords(selected);
+  let best: (typeof candidates)[number] | null = null;
+  let score = 0;
+  for (const item of candidates) {
+    const words = normalizedEvidenceWords(String(item.text || ""));
+    const overlap = [...wanted].filter((word) => words.has(word)).length;
+    const next = wanted.size ? overlap / wanted.size : 0;
+    if (next > score) {
+      score = next;
+      best = item;
     }
-    if (score < 0.45) block = null;
   }
+  return score >= 0.45 ? best : null;
+}
+
+/**
+ * "Save and use selected text as evidence": one optimistic save of the value together with the
+ * nearest source block as its evidence. The reviewer stays on the metadata tab and the field
+ * list moves on to the next value awaiting review.
+ */
+async function resolveMetadataWithSelectionEvidence(
+  field: string,
+  value: unknown,
+  selectedText: string,
+) {
+  const block = evidenceBlockForSelection(selectedText);
   if (!block?.block_id) {
-    showMetadataSource(field);
+    // Nothing in this record matches the selection: keep the value, say why, and bind no evidence.
+    setMessage(i18n.t("pdf_corpus.selection_no_matching_block"), "error");
+    await resolveMetadataField(field, value);
     return;
   }
-  await assignEvidenceBlock(field, String(block.block_id));
-  selectedEvidenceField.value = field;
-  reviewInspectorTab.value = "evidence";
+  await resolveMetadataField(field, value, String(block.block_id));
 }
 
 const metadataFamilyOptions = computed(
@@ -1920,6 +1933,7 @@ defineExpose({
         <CorpusSourceIngest
           v-model:asset-id="selectedAssetId"
           v-model:illegibility="sourceIllegibility"
+          v-model:detect-page-numbers="detectPageNumbers"
           v-model:source-url="sourceUrl"
           v-model:gutenberg-query="gutenbergQuery"
           :assets="assets"
@@ -2942,7 +2956,7 @@ defineExpose({
                     @no-value="resolveMetadataNoValue"
                     @resolve-many="resolveMetadataSuggestions"
                     @source="showMetadataSource"
-                    @selection-evidence="assignSelectedMetadataEvidence"
+                    @resolve-with-evidence="resolveMetadataWithSelectionEvidence"
                     @dirty="handleMetadataDirty"
                   />
                   <button
@@ -3372,6 +3386,7 @@ defineExpose({
         @resolve-source-issues-change="resolveSourceOnTextSave = $event"
         @open-text-cleanup="textCleanupOpen = true"
         @resolve-metadata="resolveMetadataField"
+        @resolve-metadata-with-evidence="resolveMetadataWithSelectionEvidence"
         @resolve-metadata-many="resolveMetadataSuggestions"
         @confirm-no-metadata-value="resolveMetadataNoValue"
         @metadata-dirty="handleMetadataDirty"

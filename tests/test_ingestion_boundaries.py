@@ -358,8 +358,13 @@ def test_gutenberg_no_results_and_multiple_editions(monkeypatch):
 
 def test_audio_missing_credentials_and_unsupported_format(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.setattr(audio, "settings", replace(audio.settings, openai_compat_api_key=""))
-    with pytest.raises(ValueError, match="API_KEY"):
+    from app import system_store as store_module
+
+    monkeypatch.setattr(store_module, "app_settings", replace(store_module.app_settings, openai_compat_api_key=""))
+    store_module.system_store.set_audio_transcription_settings(
+        base_url="https://api.openai.com/v1", model="whisper-1", clear_key=True
+    )
+    with pytest.raises(ValueError, match="API key"):
         audio.transcribe_entire_file(Path("absent.wav"))
     with pytest.raises(ValueError, match="Unsupported"):
         audio.extract_audio(b"data", filename="clip.xyz")

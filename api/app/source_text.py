@@ -60,8 +60,13 @@ def document_from_text(
     catalog: dict[str, Any] | None = None,
     confidence: float = 0.99,
     warnings: list[str] | None = None,
+    detect_pages: bool = True,
 ) -> dict[str, Any]:
-    blocks, pages = prose_to_blocks(text, extraction_method=extraction_method, confidence=confidence)
+    detection: dict[str, Any] = {}
+    blocks, pages = prose_to_blocks(
+        text, extraction_method=extraction_method, confidence=confidence,
+        detect_pages=detect_pages, detection_out=detection,
+    )
     if not blocks:
         raise ValueError("The source did not contain extractable text.")
     embedded = dict(embedded or {})
@@ -72,8 +77,9 @@ def document_from_text(
         "pages": pages,
         "blocks": blocks,
         "block_count": len(blocks),
-        "included_block_count": len(blocks),
-        "excluded_block_count": 0,
+        "included_block_count": sum(1 for block in blocks if not block.get("excluded_reason")),
+        "excluded_block_count": sum(1 for block in blocks if block.get("excluded_reason")),
+        "page_number_detection": detection,
         "ocr_pages": 0,
         "warnings": list(warnings or []),
         "extractor": f"derridai-{media_kind}-v1",
@@ -87,7 +93,149 @@ def document_from_text(
     }
 
 
-def prose_to_blocks(text: str, *, extraction_method: str, confidence: float = 0.99) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def prose_to_blocks(
+    text: str,
+    *,
+    extraction_method: str,
+    confidence: float = 0.99,
+    detect_pages: bool = True,
+    detection_out: dict[str, Any] | None = None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Blocks and pages for prose. Printed page numbers are detected first, deterministically.
+
+    When a plausible sequence of page markers is found, blocks carry the printed page label
+    they fall on and the marker lines are kept as excluded ``page_number`` blocks (the same
+    convention the PDF path uses), so no source text is lost. Otherwise pages are synthetic
+    spans, exactly as before. ``detection_out`` receives the detector's summary.
+    """
+    from . import page_markers
+
+    if detect_pages:
+        detection = page_markers.detect(text)
+    else:
+        detection = page_markers.Detection(status="disabled", reason="page-number detection was turned off")
+    if detection_out is not None:
+        detection_out.update(detection.summary())
+    if detection.status == "detected":
+        detected = _blocks_with_detected_pages(text, detection, extraction_method, confidence)
+        if detected is not None:
+            return detected
+        if detection_out is not None:
+            detection_out.update(status="not_found", reason="markers found but no text could be assigned to pages")
+    return _synthetic_page_blocks(text, extraction_method=extraction_method, confidence=confidence)
+
+
+def _paragraph_spans(lines: list[str]) -> list[tuple[int, int]]:
+    """(first_line, last_line) of each run of non-blank lines, matching blank-line splitting."""
+    spans: list[tuple[int, int]] = []
+    start: int | None = None
+    for index, line in enumerate(lines):
+        if line.strip().strip("\f"):
+            if start is None:
+                start = index
+        elif start is not None:
+            spans.append((start, index - 1))
+            start = None
+    if start is not None:
+        spans.append((start, len(lines) - 1))
+    return spans
+
+
+def _blocks_with_detected_pages(
+    text: str, detection: Any, extraction_method: str, confidence: float,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]] | None:
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    markers = detection.markers
+    marker_lines = {m.line for m in markers if m.standalone}
+    inline_lines = sorted({m.line for m in markers if not m.standalone})
+    by_line = {m.line: m.value for m in markers}
+    ordered = sorted(markers, key=lambda m: m.line)
+    end_convention = detection.convention == "end"
+
+    def label_at(line: int) -> tuple[str | None, str]:
+        """Printed label of the page containing ``line`` and how it was established."""
+        if not end_convention:
+            prior = [m for m in ordered if m.line <= line]
+            if prior:
+                return str(prior[-1].value), "visible_folio"
+            first = ordered[0].value
+            return (str(first - 1), "inferred_from_folios") if first > 1 else (None, "")
+        following = [m for m in ordered if m.line >= line]
+        if following:
+            return str(following[0].value), "visible_folio"
+        return str(ordered[-1].value + 1), "inferred_from_folios"
+
+    blocks: list[dict[str, Any]] = []
+    pages: list[dict[str, Any]] = []
+    page_index = 0
+    current_label: str | None = object()  # type: ignore[assignment]
+    current_ids: list[str] = []
+    per_page_count = 0
+    current_source = ""
+
+    def close_page() -> None:
+        if current_ids:
+            pages.append({
+                "pdf_page": page_index,
+                "printed_page_label": current_label,
+                "printed_page_label_source": current_source or None,
+                "width": 0, "height": 0,
+                "block_ids": list(current_ids),
+                "extraction_method": extraction_method,
+                "page_number_detection": {"pattern": detection.pattern, "confidence": round(detection.confidence, 3)},
+            })
+
+    def add_block(paragraph_lines: list[int], *, marker: bool) -> None:
+        nonlocal page_index, current_label, current_ids, per_page_count, current_source
+        first, last = paragraph_lines[0], paragraph_lines[-1]
+        label, source = label_at(first)
+        if label != current_label or page_index == 0:
+            close_page()
+            page_index += 1
+            current_label, current_ids, per_page_count, current_source = label, [], 0, source
+        per_page_count += 1
+        block_id = f"p{page_index:05d}-b{per_page_count:04d}"
+        body = "\n".join(lines[i].strip().strip("\f") for i in paragraph_lines).strip()
+        block: dict[str, Any] = {
+            "block_id": block_id, "page": page_index,
+            "printed_page_label": label, "printed_page_label_source": source or None,
+            "bbox": [0, 0, 0, 0], "type": "header_footer" if marker else "paragraph",
+            "text": body, "extraction_method": extraction_method, "confidence": confidence,
+        }
+        if marker:
+            block["excluded_reason"] = "page_number"
+        else:
+            speaker = leading_speaker(body)
+            if speaker:
+                block["speaker"] = speaker
+            end_label, _ = label_at(last)
+            inner = [line for line in inline_lines if first <= line <= last]
+            if inner and end_label != label:
+                block["printed_page_label_end"] = end_label
+        blocks.append(block)
+        current_ids.append(block_id)
+
+    for first, last in _paragraph_spans(lines):
+        run: list[int] = []
+        for line in range(first, last + 1):
+            is_marker = line in marker_lines
+            if is_marker:
+                if run:
+                    add_block(run, marker=False)
+                    run = []
+                add_block([line], marker=True)
+            else:
+                run.append(line)
+        if run:
+            add_block(run, marker=False)
+    close_page()
+    if not any(block["type"] == "paragraph" for block in blocks):
+        return None
+    del by_line
+    return blocks, pages
+
+
+def _synthetic_page_blocks(text: str, *, extraction_method: str, confidence: float = 0.99) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     paragraphs = [part.strip() for part in re.split(r"\n\s*\n", text) if part.strip()]
     if not paragraphs:
         paragraphs = [line.strip() for line in text.splitlines() if line.strip()]
@@ -380,6 +528,14 @@ class _HtmlText(HTMLParser):
             key = (attr.get("name") or attr.get("property") or attr.get("itemprop") or "").lower()
             if key and attr.get("content"):
                 self.metas[key] = attr["content"]
+        anchor = attr.get("id") or attr.get("name") or ""
+        page_anchor = re.fullmatch(r"(?:page|pg|p)[_\-]?(\d{1,5})", anchor, re.I)
+        classes = (attr.get("class") or "").lower()
+        if page_anchor and not self._skip:
+            # Gutenberg/Wikisource-style page anchors become an explicit marker line.
+            self.parts.append(f"\n\n[Page {int(page_anchor.group(1))}]\n\n")
+        elif "pagenum" in classes or "page-number" in classes or "pagebreak" in classes:
+            self.parts.append("\n\n")
         if tag in {"p", "div", "h1", "h2", "h3", "li", "br", "tr"}:
             self.parts.append("\n")
 

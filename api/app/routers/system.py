@@ -12,6 +12,7 @@ from ..metadata_memory import MetadataMemoryService
 from ..models import (
     ResearcherProviderProfilesUpdate,
     ResearcherProviderStatusRequest,
+    SystemAudioTranscriptionUpdate,
     SystemEmbeddingDefaultsProbe,
     SystemEmbeddingDefaultsUpdate,
 )
@@ -76,6 +77,54 @@ def embedding_defaults_status(
         body.embedding_provider if body else None,
         body.embedding_model if body else None,
     )
+
+
+@router.get("/api/system/audio-transcription")
+def audio_transcription(request: Request) -> dict[str, Any]:
+    require_admin(request)
+    return system_store.audio_transcription_settings()
+
+
+@router.put("/api/system/audio-transcription")
+def update_audio_transcription(body: SystemAudioTranscriptionUpdate, request: Request) -> dict[str, Any]:
+    require_admin(request)
+    try:
+        return system_store.set_audio_transcription_settings(
+            base_url=body.base_url, model=body.model, api_key=body.api_key, clear_key=body.clear_key,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/api/system/audio-transcription/status")
+def audio_transcription_status(request: Request) -> dict[str, Any]:
+    """Is the transcription endpoint reachable with the stored key? (Lists models; sends no audio.)"""
+    require_admin(request)
+    import httpx
+
+    config = system_store.audio_transcription_settings(include_key=True)
+    result: dict[str, Any] = {"reachable": False, "model": config["model"], "base_url": config["base_url"], "error": "", "hint": ""}
+    if not config.get("api_key"):
+        result["error"] = "No API key is set."
+        result["hint"] = "Add an audio transcription API key below."
+        return result
+    try:
+        response = httpx.get(
+            f"{config['base_url']}/models",
+            headers={"Authorization": f"Bearer {config['api_key']}"},
+            timeout=httpx.Timeout(15.0, connect=8.0),
+        )
+        if response.status_code in (401, 403):
+            result["error"] = f"HTTP {response.status_code}"
+            result["hint"] = "The provider rejected this key."
+        elif response.status_code >= 400:
+            result["error"] = f"HTTP {response.status_code}"
+        else:
+            result["reachable"] = True
+    except httpx.HTTPError as exc:
+        result["error"] = f"{type(exc).__name__}: {exc}"[:300]
+        result["hint"] = "The endpoint could not be reached from the server."
+    return result
 
 
 @router.get("/api/system/storage")

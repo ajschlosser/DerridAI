@@ -4,7 +4,13 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 import * as runtime from "../runtime/runtime.js";
 import { apiRequest } from "../api/http";
-import { systemApi, type ProviderProfile, type SystemEmbeddingStatus } from "../api/system";
+import {
+  systemApi,
+  type ProviderProfile,
+  type SystemAudioTranscription,
+  type SystemAudioTranscriptionStatus,
+  type SystemEmbeddingStatus,
+} from "../api/system";
 import { useAuthStore } from "../stores/auth";
 import { useI18nStore } from "../stores/i18n";
 import { useShellStore } from "../stores/shell";
@@ -128,6 +134,57 @@ const section = computed<SettingsSectionId>({
 });
 const appearanceDirty = computed(() => !sameSettings(appearanceDraft.value, appearanceSaved.value));
 const reviewDirty = computed(() => !sameSettings(reviewDraft.value, reviewSaved.value));
+// Audio transcription has its own endpoint and key so it is never confused with a chat profile.
+const audio = ref<SystemAudioTranscription | null>(null);
+const audioDraft = ref({ base_url: "", model: "", api_key: "" });
+const audioStatus = ref<SystemAudioTranscriptionStatus | null>(null);
+const audioBusy = ref("");
+const audioMessage = ref("");
+async function loadAudio() {
+  if (!isAdmin.value) return;
+  try {
+    audio.value = await systemApi.audioTranscription();
+    audioDraft.value = { base_url: audio.value.base_url, model: audio.value.model, api_key: "" };
+  } catch (error) {
+    audioMessage.value = error instanceof Error ? error.message : String(error);
+  }
+}
+async function saveAudio(clearKey = false) {
+  audioBusy.value = "save";
+  audioMessage.value = "";
+  try {
+    audio.value = await systemApi.setAudioTranscription({
+      base_url: audioDraft.value.base_url,
+      model: audioDraft.value.model,
+      api_key: audioDraft.value.api_key || null,
+      clear_key: clearKey,
+    });
+    audioDraft.value.api_key = "";
+    audioMessage.value = i18n.t(clearKey ? "settings.audio_key_cleared" : "settings.audio_saved");
+    audioStatus.value = null;
+  } catch (error) {
+    audioMessage.value = error instanceof Error ? error.message : String(error);
+  } finally {
+    audioBusy.value = "";
+  }
+}
+async function testAudio() {
+  audioBusy.value = "test";
+  try {
+    audioStatus.value = await systemApi.audioTranscriptionStatus();
+  } catch (error) {
+    audioStatus.value = {
+      reachable: false,
+      model: audioDraft.value.model,
+      base_url: audioDraft.value.base_url,
+      error: error instanceof Error ? error.message : String(error),
+      hint: "",
+    };
+  } finally {
+    audioBusy.value = "";
+  }
+}
+onMounted(loadAudio);
 const embeddingProbe = ref<SystemEmbeddingStatus | null>(null);
 const embeddingProbing = ref(false);
 async function testEmbedding() {
@@ -998,6 +1055,83 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                 icon="spark"
                 :label="i18n.t('settings.open_providers')"
                 @click="go('/providers', 'providers')"
+              />
+            </template>
+          </SettingsSection>
+          <SettingsSection
+            v-if="isAdmin"
+            section-id="audio"
+            :title="i18n.t('settings.audio_title')"
+            :description="i18n.t('settings.audio_help')"
+            :persistence="persistKind('backend')"
+          >
+            <div class="config-grid">
+              <UiField :label="i18n.t('settings.audio_base_url')">
+                <input
+                  id="settings-field-audio-base-url"
+                  class="control"
+                  type="url"
+                  v-model="audioDraft.base_url"
+                />
+              </UiField>
+              <UiField :label="i18n.t('settings.audio_model')">
+                <input id="settings-field-audio-model" class="control" v-model="audioDraft.model" />
+              </UiField>
+              <UiField
+                wide
+                :label="i18n.t('settings.audio_key')"
+                :hint="
+                  audio?.has_key
+                    ? i18n.t(
+                        audio.key_source === 'settings'
+                          ? 'settings.audio_key_stored'
+                          : 'settings.audio_key_from_environment',
+                      )
+                    : i18n.t('settings.audio_key_missing')
+                "
+              >
+                <input
+                  id="settings-field-audio-key"
+                  class="control"
+                  type="password"
+                  autocomplete="off"
+                  v-model="audioDraft.api_key"
+                  :placeholder="i18n.t('settings.audio_key_placeholder')"
+                />
+              </UiField>
+            </div>
+            <p
+              v-if="audioStatus"
+              class="embedding-probe"
+              :data-state="audioStatus.reachable ? 'ok' : 'failed'"
+              role="status"
+            >
+              <strong>{{
+                i18n.t(
+                  audioStatus.reachable ? "settings.audio_reachable" : "settings.audio_unreachable",
+                )
+              }}</strong>
+              <span v-if="audioStatus.error">{{ audioStatus.error }}</span>
+              <span v-if="audioStatus.hint">{{ audioStatus.hint }}</span>
+            </p>
+            <p v-if="audioMessage" class="note" role="status">{{ audioMessage }}</p>
+            <template #actions>
+              <UiButton
+                :disabled="audioBusy !== ''"
+                :label="i18n.t('settings.audio_test')"
+                @click="testAudio"
+              />
+              <UiButton
+                v-if="audio?.key_source === 'settings'"
+                :disabled="audioBusy !== ''"
+                :label="i18n.t('settings.audio_clear_key')"
+                @click="saveAudio(true)"
+              />
+              <UiButton
+                variant="primary"
+                :disabled="audioBusy !== ''"
+                :label="i18n.t('settings.audio_save')"
+                @click="saveAudio(false)"
               />
             </template>
           </SettingsSection>

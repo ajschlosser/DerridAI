@@ -14,6 +14,21 @@ export interface ProviderProfile {
   [key: string]: unknown;
 }
 
+export interface SystemAudioTranscription {
+  base_url: string;
+  model: string;
+  has_key: boolean;
+  key_source: "settings" | "environment" | "none";
+}
+
+export interface SystemAudioTranscriptionStatus {
+  reachable: boolean;
+  model: string;
+  base_url: string;
+  error: string;
+  hint: string;
+}
+
 export interface SystemEmbeddingStatus {
   provider: string;
   model: string | null;
@@ -190,6 +205,21 @@ export const systemApi = {
   researcherProviders: () =>
     apiRequest<{ profiles: ProviderProfile[] }>("/api/system/researcher-providers"),
   embeddingDefaults: () => apiRequest<SystemEmbeddingDefaults>("/api/system/embedding-defaults"),
+  audioTranscription: () => apiRequest<SystemAudioTranscription>("/api/system/audio-transcription"),
+  setAudioTranscription: (payload: {
+    base_url: string;
+    model: string;
+    api_key?: string | null;
+    clear_key?: boolean;
+  }) =>
+    apiRequest<SystemAudioTranscription>("/api/system/audio-transcription", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  audioTranscriptionStatus: () =>
+    apiRequest<SystemAudioTranscriptionStatus>("/api/system/audio-transcription/status", {
+      method: "POST",
+    }),
   /** Embeds one short probe string with the given draft (or the saved default). */
   embeddingStatus: (draft?: { embedding_provider: string; embedding_model: string | null }) =>
     apiRequest<SystemEmbeddingStatus>("/api/system/embedding-defaults/status", {

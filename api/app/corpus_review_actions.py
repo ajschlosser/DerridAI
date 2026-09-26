@@ -894,7 +894,7 @@ class ReviewActionsMixin:
 
 
     @_serialize_record_mutation
-    def metadata_decision(self, build_id: str, record_id: str, field: str, value: Any, expected_revision: int | None = None, confirm_no_supported_value: bool = False) -> dict[str, Any]:
+    def metadata_decision(self, build_id: str, record_id: str, field: str, value: Any, expected_revision: int | None = None, confirm_no_supported_value: bool = False, evidence_block_ids: list[str] | None = None) -> dict[str, Any]:
         """Persist one human metadata decision and return authoritative review state.
 
         This endpoint is deliberately transactional from the UI's perspective:
@@ -903,6 +903,12 @@ class ReviewActionsMixin:
         """
         if field not in self._editable_fields(build_id) or field in {"needs_review", "review_reason"}:
             raise ValueError(f"Unsupported review metadata field: {field}")
+        if evidence_block_ids:
+            # Validate up front so a bad evidence binding cannot leave the value half-saved.
+            allowed = set(map(str, self.repo.get_record(build_id, record_id).get("source_block_ids") or []))
+            invalid = [b for b in dict.fromkeys(map(str, evidence_block_ids)) if b not in allowed]
+            if invalid:
+                raise ValueError("Evidence blocks must belong to the selected record: " + ", ".join(invalid[:10]))
         if confirm_no_supported_value:
             target = self.repo.get_record(build_id, record_id)
             previous_record = json.loads(json.dumps(target))
@@ -940,6 +946,12 @@ class ReviewActionsMixin:
             self._schedule_metadata_exemplar_projection(build_id)
         else:
             record = self.patch_metadata(build_id, record_id, {field: value}, expected_revision)
+            if evidence_block_ids:
+                # Bind the reviewer's selected evidence to the value just saved, in the same request.
+                self.patch_evidence(
+                    build_id, record_id, field, evidence_block_ids,
+                    expected_revision=int(self.repo.get_record(build_id, record_id).get("record_revision") or 1),
+                )
         current_record = self.repo.get_record(build_id, record_id)
         previous_record = json.loads(json.dumps(current_record))
         disputes = current_record.get("metadata_disputes") if isinstance(current_record.get("metadata_disputes"), list) else []
