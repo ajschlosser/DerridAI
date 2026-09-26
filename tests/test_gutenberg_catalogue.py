@@ -118,6 +118,31 @@ def test_first_archive_request_is_always_bounded_by_range(tmp_path: Path):
     assert state["archive"]["status"] == "downloading"
 
 
+def test_pause_during_inflight_chunk_does_not_resurrect_download(tmp_path: Path):
+    service = GutenbergOfflineService(
+        tmp_path / "state.sqlite", tmp_path / "archive.zip", start_worker=False
+    )
+    service.set_archive_status("start")
+
+    class Response:
+        status_code = 206
+        content = b"four"
+        headers = {"content-range": "bytes 0-3/8"}
+
+        def raise_for_status(self):
+            return None
+
+    def fake_get(*_args, **_kwargs):
+        service.set_archive_status("pause")
+        return Response()
+
+    with patch("app.gutenberg_catalogue.httpx.get", side_effect=fake_get):
+        state = service.download_chunk(chunk_size=4)
+
+    assert state["archive"]["status"] == "paused"
+    assert not service.archive_path.exists()
+
+
 def test_download_resume_requires_range_support(tmp_path: Path):
     service = GutenbergOfflineService(
         tmp_path / "state.sqlite", tmp_path / "archive.zip", start_worker=False
