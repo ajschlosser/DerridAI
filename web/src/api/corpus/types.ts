@@ -307,6 +307,11 @@ export interface CorpusBuild {
   }>;
   published_at?: string | null;
   error?: string | null;
+  /** Who acknowledged which warning, and when, keyed by warning ID. Acknowledged warnings stay in the provenance. */
+  warning_acknowledgements?: Record<
+    string,
+    { warning: string; acknowledged_by?: string; acknowledged_at?: string }
+  >;
   warnings?: string[];
   resumable?: boolean;
   boundary_count?: number;

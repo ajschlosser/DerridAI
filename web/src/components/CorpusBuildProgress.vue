@@ -14,6 +14,11 @@ const props = defineProps<{
   acceptedCount: number;
   error?: string | null;
   warnings?: string[];
+  /** Who acknowledged which warning, and when (keyed by warning ID). */
+  warningAcknowledgements?: Record<
+    string,
+    { warning: string; acknowledged_by?: string; acknowledged_at?: string }
+  >;
   validation?: CorpusBuild["validation"] | null;
   llmMetrics?: {
     calls?: number;
@@ -112,6 +117,22 @@ const nextStage = computed(() => {
     ? i18n.t(`pdf_corpus.stage.${order[i + 1]}`, order[i + 1].replace(/_/g, " "))
     : "";
 });
+
+function acknowledgement(warning: string) {
+  return Object.values(props.warningAcknowledgements || {}).find(
+    (item) => item.warning === warning,
+  );
+}
+function formatWhen(value?: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat(i18n.locale || undefined, {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(date);
+}
 </script>
 
 <template>
@@ -212,7 +233,15 @@ const nextStage = computed(() => {
         }}
       </summary>
       <ul>
-        <li v-for="warning in props.warnings" :key="warning">{{ warning }}</li>
+        <li v-for="warning in props.warnings" :key="warning">
+          {{ warning
+          }}<small v-if="acknowledgement(warning)" class="warning-acknowledged">{{
+            i18n.tf("pdf_corpus.warning_acknowledged_by", {
+              actor: acknowledgement(warning)?.acknowledged_by || "—",
+              when: formatWhen(acknowledgement(warning)?.acknowledged_at),
+            })
+          }}</small>
+        </li>
       </ul>
     </details>
     <div v-if="validationReady" class="validation-strip" :class="{ invalid: !validationValid }">
@@ -327,6 +356,10 @@ const nextStage = computed(() => {
   background: var(--tone-danger-bg);
   color: var(--tone-danger-fg);
   font-size: 0.8125rem;
+}
+.warning-acknowledged {
+  display: block;
+  color: var(--text-tertiary, var(--muted));
 }
 .warnings,
 .validation-details {

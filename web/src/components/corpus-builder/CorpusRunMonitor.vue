@@ -11,6 +11,8 @@ import CorpusEnrichmentMetrics from "../CorpusEnrichmentMetrics.vue";
 import CorpusTextCleanupSummary from "../CorpusTextCleanupSummary.vue";
 import CorpusLlmEffectivenessPanel from "../CorpusLlmEffectivenessPanel.vue";
 import UiButton from "../ui/UiButton.vue";
+import UiNoticeStack, { type Notice } from "../ui/UiNoticeStack.vue";
+import { openBuildWarnings } from "../../features/corpus-builder/domain/buildWarnings";
 
 const props = defineProps<{
   build: CorpusBuild;
@@ -26,6 +28,8 @@ const emit = defineEmits<{
   runAnother: [];
   openRecord: [recordId: string];
   inspectEditorialMemory: [];
+  /** Record that these warnings were seen; they stay in the build's provenance. */
+  acknowledgeWarnings: [warnings: string[]];
 }>();
 const i18n = useI18nStore();
 const expanded = ref(false);
@@ -33,7 +37,17 @@ const running = computed(() => ["queued", "running"].includes(String(props.build
 const progress = computed(() =>
   Math.max(0, Math.min(100, Math.round(Number(props.build.progress || 0) * 100))),
 );
-const warnings = computed(() => props.build.warnings || []);
+// Open warnings are the ones nobody has acknowledged; acknowledged ones stay with the build (technical details).
+const warningNotices = computed<Notice[]>(() =>
+  openBuildWarnings(props.build).map((text) => ({ id: text, tone: "warning", text })),
+);
+// A build error is state, not history: closing it hides it until the build reports a different one.
+const dismissedError = ref("");
+const errorNotices = computed<Notice[]>(() =>
+  props.build.error && props.build.error !== dismissedError.value
+    ? [{ id: "build-error", tone: "error", text: String(props.build.error) }]
+    : [],
+);
 const operation = computed(() => props.build.metadata_operation || {});
 const operationState = computed(() => String(operation.value.state || ""));
 const contribution = computed(() => props.build.llm_contribution || {});
@@ -81,12 +95,20 @@ const contribution = computed(() => props.build.llm_contribution || {});
       :aria-label="i18n.t('pdf_corpus.progress')"
     ></progress>
 
-    <div v-if="build.error || warnings.length" class="run-monitor-alerts" role="status">
-      <p v-if="build.error">{{ build.error }}</p>
-      <ul v-if="warnings.length">
-        <li v-for="warning in warnings.slice(0, 5)" :key="warning">{{ warning }}</li>
-      </ul>
-    </div>
+    <UiNoticeStack
+      :items="errorNotices"
+      :label="i18n.t('pdf_corpus.build_error')"
+      @dismiss="dismissedError = String(build.error || '')"
+    />
+    <UiNoticeStack
+      :items="warningNotices"
+      :label="i18n.t('pdf_corpus.build_warnings_label')"
+      mode="acknowledge"
+      :limit="3"
+      :disabled="disabled"
+      @dismiss="(id) => emit('acknowledgeWarnings', [id])"
+      @dismiss-all="(ids) => emit('acknowledgeWarnings', ids)"
+    />
 
     <CorpusMetadataLiveStatus
       v-if="running && build.stage === 'enriching'"
@@ -170,21 +192,6 @@ const contribution = computed(() => props.build.llm_contribution || {});
 .run-monitor-progress {
   width: 100%;
   height: 6px;
-}
-.run-monitor-alerts {
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--tone-warn-border);
-  border-radius: var(--radius-control);
-  background: var(--tone-warn-bg);
-  color: var(--tone-warn-fg);
-  font-size: var(--fs-sm);
-}
-.run-monitor-alerts p,
-.run-monitor-alerts ul {
-  margin: 0;
-}
-.run-monitor-alerts ul {
-  padding-inline-start: var(--space-4);
 }
 .run-monitor-diagnostics {
   display: grid;

@@ -1,6 +1,13 @@
+<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { ref, useId } from "vue";
+import { nextTick, onBeforeUnmount, ref, useId } from "vue";
 
+/**
+ * An "i" button that explains something. The explanation is rendered at the page level (or inside the open modal
+ * dialog that contains the button, since a modal dialog sits above the page) with fixed coordinates, so no scrolling or
+ * clipped pane, such as the review panes or the record viewer, can hide or cover it. It opens above or below as asked,
+ * flips when there is no room, and stays inside the window.
+ */
 const {
   text,
   label = "",
@@ -13,33 +20,67 @@ const {
 
 const id = `${useId()}-tooltip`;
 const open = ref(false);
+const trigger = ref<HTMLButtonElement | null>(null);
+const bubble = ref<HTMLElement | null>(null);
+const target = ref<HTMLElement | string>("body");
+const side = ref<"top" | "bottom">(placement);
+const position = ref<Record<string, string>>({});
+const GAP = 6;
+const MARGIN = 8;
 
+function place() {
+  const button = trigger.value;
+  const content = bubble.value;
+  if (!button || !content) return;
+  const anchor = button.getBoundingClientRect();
+  const box = content.getBoundingClientRect();
+  const above = anchor.top - GAP - box.height;
+  const below = anchor.bottom + GAP;
+  const fitsAbove = above >= MARGIN;
+  const fitsBelow = below + box.height <= window.innerHeight - MARGIN;
+  side.value =
+    placement === "top"
+      ? fitsAbove || !fitsBelow
+        ? "top"
+        : "bottom"
+      : fitsBelow || !fitsAbove
+        ? "bottom"
+        : "top";
+  const top = side.value === "top" ? Math.max(MARGIN, above) : below;
+  const centre = anchor.left + anchor.width / 2 - box.width / 2;
+  const left = Math.min(Math.max(MARGIN, centre), window.innerWidth - box.width - MARGIN);
+  position.value = { top: `${Math.round(top)}px`, left: `${Math.round(left)}px` };
+}
 function show() {
+  target.value = trigger.value?.closest<HTMLElement>("dialog[open]") || "body";
   open.value = true;
+  void nextTick(place);
+  window.addEventListener("scroll", hide, true);
+  window.addEventListener("resize", hide);
 }
 function hide() {
   open.value = false;
+  window.removeEventListener("scroll", hide, true);
+  window.removeEventListener("resize", hide);
 }
 function toggle() {
-  open.value = !open.value;
+  if (open.value) hide();
+  else show();
 }
 function onKeydown(event: KeyboardEvent) {
-  if (event.key === "Escape") {
+  if (event.key === "Escape" && open.value) {
     event.preventDefault();
+    event.stopPropagation();
     hide();
   }
 }
+onBeforeUnmount(hide);
 </script>
 
 <template>
-  <span
-    class="ui-tooltip"
-    :data-placement="placement"
-    @mouseenter="show"
-    @mouseleave="hide"
-    @keydown="onKeydown"
-  >
+  <span class="ui-tooltip" @mouseenter="show" @mouseleave="hide" @keydown="onKeydown">
     <button
+      ref="trigger"
       type="button"
       class="ui-tooltip-trigger"
       :aria-label="label || text"
@@ -51,9 +92,19 @@ function onKeydown(event: KeyboardEvent) {
     >
       <span aria-hidden="true">i</span>
     </button>
-    <span :id="id" class="ui-tooltip-content" role="tooltip" :hidden="!open">
-      {{ text }}
-    </span>
+    <Teleport :to="target">
+      <span
+        :id="id"
+        ref="bubble"
+        class="ui-tooltip-content"
+        role="tooltip"
+        :data-side="side"
+        :hidden="!open"
+        :style="position"
+      >
+        {{ text }}
+      </span>
+    </Teleport>
   </span>
 </template>
 
@@ -97,9 +148,8 @@ function onKeydown(event: KeyboardEvent) {
   outline-offset: var(--focus-ring-offset, 2px);
 }
 .ui-tooltip-content {
-  position: absolute;
-  z-index: 100;
-  inset-inline-start: 50%;
+  position: fixed;
+  z-index: 10000;
   inline-size: max-content;
   max-inline-size: min(22rem, calc(100vw - 2rem));
   padding: 0.625rem 0.75rem;
@@ -113,13 +163,7 @@ function onKeydown(event: KeyboardEvent) {
   line-height: 1.45;
   text-align: start;
   white-space: normal;
-  transform: translateX(-50%);
-}
-.ui-tooltip[data-placement="top"] .ui-tooltip-content {
-  inset-block-end: calc(100% + 0.375rem);
-}
-.ui-tooltip[data-placement="bottom"] .ui-tooltip-content {
-  inset-block-start: calc(100% + 0.375rem);
+  pointer-events: none;
 }
 .ui-tooltip-content[hidden] {
   display: none;

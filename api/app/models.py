@@ -496,6 +496,10 @@ class PdfSourceUnitPolicy(BaseModel):
     chars: int | None = Field(default=None, ge=60, le=20000)
 
 
+class BuildWarningAcknowledgement(BaseModel):
+    warnings: list[str] = Field(min_length=1, max_length=500)
+
+
 class PdfSourceUrlImport(BaseModel):
     url: str = Field(min_length=8, max_length=2000)
     source_illegibility: float = Field(default=0, ge=0, le=100)

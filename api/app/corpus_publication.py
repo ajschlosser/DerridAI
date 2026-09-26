@@ -3,10 +3,46 @@
 
 from __future__ import annotations
 
+import hashlib
+import re
 from typing import Any
 
 from .corpus_metadata import DISCOURSE_ROLES, REGION_TYPES
 from .field_assertions import migrate_record_assertions
+
+
+def warning_key(text: str) -> str:
+    """A stable identity for a build warning, so an acknowledgement stays attached to the warning it names."""
+    return hashlib.blake2b(str(text).encode("utf-8"), digest_size=8).hexdigest()
+
+
+_RECORD_SCOPED = re.compile(r"^\s*([\w.\-]+):\s")
+
+
+def provenance_warnings(
+    build: dict[str, Any], record_ids: set[str]
+) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
+    """The build's warnings as provenance: (build-wide warnings, warnings per record ID), with acknowledgements.
+
+    A warning is part of how a corpus was made, so it travels with the corpus. One that names a record
+    ("cosmopolitanism-00006: LLM text touch-up failed") belongs to that record; the rest belong to the build.
+    """
+    acknowledgements = build.get("warning_acknowledgements") or {}
+    build_wide: list[dict[str, Any]] = []
+    per_record: dict[str, list[dict[str, Any]]] = {}
+    for text in [str(item) for item in build.get("warnings") or [] if str(item).strip()]:
+        key = warning_key(text)
+        entry: dict[str, Any] = {"warning_id": key, "text": text}
+        acknowledged = acknowledgements.get(key)
+        if isinstance(acknowledged, dict):
+            entry["acknowledged_by"] = acknowledged.get("acknowledged_by")
+            entry["acknowledged_at"] = acknowledged.get("acknowledged_at")
+        match = _RECORD_SCOPED.match(text)
+        if match and match.group(1) in record_ids:
+            per_record.setdefault(match.group(1), []).append(entry)
+        else:
+            build_wide.append(entry)
+    return build_wide, per_record
 
 
 def validate_publication_record(record: dict[str, Any]) -> list[str]:
