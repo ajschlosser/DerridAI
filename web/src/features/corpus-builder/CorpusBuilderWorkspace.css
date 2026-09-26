@@ -738,15 +738,6 @@ summary:focus-visible {
   .build-launch-row {
     grid-template-columns: 1fr;
   }
-  .escalation-field {
-    grid-template-columns: 1fr;
-  }
-  .advanced-grid {
-    grid-template-columns: 1fr;
-  }
-  .advanced-config {
-    grid-column: auto;
-  }
   .builder-workspace {
     grid-template-columns: 1fr;
   }
