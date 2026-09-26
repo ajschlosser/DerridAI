@@ -26,9 +26,7 @@ describe("Corpus Builder configuration workspaces", () => {
         runGuidance: {},
         schemaChoices,
         chosenSchema: schemaChoices[0],
-        runGuidanceFields: [
-          { name: "speaker", label: "Speaker", group: "Discourse" },
-        ],
+        runGuidanceFields: [{ name: "speaker", label: "Speaker", group: "Discourse" }],
         disabled: false,
       },
     });
