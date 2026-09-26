@@ -105,6 +105,36 @@ def test_system_store_bootstraps_current_defaults_and_ignores_old_json(tmp_path:
 
 
 
+def test_unpersisted_ollama_default_uses_configured_ollama_profile(
+    tmp_path: Path,
+    monkeypatch,
+):
+    import app.system_store as module
+
+    repository = SQLiteSystemRepository(tmp_path / "derridai-system.sqlite3")
+    monkeypatch.setattr(module, "system_repository", repository)
+    monkeypatch.setattr(module.app_settings, "embedding_provider", "ollama")
+    monkeypatch.setattr(module.app_settings, "ollama_embed_model", "legacy-env-model")
+    store = module.SystemStore()
+    store.set_researcher_profiles(
+        [
+            {
+                "id": "local-embeddings",
+                "name": "Local embeddings",
+                "type": "ollama",
+                "base_url": "http://configured-ollama:11434",
+                "model": "nomic-embed-text",
+            }
+        ]
+    )
+
+    defaults = store.embedding_defaults()
+
+    assert defaults["embedding_provider"] == "profile:local-embeddings"
+    assert defaults["embedding_model"] == "nomic-embed-text"
+    assert defaults["persisted"] is False
+
+
 def test_embedding_defaults_are_server_owned_and_can_reference_provider_profiles(
     tmp_path: Path,
     monkeypatch,
