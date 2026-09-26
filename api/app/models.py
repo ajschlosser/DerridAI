@@ -84,6 +84,14 @@ class SystemEmbeddingDefaultsUpdate(BaseModel):
     embedding_model: str | None = Field(default=None, max_length=512)
 
 
+class SystemAudioTranscriptionUpdate(BaseModel):
+    base_url: str = Field(min_length=8, max_length=512)
+    model: str = Field(min_length=1, max_length=200)
+    # Omitted keeps the stored key; an empty string is treated as omitted. Use clear_key to remove it.
+    api_key: str | None = Field(default=None, max_length=512)
+    clear_key: bool = False
+
+
 class SystemEmbeddingDefaultsProbe(BaseModel):
     """A draft embedding default to test before saving it."""
     embedding_provider: str = Field(min_length=1, max_length=256)

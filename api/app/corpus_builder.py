@@ -2433,6 +2433,21 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             sizing_policy = _record_sizing_policy(request, active_profile)
             topology_validation = _topology_sanity(records, sizing_policy, source_blocks)
             topology_quality = _topology_quality_report(records, source_blocks, sizing_policy, topology_validation)
+            # Records above the absolute ceiling are not a build failure: keep them, flag them
+            # for review, and let the reviewer split them (a single block may be larger than
+            # any configured ceiling, and a reviewer's small targets are legitimate).
+            oversize = {
+                str(f.get("record_id")): f for f in topology_validation.get("findings") or []
+                if f.get("code") == "topology.over_absolute_limit"
+            }
+            for record in records:
+                found = oversize.get(str(record.get("record_id")))
+                if found:
+                    record["needs_review"] = True
+                    record["review_reason"] = (
+                        f"Record is {found['params'].get('chars')} characters, above the "
+                        f"{found['params'].get('limit')}-character ceiling; split it during review."
+                    )
             current_build = self.repo.get_build(build_id)
             current_build["topology_validation"] = topology_validation
             current_build["topology_quality"] = topology_quality

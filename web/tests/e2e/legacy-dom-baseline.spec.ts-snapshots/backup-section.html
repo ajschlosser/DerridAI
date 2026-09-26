@@ -368,6 +368,44 @@
 </span>
 </footer>
 </section>
+<section class="ui-card settings-section" aria-labelledby="settings-heading-audio">
+<header class="settings-section-head">
+<div>
+<p class="settings-kicker">Server operation</p>
+<h2 id="settings-heading-audio">Audio transcription</h2>
+<p class="settings-section-copy">Used only to transcribe audio sources. It has its own endpoint and key, separate from chat and embedding provider profiles.</p>
+</div>
+</header>
+<div class="settings-section-body">
+<div class="config-grid">
+<label class="ui-field">
+<span class="ui-field-label">Transcription endpoint </span>
+<input id="settings-field-audio-base-url" class="control" type="url">
+</label>
+<label class="ui-field">
+<span class="ui-field-label">Transcription model </span>
+<input id="settings-field-audio-model" class="control">
+</label>
+<label class="ui-field wide">
+<span class="ui-field-label">API key </span>
+<input id="settings-field-audio-key" class="control" type="password" autocomplete="off" placeholder="Paste a key to store it">
+<span id="v-13-hint" class="ui-field-hint">No key yet. Audio sources cannot be transcribed until one is set.</span>
+</label>
+</div>
+</div>
+<footer class="settings-section-actions">
+<span class="ui-button-wrap" data-tooltip="">
+<button class="ui-button variant-default size-default" type="button">
+<span>Test connection</span>
+</button>
+</span>
+<span class="ui-button-wrap" data-tooltip="">
+<button class="ui-button variant-primary size-default" type="button">
+<span>Save audio settings</span>
+</button>
+</span>
+</footer>
+</section>
 </div>
 <div id="settings-section-retrieval" role="tabpanel" aria-labelledby="settings-nav-retrieval" style="display: none;">
 <section class="ui-card settings-section" aria-labelledby="settings-heading-retrieval">
@@ -403,7 +441,7 @@
 <span class="ui-field-label">Current Chroma path <span class="ui-field-persist">Read-only</span>
 </span>
 <input id="settings-field-chroma-path" class="control" readonly="" value="/data/chroma">
-<span id="v-13-hint" class="ui-field-hint">Reported by the running API. Change the backend on Corpus Data.</span>
+<span id="v-16-hint" class="ui-field-hint">Reported by the running API. Change the backend on Corpus Data.</span>
 </label>
 </div>
 <div class="embedding-probe" data-state="failed" role="status" aria-live="polite">
@@ -455,12 +493,12 @@
 <label class="ui-field">
 <span class="ui-field-label">Retrieval k </span>
 <input id="settings-field-rag-k" class="control" type="number" min="1" max="500" aria-invalid="false">
-<span id="v-14-hint" class="ui-field-hint">How many passages to keep after ranking. Typical scholarly runs use 24–64.</span>
+<span id="v-17-hint" class="ui-field-hint">How many passages to keep after ranking. Typical scholarly runs use 24–64.</span>
 </label>
 <label class="ui-field">
 <span class="ui-field-label">Rerank top N </span>
 <input id="settings-field-rag-top-n" class="control" type="number" min="1" max="500">
-<span id="v-15-hint" class="ui-field-hint">How many candidates the reranker inspects.</span>
+<span id="v-18-hint" class="ui-field-hint">How many candidates the reranker inspects.</span>
 </label>
 <label class="ui-field">
 <span class="ui-field-label">Default reranker </span>
@@ -473,7 +511,7 @@
 <label class="ui-field">
 <span class="ui-field-label">Max characters per evidence record </span>
 <input id="settings-field-rag-record-chars" class="control" type="number" min="500">
-<span id="v-17-hint" class="ui-field-hint">Caps each passage so the model cannot swallow an entire chapter as one evidence item.</span>
+<span id="v-20-hint" class="ui-field-hint">Caps each passage so the model cannot swallow an entire chapter as one evidence item.</span>
 </label>
 <label class="ui-field">
 <span class="ui-field-label">Total evidence characters </span>
@@ -516,17 +554,17 @@
 <label class="ui-field">
 <span class="ui-field-label">MMR fetch_k </span>
 <input class="control" type="number" min="1" max="5000" aria-invalid="false">
-<span id="v-19-hint" class="ui-field-hint">Candidate pool size before diversity ranking. Must be at least retrieval k.</span>
+<span id="v-22-hint" class="ui-field-hint">Candidate pool size before diversity ranking. Must be at least retrieval k.</span>
 </label>
 <label class="ui-field">
 <span class="ui-field-label">MMR lambda </span>
 <input class="control" type="number" min="0" max="1" step="0.05">
-<span id="v-20-hint" class="ui-field-hint">0 favors diversity; 1 favors relevance to the question.</span>
+<span id="v-23-hint" class="ui-field-hint">0 favors diversity; 1 favors relevance to the question.</span>
 </label>
 <label class="ui-field">
 <span class="ui-field-label">RRF k </span>
 <input class="control" type="number" min="1">
-<span id="v-21-hint" class="ui-field-hint">Smoothing constant for reciprocal-rank fusion. 60 is a common default.</span>
+<span id="v-24-hint" class="ui-field-hint">Smoothing constant for reciprocal-rank fusion. 60 is a common default.</span>
 </label>
 <label class="ui-field">
 <span class="ui-field-label">Cross-encoder model </span>
@@ -535,7 +573,7 @@
 <label class="ui-field">
 <span class="ui-field-label">Query-decomposition max tokens </span>
 <input class="control" type="number" min="64">
-<span id="v-23-hint" class="ui-field-hint">Upper bound for the optional query-split step before retrieval.</span>
+<span id="v-26-hint" class="ui-field-hint">Upper bound for the optional query-split step before retrieval.</span>
 </label>
 </div>
 </details>
@@ -669,7 +707,7 @@
 <option value="off">Off</option>
 <option value="on">On when background operations finish</option>
 </select>
-<span id="v-24-hint" class="ui-field-hint">Browser permission is required. Notifications are local to this browser.</span>
+<span id="v-27-hint" class="ui-field-hint">Browser permission is required. Notifications are local to this browser.</span>
 </label>
 </div>
 <footer class="settings-section-actions">
@@ -739,7 +777,7 @@
 <label class="ui-field">
 <span class="ui-field-label">Type NUKE to enable </span>
 <input id="settings-field-nuke" class="control" autocomplete="off">
-<span id="v-25-hint" class="ui-field-hint">Type "NUKE" exactly to enable this destructive action.</span>
+<span id="v-28-hint" class="ui-field-hint">Type "NUKE" exactly to enable this destructive action.</span>
 </label>
 </div>
 <footer class="settings-section-actions">
