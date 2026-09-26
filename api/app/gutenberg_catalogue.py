@@ -430,6 +430,10 @@ class GutenbergOfflineService:
             raise ValueError("Gutenberg server did not honor the bounded range request.")
         if len(response.content) > requested:
             raise ValueError("Gutenberg archive response exceeded the bounded chunk size.")
+        # Pause/refetch may have been requested while the HTTP call was in flight.
+        # Do not let a stale chunk resurrect "downloading" or recreate a refetched file.
+        if self._stop.is_set() or self.status()["archive"]["status"] != "downloading":
+            return self.status()
         self.archive_path.parent.mkdir(parents=True, exist_ok=True)
         with self.archive_path.open("ab" if offset else "wb") as handle:
             handle.write(response.content)
