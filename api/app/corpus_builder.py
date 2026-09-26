@@ -166,10 +166,12 @@ from .corpus_operations import OperationsMixin
 from .corpus_pipeline import BuildScope
 from .corpus_publication import (
     build_text_touchup_prompt,
+    provenance_warnings,
     publication_blocker,
     publishable_records,
     serialize_public_record,
     validate_publication_record,
+    warning_key,
 )
 from .corpus_record_quality import (
     _record_extraction_quality_issues,
@@ -3364,6 +3366,25 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         return next(row for row in self.repo.load_records(build_id) if row.get("record_id") == record_id)
 
     @_serialize_record_mutation
+    def acknowledge_warnings(self, build_id: str, warnings: list[str], actor: str) -> dict[str, Any]:
+        """Record that a person has seen these build warnings. The warnings stay; they travel with the corpus."""
+        with self._lock:
+            build = self.repo.get_build(build_id)
+            current = {str(item) for item in build.get("warnings") or []}
+            unknown = [text for text in warnings if text not in current]
+            if unknown:
+                raise ValueError(f"Not a warning of this build: {unknown[0][:120]}")
+            acknowledgements = dict(build.get("warning_acknowledgements") or {})
+            now = iso_now()
+            for text in warnings:
+                acknowledgements.setdefault(
+                    warning_key(text),
+                    {"warning": text, "acknowledged_by": actor, "acknowledged_at": now},
+                )
+            build["warning_acknowledgements"] = acknowledgements
+            self.repo.save_build(build)
+            return build
+
     def publish(self, build_id: str, *, require_acceptance: bool = True) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
         if self.repo.records_projection_dirty(build_id):
@@ -3377,6 +3398,16 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             raise ValueError(blocker)
         publication_id = f"publication-{build_id.removeprefix('build-')}-{uuid.uuid4().hex[:8]}"
         created_at = iso_now()
+        # Warnings are provenance: those about a record are published with it, the rest with the publication.
+        build_warnings, record_warnings = provenance_warnings(
+            build, {str(record.get("record_id") or "") for record in publishable}
+        )
+        publishable = [
+            {**record, "provenance_warnings": record_warnings[str(record.get("record_id") or "")]}
+            if str(record.get("record_id") or "") in record_warnings
+            else record
+            for record in publishable
+        ]
         path = self.repo.publication_path(publication_id)
         result = write_jsonl_zst(
             path,
@@ -3400,6 +3431,8 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             "uncompressed_bytes": result.uncompressed_bytes,
             "compressed_bytes": result.compressed_bytes,
             "created_at": created_at,
+            "provenance_warnings": build_warnings,
+            "record_warning_count": sum(len(items) for items in record_warnings.values()),
         }
         build["publication"] = publication
         # Build lifecycle and publication lifecycle are separate. A publication is

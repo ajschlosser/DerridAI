@@ -31,6 +31,7 @@ from ..metadata_adjudication_cache import suggestions as adjudication_suggestion
 from ..metadata_schema import MetadataSchema, SchemaImportError
 from ..metadata_schema_store import SchemaLocked, SchemaNotFound, SchemaStore
 from ..models import (
+    BuildWarningAcknowledgement,
     GutenbergImport,
     MetadataSchemaPreview,
     PdfCorpusBoundaryAdjudication,
@@ -617,6 +618,19 @@ def confirm_pdf_corpus_manifest(build_id: str, body: PdfCorpusRecordRerun) -> di
         return pdf_corpus_builds.confirm_manifest(
             build_id, _resolve_pdf_corpus_provider(body.model_dump(exclude_none=True))
         )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/api/pdf/corpus-builds/{build_id}/warnings/acknowledge")
+def acknowledge_pdf_corpus_warnings(build_id: str, body: BuildWarningAcknowledgement, request: Request) -> dict[str, Any]:
+    user = require_admin(request)
+    try:
+        build = pdf_corpus_builds.acknowledge_warnings(build_id, body.warnings, user.username)
+        # Only what changed: the acknowledgements, not the whole build.
+        return {"build_id": build["build_id"], "warning_acknowledgements": build.get("warning_acknowledgements") or {}}
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus build not found") from exc
     except ValueError as exc:

@@ -70,6 +70,7 @@ import {
   reviewableMetadataFieldNames,
 } from "../features/corpus-builder/domain/recordMetadata";
 import { useCorpusPublication } from "../features/corpus-builder/composables/useCorpusPublication";
+import UiNoticeStack, { type Notice } from "./ui/UiNoticeStack.vue";
 import CorpusRunMonitor from "./corpus-builder/CorpusRunMonitor.vue";
 import CorpusConfigurationNav, {
   type CorpusConfigurationSection,
@@ -1141,6 +1142,47 @@ function statusLabel(build: CorpusBuild) {
     String(build.status || "unknown").replace(/_/g, " "),
   );
 }
+const statusNotices = computed<Notice[]>(() => [
+  ...(error.value
+    ? [
+        {
+          id: "error",
+          tone: transientNetworkError.value ? ("warning" as const) : ("error" as const),
+          text: displayError.value,
+        },
+      ]
+    : []),
+  ...(notice.value ? [{ id: "notice", tone: "info" as const, text: notice.value }] : []),
+]);
+function dismissStatus(id: string) {
+  if (id === "error") error.value = "";
+  if (id === "notice") notice.value = "";
+}
+/**
+ * Acknowledge build warnings: shown as done at once, recorded on the build (who and when), and published with the
+ * corpus. If the save fails the warnings come back, with the reason.
+ */
+async function acknowledgeBuildWarnings(warnings: string[]) {
+  const build = currentBuild.value;
+  if (!build || !warnings.length) return;
+  const before = build.warning_acknowledgements;
+  const pending = Object.fromEntries(
+    warnings.map((text, index) => [`pending-${index}-${text.length}`, { warning: text }]),
+  );
+  currentBuild.value = { ...build, warning_acknowledgements: { ...(before || {}), ...pending } };
+  try {
+    const saved = await corpusBuilderApi.acknowledgeWarnings(build.build_id, warnings);
+    if (currentBuild.value?.build_id === build.build_id)
+      currentBuild.value = {
+        ...currentBuild.value,
+        warning_acknowledgements: saved.warning_acknowledgements,
+      };
+  } catch (exc) {
+    if (currentBuild.value?.build_id === build.build_id)
+      currentBuild.value = { ...currentBuild.value, warning_acknowledgements: before };
+    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+  }
+}
 function setMessage(message: string, tone: "error" | "notice" = "notice") {
   if (tone === "error") {
     error.value = message;
@@ -1900,30 +1942,13 @@ defineExpose({
       </template>
     </CorpusBuilderWorkspaceHeader>
 
-    <div
-      ref="statusRegion"
-      tabindex="-1"
-      class="status-region"
-      aria-live="polite"
-      aria-atomic="true"
-    >
-      <div
-        v-if="error"
-        class="builder-message"
-        :class="transientNetworkError ? 'warning' : 'error'"
-        :role="transientNetworkError ? 'status' : 'alert'"
-      >
-        <span>{{ displayError }}</span
-        ><button
-          type="button"
-          class="message-dismiss"
-          :aria-label="i18n.t('ui.dismiss')"
-          @click="error = ''"
-        >
-          ×
-        </button>
-      </div>
-      <div v-else-if="notice" class="builder-message" role="status">{{ notice }}</div>
+    <div ref="statusRegion" tabindex="-1" class="status-region" aria-live="polite">
+      <UiNoticeStack
+        :items="statusNotices"
+        :label="i18n.t('pdf_corpus.messages_label')"
+        @dismiss="dismissStatus"
+        @dismiss-all="error = notice = ''"
+      />
     </div>
 
     <CorpusWorkflowStepper
@@ -2370,6 +2395,7 @@ defineExpose({
               :accepted-count="currentBuild.accepted_count || 0"
               :error="currentBuild.error"
               :warnings="currentBuild.warnings || []"
+              :warning-acknowledgements="currentBuild.warning_acknowledgements || {}"
               :validation="currentBuild.validation || null"
               :llm-metrics="currentBuild.llm_metrics || null"
               :metadata-operation="currentBuild.metadata_operation || null"
@@ -2548,6 +2574,7 @@ defineExpose({
             "
             @open-record="openHandsFreeException"
             @inspect-editorial-memory="openEditorialMemory"
+            @acknowledge-warnings="acknowledgeBuildWarnings"
           />
 
           <CorpusReviewSessionBar

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Copyright 2026 Aaron John Schlosser, PhD.
-import { computed } from "vue";
+import { computed, ref } from "vue";
+import UiNoticeStack, { type Notice } from "./ui/UiNoticeStack.vue";
 import { hasPages } from "../domain/sourceMedia";
 import { useI18nStore } from "../stores/i18n";
 
@@ -41,6 +42,15 @@ const props = withDefaults(
 );
 const emit = defineEmits<{ build: [] }>();
 const i18n = useI18nStore();
+// Readiness warnings describe the settings as they are now; closing one hides it until the warning itself changes.
+const dismissed = ref(new Set<string>());
+const openWarnings = computed(() => props.warnings.filter((text) => !dismissed.value.has(text)));
+const warningNotices = computed<Notice[]>(() =>
+  openWarnings.value.map((text) => ({ id: text, tone: "warning", text })),
+);
+function dismissWarnings(ids: string[]) {
+  dismissed.value = new Set([...dismissed.value, ...ids]);
+}
 const ready = computed(() => Boolean(props.sourceFilename && props.canStart && props.contextSafe));
 const modeLabel = computed(() =>
   props.enrichmentMode === "deep"
@@ -89,8 +99,8 @@ const providerSummary = computed(() =>
       <span>{{ modeLabel }}</span>
       <span>{{ providerSummary }}</span>
       <span>{{ sizing }}</span>
-      <span v-if="warnings.length" class="build-command-warning">
-        {{ warnings.length }}
+      <span v-if="openWarnings.length" class="build-command-warning">
+        {{ openWarnings.length }}
         {{ i18n.t("pdf_corpus.readiness.warnings", "warnings") }}
       </span>
     </div>
@@ -132,13 +142,13 @@ const providerSummary = computed(() =>
           <div v-if="!contextSafe" class="readiness-alert" role="alert">
             {{ i18n.t("pdf_corpus.context_unsafe") }}
           </div>
-          <ul
-            v-if="warnings.length"
+          <UiNoticeStack
             class="readiness-warnings"
-            :aria-label="i18n.t('pdf_corpus.readiness.warnings')"
-          >
-            <li v-for="warning in warnings" :key="warning">{{ warning }}</li>
-          </ul>
+            :items="warningNotices"
+            :label="i18n.t('pdf_corpus.readiness_warnings_label')"
+            @dismiss="(id) => dismissWarnings([id])"
+            @dismiss-all="dismissWarnings"
+          />
           <p v-if="activeBuildCount" class="capacity-note">
             {{ i18n.tf("pdf_corpus.active_build_capacity", { count: activeBuildCount }) }}
           </p>
@@ -325,10 +335,6 @@ dd small {
 }
 .readiness-warnings {
   margin: 0;
-  padding-inline-start: 1.25rem;
-  color: var(--text-secondary);
-  font-size: var(--fs-sm);
-  line-height: 1.45;
 }
 .capacity-note {
   margin: 0;
