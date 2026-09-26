@@ -238,6 +238,7 @@ class SystemStore:
         return {
             "embedding_provider": provider,
             "embedding_model": model,
+            "persisted": isinstance(stored, dict),
         }
 
     def set_embedding_defaults(self, provider: str, model: str | None = None) -> dict[str, Any]:
@@ -272,7 +273,7 @@ class SystemStore:
         }
         with self._lock:
             self.repository.put_setting("embedding_defaults", payload)
-        return copy.deepcopy(payload)
+        return {**copy.deepcopy(payload), "persisted": True}
 
     def researcher_profiles(self, *, include_secrets: bool = False) -> list[dict[str, Any]]:
         with self._lock:
