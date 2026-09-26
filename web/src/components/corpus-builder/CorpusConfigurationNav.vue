@@ -79,9 +79,10 @@ function onTabKeydown(event: KeyboardEvent, id: CorpusConfigurationSection) {
         :key="tab.id"
         type="button"
         role="tab"
-        :aria-selected="modelValue === tab.id"
+        :aria-selected="props.modelValue === tab.id"
+        :data-active="props.modelValue === tab.id ? 'true' : 'false'"
         :aria-controls="disabled(tab.id) ? undefined : `corpus-config-panel-${tab.id}`"
-        :tabindex="modelValue === tab.id ? 0 : -1"
+        :tabindex="props.modelValue === tab.id ? 0 : -1"
         :disabled="disabled(tab.id)"
         @click="select(tab.id)"
         @keydown="onTabKeydown($event, tab.id)"
@@ -125,7 +126,7 @@ function onTabKeydown(event: KeyboardEvent, id: CorpusConfigurationSection) {
   justify-content: center;
   gap: var(--space-2);
   padding-inline: var(--space-4);
-  border: 0;
+  border: 1px solid transparent;
   border-radius: calc(var(--radius-control) - 2px);
   background: transparent;
   color: var(--text-secondary);
@@ -138,9 +139,12 @@ function onTabKeydown(event: KeyboardEvent, id: CorpusConfigurationSection) {
   color: var(--text-primary);
 }
 .corpus-config-tabs button[aria-selected="true"] {
-  background: var(--surface-card);
-  color: var(--text-primary);
-  box-shadow: var(--shadow-sm);
+  border-color: var(--border-interactive);
+  background: var(--surface-selected);
+  color: var(--accent-fg);
+  box-shadow:
+    inset 0 -3px 0 var(--ui-accent),
+    var(--shadow-sm);
 }
 .corpus-config-tabs button:focus-visible {
   outline: 3px solid var(--ui-accent-focus);
@@ -159,6 +163,13 @@ function onTabKeydown(event: KeyboardEvent, id: CorpusConfigurationSection) {
   background: var(--tone-success-bg);
   color: var(--tone-success-fg);
   font-size: var(--fs-xs);
+}
+@media (forced-colors: active) {
+  .corpus-config-tabs button[aria-selected="true"] {
+    border-color: Highlight;
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
 }
 @media (max-width: 720px) {
   .corpus-config-tabs button {
