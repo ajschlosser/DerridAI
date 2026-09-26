@@ -255,3 +255,23 @@ The Review workspace decomposition now separates the toolbar/filter/bulk-control
   length stress.
 - Reduced `PdfCorpusBuilder.vue` to 3,543 lines and the shared Corpus
   Builder workspace stylesheet to 2,219 lines.
+
+
+### Review evidence panel extraction
+
+The Review inspector decomposition now separates the evidence-assignment surface from
+`PdfCorpusBuilder.vue` without moving evidence mutation ownership.
+
+- Extracted field-evidence selection and source-block evidence toggles into
+  `CorpusReviewEvidencePanel.vue`.
+- Kept the selected evidence field and evidence-block mutation in the parent; the child emits only
+  selected-field and toggle-evidence events.
+- Preserved the evidence tabpanel ID/ARIA relationship, field evidence list, paginated/time source
+  locators, non-destructive evidence highlighting, and busy-state mutation gating.
+- Moved evidence-panel-local source-block styling into the extracted component while retaining the
+  shared source-panel styles in the parent until the Source inspector is extracted.
+- Removed the now-dead parent `.compact-source-blocks` selector.
+- Added focused component tests and Storybook states for selected/unbound evidence, busy state,
+  page locators, evidence toggles, and Canadian French length stress.
+- Reduced `PdfCorpusBuilder.vue` to 3,500 lines and the shared Corpus
+  Builder workspace stylesheet to 2,216 lines.
