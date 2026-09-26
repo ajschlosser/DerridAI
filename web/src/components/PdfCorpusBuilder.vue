@@ -13,8 +13,7 @@ import CorpusBuildProgress from "./CorpusBuildProgress.vue";
 import DocumentStructureConfigurator from "./DocumentStructureConfigurator.vue";
 import MediaStructureConfigurator from "./MediaStructureConfigurator.vue";
 import SourceTranscriptionDialog from "./SourceTranscriptionDialog.vue";
-import { sourceMediaCapabilities, timeLabel } from "../domain/sourceMedia";
-import CorpusSourceSummary from "./CorpusSourceSummary.vue";
+import { sourceMediaCapabilities } from "../domain/sourceMedia";
 import DocumentManifestEditor from "./DocumentManifestEditor.vue";
 import DocumentManifestDialog from "./DocumentManifestDialog.vue";
 import CorpusInitializationDialog from "./CorpusInitializationDialog.vue";
@@ -36,11 +35,9 @@ import CorpusSourceQualityDialog from "./CorpusSourceQualityDialog.vue";
 import CorpusTextCleanupDialog from "./CorpusTextCleanupDialog.vue";
 import CorpusEditorialMemoryDialog from "./CorpusEditorialMemoryDialog.vue";
 import CorpusReviewSessionBar from "./CorpusReviewSessionBar.vue";
-import CorpusRevisionHistory from "./CorpusRevisionHistory.vue";
 import CorpusJsonlPreviewDialog from "./CorpusJsonlPreviewDialog.vue";
 import CorpusLlmTextTouchupDialog from "./CorpusLlmTextTouchupDialog.vue";
 import CorpusBoundarySliceDialog from "./CorpusBoundarySliceDialog.vue";
-import CorpusBoundaryAdjudication from "./CorpusBoundaryAdjudication.vue";
 import MetadataEnrichmentDialog from "./MetadataEnrichmentDialog.vue";
 import CorpusModelActivity from "./CorpusModelActivity.vue";
 import CorpusHandsFreeSettings from "./CorpusHandsFreeSettings.vue";
@@ -82,6 +79,7 @@ import CorpusBuilderWorkspaceHeader from "./corpus-builder/CorpusBuilderWorkspac
 import CorpusReviewRecordQueue from "./corpus-builder/CorpusReviewRecordQueue.vue";
 import CorpusReviewToolbar from "./corpus-builder/CorpusReviewToolbar.vue";
 import CorpusReviewEvidencePanel from "./corpus-builder/CorpusReviewEvidencePanel.vue";
+import CorpusReviewSourcePanel from "./corpus-builder/CorpusReviewSourcePanel.vue";
 import CorpusEnrichmentConfiguration from "./corpus-builder/CorpusEnrichmentConfiguration.vue";
 import CorpusMetadataConfiguration from "./corpus-builder/CorpusMetadataConfiguration.vue";
 import CorpusAdvancedConfiguration from "./corpus-builder/CorpusAdvancedConfiguration.vue";
@@ -877,7 +875,9 @@ const llmActionConcurrentLoad = computed(() => {
       0,
     );
 });
-const recordSizingValid = computed(() => invalidRecordSizingFields(recordSizing.value).length === 0);
+const recordSizingValid = computed(
+  () => invalidRecordSizingFields(recordSizing.value).length === 0,
+);
 const canStartConcurrentBuild = computed(() =>
   Boolean(
     recordSizingValid.value &&
@@ -949,6 +949,19 @@ const selectedPageBlocks = computed(() =>
   ),
 );
 const evidenceIdsArray = computed(() => Array.from(evidenceBlockIds.value));
+const boundaryProfile = computed(() =>
+  providerProfiles.value.find(
+    (p) => p.id === (llmActionProviderId.value || selectedProviderId.value),
+  ),
+);
+const boundaryConcurrencyLimit = computed(() =>
+  Number(boundaryProfile.value?.max_concurrent_requests || 1),
+);
+const boundaryConcurrencyRisk = computed(
+  () =>
+    boundaryProfile.value?.type === "ollama" &&
+    llmActionConcurrentLoad.value + 1 > boundaryConcurrencyLimit.value,
+);
 const activeCorpusProfile = computed(
   () =>
     corpusProfiles.value.find(
@@ -3077,141 +3090,49 @@ defineExpose({
                   @update:selected-field="selectedEvidenceField = $event"
                   @toggle-evidence="toggleEvidenceBlock"
                 />
-                <section
+                <CorpusReviewSourcePanel
                   v-else-if="
                     selectedRecord &&
                     (reviewWorkspaceMode === 'record' || reviewWorkspaceMode === 'source')
                   "
-                  id="review-panel-source"
-                  class="review-inspector-panel source-review-panel"
-                  role="tabpanel"
-                  aria-labelledby="review-tab-source"
-                  tabindex="0"
-                >
-                  <CorpusSourceSummary
-                    :media-kind="selectedAsset?.media_kind"
-                    :audio-url="audioSourceUrl"
-                    :image-url="imageSourceUrl"
-                    :show-pdf-explorer="selectedSourceCapabilities.pdfViewer"
-                    :pdf-url="sourcePdfUrl"
-                    :page="selectedPdfPage"
-                    :page-count="selectedAsset?.page_count || 0"
-                    :page-width="selectedPageMeta?.width || 0"
-                    :page-height="selectedPageMeta?.height || 0"
-                    :blocks="selectedPageBlocks"
-                    :evidence-block-ids="evidenceIdsArray"
-                    :zoomable="reviewWorkspaceMode === 'source'"
-                    :can-previous="selectedPdfPageIndex > 0"
-                    :can-next="selectedPdfPageIndex < recordPdfPages.length - 1"
-                    @previous="previousSourcePage"
-                    @next="nextSourcePage"
-                    @open-viewer="sourceTranscriptionOpen = true"
-                    @open-pdf-explorer="openPdfExplorer"
-                  />
-                  <details class="source-tool-section">
-                    <summary>
-                      {{ i18n.t("pdf_corpus.boundary_second_reader") }}
-                    </summary>
-                    <CorpusBoundaryAdjudication
-                      :record="selectedRecord"
-                      :can-previous="canMergePrevious"
-                      :can-next="canMergeNext"
-                      :busy="busy !== ''"
-                      :profiles="providerProfiles"
-                      :provider-profile-id="llmActionProviderId || selectedProviderId"
-                      :model-override="llmActionModel"
-                      :concurrency-risk="
-                        Boolean(
-                          providerProfiles.find(
-                            (p) => p.id === (llmActionProviderId || selectedProviderId),
-                          )?.type === 'ollama' &&
-                            llmActionConcurrentLoad + 1 >
-                              Number(
-                                providerProfiles.find(
-                                  (p) => p.id === (llmActionProviderId || selectedProviderId),
-                                )?.max_concurrent_requests || 1,
-                              ),
-                        )
-                      "
-                      :active-requests="llmActionConcurrentLoad"
-                      :concurrency-limit="
-                        Number(
-                          providerProfiles.find(
-                            (p) => p.id === (llmActionProviderId || selectedProviderId),
-                          )?.max_concurrent_requests || 1,
-                        )
-                      "
-                      @update:provider-profile-id="(value) => (llmActionProviderId = value)"
-                      @update:model-override="(value) => (llmActionModel = value)"
-                      @adjudicate="adjudicateBoundary"
-                    />
-                  </details>
-                  <details class="source-tool-section">
-                    <summary>
-                      {{ i18n.t("pdf_corpus.extracted_source_text") }}
-                    </summary>
-                    <p class="inspector-help">
-                      {{ i18n.t("pdf_corpus.extracted_source_text_help") }}
-                    </p>
-                    <pre
-                      v-if="selectedRecord.source_extracted_text"
-                      class="original-extraction-snapshot"
-                      >{{ selectedRecord.source_extracted_text }}</pre
-                    >
-                    <div class="source-blocks">
-                      <article
-                        v-for="(block, index) in visibleBlocks"
-                        :key="block.block_id"
-                        class="source-block"
-                        :class="{ 'evidence-block': evidenceBlockIds.has(block.block_id) }"
-                      >
-                        <header>
-                          <span>{{ block.block_id }}</span
-                          ><span
-                            >{{
-                              block.locator_kind === "time"
-                                ? timeLabel(block.start, block.end)
-                                : paginatedSource
-                                  ? block.page
-                                  : block.block_id
-                            }}
-                            · {{ block.speaker || block.type }}</span
-                          >
-                        </header>
-                        <p>{{ block.text }}</p>
-                        <button
-                          v-if="selectedEvidenceField"
-                          type="button"
-                          class="evidence-toggle"
-                          :aria-pressed="evidenceBlockIds.has(block.block_id)"
-                          @click="toggleEvidenceBlock(block.block_id)"
-                          :disabled="busy !== ''"
-                        >
-                          {{
-                            evidenceBlockIds.has(block.block_id)
-                              ? i18n.t("pdf_corpus.remove_evidence")
-                              : i18n.t("pdf_corpus.add_evidence")
-                          }}
-                          · {{ selectedEvidenceField }}</button
-                        ><button
-                          v-if="index < visibleBlocks.length - 1"
-                          type="button"
-                          class="split-button"
-                          @click="split(block.block_id)"
-                          :disabled="busy !== ''"
-                        >
-                          {{ i18n.t("pdf_corpus.split_after") }}
-                        </button>
-                      </article>
-                    </div>
-                  </details>
-                  <details class="source-tool-section">
-                    <summary>
-                      {{ i18n.t("pdf_corpus.revision_history") }}
-                    </summary>
-                    <CorpusRevisionHistory :record="selectedRecord" />
-                  </details>
-                </section>
+                  :record="selectedRecord"
+                  :media-kind="selectedAsset?.media_kind"
+                  :audio-url="audioSourceUrl"
+                  :image-url="imageSourceUrl"
+                  :show-pdf-explorer="selectedSourceCapabilities.pdfViewer"
+                  :pdf-url="sourcePdfUrl"
+                  :page="selectedPdfPage"
+                  :page-count="selectedAsset?.page_count || 0"
+                  :page-width="selectedPageMeta?.width || 0"
+                  :page-height="selectedPageMeta?.height || 0"
+                  :page-blocks="selectedPageBlocks"
+                  :evidence-ids="evidenceIdsArray"
+                  :zoomable="reviewWorkspaceMode === 'source'"
+                  :can-previous-page="selectedPdfPageIndex > 0"
+                  :can-next-page="selectedPdfPageIndex < recordPdfPages.length - 1"
+                  :can-merge-previous="canMergePrevious"
+                  :can-merge-next="canMergeNext"
+                  :profiles="providerProfiles"
+                  :provider-profile-id="llmActionProviderId || selectedProviderId"
+                  :model-override="llmActionModel"
+                  :concurrency-risk="boundaryConcurrencyRisk"
+                  :active-requests="llmActionConcurrentLoad"
+                  :concurrency-limit="boundaryConcurrencyLimit"
+                  :blocks="visibleBlocks"
+                  :evidence-block-ids="evidenceBlockIds"
+                  :paginated-source="paginatedSource"
+                  :selected-evidence-field="selectedEvidenceField"
+                  :busy="busy !== ''"
+                  @previous-page="previousSourcePage"
+                  @next-page="nextSourcePage"
+                  @open-viewer="sourceTranscriptionOpen = true"
+                  @open-pdf-explorer="openPdfExplorer"
+                  @update:provider-profile-id="(value) => (llmActionProviderId = value)"
+                  @update:model-override="(value) => (llmActionModel = value)"
+                  @adjudicate="adjudicateBoundary"
+                  @toggle-evidence="toggleEvidenceBlock"
+                  @split="split"
+                />
                 <div v-else class="inspector-empty">
                   {{ i18n.t("pdf_corpus.select_record") }}
                 </div>

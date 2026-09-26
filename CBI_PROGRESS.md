@@ -274,3 +274,22 @@ The Review inspector decomposition now separates the evidence-assignment surface
   page locators, evidence toggles, and Canadian French length stress.
 - Reduced `PdfCorpusBuilder.vue` to 3,500 lines and the shared Corpus
   Builder workspace stylesheet to 2,216 lines.
+
+### Review source panel extraction
+
+The Source inspector tab is now `CorpusReviewSourcePanel.vue`; `PdfCorpusBuilder.vue` still owns
+every mutation.
+
+- Extracted the source viewer, boundary second reader, extracted-text blocks (evidence toggle and
+  split-after controls) and revision history. The child only emits events (`previousPage`,
+  `nextPage`, `openViewer`, `openPdfExplorer`, `adjudicate`, `toggleEvidence`, `split`, provider
+  and model updates).
+- Kept the `review-panel-source` tabpanel ID and `review-tab-source` labelling.
+- Moved the boundary-provider concurrency calculation out of the template into computed values.
+- Moved panel-local styles (source blocks, evidence toggle, split button, extraction snapshot,
+  tool sections, detail-mode widths) into the component and removed them from the shared
+  stylesheet.
+- Added focused component tests and Storybook states.
+- Reduced `PdfCorpusBuilder.vue` to about 3,430 lines.
+- Validation: `vue-tsc`, the full Vitest suite and the production build pass; Storybook and
+  Playwright were not run.

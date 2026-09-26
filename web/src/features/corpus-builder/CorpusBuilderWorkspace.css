@@ -389,65 +389,6 @@
   font-size: 0.8125rem;
   color: var(--muted);
 }
-.source-blocks {
-  display: grid;
-  gap: 8px;
-  padding: 10px;
-}
-.source-block {
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  padding: 9px;
-  position: relative;
-}
-.source-block.evidence-block {
-  box-shadow: inset 3px 0 0 var(--accent);
-}
-[dir="rtl"] .source-block.evidence-block {
-  box-shadow: inset -3px 0 0 var(--accent);
-}
-.source-block header {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 0.8125rem;
-  color: var(--muted);
-}
-.source-block p {
-  white-space: pre-wrap;
-  font:
-    13px/1.52 Georgia,
-    serif;
-  margin: 7px 0;
-}
-.split-button {
-  display: block;
-  width: 100%;
-  border: 0;
-  border-top: 1px dashed var(--line);
-  background: transparent;
-  color: var(--muted);
-  font-size: 0.8125rem;
-  padding: 5px;
-  cursor: pointer;
-}
-.evidence-toggle {
-  display: block;
-  width: 100%;
-  margin: 5px 0;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: var(--soft);
-  color: var(--text);
-  font-size: 0.8125rem;
-  padding: 6px;
-  text-align: start;
-  cursor: pointer;
-}
-.evidence-toggle[aria-pressed="true"] {
-  border-color: var(--accent);
-  box-shadow: inset 3px 0 0 var(--accent);
-}
 .inspector-pane details {
   border-bottom: 1px solid var(--line);
   padding: 10px 12px;
@@ -545,8 +486,6 @@
 .build-row:focus-visible,
 .record-row:focus-visible,
 .icon-button:focus-visible,
-.split-button:focus-visible,
-.evidence-toggle:focus-visible,
 .evidence-list button:focus-visible,
 summary:focus-visible {
   outline: 3px solid var(--accent);
@@ -1037,10 +976,6 @@ summary:focus-visible {
   line-height: 1.45;
   color: var(--muted);
 }
-.source-review-panel {
-  background: var(--card);
-  min-height: 100%;
-}
 .source-inspector-head {
   position: static;
   z-index: auto;
@@ -1233,13 +1168,6 @@ summary:focus-visible {
 .source-inspector-head {
   font-size: 0.8125rem;
 }
-.source-block p {
-  font-size: 0.8125rem;
-  line-height: 1.5;
-}
-.source-block header {
-  font-size: 0.8125rem;
-}
 .build-summary:has(+ .review-session-bar) {
   padding-bottom: 4px;
 }
@@ -1248,33 +1176,8 @@ summary:focus-visible {
     grid-template-columns: minmax(210px, 240px) minmax(500px, 1.55fr) minmax(320px, 0.85fr);
   }
 }
-.source-tool-section {
-  min-width: 0;
-  border-top: 1px solid var(--line);
-  background: var(--card);
-}
-.source-tool-section > summary {
-  display: flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 10px 12px;
-  font-weight: 800;
-  cursor: pointer;
-}
-.source-tool-section :deep(.boundary-adjudication) {
-  border: 0;
-  border-radius: 0;
-}
-.source-block,
-.source-blocks,
 .source-text-details {
   min-width: 0;
-}
-.source-block p,
-.source-block header,
-.original-extraction-snapshot {
-  overflow-wrap: anywhere;
-  max-width: 100%;
 }
 .review-inspector {
   overflow-x: hidden;
@@ -1346,9 +1249,6 @@ summary:focus-visible {
     .review-handoff span,
     .review-handoff > strong,
     .source-page-nav,
-    .source-block header,
-    .split-button,
-    .evidence-toggle,
     .inspector-pane summary,
     .help,
     .active-build-settings > summary,
@@ -1507,21 +1407,6 @@ summary:focus-visible {
   color: var(--tone-warn-fg);
   font-size: 0.8125rem;
   line-height: 1.45;
-}
-.original-extraction-snapshot {
-  max-height: 320px;
-  overflow: auto;
-  white-space: pre-wrap;
-  padding: 12px;
-  margin: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--soft);
-  font:
-    12px/1.5 ui-monospace,
-    SFMono-Regular,
-    Consolas,
-    monospace;
 }
 .rerun-family {
   display: flex;
@@ -1759,17 +1644,6 @@ summary:focus-visible {
 }
 .detail-mode .metadata-review {
   padding: 16px 18px;
-}
-.detail-mode .source-review-panel {
-  padding-bottom: 18px;
-}
-.detail-mode .source-review-panel > .source-summary {
-  max-width: 1100px;
-  margin-inline: auto;
-}
-.detail-mode .source-tool-section {
-  max-width: 1100px;
-  margin-inline: auto;
 }
 .detail-mode .review-inspector {
   overflow-x: hidden;
