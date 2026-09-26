@@ -221,6 +221,11 @@ class GutenbergOfflineService:
             self._stop.set()
         if action == "refetch":
             self.archive_path.unlink(missing_ok=True)
+            if self.extract_root.is_dir():
+                for path in self.extract_root.glob("*.txt"):
+                    path.unlink(missing_ok=True)
+            with sqlite3.connect(self.db_path) as db:
+                db.execute("DELETE FROM gutenberg_books")
         with sqlite3.connect(self.db_path) as db:
             db.execute("UPDATE gutenberg_archive SET status=?,bytes_done=?,total_bytes=NULL,error=NULL,updated_at=? WHERE id=1",
                        (allowed[action], 0 if action == "refetch" else self._bytes_done(), _now()))
