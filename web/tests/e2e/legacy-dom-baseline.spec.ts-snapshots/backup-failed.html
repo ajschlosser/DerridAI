@@ -277,7 +277,7 @@
 <kbd>Ctrl K</kbd>
 </form>
 <div class="shell-top-actions">
-<input id="fileInput" type="file" accept=".jsonl,.ndjson,.json" multiple="" hidden="">
+<input id="fileInput" type="file" accept=".jsonl,.ndjson,.json,.zst" multiple="" hidden="">
 <div class="topbar-chrome">
 <span class="ui-button-wrap" data-tooltip="">
 <button class="ui-button variant-ghost size-default icon-only" type="button" aria-label="Help" title="Help">
@@ -746,8 +746,19 @@
 <span id="v-13-hint" class="ui-field-hint">Reported by the running API. Change the backend on Corpus Data.</span>
 </label>
 </div>
+<div class="embedding-probe" data-state="failed" role="status" aria-live="polite">
+<strong>Embedding model not reachable</strong>
+<span>
+</span>
+<span class="embedding-probe-scope">This default is used by vector stores, metadata examples and validated-claim memory. The test embeds one short string with the values above, saved or not.</span>
+</div>
 </div>
 <footer class="settings-section-actions">
+<span class="ui-button-wrap" data-tooltip="">
+<button class="ui-button variant-default size-default" type="button">
+<span>Test embedding model</span>
+</button>
+</span>
 <span class="ui-button-wrap" data-tooltip="">
 <button class="ui-button variant-primary size-default" type="button">
 <span>Save embedding defaults</span>

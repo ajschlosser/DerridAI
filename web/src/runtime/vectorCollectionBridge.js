@@ -57,11 +57,13 @@ export function createVectorCollectionBridge({
     );
     const initialProvider = String(defaultProvider || "").startsWith("profile:")
       ? String(defaultProvider)
-      : ["chroma", "ollama"].includes(requestedProvider)
-        ? requestedProvider
+      : requestedProvider === "chroma"
+        ? "chroma"
         : profileDefault
           ? `profile:${profileDefault.id}`
-          : "chroma";
+          : requestedProvider === "ollama"
+            ? "ollama"
+            : "chroma";
     const initialProfile = embeddingProfiles.find(
       (profile) => `profile:${profile.id}` === initialProvider,
     );
