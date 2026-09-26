@@ -36,7 +36,9 @@ describe("Corpus Builder configuration workspaces", () => {
     const panel = wrapper.get("#corpus-config-panel-metadata");
     expect(panel.attributes("role")).toBe("tabpanel");
     expect(panel.attributes("aria-labelledby")).toBe("corpus-config-tab-metadata");
-    expect(panel.findAll(":scope > details")).toHaveLength(2);
+    expect(
+      Array.from(panel.element.children).filter((element) => element.tagName === "DETAILS"),
+    ).toHaveLength(2);
 
     await wrapper.get("button").trigger("click");
     expect(wrapper.emitted("manageSchemas")).toHaveLength(1);
