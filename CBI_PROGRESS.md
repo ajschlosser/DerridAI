@@ -274,3 +274,27 @@ The Review inspector decomposition now separates the evidence-assignment surface
   page locators, evidence toggles, and Canadian French length stress.
 - Reduced `PdfCorpusBuilder.vue` to 3,500 lines and the shared Corpus
   Builder workspace stylesheet to 2,216 lines.
+
+
+### Review source panel extraction
+
+The Review inspector decomposition now separates the Source workspace from
+`PdfCorpusBuilder.vue` while retaining all source/review mutations in the parent.
+
+- Extracted source context, source-page navigation, boundary second-reader presentation,
+  extracted-source blocks, evidence toggles, split affordances, and revision history into
+  `CorpusReviewSourcePanel.vue`.
+- Kept source navigation state, viewer/dialog state, provider/model state, boundary adjudication,
+  evidence mutation, and record splitting in the existing parent/controllers; the component emits
+  typed actions back to those handlers.
+- Preserved the Source tabpanel ID/ARIA relationship, PDF/source-summary integration,
+  provider-concurrency warning behavior, paginated/time locators, evidence highlighting, busy
+  gating, and detail-workspace sizing.
+- Moved Source-panel-local CSS into the extracted component and removed the corresponding dead
+  scoped selectors from `CorpusBuilderWorkspace.css`; frame-level Review shell rules remain in
+  the shared stylesheet.
+- Added focused component tests and Storybook states for source navigation, boundary provider
+  forwarding, adjudication, evidence/split actions, concurrency risk, busy state, Source workspace
+  mode, and Canadian French length stress.
+- Reduced `PdfCorpusBuilder.vue` to 3,404 lines and the shared Corpus Builder workspace
+  stylesheet to 2,059 lines.
