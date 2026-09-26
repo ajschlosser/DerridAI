@@ -1,6 +1,6 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import type { ProviderProfile } from "../../api/system";
 import { useI18nStore } from "../../stores/i18n";
 import CorpusTextNoiseSettings from "../CorpusTextNoiseSettings.vue";
@@ -44,6 +44,51 @@ const emit = defineEmits<{
 
 const i18n = useI18nStore();
 const manualOpen = ref(false);
+const enrichmentSummary = computed(() =>
+  [
+    props.selectedProviderLabel,
+    props.selectedProfileModel,
+    props.enrichmentMode === "deep"
+      ? i18n.t("pdf_corpus.enrichment_deep")
+      : i18n.t("pdf_corpus.enrichment_fast"),
+  ]
+    .filter(Boolean)
+    .join(" · "),
+);
+
+function reviewProviderChanged(event: Event) {
+  emit(
+    "update:selectedReviewProviderId",
+    (event.target as HTMLSelectElement).value,
+  );
+}
+
+function checkboxChanged(
+  event: Event,
+  name:
+    | "update:semanticIndexing"
+    | "update:autoCleanText"
+    | "update:llmTouchupDuringEnrichment",
+) {
+  emit(name, (event.target as HTMLInputElement).checked);
+}
+
+function manualProviderChanged(event: Event) {
+  emit(
+    "update:manualProvider",
+    (event.target as HTMLSelectElement).value as "ollama" | "openai",
+  );
+}
+
+function manualInputChanged(
+  event: Event,
+  name:
+    | "update:manualModel"
+    | "update:manualBaseUrl"
+    | "update:manualApiKey",
+) {
+  emit(name, (event.target as HTMLInputElement).value);
+}
 </script>
 
 <template>
@@ -57,16 +102,7 @@ const manualOpen = ref(false);
     <summary>
       <span>
         <b>{{ i18n.t("pdf_corpus.llm_enrichment_title") }}</b>
-        <small>
-          {{ props.selectedProviderLabel
-          }}<template v-if="props.selectedProfileModel"> · {{ props.selectedProfileModel }}</template>
-          ·
-          {{
-            props.enrichmentMode === "deep"
-              ? i18n.t("pdf_corpus.enrichment_deep")
-              : i18n.t("pdf_corpus.enrichment_fast")
-          }}
-        </small>
+        <small>{{ enrichmentSummary }}</small>
       </span>
     </summary>
 
@@ -102,14 +138,11 @@ const manualOpen = ref(false);
             id="pdf-corpus-review-provider"
             class="control"
             :value="props.selectedReviewProviderId"
-            @change="
-              emit(
-                'update:selectedReviewProviderId',
-                ($event.target as HTMLSelectElement).value,
-              )
-            "
+            @change="reviewProviderChanged"
           >
-            <option value="">{{ i18n.t("pdf_corpus.no_escalation_provider") }}</option>
+            <option value="">
+              {{ i18n.t("pdf_corpus.no_escalation_provider") }}
+            </option>
             <option
               v-for="profile in props.providerProfiles"
               :key="profile.id"
@@ -123,11 +156,14 @@ const manualOpen = ref(false);
         </label>
       </div>
 
-      <section class="enrichment-strategy" aria-labelledby="pdf-corpus-enrichment-mode-title">
+      <section
+        class="enrichment-strategy"
+        aria-labelledby="pdf-corpus-enrichment-mode-title"
+      >
         <div class="setup-card-heading">
-          <b id="pdf-corpus-enrichment-mode-title">{{
-            i18n.t("pdf_corpus.enrichment_strategy")
-          }}</b>
+          <b id="pdf-corpus-enrichment-mode-title">
+            {{ i18n.t("pdf_corpus.enrichment_strategy") }}
+          </b>
           <small>{{ i18n.t("pdf_corpus.enrichment_strategy_help") }}</small>
         </div>
 
@@ -170,9 +206,7 @@ const manualOpen = ref(false);
           <input
             type="checkbox"
             :checked="props.semanticIndexing"
-            @change="
-              emit('update:semanticIndexing', ($event.target as HTMLInputElement).checked)
-            "
+            @change="checkboxChanged($event, 'update:semanticIndexing')"
           />
           <span>
             <b>{{ i18n.t("pdf_corpus.semantic_indexing") }}</b>
@@ -184,7 +218,7 @@ const manualOpen = ref(false);
           <input
             type="checkbox"
             :checked="props.autoCleanText"
-            @change="emit('update:autoCleanText', ($event.target as HTMLInputElement).checked)"
+            @change="checkboxChanged($event, 'update:autoCleanText')"
           />
           <span>
             <b>{{ i18n.t("pdf_corpus.auto_clean_all_records") }}</b>
@@ -197,9 +231,9 @@ const manualOpen = ref(false);
             type="checkbox"
             :checked="props.llmTouchupDuringEnrichment"
             @change="
-              emit(
+              checkboxChanged(
+                $event,
                 'update:llmTouchupDuringEnrichment',
-                ($event.target as HTMLInputElement).checked,
               )
             "
           />
@@ -227,41 +261,46 @@ const manualOpen = ref(false);
         <summary>{{ i18n.t("pdf_corpus.manual_provider") }}</summary>
         <p class="help">{{ i18n.t("pdf_corpus.manual_provider_help") }}</p>
         <div class="advanced-grid">
-          <label for="pdf-corpus-provider">{{ i18n.t("pdf_corpus.provider") }}</label>
+          <label for="pdf-corpus-provider">
+            {{ i18n.t("pdf_corpus.provider") }}
+          </label>
           <select
             id="pdf-corpus-provider"
             class="control"
             :value="props.manualProvider"
-            @change="
-              emit(
-                'update:manualProvider',
-                ($event.target as HTMLSelectElement).value as 'ollama' | 'openai',
-              )
-            "
+            @change="manualProviderChanged"
           >
             <option value="ollama">Ollama</option>
-            <option value="openai">{{ i18n.t("pdf_corpus.openai_compatible") }}</option>
+            <option value="openai">
+              {{ i18n.t("pdf_corpus.openai_compatible") }}
+            </option>
           </select>
 
-          <label for="pdf-corpus-model">{{ i18n.t("pdf_corpus.model") }}</label>
+          <label for="pdf-corpus-model">
+            {{ i18n.t("pdf_corpus.model") }}
+          </label>
           <input
             id="pdf-corpus-model"
             class="control"
             :value="props.manualModel"
             :placeholder="i18n.t('pdf_corpus.provider_default')"
-            @input="emit('update:manualModel', ($event.target as HTMLInputElement).value)"
+            @input="manualInputChanged($event, 'update:manualModel')"
           />
 
-          <label for="pdf-corpus-url">{{ i18n.t("pdf_corpus.base_url") }}</label>
+          <label for="pdf-corpus-url">
+            {{ i18n.t("pdf_corpus.base_url") }}
+          </label>
           <input
             id="pdf-corpus-url"
             class="control"
             :value="props.manualBaseUrl"
             :placeholder="i18n.t('pdf_corpus.provider_default')"
-            @input="emit('update:manualBaseUrl', ($event.target as HTMLInputElement).value)"
+            @input="manualInputChanged($event, 'update:manualBaseUrl')"
           />
 
-          <label for="pdf-corpus-key">{{ i18n.t("pdf_corpus.api_key") }}</label>
+          <label for="pdf-corpus-key">
+            {{ i18n.t("pdf_corpus.api_key") }}
+          </label>
           <input
             id="pdf-corpus-key"
             class="control"
@@ -269,7 +308,7 @@ const manualOpen = ref(false);
             autocomplete="off"
             :value="props.manualApiKey"
             :placeholder="i18n.t('pdf_corpus.not_persisted')"
-            @input="emit('update:manualApiKey', ($event.target as HTMLInputElement).value)"
+            @input="manualInputChanged($event, 'update:manualApiKey')"
           />
         </div>
       </details>
