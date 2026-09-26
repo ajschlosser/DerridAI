@@ -66,3 +66,11 @@ export function recordSizingMinimums(policy: RecordSizingPolicy) {
     absolute_record_chars: Math.max(long, Number(policy.long_record_chars)),
   };
 }
+
+/** What the last build actually produced, so the ruler shows the policy against reality. */
+export interface ObservedRecordSizes {
+  p10_record_chars?: number;
+  median_record_chars?: number;
+  p90_record_chars?: number;
+  max_record_chars?: number;
+}

@@ -582,6 +582,7 @@ function displayValue(field: string) {
 
 <style scoped>
 .metadata-review {
+  container: metadata-review / inline-size;
   display: grid;
   gap: 12px;
 }
@@ -726,7 +727,7 @@ function displayValue(field: string) {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
-@media (max-width: 520px) {
+@container metadata-review (max-width: 32rem) {
   .suggestion-toolbar {
     flex-direction: column;
     align-items: stretch;

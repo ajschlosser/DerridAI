@@ -2,6 +2,7 @@ import { mount } from "@vue/test-utils";
 import { nextTick } from "vue";
 import { describe, expect, it } from "vitest";
 import CorpusRecordFocusReview from "../../src/components/CorpusRecordFocusReview.vue";
+import CorpusActionMenu from "../../src/components/CorpusActionMenu.vue";
 
 function buttonByText(wrapper: any, text: string) {
   const button = wrapper.findAll("button").find((node: any) => node.text().includes(text));
@@ -75,17 +76,18 @@ describe("Corpus Builder focus review interactions", () => {
   it("implements arrow-key tab navigation across metadata, evidence, and source", async () => {
     const wrapper = mount(CorpusRecordFocusReview, {
       attachTo: document.body,
-      props: { record },
+      props: { record, inspectorTab: "metadata" },
       global: { stubs },
     });
     expect(wrapper.get("#focus-tab-metadata").attributes("aria-selected")).toBe("true");
-    await wrapper.get(".tabs").trigger("keydown", { key: "ArrowRight" });
-    await nextTick();
+    await wrapper.get(".focus-tabs").trigger("keydown", { key: "ArrowRight" });
+    // The tab is parent-owned (blocked accepts switch it too): the view asks, the parent applies.
+    expect(lastEmission(wrapper, "update:inspectorTab")).toEqual(["evidence"]);
+    await wrapper.setProps({ inspectorTab: "evidence" });
     expect(wrapper.get("#focus-tab-evidence").attributes("aria-selected")).toBe("true");
     expect(document.activeElement).toBe(wrapper.get("#focus-tab-evidence").element);
-    await wrapper.get(".tabs").trigger("keydown", { key: "End" });
-    await nextTick();
-    expect(wrapper.get("#focus-tab-source").attributes("aria-selected")).toBe("true");
+    await wrapper.get(".focus-tabs").trigger("keydown", { key: "End" });
+    expect(lastEmission(wrapper, "update:inspectorTab")).toEqual(["source"]);
     wrapper.unmount();
   });
 
@@ -221,25 +223,73 @@ describe("Corpus Builder focus review interactions", () => {
     wrapper.unmount();
   });
 
-  it("disables acceptance when the parent marks the record unsafe to accept", () => {
+  it("names what blocks the record, badges the metadata tab, and jumps to it from the dock", async () => {
     const wrapper = mount(CorpusRecordFocusReview, {
-      props: { record, canAccept: false },
+      props: { record, blockingFields: ["speaker", "discourse_role"] },
       global: { stubs },
     });
-    const accept = buttonByText(wrapper, "Accept");
-    expect(accept.attributes("disabled")).toBeDefined();
+    const blocker = wrapper.get("#focus-metadata-blocker");
+    expect(blocker.text()).toContain("speaker");
+    expect(wrapper.get("#focus-tab-metadata").text()).toContain("2");
+    // Accept stays available (the server decides) and is described by what blocks it.
+    expect(buttonByText(wrapper, "Accept").attributes("aria-describedby")).toBe(
+      "focus-metadata-blocker",
+    );
+    await blocker.trigger("click");
+    expect(wrapper.emitted("focusBlocker")).toHaveLength(1);
     wrapper.unmount();
   });
 
-  it("emits front-of-queue requeue and disables the action while busy", async () => {
+  it("shows a ready state and no blocker when every field is decided", () => {
     const wrapper = mount(CorpusRecordFocusReview, { props: { record }, global: { stubs } });
-    const requeue = buttonByText(wrapper, "Send back through current LLM run");
-    await requeue.trigger("click");
-    expect(wrapper.emitted("requeueMetadata")).toHaveLength(1);
+    expect(wrapper.find("#focus-metadata-blocker").exists()).toBe(false);
+    expect(wrapper.get(".dock-ready").text()).toContain("Metadata decided");
+    wrapper.unmount();
+  });
+
+  it("routes secondary record actions through the shared menu and honors busy", async () => {
+    const wrapper = mount(CorpusRecordFocusReview, {
+      props: { record, actionItems: [{ id: "requeue", label: "Requeue" }] },
+      global: { stubs },
+    });
+    wrapper.getComponent(CorpusActionMenu).vm.$emit("select", "requeue");
+    expect(lastEmission(wrapper, "recordAction")).toEqual(["requeue"]);
     await wrapper.setProps({ busy: true });
-    expect(
-      buttonByText(wrapper, "Send back through current LLM run").attributes("disabled"),
-    ).toBeDefined();
+    expect(wrapper.get(".action-menu-trigger").attributes("disabled")).toBeDefined();
+    expect(buttonByText(wrapper, "Skip").attributes("disabled")).toBeDefined();
+    wrapper.unmount();
+  });
+
+  it("decides with the same dock: accept, reject, skip, undo, redo", async () => {
+    const wrapper = mount(CorpusRecordFocusReview, { props: { record }, global: { stubs } });
+    await buttonByText(wrapper, "Accept").trigger("click");
+    await buttonByText(wrapper, "Reject").trigger("click");
+    await buttonByText(wrapper, "Skip").trigger("click");
+    await wrapper.get('[aria-keyshortcuts="Z"]').trigger("click");
+    await wrapper.get('[aria-keyshortcuts="Shift+Z"]').trigger("click");
+    for (const event of ["accept", "reject", "skip", "undo", "redo"])
+      expect(wrapper.emitted(event), event).toHaveLength(1);
+    wrapper.unmount();
+  });
+
+  it("offers Mark reviewed until the text has been reviewed", async () => {
+    const wrapper = mount(CorpusRecordFocusReview, { props: { record }, global: { stubs } });
+    await buttonByText(wrapper, "Mark reviewed").trigger("click");
+    expect(wrapper.emitted("markTextReviewed")).toHaveLength(1);
+    await wrapper.setProps({ record: { ...record, text_review_status: "human_reviewed" } });
+    expect(wrapper.findAll("button").some((b) => b.text().includes("Mark reviewed"))).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("reports build progress to assistive technology", () => {
+    const wrapper = mount(CorpusRecordFocusReview, {
+      props: { record, accepted: 42, remaining: 118, total: 340 },
+      global: { stubs },
+    });
+    const bar = wrapper.get('[role="progressbar"]');
+    expect(bar.attributes("aria-valuenow")).toBe("42");
+    expect(bar.attributes("aria-valuemax")).toBe("340");
+    expect(bar.attributes("aria-valuetext")).toBe("42 accepted, 118 remaining");
     wrapper.unmount();
   });
 
@@ -252,7 +302,8 @@ describe("Corpus Builder focus review interactions", () => {
       },
       global: { stubs },
     });
-    expect(wrapper.get(".record-noise-summary").text()).toContain("52% noise");
+    expect(wrapper.get(".focus-facts").text()).toContain("52% noise");
+    expect(wrapper.text()).toContain("unusable");
     const links = wrapper.findAll(".queue-context .text-link");
     expect(links).toHaveLength(3);
     await links[0].trigger("click");
