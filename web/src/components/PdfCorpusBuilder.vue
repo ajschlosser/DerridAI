@@ -1323,7 +1323,11 @@ async function refreshRecords(reset = false, preferredId = "") {
       sourceProblemDialogBuildId.value = selectedBuildId.value;
       openRecordSourceWarning(firstSourceProblem);
     }
-    if (result.total > 0 || expected === 0)
+    const filteredRecordView = reviewQueue.value !== "all" || Boolean(recordQuery.value);
+    if (result.total > 0 || expected === 0 || filteredRecordView)
+      // A zero-row filtered queue is still a successful hydration. Track the
+      // build's advertised topology, not the filtered row count, or an empty
+      // "issues" queue will be fetched again on every build-status poll.
       hydratedTopologyCount.value = Math.max(hydratedTopologyCount.value, expected, result.total);
     const wanted = preferredId || selectedRecordId.value;
     const match = wanted ? records.value.find((row) => row.record_id === wanted) : undefined;
