@@ -242,6 +242,7 @@ from .field_assertions import (
     project_record_assertions,
 )
 from .main_text_start import infer_main_text_start
+from .memory_prefill import prefill_records
 from .metadata_exemplar_projection import (
     dirty_metadata_exemplar_build_ids,
     project_build_metadata_exemplars,
@@ -2553,6 +2554,18 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 record["full_citation"] = full
                 # Deterministic POS/NER candidates: hints for the metadata prompt, never values.
                 annotate_record(record, nlp_schema, language=str(manifest.get("language") or ""))
+            # Pre-fill from reviewed precedents matched on each record's source spans (advisory).
+            memory_prefill = (
+                prefill_records(records, source_blocks, nlp_schema, self._progressive_metadata_index, build_id=build_id)
+                if bool(request.get("memory_prefill", True))
+                else {"status": "disabled"}
+            )
+            if memory_prefill.get("status") == "unavailable":
+                self._append_warning(
+                    build_id,
+                    "Metadata memory could not pre-fill fields (embedding provider or vector store unavailable). "
+                    "The build continues without it: " + str(memory_prefill.get("error") or ""),
+                )
             # Validate topology before spending time on metadata enrichment.
             # At this point all source-derived text and boundaries are deterministic;
             # any failure is therefore an implementation/topology problem, not an
@@ -2577,6 +2590,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                         f"{found['params'].get('limit')}-character ceiling; split it during review."
                     )
             current_build = self.repo.get_build(build_id)
+            current_build["memory_prefill"] = memory_prefill
             current_build["topology_validation"] = topology_validation
             current_build["topology_quality"] = topology_quality
             current_build["record_sizing_policy"] = sizing_policy

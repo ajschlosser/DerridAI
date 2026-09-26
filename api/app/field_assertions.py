@@ -18,7 +18,13 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 
-DerivationMethod = Literal["deterministic", "model", "human", "inherited", "imported", "other"]
+# The specification lets a profile add namespaced derivation methods. ``derridai:memory`` is a value
+# suggested by reviewed precedents matched on the source span, ``derridai:nlp`` a statistical tagger's
+# judgement, ``derridai:computed`` an exact pattern or arithmetic. None of them is authoritative.
+DerivationMethod = Literal[
+    "deterministic", "model", "human", "inherited", "imported", "other",
+    "derridai:memory", "derridai:nlp", "derridai:computed",
+]
 EvaluationStatus = Literal["not_evaluated", "value_supported", "no_supported_value", "evaluation_failed"]
 AuthorityStatus = Literal["unreviewed", "human_confirmed", "human_override", "disputed"]
 ValueStatus = Literal["present", "confirmed_absent", "invalid", "unresolved"]
@@ -74,7 +80,7 @@ _OPERATIONAL_PREFIXES = (
     "boundary_", "metadata_", "review_", "text_", "source_", "topology_", "nlp_", "slice_",
     "human_", "llm_", "segmentation_", "unit_", "recheck", "second_opinion", "blind_",
     "printed_page", "extraction_", "acceptance_", "field_assertion", "current_field", "record_sizing",
-    "editorial_", "autonomous_", "pdf_", "inline_", "full_",
+    "editorial_", "autonomous_", "pdf_", "inline_", "full_", "memory_",
 )
 _OPERATIONAL_KEYS = {"lineage", "media_kind", "parent_block_id"}
 
@@ -355,6 +361,27 @@ def create_model_assertion(
     )
 
 
+def create_memory_assertion(
+    record: dict[str, Any],
+    field_name: str,
+    value: Any,
+    *,
+    schema: Any | None = None,
+    confidence: float,
+    reason: str,
+    evidence: list[dict[str, Any]],
+    model: str | None = None,
+    select: bool = True,
+) -> FieldAssertion:
+    """A value suggested by reviewed precedents whose evidence matched this record's source span."""
+    return _new_assertion(
+        record, field_name=field_name, schema=schema, value=value,
+        derivation_method="derridai:memory", evaluation_status="value_supported",
+        method="metadata_memory", confidence=confidence, reason=reason,
+        evidence=evidence, model=model, select=select,
+    )
+
+
 def confirm_assertion(record: dict[str, Any], assertion: FieldAssertion, *, actor: str | None = None, reason: str = "") -> FieldAssertion:
     present = assertion.value not in (None, "", [])
     return store_assertion(
@@ -609,7 +636,8 @@ def _compatibility_status(assertion: FieldAssertion) -> str:
         return "human_override"
     if assertion.authority_status == "human_confirmed":
         return "human_confirmed"
-    if assertion.derivation_method == "model":
+    if assertion.derivation_method == "model" or str(assertion.derivation_method).startswith("derridai:"):
+        # Unreviewed suggestions that need a human decision, like a model proposal.
         return "model_inferred"
     if assertion.derivation_method == "deterministic":
         return "deterministic"

@@ -224,3 +224,37 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
     wrapper.unmount();
   });
 });
+
+describe("CorpusMetadataFieldEditor memory hints", () => {
+  it("offers less certain earlier values as chips that fill the draft, and labels namespaced derivations", async () => {
+    const wrapper = mount(CorpusMetadataFieldEditor, {
+      props: {
+        field: "stance",
+        value: "",
+        control: "enum",
+        options: stanceOptions,
+        open: true,
+        status: {
+          status: "model_inferred",
+          derivation_method: "derridai:memory",
+          assertion_id: "a1",
+          confidence: 0.8,
+        },
+        hints: [{ value: "criticize", similarity: 0.81, support: 1 }],
+      },
+    });
+    expect(wrapper.get(".memory-hints").text()).toContain("81%");
+    await wrapper.get(".hint-chip").trigger("click");
+    await nextTick();
+    expect((wrapper.get("select").element as HTMLSelectElement).value).toBe("criticize");
+    expect(wrapper.text()).toContain("Metadata memory");
+    expect(wrapper.text()).not.toContain("LLM source");
+  });
+
+  it("shows no hint strip when there are none", () => {
+    const wrapper = mount(CorpusMetadataFieldEditor, {
+      props: { field: "stance", value: "", control: "enum", options: stanceOptions, open: true },
+    });
+    expect(wrapper.find(".memory-hints").exists()).toBe(false);
+  });
+});

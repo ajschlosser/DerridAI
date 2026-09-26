@@ -115,3 +115,14 @@ describe("operational record keys", () => {
     expect(names).toContain("speaker");
   });
 });
+
+describe("memory pre-fill bookkeeping", () => {
+  it("does not treat memory hints as metadata fields", async () => {
+    const { isOperationalKey } = await import(
+      "../../src/features/corpus-builder/domain/recordMetadata"
+    );
+    expect(isOperationalKey("memory_hints")).toBe(true);
+    expect(isOperationalKey("memory_prefill")).toBe(true);
+    expect(isOperationalKey("speaker")).toBe(false);
+  });
+});
