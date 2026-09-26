@@ -15,7 +15,7 @@ import re
 import statistics
 from typing import Any
 
-MODES = ("default", "paragraph", "line", "sentence", "chars")
+MODES = ("default", "paragraph", "line", "sentence", "chars", "auto")
 MIN_CHARS, MAX_CHARS = 60, 20000
 DIVISIBLE = {"paragraph", "block_quote", "list_item", "footnote", "speech", "text"}
 _ABBREVIATIONS = {
@@ -35,6 +35,16 @@ def normalize_policy(policy: dict[str, Any] | None) -> dict[str, Any]:
     if mode not in MODES:
         raise ValueError(f"Unknown source-unit mode {mode!r}; choose one of {', '.join(MODES)}.")
     out: dict[str, Any] = {"mode": mode}
+    if mode == "auto":
+        # Paragraphs that fit are kept whole; a longer one is divided into sentences. The limit is the build's long
+        # record size, so the record size, not the extractor's paragraphing, decides how small records can be.
+        try:
+            limit = int(raw.get("max_chars"))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("An automatic policy needs the longest paragraph to keep whole, in characters.") from exc
+        if not MIN_CHARS <= limit <= MAX_CHARS * 5:
+            raise ValueError(f"The automatic paragraph limit must be between {MIN_CHARS} and {MAX_CHARS * 5}.")
+        out["max_chars"] = limit
     if mode == "chars":
         try:
             size = int(raw.get("chars"))
@@ -104,6 +114,8 @@ def divide(text: str, policy: dict[str, Any]) -> list[str]:
         return split_lines(text)
     if mode == "chars":
         return split_chars(text, int(policy["chars"]))
+    if mode == "auto":
+        return split_sentences(text) if len(text) > int(policy["max_chars"]) else [text]
     return [text]
 
 

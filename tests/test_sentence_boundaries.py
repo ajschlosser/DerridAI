@@ -58,3 +58,29 @@ def test_every_resulting_record_starts_and_ends_on_sentence_boundaries():
     for item in result:
         i = index[item["after_block_id"]]
         assert clean_boundary(b[i], b[i + 1])
+
+
+def test_the_builds_ceiling_bounds_every_join_and_move():
+    """Sentence ends are preferred, never at the cost of the record size the build asked for.
+
+    Why: a 250-character build (ceiling 1,500) had records of 5,700 characters: snapping joined records up to the
+    profile's 10,500-character limit instead of the build's own ceiling.
+    """
+    b = blocks(*(["Half a sentence that runs on and"] * 40 + ["ends here."]))
+    out, report = snap(b, cut(*range(0, 40, 5)), hard_max_chars=200)
+    sizes, current = [], []
+    cuts = {x["after_block_id"] for x in out}
+    for item in b:
+        current.append(item)
+        if item["block_id"] in cuts:
+            sizes.append(sum(len(x["text"]) for x in current) + 2 * (len(current) - 1)); current = []
+    assert max(sizes) <= 200
+    assert report["unavoidable"], "a kept mid-sentence boundary is reported, not hidden"
+
+
+def test_headings_and_contents_lines_are_clean_ends():
+    """A contents page is not one long unfinished sentence."""
+    b = blocks("Contents", "Preface", "Introduction", "Chapter II", "WOMEN IN THE LIFE OF BALZAC", "It begins.")
+    assert ids(snap(b, cut(0, 1, 2, 3))) == ["b0", "b1", "b2", "b3"]
+    # A fragment that stops on a connecting word is still the middle of a sentence.
+    assert ids(snap(blocks("The concept of", "Hospitality returns.", "Next."), cut(0))) != ["b0"]

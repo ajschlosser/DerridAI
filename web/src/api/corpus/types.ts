@@ -12,7 +12,7 @@ export interface PageDetectionRequest {
   connection?: { provider?: string; model?: string; base_url?: string; api_key?: string };
 }
 
-export type SourceUnitMode = "default" | "paragraph" | "line" | "sentence" | "chars";
+export type SourceUnitMode = "default" | "paragraph" | "line" | "sentence" | "chars" | "auto";
 
 export interface SourceUnitPolicy {
   mode: SourceUnitMode;

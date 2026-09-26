@@ -38,6 +38,7 @@ from .corpus_record_quality import iso_now
 from .corpus_segmentation import (
     _apply_manifest_metadata,
     _normalize_text,
+    _record_sizing_policy,
     _scholarly_page_range,
 )
 from .field_assertions import (
@@ -85,11 +86,47 @@ class ManifestWorkflowMixin:
         def _write_start_page_to_layout(self, asset_id: str, start_page: Any) -> None: ...
         def _rewrite_and_validate(self, build_id: str, records: list[dict[str, Any]], *, persist_records: bool = True) -> dict[str, Any]: ...
 
+    def _automatic_units(self, asset: dict[str, Any], request: dict[str, Any], profile_id: str) -> tuple[dict[str, Any], dict[str, Any] | None]:
+        """Use sentence units for paragraphs too long for the requested records, when no unit policy was chosen.
+
+        Records are built from whole source units, so a paragraph longer than the build's long-record size would
+        become an oversized record however the rest is sized. A source still on its extracted units is divided
+        automatically (paragraphs that fit stay whole); an explicitly chosen policy is left as it is. The original
+        source is kept, and the derived one names it.
+        """
+        from .unit_policy import DIVISIBLE, split_sentences
+
+        chosen = str((asset.get("unit_policy") or {}).get("mode") or "default")
+        if chosen != "default":
+            return asset, None
+        limit = _record_sizing_policy(request, CORPUS_PROFILES[profile_id])["long_record_chars"]
+        needs_division = any(
+            len(str(block.get("text") or "")) > limit
+            and not block.get("excluded_reason")
+            and str(block.get("type") or "paragraph") in DIVISIBLE
+            and str(block.get("locator_kind") or "") != "time"
+            and len(split_sentences(str(block.get("text") or ""))) > 1
+            for block in self.repo.load_blocks(str(asset["asset_id"]))
+        )
+        if not needs_division:
+            return asset, None
+        derived = self.repo.derive_asset_with_units(str(asset["asset_id"]), {"mode": "auto", "max_chars": limit})
+        return derived, {
+            "mode": "auto",
+            "max_chars": limit,
+            "source_asset_id": asset["asset_id"],
+            "source_block_count": asset["block_count"],
+            "block_count": derived["block_count"],
+        }
+
     def create(self, request: dict[str, Any]) -> dict[str, Any]:
         asset = self.repo.get_asset(str(request["asset_id"]))
         profile_id = str(request.get("profile_id") or PROFILE_VERSION)
         if profile_id not in CORPUS_PROFILES:
             raise ValueError(f"Unknown corpus profile: {profile_id}")
+        asset, automatic_units = self._automatic_units(asset, request, profile_id)
+        if automatic_units:
+            request = {**request, "asset_id": asset["asset_id"]}
         _validate_execution_budget(request)
         try:
             schema = self._schemas.get(str(request.get("schema_id") or DEFAULT_SCHEMA_ID))
@@ -121,6 +158,7 @@ class ManifestWorkflowMixin:
             "model": request.get("model"),
             "request": public_request,
             "manifest": {},
+            "automatic_units": automatic_units,
         })
         with self._lock:
             self._runtime_requests[build["build_id"]] = dict(request)
