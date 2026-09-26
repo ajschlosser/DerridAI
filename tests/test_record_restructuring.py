@@ -168,3 +168,47 @@ def test_evidence_outside_the_record_is_refused_before_anything_is_saved(tmp_pat
         manager.metadata_decision(bid, "r2", "speaker", "Derrida", 1, False, ["b1"])
     row = repo.load_records(bid)[1]
     assert row.get("speaker") in (None, "") and row["record_revision"] == 1
+
+
+def test_operational_record_keys_never_become_metadata_assertions(tmp_path):
+    from app.field_assertions import migrate_record_assertions
+
+    row = {
+        "record_id": "r1", "source_document_id": "d", "text": "t",
+        "source_spans": [{"source_document_id": "d", "block_id": "b"}],
+        "boundary_evidence": {"after_block_id": "b1"}, "lineage": {"operation": "split"},
+        "nlp_candidates": {"status": "ok"}, "text_review_source": "human_split", "unit_policy": "sentence",
+        "speaker": "Derrida",
+    }
+    migrate_record_assertions(row)
+    names = {a["field_name"] for bucket in row["field_assertions"].values() for a in bucket}
+    assert names == {"speaker"}
+
+
+def test_record_context_returns_neighbours_in_document_order(tmp_path):
+    repo, bid, manager = _manager(tmp_path)
+    context = repo.record_context(bid, "r2", before=5, after=5)
+    assert [r["record_id"] for r in context["before"]] == ["r1"]
+    assert [r["record_id"] for r in context["after"]] == ["r3"]
+    assert set(context["before"][0]) == {"record_id", "text", "text_length", "page_start", "page_end", "review_disposition"}
+    assert repo.record_context(bid, "r2", before=0, after=0) == {"record_id": "r2", "before": [], "after": [], "truncated": False}
+    with pytest.raises(KeyError):
+        repo.record_context(bid, "nope")
+
+
+def test_record_context_is_bounded_by_a_character_budget(tmp_path):
+    repo, bid, manager = _manager(tmp_path)
+    context = repo.record_context(bid, "r2", before=5, after=5, max_chars=5)
+    assert context["truncated"] is True
+
+
+def test_context_route_reads_from_the_repository(tmp_path, monkeypatch):
+    from app.routers import corpus as routes
+
+    repo, bid, manager = _manager(tmp_path)
+    monkeypatch.setattr(routes, "pdf_corpus_repository", repo)
+    result = routes.get_pdf_corpus_record_context(bid, "r2", before=3, after=3)
+    assert [r["record_id"] for r in result["before"]] == ["r1"]
+    with pytest.raises(Exception) as info:
+        routes.get_pdf_corpus_record_context(bid, "missing", before=1, after=1)
+    assert getattr(info.value, "status_code", None) == 404

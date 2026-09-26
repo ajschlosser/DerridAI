@@ -91,3 +91,27 @@ describe("corpus lifecycle composable", () => {
     expect(view.canResume.value).toBe(false);
   });
 });
+
+describe("operational record keys", () => {
+  it("never surface as scholarly metadata to review", async () => {
+    const { reviewableMetadataFieldNames } = await import(
+      "../../src/features/corpus-builder/domain/recordMetadata"
+    );
+    const record = {
+      record_id: "r1",
+      boundary_evidence: { after_block_id: "b1" },
+      lineage: { operation: "split" },
+      nlp_candidates: { status: "ok" },
+      text_review_source: "human_split",
+      field_assertions: {
+        x: [{ assertion_id: "a", field_name: "boundary_evidence" }],
+        y: [{ assertion_id: "b", field_name: "speaker" }],
+      },
+    };
+    const names = reviewableMetadataFieldNames(record as never, null);
+    expect(names).not.toContain("boundary_evidence");
+    expect(names).not.toContain("lineage");
+    expect(names).not.toContain("nlp_candidates");
+    expect(names).toContain("speaker");
+  });
+});

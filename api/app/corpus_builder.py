@@ -1427,6 +1427,60 @@ class PdfCorpusRepository:
             self._record_schema(build_id),
         )
 
+    def record_context(
+        self, build_id: str, record_id: str, *, before: int = 6, after: int = 6, max_chars: int = 24000,
+    ) -> dict[str, Any]:
+        """Text of the records around one record, in document order, for reading in context.
+
+        Only what a reader needs is returned (identity, text, pages, state): never metadata or
+        review internals. ``max_chars`` bounds the total text so a request stays small.
+        """
+        self.get_build(build_id)
+        before, after = max(0, min(30, int(before))), max(0, min(30, int(after)))
+        with self._lock:
+            self._bootstrap_records_db(build_id)
+            with self._records_db(build_id) as connection:
+                row = connection.execute(
+                    "SELECT ordinal FROM corpus_records WHERE record_id = ?", (str(record_id),)
+                ).fetchone()
+                if row is None:
+                    raise KeyError(record_id)
+                ordinal = int(row[0])
+                previous = connection.execute(
+                    "SELECT payload FROM corpus_records WHERE ordinal < ? ORDER BY ordinal DESC LIMIT ?",
+                    (ordinal, before),
+                ).fetchall()
+                following = connection.execute(
+                    "SELECT payload FROM corpus_records WHERE ordinal > ? ORDER BY ordinal ASC LIMIT ?",
+                    (ordinal, after),
+                ).fetchall()
+        budget = [max(0, int(max_chars))]
+
+        def slim(payload: str) -> dict[str, Any] | None:
+            record = json.loads(payload)
+            text = str(record.get("text") or "")
+            if budget[0] <= 0:
+                return None
+            budget[0] -= len(text)
+            return {
+                "record_id": record.get("record_id"),
+                "text": text,
+                "text_length": len(text),
+                "page_start": record.get("page_start"),
+                "page_end": record.get("page_end"),
+                "review_disposition": record.get("review_disposition"),
+            }
+
+        # Nearest first, so the budget is spent where context matters most.
+        near_before = [item for item in (slim(r[0]) for r in previous) if item]
+        near_after = [item for item in (slim(r[0]) for r in following) if item]
+        return {
+            "record_id": record_id,
+            "before": list(reversed(near_before)),  # document order, farthest first
+            "after": near_after,
+            "truncated": len(near_before) < len(previous) or len(near_after) < len(following),
+        }
+
     def load_records(self, build_id: str) -> list[dict[str, Any]]:
         schema = self._record_schema(build_id)
         with self._lock:
