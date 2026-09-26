@@ -121,7 +121,7 @@ class StoreCreate(BaseModel):
 
 
 class EmbeddingPreflightRequest(BaseModel):
-    embedding_provider: Literal["chroma", "ollama", "precomputed"] = "ollama"
+    embedding_provider: str = Field(default="ollama", min_length=1, max_length=256)
     embedding_model: str | None = None
     embedding_dimension: int | None = Field(default=None, ge=1, le=65536)
     distance_metric: DistanceMetric = "cosine"
