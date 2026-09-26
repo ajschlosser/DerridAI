@@ -166,6 +166,7 @@ from .corpus_publication import (
     serialize_public_record,
     validate_publication_record,
 )
+from .derridai_ledger import write_jsonl_zst
 from .corpus_record_quality import (
     _record_extraction_quality_issues,
     _trash_quality_report,
@@ -1458,7 +1459,12 @@ class PdfCorpusRepository:
         }
 
     def publication_path(self, publication_id: str) -> Path:
-        return self.root / "publications" / f"{publication_id}.jsonl"
+        """Return the immutable publication path, preserving legacy JSONL snapshots."""
+        compressed = self.root / "publications" / f"{publication_id}.jsonl.zst"
+        legacy = self.root / "publications" / f"{publication_id}.jsonl"
+        if compressed.exists() or not legacy.exists():
+            return compressed
+        return legacy
 
 
 
@@ -3166,20 +3172,29 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         publication_id = f"publication-{build_id.removeprefix('build-')}-{uuid.uuid4().hex[:8]}"
         created_at = iso_now()
         path = self.repo.publication_path(publication_id)
-        hasher = hashlib.sha256()
-        with path.open("wb") as handle:
-            for record in publishable:
-                # Use the same serializer as the per-record JSONL preview so the
-                # reviewer sees the exact eventual public record shape.
-                public = serialize_public_record(record)
-                schema_errors = validate_publication_record(public)
-                if schema_errors:
-                    joined = "; ".join(schema_errors[:8])
-                    raise ValueError(f"Publication schema validation failed for {public.get('record_id') or 'unknown record'}: {joined}")
-                line = (json.dumps(public, ensure_ascii=False) + "\n").encode("utf-8")
-                hasher.update(line)
-                handle.write(line)
-        publication = {"publication_id": publication_id, "filename": f"{Path(build.get('source_filename') or 'corpus').stem}.jsonl", "sha256": hasher.hexdigest(), "record_count": len(publishable), "excluded_rejected_count": len(records) - len(publishable), "created_at": created_at}
+        result = write_jsonl_zst(
+            path,
+            publishable,
+            serialize_record=serialize_public_record,
+            validate_record=validate_publication_record,
+            compression_level=10,
+        )
+        publication = {
+            "publication_id": publication_id,
+            "filename": f"{Path(build.get('source_filename') or 'corpus').stem}.jsonl.zst",
+            # Preserve the historical meaning of sha256 as the hash of the
+            # canonical decompressed JSONL content; archive_sha256 identifies
+            # the exact compressed artifact.
+            "sha256": result.content_sha256,
+            "archive_sha256": result.archive_sha256,
+            "compression": "zstd",
+            "media_type": "application/zstd",
+            "record_count": result.record_count,
+            "excluded_rejected_count": len(records) - len(publishable),
+            "uncompressed_bytes": result.uncompressed_bytes,
+            "compressed_bytes": result.compressed_bytes,
+            "created_at": created_at,
+        }
         build["publication"] = publication
         # Build lifecycle and publication lifecycle are separate. A publication is
         # an immutable snapshot of a ready build, not a new build-processing state.
