@@ -354,6 +354,30 @@ class ChromaStore:
         }
         self.embeddings = Embeddings()
 
+    def default_embedding_spec(self) -> tuple[str, str | None]:
+        """Resolve the server-owned default used when a collection omits a contract."""
+
+        try:
+            from .system_store import system_store
+
+            defaults = system_store.embedding_defaults()
+        except Exception:
+            logger.warning(
+                "Could not read persisted embedding defaults; using environment defaults.",
+                exc_info=True,
+            )
+            defaults = {}
+
+        provider = str(
+            defaults.get("embedding_provider") or settings.embedding_provider
+        ).strip()
+        if not provider.startswith("profile:"):
+            provider = provider.lower()
+        model = str(defaults.get("embedding_model") or "").strip() or None
+        if provider == "ollama" and not model:
+            model = settings.ollama_embed_model
+        return provider, model
+
     def _normalize_path(self, path: str) -> Path:
         root = self._data_root
         target = Path(path).expanduser()
@@ -629,9 +653,14 @@ class ChromaStore:
         A one-item probe catches missing Ollama models and records the actual vector
         dimension so dimension mismatches fail before a collection is populated.
         """
-        provider = str(provider or settings.embedding_provider).strip()
-        if not provider.startswith("profile:"):
-            provider = provider.lower()
+        if provider:
+            provider = str(provider).strip()
+            if not provider.startswith("profile:"):
+                provider = provider.lower()
+        else:
+            provider, default_model = self.default_embedding_spec()
+            if not model:
+                model = default_model
         if provider not in {"chroma", "ollama", "precomputed"} and not provider.startswith("profile:"):
             raise ValueError(
                 "Embedding provider must be chroma, precomputed, or profile:<provider-id>."
@@ -878,12 +907,12 @@ class ChromaStore:
 
     def _embedding_spec(self, collection) -> tuple[str, str | None]:
         metadata = dict(getattr(collection, "metadata", None) or {})
-        provider = str(
-            metadata.get(self._PROVIDER_KEY)
-            or settings.embedding_provider
-        ).strip().lower()
+        default_provider, default_model = self.default_embedding_spec()
+        provider = str(metadata.get(self._PROVIDER_KEY) or default_provider).strip()
+        if not provider.startswith("profile:"):
+            provider = provider.lower()
         model_value = metadata.get(self._MODEL_KEY)
-        model = str(model_value).strip() if model_value else None
+        model = str(model_value).strip() if model_value else default_model
         if provider == "ollama" and not model:
             model = settings.ollama_embed_model
         return provider, model
@@ -1187,8 +1216,13 @@ class ChromaStore:
                 "collection or choose a new name; Create never reuses an existing collection."
             )
 
-        provider = (embedding_provider or settings.embedding_provider).strip().lower()
+        default_provider, default_model = self.default_embedding_spec()
+        provider = str(embedding_provider or default_provider).strip()
+        if not provider.startswith("profile:"):
+            provider = provider.lower()
         model = (embedding_model or "").strip() or None
+        if not model and provider == default_provider:
+            model = default_model
         preflight = self.preflight_embedding(
             provider=provider,
             model=model,
