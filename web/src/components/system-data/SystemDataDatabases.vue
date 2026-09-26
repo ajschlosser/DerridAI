@@ -1,13 +1,16 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
+import { RouterLink, useRoute } from "vue-router";
 import AppIcon from "../AppIcon.vue";
 import { systemApi, type SystemDataDatabase, type SystemDataTable } from "../../api/system";
 import { useI18nStore } from "../../stores/i18n";
+import UiTooltip from "../ui/UiTooltip.vue";
 
 type DataRow = Record<string, unknown>;
 
 const i18n = useI18nStore();
+const route = useRoute();
 const databases = ref<SystemDataDatabase[]>([]);
 const selectedDatabase = ref("system");
 const selectedTable = ref("");
@@ -55,6 +58,13 @@ function dbHelp(name: string) {
         "Durable application information such as provider profiles, annotations, languages, and jobs.",
       );
 }
+// Explanations live in the locale files as runtime.system_table_help_<table>; unknown tables get none.
+function tableHelp(name: string): string {
+  const key = `runtime.system_table_help_${name}`;
+  const text = i18n.t(key, "");
+  return text && text !== key ? text : "";
+}
+const memoryTables = new Set(["semantic_memory_outbox", "metadata_memory_bindings"]);
 function cell(value: unknown) {
   if (value === null || value === undefined || value === "") return "—";
   if (typeof value === "object") return JSON.stringify(value);
@@ -70,12 +80,22 @@ async function loadDatabases() {
       selectedDatabase.value = databases.value[0]?.name || "";
     if (!database.value?.tables.some((item) => item.name === selectedTable.value))
       selectedTable.value = database.value?.tables[0]?.name || "";
+    applyRequestedTable();
     if (selectedTable.value) await loadTable(0);
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : String(cause);
   } finally {
     loading.value = false;
   }
+}
+// A link such as ?table=semantic_memory_outbox opens that table in whichever database holds it.
+function applyRequestedTable() {
+  const requested = String(route?.query.table || "");
+  if (!requested) return;
+  const owner = databases.value.find((item) => item.tables.some((tbl) => tbl.name === requested));
+  if (!owner) return;
+  selectedDatabase.value = owner.name;
+  selectedTable.value = requested;
 }
 async function loadTable(offset = 0) {
   if (!selectedDatabase.value || !selectedTable.value) return;
@@ -107,6 +127,15 @@ function chooseTable(name: string) {
 }
 
 onMounted(() => void loadDatabases());
+// The workspace is kept alive, so a link followed while it is cached must still switch tables.
+watch(
+  () => route?.query.table,
+  () => {
+    if (!databases.value.length) return;
+    applyRequestedTable();
+    void loadTable(0);
+  },
+);
 </script>
 
 <template>
@@ -166,30 +195,57 @@ onMounted(() => void loadDatabases());
             :placeholder="t('runtime.system_find_table', 'Find a table')"
         /></label>
         <nav class="table-directory" aria-label="Database tables">
-          <button
+          <div
             v-for="item in filteredTables"
             :key="item.name"
-            type="button"
+            class="table-row"
             :class="{ active: selectedTable === item.name }"
-            @click="chooseTable(item.name)"
           >
-            <span>{{ item.name }}</span
-            ><small
-              >{{ item.row_count.toLocaleString() }} {{ t("runtime.system_rows", "rows") }}</small
+            <button
+              type="button"
+              :aria-current="selectedTable === item.name ? 'true' : undefined"
+              @click="chooseTable(item.name)"
             >
-          </button>
+              <span>{{ item.name }}</span
+              ><small
+                >{{ item.row_count.toLocaleString() }} {{ t("runtime.system_rows", "rows") }}</small
+              >
+            </button>
+            <UiTooltip
+              v-if="tableHelp(item.name)"
+              :text="tableHelp(item.name)"
+              :label="i18n.tf('runtime.system_table_about', { table: item.name })"
+              placement="bottom"
+            />
+          </div>
         </nav>
       </aside>
 
       <section class="table-space">
         <header v-if="table" class="table-heading">
           <div>
-            <h3>{{ table.name }}</h3>
+            <h3>
+              {{ table.name }}
+              <UiTooltip
+                v-if="tableHelp(table.name)"
+                :text="tableHelp(table.name)"
+                :label="i18n.tf('runtime.system_table_about', { table: table.name })"
+                placement="bottom"
+              />
+            </h3>
+            <p v-if="tableHelp(table.name)" class="table-about">{{ tableHelp(table.name) }}</p>
             <p>
               {{ totalRows.toLocaleString() }} {{ t("runtime.system_rows", "rows") }} ·
               {{ t("runtime.system_read_only_inspection", "read-only inspection") }}
             </p>
           </div>
+          <RouterLink
+            v-if="memoryTables.has(table.name)"
+            class="related-link"
+            to="/metadata-memory"
+          >
+            {{ t("runtime.system_table_related", "Related: Metadata memory") }}
+          </RouterLink>
           <span class="readonly"
             ><AppIcon name="lock" /> {{ t("runtime.system_read_only", "Read only") }}</span
           >
@@ -428,8 +484,15 @@ onMounted(() => void loadDatabases());
   max-height: 460px;
   overflow: auto;
 }
-.table-directory button {
+.table-row {
   display: flex;
+  align-items: center;
+  border-radius: 8px;
+}
+.table-row button {
+  display: flex;
+  flex: 1;
+  min-width: 0;
   justify-content: space-between;
   gap: 8px;
   padding: 8px 9px;
@@ -440,9 +503,28 @@ onMounted(() => void loadDatabases());
   text-align: left;
   cursor: pointer;
 }
-.table-directory button:hover,
-.table-directory button.active {
+.table-row button > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.table-row:hover,
+.table-row.active {
   background: var(--soft);
+}
+/* The directory scrolls, so anchor the tooltip inside it rather than centring it past the edge. */
+.table-row :deep(.ui-tooltip-content) {
+  inset-inline: auto 0;
+  max-inline-size: 15rem;
+  transform: none;
+}
+.table-about {
+  max-width: 60ch;
+}
+.related-link {
+  margin-inline-start: auto;
+  margin-inline-end: 10px;
+  font-size: 0.8125rem;
+  font-weight: 650;
 }
 .table-directory small {
   color: var(--muted);
