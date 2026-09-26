@@ -40,6 +40,11 @@ class GutenbergOfflineService:
         self._stop = threading.Event()
         self._start_worker_enabled = start_worker
         self._init()
+        if self._start_worker_enabled and self.status()["archive"]["status"] == "downloading":
+            # The archive state is durable. If the API process restarts while a
+            # download is active, resume from the persisted byte offset instead of
+            # leaving a permanent "downloading" row with no worker behind it.
+            self._start_worker()
 
     def _init(self) -> None:
         with sqlite3.connect(self.db_path) as db:
