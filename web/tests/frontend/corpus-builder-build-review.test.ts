@@ -225,6 +225,23 @@ describe("Corpus Builder build, review, and finish states", () => {
     expect(wrapper.emitted("reviewMetadata")).toBeUndefined();
   });
 
+  it("routes structural record-attention blockers to the Issues queue", async () => {
+    const build: any = {
+      ...buildBase,
+      publication_readiness: {
+        ...buildBase.publication_readiness,
+        can_publish: false,
+        next_action: "review_records",
+        blockers: [{ code: "record_attention", count: 4 }],
+      },
+    };
+    const wrapper = mount(CorpusFinishWorkspace, { props: { build } });
+
+    await buttonByText(wrapper, "Go fix").trigger("click");
+
+    expect(wrapper.emitted("reviewIssues")).toHaveLength(1);
+  });
+
   it("routes structural boundary blockers to topology review", async () => {
     const build: any = {
       ...buildBase,
