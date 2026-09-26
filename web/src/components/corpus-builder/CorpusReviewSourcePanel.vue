@@ -1,5 +1,6 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
+import { computed } from "vue";
 import type { CorpusRecord, SourceBlock } from "../../api/corpus";
 import type { ProviderProfile } from "../../api/system";
 import { timeLabel } from "../../domain/sourceMedia";
@@ -8,44 +9,38 @@ import CorpusBoundaryAdjudication from "../CorpusBoundaryAdjudication.vue";
 import CorpusRevisionHistory from "../CorpusRevisionHistory.vue";
 import CorpusSourceSummary from "../CorpusSourceSummary.vue";
 
-/** Source view of the selected record. The parent still owns every mutation. */
 const props = defineProps<{
   record: CorpusRecord;
-  // Source viewer
+  workspaceMode: "record" | "metadata" | "source";
   mediaKind?: string;
   audioUrl?: string;
   imageUrl?: string;
   showPdfExplorer: boolean;
-  pdfUrl?: string;
+  pdfUrl: string;
   page: number;
   pageCount: number;
   pageWidth: number;
   pageHeight: number;
   pageBlocks: SourceBlock[];
+  visibleBlocks: SourceBlock[];
   evidenceIds: string[];
-  zoomable: boolean;
-  canPreviousPage: boolean;
-  canNextPage: boolean;
-  // Boundary second reader
+  evidenceBlockIds: Set<string>;
+  selectedEvidenceField: string;
+  paginatedSource: boolean;
+  canPreviousSourcePage: boolean;
+  canNextSourcePage: boolean;
   canMergePrevious: boolean;
   canMergeNext: boolean;
   profiles: ProviderProfile[];
   providerProfileId: string;
   modelOverride: string;
-  concurrencyRisk: boolean;
   activeRequests: number;
-  concurrencyLimit: number;
-  // Extracted source text
-  blocks: SourceBlock[];
-  evidenceBlockIds: Set<string>;
-  paginatedSource: boolean;
-  selectedEvidenceField: string;
-  busy: boolean;
+  disabled?: boolean;
 }>();
 
 const emit = defineEmits<{
-  previousPage: [];
-  nextPage: [];
+  previousSourcePage: [];
+  nextSourcePage: [];
   openViewer: [];
   openPdfExplorer: [];
   "update:providerProfileId": [value: string];
@@ -56,6 +51,18 @@ const emit = defineEmits<{
 }>();
 
 const i18n = useI18nStore();
+
+const activeProfile = computed(() =>
+  props.profiles.find((profile) => profile.id === props.providerProfileId),
+);
+const concurrencyLimit = computed(() => Number(activeProfile.value?.max_concurrent_requests || 1));
+const concurrencyRisk = computed(
+  () => activeProfile.value?.type === "ollama" && props.activeRequests + 1 > concurrencyLimit.value,
+);
+
+function adjudicate(direction: "previous" | "next", providerProfileId: string, model: string) {
+  emit("adjudicate", direction, providerProfileId, model);
+}
 </script>
 
 <template>
@@ -78,34 +85,34 @@ const i18n = useI18nStore();
       :page-height="props.pageHeight"
       :blocks="props.pageBlocks"
       :evidence-block-ids="props.evidenceIds"
-      :zoomable="props.zoomable"
-      :can-previous="props.canPreviousPage"
-      :can-next="props.canNextPage"
-      @previous="emit('previousPage')"
-      @next="emit('nextPage')"
+      :zoomable="props.workspaceMode === 'source'"
+      :can-previous="props.canPreviousSourcePage"
+      :can-next="props.canNextSourcePage"
+      @previous="emit('previousSourcePage')"
+      @next="emit('nextSourcePage')"
       @open-viewer="emit('openViewer')"
       @open-pdf-explorer="emit('openPdfExplorer')"
     />
+
     <details class="source-tool-section">
       <summary>{{ i18n.t("pdf_corpus.boundary_second_reader") }}</summary>
       <CorpusBoundaryAdjudication
         :record="props.record"
         :can-previous="props.canMergePrevious"
         :can-next="props.canMergeNext"
-        :busy="props.busy"
+        :busy="props.disabled"
         :profiles="props.profiles"
         :provider-profile-id="props.providerProfileId"
         :model-override="props.modelOverride"
-        :concurrency-risk="props.concurrencyRisk"
+        :concurrency-risk="concurrencyRisk"
         :active-requests="props.activeRequests"
-        :concurrency-limit="props.concurrencyLimit"
+        :concurrency-limit="concurrencyLimit"
         @update:provider-profile-id="emit('update:providerProfileId', $event)"
         @update:model-override="emit('update:modelOverride', $event)"
-        @adjudicate="
-          (direction, profileId, model) => emit('adjudicate', direction, profileId, model)
-        "
+        @adjudicate="adjudicate"
       />
     </details>
+
     <details class="source-tool-section">
       <summary>{{ i18n.t("pdf_corpus.extracted_source_text") }}</summary>
       <p class="inspector-help">{{ i18n.t("pdf_corpus.extracted_source_text_help") }}</p>
@@ -114,23 +121,23 @@ const i18n = useI18nStore();
       }}</pre>
       <div class="source-blocks">
         <article
-          v-for="(block, index) in props.blocks"
+          v-for="(block, index) in props.visibleBlocks"
           :key="block.block_id"
           class="source-block"
           :class="{ 'evidence-block': props.evidenceBlockIds.has(block.block_id) }"
         >
           <header>
-            <span>{{ block.block_id }}</span
-            ><span
-              >{{
+            <span>{{ block.block_id }}</span>
+            <span>
+              {{
                 block.locator_kind === "time"
                   ? timeLabel(block.start, block.end)
                   : props.paginatedSource
                     ? block.page
                     : block.block_id
               }}
-              · {{ block.speaker || block.type }}</span
-            >
+              · {{ block.speaker || block.type }}
+            </span>
           </header>
           <p>{{ block.text }}</p>
           <button
@@ -138,7 +145,7 @@ const i18n = useI18nStore();
             type="button"
             class="evidence-toggle"
             :aria-pressed="props.evidenceBlockIds.has(block.block_id)"
-            :disabled="props.busy"
+            :disabled="props.disabled"
             @click="emit('toggleEvidence', block.block_id)"
           >
             {{
@@ -146,12 +153,13 @@ const i18n = useI18nStore();
                 ? i18n.t("pdf_corpus.remove_evidence")
                 : i18n.t("pdf_corpus.add_evidence")
             }}
-            · {{ props.selectedEvidenceField }}</button
-          ><button
-            v-if="index < props.blocks.length - 1"
+            · {{ props.selectedEvidenceField }}
+          </button>
+          <button
+            v-if="index < props.visibleBlocks.length - 1"
             type="button"
             class="split-button"
-            :disabled="props.busy"
+            :disabled="props.disabled"
             @click="emit('split', block.block_id)"
           >
             {{ i18n.t("pdf_corpus.split_after") }}
@@ -159,6 +167,7 @@ const i18n = useI18nStore();
         </article>
       </div>
     </details>
+
     <details class="source-tool-section">
       <summary>{{ i18n.t("pdf_corpus.revision_history") }}</summary>
       <CorpusRevisionHistory :record="props.record" />
@@ -167,9 +176,12 @@ const i18n = useI18nStore();
 </template>
 
 <style scoped>
+.review-inspector-panel {
+  min-width: 0;
+}
 .source-review-panel {
-  background: var(--card);
   min-height: 100%;
+  background: var(--card);
 }
 .source-tool-section {
   min-width: 0;
@@ -181,7 +193,6 @@ const i18n = useI18nStore();
   align-items: center;
   min-height: 44px;
   padding: 10px 12px;
-  font-size: 0.8125rem;
   font-weight: 800;
   cursor: pointer;
 }
@@ -192,37 +203,39 @@ const i18n = useI18nStore();
 .inspector-help {
   margin: 0;
   padding: 12px 14px 0;
+  color: var(--muted);
   font-size: 0.8125rem;
   line-height: 1.45;
-  color: var(--muted);
 }
 .original-extraction-snapshot {
+  max-width: 100%;
   max-height: 320px;
+  margin: 10px 12px;
+  padding: 12px;
   overflow: auto;
   overflow-wrap: anywhere;
-  max-width: 100%;
   white-space: pre-wrap;
-  padding: 12px;
-  margin: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--soft);
   font:
-    13px/1.52 Georgia,
-    serif;
+    12px/1.5 ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
 }
 .source-blocks {
   display: grid;
   gap: 8px;
-  padding: 10px;
   min-width: 0;
+  padding: 10px;
 }
 .source-block {
+  position: relative;
   min-width: 0;
+  padding: 9px;
   border: 1px solid var(--line);
   border-radius: 9px;
-  padding: 9px;
-  position: relative;
 }
 .source-block.evidence-block {
   box-shadow: inset 3px 0 0 var(--accent);
@@ -234,61 +247,61 @@ const i18n = useI18nStore();
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  font-size: 0.8125rem;
-  color: var(--muted);
-  overflow-wrap: anywhere;
   max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 0.8125rem;
 }
 .source-block p {
-  white-space: pre-wrap;
-  font:
-    13px/1.52 Georgia,
-    serif;
+  max-width: 100%;
   margin: 7px 0;
   overflow-wrap: anywhere;
-  max-width: 100%;
+  white-space: pre-wrap;
+  font:
+    0.8125rem/1.5 Georgia,
+    serif;
 }
+.evidence-toggle,
 .split-button {
-  display: block;
   width: 100%;
-  border: 0;
-  border-top: 1px dashed var(--line);
-  background: transparent;
-  color: var(--muted);
+  padding: 6px;
+  color: var(--text);
   font-size: 0.8125rem;
-  padding: 5px;
+  text-align: start;
   cursor: pointer;
 }
 .evidence-toggle {
   display: block;
-  width: 100%;
   margin: 5px 0;
   border: 1px solid var(--line);
   border-radius: 7px;
   background: var(--soft);
-  color: var(--text);
-  font-size: 0.8125rem;
-  padding: 6px;
-  text-align: start;
-  cursor: pointer;
 }
 .evidence-toggle[aria-pressed="true"] {
   border-color: var(--accent);
   box-shadow: inset 3px 0 0 var(--accent);
 }
-.split-button:focus-visible,
+.split-button {
+  display: block;
+  border: 0;
+  border-top: 1px dashed var(--line);
+  background: transparent;
+  color: var(--muted);
+}
 .evidence-toggle:focus-visible,
-summary:focus-visible {
+.split-button:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
+}
+.evidence-toggle:disabled,
+.split-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 :global(.detail-mode) .source-review-panel {
   padding-bottom: 18px;
 }
-:global(.detail-mode) .source-review-panel > :deep(.source-summary) {
-  max-width: 1100px;
-  margin-inline: auto;
-}
+:global(.detail-mode) .source-review-panel > :deep(.source-summary),
 :global(.detail-mode) .source-tool-section {
   max-width: 1100px;
   margin-inline: auto;

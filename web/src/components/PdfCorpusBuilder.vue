@@ -949,19 +949,6 @@ const selectedPageBlocks = computed(() =>
   ),
 );
 const evidenceIdsArray = computed(() => Array.from(evidenceBlockIds.value));
-const boundaryProfile = computed(() =>
-  providerProfiles.value.find(
-    (p) => p.id === (llmActionProviderId.value || selectedProviderId.value),
-  ),
-);
-const boundaryConcurrencyLimit = computed(() =>
-  Number(boundaryProfile.value?.max_concurrent_requests || 1),
-);
-const boundaryConcurrencyRisk = computed(
-  () =>
-    boundaryProfile.value?.type === "ollama" &&
-    llmActionConcurrentLoad.value + 1 > boundaryConcurrencyLimit.value,
-);
 const activeCorpusProfile = computed(
   () =>
     corpusProfiles.value.find(
@@ -3084,6 +3071,7 @@ defineExpose({
                     (reviewWorkspaceMode === 'record' || reviewWorkspaceMode === 'source')
                   "
                   :record="selectedRecord"
+                  :workspace-mode="reviewWorkspaceMode"
                   :media-kind="selectedAsset?.media_kind"
                   :audio-url="audioSourceUrl"
                   :image-url="imageSourceUrl"
@@ -3094,29 +3082,26 @@ defineExpose({
                   :page-width="selectedPageMeta?.width || 0"
                   :page-height="selectedPageMeta?.height || 0"
                   :page-blocks="selectedPageBlocks"
+                  :visible-blocks="visibleBlocks"
                   :evidence-ids="evidenceIdsArray"
-                  :zoomable="reviewWorkspaceMode === 'source'"
-                  :can-previous-page="selectedPdfPageIndex > 0"
-                  :can-next-page="selectedPdfPageIndex < recordPdfPages.length - 1"
+                  :evidence-block-ids="evidenceBlockIds"
+                  :selected-evidence-field="selectedEvidenceField"
+                  :paginated-source="paginatedSource"
+                  :can-previous-source-page="selectedPdfPageIndex > 0"
+                  :can-next-source-page="selectedPdfPageIndex < recordPdfPages.length - 1"
                   :can-merge-previous="canMergePrevious"
                   :can-merge-next="canMergeNext"
                   :profiles="providerProfiles"
                   :provider-profile-id="llmActionProviderId || selectedProviderId"
                   :model-override="llmActionModel"
-                  :concurrency-risk="boundaryConcurrencyRisk"
                   :active-requests="llmActionConcurrentLoad"
-                  :concurrency-limit="boundaryConcurrencyLimit"
-                  :blocks="visibleBlocks"
-                  :evidence-block-ids="evidenceBlockIds"
-                  :paginated-source="paginatedSource"
-                  :selected-evidence-field="selectedEvidenceField"
-                  :busy="busy !== ''"
-                  @previous-page="previousSourcePage"
-                  @next-page="nextSourcePage"
+                  :disabled="busy !== ''"
+                  @previous-source-page="previousSourcePage"
+                  @next-source-page="nextSourcePage"
                   @open-viewer="sourceTranscriptionOpen = true"
                   @open-pdf-explorer="openPdfExplorer"
-                  @update:provider-profile-id="(value) => (llmActionProviderId = value)"
-                  @update:model-override="(value) => (llmActionModel = value)"
+                  @update:provider-profile-id="llmActionProviderId = $event"
+                  @update:model-override="llmActionModel = $event"
                   @adjudicate="adjudicateBoundary"
                   @toggle-evidence="toggleEvidenceBlock"
                   @split="split"

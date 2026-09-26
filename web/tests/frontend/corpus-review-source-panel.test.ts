@@ -1,103 +1,140 @@
-// Copyright 2026 Aaron John Schlosser, PhD.
+/* Copyright 2026 Aaron John Schlosser, PhD. */
 import { mount } from "@vue/test-utils";
-import { createPinia, setActivePinia } from "pinia";
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { CorpusRecord, SourceBlock } from "../../src/api/corpus";
+import CorpusBoundaryAdjudication from "../../src/components/CorpusBoundaryAdjudication.vue";
+import CorpusSourceSummary from "../../src/components/CorpusSourceSummary.vue";
 import CorpusReviewSourcePanel from "../../src/components/corpus-builder/CorpusReviewSourcePanel.vue";
+
+const record: CorpusRecord = {
+  record_id: "record-1",
+  text: "Reviewed source text.",
+  text_length: 21,
+  source_block_ids: ["block-1", "block-2"],
+  source_spans: [],
+  source_extracted_text: "Original extracted source text.",
+};
 
 const blocks: SourceBlock[] = [
   {
-    block_id: "b1",
-    page: 1,
+    block_id: "block-1",
+    page: 12,
+    bbox: [],
     type: "paragraph",
-    text: "First block.",
-    bbox: [0, 0, 1, 1],
-    extraction_method: "native",
-    confidence: 1,
+    text: "First source block.",
+    extraction_method: "pdf_text",
+    confidence: 0.99,
   },
   {
-    block_id: "b2",
-    page: 1,
+    block_id: "block-2",
+    page: 12,
+    bbox: [],
     type: "paragraph",
-    text: "Second block.",
-    bbox: [0, 0, 1, 1],
-    extraction_method: "native",
-    confidence: 1,
+    text: "Second source block.",
+    extraction_method: "pdf_text",
+    confidence: 0.98,
   },
 ];
 
-function mountPanel(props: Record<string, unknown> = {}) {
+function mountPanel(overrides: Record<string, unknown> = {}) {
   return mount(CorpusReviewSourcePanel, {
     props: {
-      record: {
-        record_id: "r1",
-        text: "Original extraction.",
-        text_length: 20,
-        source_block_ids: ["b1"],
-        source_spans: [],
-        source_extracted_text: "Original extraction.",
-      } as CorpusRecord,
-      showPdfExplorer: false,
-      page: 1,
-      pageCount: 1,
-      pageWidth: 0,
-      pageHeight: 0,
-      pageBlocks: [],
-      evidenceIds: [],
-      zoomable: false,
-      canPreviousPage: false,
-      canNextPage: false,
+      record,
+      workspaceMode: "record",
+      mediaKind: "pdf",
+      audioUrl: "",
+      imageUrl: "",
+      showPdfExplorer: true,
+      pdfUrl: "",
+      page: 12,
+      pageCount: 20,
+      pageWidth: 612,
+      pageHeight: 792,
+      pageBlocks: blocks,
+      visibleBlocks: blocks,
+      evidenceIds: ["block-1"],
+      evidenceBlockIds: new Set(["block-1"]),
+      selectedEvidenceField: "speaker",
+      paginatedSource: true,
+      canPreviousSourcePage: true,
+      canNextSourcePage: true,
       canMergePrevious: true,
       canMergeNext: true,
-      profiles: [],
-      providerProfileId: "",
+      profiles: [
+        {
+          id: "local",
+          name: "Local Ollama",
+          type: "ollama",
+          model: "gemma4:e2b",
+          max_concurrent_requests: 1,
+        },
+      ],
+      providerProfileId: "local",
       modelOverride: "",
-      concurrencyRisk: false,
-      activeRequests: 0,
-      concurrencyLimit: 1,
-      blocks,
-      evidenceBlockIds: new Set(["b1"]),
-      paginatedSource: true,
-      selectedEvidenceField: "speaker",
-      busy: false,
-      ...props,
-    },
-    global: {
-      stubs: {
-        CorpusSourceSummary: true,
-        CorpusBoundaryAdjudication: true,
-        CorpusRevisionHistory: true,
-      },
+      activeRequests: 1,
+      disabled: false,
+      ...overrides,
     },
   });
 }
 
-describe("CorpusReviewSourcePanel", () => {
-  beforeEach(() => setActivePinia(createPinia()));
-
-  it("keeps the tabpanel identity and shows the original extraction", () => {
+describe("Corpus Builder review source panel", () => {
+  it("owns the source tabpanel semantics", () => {
     const wrapper = mountPanel();
-    expect(wrapper.attributes("id")).toBe("review-panel-source");
-    expect(wrapper.attributes("aria-labelledby")).toBe("review-tab-source");
-    expect(wrapper.find(".original-extraction-snapshot").text()).toBe("Original extraction.");
+    const panel = wrapper.get("#review-panel-source");
+
+    expect(panel.attributes("role")).toBe("tabpanel");
+    expect(panel.attributes("aria-labelledby")).toBe("review-tab-source");
   });
 
-  it("forwards evidence toggles and splits without mutating anything itself", async () => {
+  it("forwards source navigation and viewer actions", () => {
     const wrapper = mountPanel();
-    await wrapper.get(".evidence-toggle").trigger("click");
-    expect(wrapper.emitted("toggleEvidence")?.[0]).toEqual(["b1"]);
-    await wrapper.get(".split-button").trigger("click");
-    expect(wrapper.emitted("split")?.[0]).toEqual(["b1"]);
-    // No split control after the final block.
-    expect(wrapper.findAll(".split-button")).toHaveLength(1);
-    expect(wrapper.findAll(".source-block")[0].classes()).toContain("evidence-block");
+    const summary = wrapper.findComponent(CorpusSourceSummary);
+
+    summary.vm.$emit("previous");
+    summary.vm.$emit("next");
+    summary.vm.$emit("openViewer");
+    summary.vm.$emit("openPdfExplorer");
+
+    expect(wrapper.emitted("previousSourcePage")).toHaveLength(1);
+    expect(wrapper.emitted("nextSourcePage")).toHaveLength(1);
+    expect(wrapper.emitted("openViewer")).toHaveLength(1);
+    expect(wrapper.emitted("openPdfExplorer")).toHaveLength(1);
   });
 
-  it("disables block actions while busy and hides evidence toggles without a field", async () => {
-    const busy = mountPanel({ busy: true });
-    expect(busy.get(".evidence-toggle").attributes("disabled")).toBeDefined();
-    expect(busy.get(".split-button").attributes("disabled")).toBeDefined();
-    const none = mountPanel({ selectedEvidenceField: "" });
-    expect(none.find(".evidence-toggle").exists()).toBe(false);
+  it("forwards boundary provider and adjudication actions", () => {
+    const wrapper = mountPanel();
+    const adjudication = wrapper.findComponent(CorpusBoundaryAdjudication);
+
+    expect(adjudication.props("concurrencyRisk")).toBe(true);
+    expect(adjudication.props("concurrencyLimit")).toBe(1);
+
+    adjudication.vm.$emit("update:providerProfileId", "remote");
+    adjudication.vm.$emit("update:modelOverride", "review-model");
+    adjudication.vm.$emit("adjudicate", "next", "local", "review-model");
+
+    expect(wrapper.emitted("update:providerProfileId")?.at(-1)).toEqual(["remote"]);
+    expect(wrapper.emitted("update:modelOverride")?.at(-1)).toEqual(["review-model"]);
+    expect(wrapper.emitted("adjudicate")?.at(-1)).toEqual(["next", "local", "review-model"]);
+  });
+
+  it("forwards evidence and split mutations without owning them", async () => {
+    const wrapper = mountPanel();
+    const evidenceToggle = wrapper.get(".evidence-toggle");
+    const splitButton = wrapper.get(".split-button");
+
+    expect(evidenceToggle.attributes("aria-pressed")).toBe("true");
+    await evidenceToggle.trigger("click");
+    await splitButton.trigger("click");
+
+    expect(wrapper.emitted("toggleEvidence")?.at(-1)).toEqual(["block-1"]);
+    expect(wrapper.emitted("split")?.at(-1)).toEqual(["block-1"]);
+  });
+
+  it("disables mutation controls while busy", () => {
+    const wrapper = mountPanel({ disabled: true });
+
+    expect(wrapper.get(".evidence-toggle").attributes("disabled")).toBeDefined();
+    expect(wrapper.get(".split-button").attributes("disabled")).toBeDefined();
   });
 });

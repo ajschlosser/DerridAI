@@ -379,16 +379,6 @@
   padding: 9px 11px;
   border-bottom: 1px solid var(--line);
 }
-.source-page-nav {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--line);
-  font-size: 0.8125rem;
-  color: var(--muted);
-}
 .inspector-pane details {
   border-bottom: 1px solid var(--line);
   padding: 10px 12px;
@@ -969,17 +959,6 @@ summary:focus-visible {
   padding: 10px 12px;
   background: var(--card);
 }
-.inspector-help {
-  margin: 0;
-  padding: 12px 14px 0;
-  font-size: 0.8125rem;
-  line-height: 1.45;
-  color: var(--muted);
-}
-.source-inspector-head {
-  position: static;
-  z-index: auto;
-}
 .metadata-row-warning {
   color: var(--tone-warn-fg) !important;
   font-weight: 800;
@@ -1162,12 +1141,6 @@ summary:focus-visible {
 .review-inspector-tabs button span {
   font-size: 0.8125rem;
 }
-.inspector-help {
-  font-size: 0.8125rem;
-}
-.source-inspector-head {
-  font-size: 0.8125rem;
-}
 .build-summary:has(+ .review-session-bar) {
   padding-bottom: 4px;
 }
@@ -1175,9 +1148,6 @@ summary:focus-visible {
   .record-first-review {
     grid-template-columns: minmax(210px, 240px) minmax(500px, 1.55fr) minmax(320px, 0.85fr);
   }
-}
-.source-text-details {
-  min-width: 0;
 }
 .review-inspector {
   overflow-x: hidden;
@@ -1248,7 +1218,6 @@ summary:focus-visible {
     .review-handoff b,
     .review-handoff span,
     .review-handoff > strong,
-    .source-page-nav,
     .inspector-pane summary,
     .help,
     .active-build-settings > summary,
@@ -1259,9 +1228,7 @@ summary:focus-visible {
     .review-stage-summary > span,
     .review-inspector-tabs button,
     .review-inspector-tabs button span,
-    .inspector-help,
-    .review-readonly-banner span,
-    .source-inspector-head
+    .review-readonly-banner span
   ) {
   font-size: 0.8125rem !important;
   line-height: 1.4;
