@@ -8,8 +8,7 @@ const record: CorpusRecord = {
   text_length: 44,
   source_block_ids: ["block-1", "block-2"],
   source_spans: [],
-  source_extracted_text:
-    "Original extracted source text before any human correction or cleanup.",
+  source_extracted_text: "Original extracted source text before any human correction or cleanup.",
 };
 
 const blocks: SourceBlock[] = [
