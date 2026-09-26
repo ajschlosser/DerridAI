@@ -217,14 +217,20 @@ function adjudicate(
 }
 .original-extraction-snapshot {
   max-width: 100%;
-  margin: 10px;
-  padding: 10px;
+  max-height: 320px;
+  margin: 10px 12px;
+  padding: 12px;
+  overflow: auto;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--soft);
-  font-size: 0.8125rem;
+  font:
+    12px/1.5 ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
 }
 .source-blocks {
   display: grid;
@@ -299,5 +305,13 @@ function adjudicate(
 .split-button:disabled {
   cursor: not-allowed;
   opacity: 0.6;
+}
+:global(.detail-mode) .source-review-panel {
+  padding-bottom: 18px;
+}
+:global(.detail-mode) .source-review-panel > :deep(.source-summary),
+:global(.detail-mode) .source-tool-section {
+  max-width: 1100px;
+  margin-inline: auto;
 }
 </style>
