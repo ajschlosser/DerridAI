@@ -1952,6 +1952,7 @@ defineExpose({
           :gutenberg-status="gutenbergStatus"
           :selected-asset="selectedAsset"
           :disabled="busy === 'upload'"
+          :source-selection-disabled="buildRunning"
           :busy="busy"
           @use-current="useCurrentPdf"
           @file="upload"
