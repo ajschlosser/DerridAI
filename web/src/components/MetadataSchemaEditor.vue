@@ -69,7 +69,7 @@ const schemaHelp = {
 function matchOptionsFor(field: SchemaField): RetrievalMatchOption[] {
   const core = CORE_FIELDS.map((name) => ({
     fieldId: `core.${name}`,
-    label: i18n.t(`field.${name}`, name),
+    label: i18n.t(`field.${name}`),
   }));
   const others = (draft.value?.fields || [])
     .filter((other) => other.field_id && other.field_id !== field.field_id)
