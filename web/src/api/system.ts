@@ -17,6 +17,7 @@ export interface ProviderProfile {
 export interface SystemEmbeddingDefaults {
   embedding_provider: string;
   embedding_model: string | null;
+  persisted?: boolean;
 }
 
 export interface LanguageInfo {
