@@ -1813,6 +1813,7 @@ defineExpose({
       :status="currentBuild?.status || ''"
       :record-count="currentBuild?.record_count || 0"
       :accepted-count="currentBuild?.accepted_count || 0"
+      :sticky="!showReviewWorkspace"
     >
       <template #actions>
         <CorpusBuildHistoryMenu
