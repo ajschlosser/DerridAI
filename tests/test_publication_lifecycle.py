@@ -144,3 +144,36 @@ def test_new_builds_start_unpublished(tmp_path:Path):
     repo=cb.PdfCorpusRepository(tmp_path/"repo")
     build=repo.create_build({"asset_id":"a","source_sha256":"s","source_filename":"x.pdf"})
     assert build["publication_status"]=="unpublished"
+
+
+def test_build_warnings_are_provenance_and_travel_with_the_corpus(tmp_path:Path):
+    """A warning about a record is published with that record; the rest with the publication; acknowledgements too.
+
+    Why: warnings such as "r1: LLM text touch-up failed" or "2 of 6 records appear unusable" bear on how far a record
+    can be trusted. Dismissing one in the interface records who acknowledged it and when; it is never deleted.
+    """
+    repo=cb.PdfCorpusRepository(tmp_path/"repo")
+    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
+    build=_install_publishable(repo)
+    build["warnings"]=["r1: LLM text touch-up failed; metadata enrichment continued.","2 of 6 records (33.3%) appear unusable."]
+    repo.save_build(build)
+
+    acknowledged=manager.acknowledge_warnings(build["build_id"],["2 of 6 records (33.3%) appear unusable."],"aaron")
+    assert acknowledged["warnings"]==build["warnings"], "acknowledging never removes a warning"
+    try:
+        manager.acknowledge_warnings(build["build_id"],["not a warning of this build"],"aaron")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("an unknown warning must be refused")
+
+    publication=manager.publish(build["build_id"])
+    row=next(iter_jsonl_zst(repo.publication_path(publication["publication_id"]),rehydrate_evidence=False))
+    assert [w["text"] for w in row["provenance_warnings"]]==["r1: LLM text touch-up failed; metadata enrichment continued."]
+    assert "acknowledged_by" not in row["provenance_warnings"][0]
+    [build_wide]=publication["provenance_warnings"]
+    assert build_wide["text"].startswith("2 of 6 records")
+    assert build_wide["acknowledged_by"]=="aaron" and build_wide["acknowledged_at"]
+    assert publication["record_warning_count"]==1
+    # The stored record itself is not changed by publishing.
+    assert "provenance_warnings" not in repo.load_records(build["build_id"])[0]

@@ -45,6 +45,12 @@ export const corpusBuildsApi = {
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/confirm-manifest`,
       { method: "POST", body: JSON.stringify(payload) },
     ),
+  /** Record that these build warnings have been seen; they stay part of the build's (and corpus's) provenance. */
+  acknowledgeWarnings: (buildId: string, warnings: string[]) =>
+    apiRequest<Pick<CorpusBuild, "build_id" | "warning_acknowledgements">>(
+      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/warnings/acknowledge`,
+      { method: "POST", body: JSON.stringify({ warnings }) },
+    ),
   cancel: (buildId: string) =>
     apiRequest<CorpusBuild>(
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/cancel`,

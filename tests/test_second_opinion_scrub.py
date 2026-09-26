@@ -197,6 +197,8 @@ CARRIES_RECORDS = {
 # Routes that return only build-level state (status, counters, manifest) or start work.
 BUILD_LEVEL = {
     ("POST", "/api/pdf/corpus-builds"),
+    # Returns only the build ID and its warning acknowledgements.
+    ("POST", "/api/pdf/corpus-builds/{build_id}/warnings/acknowledge"),
     ("GET", "/api/pdf/corpus-builds"),
     ("GET", "/api/pdf/corpus-builds/{build_id}"),
     ("PATCH", "/api/pdf/corpus-builds/{build_id}/provider-profile"),
