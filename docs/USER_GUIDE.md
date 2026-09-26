@@ -853,6 +853,15 @@ store without treating every store as a database.
   corpus metadata. The detail view preserves field/value, review authority,
   source record and revision, build/scope, schema, evidence blocks, hash, and
   bounded evidence context.
+- **Metadata memory** (its own System page) is the audit view over the same
+  index: each precedent is joined to its record revision, bound evidence, and
+  whether the source is still current. Filters apply as you change them, and
+  long evidence expands on demand. **Metadata examples** shows the raw index
+  rows without those joins, for debugging the index itself.
+- **semantic_memory_outbox** (Databases) is the refresh queue: after a review
+  changes, the record waits there until its examples are re-embedded, so a
+  backlog means Metadata memory can lag the reviewed corpus. Every table in the
+  Databases workspace has an info tooltip explaining what it holds.
 - **Internal vector collections** are DerridAI-owned derived projections. The
   Advanced workspace exposes only these system collections through a restricted,
   read-only command console; corpus collections and mutation commands remain

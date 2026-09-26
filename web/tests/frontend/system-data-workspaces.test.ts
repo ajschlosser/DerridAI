@@ -7,6 +7,7 @@ const push = vi.fn();
 const route = { query: { section: "metadata" } };
 
 vi.mock("vue-router", () => ({
+  RouterLink: { props: ["to"], template: "<a><slot /></a>" },
   useRoute: () => route,
   useRouter: () => ({ push }),
 }));
