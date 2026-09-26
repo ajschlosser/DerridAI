@@ -11,3 +11,5 @@ Pillow>=12.1,<13
 
 # Optional-but-default RAG cross-encoder reranking from the supplied pipeline.
 sentence-transformers>=5.1,<6
+
+zstandard>=0.23,<1
