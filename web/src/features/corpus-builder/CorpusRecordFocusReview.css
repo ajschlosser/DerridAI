@@ -1,446 +1,280 @@
-.touchup-proposal {
-  display: grid;
-  gap: 5px;
-  max-width: 86ch;
-  margin: 18px auto 0;
-  padding: 11px 12px;
-  border: 1px solid var(--tone-info-border);
-  border-radius: 9px;
-  background: var(--tone-info-bg);
-  color: var(--tone-info-fg);
-}
-.touchup-proposal span {
-  font-size: 0.8125rem;
-}
-.touchup-proposal .btn {
-  justify-self: start;
-}
+/* Copyright 2026 Aaron John Schlosser, PhD. */
+/* Focus View: a full-window layout of the same review components the workspace uses. Only layout lives here. */
 .focus-review {
   position: fixed;
   inset: 0;
   z-index: 10000;
-  background: var(--bg);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
+  background: var(--surface-page, var(--bg));
   color: var(--text);
 }
-.focus-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 24px;
-  padding: 18px clamp(18px, 3vw, 42px);
-  border-bottom: 1px solid var(--line);
-  background: var(--card);
-}
-.focus-head-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: none;
-}
-.focus-shortcuts {
-  position: relative;
-}
-.focus-shortcuts summary {
-  list-style: none;
-  width: 38px;
-  height: 38px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--card);
-  cursor: pointer;
-  font-weight: 900;
-}
-.focus-shortcuts summary::-webkit-details-marker {
-  display: none;
-}
-.focus-shortcuts-popover {
-  position: absolute;
-  right: 0;
-  top: 46px;
-  z-index: 20;
-  width: 270px;
-  display: grid;
-  gap: 8px;
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--card);
-  box-shadow: var(--shadow-overlay);
-  font-size: 0.75rem;
-}
-.focus-shortcuts-popover span {
-  color: var(--muted);
-}
-kbd {
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--soft);
-  padding: 1px 4px;
-  font: inherit;
-}
-.focus-title-block {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-}
-.focus-breadcrumb {
-  display: flex;
-  gap: 7px;
-  align-items: center;
-  flex-wrap: wrap;
-  font-size: 0.8125rem;
-  color: var(--muted);
-}
-.focus-breadcrumb strong {
-  color: var(--text);
-}
-.focus-history-controls {
-  display: flex;
-  gap: 7px;
-  align-items: center;
-  flex-wrap: wrap;
-  margin: 2px 0 4px;
-}
-.focus-nav-divider {
-  width: 1px;
-  height: 24px;
-  background: var(--line);
-  margin-inline: 2px;
-}
-.focus-head h2 {
-  margin: 0;
-  font-size: 1.375rem;
-  overflow-wrap: anywhere;
+.focus-review :is(button, [tabindex], textarea, input, summary):focus-visible {
+  outline: var(--focus-ring-width, 3px) solid var(--focus-ring);
+  outline-offset: 2px;
 }
 .eyebrow {
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: var(--muted);
   font-weight: 800;
 }
-.focus-facts {
-  display: flex;
-  gap: 14px;
-  align-items: center;
-  flex-wrap: wrap;
-  font-size: 0.8125rem;
-  color: var(--muted);
+kbd {
+  padding: 0 0.3rem;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
 }
-.state-pill,
-.unresolved-badge {
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 4px 8px;
-  font-size: 0.8125rem;
-  font-weight: 750;
-}
-.state-pill[data-state="accepted"] {
-  background: var(--tone-ok-bg);
-  color: var(--tone-ok-fg);
-}
-.state-pill[data-state="rejected"] {
-  background: var(--tone-danger-bg);
-  color: var(--tone-danger-fg);
-}
+
+/* Workspace: the reading surface is dominant; the inspector is a fixed-comfort column beside it. */
 .focus-workspace {
-  min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(370px, 440px);
+  grid-template-columns: minmax(0, 1fr) clamp(380px, 38vw, 560px);
+  min-height: 0;
   overflow: hidden;
 }
 .focus-record {
   min-width: 0;
   min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
+  background: var(--surface-card, var(--card));
   border-inline-end: 1px solid var(--line);
-  background: var(--card);
 }
 .focus-record-heading {
   position: sticky;
   top: 0;
-  z-index: 2;
-  background: var(--card);
+  z-index: 3;
   display: flex;
-  justify-content: space-between;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 16px;
-  padding: 14px clamp(22px, 4vw, 54px);
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 0.75rem clamp(20px, 4vw, 56px);
   border-bottom: 1px solid var(--line);
+  background: var(--surface-card, var(--card));
 }
 .focus-record-heading h3 {
-  margin: 3px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.125rem 0 0;
   font-size: 1rem;
-}
-.record-noise-summary {
-  margin: 10px 0 0;
-  color: var(--muted);
-  font-size: 0.8125rem;
 }
 .heading-actions {
   display: flex;
-  gap: 8px;
-  align-items: center;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.human-corrected {
+  display: inline-flex;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--tone-ok-bg);
+  color: var(--tone-ok-fg);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+.context-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  cursor: pointer;
 }
 .source-warn-icon {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
-  margin: 0;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
   padding: 0;
   border: 1px solid var(--tone-warn-border);
-  border-radius: 10px;
+  border-radius: var(--radius-control, 10px);
   background: var(--tone-warn-bg);
   color: var(--tone-warn-fg);
   cursor: pointer;
 }
 .source-warn-icon svg {
-  width: 18px;
-  height: 18px;
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
 }
-.unresolved-badge {
+.focus-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  max-inline-size: 78ch;
+  margin: 1rem auto 0;
+  inline-size: calc(100% - 2 * clamp(20px, 4vw, 56px));
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--tone-info-border);
+  border-radius: var(--radius-card, 10px);
+  background: var(--tone-info-bg);
+  color: var(--tone-info-fg);
+  font-size: 0.8125rem;
+}
+.focus-note[data-tone="warn"] {
+  border-color: var(--tone-warn-border);
   background: var(--tone-warn-bg);
   color: var(--tone-warn-fg);
 }
+.focus-note[data-tone="danger"] {
+  border-color: var(--tone-danger-border);
+  background: var(--tone-danger-bg);
+  color: var(--tone-danger-fg);
+}
+.focus-note .btn {
+  margin-inline-start: auto;
+}
 .focus-record-text {
-  max-width: 78ch;
-  margin: 0 auto;
-  padding: 34px clamp(24px, 5vw, 72px) 80px;
-  white-space: pre-wrap;
-  font:
-    18px/1.78 Georgia,
-    serif;
   outline: none;
 }
-.focus-text-tools {
-  display: flex;
-  justify-content: flex-end;
+/* The reader sets the measure and typography. Its window is sized to the pane so the record under review sits in
+   the reader's line of sight; the reader fits its neighbours to that room. */
+.focus-record-text :deep(.context-reader) {
+  max-inline-size: 78ch;
+  max-block-size: calc(100vh - 17rem);
+  margin-inline: auto;
+  padding: 1.5rem clamp(20px, 4vw, 56px) 2rem;
+  font-family: var(--font-reading, Georgia, serif);
+  font-size: 1.125rem;
+  line-height: 1.75;
 }
+.focus-record-text :deep(.ctx-item) {
+  font-size: 0.9375rem;
+}
+
 .focus-text-edit {
-  max-width: 90ch;
-  margin: 24px auto;
-  padding: 0 clamp(24px, 4vw, 54px);
   display: grid;
-  gap: 12px;
+  gap: 0.75rem;
+  max-inline-size: 90ch;
+  margin: 1.5rem auto;
+  padding: 0 clamp(20px, 4vw, 56px);
 }
 .focus-text-editor {
-  width: 100%;
-  min-height: 58vh;
+  inline-size: 100%;
+  min-block-size: 58vh;
   resize: vertical;
-  padding: 16px;
+  padding: 1rem;
   border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--bg);
+  border-radius: var(--radius-card, 10px);
+  background: var(--surface-page, var(--bg));
   color: var(--text);
-  font:
-    17px/1.7 Georgia,
-    serif;
+  font: 1.0625rem/1.7 var(--font-reading, Georgia, serif);
 }
 .resolve-check {
   display: flex;
-  gap: 9px;
   align-items: flex-start;
+  gap: 0.5rem;
   font-size: 0.8125rem;
   line-height: 1.5;
 }
 .resolve-check input {
-  inline-size: 18px;
-  block-size: 18px;
   flex: none;
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
 }
-.edit-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
-.focus-data {
+
+/* Inspector. */
+.focus-inspector {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
-  overflow: auto;
-  background: var(--soft);
+  background: var(--surface-card, var(--card));
 }
-.tabs {
-  position: sticky;
-  top: 0;
-  z-index: 3;
+.focus-tabs {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  background: var(--card);
   border-bottom: 1px solid var(--line);
+  background: var(--surface-card, var(--card));
 }
-.tabs button {
-  min-height: 48px;
+.focus-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  min-block-size: 3rem;
   border: 0;
-  border-inline-end: 1px solid var(--line);
   background: transparent;
-  color: inherit;
+  color: var(--muted);
+  font: inherit;
   font-size: 0.8125rem;
   font-weight: 750;
   cursor: pointer;
 }
-.tabs button[aria-selected="true"] {
+.focus-tabs button:hover {
+  background: var(--surface-hover, var(--soft));
+  color: var(--text);
+}
+.focus-tabs button[aria-selected="true"] {
+  color: var(--text);
   box-shadow: inset 0 -3px 0 var(--accent);
+}
+.focus-tab-count {
+  min-inline-size: 1.25rem;
+  padding: 0 0.375rem;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--tone-warn-bg);
+  border: 1px solid var(--tone-warn-border);
+  color: var(--tone-warn-fg);
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-align: center;
+}
+.focus-inspector-body {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
   background: var(--soft);
 }
-.tab-panel {
-  padding: 16px;
-  display: grid;
-  gap: 12px;
-}
-.focus-metadata-panel {
-  padding: 0;
+.focus-panel {
+  min-width: 0;
 }
 .focus-metadata-panel :deep(.metadata-review) {
   border: 0;
   border-radius: 0;
 }
-.guidance-match-panel {
+.focus-guidance {
   display: grid;
-  gap: 6px;
+  gap: 0.375rem;
+  margin: 1rem 1rem 0;
+  padding: 0.75rem;
   border: 1px solid var(--ui-accent-border);
-  border-radius: 9px;
+  border-radius: var(--radius-card, 10px);
   background: var(--ui-accent-soft);
-  padding: 11px;
 }
-.guidance-match-panel h3,
-.guidance-match-panel p {
+.focus-guidance h3,
+.focus-guidance p {
   margin: 0;
 }
-.guidance-match-panel h3 {
-  color: var(--text);
+.focus-guidance h3 {
   font-size: 0.875rem;
 }
-.guidance-match-panel p,
-.guidance-match-panel li {
+.focus-guidance p,
+.focus-guidance li {
   color: var(--text-2);
   font-size: 0.8125rem;
   line-height: 1.5;
 }
-.guidance-match-panel ul {
+.focus-guidance ul {
   display: grid;
-  gap: 5px;
+  gap: 0.25rem;
   margin: 0;
-  padding-inline-start: 18px;
+  padding-inline-start: 1.125rem;
 }
-.guidance-match-panel li span {
-  margin-inline-start: 8px;
+.focus-guidance li span {
+  margin-inline-start: 0.5rem;
 }
-.evidence-row,
-.source-row {
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--card);
-  padding: 11px;
-}
-.evidence-row header,
-.source-row header {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 0.8125rem;
-}
-.evidence-row p {
-  margin: 7px 0;
-  font-size: 0.8125rem;
-  line-height: 1.5;
-}
-.evidence-row small {
-  font-size: 0.8125rem;
-  color: var(--muted);
-}
-.focus-pdf-source {
-  display: grid;
-  gap: 8px;
-}
-.focus-pdf-source {
-  min-width: 0;
-}
-.focus-pdf-source header {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  align-items: center;
-  font-size: 0.875rem;
-  flex-wrap: wrap;
-}
-.focus-pdf-source header > div {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-.focus-pdf-source header span,
-.focus-pdf-source p {
-  color: var(--muted);
-  font-size: 0.8125rem;
-  line-height: 1.45;
-}
-.focus-pdf-source p {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-.source-row p {
-  white-space: pre-wrap;
-  margin: 8px 0 0;
-  font:
-    14px/1.6 Georgia,
-    serif;
-}
-.source-row header span {
-  font-size: 0.8125rem;
-  color: var(--muted);
-}
-.empty-note {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.8125rem;
-  line-height: 1.5;
-}
-.focus-blocker {
-  margin: 0;
-  padding: 10px 18px;
-  border-top: 1px solid var(--tone-warn-edge);
-  background: var(--tone-warn-bg);
-  color: var(--tone-warn-fg);
-  font-size: 0.8125rem;
-}
-.focus-actions {
-  position: fixed;
-  inset-inline: var(--sidebar) 0;
-  inset-block-end: 0;
-  z-index: 20;
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-  padding: 12px clamp(18px, 3vw, 42px);
-  border-top: 1px solid var(--line);
-  background: var(--card);
-  box-shadow: 0 -0.75rem 2rem color-mix(in srgb, var(--text) 12%, transparent);
-  padding-bottom: calc(12px + env(safe-area-inset-bottom));
-}
-.focus-review {
-  padding-bottom: 5.5rem;
-}
-.structural-actions,
-.decision-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.danger {
-  border-color: var(--tone-danger-border);
-  color: var(--tone-danger-fg);
-}
-.focus-review :is(button, [tabindex], textarea, input):focus-visible {
-  outline: 3px solid var(--accent);
-  outline-offset: 2px;
-}
+
+/* Narrow windows: read first, then the inspector; the page scrolls and the dock (its own sticky) stays reachable. */
 @media (max-width: 900px) {
   .focus-workspace {
     grid-template-columns: 1fr;
@@ -450,57 +284,23 @@ kbd {
     overflow: visible;
     border-inline-end: 0;
   }
-  .focus-data {
+  .focus-inspector {
+    display: block;
+    border-block-start: 1px solid var(--line);
+  }
+  .focus-tabs {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+  }
+  .focus-inspector-body {
     overflow: visible;
-    border-top: 1px solid var(--line);
   }
-  .focus-actions {
-    inset-inline-start: 0;
-    align-items: stretch;
-    flex-direction: column;
-    box-shadow: 0 -8px 24px color-mix(in srgb, var(--text) 10%, transparent);
-  }
-  .decision-actions {
-    justify-content: flex-end;
-  }
-  .focus-record-text {
-    font-size: 1.0625rem;
-    padding: 24px 18px 50px;
-  }
-}
-.source-tab-panel {
-  min-width: 0;
-  overflow-x: hidden;
-}
-.focus-source-section {
-  min-width: 0;
-  border-top: 1px solid var(--line);
-}
-.focus-source-section > summary {
-  min-height: 44px;
-  padding: 10px 12px;
-  display: flex;
-  align-items: center;
-  font-weight: 800;
-  cursor: pointer;
-}
-.focus-source-section :deep(.boundary-adjudication) {
-  border: 0;
-  border-radius: 0;
-}
-.source-row {
-  min-width: 0;
-}
-.source-row p,
-.source-row header {
-  overflow-wrap: anywhere;
-}
-.source-row pre {
-  max-width: 100%;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
 }
 @media (prefers-reduced-motion: reduce) {
+  .focus-progress span {
+    transition: none;
+  }
   * {
     scroll-behavior: auto !important;
   }

@@ -69,6 +69,8 @@ describe("Corpus Builder review evidence panel", () => {
     const wrapper = mountPanel();
 
     const toggle = wrapper.get(".evidence-toggle");
+    // Its name stays put; the state is announced, not renamed.
+    expect(toggle.text()).toContain("Use as evidence");
     expect(toggle.attributes("aria-pressed")).toBe("true");
 
     await toggle.trigger("click");
@@ -80,11 +82,46 @@ describe("Corpus Builder review evidence panel", () => {
     const wrapper = mountPanel();
 
     expect(wrapper.get(".source-block header").text()).toContain("12");
+    expect(wrapper.get(".source-block header").text()).not.toContain("block-1");
   });
 
   it("disables evidence mutation controls while busy", () => {
     const wrapper = mountPanel({ disabled: true });
 
     expect(wrapper.get(".evidence-toggle").attributes("disabled")).toBeDefined();
+  });
+
+  it("names the chosen field and counts its evidence", () => {
+    const wrapper = mountPanel({ record: { ...record, speaker: "Jacques Derrida" } });
+    const head = wrapper.get(".assign-head");
+    expect(head.text()).toContain("Jacques Derrida");
+    expect(head.get('[role="status"]').text()).toBe("1 span");
+  });
+
+  it("offers the next field that has a value but no evidence, and closes with Done", async () => {
+    const wrapper = mountPanel({
+      record: { ...record, speaker: "Jacques Derrida", position_holder: "Levinas" },
+    });
+    const buttons = wrapper.findAll(".assign-actions button");
+    await buttons[0].trigger("click");
+    expect(wrapper.emitted("update:selectedField")?.at(-1)).toEqual(["position_holder"]);
+    await buttons[1].trigger("click");
+    expect(wrapper.emitted("update:selectedField")?.at(-1)).toEqual([""]);
+  });
+
+  it("narrows the source list by text and to the selected spans", async () => {
+    const two: SourceBlock[] = [
+      ...blocks,
+      { ...blocks[0], block_id: "block-2", text: "Another passage entirely." },
+    ];
+    const wrapper = mountPanel({ blocks: two });
+    expect(wrapper.findAll(".source-block")).toHaveLength(2);
+    await wrapper.get('input[type="search"]').setValue("another");
+    expect(wrapper.findAll(".source-block")).toHaveLength(1);
+    await wrapper.get('input[type="search"]').setValue("nothing like this");
+    expect(wrapper.get(".evidence-empty").text()).toContain("No source span");
+    await wrapper.get('input[type="search"]').setValue("");
+    await wrapper.get(".only-selected input").setValue(true);
+    expect(wrapper.findAll(".source-block")).toHaveLength(1);
   });
 });

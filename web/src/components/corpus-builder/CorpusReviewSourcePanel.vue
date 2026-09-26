@@ -36,6 +36,8 @@ const props = defineProps<{
   modelOverride: string;
   activeRequests: number;
   disabled?: boolean;
+  /** Tab/panel id prefix; Focus View uses its own so it never duplicates the workspace's ids. */
+  idPrefix?: string;
 }>();
 
 const emit = defineEmits<{
@@ -67,10 +69,10 @@ function adjudicate(direction: "previous" | "next", providerProfileId: string, m
 
 <template>
   <section
-    id="review-panel-source"
+    :id="`${props.idPrefix || 'review'}-panel-source`"
     class="review-inspector-panel source-review-panel"
     role="tabpanel"
-    aria-labelledby="review-tab-source"
+    :aria-labelledby="`${props.idPrefix || 'review'}-tab-source`"
     tabindex="0"
   >
     <CorpusSourceSummary

@@ -70,7 +70,6 @@ import {
   reviewableMetadataFieldNames,
 } from "../features/corpus-builder/domain/recordMetadata";
 import { useCorpusPublication } from "../features/corpus-builder/composables/useCorpusPublication";
-import AppIcon from "./AppIcon.vue";
 import CorpusRunMonitor from "./corpus-builder/CorpusRunMonitor.vue";
 import CorpusConfigurationNav, {
   type CorpusConfigurationSection,
@@ -86,7 +85,8 @@ import RecordContextReader from "./corpus-builder/RecordContextReader.vue";
 import CorpusEnrichmentConfiguration from "./corpus-builder/CorpusEnrichmentConfiguration.vue";
 import CorpusMetadataConfiguration from "./corpus-builder/CorpusMetadataConfiguration.vue";
 import CorpusAdvancedConfiguration from "./corpus-builder/CorpusAdvancedConfiguration.vue";
-import CorpusActionMenu, { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
+import { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
+import CorpusRecordDecisionDock from "./corpus-builder/CorpusRecordDecisionDock.vue";
 import { recordIssueKinds } from "../domain/corpusReview";
 import { RecordMutationQueue } from "../domain/recordMutationQueue";
 import {
@@ -301,7 +301,7 @@ const {
 const error = ref("");
 const notice = ref("");
 const statusRegion = ref<HTMLElement | null>(null);
-const acceptButtonEl = ref<HTMLButtonElement | null>(null);
+const decisionDock = ref<InstanceType<typeof CorpusRecordDecisionDock> | null>(null);
 const configurationSection = ref<CorpusConfigurationSection>("source");
 const recordSaveQueue = new RecordMutationQueue();
 const documentMetadataOpen = ref(false);
@@ -438,7 +438,6 @@ const {
   metadataKnownValues,
   rememberMetadataValues,
   saveMetadata,
-  assignEvidenceBlock,
   toggleEvidenceBlock,
   requeueCurrentRecord,
   resolveMetadataField,
@@ -1020,7 +1019,6 @@ const {
   setDisposition,
   attemptAccept,
   toggleAccept,
-  acceptFromFocus,
   rejectRecord,
   skipRecord,
   acceptCleanRecords,
@@ -1655,7 +1653,7 @@ function reviewShortcut(event: KeyboardEvent) {
 }
 /** Every field is decided from the panel: hand the keyboard to the record decision, so Enter accepts. */
 function handleMetadataComplete() {
-  void nextTick(() => acceptButtonEl.value?.focus({ preventScroll: true }));
+  void nextTick(() => decisionDock.value?.focusAccept());
 }
 watch(selectedProviderId, (profileId) => {
   if (!profileId) return;
@@ -2142,7 +2140,11 @@ defineExpose({
           >
         </summary>
         <div class="setup-disclosure-body">
-          <CorpusRecordSizingSettings v-model="recordSizing" :disabled="busy !== ''" />
+          <CorpusRecordSizingSettings
+            v-model="recordSizing"
+            :disabled="busy !== ''"
+            :observed="currentBuild?.topology_quality"
+          />
         </div>
       </details>
       <CorpusMetadataConfiguration
@@ -3114,153 +3116,28 @@ defineExpose({
               </aside>
               <!-- One decision dock for the whole workspace, under the inspector where adjudication ends: what still
                    blocks the record, history, and the record decision, always in the same place. -->
-              <footer v-if="selectedRecord" class="record-decision-dock">
-                <div
-                  v-if="editingText"
-                  class="decision-bar text-edit-bar"
-                  role="group"
-                  :aria-label="i18n.t('pdf_corpus.edit_text')"
-                >
-                  <span class="text-save-hint">{{ i18n.t("pdf_corpus.text_save_hint") }}</span>
-                  <div class="decision-actions">
-                    <button type="button" class="btn small" @click="cancelTextEdit">
-                      {{ i18n.t("ui.cancel") }}
-                    </button>
-                    <button
-                      type="button"
-                      class="btn small primary"
-                      @click="saveReviewedText()"
-                      :disabled="busy !== '' || !textDraft.trim()"
-                    >
-                      {{
-                        busy === "text"
-                          ? i18n.t("ui.saving")
-                          : i18n.t("pdf_corpus.save_and_mark_reviewed")
-                      }}
-                    </button>
-                  </div>
-                </div>
-                <div
-                  v-else
-                  class="decision-bar"
-                  role="group"
-                  :aria-label="i18n.t('pdf_corpus.record_decision')"
-                >
-                  <div class="dock-status">
-                    <button
-                      v-if="selectedMetadataBlocked"
-                      id="record-metadata-blocker"
-                      type="button"
-                      class="dock-blocker"
-                      aria-keyshortcuts="M"
-                      :title="
-                        i18n.tf('pdf_corpus.resolve_metadata_before_accept_fields', {
-                          fields: selectedMetadataBlockingLabel,
-                        })
-                      "
-                      @click="focusFirstMetadataBlocker"
-                    >
-                      <AppIcon name="warning" /><b class="dock-blocker-count">{{
-                        i18n.tf("pdf_corpus.metadata_decisions_count", {
-                          count: selectedMetadataBlockingFields.length,
-                        })
-                      }}</b
-                      ><b class="dock-blocker-short"
-                        ><span aria-hidden="true">{{ selectedMetadataBlockingFields.length }}</span
-                        ><span class="sr-only">{{
-                          i18n.tf("pdf_corpus.metadata_decisions_count", {
-                            count: selectedMetadataBlockingFields.length,
-                          })
-                        }}</span></b
-                      ><span class="dock-blocker-text">{{ selectedMetadataBlockingLabel }}</span
-                      ><kbd aria-hidden="true">{{ i18n.t("pdf_corpus.shortcut.metadata") }}</kbd>
-                    </button>
-                    <span v-else class="dock-ready" role="status"
-                      ><AppIcon name="check" />{{
-                        selectedRecord.accepted
-                          ? i18n.t("pdf_corpus.dock_record_accepted")
-                          : i18n.t("pdf_corpus.dock_metadata_complete")
-                      }}</span
-                    >
-                  </div>
-                  <div
-                    class="decision-history"
-                    role="group"
-                    :aria-label="i18n.t('pdf_corpus.record_history')"
-                  >
-                    <button
-                      type="button"
-                      class="btn small icon-only"
-                      :title="i18n.t('pdf_corpus.undo')"
-                      aria-keyshortcuts="Z"
-                      @click="undoReview"
-                      :disabled="busy !== ''"
-                    >
-                      <AppIcon name="history" /><span class="sr-only">{{
-                        i18n.t("pdf_corpus.undo")
-                      }}</span></button
-                    ><button
-                      type="button"
-                      class="btn small icon-only"
-                      :title="i18n.t('pdf_corpus.redo')"
-                      aria-keyshortcuts="Shift+Z"
-                      @click="redoReview"
-                      :disabled="busy !== ''"
-                    >
-                      <AppIcon name="history" class="flip-inline" /><span class="sr-only">{{
-                        i18n.t("pdf_corpus.redo")
-                      }}</span>
-                    </button>
-                  </div>
-                  <CorpusActionMenu
-                    :label="i18n.t('pdf_corpus.more_actions')"
-                    :menu-label="i18n.t('pdf_corpus.more_record_actions')"
-                    :items="recordActionItems"
-                    :disabled="busy !== ''"
-                    placement="top"
-                    @select="runRecordAction"
-                  />
-                  <div class="decision-actions">
-                    <button
-                      type="button"
-                      class="btn small"
-                      @click="skipRecord"
-                      :disabled="busy !== ''"
-                    >
-                      {{ i18n.t("pdf_corpus.skip") }}
-                    </button>
-                    <button
-                      type="button"
-                      class="btn small danger"
-                      aria-keyshortcuts="R"
-                      @click="rejectRecord"
-                      :disabled="busy !== ''"
-                    >
-                      {{ i18n.t("pdf_corpus.reject_next")
-                      }}<kbd aria-hidden="true">{{ i18n.t("pdf_corpus.shortcut.reject") }}</kbd>
-                    </button>
-                    <button
-                      ref="acceptButtonEl"
-                      type="button"
-                      class="btn small primary"
-                      aria-keyshortcuts="A"
-                      @click="toggleAccept"
-                      :disabled="busy !== '' || reviewLocked"
-                      :aria-describedby="
-                        selectedMetadataBlocked ? 'record-metadata-blocker' : undefined
-                      "
-                    >
-                      {{
-                        selectedRecord.accepted
-                          ? i18n.t("pdf_corpus.reopen")
-                          : i18n.t("pdf_corpus.accept_next")
-                      }}<kbd v-if="!selectedRecord.accepted" aria-hidden="true">{{
-                        i18n.t("pdf_corpus.shortcut.accept")
-                      }}</kbd>
-                    </button>
-                  </div>
-                </div>
-              </footer>
+              <CorpusRecordDecisionDock
+                v-if="selectedRecord"
+                ref="decisionDock"
+                :accepted="Boolean(selectedRecord.accepted)"
+                :editing="editingText"
+                :busy="busy !== ''"
+                :locked="reviewLocked"
+                :saving="busy === 'text'"
+                :save-disabled="!textDraft.trim()"
+                :blocking-count="selectedMetadataBlockingFields.length"
+                :blocking-label="selectedMetadataBlockingLabel"
+                :action-items="recordActionItems"
+                @focus-blocker="focusFirstMetadataBlocker"
+                @undo="undoReview"
+                @redo="redoReview"
+                @action="runRecordAction"
+                @skip="skipRecord"
+                @reject="rejectRecord"
+                @accept="toggleAccept"
+                @cancel-edit="cancelTextEdit"
+                @save-text="saveReviewedText()"
+              />
             </section>
             <div
               class="review-height-splitter"
@@ -3476,25 +3353,25 @@ defineExpose({
     <Teleport to="body"
       ><CorpusRecordFocusReview
         v-if="focusView && selectedRecord"
+        v-model:show-context="showRecordContext"
+        v-model:inspector-tab="reviewInspectorTab"
         :record="selectedRecord"
+        :build-id="currentBuild?.build_id || ''"
         :schema="currentBuild?.schema"
-        :source-blocks="visibleBlocks"
-        :busy="busy !== '' || reviewLocked"
-        :can-merge-previous="canMergePrevious"
-        :can-merge-next="canMergeNext"
-        :can-accept="!selectedMetadataBlocked"
+        :busy="busy !== ''"
+        :locked="reviewLocked"
         :region-types="regionTypes"
         :discourse-roles="discourseRoles"
         :confidence-calibration="currentBuild?.llm_confidence_calibration || {}"
-        :source-pdf-url="
-          selectedAsset
-            ? `${corpusBuilderApi.assetContentUrl(selectedAsset.asset_id)}#page=${selectedPdfPage || 1}`
-            : ''
-        "
-        :source-pdf-page="selectedPdfPage"
-        :source-pdf-page-count="selectedAsset?.page_count || 0"
-        :source-page-width="selectedPageMeta?.width || 0"
-        :source-page-height="selectedPageMeta?.height || 0"
+        :known-values="metadataKnownValues"
+        :blocking-fields="selectedMetadataBlockingFields"
+        :saving-field="metadataSavingField"
+        :saved-field="metadataSavedField"
+        :batch-saving="metadataSavingField === '__batch__'"
+        :action-items="recordActionItems"
+        :accepted="Number(currentBuild?.accepted_count || 0)"
+        :remaining="pendingCount"
+        :total="Number(currentBuild?.record_count || 0)"
         :can-history-back="focusHistoryIndex > 0"
         :can-history-forward="focusHistoryIndex >= 0 && focusHistoryIndex < focusHistory.length - 1"
         :can-previous-record="selectedRecordIndex > 0 || recordOffset > 0"
@@ -3502,23 +3379,46 @@ defineExpose({
           selectedRecordIndex >= 0 &&
           (selectedRecordIndex < records.length - 1 || recordOffset + pageSize < recordTotal)
         "
-        :provider-profiles="providerProfiles"
-        :llm-provider-profile-id="llmActionProviderId || selectedProviderId"
-        :llm-model-override="llmActionModel"
         :editing-text="editingText"
         :text-draft="textDraft"
         :resolve-source-issues="resolveSourceOnTextSave"
+        :evidence-fields="evidenceCandidateFields"
+        :selected-evidence-field="selectedEvidenceField"
+        :evidence-block-ids="evidenceIdsArray"
+        :paginated-source="paginatedSource"
+        :source-blocks="visibleBlocks"
+        :source-page-blocks="selectedPageBlocks"
+        :media-kind="selectedAsset?.media_kind"
+        :audio-url="audioSourceUrl"
+        :image-url="imageSourceUrl"
+        :show-pdf-explorer="selectedSourceCapabilities.pdfViewer"
+        :source-pdf-url="sourcePdfUrl"
+        :source-pdf-page="selectedPdfPage"
+        :source-pdf-page-count="selectedAsset?.page_count || 0"
+        :source-page-width="selectedPageMeta?.width || 0"
+        :source-page-height="selectedPageMeta?.height || 0"
+        :can-previous-source-page="selectedPdfPageIndex > 0"
+        :can-next-source-page="selectedPdfPageIndex < recordPdfPages.length - 1"
+        :can-merge-previous="canMergePrevious"
+        :can-merge-next="canMergeNext"
+        :provider-profiles="providerProfiles"
+        :llm-provider-profile-id="llmActionProviderId || selectedProviderId"
+        :llm-model-override="llmActionModel"
+        :active-requests="llmActionConcurrentLoad"
+        :just-processed-record-id="justProcessedRecordId"
+        :next-record-id="nextQueueRecordId"
         @close="focusView = false"
         @history-back="focusHistoryMove(-1)"
         @history-forward="focusHistoryMove(1)"
         @previous-record="focusQueueMove(-1)"
         @next-record="focusQueueMove(1)"
-        @requeue-metadata="requeueCurrentRecord"
-        @request-slice="boundarySliceOpen = true"
+        @record-action="runRecordAction"
+        @focus-blocker="focusFirstMetadataBlocker"
         @open-source-issue="recordSourceWarningOpen = true"
         @begin-text-edit="beginTextEdit"
         @cancel-text-edit="cancelTextEdit"
-        @save-text="saveReviewedText"
+        @save-text="saveReviewedText()"
+        @mark-text-reviewed="markTextReviewed"
         @text-draft-change="textDraft = $event"
         @resolve-source-issues-change="resolveSourceOnTextSave = $event"
         @open-text-cleanup="textCleanupOpen = true"
@@ -3527,25 +3427,22 @@ defineExpose({
         @resolve-metadata-many="resolveMetadataSuggestions"
         @confirm-no-metadata-value="resolveMetadataNoValue"
         @metadata-dirty="handleMetadataDirty"
-        @preview-jsonl="openJsonlPreview"
         @llm-touchup="openLlmTouchup"
-        @accept="acceptFromFocus"
-        @reject="setDisposition('rejected')"
+        @accept="toggleAccept"
+        @reject="rejectRecord"
         @skip="skipRecord"
         @undo="undoReview"
         @redo="redoReview"
-        @merge="merge"
         @update-llm-provider-profile="(value) => (llmActionProviderId = value)"
         @update-llm-model="(value) => (llmActionModel = value)"
         @adjudicate-boundary="adjudicateBoundary"
         @open-source-viewer="sourceTranscriptionOpen = true"
-        :just-processed-record-id="justProcessedRecordId"
-        :next-record-id="nextQueueRecordId"
-        :selected-evidence-field="selectedEvidenceField"
-        :evidence-block-ids="[...evidenceBlockIds]"
+        @open-pdf-explorer="openPdfExplorer"
+        @previous-source-page="previousSourcePage"
+        @next-source-page="nextSourcePage"
+        @split-after="split"
         @select-evidence="selectedEvidenceField = $event"
         @toggle-evidence="toggleEvidenceBlock"
-        @assign-evidence="assignEvidenceBlock"
         @navigate-record="navigateToQueueRecord"
     /></Teleport>
   </section>

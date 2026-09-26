@@ -38,6 +38,23 @@ const llmProcessedHelp = i18n.t(
 onMounted(() => emit("rootChange", queueRoot.value));
 onBeforeUnmount(() => emit("rootChange", null));
 
+/**
+ * What tells one row from the next. A citation is the same for every record of a work, so the row leads with where
+ * the record sits (its pages) and the opening of its own text.
+ */
+function locator(record: CorpusRecord) {
+  const start = record.page_start,
+    end = record.page_end;
+  if (start == null || start === "") return "";
+  const pages = end != null && end !== "" && end !== start ? `${start}–${end}` : String(start);
+  return `${i18n.t("pdf_corpus.page_abbrev")} ${pages}`;
+}
+function snippet(record: CorpusRecord) {
+  const text = String(record.text || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text.length > 90 ? `${text.slice(0, 90).trimEnd()}…` : text;
+}
 function recordStateLabel(record: CorpusRecord) {
   const state = recordState(record);
   return i18n.t(
@@ -133,9 +150,10 @@ function recordSelectionChanged(recordId: string, event: Event) {
         <span class="record-row-main">
           <b>{{ record.record_id }}</b>
           <small>
-            {{ record.inline_citation }} · {{ record.text_length.toLocaleString() }}
-            {{ i18n.t("pdf_corpus.characters") }}
+            <template v-if="locator(record)">{{ locator(record) }} · </template
+            >{{ record.text_length.toLocaleString() }} {{ i18n.t("pdf_corpus.characters") }}
           </small>
+          <span v-if="snippet(record)" class="record-row-snippet">{{ snippet(record) }}</span>
           <span class="record-row-status" :data-state="recordState(record)">
             {{ recordStateLabel(record) }}
           </span>
@@ -181,6 +199,16 @@ function recordSelectionChanged(recordId: string, event: Event) {
 </template>
 
 <style scoped>
+.record-row-snippet {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  color: var(--text-secondary, var(--muted));
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
 .records-pane {
   background: var(--soft);
   border-inline-end: 1px solid var(--line);

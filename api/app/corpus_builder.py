@@ -125,17 +125,16 @@ from .corpus_metadata import (
 )
 from .corpus_metadata_enrichment_execution import MetadataEnrichmentExecutionMixin
 from .corpus_models import (
-    CORPUS_PROFILES,
-    PROFILE_VERSION,
-    DocumentManifestModel,
-    PageMarkerChoiceModel,
-    TextTouchupResponseModel,
+    CORPUS_PROFILES as CORPUS_PROFILES,
 )
 from .corpus_models import (
     DOCUMENT_PROMPT_VERSION as DOCUMENT_PROMPT_VERSION,
 )
 from .corpus_models import (
     METADATA_PROMPT_VERSION as METADATA_PROMPT_VERSION,
+)
+from .corpus_models import (
+    PROFILE_VERSION as PROFILE_VERSION,
 )
 from .corpus_models import (
     SCHEMA_VERSION as SCHEMA_VERSION,
@@ -148,6 +147,11 @@ from .corpus_models import (
 )
 from .corpus_models import (
     DiscourseMetadataResponseModel as DiscourseMetadataResponseModel,
+)
+from .corpus_models import (
+    DocumentManifestModel,
+    PageMarkerChoiceModel,
+    TextTouchupResponseModel,
 )
 from .corpus_models import (
     IndexMetadataResponseModel as IndexMetadataResponseModel,
@@ -843,7 +847,8 @@ class PdfCorpusRepository:
         origin = _json_read(self.asset_meta_path(origin_id))
         if not isinstance(origin, dict):
             raise KeyError(origin_id)
-        digest = hashlib.sha256(f"{origin_id}|units|{resolved['mode']}|{resolved.get('chars', '')}".encode()).hexdigest()
+        size_key = resolved.get("chars", "") if resolved["mode"] != "auto" else f"auto{resolved['max_chars']}"
+        digest = hashlib.sha256(f"{origin_id}|units|{resolved['mode']}|{size_key}".encode()).hexdigest()
         derived_id = f"pdf-{digest[:24]}"
         meta_path = self.asset_meta_path(derived_id)
         with self._lock:
@@ -2545,8 +2550,10 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         # Whoever proposed the boundaries (the model, a checkpoint, a heuristic), a record must not
         # start or end mid-sentence. This is deterministic and idempotent, so it also repairs
         # checkpoints written before it existed.
-        soft_max = int(CORPUS_PROFILES[str(previous_build.get("profile_id") or PROFILE_VERSION)].get("soft_max_chars") or 3500)
-        boundaries, sentence_report = snap_boundaries_to_sentences(semantic_blocks, boundaries, hard_max_chars=soft_max * 3)
+        # The build's own ceiling bounds any join: sentence ends are preferred, never at the cost of the record size
+        # the build asked for (the profile's generic limit let a small-record build grow records to 10,500 characters).
+        ceiling = _record_sizing_policy(request, self._profile_for(build_id))["absolute_record_chars"]
+        boundaries, sentence_report = snap_boundaries_to_sentences(semantic_blocks, boundaries, hard_max_chars=ceiling)
         self._update(build_id, sentence_boundary_report={key: len(value) for key, value in sentence_report.items()})
         self.repo.save_checkpoint(build_id, "boundaries", boundaries)
 

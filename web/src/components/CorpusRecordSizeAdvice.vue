@@ -11,8 +11,9 @@ import type { RecordSizingPolicy } from "../types/corpus";
 import { useI18nStore } from "../stores/i18n";
 
 /**
- * Records are built from whole source units, so they can never be smaller than the units. When the
- * record length you ask for is shorter than the source's typical unit, say so and offer the fix.
+ * Records are built from whole source units, so they can never be smaller than the units. With Automatic units the
+ * build divides paragraphs that are too long itself; when a unit policy was chosen explicitly and the record length
+ * asked for is shorter than its typical unit, say so and offer the fix.
  */
 const props = defineProps<{ asset: PdfAsset; sizing: RecordSizingPolicy; disabled?: boolean }>();
 const emit = defineEmits<{ apply: [policy: SourceUnitPolicy] }>();
@@ -54,7 +55,12 @@ const canChars = computed(
 </script>
 
 <template>
-  <aside v-if="coarse && stats" class="size-advice" role="note" aria-labelledby="size-advice-title">
+  <aside
+    v-if="coarse && stats && current !== 'default'"
+    class="size-advice"
+    role="note"
+    aria-labelledby="size-advice-title"
+  >
     <div class="advice-copy">
       <h4 id="size-advice-title">{{ i18n.t("pdf_corpus.size_advice_title") }}</h4>
       <p>

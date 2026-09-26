@@ -482,7 +482,9 @@ text, mismatched identity, timeout, or undecodable content fails visibly. The
 importer does not guess another download or substitute another edition. Two
 editions with identical text remain distinct assets. Imports come from the local
 collection; until it is downloaded the dialog says so and offers the download,
-and searching still works.
+and searching still works. A paused or failed download resumes from the bytes
+already on disk, and a download that had in fact finished moves straight on to
+unpacking; **Redownload** (after a confirmation) deletes the file and starts over.
 
 Wikisource search covers one language edition at a time (English, French,
 German, and others; French is preselected in the French interface). A work's
@@ -530,6 +532,7 @@ The LLM returns each metadata field (or `null` when unsupported) together with a
 - When a PDF is loaded, the builder scores each page for **illegibility** (0% = still looks like words in a writing system; 100% = unreadable) and, when a page has an embedded scan, **raster DPI**. A warning dialog appears if too much of the source looks unusable; afterward the finding lives as a clickable warning icon on affected Record Review rows. Names, bilingual pages, and coinages are allowed; interior punctuation, letter–digit soup, and scans below about 150 DPI are not. A build setting (default 45%) counts pages and Records at or above that noise as unusable. Those Records feed the existing **>10%** source-quality warning, skip metadata enrichment, and appear in the source-problem queue. An optional LLM second-read runs **after you start a build** and may only **raise** the deterministic score.
 - Pixelation is measured from the embedded image’s pixel size versus the rectangle it occupies on the page. Native vector/text pages with no image are not scored as scans.
 - The Source PDF step reports extracted **SourceUnits** (addressable PDF/OCR layout units), not Records. `OCR page(s)` counts pages where OCR was used; zero means the native PDF text layer was used. Image-only pages remain visible as source-quality findings instead of disappearing from the 10% check.
+- **Record size and source units.** Record sizes are in characters, counting spaces and punctuation (about 6 per word in English and French prose, so 250 characters is roughly 40 words). A record is made of whole source units, and a unit is never cut. The record size is authoritative for how units are grouped: the target range is what the segmenter aims for, the ceiling is a hard limit, and the step that keeps records from starting or ending mid-sentence may move or remove a boundary only when every record stays within that ceiling. A boundary it cannot place on a sentence end is kept and reported rather than silently producing a larger record. Headings and contents lines ("Contents", "Chapter II") count as clean ends. With **Automatic** units (the default), a paragraph longer than the build's long-record size is divided into sentences when the build starts, so records can be as small as you ask; the original source is kept, and the build records which derived source it used. Choosing **Every paragraph** (or another policy) explicitly is respected, and the Structure step says when that choice makes the requested size unreachable. A single unit larger than the ceiling (one very long sentence, or a paragraph under **Every paragraph**) becomes a record of its own.
 - When embedded PDF metadata contains an author, the builder carries it forward as a deterministic, reviewable document-author assertion. It is not silently treated as an LLM inference.
 - **Clean all Record text before enrichment** is deterministic preprocessing. **Use LLM to touch-up text as part of enrichment** creates a conservative, reviewable proposal for extraction errata, diacritics, formatting, quotations, and line breaks. The proposal does not change authoritative reviewed text until a person reviews and saves it.
 - The Metadata schemas page lists saved schemas in a table with **New schema** and **Import a schema…** above it. The selected schema has a sticky bar (state, version, Duplicate, Export, Delete, Save; Ctrl/Cmd+S saves) and three tabs: **Fields** (a filterable table per group; a row expands into the full field form and shows its evidence, confidence, review and memory policy), **Prompts** (one group's prompt at a time) and **Try it** (preview or run a group on a passage).
@@ -591,6 +594,8 @@ When there is nothing to search (no loaded JSONL records and no corpus database)
 ### Record review shortcuts
 
 The record header keeps navigation available while the text or inspector is scrolled. In Record View and Focus Review, `Alt+Left` / `Alt+Right` moves to the previous or next record without moving the page. In Focus Review, `Escape` closes the review surface and `Ctrl+S` (`⌘S` on Apple platforms) saves reviewed text while the text editor is active. In the Corpus Builder review workspace, `J` / `K` move through the queue, `A` accepts, `R` rejects, `M` jumps to the first metadata field to decide, `F` opens Focus view, and `Ctrl+Enter` confirms the metadata field you are in. Shortcuts are ignored while typing in another editable control. The `?` control beside record actions lists the shortcuts available in the current surface.
+
+Focus view uses the same panels and decision dock as the review workspace: the record with its surrounding context, the Metadata / Evidence / Source tabs, and one dock with what still blocks the record, undo/redo, More actions, and skip / reject / accept. A slim bar under the header shows how much of the build is accepted. Accepting a record with open metadata decisions keeps you in Focus view and moves to the first open field. The surrounding-context window fits itself to the record: a long record shows few or no neighbours, a short one shows more. In the Evidence tab, pick a field (fields with a value but no evidence come first), then tick the source spans that support it; filter the list by text or to the selected spans. While editing a field, text you select in the record is previewed as the evidence "Save with selection as evidence" will cite. Where a field has a fixed list of values, the model's proposal is listed first and marked "Suggested".
 
 ## RAG Research
 
@@ -849,6 +854,15 @@ store without treating every store as a database.
   corpus metadata. The detail view preserves field/value, review authority,
   source record and revision, build/scope, schema, evidence blocks, hash, and
   bounded evidence context.
+- **Metadata memory** (its own System page) is the audit view over the same
+  index: each precedent is joined to its record revision, bound evidence, and
+  whether the source is still current. Filters apply as you change them, and
+  long evidence expands on demand. **Metadata examples** shows the raw index
+  rows without those joins, for debugging the index itself.
+- **semantic_memory_outbox** (Databases) is the refresh queue: after a review
+  changes, the record waits there until its examples are re-embedded, so a
+  backlog means Metadata memory can lag the reviewed corpus. Every table in the
+  Databases workspace has an info tooltip explaining what it holds.
 - **Internal vector collections** are DerridAI-owned derived projections. The
   Advanced workspace exposes only these system collections through a restricted,
   read-only command console; corpus collections and mutation commands remain

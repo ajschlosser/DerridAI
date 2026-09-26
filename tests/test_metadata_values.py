@@ -42,3 +42,38 @@ def test_structured_output_transport_suffix_is_not_persisted_as_metadata():
 def test_ordinary_metadata_text_is_not_over_sanitized():
     value = "A discussion of evidence and confidence in testimony"
     assert _normalize_semantic_value("concepts", value) == (value, None)
+
+
+LEAKED = [
+    "Balzac",
+    "field_evidence_id-12b1b026d14aebb21198d716:p00001-b0001",
+    "confidence_score_0.95",
+    "The text presents a quote from Balzac's 'Lettres a l'Etrangere'.",
+]
+
+
+def test_a_list_flattened_with_its_evidence_and_confidence_keeps_only_its_value():
+    """A model that folds {value, evidence, confidence, reason} into one list gets its value back.
+
+    Why: quoted_speaker, quoted_work and the other quotation fields of a Wikisource build were proposed as
+    ["Balzac", "field_evidence_id-…:p00001-b0001", "confidence_score_0.95", "The text presents…"]. The residue is not
+    metadata; the raw list is kept for audit.
+    """
+    value, raw = _normalize_semantic_value("quoted_speaker", LEAKED)
+    assert value == ["Balzac"]
+    assert raw == LEAKED
+
+
+@pytest.mark.parametrize("item", [
+    "block_ids: p00003-b0012", "p00003-b0012", "evidence_id b7", "confidence: 0.9", "confidence 1", "reason: explicit",
+    "needs_review=true", "field_assessments", "Derrida, field_evidence: b1",
+])
+def test_residue_items_end_the_list(item):
+    value, raw = _normalize_semantic_value("persons", ["Jacques Derrida", item, "Emmanuel Levinas"])
+    assert value in (["Jacques Derrida"], ["Jacques Derrida", "Derrida"])
+    assert raw is not None
+
+
+def test_real_list_values_that_resemble_keys_are_kept():
+    values = ["Reason and faith", "Confidence", "Evidence", "hospitality", "Block universe"]
+    assert _normalize_semantic_value("concepts", values) == (values, None)

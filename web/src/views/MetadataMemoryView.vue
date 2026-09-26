@@ -1,17 +1,18 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
-import {
-  metadataMemoryApi,
-  type MetadataMemoryEntry,
-  type MetadataMemoryPayload,
-} from "../api/metadataMemory";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { metadataMemoryApi, type MetadataMemoryPayload } from "../api/metadataMemory";
+import MetadataMemoryRelations from "../components/metadata-memory/MetadataMemoryRelations.vue";
+import MetadataMemoryTable from "../components/metadata-memory/MetadataMemoryTable.vue";
+import AppIcon from "../components/AppIcon.vue";
 import UiButton from "../components/ui/UiButton.vue";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
+import UiTooltip from "../components/ui/UiTooltip.vue";
 import { useI18nStore } from "../stores/i18n";
 
 const i18n = useI18nStore();
 const pageSize = 50;
+const searchDebounceMs = 300;
 const loading = ref(false);
 const error = ref("");
 const offset = ref(0);
@@ -32,21 +33,20 @@ const payload = ref<MetadataMemoryPayload>({
   available: true,
   error: "",
 });
+// Only the newest request may update the page, so slow earlier responses cannot overwrite it.
+let requestSeq = 0;
+let searchTimer: number | undefined;
 
 const pageStart = computed(() => (payload.value.total ? offset.value + 1 : 0));
 const pageEnd = computed(() => Math.min(offset.value + pageSize, payload.value.total));
 const canPrevious = computed(() => offset.value > 0 && !loading.value);
 const canNext = computed(() => offset.value + pageSize < payload.value.total && !loading.value);
-
-function displayValue(value: unknown): string {
-  if (value === null || value === undefined || value === "") return "—";
-  if (typeof value === "string") return value;
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
+const stats = computed(() => [
+  { key: "entries", value: payload.value.summary.entries },
+  { key: "evidence_bound", value: payload.value.summary.evidence_bound },
+  { key: "corrections", value: payload.value.summary.corrections },
+  { key: "fields", value: payload.value.summary.fields },
+]);
 
 function kindLabel(value: string): string {
   if (value === "positive") return i18n.t("metadata_memory.kind_positive");
@@ -54,25 +54,30 @@ function kindLabel(value: string): string {
   return value;
 }
 
-function sourceLabel(item: MetadataMemoryEntry): string {
-  const revision = item.record_revision ? ` · r${item.record_revision}` : "";
-  return `${item.record_id}${revision}`;
-}
-
-function pageLabel(item: MetadataMemoryEntry): string {
-  const start = item.page_start;
-  const end = item.page_end;
-  if (start === undefined || start === null || start === "") return "";
-  return end !== undefined && end !== null && end !== "" && String(end) !== String(start)
-    ? `${start}–${end}`
-    : String(start);
-}
+const activeFilters = computed(() => {
+  const chips: Array<{ key: string; label: string; clear: () => void }> = [];
+  const add = (key: string, name: string, value: string, clear: () => void) => {
+    if (value) chips.push({ key, label: `${name}: ${value}`, clear });
+  };
+  add("q", i18n.t("metadata_memory.search"), query.value.trim(), () => (query.value = ""));
+  add("field", i18n.t("metadata_memory.field"), field.value, () => (field.value = ""));
+  add(
+    "kind",
+    i18n.t("metadata_memory.kind"),
+    kind.value ? kindLabel(kind.value) : "",
+    () => (kind.value = ""),
+  );
+  add("build", i18n.t("metadata_memory.build"), buildId.value, () => (buildId.value = ""));
+  add("language", i18n.t("metadata_memory.language"), language.value, () => (language.value = ""));
+  return chips;
+});
 
 async function load() {
+  const seq = ++requestSeq;
   loading.value = true;
   error.value = "";
   try {
-    payload.value = await metadataMemoryApi.list({
+    const next = await metadataMemoryApi.list({
       limit: pageSize,
       offset: offset.value,
       field: field.value,
@@ -81,41 +86,45 @@ async function load() {
       language: language.value,
       q: query.value.trim(),
     });
-    if (!payload.value.available && payload.value.error) error.value = payload.value.error;
+    if (seq !== requestSeq) return;
+    payload.value = next;
+    if (!next.available && next.error) error.value = next.error;
   } catch (exc) {
-    error.value = exc instanceof Error ? exc.message : String(exc);
+    if (seq === requestSeq) error.value = exc instanceof Error ? exc.message : String(exc);
   } finally {
-    loading.value = false;
+    if (seq === requestSeq) loading.value = false;
   }
 }
 
 function applyFilters() {
+  window.clearTimeout(searchTimer);
   offset.value = 0;
   void load();
 }
 
 function clearFilters() {
+  window.clearTimeout(searchTimer);
   query.value = "";
   field.value = "";
   kind.value = "";
   buildId.value = "";
   language.value = "";
-  offset.value = 0;
+  // The watchers below reload once for the select changes; reload here when only the search changed.
+  applyFilters();
+}
+
+function goTo(next: number) {
+  offset.value = next;
   void load();
 }
 
-function previousPage() {
-  if (!canPrevious.value) return;
-  offset.value = Math.max(0, offset.value - pageSize);
-  void load();
-}
-
-function nextPage() {
-  if (!canNext.value) return;
-  offset.value += pageSize;
-  void load();
-}
-
+// Selects apply immediately; free text waits for a pause in typing.
+watch([field, kind, buildId, language], applyFilters);
+watch(query, () => {
+  window.clearTimeout(searchTimer);
+  searchTimer = window.setTimeout(applyFilters, searchDebounceMs);
+});
+onBeforeUnmount(() => window.clearTimeout(searchTimer));
 onMounted(() => void load());
 </script>
 
@@ -137,22 +146,15 @@ onMounted(() => void load());
       {{ i18n.t("metadata_memory.authority_help") }}
     </p>
 
+    <MetadataMemoryRelations />
+
     <section class="memory-summary" :aria-label="i18n.t('metadata_memory.summary')">
-      <article class="card">
-        <span>{{ i18n.t("metadata_memory.entries") }}</span>
-        <strong>{{ payload.summary.entries.toLocaleString(i18n.locale) }}</strong>
-      </article>
-      <article class="card">
-        <span>{{ i18n.t("metadata_memory.evidence_bound") }}</span>
-        <strong>{{ payload.summary.evidence_bound.toLocaleString(i18n.locale) }}</strong>
-      </article>
-      <article class="card">
-        <span>{{ i18n.t("metadata_memory.corrections") }}</span>
-        <strong>{{ payload.summary.corrections.toLocaleString(i18n.locale) }}</strong>
-      </article>
-      <article class="card">
-        <span>{{ i18n.t("metadata_memory.fields") }}</span>
-        <strong>{{ payload.summary.fields.toLocaleString(i18n.locale) }}</strong>
+      <article v-for="stat in stats" :key="stat.key" class="card">
+        <span class="stat-label">
+          {{ i18n.t(`metadata_memory.${stat.key}`) }}
+          <UiTooltip :text="i18n.t(`metadata_memory.${stat.key}_help`)" placement="bottom" />
+        </span>
+        <strong>{{ stat.value.toLocaleString(i18n.locale) }}</strong>
       </article>
     </section>
 
@@ -160,171 +162,112 @@ onMounted(() => void load());
       {{ i18n.t("metadata_memory.unavailable") }}: {{ error }}
     </p>
 
-    <form class="card memory-filters" @submit.prevent="applyFilters">
-      <label>
-        <span>{{ i18n.t("metadata_memory.search") }}</span>
-        <input
-          v-model="query"
-          class="control"
-          type="search"
-          :placeholder="i18n.t('metadata_memory.search_placeholder')"
-        />
-      </label>
-      <label>
-        <span>{{ i18n.t("metadata_memory.field") }}</span>
-        <select v-model="field" class="control">
-          <option value="">{{ i18n.t("metadata_memory.all_fields") }}</option>
-          <option v-for="value in payload.facets.fields" :key="value" :value="value">
-            {{ value }}
-          </option>
-        </select>
-      </label>
-      <label>
-        <span>{{ i18n.t("metadata_memory.kind") }}</span>
-        <select v-model="kind" class="control">
-          <option value="">{{ i18n.t("metadata_memory.all_kinds") }}</option>
-          <option v-for="value in payload.facets.kinds" :key="value" :value="value">
-            {{ kindLabel(value) }}
-          </option>
-        </select>
-      </label>
-      <label>
-        <span>{{ i18n.t("metadata_memory.build") }}</span>
-        <select v-model="buildId" class="control">
-          <option value="">{{ i18n.t("metadata_memory.all_builds") }}</option>
-          <option v-for="value in payload.facets.builds" :key="value" :value="value">
-            {{ value }}
-          </option>
-        </select>
-      </label>
-      <label>
-        <span>{{ i18n.t("metadata_memory.language") }}</span>
-        <select v-model="language" class="control">
-          <option value="">{{ i18n.t("metadata_memory.all_languages") }}</option>
-          <option v-for="value in payload.facets.languages" :key="value" :value="value">
-            {{ value }}
-          </option>
-        </select>
-      </label>
-      <div class="filter-actions">
-        <UiButton
-          variant="primary"
-          :label="i18n.t('metadata_memory.apply_filters')"
-          type="submit"
-        />
-        <UiButton
-          :label="i18n.t('metadata_memory.clear_filters')"
-          type="button"
-          @click="clearFilters"
-        />
-      </div>
-    </form>
-
     <section class="card memory-table-card" aria-labelledby="metadata-memory-table-title">
       <header class="table-heading">
         <div>
           <h2 id="metadata-memory-table-title">{{ i18n.t("metadata_memory.precedents") }}</h2>
-          <p>
+          <p role="status">
             {{
-              i18n.tf("metadata_memory.showing", {
-                start: pageStart,
-                end: pageEnd,
-                total: payload.total,
-              })
+              loading
+                ? i18n.t("metadata_memory.updating")
+                : i18n.tf("metadata_memory.showing", {
+                    start: pageStart,
+                    end: pageEnd,
+                    total: payload.total,
+                  })
             }}
           </p>
         </div>
-        <span v-if="loading" role="status">{{ i18n.t("metadata_memory.loading") }}</span>
       </header>
 
-      <div class="tablewrap">
-        <table>
-          <thead>
-            <tr>
-              <th>{{ i18n.t("metadata_memory.field_value") }}</th>
-              <th>{{ i18n.t("metadata_memory.authority") }}</th>
-              <th>{{ i18n.t("metadata_memory.source") }}</th>
-              <th>{{ i18n.t("metadata_memory.scope") }}</th>
-              <th>{{ i18n.t("metadata_memory.evidence") }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in payload.items" :key="item.id">
-              <td>
-                <b>{{ item.field }}</b>
-                <pre class="memory-value">{{ displayValue(item.value) }}</pre>
-                <p
-                  v-if="item.kind === 'correction' && item.rejected_value !== undefined"
-                  class="negative-precedent"
-                >
-                  <span>{{ i18n.t("metadata_memory.rejected_value") }}</span>
-                  {{ displayValue(item.rejected_value) }}
-                </p>
-              </td>
-              <td>
-                <div class="badge-row">
-                  <span class="memory-badge">{{ kindLabel(item.kind) }}</span>
-                  <span v-if="item.evidence_bound" class="memory-badge">
-                    {{ i18n.t("metadata_memory.bound") }}
-                  </span>
-                </div>
-                <small>{{ item.authority || "—" }}</small>
-                <small v-if="item.review_method">{{ item.review_method }}</small>
-              </td>
-              <td>
-                <b>{{ sourceLabel(item) }}</b>
-                <small v-if="item.source_document_id">{{ item.source_document_id }}</small>
-                <small v-if="pageLabel(item)">
-                  {{ i18n.t("metadata_memory.page") }} {{ pageLabel(item) }}
-                </small>
-                <small v-if="item.source_current === false" class="stale-source">
-                  {{ i18n.t("metadata_memory.source_stale") }}
-                </small>
-                <small v-if="item.evidence_current === false" class="stale-source">
-                  {{ i18n.t("metadata_memory.evidence_stale") }}
-                </small>
-              </td>
-              <td>
-                <small v-if="item.build_id">{{ item.build_id }}</small>
-                <small v-if="item.schema_id || item.schema_version">
-                  {{ item.schema_id || "—"
-                  }}<template v-if="item.schema_version"> · {{ item.schema_version }}</template>
-                </small>
-                <small v-if="item.language || item.region_type">
-                  {{ item.language || "—"
-                  }}<template v-if="item.region_type"> · {{ item.region_type }}</template>
-                </small>
-              </td>
-              <td class="evidence-cell">
-                <p v-if="item.evidence_text" class="evidence-text">{{ item.evidence_text }}</p>
-                <p v-else-if="item.evidence_bound" class="note">
-                  {{ i18n.t("metadata_memory.evidence_unresolved") }}
-                </p>
-                <p v-else class="note">{{ i18n.t("metadata_memory.context_only") }}</p>
-                <small v-if="item.evidence_block_ids.length">
-                  {{ i18n.t("metadata_memory.blocks") }}: {{ item.evidence_block_ids.join(", ") }}
-                </small>
-                <details v-if="item.context_text">
-                  <summary>{{ i18n.t("metadata_memory.indexed_context") }}</summary>
-                  <p>{{ item.context_text }}</p>
-                </details>
-              </td>
-            </tr>
-            <tr v-if="!loading && !payload.items.length">
-              <td colspan="5" class="empty-cell">{{ i18n.t("metadata_memory.empty") }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <form class="memory-filters" role="search" @submit.prevent="applyFilters">
+        <label class="filter-search">
+          <span>{{ i18n.t("metadata_memory.search") }}</span>
+          <input
+            v-model="query"
+            class="control"
+            type="search"
+            :placeholder="i18n.t('metadata_memory.search_placeholder')"
+          />
+        </label>
+        <label>
+          <span>{{ i18n.t("metadata_memory.field") }}</span>
+          <select v-model="field" class="control">
+            <option value="">{{ i18n.t("metadata_memory.all_fields") }}</option>
+            <option v-for="value in payload.facets.fields" :key="value" :value="value">
+              {{ value }}
+            </option>
+          </select>
+        </label>
+        <label>
+          <span>{{ i18n.t("metadata_memory.kind") }}</span>
+          <select v-model="kind" class="control">
+            <option value="">{{ i18n.t("metadata_memory.all_kinds") }}</option>
+            <option v-for="value in payload.facets.kinds" :key="value" :value="value">
+              {{ kindLabel(value) }}
+            </option>
+          </select>
+        </label>
+        <label>
+          <span>{{ i18n.t("metadata_memory.build") }}</span>
+          <select v-model="buildId" class="control">
+            <option value="">{{ i18n.t("metadata_memory.all_builds") }}</option>
+            <option v-for="value in payload.facets.builds" :key="value" :value="value">
+              {{ value }}
+            </option>
+          </select>
+        </label>
+        <label>
+          <span>{{ i18n.t("metadata_memory.language") }}</span>
+          <select v-model="language" class="control">
+            <option value="">{{ i18n.t("metadata_memory.all_languages") }}</option>
+            <option v-for="value in payload.facets.languages" :key="value" :value="value">
+              {{ value }}
+            </option>
+          </select>
+        </label>
+      </form>
+
+      <ul
+        v-if="activeFilters.length"
+        class="filter-chips"
+        :aria-label="i18n.t('metadata_memory.active_filters')"
+      >
+        <li v-for="chip in activeFilters" :key="chip.key">
+          <button
+            type="button"
+            class="chip"
+            :aria-label="i18n.tf('metadata_memory.remove_filter', { label: chip.label })"
+            @click="chip.clear()"
+          >
+            {{ chip.label }} <AppIcon name="close" />
+          </button>
+        </li>
+        <li>
+          <button type="button" class="chip-clear" @click="clearFilters">
+            {{ i18n.t("metadata_memory.clear_filters") }}
+          </button>
+        </li>
+      </ul>
+
+      <MetadataMemoryTable
+        :items="payload.items"
+        :loading="loading"
+        :filtered="activeFilters.length > 0"
+      />
 
       <footer class="pagination">
         <UiButton
           :label="i18n.t('common.previous')"
           :disabled="!canPrevious"
-          @click="previousPage"
+          @click="goTo(Math.max(0, offset - pageSize))"
         />
         <span>{{ pageStart }}–{{ pageEnd }} / {{ payload.total }}</span>
-        <UiButton :label="i18n.t('common.next')" :disabled="!canNext" @click="nextPage" />
+        <UiButton
+          :label="i18n.t('common.next')"
+          :disabled="!canNext"
+          @click="goTo(offset + pageSize)"
+        />
       </footer>
     </section>
   </main>
@@ -339,9 +282,9 @@ onMounted(() => void load());
 .memory-contract {
   margin: 0;
   padding: 12px 14px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border-subtle);
   border-radius: 10px;
-  background: var(--soft);
+  background: var(--surface-inset);
   line-height: 1.55;
 }
 .memory-summary {
@@ -354,45 +297,23 @@ onMounted(() => void load());
   gap: 4px;
   padding: 14px;
 }
-.memory-summary span {
-  color: var(--muted);
-  font-size: 0.8rem;
+.stat-label {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--text-secondary, var(--muted));
+  font-size: 0.8125rem;
   font-weight: 700;
 }
 .memory-summary strong {
   font-size: 1.55rem;
-}
-.memory-filters {
-  display: grid;
-  grid-template-columns: minmax(220px, 1.5fr) repeat(4, minmax(130px, 1fr));
-  gap: 10px;
-  align-items: end;
-  padding: 14px;
-}
-.memory-filters label {
-  display: grid;
-  gap: 5px;
-  min-width: 0;
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-.filter-actions {
-  display: flex;
-  gap: 8px;
-  grid-column: 1 / -1;
 }
 .memory-table-card {
   min-width: 0;
   padding: 0;
   overflow: hidden;
 }
-.table-heading,
-.pagination {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
+.table-heading {
   padding: 14px;
 }
 .table-heading h2 {
@@ -401,101 +322,85 @@ onMounted(() => void load());
 }
 .table-heading p {
   margin: 4px 0 0;
-  color: var(--muted);
+  color: var(--text-secondary, var(--muted));
 }
-.memory-table-card th {
-  white-space: nowrap;
+.memory-filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.6fr) repeat(4, minmax(130px, 1fr));
+  gap: 10px;
+  align-items: end;
+  padding: 0 14px 12px;
 }
-.memory-table-card td {
-  min-width: 150px;
-  vertical-align: top;
-}
-.memory-table-card td:first-child {
-  min-width: 190px;
-}
-.evidence-cell {
-  min-width: min(34rem, 42vw) !important;
-}
-.memory-value {
-  margin: 6px 0 0;
-  max-width: 28rem;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  font: inherit;
-  font-size: 0.82rem;
-}
-.negative-precedent {
-  margin: 8px 0 0;
-  font-size: 0.8rem;
-}
-.negative-precedent span {
-  display: block;
-  color: var(--muted);
-  font-weight: 700;
-}
-.badge-row {
-  display: flex;
+.memory-filters label {
+  display: grid;
   gap: 5px;
+  min-width: 0;
+  color: var(--text-secondary, var(--muted));
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.filter-chips {
+  display: flex;
   flex-wrap: wrap;
-  margin-bottom: 6px;
+  gap: 6px;
+  margin: 0;
+  padding: 0 14px 12px;
+  list-style: none;
 }
-.memory-badge {
+.chip,
+.chip-clear {
   display: inline-flex;
-  padding: 3px 6px;
-  border: 1px solid var(--line);
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 3px 10px;
+  border: 1px solid var(--border-subtle);
   border-radius: 999px;
-  background: var(--soft);
-  font-size: 0.75rem;
+  background: var(--surface-inset);
+  color: inherit;
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.chip:hover {
+  background: var(--surface-hover);
+}
+.chip-clear {
+  border-color: transparent;
+  background: none;
+  color: var(--accent-fg, var(--accent));
   font-weight: 700;
+  text-decoration: underline;
 }
-.memory-table-card small {
-  display: block;
-  margin-top: 4px;
-  color: var(--muted);
-  overflow-wrap: anywhere;
+.chip:focus-visible,
+.chip-clear:focus-visible {
+  outline: var(--focus-ring-width, 3px) solid var(--focus-ring);
+  outline-offset: 2px;
 }
-.stale-source {
-  font-weight: 700;
-}
-.evidence-text {
-  margin: 0 0 8px;
-  white-space: pre-wrap;
-  line-height: 1.5;
-}
-.evidence-cell details {
-  margin-top: 8px;
-}
-.evidence-cell details p {
-  max-height: 14rem;
-  overflow: auto;
-  white-space: pre-wrap;
-  line-height: 1.5;
-}
-.empty-cell {
-  padding: 28px !important;
-  text-align: center;
-  color: var(--muted);
+.chip :deep(svg) {
+  width: 12px;
+  height: 12px;
 }
 .pagination {
-  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
 }
 @media (max-width: 1000px) {
-  .memory-summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+  .memory-summary,
   .memory-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .filter-search {
+    grid-column: 1 / -1;
   }
 }
 @media (max-width: 650px) {
   .memory-summary,
   .memory-filters {
     grid-template-columns: 1fr;
-  }
-  .table-heading,
-  .pagination {
-    align-items: stretch;
-    flex-direction: column;
   }
 }
 </style>
