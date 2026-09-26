@@ -388,12 +388,13 @@ export function normalizeEmbedding(
       ? (rawProvider as EmbeddingProvider)
       : "ollama";
   const requestedModel = String(source?.embedding_model || "").trim();
+  const embeddingModel =
+    provider === "chroma" || provider === "precomputed"
+      ? ""
+      : requestedModel || "bge-m3:latest";
   return {
     embedding_provider: provider,
-    embedding_model:
-      provider === "chroma" || provider === "precomputed"
-        ? ""
-        : requestedModel || "bge-m3:latest",
+    embedding_model: embeddingModel,
   };
 }
 
