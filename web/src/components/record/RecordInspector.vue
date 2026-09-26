@@ -245,6 +245,7 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
         v-else-if="tab === 'traceability'"
         :id="panelId('traceability')"
         :graph="objectGraph"
+        :record="record"
         :model="normativeModel"
         :loading="graphLoading"
         :error="graphError"

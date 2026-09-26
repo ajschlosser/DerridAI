@@ -7,6 +7,7 @@ import UiDialog from "../ui/UiDialog.vue";
 import UiStatusBadge from "../ui/UiStatusBadge.vue";
 import UiTabs from "../ui/UiTabs.vue";
 import UiTooltip from "../ui/UiTooltip.vue";
+import ClaimValidationPanel from "./ClaimValidationPanel.vue";
 import ResearchObjectDiagram from "./ResearchObjectDiagram.vue";
 import type {
   DerridaiNormativeModel,
@@ -21,8 +22,10 @@ const props = withDefaults(
     model?: DerridaiNormativeModel | null;
     loading?: boolean;
     error?: string;
+    /** The record being audited; passed to claim validation. */
+    record?: Record<string, unknown> | null;
   }>(),
-  { graph: null, model: null, loading: false, error: "" },
+  { graph: null, model: null, loading: false, error: "", record: null },
 );
 const i18n = useI18nStore();
 const mode = ref<"trace" | "model">("trace");
@@ -479,6 +482,13 @@ watch(mode, () => resetFocus());
             tone="neutral"
           />
         </div>
+
+        <ClaimValidationPanel
+          v-if="mode === 'trace' && focus.object_type === 'GeneratedClaim'"
+          :claim-id="focus.object_id"
+          :status="focus.status"
+          :record="record"
+        />
 
         <details class="technical-details">
           <summary>{{ i18n.t("traceability.technical_details", "Technical details") }}</summary>

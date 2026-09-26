@@ -1,10 +1,12 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 
+from ..claim_memory import ClaimMemoryIndex, derive_entry, similar_validated_claims
 from ..derridai_model import normative_model
 from ..http_auth import request_user
 from ..provenance_memory import SupportBinding, resolve_support_binding
@@ -79,3 +81,71 @@ def get_record_object_graph(body: dict[str, Any], request: Request) -> dict[str,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+_claim_index: ClaimMemoryIndex | None = None
+
+
+def _claim_memory() -> ClaimMemoryIndex:
+    global _claim_index
+    if _claim_index is None:
+        _claim_index = ClaimMemoryIndex()
+    return _claim_index
+
+
+def _owned_claim(claim_id: str, user: Any) -> tuple[dict[str, Any], str | None]:
+    owner = None if user.role == "admin" else user.username
+    claim = system_store.get_generated_claim(claim_id, owner=owner)
+    if claim is None:
+        raise HTTPException(status_code=404, detail="Generated claim not found")
+    return claim, owner
+
+
+@router.post("/api/derridai/claims/{claim_id}/validation")
+def set_claim_validation(claim_id: str, body: dict[str, Any], request: Request) -> dict[str, Any]:
+    """Record a human audit decision on a generated claim.
+
+    ``validated`` adds the claim to validated-claim memory (a derived vector
+    projection); any other status removes it. The SQLite row is authoritative and is
+    committed first; a projection failure is reported, never hidden.
+    """
+    user = request_user(request)
+    claim, owner = _owned_claim(claim_id, user)
+    status = str(body.get("status") or "")
+    if status not in {"unvalidated", "validated", "rejected", "unresolved"}:
+        raise HTTPException(status_code=422, detail="status must be unvalidated, validated, rejected, or unresolved")
+    claim = {
+        **claim,
+        "validation_status": status,
+        "validated_by": None if status == "unvalidated" else user.username,
+        "validated_at": None if status == "unvalidated" else datetime.now(UTC).isoformat(),
+    }
+    system_store.put_generated_claim(claim)
+    records: dict[str, dict[str, Any]] = {}
+    record = body.get("record")
+    if isinstance(record, dict) and str(record.get("record_id") or ""):
+        records[str(record["record_id"])] = record
+    projection = {"status": "removed" if status != "validated" else "indexed", "error": ""}
+    try:
+        index = _claim_memory()
+        entry = derive_entry(claim, system_store.list_claim_support_bindings(claim_id, owner=owner), records)
+        if entry is not None:
+            index.upsert(entry)
+        else:
+            index.remove(claim_id)
+    except Exception as exc:  # projection is derived; surface, do not fail the audit decision
+        projection = {"status": "failed", "error": str(exc)[:300]}
+    return {"claim": claim, "projection": projection}
+
+
+@router.get("/api/derridai/claims/{claim_id}/similar")
+def similar_claims(claim_id: str, request: Request, limit: int = 5) -> dict[str, Any]:
+    """Advisory: previously validated claims similar to this one (never asserts support)."""
+    user = request_user(request)
+    claim, owner = _owned_claim(claim_id, user)
+    try:
+        return similar_validated_claims(
+            _claim_memory(), system_store, claim, owner=owner, limit=max(1, min(10, int(limit))),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Validated-claim memory unavailable: {exc}") from exc
