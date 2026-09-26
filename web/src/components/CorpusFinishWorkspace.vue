@@ -8,6 +8,7 @@ const emit = defineEmits<{
   retryMetadata: [];
   reviewMetadata: [];
   reviewValidation: [];
+  reviewTopology: [];
   reviewRejected: [];
   reviewRecords: [];
   reviewSource: [];
@@ -58,7 +59,9 @@ function blockerLabel(code?: string) {
 function fixBlocker(code?: string) {
   const value = String(code || "");
   if (value === "required_document_metadata") emit("editDocumentMetadata");
-  else if (value === "required_metadata" || value === "metadata_validation") emit("reviewMetadata");
+  else if (value === "required_metadata") emit("reviewMetadata");
+  else if (value === "metadata_validation") emit("reviewValidation");
+  else if (value === "boundary_attention") emit("reviewTopology");
   else if (value === "source_quality" || value === "source_validation") emit("reviewSource");
   else emit("reviewRecords");
 }
