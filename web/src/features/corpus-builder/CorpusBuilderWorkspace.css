@@ -72,21 +72,9 @@
   border-radius: 12px;
   background: linear-gradient(180deg, var(--card), var(--card));
 }
-.setup-source,
-.provider-area {
+.setup-source {
   display: grid;
   gap: 8px;
-}
-.setup-card-heading {
-  display: grid;
-  gap: 3px;
-}
-.setup-card-heading b {
-  font-size: 0.8125rem;
-}
-.setup-card-heading small {
-  font-size: 0.8125rem !important;
-  line-height: 1.45;
 }
 .builder-setup label {
   font-size: 0.8125rem;
@@ -97,47 +85,8 @@
   font-size: 0.8125rem;
   color: var(--muted);
 }
-.execution-config,
-.advanced-config,
 .build-launch-row {
   grid-column: 1/-1;
-}
-.advanced-config {
-  grid-column: 1/-1;
-}
-.advanced-config summary {
-  cursor: pointer;
-  font-size: 0.8125rem;
-  font-weight: 700;
-}
-.escalation-field {
-  display: grid;
-  grid-template-columns: minmax(150px, 0.7fr) minmax(220px, 1fr);
-  gap: 12px;
-  align-items: center;
-  padding: 10px 11px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--soft);
-}
-.escalation-field > span {
-  display: grid;
-  gap: 2px;
-}
-.escalation-field b {
-  font-size: 0.8125rem;
-}
-.escalation-field small {
-  font-size: 0.8125rem;
-  line-height: 1.4;
-  color: var(--muted);
-}
-.advanced-grid {
-  display: grid;
-  grid-template-columns: max-content 1fr max-content 1fr;
-  gap: 8px 10px;
-  margin-top: 8px;
-  align-items: center;
 }
 .build-launch-row {
   display: grid;
@@ -1610,10 +1559,6 @@ summary:focus-visible {
     .eyebrow,
     .builder-setup label,
     .builder-setup small,
-    .setup-card-heading small,
-    .advanced-config summary,
-    .escalation-field b,
-    .escalation-field small,
     .launch-copy b,
     .launch-copy span,
     .context-blocker,
@@ -1679,61 +1624,12 @@ summary:focus-visible {
 }
 
 /* Feral Fox review and enrichment controls. */
-.enrichment-strategy {
-  display: grid;
-  gap: 12px;
-}
-.mode-options {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-.mode-options > label,
-.semantic-index-toggle {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--card);
-  cursor: pointer;
-}
-.mode-options input,
-.semantic-index-toggle input,
 .resolve-source-check input {
   inline-size: 18px;
   block-size: 18px;
   flex: 0 0 auto;
   margin-top: 2px;
   accent-color: var(--accent);
-}
-.mode-options span,
-.semantic-index-toggle span {
-  display: grid;
-  gap: 4px;
-}
-.mode-options b,
-.semantic-index-toggle b {
-  font-size: 0.875rem;
-}
-.mode-options small,
-.semantic-index-toggle small {
-  font-size: 0.8125rem !important;
-  color: var(--muted);
-}
-.mode-options > label:has(input:checked) {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent);
-}
-.mode-options > label:focus-within,
-.semantic-index-toggle:focus-within {
-  outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent);
-  outline-offset: 2px;
-}
-.semantic-index-toggle:has(input:disabled) {
-  opacity: 0.7;
-  cursor: not-allowed;
 }
 .capacity-note {
   display: block;
@@ -2066,57 +1962,6 @@ summary:focus-visible {
   gap: var(--space-4);
   padding: var(--space-4) 0 var(--space-5);
 }
-.provider-area {
-  padding: 0;
-  border: 0;
-}
-.enrichment-strategy {
-  padding-top: 2px;
-}
-.included-feature {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 11px 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--soft);
-}
-.included-feature b {
-  font-size: 0.875rem;
-}
-.included-feature span {
-  color: var(--muted);
-  font-size: 0.8125rem;
-}
-.execution-wrapper {
-  padding: var(--space-4) 0;
-  border-top: 1px solid var(--border-subtle);
-}
-.setup-section-inline-head {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  margin-bottom: 10px;
-}
-.setup-section-inline-head > span:last-child {
-  display: grid;
-  gap: 2px;
-}
-.setup-section-inline-head b {
-  font-size: 0.9375rem;
-}
-.setup-section-inline-head small {
-  font-size: 0.8125rem !important;
-  color: var(--muted);
-}
-.execution-wrapper > .execution-config {
-  border: 0;
-}
-.execution-wrapper :deep(.execution-settings-shell) {
-  border: 0;
-}
 .build-launch-row {
   display: none;
 }
@@ -2208,9 +2053,6 @@ summary:focus-visible {
   .source-actions .btn {
     width: 100%;
   }
-  .mode-options {
-    grid-template-columns: 1fr;
-  }
   .setup-section-head > div,
   .phase-label {
     align-items: flex-start;
@@ -2231,8 +2073,7 @@ summary:focus-visible {
 @media (max-width: 620px) {
   .setup-source-section,
   .setup-phase,
-  .setup-disclosure-body,
-  .execution-wrapper {
+  .setup-disclosure-body {
     padding: 13px;
   }
   .source-actions {
@@ -2787,21 +2628,4 @@ summary:focus-visible {
   .review-frame .record-review-head p {
     font-size: 0.75rem;
   }
-}
-.schema-choice {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: flex-end;
-}
-.schema-choice-field {
-  display: grid;
-  gap: 4px;
-  flex: 1 1 16rem;
-  font-size: 0.8125rem;
-  font-weight: 700;
-}
-.schema-choice-field small {
-  color: var(--muted);
-  font-weight: 500;
 }
