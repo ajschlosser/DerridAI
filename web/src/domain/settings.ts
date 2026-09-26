@@ -16,11 +16,7 @@ export type ColorScheme = "system" | "light" | "dark";
 export type ContrastPref = "system" | "more";
 export type ReviewPreset = "text" | "attribution" | "semantic";
 export type LlmRunMode = "foreground" | "background";
-export type EmbeddingProvider =
-  | "ollama"
-  | "chroma"
-  | "precomputed"
-  | `profile:${string}`;
+export type EmbeddingProvider = "ollama" | "chroma" | "precomputed" | `profile:${string}`;
 export type Reranker = "cross_encoder" | "lexical" | "none";
 export type ResponseLanguage = "auto" | "en" | "fr";
 export type RetrievalRoute = "similarity" | "lexical" | "mmr";
