@@ -181,6 +181,7 @@ CARRIES_RECORDS = {
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/merge"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/from-selection"),
     ("GET", "/api/pdf/corpus-builds/{build_id}/retired-records"),
+    ("GET", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/context"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/boundary-adjudication"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/split"),
     ("GET", "/api/pdf/corpus-builds/{build_id}/editorial-memory"),
