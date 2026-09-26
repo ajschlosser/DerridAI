@@ -7,6 +7,8 @@ import type {
   GutenbergHit,
   WikisourceHit,
   GutenbergStatus,
+  SourceUnitPolicy,
+  SourceUnitPreview,
 } from "./types";
 import { LEGACY_CORPUS_BASE, legacyCorpusUrl } from "./compatibility";
 
@@ -56,6 +58,17 @@ export const corpusSourcesApi = {
         source_illegibility: sourceIllegibility,
         page_number_detection: detectPageNumbers ? "auto" : "off",
       }),
+    }),
+  previewUnitPolicy: (assetId: string, policy: SourceUnitPolicy) =>
+    apiRequest<SourceUnitPreview>(
+      `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/units/preview`,
+      { method: "POST", body: JSON.stringify(policy) },
+    ),
+  /** Creates (or returns) a source asset whose evidence units follow the policy. */
+  deriveUnits: (assetId: string, policy: SourceUnitPolicy) =>
+    apiRequest<PdfAsset>(`${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/units`, {
+      method: "POST",
+      body: JSON.stringify(policy),
     }),
   assetContentUrl: (assetId: string) =>
     `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/content`,

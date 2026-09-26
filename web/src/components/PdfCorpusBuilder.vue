@@ -79,6 +79,7 @@ import CorpusBuilderWorkspaceHeader from "./corpus-builder/CorpusBuilderWorkspac
 import CorpusReviewRecordQueue from "./corpus-builder/CorpusReviewRecordQueue.vue";
 import CorpusReviewToolbar from "./corpus-builder/CorpusReviewToolbar.vue";
 import CorpusReviewEvidencePanel from "./corpus-builder/CorpusReviewEvidencePanel.vue";
+import CorpusUnitPolicy from "./CorpusUnitPolicy.vue";
 import CorpusReviewSourcePanel from "./corpus-builder/CorpusReviewSourcePanel.vue";
 import CorpusEnrichmentConfiguration from "./corpus-builder/CorpusEnrichmentConfiguration.vue";
 import CorpusMetadataConfiguration from "./corpus-builder/CorpusMetadataConfiguration.vue";
@@ -270,6 +271,7 @@ const {
   lastIngestedAsset,
   refreshAssets,
   upload,
+  applyUnitPolicy,
   loadSourceUrl,
   searchGutenberg,
   searchWikisource,
@@ -1975,6 +1977,13 @@ defineExpose({
             </p>
           </div>
         </div>
+        <CorpusUnitPolicy
+          v-if="selectedAsset.media_kind !== 'audio'"
+          :asset="selectedAsset"
+          :disabled="Boolean(buildRunning && currentBuild?.asset_id === selectedAssetId)"
+          :busy="busy === 'units'"
+          @apply="applyUnitPolicy"
+        />
         <DocumentStructureConfigurator
           class="document-structure-config"
           :asset="selectedAsset"
@@ -2002,6 +2011,13 @@ defineExpose({
             </h3>
           </div>
         </div>
+        <CorpusUnitPolicy
+          v-if="selectedAsset.media_kind !== 'audio'"
+          :asset="selectedAsset"
+          :disabled="Boolean(buildRunning && currentBuild?.asset_id === selectedAssetId)"
+          :busy="busy === 'units'"
+          @apply="applyUnitPolicy"
+        />
         <MediaStructureConfigurator
           :media-kind="selectedAsset.media_kind"
           :filename="selectedAsset.filename"
