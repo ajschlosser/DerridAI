@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { diffLines } from "diff";
+import { diffWordsWithSpace } from "diff";
 import { describe, expect, it } from "vitest";
 import { format, resolveConfig } from "prettier";
 
@@ -13,7 +13,7 @@ describe("temporary Prettier probe", () => {
     const source = readFileSync(path, "utf8");
     const config = (await resolveConfig(path)) || {};
     const formatted = await format(source, { ...config, filepath: path });
-    const delta = diffLines(source, formatted)
+    const delta = diffWordsWithSpace(source, formatted)
       .filter((part) => part.added || part.removed)
       .map((part) => `${part.added ? "+" : "-"} ${part.value}`)
       .join("\n");
