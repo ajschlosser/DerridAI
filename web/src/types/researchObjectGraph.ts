@@ -34,6 +34,8 @@ export interface ResearchObjectGraph {
   root_id: string;
   nodes: ResearchObjectNode[];
   edges: ResearchObjectEdge[];
+  /** Superseded / earlier-pass assertions left out of the map (still on the record). */
+  hidden_assertion_count?: number;
 }
 
 export interface DerridaiModelNode {

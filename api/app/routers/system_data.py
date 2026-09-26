@@ -72,7 +72,9 @@ def get_system_metadata_exemplars(
     """Inspect progressive metadata exemplars as read-only System Data."""
     require_admin(request)
     try:
-        return metadata_exemplars.rows(
+        from ..metadata_exemplar_projection import projection_backlog
+
+        payload = metadata_exemplars.rows(
             limit=limit,
             offset=offset,
             field=field,
@@ -82,6 +84,8 @@ def get_system_metadata_exemplars(
             schema_id=schema_id,
             record_id=record_id,
         )
+        # Why the list may be empty: reviewed metadata waiting on a failing projection.
+        return {**payload, "projection_backlog": projection_backlog()}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 

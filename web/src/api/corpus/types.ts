@@ -77,6 +77,15 @@ export interface PdfAsset {
   };
 }
 
+/** Result of split / merge / create-from-selection: affected records are retired and new ones minted. */
+export interface StructuralEditResult {
+  /** The new record the reviewer should land on. */
+  record: CorpusRecord;
+  records: CorpusRecord[];
+  retired_record_ids: string[];
+  transaction_id: string;
+}
+
 export interface WikisourceHit {
   source: "wikisource";
   title: string;

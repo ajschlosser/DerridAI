@@ -62,6 +62,7 @@ import { useCorpusReviewDecisions } from "../features/corpus-builder/composables
 import { useCorpusTextReview } from "../features/corpus-builder/composables/useCorpusTextReview";
 import { useCorpusMetadataReview } from "../features/corpus-builder/composables/useCorpusMetadataReview";
 import { useCorpusBoundaryReview } from "../features/corpus-builder/composables/useCorpusBoundaryReview";
+import { invalidRecordSizingFields } from "../features/corpus-builder/domain/recordSizing";
 import { corpusReviewCommandFromKeydown } from "../features/corpus-builder/domain/reviewCommands";
 import {
   editableRecordMetadata,
@@ -147,6 +148,9 @@ const sourceBlocks = ref<SourceBlock[]>([]);
 const selectedEvidenceField = ref("");
 const selectedPdfPage = ref(1);
 const reviewQueue = ref<ReviewQueue>("all");
+// Set when a Finish blocker sends the reviewer into the "all" queue, which
+// otherwise looks identical to the Finish workspace.
+const reviewRequested = ref(false);
 const {
   reviewQueueCollapsed,
   reviewInspectorTab,
@@ -343,7 +347,7 @@ const {
   showBuildConfiguration,
   finishPhase,
   showReviewWorkspace,
-} = useCorpusBuildLifecycle(currentBuild, recordTotal, reviewQueue);
+} = useCorpusBuildLifecycle(currentBuild, recordTotal, reviewQueue, reviewRequested);
 const {
   registerBuildOperation,
   syncBuildInRail,
@@ -681,7 +685,7 @@ const {
   sliceUnavailable,
   merge,
   split,
-  sliceRecord,
+  createFromSelection,
   adjudicateBoundary,
 } = useCorpusBoundaryReview({
   currentBuild,
@@ -726,6 +730,7 @@ const {
   previousPage,
   nextPage,
 } = useCorpusReviewNavigation({
+  reviewRequested,
   currentBuild,
   records,
   recordTotal,
@@ -870,9 +875,13 @@ const llmActionConcurrentLoad = computed(() => {
       0,
     );
 });
+const recordSizingValid = computed(
+  () => invalidRecordSizingFields(recordSizing.value).length === 0,
+);
 const canStartConcurrentBuild = computed(() =>
   Boolean(
-    selectedAsset.value &&
+    recordSizingValid.value &&
+      selectedAsset.value &&
       contextSafe.value &&
       (selectedProviderId.value || !activeBuildCount.value),
   ),
@@ -1081,6 +1090,7 @@ const setupWarnings = computed(() => {
         count: selectedProfileActiveBuildCount.value,
       }),
     );
+  if (!recordSizingValid.value) warnings.push(i18n.t("pdf_corpus.record_sizing.invalid"));
   return warnings;
 });
 
@@ -1498,6 +1508,7 @@ async function chooseBuild(build: CorpusBuild) {
   hydratedTopologyCount.value = 0;
   hydratedMetadataCount.value = 0;
   reviewQueue.value = "all";
+  reviewRequested.value = false;
   await refreshBuild();
   await nextTick();
   await refreshRecords(true);
@@ -1928,20 +1939,8 @@ defineExpose({
           @refresh-gutenberg-catalogue="refreshGutenbergCatalogue"
           @update-gutenberg-archive="updateGutenbergArchive"
           @import-gutenberg="importGutenberg"
+          @continue="configurationSection = 'structure'"
         />
-        <div v-if="selectedAsset && paginatedSource" class="source-facts">
-          <span>{{ selectedAsset.page_count }} {{ i18n.t("pdf_corpus.pages") }}</span
-          ><span>{{ selectedAsset.block_count }} {{ i18n.t("pdf_corpus.source_units") }}</span
-          ><span>{{ selectedAsset.ocr_pages }} {{ i18n.t("pdf_corpus.ocr_pages") }}</span
-          ><span v-if="selectedAsset.metadata?.author"
-            ><b>{{ i18n.t("pdf_corpus.pdf_author") }}</b
-            >: {{ String(selectedAsset.metadata.author) }}</span
-          ><span>SHA-256 {{ selectedAsset.sha256.slice(0, 16) }}…</span
-          ><span>{{ formatDate(selectedAsset.created_at) }}</span>
-        </div>
-        <p v-if="selectedAsset && paginatedSource" class="source-facts-help">
-          {{ i18n.t("pdf_corpus.source_facts_help") }}
-        </p>
       </section>
 
       <section
@@ -3154,7 +3153,8 @@ defineExpose({
         :can-next="canMergeNext"
         :busy="busy !== ''"
         @close="boundarySliceOpen = false"
-        @slice="sliceRecord"
+        @split="split"
+        @create="createFromSelection"
     /></Teleport>
     <CorpusTextCleanupDialog
       v-if="textCleanupOpen && selectedRecord"
@@ -3382,7 +3382,6 @@ defineExpose({
         @skip="skipRecord"
         @undo="undoReview"
         @redo="redoReview"
-        @slice="sliceRecord"
         @merge="merge"
         @update-llm-provider-profile="(value) => (llmActionProviderId = value)"
         @update-llm-model="(value) => (llmActionModel = value)"

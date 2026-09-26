@@ -111,7 +111,7 @@ def test_human_slice_becomes_boundary_editorial_memory(tmp_path:Path):
     repo,build=install(tmp_path);manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
     row=repo.load_records(build['build_id'])[1]
     cut=row['text'].index('A new unit')
-    manager.slice_to_neighbor(build['build_id'],'r2','previous',cut,1)
+    manager.create_from_selection(build['build_id'],'r2',cut,len(row['text']),'merge_prior',expected_revision=1)
     memory=repo.load_checkpoint(build['build_id'],'boundary_editorial_memory',{})
     assert memory['examples']
     assert memory['examples'][-1]['source']=='human_confirmed_boundary'

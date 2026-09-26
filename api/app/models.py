@@ -4,7 +4,14 @@ from __future__ import annotations
 import re
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from .enrichment_cycles import MAX_PASSES
 from .metadata_schema import MetadataSchema
@@ -73,6 +80,12 @@ class ChromaConnectionUpdate(BaseModel):
 
 
 class SystemEmbeddingDefaultsUpdate(BaseModel):
+    embedding_provider: str = Field(min_length=1, max_length=256)
+    embedding_model: str | None = Field(default=None, max_length=512)
+
+
+class SystemEmbeddingDefaultsProbe(BaseModel):
+    """A draft embedding default to test before saving it."""
     embedding_provider: str = Field(min_length=1, max_length=256)
     embedding_model: str | None = Field(default=None, max_length=512)
 
@@ -535,10 +548,10 @@ class PdfCorpusRecordSizing(BaseModel):
     post-segmentation normalization toward readable/retrievable records while
     protected attribution and discourse structure remain higher priority.
     """
-    preferred_record_chars: int = Field(default=1750, ge=600, le=12000)
-    record_length_tolerance: int = Field(default=200, ge=50, le=2000)
-    long_record_chars: int = Field(default=3500, ge=1200, le=24000)
-    absolute_record_chars: int = Field(default=6000, ge=1800, le=48000)
+    preferred_record_chars: int = Field(default=1750, ge=100, le=12000)
+    record_length_tolerance: int = Field(default=200, ge=10, le=2000)
+    long_record_chars: int = Field(default=3500, ge=100, le=24000)
+    absolute_record_chars: int = Field(default=6000, ge=100, le=48000)
 
     def model_post_init(self, __context: Any) -> None:
         preferred = self.preferred_record_chars
@@ -740,13 +753,24 @@ class PdfCorpusRecordMerge(BaseModel):
 
 
 class PdfCorpusRecordSplit(BaseModel):
-    after_block_id: str = Field(min_length=1, max_length=200)
+    """Split at a source block boundary or at a character offset in the record text."""
+    after_block_id: str | None = Field(default=None, min_length=1, max_length=200)
+    offset: int | None = Field(default=None, ge=1, le=500000)
     expected_revision: int | None = Field(default=None, ge=1)
 
-class PdfCorpusRecordSlice(BaseModel):
-    direction: Literal["previous", "next", "keep", "new"]
-    offset: int = Field(ge=1, le=500000)
-    keep_end: int | None = Field(default=None, ge=2, le=500000)
+    @model_validator(mode="after")
+    def _one_split_point(self) -> PdfCorpusRecordSplit:
+        if (self.after_block_id is None) == (self.offset is None):
+            raise ValueError("Provide exactly one of after_block_id or offset.")
+        return self
+
+
+class PdfCorpusRecordFromSelection(BaseModel):
+    """Create a new record from ``text[start:end]``; left/right text joins a neighbour or stands alone."""
+    start: int = Field(ge=0, le=500000)
+    end: int = Field(ge=1, le=500000)
+    left: Literal["distinct", "merge_prior"] = "distinct"
+    right: Literal["distinct", "merge_next"] = "distinct"
     expected_revision: int | None = Field(default=None, ge=1)
 
 

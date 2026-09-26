@@ -487,7 +487,7 @@ watch(
           <input
             id="fileInput"
             type="file"
-            accept=".jsonl,.ndjson,.json"
+            accept=".jsonl,.ndjson,.json,.zst"
             multiple
             hidden
             @change="onFiles"

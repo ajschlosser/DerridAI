@@ -5,6 +5,7 @@ import type { ReviewQueue } from "../../../types/corpus";
 import { firstValidationRecordId } from "../domain/publicationReadiness";
 
 interface CorpusReviewNavigationOptions {
+  reviewRequested: Ref<boolean>;
   currentBuild: Ref<CorpusBuild | null>;
   records: Ref<CorpusRecord[]>;
   recordTotal: Ref<number>;
@@ -129,6 +130,7 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
     options.selectedRecordId.value = "";
     options.selectedRecord.value = null;
     options.focusView.value = false;
+    options.reviewRequested.value = true;
     options.reviewQueue.value = queue;
     options.recordQuery.value = recordQuery;
     await nextTick();

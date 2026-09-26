@@ -179,7 +179,8 @@ CARRIES_RECORDS = {
     ("POST", "/api/pdf/corpus-builds/{build_id}/review/undo"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/review/redo"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/merge"),
-    ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/slice"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/from-selection"),
+    ("GET", "/api/pdf/corpus-builds/{build_id}/retired-records"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/boundary-adjudication"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/split"),
     ("GET", "/api/pdf/corpus-builds/{build_id}/editorial-memory"),
@@ -208,6 +209,8 @@ BUILD_LEVEL = {
     ("POST", "/api/pdf/corpus-builds/{build_id}/metadata/enrich"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/autonomous/run"),
     ("DELETE", "/api/pdf/corpus-builds/{build_id}/editorial-memory"),
+    ("GET", "/api/pdf/corpus-builds/{build_id}/metadata-exemplars/diagnosis"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/metadata-exemplars/project"),
 }
 
 

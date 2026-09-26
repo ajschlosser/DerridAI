@@ -1,9 +1,12 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 from __future__ import annotations
 
+import json
 import logging
+from pathlib import Path
 from typing import Any
 
+import httpx
 from fastapi import (
     APIRouter,
     File,
@@ -43,10 +46,10 @@ from ..models import (
     PdfCorpusPublishRequest,
     PdfCorpusRecordAccept,
     PdfCorpusRecordDisposition,
+    PdfCorpusRecordFromSelection,
     PdfCorpusRecordMerge,
     PdfCorpusRecordPatch,
     PdfCorpusRecordRerun,
-    PdfCorpusRecordSlice,
     PdfCorpusRecordSplit,
     PdfCorpusRecordTextPatch,
     PdfCorpusReviewDecision,
@@ -135,6 +138,39 @@ async def create_pdf_asset(
         raise HTTPException(status_code=500, detail=f"PDF asset ingestion failed: {exc}") from exc
 
 
+@router.post("/api/corpus/ledger/decode")
+async def decode_corpus_ledger(file: UploadFile = File(...)) -> dict[str, Any]:
+    """Decode an uploaded ``.jsonl.zst`` publication into plain JSONL text.
+
+    The browser importer only reads plaintext JSONL, so archival ledgers are
+    decompressed, validated, and evidence-rehydrated here rather than guessed at
+    client-side.
+    """
+    import tempfile
+
+    from .. import derridai_ledger
+
+    name = file.filename or "ledger.jsonl.zst"
+    if not name.endswith(".zst"):
+        raise HTTPException(status_code=400, detail="Expected a .jsonl.zst ledger.")
+    limit = settings.pdf_max_upload_mb * 1024 * 1024
+    with tempfile.TemporaryDirectory() as tmp:
+        target = Path(tmp) / "ledger.jsonl.zst"
+        size = 0
+        with target.open("wb") as handle:
+            while chunk := await file.read(1024 * 1024):
+                size += len(chunk)
+                if size > limit:
+                    raise HTTPException(status_code=413, detail="The ledger exceeds the upload size limit.")
+                handle.write(chunk)
+        try:
+            records = derridai_ledger.read_jsonl_zst(target)
+        except (derridai_ledger.LedgerValidationError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    text = "\n".join(json.dumps(record, ensure_ascii=False) for record in records) + "\n"
+    return {"text": text, "record_count": len(records), "filename": name.removesuffix(".zst")}
+
+
 @router.post("/api/pdf/assets/url")
 def import_pdf_asset_url(body: PdfSourceUrlImport) -> dict[str, Any]:
     try:
@@ -145,6 +181,15 @@ def import_pdf_asset_url(body: PdfSourceUrlImport) -> dict[str, Any]:
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except httpx.HTTPStatusError as exc:
+        # The remote site refused or lacked the page: an upstream problem, not a server fault.
+        logger.warning("URL source fetch returned %s for %s", exc.response.status_code, body.url)
+        raise HTTPException(
+            status_code=502,
+            detail=f"The source site returned HTTP {exc.response.status_code} for {body.url}.",
+        ) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"Could not reach the source site: {exc}") from exc
     except Exception as exc:
         logger.exception("URL source ingestion failed")
         raise HTTPException(status_code=500, detail=f"URL source ingestion failed: {exc}") from exc
@@ -785,10 +830,43 @@ def merge_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecord
 
 
 
-@router.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/slice")
-def slice_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecordSlice) -> dict[str, Any]:
+@router.get("/api/pdf/corpus-builds/{build_id}/retired-records")
+def list_retired_pdf_corpus_records(build_id: str) -> dict[str, Any]:
     try:
-        return pdf_corpus_builds.slice_to_neighbor(build_id, record_id, body.direction, body.offset, body.expected_revision, body.keep_end)
+        return {"items": pdf_corpus_builds.retired_records(build_id)}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+
+
+@router.get("/api/pdf/corpus-builds/{build_id}/metadata-exemplars/diagnosis")
+def diagnose_pdf_corpus_metadata_exemplars(build_id: str) -> dict[str, Any]:
+    """Why a build has (or lacks) metadata exemplars; counts only, no record content."""
+    from ..metadata_exemplar_projection import diagnose_build_metadata_exemplars
+
+    try:
+        return diagnose_build_metadata_exemplars(pdf_corpus_repository, build_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+
+
+@router.post("/api/pdf/corpus-builds/{build_id}/metadata-exemplars/project")
+def project_pdf_corpus_metadata_exemplars(build_id: str) -> dict[str, Any]:
+    """Rebuild this build's exemplar projection now and report the real error, if any."""
+    try:
+        return pdf_corpus_builds._project_metadata_exemplars(build_id, force=True)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    except Exception as exc:
+        logger.exception("Metadata exemplar projection failed")
+        raise HTTPException(status_code=503, detail=f"Metadata exemplar projection failed: {exc}") from exc
+
+
+@router.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/from-selection")
+def create_pdf_corpus_record_from_selection(build_id: str, record_id: str, body: PdfCorpusRecordFromSelection) -> dict[str, Any]:
+    try:
+        return pdf_corpus_builds.create_from_selection(
+            build_id, record_id, body.start, body.end, body.left, body.right, body.expected_revision,
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
     except ValueError as exc:
@@ -810,7 +888,7 @@ def adjudicate_pdf_corpus_boundary(build_id: str, record_id: str, body: PdfCorpu
 @router.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/split")
 def split_pdf_corpus_record(build_id: str, record_id: str, body: PdfCorpusRecordSplit) -> dict[str, Any]:
     try:
-        return pdf_corpus_builds.split(build_id, record_id, body.after_block_id, body.expected_revision)
+        return pdf_corpus_builds.split(build_id, record_id, body.after_block_id, body.expected_revision, body.offset)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
     except ValueError as exc:

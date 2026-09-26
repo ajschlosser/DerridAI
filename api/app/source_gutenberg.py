@@ -278,12 +278,75 @@ def _gutendex_etext(etext_id: int) -> tuple[str, dict[str, Any]]:
     return text, catalog
 
 
+_WIKISOURCE_HOST = re.compile(r"^([a-z\-]+\.)?wikisource\.org$", re.IGNORECASE)
+# Wikimedia asks API clients to identify the tool and a way to reach its maintainers.
+_USER_AGENT = "DerridAI/1.0 (https://github.com/ajschlosser/DerridAI; local scholarly research tool)"
+
+
+def _wikisource_page_title(parsed: Any) -> str:
+    """Page title for a /wiki/<Title> or ?title=<Title> Wikisource URL, else ''."""
+    host = (parsed.hostname or "").lower()
+    if not _WIKISOURCE_HOST.match(host):
+        return ""
+    if parsed.path.startswith("/wiki/"):
+        return unquote(parsed.path[len("/wiki/"):]).replace("_", " ").strip()
+    match = re.search(r"(?:^|&)title=([^&]+)", parsed.query or "")
+    return unquote(match.group(1).replace("+", " ")).replace("_", " ").strip() if match else ""
+
+
+def fetch_wikisource_page(parsed: Any, title: str, *, max_bytes: int) -> tuple[bytes, str, str]:
+    """Fetch a Wikisource page through the MediaWiki API (never by scraping /wiki/).
+
+    Wikimedia rejects anonymous page scraping; the parse API is the supported
+    route and is rate-limited like search.
+    """
+    global _WIKISOURCE_LAST_REQUEST
+    with _WIKISOURCE_RATE_LOCK:
+        elapsed = time.monotonic() - _WIKISOURCE_LAST_REQUEST
+        if elapsed < 0.2:
+            time.sleep(0.2 - elapsed)
+        _WIKISOURCE_LAST_REQUEST = time.monotonic()
+    response = httpx.get(
+        f"{parsed.scheme}://{parsed.netloc}/w/api.php",
+        params={
+            "action": "parse",
+            "page": title,
+            "prop": "text",
+            "redirects": 1,
+            "disableeditsection": 1,
+            "disabletoc": 1,
+            "format": "json",
+            "formatversion": 2,
+        },
+        headers={"User-Agent": _USER_AGENT},
+        timeout=httpx.Timeout(45.0, connect=10.0),
+    )
+    response.raise_for_status()
+    payload = response.json()
+    if isinstance(payload.get("error"), dict):
+        raise ValueError(f"Wikisource: {payload['error'].get('info') or 'page not found'}")
+    parse = payload.get("parse") or {}
+    html = str(parse.get("text") or "")
+    if not html:
+        raise ValueError("Wikisource returned no page content.")
+    data = html.encode("utf-8")
+    if len(data) > max_bytes:
+        raise ValueError("The URL exceeds the upload size limit.")
+    resolved = str(parse.get("title") or title)
+    safe = re.sub(r"[^\w.\- ]+", "_", resolved).strip().replace(" ", "_") or "wikisource"
+    return data, f"{safe}.html", "text/html; charset=utf-8"
+
+
 def fetch_source_url(url: str, *, max_bytes: int) -> tuple[bytes, str, str]:
     parsed = urlparse(str(url or "").strip())
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise ValueError("Source URL must be an http(s) address.")
+    wiki_title = _wikisource_page_title(parsed)
+    if wiki_title:
+        return fetch_wikisource_page(parsed, wiki_title, max_bytes=max_bytes)
     with httpx.stream(
-        "GET", parsed.geturl(), timeout=45.0, follow_redirects=True
+        "GET", parsed.geturl(), timeout=45.0, follow_redirects=True,
+        headers={"User-Agent": _USER_AGENT},
     ) as response:
         response.raise_for_status()
         content_type = response.headers.get("content-type", "")

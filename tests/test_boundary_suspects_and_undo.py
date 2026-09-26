@@ -71,7 +71,7 @@ def test_slice_moves_prefix_to_previous_and_undo_redo_walk_history(tmp_path:Path
     """
     repo,build=install(tmp_path);manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
     target=repo.load_records(build['build_id'])[1];cut=target['text'].index('Proper')
-    result=manager.slice_to_neighbor(build['build_id'],'r2','previous',cut,1)
+    result=manager.create_from_selection(build['build_id'],'r2',cut,len(target['text']),'merge_prior',expected_revision=1)
     assert result['record']['text'].startswith('Proper current text')
     assert repo.load_records(build['build_id'])[0]['text'].endswith('Misplaced beginning.')
     undo=manager.undo_last_review_edit(build['build_id']); assert undo['can_redo'] is True
@@ -84,7 +84,7 @@ def test_slice_moves_text_to_beginning_of_next_record_and_requeues_metadata(tmp_
     repo,build=install(tmp_path); manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
     target=repo.load_records(build['build_id'])[1]
     cut=target['text'].index('Proper')
-    result=manager.slice_to_neighbor(build['build_id'],'r2','next',cut,1)
+    result=manager.create_from_selection(build['build_id'],'r2',0,cut,right='merge_next',expected_revision=1)
     rows=repo.load_records(build['build_id'])
     assert rows[2]['text'].startswith('Proper current text.')
     assert result['record']['text'].startswith('Misplaced beginning.')

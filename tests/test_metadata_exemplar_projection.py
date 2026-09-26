@@ -236,3 +236,51 @@ def test_best_effort_projection_never_makes_review_depend_on_chroma():
     assert result["error"] == "chroma unavailable"
     assert warnings and warnings[0][0] == "build-1"
     assert "projection is pending" in warnings[0][1]
+
+
+def _patch_quiet(monkeypatch):
+    monkeypatch.setattr(projection.experiment, "is_gold", lambda record_id: False)
+    monkeypatch.setattr(projection, "_second_opinion_owed", lambda row, field: False)
+
+
+def test_diagnosis_counts_a_derivable_exemplar(monkeypatch):
+    _patch_quiet(monkeypatch)
+    report = projection.diagnose_build_metadata_exemplars(FakeRepo(), "build-1")
+    assert report["outcomes"].get("exemplar") == 1
+    assert "no_evidence" not in report["outcomes"]
+
+
+def test_diagnosis_explains_missing_evidence_even_though_a_value_was_confirmed(monkeypatch):
+    _patch_quiet(monkeypatch)
+    repo = FakeRepo()
+    repo.records[0]["metadata_evidence"] = {}
+    report = projection.diagnose_build_metadata_exemplars(repo, "build-1")
+    assert report["outcomes"] == {"no_evidence": 1}
+    assert report["examples"]["no_evidence"][0]["field"] == "position_holder"
+
+
+def test_diagnosis_reports_evidence_outside_the_record(monkeypatch):
+    _patch_quiet(monkeypatch)
+    repo = FakeRepo()
+    repo.records[0]["metadata_evidence"]["position_holder"]["block_ids"] = ["elsewhere"]
+    report = projection.diagnose_build_metadata_exemplars(repo, "build-1")
+    assert report["outcomes"] == {"evidence_not_in_record": 1}
+
+
+def test_diagnosis_reports_unconfirmed_values(monkeypatch):
+    _patch_quiet(monkeypatch)
+    repo = FakeRepo()
+    repo.records[0]["metadata_field_status"]["position_holder"]["status"] = "model_inferred"
+    report = projection.diagnose_build_metadata_exemplars(repo, "build-1")
+    assert report["outcomes"] == {"not_human_confirmed": 1}
+
+
+def test_backlog_reports_dirty_rows_and_the_last_failure(monkeypatch):
+    rows = [{"scope_id": "build-1", "item_id": "i1"}, {"scope_id": "build-1", "item_id": "i2"}]
+    monkeypatch.setattr(projection.system_store, "list_semantic_memory_dirty", lambda *a, **k: rows)
+    projection.record_projection_result("build-1", "ConnectError: no route to embedding host")
+    backlog = projection.projection_backlog()
+    assert backlog["dirty"] == 2 and backlog["scopes"] == ["build-1"]
+    assert "ConnectError" in backlog["errors"]["build-1"]
+    projection.record_projection_result("build-1")
+    assert projection.projection_backlog()["errors"] == {}

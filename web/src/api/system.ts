@@ -14,6 +14,16 @@ export interface ProviderProfile {
   [key: string]: unknown;
 }
 
+export interface SystemEmbeddingStatus {
+  provider: string;
+  model: string | null;
+  reachable: boolean;
+  dimension: number | null;
+  latency_ms: number | null;
+  error: string;
+  hint: string;
+}
+
 export interface SystemEmbeddingDefaults {
   embedding_provider: string;
   embedding_model: string | null;
@@ -130,6 +140,8 @@ export interface SystemMetadataExemplarFacets {
   schemas: string[];
 }
 export interface SystemMetadataExemplarPage {
+  /** Reviewed metadata still waiting to be indexed, with the latest failure per build. */
+  projection_backlog?: { dirty: number; scopes: string[]; errors: Record<string, string> };
   exists: boolean;
   count: number;
   limit: number;
@@ -178,6 +190,12 @@ export const systemApi = {
   researcherProviders: () =>
     apiRequest<{ profiles: ProviderProfile[] }>("/api/system/researcher-providers"),
   embeddingDefaults: () => apiRequest<SystemEmbeddingDefaults>("/api/system/embedding-defaults"),
+  /** Embeds one short probe string with the given draft (or the saved default). */
+  embeddingStatus: (draft?: { embedding_provider: string; embedding_model: string | null }) =>
+    apiRequest<SystemEmbeddingStatus>("/api/system/embedding-defaults/status", {
+      method: "POST",
+      body: draft ? JSON.stringify(draft) : undefined,
+    }),
   setEmbeddingDefaults: (payload: SystemEmbeddingDefaults) =>
     apiRequest<SystemEmbeddingDefaults>("/api/system/embedding-defaults", {
       method: "PUT",

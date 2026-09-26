@@ -10,48 +10,70 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   close: [];
-  slice: [direction: "previous" | "next" | "keep" | "new", offset: number, keepEnd?: number];
+  split: [offset: number];
+  create: [
+    start: number,
+    end: number,
+    left: "distinct" | "merge_prior",
+    right: "distinct" | "merge_next",
+  ];
 }>();
 const i18n = useI18nStore();
 const textarea = ref<HTMLTextAreaElement | null>(null);
-const offset = ref(Math.max(1, Math.min(props.text.length - 1, Math.floor(props.text.length / 2))));
-const keepEnd = ref<number | null>(null);
-const before = computed(() => props.text.slice(0, offset.value).trim());
-const selected = computed(() =>
-  keepEnd.value === null ? "" : props.text.slice(offset.value, keepEnd.value).trim(),
+// A caret (start === end) chooses a split point; a range chooses text for a new record.
+const start = ref(0);
+const end = ref(0);
+const left = ref<"distinct" | "merge_prior">("distinct");
+const right = ref<"distinct" | "merge_next">("distinct");
+const hasSelection = computed(() => end.value > start.value);
+const before = computed(() => props.text.slice(0, start.value).trim());
+const selected = computed(() => props.text.slice(start.value, end.value).trim());
+const after = computed(() => props.text.slice(end.value).trim());
+const wholeText = computed(() => hasSelection.value && !before.value && !after.value);
+const canCreate = computed(
+  () =>
+    hasSelection.value &&
+    !!selected.value &&
+    !wholeText.value &&
+    !(before.value && left.value === "merge_prior" && !props.canPrevious) &&
+    !(after.value && right.value === "merge_next" && !props.canNext),
 );
-const after = computed(() =>
-  keepEnd.value === null
-    ? props.text.slice(offset.value).trim()
-    : props.text.slice(keepEnd.value).trim(),
+const canSplit = computed(
+  () =>
+    !hasSelection.value &&
+    start.value > 0 &&
+    start.value < props.text.length &&
+    !!before.value &&
+    !!after.value,
 );
 function capture() {
   const el = textarea.value;
   if (!el) return;
-  const start = Math.min(el.selectionStart || 0, el.selectionEnd || 0);
-  const end = Math.max(el.selectionStart || 0, el.selectionEnd || 0);
-  if (start > 0 && end < props.text.length && start < end) {
-    offset.value = start;
-    keepEnd.value = end;
-  } else if (start > 0 && start < props.text.length) {
-    offset.value = start;
-    keepEnd.value = null;
-  }
+  start.value = Math.min(el.selectionStart || 0, el.selectionEnd || 0);
+  end.value = Math.max(el.selectionStart || 0, el.selectionEnd || 0);
 }
-function apply(direction: "previous" | "next" | "keep" | "new") {
-  if ((direction === "keep" || direction === "new") && keepEnd.value !== null)
-    emit("slice", direction, offset.value, keepEnd.value);
-  else if (direction !== "keep" && direction !== "new" && before.value && after.value)
-    emit("slice", direction, offset.value);
+function create() {
+  if (!canCreate.value) return;
+  emit(
+    "create",
+    start.value,
+    end.value,
+    before.value ? left.value : "distinct",
+    after.value ? right.value : "distinct",
+  );
+}
+function split() {
+  if (canSplit.value) emit("split", start.value);
 }
 watch(
   () => props.text,
   () => {
-    offset.value = Math.max(1, Math.min(props.text.length - 1, Math.floor(props.text.length / 2)));
-    keepEnd.value = null;
+    start.value = end.value = Math.floor(props.text.length / 2);
+    left.value = "distinct";
+    right.value = "distinct";
     void nextTick(() => {
       textarea.value?.focus();
-      textarea.value?.setSelectionRange(offset.value, offset.value);
+      textarea.value?.setSelectionRange(start.value, end.value);
     });
   },
   { immediate: true },
@@ -74,6 +96,8 @@ watch(
         aria-describedby="slice-instructions"
         @click="capture"
         @keyup="capture"
+        @select="capture"
+        @mouseup="capture"
       ></textarea>
     </label>
     <p id="slice-instructions" class="instructions">
@@ -84,8 +108,8 @@ watch(
         <b>{{ i18n.t("pdf_corpus.before_slice") }}</b>
         <p>{{ before || "—" }}</p>
       </article>
-      <article v-if="keepEnd !== null">
-        <b>Keep selected</b>
+      <article v-if="hasSelection">
+        <b>{{ i18n.t("pdf_corpus.selected_text") }}</b>
         <p>{{ selected || "—" }}</p>
       </article>
       <article>
@@ -93,47 +117,91 @@ watch(
         <p>{{ after || "—" }}</p>
       </article>
     </div>
+    <div v-if="hasSelection" class="choices">
+      <fieldset v-if="before">
+        <legend>{{ i18n.t("pdf_corpus.leading_text_choice") }}</legend>
+        <label
+          ><input v-model="left" type="radio" name="slice-left" value="distinct" />
+          {{ i18n.t("pdf_corpus.keep_separate") }}</label
+        >
+        <label
+          ><input
+            v-model="left"
+            type="radio"
+            name="slice-left"
+            value="merge_prior"
+            :disabled="!canPrevious"
+          />
+          {{ i18n.t("pdf_corpus.join_prior") }}</label
+        >
+      </fieldset>
+      <fieldset v-if="after">
+        <legend>{{ i18n.t("pdf_corpus.trailing_text_choice") }}</legend>
+        <label
+          ><input v-model="right" type="radio" name="slice-right" value="distinct" />
+          {{ i18n.t("pdf_corpus.keep_separate") }}</label
+        >
+        <label
+          ><input
+            v-model="right"
+            type="radio"
+            name="slice-right"
+            value="merge_next"
+            :disabled="!canNext"
+          />
+          {{ i18n.t("pdf_corpus.join_next") }}</label
+        >
+      </fieldset>
+    </div>
+    <p v-if="wholeText" class="instructions" role="status">
+      {{ i18n.t("pdf_corpus.selection_is_whole_record") }}
+    </p>
     <template #footer
       ><div class="slice-actions">
         <button
-          v-if="keepEnd !== null"
+          v-if="hasSelection"
           class="btn primary"
           type="button"
-          :disabled="busy || !canPrevious || !canNext || !before || !selected || !after"
-          @click="apply('new')"
+          :disabled="busy || !canCreate"
+          @click="create"
         >
           {{ i18n.t("pdf_corpus.create_record_from_selection") }}</button
         ><button
-          v-if="keepEnd !== null"
-          class="btn"
-          type="button"
-          :disabled="busy || !canPrevious || !canNext || !before || !selected || !after"
-          @click="apply('keep')"
-        >
-          Keep selected chunk</button
-        ><button
           v-else
-          class="btn"
-          type="button"
-          :disabled="busy || !canPrevious || !before || !after"
-          @click="apply('previous')"
-        >
-          ←
-          {{ i18n.t("pdf_corpus.move_before_previous") }}</button
-        ><button
-          v-if="keepEnd === null"
           class="btn primary"
           type="button"
-          :disabled="busy || !canNext || !before || !after"
-          @click="apply('next')"
+          :disabled="busy || !canSplit"
+          @click="split"
         >
-          {{ i18n.t("pdf_corpus.move_after_next") }} →
+          {{ i18n.t("pdf_corpus.split_at_caret") }}
         </button>
       </div></template
     ></UiDialog
   >
 </template>
 <style scoped>
+.choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.choices fieldset {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.choices legend {
+  font-weight: 750;
+  padding: 0 4px;
+}
+.choices label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
 .slice-label {
   display: grid;
   gap: 7px;
@@ -184,12 +252,13 @@ watch(
   gap: 10px;
   flex-wrap: wrap;
 }
-:is(button, textarea):focus-visible {
+:is(button, textarea, input):focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
 @media (max-width: 720px) {
-  .preview-grid {
+  .preview-grid,
+  .choices {
     grid-template-columns: 1fr;
   }
   .slice-actions {

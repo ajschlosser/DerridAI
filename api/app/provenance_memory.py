@@ -94,6 +94,8 @@ class GeneratedClaim(BaseModel):
     answer_start: int | None = Field(default=None, ge=0)
     answer_end: int | None = Field(default=None, ge=0)
     validation_status: Literal["unvalidated", "validated", "rejected", "unresolved"] = "unvalidated"
+    validated_by: str | None = None
+    validated_at: str | None = None
     created_at: str = Field(default_factory=_now)
 
 

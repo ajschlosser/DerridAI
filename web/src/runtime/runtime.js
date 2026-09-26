@@ -2872,7 +2872,9 @@ window.addEventListener("drop", (e) => {
   if (e.dataTransfer?.files?.length) {
     e.preventDefault();
     if (!isResearcher())
-      importFiles([...e.dataTransfer.files].filter((f) => /\.(jsonl|ndjson|json)$/i.test(f.name)));
+      importFiles(
+        [...e.dataTransfer.files].filter((f) => /\.(jsonl|ndjson|json|zst)$/i.test(f.name)),
+      );
   }
 });
 document.addEventListener(

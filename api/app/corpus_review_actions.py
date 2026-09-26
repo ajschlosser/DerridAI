@@ -19,7 +19,6 @@ from __future__ import annotations
 import difflib
 import hashlib
 import json
-import re
 import uuid
 from functools import wraps
 from typing import TYPE_CHECKING, Any, Literal
@@ -29,6 +28,14 @@ from pydantic import BaseModel, ValidationError
 from .corpus_enrichment_helpers import _mark_human_touch, _prepend_metadata_priority
 from .corpus_metadata import MANIFEST_INHERITED_FIELDS, apply_metadata_constraints
 from .corpus_record_quality import iso_now
+from .corpus_record_restructure import (
+    JOIN,
+    assert_text_conserved,
+    block_ids_for_range,
+    mint_record,
+    new_record_id,
+    tombstone,
+)
 from .corpus_review_mutations import requeue_record_metadata
 from .corpus_review_state import (
     _decorate_review_state,
@@ -40,7 +47,7 @@ from .corpus_review_state import (
 from .corpus_reviewer_helpers import _present_for_reviewer, _second_opinion_owed
 from .corpus_segmentation import (
     _apply_boundary_adjudication_to_records,
-    _scholarly_page_range,
+    _apply_manifest_metadata,
 )
 from .enrichment_ledger import ACCEPTED
 from .field_assertions import (
@@ -54,6 +61,7 @@ from .field_assertions import (
 )
 from .metadata_adjudication_cache import remember as remember_adjudication
 from .metadata_schema import MetadataSchema
+from .nlp_annotations import annotate_record
 from .provenance_memory import persist_record_decision
 from .rag import _citation_strings
 from .system_store import system_store
@@ -1057,142 +1065,230 @@ class ReviewActionsMixin:
         return target
 
 
-    @_serialize_record_mutation
-    def slice_to_neighbor(
-        self, build_id: str, record_id: str, direction: str, offset: int, expected_revision: int | None = None, keep_end: int | None = None,
-    ) -> dict[str, Any]:
-        """Move reviewed text across an existing record boundary without creating a record.
-
-        ``previous`` moves text before ``offset`` to the end of the previous record.
-        ``next`` moves text after ``offset`` to the start of the next record.  The
-        immutable extraction is retained on both records; this operation edits the
-        reviewed corpus layer and records an atomic two-record revision.
-        """
-        if direction not in {"previous", "next", "keep", "new"}:
-            raise ValueError("Slice direction must be previous or next.")
+    # ------------------------------------------------------------------
+    # Structural edits: split, merge, create-from-selection.
+    #
+    # Every operation retires the affected Records and mints new ones (see
+    # corpus_record_restructure). Nothing is edited in place and no ID is reused.
+    # ------------------------------------------------------------------
+    def _structural_context(self, build_id: str, record_id: str, expected_revision: int | None):
+        self._assert_human_review_available(build_id, structural=True)
         records = self.repo.load_records(build_id)
         index = next((i for i, row in enumerate(records) if row.get("record_id") == record_id), -1)
         if index < 0:
             raise KeyError(record_id)
-        target = records[index]
-        self._assert_human_review_available(build_id, target, structural=False)
-        self._assert_record_revision(target, expected_revision)
-        text = str(target.get("text") or "")
-        create_new = direction == "new"
-        if direction in {"keep", "new"}:
-            if index == 0 or index == len(records) - 1:
-                raise ValueError("Keeping a selected chunk requires both neighboring records.")
-            if keep_end is None or offset >= keep_end or keep_end > len(text):
-                raise ValueError("Keep selection must be inside the selected record text.")
-            previous, following = records[index - 1], records[index + 1]
-            prefix, retained, suffix = text[:offset].strip(), text[offset:keep_end].strip(), text[keep_end:].strip()
-            if not prefix or not retained or not suffix:
-                raise ValueError("Keep selection must leave non-empty text in all three records.")
-            original_texts = {
-                str(target.get("record_id")): text,
-                str(previous.get("record_id")): str(previous.get("text") or ""),
-                str(following.get("record_id")): str(following.get("text") or ""),
-            }
-            neighbors = (previous, following)
-        else:
-            neighbor_index = index - 1 if direction == "previous" else index + 1
-            if neighbor_index < 0 or neighbor_index >= len(records):
-                raise ValueError(f"No {direction} record is available for this slice.")
-            neighbor = records[neighbor_index]
-            neighbors = (neighbor,)
-        neighbor = neighbors[0]
-        if direction != "keep":
-            neighbor_index = index - 1 if direction == "previous" else index + 1
-            neighbor = records[neighbor_index]
-        if direction != "keep":
-            original_texts = {str(target.get("record_id")): text, str(neighbor.get("record_id")): str(neighbor.get("text") or "")}
-        if offset <= 0 or offset >= len(text):
-            raise ValueError("Slice point must be inside the selected record text.")
-        self._push_review_history(build_id, records, action=f"slice_{direction}", selected_record_id=record_id)
-        if direction == "keep":
-            previous, following = records[index - 1], records[index + 1]
-            previous["text"] = (str(previous.get("text") or "").rstrip() + "\n\n" + prefix).strip()
-            target["text"] = retained
-            following["text"] = (suffix + "\n\n" + str(following.get("text") or "").lstrip()).strip()
-        elif direction == "previous":
-            moved, retained = text[:offset].strip(), text[offset:].lstrip()
-            if not moved or not retained:
-                raise ValueError("Slice must leave non-empty text in both records.")
-            neighbor["text"] = (str(neighbor.get("text") or "").rstrip() + "\n\n" + moved).strip()
-            target["text"] = retained
-        else:
-            retained, moved = text[:offset].rstrip(), text[offset:].strip()
-            if not moved or not retained:
-                raise ValueError("Slice must leave non-empty text in both records.")
-            neighbor["text"] = (moved + "\n\n" + str(neighbor.get("text") or "").lstrip()).strip()
-            target["text"] = retained
-        now = iso_now()
-        transaction_id = f"slice-{uuid.uuid4().hex[:12]}"
-        created_record: dict[str, Any] | None = None
-        if create_new:
-            new_record = json.loads(json.dumps(target))
-            new_record["record_id"] = f"{record_id}-split-{uuid.uuid4().hex[:10]}"
-            new_record["text"] = retained
-            new_record["text_length"] = len(retained)
-            new_record["record_revision"] = 1
-            new_record["review_events"] = []
-            new_record["slice_lineage"] = {
-                "transaction_id": transaction_id,
-                "source_record_id": record_id,
-                "role": "created",
-                "at": now,
-            }
-            target["text"] = prefix
-            records.insert(index + 1, new_record)
-            created_record = new_record
-            affected_rows = (target, new_record, following)
-        else:
-            affected_rows = (target, *neighbors)
-        for row in affected_rows:
-            if "source_extracted_text" not in row:
-                row["source_extracted_text"] = original_texts.get(str(row.get("record_id")), str(row.get("text") or ""))
-            row["text_length"] = len(str(row.get("text") or ""))
-            row["text_review_status"] = "human_corrected"
-            row["text_reviewed_at"] = now
-            row["text_review_source"] = "human_boundary_slice"
-            row["review_disposition"] = "pending"
-            row["accepted"] = False
-            row["rejected"] = False
-            row["needs_review"] = True
-            row["review_reason"] = "Record boundary adjusted during human review; verify neighboring text and affected metadata."
-            requeue_record_metadata(
-                row,
-                "Record boundary changed; metadata whose interpretation depends on moved text may need review.",
-            )
-            lineage = dict(row.get("slice_lineage") or {})
-            lineage.update({
-                "transaction_id": transaction_id,
-                "source_record_id": record_id,
-                "affected_record_ids": [str(item.get("record_id") or "") for item in affected_rows],
-                "direction": direction,
-                "role": "source" if str(row.get("record_id")) == record_id else "neighbor",
-                "at": now,
-            })
-            row["slice_lineage"] = lineage
-            row["record_revision"] = int(row.get("record_revision") or 1) + 1
-            _mark_human_touch(row, ["__text__", "__boundary__"])
-            events = list(row.get("review_events") or [])
-            events.append({"at": now, "event": "boundary_slice", "transaction_id": transaction_id, "direction": direction, "source_record_id": record_id, "affected_record_ids": [str(item.get("record_id") or "") for item in affected_rows]})
-            row["review_events"] = events[-100:]
-        left_row, right_row = (neighbors[0], target) if direction in {"previous", "keep"} else (target, neighbor)
-        self._record_boundary_editorial_example(
-            build_id, left=left_row, right=right_row,
-            action=f"human_slice_{direction}", transaction_id=transaction_id,
-        )
-        self._rewrite_and_validate(build_id, records)
-        result = {"record": target, "neighbor": neighbor, "direction": direction, "transaction_id": transaction_id}
-        if created_record is not None:
-            result["new_record"] = created_record
-        if direction == "keep":
-            result["left_neighbor"] = neighbors[0]
-            result["right_neighbor"] = records[index + 1]
-        return result
+        self._assert_record_revision(records[index], expected_revision)
+        return records, index
 
+    def _retired_ids(self, build_id: str) -> set[str]:
+        stored = self.repo.load_checkpoint(build_id, "retired_records", {})
+        entries = stored.get("entries") if isinstance(stored, dict) else []
+        return {str(item.get("record_id")) for item in entries or [] if isinstance(item, dict)}
+
+    def _restructure(
+        self,
+        build_id: str,
+        records: list[dict[str, Any]],
+        lo: int,
+        hi: int,
+        pieces: list[dict[str, Any]],
+        *,
+        operation: str,
+        selected_piece: int,
+    ) -> dict[str, Any]:
+        """Replace ``records[lo:hi+1]`` with new Records built from ``pieces``.
+
+        Each piece is ``{"text", "block_ids", "precise", "parents"}``.
+        """
+        retiring = records[lo:hi + 1]
+        assert_text_conserved(
+            [str(row.get("text") or "") for row in retiring],
+            [str(piece["text"]) for piece in pieces],
+        )
+        self._save_review_undo(build_id, json.loads(json.dumps(records)), action=operation, selected_record_id=str(retiring[0].get("record_id")))
+        build = self.repo.get_build(build_id)
+        asset = self.repo.get_asset(build["asset_id"])
+        blocks = {block["block_id"]: block for block in self.repo.load_blocks(build["asset_id"])}
+        manifest = build.get("manifest") or {}
+        schema = self._schema_for(build_id)
+        transaction_id = f"{operation}-{uuid.uuid4().hex[:12]}"
+        taken = {str(row.get("record_id")) for row in records} | self._retired_ids(build_id)
+        seed = str(retiring[0].get("record_id") or "pdf")
+
+        def finish(record: dict[str, Any]) -> None:
+            _apply_manifest_metadata(record, manifest)
+            inline, full = _citation_strings(record)
+            record["inline_citation"] = inline
+            record["full_citation"] = full
+            annotate_record(record, schema, language=str(manifest.get("language") or ""))
+
+        created: list[dict[str, Any]] = []
+        for piece in pieces:
+            row = mint_record(
+                asset=asset, blocks=blocks, block_ids=piece["block_ids"], text=piece["text"],
+                record_id=new_record_id(seed, taken), parents=piece["parents"], operation=operation,
+                transaction_id=transaction_id, manifest_apply=finish, precise=piece["precise"],
+            )
+            requeue_record_metadata(row, "Record created by a structural edit; metadata must be evaluated against its new text.", force=True)
+            _mark_human_touch(row, ["__text__", "__boundary__"])
+            row["review_events"] = [{"at": iso_now(), "event": operation, "transaction_id": transaction_id, "parent_record_ids": row["lineage"]["parent_record_ids"]}]
+            created.append(row)
+        successor_ids = [str(row["record_id"]) for row in created]
+        stored = self.repo.load_checkpoint(build_id, "retired_records", {})
+        entries = list(stored.get("entries") or []) if isinstance(stored, dict) else []
+        # An undone edit brings its parents back to life; they are no longer retired.
+        live_ids = {str(row.get("record_id")) for row in records}
+        entries = [item for item in entries if str(item.get("record_id")) not in live_ids]
+        entries.extend(tombstone(row, operation=operation, transaction_id=transaction_id, successors=successor_ids) for row in retiring)
+        self.repo.save_checkpoint(build_id, "retired_records", {"entries": entries})
+        records[lo:hi + 1] = created
+        self._rewrite_and_validate(build_id, records)
+        with self._lock:
+            current = self.repo.get_build(build_id)
+            for row in reversed(created):
+                _prepend_metadata_priority(current, str(row["record_id"]))
+            self.repo.save_build(current)
+        if operation != "merge":
+            for left_row, right_row in zip(created, created[1:]):
+                self._record_boundary_editorial_example(
+                    build_id, left=left_row, right=right_row,
+                    action=f"human_{operation}", transaction_id=transaction_id,
+                )
+        for row in retiring:
+            self._invalidate_metadata_exemplar_projection(build_id, record_id=str(row.get("record_id")), reason="record_retired_by_structural_edit")
+        return {
+            "records": created,
+            "record": created[selected_piece],
+            "retired_record_ids": [str(row.get("record_id")) for row in retiring],
+            "transaction_id": transaction_id,
+        }
+
+    def retired_records(self, build_id: str) -> list[dict[str, Any]]:
+        """Lineage tombstones for Records retired by structural edits (never reused IDs)."""
+        stored = self.repo.load_checkpoint(build_id, "retired_records", {})
+        live = {str(row.get("record_id")) for row in self.repo.load_records(build_id)}
+        return [item for item in (stored.get("entries") if isinstance(stored, dict) else []) or [] if str(item.get("record_id")) not in live]
+
+    def _blocks_for(self, build_id: str) -> dict[str, dict[str, Any]]:
+        asset_id = self.repo.get_build(build_id)["asset_id"]
+        return {block["block_id"]: block for block in self.repo.load_blocks(asset_id)}
+
+    @_serialize_record_mutation
+    def merge(self, build_id: str, record_id: str, direction: str, expected_revision: int | None = None) -> dict[str, Any]:
+        """Retire two adjacent Records and mint one new Record from both."""
+        if direction not in {"previous", "next"}:
+            raise ValueError("Merge direction must be previous or next.")
+        records, index = self._structural_context(build_id, record_id, expected_revision)
+        other = index - 1 if direction == "previous" else index + 1
+        if other < 0 or other >= len(records):
+            raise ValueError(f"No {direction} record is available to merge.")
+        lo, hi = sorted((index, other))
+        first, second = records[lo], records[hi]
+        piece = {
+            "text": str(first.get("text") or "").rstrip() + JOIN + str(second.get("text") or "").lstrip(),
+            "block_ids": [*(first.get("source_block_ids") or []), *(second.get("source_block_ids") or [])],
+            "precise": True,
+            "parents": [first, second],
+        }
+        return self._restructure(build_id, records, lo, hi, [piece], operation="merge", selected_piece=0)
+
+    @_serialize_record_mutation
+    def split(
+        self, build_id: str, record_id: str, after_block_id: str | None = None,
+        expected_revision: int | None = None, offset: int | None = None,
+    ) -> dict[str, Any]:
+        """Retire one Record and mint two new Records from its text."""
+        records, index = self._structural_context(build_id, record_id, expected_revision)
+        target = records[index]
+        text = str(target.get("text") or "")
+        block_ids = list(target.get("source_block_ids") or [])
+        blocks = self._blocks_for(build_id)
+        if offset is None:
+            if not after_block_id or after_block_id not in block_ids:
+                raise ValueError("Split point must be a source block in the selected record or a text offset.")
+            cursor = 0
+            offset = -1
+            for bid in block_ids:
+                bt = str((blocks.get(bid) or {}).get("text") or "").strip()
+                if not bt:
+                    continue
+                found = text.find(bt, cursor)
+                if found < 0:
+                    raise ValueError("The record text no longer aligns with its source blocks; split by text offset instead.")
+                cursor = found + len(bt)
+                if bid == after_block_id:
+                    offset = cursor
+                    break
+        left, right = text[:offset], text[offset:]
+        if offset <= 0 or offset >= len(text) or not left.strip() or not right.strip():
+            raise ValueError("Split point must leave non-empty text in both new records.")
+        lids, lp = block_ids_for_range(text, block_ids, blocks, 0, offset)
+        rids, rp = block_ids_for_range(text, block_ids, blocks, offset, len(text))
+        pieces = [
+            {"text": left, "block_ids": lids, "precise": lp, "parents": [target]},
+            {"text": right, "block_ids": rids, "precise": rp, "parents": [target]},
+        ]
+        return self._restructure(build_id, records, index, index, pieces, operation="split", selected_piece=0)
+
+    @_serialize_record_mutation
+    def create_from_selection(
+        self, build_id: str, record_id: str, start: int, end: int,
+        left: str = "distinct", right: str = "distinct", expected_revision: int | None = None,
+    ) -> dict[str, Any]:
+        """Make a new Record from ``text[start:end]``.
+
+        The text before and after the selection either joins the prior / following
+        Record (``merge_prior`` / ``merge_next``) or becomes its own new Record
+        (``distinct``). Every Record touched is retired and replaced.
+        """
+        if left not in {"distinct", "merge_prior"} or right not in {"distinct", "merge_next"}:
+            raise ValueError("left must be distinct or merge_prior; right must be distinct or merge_next.")
+        records, index = self._structural_context(build_id, record_id, expected_revision)
+        target = records[index]
+        text = str(target.get("text") or "")
+        if not 0 <= start < end <= len(text) or not text[start:end].strip():
+            raise ValueError("Selection must be non-empty text inside the selected record.")
+        if start == 0 and end == len(text):
+            raise ValueError("The selection is the whole record; nothing would change.")
+        before, chosen, after = text[:start], text[start:end], text[end:]
+        block_ids = list(target.get("source_block_ids") or [])
+        blocks = self._blocks_for(build_id)
+
+        def ids(lo: int, hi: int) -> tuple[list[str], bool]:
+            return block_ids_for_range(text, block_ids, blocks, lo, hi)
+
+        lo = hi = index
+        pieces: list[dict[str, Any]] = []
+        if before.strip():
+            bids, bp = ids(0, start)
+            if left == "merge_prior":
+                if index == 0:
+                    raise ValueError("There is no prior record to merge the leading text into.")
+                prior = records[index - 1]
+                lo = index - 1
+                pieces.append({
+                    "text": str(prior.get("text") or "").rstrip() + JOIN + before.lstrip(),
+                    "block_ids": [*(prior.get("source_block_ids") or []), *bids], "precise": bp, "parents": [prior, target],
+                })
+            else:
+                pieces.append({"text": before, "block_ids": bids, "precise": bp, "parents": [target]})
+        cids, cp = ids(start, end)
+        pieces.append({"text": chosen, "block_ids": cids, "precise": cp, "parents": [target]})
+        selected = len(pieces) - 1
+        if after.strip():
+            aids, ap = ids(end, len(text))
+            if right == "merge_next":
+                if index >= len(records) - 1:
+                    raise ValueError("There is no following record to merge the trailing text into.")
+                following = records[index + 1]
+                hi = index + 1
+                pieces.append({
+                    "text": after.rstrip() + JOIN + str(following.get("text") or "").lstrip(),
+                    "block_ids": [*aids, *(following.get("source_block_ids") or [])], "precise": ap, "parents": [target, following],
+                })
+            else:
+                pieces.append({"text": after, "block_ids": aids, "precise": ap, "parents": [target]})
+        return self._restructure(build_id, records, lo, hi, pieces, operation="create_from_selection", selected_piece=selected)
 
     @_serialize_record_mutation
     def adjudicate_record_boundary(self, build_id: str, record_id: str, direction: str, request_override: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -1222,77 +1318,3 @@ class ReviewActionsMixin:
         return {"decision": decision, "left_record": left, "right_record": right, "build": current_build}
 
 
-    @_serialize_record_mutation
-    def merge(self, build_id: str, record_id: str, direction: str, expected_revision: int | None = None) -> dict[str, Any]:
-        self._assert_human_review_available(build_id, structural=True)
-        records = self.repo.load_records(build_id)
-        index = next((i for i, record in enumerate(records) if record.get("record_id") == record_id), -1)
-        if index < 0:
-            raise KeyError(record_id)
-        self._assert_record_revision(records[index], expected_revision)
-        self._save_review_undo(build_id, json.loads(json.dumps(records)), action="merge", selected_record_id=record_id)
-        other_index = index - 1 if direction == "previous" else index + 1
-        if other_index < 0 or other_index >= len(records):
-            raise ValueError(f"No {direction} record is available to merge.")
-        first_index, second_index = sorted((index, other_index))
-        first, second = records[first_index], records[second_index]
-        merged_ids = list(first.get("source_block_ids") or []) + list(second.get("source_block_ids") or [])
-        blocks = {block["block_id"]: block for block in self.repo.load_blocks(self.repo.get_build(build_id)["asset_id"])}
-        group = [blocks[block_id] for block_id in merged_ids if block_id in blocks]
-        text = "\n\n".join(block["text"].strip() for block in group if block.get("text", "").strip())
-        pages = sorted({int(block["page"]) for block in group})
-        page_start, page_end = _scholarly_page_range(group)
-        merged_evidence: dict[str, Any] = {}
-        for evidence_map in (first.get("metadata_evidence") or {}, second.get("metadata_evidence") or {}):
-            for field, info in evidence_map.items():
-                existing = merged_evidence.setdefault(field, {"block_ids": [], "confidence": 1.0, "reason": "Preserved across human merge.", "reviewed_by": "human", "reviewed_at": iso_now()})
-                existing["block_ids"] = list(dict.fromkeys(list(existing.get("block_ids") or []) + list(info.get("block_ids") or [])))
-                existing["confidence"] = min(float(existing.get("confidence") or 1.0), float(info.get("confidence") or 1.0))
-        merged = {**first, "text": text, "text_length": len(text), "page_start": page_start, "page_end": page_end, "pdf_pages": pages, "source_unit_ids": merged_ids, "source_block_ids": merged_ids, "source_spans": list(first.get("source_spans") or []) + list(second.get("source_spans") or []), "needs_review": True, "accepted": False, "rejected": False, "review_disposition": "pending", "review_reason": "Record boundaries were merged during human review.", "metadata_evidence": merged_evidence, "record_revision": max(int(first.get("record_revision") or 1), int(second.get("record_revision") or 1)) + 1}
-        # Keep the first record's immutable identity. Unrelated downstream IDs never change.
-        merged["record_id"] = first.get("record_id")
-        requeue_record_metadata(
-            merged,
-            "Record boundaries were merged during human review; metadata enrichment must rerun against the merged text.",
-        )
-        records[first_index:second_index + 1] = [merged]
-        self._rewrite_and_validate(build_id, records)
-        with self._lock:
-            build = self.repo.get_build(build_id)
-            _prepend_metadata_priority(build, str(merged.get("record_id") or ""))
-            self.repo.save_build(build)
-        return merged
-
-
-    @_serialize_record_mutation
-    def split(self, build_id: str, record_id: str, after_block_id: str, expected_revision: int | None = None) -> dict[str, Any]:
-        self._assert_human_review_available(build_id, structural=True)
-        records = self.repo.load_records(build_id)
-        index = next((i for i, record in enumerate(records) if record.get("record_id") == record_id), -1)
-        if index < 0:
-            raise KeyError(record_id)
-        target = records[index]
-        self._assert_record_revision(target, expected_revision)
-        self._save_review_undo(build_id, json.loads(json.dumps(records)), action="split", selected_record_id=record_id)
-        ids = list(target.get("source_block_ids") or [])
-        if after_block_id not in ids or ids.index(after_block_id) >= len(ids) - 1:
-            raise ValueError("Split point must be a non-final source block in the selected record.")
-        cut = ids.index(after_block_id) + 1
-        block_map = {block["block_id"]: block for block in self.repo.load_blocks(self.repo.get_build(build_id)["asset_id"])}
-        pieces = []
-        for piece_ids in (ids[:cut], ids[cut:]):
-            group = [block_map[block_id] for block_id in piece_ids if block_id in block_map]
-            text = "\n\n".join(block["text"].strip() for block in group if block.get("text", "").strip())
-            pages = sorted({int(block["page"]) for block in group})
-            page_start, page_end = _scholarly_page_range(group)
-            piece_evidence: dict[str, Any] = {}
-            for field, info in (target.get("metadata_evidence") or {}).items():
-                kept = [block_id for block_id in (info.get("block_ids") or []) if block_id in piece_ids]
-                if kept:
-                    piece_evidence[field] = {**info, "block_ids": kept, "reason": str(info.get("reason") or "") + " Preserved across human split."}
-            pieces.append({**target, "text": text, "text_length": len(text), "page_start": page_start, "page_end": page_end, "pdf_pages": pages, "source_unit_ids": piece_ids, "source_block_ids": piece_ids, "source_spans": [span for span in target.get("source_spans") or [] if span.get("block_id") in piece_ids], "needs_review": True, "accepted": False, "rejected": False, "review_disposition": "pending", "review_reason": "Record boundary was split during human review.", "metadata_evidence": piece_evidence, "record_revision": int(target.get("record_revision") or 1) + 1})
-        pieces[0]["record_id"] = target.get("record_id")
-        pieces[1]["record_id"] = f"{re.sub(r'-[0-9a-f]{8}$', '', str(target.get('record_id') or 'pdf'))}-s{uuid.uuid4().hex[:8]}"
-        records[index:index + 1] = pieces
-        self._rewrite_and_validate(build_id, records)
-        return {"records": pieces}

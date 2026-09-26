@@ -59,7 +59,6 @@ const emit = defineEmits<{
   requestSlice: [];
   openSourceIssue: [];
   merge: [direction: "previous" | "next"];
-  slice: [direction: "previous" | "next" | "keep" | "new", offset: number, keepEnd?: number];
   adjudicateBoundary: [direction: "previous" | "next", providerProfileId: string, model: string];
   openSourceViewer: [];
   updateLlmProviderProfile: [value: string];

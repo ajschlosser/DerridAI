@@ -43,7 +43,51 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+const library: PdfAsset[] = [
+  asset,
+  {
+    ...asset,
+    asset_id: "pdf-2",
+    filename: "Of Grammatology.pdf",
+    media_kind: "pdf",
+    page_count: 512,
+    block_count: 4120,
+    ocr_pages: 38,
+  },
+  {
+    ...asset,
+    asset_id: "pdf-3",
+    filename: "Voice and Phenomenon.docx",
+    media_kind: "docx",
+    page_count: 0,
+    block_count: 610,
+  },
+  {
+    ...asset,
+    asset_id: "pdf-4",
+    filename: "Seminar recording, 1968.mp3",
+    media_kind: "audio",
+    page_count: 0,
+    block_count: 233,
+  },
+];
+
 export const BeforeFileSelection: Story = {};
+export const WithSavedSources: Story = { args: { assets: library } };
+export const SelectedSource: Story = {
+  args: { assets: library, assetId: "pdf-2", selectedAsset: library[1], illegibility: 50 },
+};
+export const WikisourceAddress: Story = {
+  args: { assets: library, sourceUrl: "https://en.wikisource.org/wiki/Balzac/Preface" },
+};
+export const LockedWhileBuilding: Story = {
+  args: {
+    assets: library,
+    assetId: "pdf-hospitality",
+    selectedAsset: asset,
+    sourceSelectionDisabled: true,
+  },
+};
 export const GutenbergResults: Story = { args: { hits, gutenbergQuery: "austen" } };
 export const DeterministicCheck: Story = {
   args: { assetId: asset.asset_id, selectedAsset: asset, illegibility: 0 },

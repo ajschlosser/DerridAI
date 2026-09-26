@@ -131,3 +131,27 @@ def test_record_graph_can_walk_document_assertion_and_claim_branches():
     # The same graph supports re-centering instead of enforcing one fixed chain.
     assert len(root_neighbors) >= 4
     assert len(_neighbors(graph, claim)) >= 2
+
+
+def _assertion(assertion_id, value, *, supersedes=None):
+    return {
+        "assertion_id": assertion_id, "field_id": "f", "field_name": "speaker", "value": value,
+        "record_revision": 1, "authority_status": "unreviewed", "derivation_method": "model",
+        **({"supersedes_assertion_id": supersedes} if supersedes else {}),
+    }
+
+
+def test_graph_shows_only_current_assertions_by_default():
+    record = {
+        "record_id": "r1", "source_document_id": "d1", "record_revision": 1,
+        "field_assertions": {"f": [_assertion("a1", "Derrida"), _assertion("a2", "Rousseau", supersedes="a1")]},
+        "current_field_assertions": {"f": "a2"},
+    }
+    graph = build_record_graph(record)
+    ids = [n["label"] for n in graph["nodes"] if n["object_type"] == "FieldAssertion"]
+    assert len(ids) == 1 and graph["hidden_assertion_count"] == 1
+    full = build_record_graph(record, include_assertion_history=True)
+    assert len([n for n in full["nodes"] if n["object_type"] == "FieldAssertion"]) == 2
+    assert full["hidden_assertion_count"] == 0
+    assert any(e.get("relation") == "supersedes" for e in full["edges"])
+    assert not any(e.get("relation") == "supersedes" for e in graph["edges"])

@@ -476,8 +476,6 @@
 .build-row:focus-visible,
 .record-row:focus-visible,
 .icon-button:focus-visible,
-.split-button:focus-visible,
-.evidence-toggle:focus-visible,
 .evidence-list button:focus-visible,
 summary:focus-visible {
   outline: 3px solid var(--accent);
@@ -1485,6 +1483,23 @@ summary:focus-visible {
   margin: 0;
   font-size: 1rem;
 }
+.setup-source-section .setup-section-head {
+  padding-block-end: var(--space-3);
+  border-block-end: 1px solid var(--border-subtle);
+}
+.setup-source-section .setup-section-head h3 {
+  font-family: var(--font-reading);
+  font-size: clamp(1.375rem, 2vw, 1.75rem);
+  font-weight: var(--fw-semibold);
+  letter-spacing: -0.015em;
+  line-height: var(--lh-tight);
+}
+.setup-source-section .setup-section-head p {
+  margin-block-start: 6px;
+  font-size: var(--fs-md);
+  line-height: var(--lh-normal);
+  max-width: 72ch;
+}
 .setup-section-head p,
 .phase-label p {
   margin: 3px 0 0;
@@ -1492,31 +1507,6 @@ summary:focus-visible {
   font-size: 0.875rem;
   line-height: 1.45;
   max-width: 86ch;
-}
-.source-setup-grid {
-  display: grid;
-  grid-template-columns: minmax(320px, 1fr) auto;
-  gap: 12px;
-  align-items: end;
-}
-.source-setup-grid label {
-  display: grid;
-  gap: 5px;
-}
-.source-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.source-facts {
-  display: flex;
-  gap: 8px 14px;
-  flex-wrap: wrap;
-  color: var(--muted);
-  font-size: 0.8125rem;
-}
-.source-facts span {
-  overflow-wrap: anywhere;
 }
 .setup-phase {
   display: grid;
@@ -1618,27 +1608,12 @@ summary:focus-visible {
   overflow-x: hidden;
 }
 @container (max-width:760px) {
-  .source-setup-grid {
-    grid-template-columns: 1fr;
-  }
-  .source-actions {
-    display: grid;
-  }
-  .source-actions .btn {
-    width: 100%;
-  }
   .setup-section-head > div,
   .phase-label {
     align-items: flex-start;
   }
 }
 @media (max-width: 900px) {
-  .source-setup-grid {
-    grid-template-columns: 1fr;
-  }
-  .source-actions .btn {
-    flex: 1 1 200px;
-  }
   .setup-section-head > div,
   .phase-label {
     align-items: flex-start;
@@ -1649,12 +1624,6 @@ summary:focus-visible {
   .setup-phase,
   .setup-disclosure-body {
     padding: 13px;
-  }
-  .source-actions {
-    display: grid;
-  }
-  .source-actions .btn {
-    width: 100%;
   }
   .setup-disclosure > summary {
     padding: 11px 13px;

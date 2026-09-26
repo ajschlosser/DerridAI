@@ -236,6 +236,24 @@ class ChromaMetadataExemplarIndex:
     fallback behavior.
     """
 
+    # Collection identity is class-level so other derived semantic projections
+    # (for example validated-claim memory) share this compatibility logic.
+    SYSTEM_KIND = "metadata_exemplars"
+    SCHEMA_KEY = "derridai_exemplar_schema"
+    SCHEMA_VERSION = PROJECTION_VERSION
+    DESCRIPTION = "Derived evidence-bound metadata exemplars for progressive enrichment."
+    TEXT_FIELD = "context_text"
+    FILTER_FIELDS = [
+        "scope_id",
+        "field_name",
+        "schema_id",
+        "schema_version",
+        "assertion_status",
+        "kind",
+        "language",
+        "region_type",
+    ]
+
     def __init__(self, store: Any | None = None, *, collection_name: str = COLLECTION_NAME) -> None:
         if store is None:
             from .chroma_store import ChromaStore
@@ -265,7 +283,7 @@ class ChromaMetadataExemplarIndex:
             collection = self.store.client.get_collection(name=self.collection_name)
             metadata = dict(getattr(collection, "metadata", None) or {})
             schema_current = (
-                int(metadata.get("derridai_exemplar_schema") or 0) == PROJECTION_VERSION
+                int(metadata.get(self.SCHEMA_KEY) or 0) == self.SCHEMA_VERSION
             )
             embedding_current = True
             embedding_spec = getattr(self.store, "_embedding_spec", None)
@@ -290,28 +308,19 @@ class ChromaMetadataExemplarIndex:
         try:
             self.store.create_store(
                 self.collection_name,
-                description="Derived evidence-bound metadata exemplars for progressive enrichment.",
+                description=self.DESCRIPTION,
                 embedding_provider=expected_provider,
                 embedding_model=expected_model,
                 retrieval_mode="semantic",
-                text_field="context_text",
-                filter_fields=[
-                    "scope_id",
-                    "field_name",
-                    "schema_id",
-                    "schema_version",
-                    "assertion_status",
-                    "kind",
-                    "language",
-                    "region_type",
-                ],
+                text_field=self.TEXT_FIELD,
+                filter_fields=list(self.FILTER_FIELDS),
                 collection_role=COLLECTION_ROLE,
                 protected=True,
                 metadata={
-                    "derridai_system_collection": "metadata_exemplars",
+                    "derridai_system_collection": self.SYSTEM_KIND,
                     "derridai_hidden_system_collection": True,
                     "derridai_derived": True,
-                    "derridai_exemplar_schema": PROJECTION_VERSION,
+                    self.SCHEMA_KEY: self.SCHEMA_VERSION,
                 },
             )
         except Exception as exc:
