@@ -56,12 +56,7 @@ const schemaSummary = computed(() => {
           </select>
           <small>{{ i18n.t("schemas.choose_help") }}</small>
         </label>
-        <button
-          type="button"
-          class="btn small"
-          :disabled="props.disabled"
-          @click="emit('manageSchemas')"
-        >
+        <button type="button" class="btn small" @click="emit('manageSchemas')">
           {{ i18n.t("schemas.manage") }}
         </button>
       </div>
