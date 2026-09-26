@@ -17,18 +17,28 @@ export const corpusSourcesApi = {
   gutenbergArchiveAction: (action: "start" | "pause" | "resume" | "refetch") =>
     apiRequest<GutenbergStatus>(`/api/gutenberg/archive/${action}`, { method: "POST" }),
   listAssets: () => apiRequest<{ items: PdfAsset[] }>(legacyCorpusUrl("assets")),
-  async uploadAsset(file: File, ocrMode = "auto", sourceIllegibility = 0) {
+  async uploadAsset(
+    file: File,
+    ocrMode = "auto",
+    sourceIllegibility = 0,
+    detectPageNumbers = true,
+  ) {
     const body = new FormData();
     body.append("file", file);
     body.append("ocr_mode", ocrMode);
     body.append("ocr_languages", "eng+fra+deu");
     body.append("source_illegibility", String(sourceIllegibility));
+    body.append("page_number_detection", detectPageNumbers ? "auto" : "off");
     return apiRequest<PdfAsset>(legacyCorpusUrl("assets"), { method: "POST", body });
   },
-  importUrl: (url: string, sourceIllegibility = 0) =>
+  importUrl: (url: string, sourceIllegibility = 0, detectPageNumbers = true) =>
     apiRequest<PdfAsset>(legacyCorpusUrl("assets/url"), {
       method: "POST",
-      body: JSON.stringify({ url, source_illegibility: sourceIllegibility }),
+      body: JSON.stringify({
+        url,
+        source_illegibility: sourceIllegibility,
+        page_number_detection: detectPageNumbers ? "auto" : "off",
+      }),
     }),
   searchGutenberg: (query: string) =>
     apiRequest<{ items: GutenbergHit[] }>(
@@ -38,10 +48,14 @@ export const corpusSourcesApi = {
     apiRequest<{ items: WikisourceHit[] }>(
       `${LEGACY_CORPUS_BASE}/wikisource/search?q=${encodeURIComponent(query)}&limit=12`,
     ),
-  importGutenberg: (etextId: number, sourceIllegibility = 0) =>
+  importGutenberg: (etextId: number, sourceIllegibility = 0, detectPageNumbers = true) =>
     apiRequest<PdfAsset>(legacyCorpusUrl("gutenberg/import"), {
       method: "POST",
-      body: JSON.stringify({ etext_id: etextId, source_illegibility: sourceIllegibility }),
+      body: JSON.stringify({
+        etext_id: etextId,
+        source_illegibility: sourceIllegibility,
+        page_number_detection: detectPageNumbers ? "auto" : "off",
+      }),
     }),
   assetContentUrl: (assetId: string) =>
     `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/content`,

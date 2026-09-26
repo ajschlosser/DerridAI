@@ -149,6 +149,7 @@ def extract_non_pdf(
     filename: str,
     kind: str,
     catalog: dict[str, Any] | None = None,
+    detect_page_numbers: bool = True,
 ) -> dict[str, Any]:
     from .source_safety import check_size
 
@@ -186,4 +187,5 @@ def extract_non_pdf(
         media_kind=kind if kind != "text" else "text",
         metadata_text=metadata_text,
         catalog=catalog,
+        detect_pages=detect_page_numbers,
     )

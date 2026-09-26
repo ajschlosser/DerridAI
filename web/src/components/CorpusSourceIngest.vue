@@ -20,6 +20,7 @@ const props = withDefaults(
     assets?: PdfAsset[];
     assetId?: string;
     illegibility?: number;
+    detectPageNumbers?: boolean;
     sourceUrl?: string;
     gutenbergQuery?: string;
     hits?: GutenbergHit[];
@@ -34,6 +35,7 @@ const props = withDefaults(
     assets: () => [],
     assetId: "",
     illegibility: 0,
+    detectPageNumbers: true,
     sourceUrl: "",
     gutenbergQuery: "",
     hits: () => [],
@@ -49,6 +51,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   "update:assetId": [string];
   "update:illegibility": [number];
+  "update:detectPageNumbers": [boolean];
   "update:sourceUrl": [string];
   "update:gutenbergQuery": [string];
   useCurrent: [];
@@ -104,6 +107,26 @@ function formatDate(value?: string | null) {
   } catch {
     return value;
   }
+}
+
+function pageDetectionText(detection: NonNullable<PdfAsset["page_number_detection"]>) {
+  if (detection.status === "detected") {
+    return i18n.tf("pdf_corpus.source_page_detected", {
+      count: detection.marker_count ?? 0,
+      first: detection.first ?? "?",
+      last: detection.last ?? "?",
+      pattern: i18n.t(
+        `pdf_corpus.page_pattern_${detection.pattern || "bare"}`,
+        detection.pattern || "",
+      ),
+      confidence: Math.round((detection.confidence ?? 0) * 100),
+    });
+  }
+  return i18n.t(
+    detection.status === "disabled"
+      ? "pdf_corpus.source_page_detect_off"
+      : "pdf_corpus.source_page_not_found",
+  );
 }
 
 function formatShortDate(value?: string | null) {
@@ -345,6 +368,19 @@ onBeforeUnmount(() => {
           </div>
         </fieldset>
 
+        <label class="page-detect" :class="{ 'is-on': detectPageNumbers }">
+          <input
+            type="checkbox"
+            :checked="detectPageNumbers"
+            :disabled="sourceSetupDisabled"
+            @change="emit('update:detectPageNumbers', ($event.target as HTMLInputElement).checked)"
+          />
+          <span class="page-detect-copy">
+            <strong>{{ i18n.t("pdf_corpus.source_page_detect") }}</strong>
+            <small>{{ i18n.t("pdf_corpus.source_page_detect_help") }}</small>
+          </span>
+        </label>
+
         <button
           type="button"
           class="dropzone source-choose"
@@ -534,6 +570,19 @@ onBeforeUnmount(() => {
               </dd>
             </div>
           </dl>
+          <p
+            v-if="selectedAsset.page_number_detection"
+            class="page-detect-result"
+            :data-status="selectedAsset.page_number_detection.status"
+            role="status"
+          >
+            <AppIcon
+              :name="
+                selectedAsset.page_number_detection.status === 'detected' ? 'check' : 'warning'
+              "
+            />
+            {{ pageDetectionText(selectedAsset.page_number_detection) }}
+          </p>
           <p class="source-facts-help">{{ i18n.t("pdf_corpus.source_facts_help") }}</p>
           <button type="button" class="btn primary continue" @click="emit('continue')">
             {{ i18n.t("pdf_corpus.source_continue") }}
@@ -1285,6 +1334,53 @@ onBeforeUnmount(() => {
 .continue {
   justify-self: start;
   gap: 8px;
+}
+.page-detect {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-card);
+  cursor: pointer;
+}
+.page-detect.is-on {
+  border-color: var(--border-interactive);
+  background: var(--surface-selected);
+}
+.page-detect input {
+  inline-size: 18px;
+  block-size: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--ui-accent, var(--accent));
+}
+.page-detect-copy {
+  display: grid;
+  gap: 2px;
+}
+.page-detect-copy small {
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-normal);
+}
+.page-detect-result {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+  color: var(--tone-ok-fg);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.page-detect-result[data-status="not_found"],
+.page-detect-result[data-status="disabled"] {
+  color: var(--tone-warn-fg);
+}
+.page-detect-result svg {
+  inline-size: 14px;
+  block-size: 14px;
+  flex: none;
 }
 .source-empty {
   display: grid;

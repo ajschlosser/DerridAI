@@ -13,6 +13,17 @@ export interface PdfAsset {
   created_at: string;
   page_count: number;
   block_count: number;
+  /** Deterministic page-number detection for text sources (absent for PDFs and audio). */
+  page_number_detection?: {
+    status: "detected" | "not_found" | "disabled";
+    pattern?: string;
+    convention?: string;
+    confidence?: number;
+    marker_count?: number;
+    first?: number | null;
+    last?: number | null;
+    reason?: string;
+  };
   ocr_pages: number;
   warnings: string[];
   metadata: Record<string, unknown>;
