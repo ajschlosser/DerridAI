@@ -159,40 +159,6 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run format:repo:check
 
-  format-apply-corpus-builder-redesign:
-    needs: changes
-    if: github.event_name == 'pull_request' && github.head_ref == 'task/corpus-builder-visible-ux'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    defaults:
-      run:
-        working-directory: web
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - run: npm ci --no-audit --no-fund
-      - run: npm run format:repo
-      - name: Commit formatting
-        working-directory: .
-        run: |
-          if git diff --quiet; then
-            echo "Formatting already clean."
-            exit 0
-          fi
-          git config user.name "DerridAI CI"
-          git config user.email "actions@users.noreply.github.com"
-          git add -A
-          git commit -m "style: format Corpus Builder redesign"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
-
   backend-lint:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
