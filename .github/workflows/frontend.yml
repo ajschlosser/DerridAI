@@ -157,7 +157,11 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci --no-audit --no-fund
-      - run: npm run format:repo:check
+      - name: Show exact formatting diff
+        run: |
+          npx prettier src/components/CorpusSourceIngest.vue --write
+          git diff -- src/components/CorpusSourceIngest.vue
+          exit 1
 
   backend-lint:
     needs: changes
