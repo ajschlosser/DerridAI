@@ -11,6 +11,7 @@ const props = withDefaults(
     status?: string;
     recordCount?: number;
     acceptedCount?: number;
+    sticky?: boolean;
   }>(),
   {
     sourceFilename: "",
@@ -20,6 +21,7 @@ const props = withDefaults(
     status: "",
     recordCount: 0,
     acceptedCount: 0,
+    sticky: true,
   },
 );
 
@@ -39,7 +41,7 @@ const progressLabel = computed(() => {
 </script>
 
 <template>
-  <header class="corpus-workspace-header" :class="{ contextual }">
+  <header class="corpus-workspace-header" :class="{ contextual, sticky }">
     <div class="corpus-workspace-identity">
       <span class="eyebrow">{{ i18n.t("pdf_corpus.eyebrow") }}</span>
       <div class="corpus-workspace-title-row">
@@ -68,8 +70,7 @@ const progressLabel = computed(() => {
 
 <style scoped>
 .corpus-workspace-header {
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 14;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -78,6 +79,10 @@ const progressLabel = computed(() => {
   padding: var(--space-3) 0;
   background: color-mix(in srgb, var(--surface-canvas) 94%, transparent);
   backdrop-filter: blur(16px);
+}
+.corpus-workspace-header.sticky {
+  position: sticky;
+  top: var(--ref-topbar, 60px);
 }
 .corpus-workspace-header.contextual {
   align-items: center;
