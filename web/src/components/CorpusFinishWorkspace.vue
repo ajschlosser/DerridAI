@@ -9,6 +9,7 @@ const emit = defineEmits<{
   reviewMetadata: [];
   reviewValidation: [];
   reviewTopology: [];
+  reviewIssues: [];
   reviewRejected: [];
   reviewRecords: [];
   reviewSource: [];
@@ -62,6 +63,7 @@ function fixBlocker(code?: string) {
   else if (value === "required_metadata") emit("reviewMetadata");
   else if (value === "metadata_validation") emit("reviewValidation");
   else if (value === "boundary_attention") emit("reviewTopology");
+  else if (value === "record_attention") emit("reviewIssues");
   else if (value === "source_quality" || value === "source_validation") emit("reviewSource");
   else emit("reviewRecords");
 }
