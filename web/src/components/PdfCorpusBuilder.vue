@@ -19,14 +19,12 @@ import CorpusSourceSummary from "./CorpusSourceSummary.vue";
 import DocumentManifestEditor from "./DocumentManifestEditor.vue";
 import DocumentManifestDialog from "./DocumentManifestDialog.vue";
 import CorpusInitializationDialog from "./CorpusInitializationDialog.vue";
-import CorpusExecutionSettings from "./CorpusExecutionSettings.vue";
 import CorpusWorkflowStepper from "./CorpusWorkflowStepper.vue";
 import CorpusBuildReadiness from "./CorpusBuildReadiness.vue";
 import CorpusSourceIngest from "./CorpusSourceIngest.vue";
 import CorpusBuildHistoryMenu from "./CorpusBuildHistoryMenu.vue";
 import CorpusQualitySummary from "./CorpusQualitySummary.vue";
 import CorpusRecordSizingSettings from "./CorpusRecordSizingSettings.vue";
-import CorpusRunGuidance from "./CorpusRunGuidance.vue";
 import CorpusRecordFocusReview from "./CorpusRecordFocusReview.vue";
 import CorpusReviewQueueTabs from "./CorpusReviewQueueTabs.vue";
 import type { ReviewQueue } from "../types/corpus";
@@ -84,6 +82,8 @@ import CorpusConfigurationNav, {
 } from "./corpus-builder/CorpusConfigurationNav.vue";
 import CorpusBuilderWorkspaceHeader from "./corpus-builder/CorpusBuilderWorkspaceHeader.vue";
 import CorpusEnrichmentConfiguration from "./corpus-builder/CorpusEnrichmentConfiguration.vue";
+import CorpusMetadataConfiguration from "./corpus-builder/CorpusMetadataConfiguration.vue";
+import CorpusAdvancedConfiguration from "./corpus-builder/CorpusAdvancedConfiguration.vue";
 import CorpusActionMenu, { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
 import { recordState, recordIssueKinds } from "../domain/corpusReview";
 import { RecordMutationQueue } from "../domain/recordMutationQueue";
@@ -2080,110 +2080,32 @@ defineExpose({
           <CorpusRecordSizingSettings v-model="recordSizing" :disabled="busy !== ''" />
         </div>
       </details>
-      <details
+      <CorpusMetadataConfiguration
         v-show="configurationSection === 'metadata'"
-        id="corpus-config-panel-metadata"
-        class="setup-section setup-disclosure"
-        role="tabpanel"
-        aria-labelledby="corpus-config-tab-metadata"
-        open
-      >
-        <summary>
-          <span
-            ><b>{{ i18n.t("schemas.title") }}</b
-            ><small
-              >{{ chosenSchema?.name || i18n.t("schemas.builtin")
-              }}<template v-if="chosenSchema">
-                ·
-                {{
-                  i18n.tf("schemas.field_count", {
-                    count: chosenSchema.field_count,
-                  })
-                }}</template
-              ></small
-            ></span
-          >
-        </summary>
-        <div class="setup-disclosure-body schema-choice">
-          <label class="schema-choice-field"
-            ><span>{{ i18n.t("schemas.choose") }}</span>
-            <select v-model="schemaId" class="control" :disabled="busy !== ''">
-              <option v-for="item in schemaChoices" :key="item.id" :value="item.id">
-                {{ item.name }}{{ item.builtin ? ` (${i18n.t("schemas.builtin")})` : "" }}
-              </option>
-            </select>
-            <small>{{ i18n.t("schemas.choose_help") }}</small></label
-          >
-          <button type="button" class="btn small" @click="schemaEditorOpen = true">
-            {{ i18n.t("schemas.manage") }}
-          </button>
-        </div>
-      </details>
+        v-model:schema-id="schemaId"
+        v-model:run-guidance="runGuidance"
+        :schema-choices="schemaChoices"
+        :chosen-schema="chosenSchema"
+        :run-guidance-fields="runGuidanceFields"
+        :disabled="busy !== ''"
+        @manage-schemas="schemaEditorOpen = true"
+      />
 
-      <details
-        v-show="configurationSection === 'metadata'"
-        class="setup-section setup-disclosure"
-        open
-      >
-        <summary>
-          <span
-            ><b>{{ i18n.t("pdf_corpus.run_guidance_title") }}</b
-            ><small>{{ i18n.t("pdf_corpus.run_guidance_summary") }}</small></span
-          >
-        </summary>
-        <div class="setup-disclosure-body">
-          <CorpusRunGuidance
-            v-model="runGuidance"
-            :fields="runGuidanceFields"
-            :disabled="busy !== ''"
-          />
-        </div>
-      </details>
-
-      <details
+      <CorpusAdvancedConfiguration
         v-show="configurationSection === 'advanced'"
-        id="corpus-config-panel-advanced"
-        class="setup-section setup-disclosure"
-        role="tabpanel"
-        aria-labelledby="corpus-config-tab-advanced"
-      >
-        <summary>
-          <span
-            ><b>{{ i18n.t("pdf_corpus.hands_free_title") }}</b
-            ><small>{{
-              handsFree.enabled
-                ? i18n.t("pdf_corpus.hands_free_on")
-                : i18n.t("pdf_corpus.hands_free_off")
-            }}</small></span
-          >
-        </summary>
-        <div class="setup-disclosure-body">
-          <CorpusHandsFreeSettings v-model="handsFree" :disabled="busy !== ''" />
-        </div>
-      </details>
-
-      <div v-show="configurationSection === 'advanced'" class="setup-section execution-wrapper">
-        <div class="setup-section-inline-head">
-          <span
-            ><b>{{ i18n.t("pdf_corpus.advanced_execution") }}</b
-            ><small>{{ i18n.t("pdf_corpus.advanced_execution_help") }}</small></span
-          >
-        </div>
-        <CorpusExecutionSettings
-          class="execution-config"
-          :generation="effectiveGeneration"
-          :stage-limits="stageLimits"
-          :stage-timeouts="stageTimeouts"
-          :max-concurrent-requests="maxConcurrentRequests"
-          :use-profile-defaults="useProfileDefaults"
-          :disabled="busy !== ''"
-          @update:generation="generationOverrides = $event"
-          @update:stage-limits="stageLimits = $event"
-          @update:stage-timeouts="stageTimeouts = $event"
-          @update:max-concurrent-requests="maxConcurrentRequests = $event"
-          @update:use-profile-defaults="useProfileDefaults = $event"
-        />
-      </div>
+        v-model:hands-free="handsFree"
+        :generation="effectiveGeneration"
+        :stage-limits="stageLimits"
+        :stage-timeouts="stageTimeouts"
+        :max-concurrent-requests="maxConcurrentRequests"
+        :use-profile-defaults="useProfileDefaults"
+        :disabled="busy !== ''"
+        @update:generation="generationOverrides = $event"
+        @update:stage-limits="stageLimits = $event"
+        @update:stage-timeouts="stageTimeouts = $event"
+        @update:max-concurrent-requests="maxConcurrentRequests = $event"
+        @update:use-profile-defaults="useProfileDefaults = $event"
+      />
 
       <CorpusBuildReadiness
         :media-kind="selectedAsset?.media_kind"
