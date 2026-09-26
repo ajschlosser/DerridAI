@@ -113,8 +113,11 @@ def test_unpersisted_ollama_default_uses_configured_ollama_profile(
 
     repository = SQLiteSystemRepository(tmp_path / "derridai-system.sqlite3")
     monkeypatch.setattr(module, "system_repository", repository)
-    monkeypatch.setattr(module.app_settings, "embedding_provider", "ollama")
-    monkeypatch.setattr(module.app_settings, "ollama_embed_model", "legacy-env-model")
+    # Settings is a frozen dataclass; object.__setattr__ is the supported test-only
+    # escape hatch for exercising environment-default migration behavior.
+    monkeypatch.setattr(module.app_settings, "embedding_provider", "ollama", raising=False)
+    object.__setattr__(module.app_settings, "embedding_provider", "ollama")
+    object.__setattr__(module.app_settings, "ollama_embed_model", "legacy-env-model")
     store = module.SystemStore()
     store.set_researcher_profiles(
         [
