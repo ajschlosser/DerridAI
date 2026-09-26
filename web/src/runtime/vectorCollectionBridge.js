@@ -250,7 +250,10 @@ export function createVectorCollectionBridge({
               name: form.name,
               description: form.description || null,
               embedding_provider: form.provider,
-              embedding_model: form.provider.startsWith("profile:") ? form.model : null,
+              embedding_model:
+                form.provider === "ollama" || form.provider.startsWith("profile:")
+                  ? form.model
+                  : null,
               embedding_dimension: form.dimension ? Number(form.dimension) : null,
               distance_metric: form.distance,
               retrieval_mode: form.retrieval,
