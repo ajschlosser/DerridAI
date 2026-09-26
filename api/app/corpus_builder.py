@@ -166,7 +166,6 @@ from .corpus_publication import (
     serialize_public_record,
     validate_publication_record,
 )
-from .derridai_ledger import write_jsonl_zst
 from .corpus_record_quality import (
     _record_extraction_quality_issues,
     _trash_quality_report,
@@ -224,6 +223,7 @@ from .corpus_segmentation import (
     _normalize_topology as _normalize_topology,
 )
 from .corpus_segmentation_execution import BuildSegmentationExecutionMixin
+from .derridai_ledger import write_jsonl_zst
 from .enrichment_cycles import (
     GlobalLearningStore,
 )
