@@ -105,6 +105,41 @@ def test_system_store_bootstraps_current_defaults_and_ignores_old_json(tmp_path:
 
 
 
+def test_embedding_defaults_are_server_owned_and_can_reference_provider_profiles(
+    tmp_path: Path,
+    monkeypatch,
+):
+    import app.system_store as module
+
+    repository = SQLiteSystemRepository(tmp_path / "derridai-system.sqlite3")
+    monkeypatch.setattr(module, "system_repository", repository)
+    store = module.SystemStore()
+    store.set_researcher_profiles(
+        [
+            {
+                "id": "embedding-lab",
+                "name": "Embedding Lab",
+                "type": "openai",
+                "base_url": "https://embeddings.example/v1",
+                "model": "text-embedding-model",
+                "api_key": "secret",
+            }
+        ]
+    )
+
+    saved = store.set_embedding_defaults("profile:embedding-lab", None)
+
+    assert saved["embedding_provider"] == "profile:embedding-lab"
+    assert saved["embedding_model"] == "text-embedding-model"
+    assert saved["persisted"] is True
+
+    restarted = module.SystemStore()
+    loaded = restarted.embedding_defaults()
+    assert loaded["embedding_provider"] == "profile:embedding-lab"
+    assert loaded["embedding_model"] == "text-embedding-model"
+    assert loaded["persisted"] is True
+
+
 def test_job_repository_survives_restart_and_marks_active_job_interrupted(tmp_path: Path):
     """After a restart a running job becomes "failed/interrupted" but keeps resume data.
 
