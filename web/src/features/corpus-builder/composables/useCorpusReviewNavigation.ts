@@ -10,6 +10,7 @@ interface CorpusReviewNavigationOptions {
   recordTotal: Ref<number>;
   recordOffset: Ref<number>;
   selectedRecord: Ref<CorpusRecord | null>;
+  selectedRecordId: Ref<string>;
   selectedRecordIndex: ComputedRef<number>;
   reviewQueue: Ref<ReviewQueue>;
   recordQuery: Ref<string>;
@@ -120,9 +121,20 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
     await options.refreshRecords();
   }
 
-  async function openQueue(queue: ReviewQueue, preferredId = "") {
+  async function openQueue(
+    queue: ReviewQueue,
+    preferredId = "",
+    recordQuery = "",
+  ) {
+    // Queue navigation is an explicit context change. Clear the previous
+    // selection before refreshing so refreshRecords can select the first row
+    // in the destination queue instead of preserving a stale record that no
+    // longer belongs to the visible result set.
+    options.selectedRecordId.value = "";
+    options.selectedRecord.value = null;
+    options.focusView.value = false;
     options.reviewQueue.value = queue;
-    options.recordQuery.value = "";
+    options.recordQuery.value = recordQuery;
     await nextTick();
     await options.refreshRecords(true, preferredId);
     await nextTick();
@@ -141,11 +153,24 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
 
   async function openMetadataIssueQueue() {
     const first = options.currentBuild.value?.metadata_issue_summary?.records?.[0]?.record_id;
-    await openQueue("metadata", first ? String(first) : "");
+    const recordId = first ? String(first) : "";
+    await openQueue("metadata", recordId, recordId);
   }
 
   async function openValidationIssueQueue() {
-    await openQueue("issues", firstValidationRecordId(options.currentBuild.value));
+    const recordId = firstValidationRecordId(options.currentBuild.value);
+    if (recordId) {
+      // Validation findings are not necessarily review-queue findings. Target
+      // the canonical record directly rather than assuming it also belongs to
+      // the generic Issues queue, which can otherwise produce a blank view.
+      await openQueue("all", recordId, recordId);
+      return;
+    }
+    await openQueue("issues");
+  }
+
+  async function openTopologyIssueQueue() {
+    await openQueue("topology");
   }
 
   async function openRejectedQueue() {
@@ -184,6 +209,7 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
     reviewMetadataRecord,
     openMetadataIssueQueue,
     openValidationIssueQueue,
+    openTopologyIssueQueue,
     openRejectedQueue,
     openAllReviewQueue,
     openSourceIssueQueue,
