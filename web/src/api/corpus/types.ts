@@ -1,6 +1,34 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
+/** How printed page numbers are found in text sources: deterministic patterns, optionally then a model, or not at all. */
+export interface PageDetectionRequest {
+  mode: "auto" | "auto_llm" | "off";
+  /** Provider profile the model-assisted step uses (only for `auto_llm`). */
+  providerProfileId?: string;
+}
+
+export type SourceUnitMode = "default" | "paragraph" | "line" | "sentence" | "chars";
+
+export interface SourceUnitPolicy {
+  mode: SourceUnitMode;
+  /** Characters per unit; only for mode "chars". */
+  chars?: number;
+}
+
+export interface SourceUnitPreview {
+  policy: SourceUnitPolicy;
+  unit_count: number;
+  source_block_count: number;
+  median_chars: number;
+  max_chars: number;
+  min_chars: number;
+  sample: { block_id: string; page: number | null; text: string }[];
+}
+
 export interface PdfAsset {
+  /** The asset this one was derived from, and the unit policy that derived it. */
+  derived_from_asset_id?: string;
+  unit_policy?: SourceUnitPolicy;
   asset_id: string;
   sha256: string;
   filename: string;

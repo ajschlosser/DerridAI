@@ -92,7 +92,11 @@ function canonicalStatus(field: string): Record<string, unknown> | null {
   else if (assertion.value_status === "unresolved") status = "unresolved";
   else if (assertion.authority_status === "human_override") status = "human_override";
   else if (assertion.authority_status === "human_confirmed") status = "human_confirmed";
-  else if (assertion.derivation_method === "model") status = "model_inferred";
+  else if (
+    assertion.derivation_method === "model" ||
+    String(assertion.derivation_method || "").startsWith("derridai:")
+  )
+    status = "model_inferred";
   else if (assertion.derivation_method === "deterministic") status = "deterministic";
   else if (assertion.derivation_method === "inherited") status = "inherited";
   const history = assertionConflict(
@@ -213,6 +217,13 @@ const llmSuggestions = computed(() => {
   return out;
 });
 const llmSuggestionCount = computed(() => Object.keys(llmSuggestions.value).length);
+type MemoryHint = { value: unknown; similarity: number; support: number; absence?: boolean };
+/** Less certain values earlier reviews attached to matching source spans (never pre-filled). */
+function memoryHints(field: string): MemoryHint[] {
+  const all = (props.record as unknown as { memory_hints?: Record<string, MemoryHint[]> })
+    .memory_hints;
+  return (all?.[field] || []).filter((hint) => !hint.absence);
+}
 function status(field: string) {
   const legacy = (props.record.metadata_field_status?.[field] || {}) as Record<string, unknown>;
   const canonical = canonicalStatus(field);
@@ -418,6 +429,7 @@ function displayValue(field: string) {
           :constraint="constraint(field)"
           :calibrated-acceptance="calibrated(field)"
           :open="pendingSet.has(field)"
+          :hints="memoryHints(field)"
           @save="
             (value) => {
               emit('resolve', field, value);

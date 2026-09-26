@@ -128,6 +128,7 @@ from .corpus_models import (
     CORPUS_PROFILES,
     PROFILE_VERSION,
     DocumentManifestModel,
+    PageMarkerChoiceModel,
     TextTouchupResponseModel,
 )
 from .corpus_models import (
@@ -242,6 +243,7 @@ from .field_assertions import (
     project_record_assertions,
 )
 from .main_text_start import infer_main_text_start
+from .memory_prefill import prefill_records
 from .metadata_exemplar_projection import (
     dirty_metadata_exemplar_build_ids,
     project_build_metadata_exemplars,
@@ -735,6 +737,7 @@ class PdfCorpusRepository:
         self, data: bytes, *, filename: str, ocr_mode: str = "auto", ocr_languages: str = "eng+fra+deu",
         source_illegibility: float = 0, content_type: str = "", catalog_metadata: dict[str, Any] | None = None,
         source_url: str | None = None, detect_page_numbers: bool = True,
+        page_llm: Any = None,
     ) -> dict[str, Any]:
         if not data:
             raise ValueError("The uploaded source was empty.")
@@ -758,6 +761,8 @@ class PdfCorpusRepository:
             identity = hashlib.sha256(f"{digest}|{kind}|source-extraction-v2|{ocr_mode}|{illegibility:.2f}".encode()).hexdigest()
         if catalog_metadata and catalog_metadata.get("gutenberg_id"):
             identity = hashlib.sha256(f"{identity}|gutenberg|{catalog_metadata['gutenberg_id']}".encode()).hexdigest()
+        if page_llm is not None and kind not in {"pdf", "audio", "image"}:
+            identity = hashlib.sha256(f"{identity}|page-detection-llm".encode()).hexdigest()
         if not detect_page_numbers and kind not in {"pdf", "audio", "image"}:
             # A different page structure is a different asset; keep the two apart.
             identity = hashlib.sha256(f"{identity}|page-detection-off".encode()).hexdigest()
@@ -774,7 +779,7 @@ class PdfCorpusRepository:
             extracted = self._extract_for_ingest(
                 data, filename=filename, kind=kind, ocr_mode=ocr_mode, ocr_languages=ocr_languages,
                 source_illegibility=illegibility, catalog_metadata=catalog_metadata,
-                detect_page_numbers=detect_page_numbers,
+                detect_page_numbers=detect_page_numbers, page_llm=page_llm,
             )
             if catalog_metadata and catalog_metadata.get("gutenberg_id"):
                 extracted["media_kind"] = "gutenberg"
@@ -812,10 +817,77 @@ class PdfCorpusRepository:
             _json_write(meta_path, meta)
             return meta
 
+    def preview_unit_policy(self, asset_id: str, policy: dict[str, Any] | None) -> dict[str, Any]:
+        """Counts and sample units for a source-unit policy, without saving anything."""
+        from .unit_policy import preview
+
+        return preview(self.load_blocks(asset_id), policy)
+
+    def derive_asset_with_units(self, asset_id: str, policy: dict[str, Any] | None) -> dict[str, Any]:
+        """A new source asset whose evidence units follow ``policy``.
+
+        The original asset is untouched. The derived asset shares the original bytes and content
+        digest, divides prose blocks deterministically (text conserved), and remembers where it
+        came from. Choosing ``default`` returns the asset this one was derived from, if any.
+        """
+        from .source_quality import page_source_quality_report
+        from .unit_policy import apply_unit_policy, normalize_policy
+
+        resolved = normalize_policy(policy)
+        source = _json_read(self.asset_meta_path(asset_id))
+        if not isinstance(source, dict):
+            raise KeyError(asset_id)
+        origin_id = str(source.get("derived_from_asset_id") or asset_id)
+        if resolved["mode"] == "default":
+            return self.get_asset(origin_id)
+        origin = _json_read(self.asset_meta_path(origin_id))
+        if not isinstance(origin, dict):
+            raise KeyError(origin_id)
+        digest = hashlib.sha256(f"{origin_id}|units|{resolved['mode']}|{resolved.get('chars', '')}".encode()).hexdigest()
+        derived_id = f"pdf-{digest[:24]}"
+        meta_path = self.asset_meta_path(derived_id)
+        with self._lock:
+            existing = _json_read(meta_path)
+            if isinstance(existing, dict):
+                return self.get_asset(derived_id)
+            blocks = self._load_block_rows(origin_id)
+            derived_blocks, remap = apply_unit_policy(blocks, resolved)
+            children: dict[str, list[str]] = {
+                str(block.get("block_id")): remap[index] for index, block in enumerate(blocks)
+            }
+            pages = []
+            for page in origin.get("pages") or []:
+                page = dict(page)
+                page["block_ids"] = [child for old in page.get("block_ids") or [] for child in children.get(str(old), [str(old)])]
+                pages.append(page)
+            suffix = str(origin.get("content_suffix") or ".pdf")
+            source_path = self.asset_content_path(origin_id, suffix)
+            if source_path.exists():
+                self.asset_content_path(derived_id, suffix).write_bytes(source_path.read_bytes())
+            excluded = sum(1 for block in derived_blocks if block.get("excluded_reason"))
+            meta = {
+                **origin,
+                "asset_id": derived_id,
+                "created_at": iso_now(),
+                "derived_from_asset_id": origin_id,
+                "unit_policy": resolved,
+                "pages": pages,
+                "block_count": len(derived_blocks),
+                "included_block_count": len(derived_blocks) - excluded,
+                "excluded_block_count": excluded,
+                "source_quality": page_source_quality_report(derived_blocks, pages),
+            }
+            with self.asset_blocks_path(derived_id).open("w", encoding="utf-8") as handle:
+                for block in derived_blocks:
+                    handle.write(json.dumps(block, ensure_ascii=False) + "\n")
+            _json_write(meta_path, meta)
+            return self.get_asset(derived_id)
+
     def _extract_for_ingest(
         self, data: bytes, *, filename: str, kind: str, ocr_mode: str, ocr_languages: str,
         source_illegibility: float, catalog_metadata: dict[str, Any] | None,
         detect_page_numbers: bool = True,
+        page_llm: Any = None,
     ) -> dict[str, Any]:
         from .source_media import (
             extract_non_pdf,
@@ -851,7 +923,10 @@ class PdfCorpusRepository:
                 blocks=list(extracted.get("blocks") or []), catalog=catalog_metadata,
             )
             return extracted
-        return extract_non_pdf(data, filename=filename, kind=kind, catalog=catalog_metadata, detect_page_numbers=detect_page_numbers)
+        return extract_non_pdf(
+            data, filename=filename, kind=kind, catalog=catalog_metadata,
+            detect_page_numbers=detect_page_numbers, page_llm=page_llm,
+        )
 
     def get_asset(self, asset_id: str) -> dict[str, Any]:
         meta = _json_read(self.asset_meta_path(asset_id))
@@ -1799,6 +1874,29 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             build["llm_metrics"] = metrics
             self.repo.save_build(build)
 
+    def page_marker_chooser(self, request: dict[str, Any]) -> Any:
+        """A callable that asks the configured model which candidate lines are printed page numbers."""
+
+        def ask(candidates: list[dict[str, Any]]) -> list[int]:
+            listing = "\n".join(
+                f'{c["id"]}: "{c["text"]}"  (before: "{c["before"]}" | after: "{c["after"]}")' for c in candidates
+            )
+            prompt = (
+                "Below are short lines from a plain-text source, each with the line before and after it. "
+                "Choose the lines that are PRINTED PAGE NUMBERS (folios or page markers such as 32, [32], "
+                "Page 32, - 32 -, xii), which appear once per page in increasing order. Do NOT choose chapter "
+                "numbers, list numbers, footnote numbers, dates, years, verse numbers, or lines that are part of "
+                "the text. If you are not confident, return an empty list.\n\n"
+                f"{listing}\n\nAnswer as JSON: {{\"page_marker_ids\": [ids]}}"
+            )
+            result = self._chat_json(
+                request, prompt, response_model=PageMarkerChoiceModel, max_tokens=1200,
+                schema_name="page_marker_choice", attempts=2,
+            )
+            return [int(i) for i in result.get("page_marker_ids") or []]
+
+        return ask
+
     def _chat_json(
         self,
         request: dict[str, Any],
@@ -2487,6 +2585,18 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 record["full_citation"] = full
                 # Deterministic POS/NER candidates: hints for the metadata prompt, never values.
                 annotate_record(record, nlp_schema, language=str(manifest.get("language") or ""))
+            # Pre-fill from reviewed precedents matched on each record's source spans (advisory).
+            memory_prefill = (
+                prefill_records(records, source_blocks, nlp_schema, self._progressive_metadata_index, build_id=build_id)
+                if bool(request.get("memory_prefill", True))
+                else {"status": "disabled"}
+            )
+            if memory_prefill.get("status") == "unavailable":
+                self._append_warning(
+                    build_id,
+                    "Metadata memory could not pre-fill fields (embedding provider or vector store unavailable). "
+                    "The build continues without it: " + str(memory_prefill.get("error") or ""),
+                )
             # Validate topology before spending time on metadata enrichment.
             # At this point all source-derived text and boundaries are deterministic;
             # any failure is therefore an implementation/topology problem, not an
@@ -2511,6 +2621,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                         f"{found['params'].get('limit')}-character ceiling; split it during review."
                     )
             current_build = self.repo.get_build(build_id)
+            current_build["memory_prefill"] = memory_prefill
             current_build["topology_validation"] = topology_validation
             current_build["topology_quality"] = topology_quality
             current_build["record_sizing_policy"] = sizing_policy

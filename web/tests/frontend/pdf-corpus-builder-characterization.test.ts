@@ -176,6 +176,17 @@ describe("PdfCorpusBuilder characterization", () => {
     wrapper.unmount();
   });
 
+  it("keeps working on the built-in schema when the schema list comes back without items", async () => {
+    metadataSchemasApi.list.mockResolvedValue({} as never);
+    const wrapper = await mountBuilder();
+    // Before the fix the list became undefined and reading the chosen schema threw.
+    const exposed = wrapper.vm as unknown as { schemaChoices: unknown[]; chosenSchema: unknown };
+    expect(exposed.schemaChoices).toEqual([]);
+    expect(exposed.chosenSchema).toBeUndefined();
+    expect(metadataSchemasApi.get).toHaveBeenCalledWith("default");
+    wrapper.unmount();
+  });
+
   it("applies text edits before the unresolved persistence request settles", async () => {
     pdfCorpusApi.listBuilds.mockResolvedValue({
       items: [reviewBuild],

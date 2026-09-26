@@ -29,6 +29,8 @@ const props = defineProps<{
   recheck?: { first: unknown; second: unknown; agreed: boolean };
   constraint?: { value: unknown; reason: string } | null;
   calibratedAcceptance?: { reviewed: number; acceptanceRate: number } | null;
+  /** Less certain values earlier reviews attached to matching source spans. */
+  hints?: { value: unknown; similarity: number; support: number }[];
   /** The server will not accept the record until this field is decided. */
   requiredToAccept?: boolean;
 }>();
@@ -60,6 +62,21 @@ const assertionAlternatives = computed<Record<string, unknown>[]>(() =>
     ? (props.status?.conflicting_assertions as Record<string, unknown>[])
     : [],
 );
+const DERIVATION_LABELS: Record<string, string> = {
+  "derridai:memory": "pdf_corpus.derivation_memory",
+  "derridai:nlp": "pdf_corpus.derivation_nlp",
+  "derridai:computed": "pdf_corpus.derivation_computed",
+};
+/** Namespaced derivations get a plain label ("Metadata memory"); the rest read as before. */
+function derivationLabel(value: unknown) {
+  const key = DERIVATION_LABELS[String(value || "")];
+  return key ? i18n.t(key) : humanizeToken(value);
+}
+function useHint(value: unknown) {
+  draft.value = Array.isArray(value) ? value.join(", ") : value;
+  editing.value = true;
+  markDirty();
+}
 function humanizeToken(value: unknown) {
   return String(value || "")
     .replaceAll("_", " ")
@@ -273,7 +290,7 @@ const autoResolved = computed(
         ><CorpusFieldOwnershipBadge
           :status="String(status?.status || '')"
           :method="String(status?.method || '')"
-          :derivation-method="String(status?.derivation_method || '')"
+          :derivation="String(status?.derivation_method || '')"
           :source="String(status?.value_source || '')"
           :verification="String(status?.verification_status || '')"
           :audit="Boolean(status?.audit_sample)"
@@ -301,7 +318,7 @@ const autoResolved = computed(
         ><CorpusFieldOwnershipBadge
           :status="String(status?.status || '')"
           :method="String(status?.method || '')"
-          :derivation-method="String(status?.derivation_method || '')"
+          :derivation="String(status?.derivation_method || '')"
           :source="String(status?.value_source || '')"
           :verification="String(status?.verification_status || '')"
           :audit="Boolean(status?.audit_sample)"
@@ -435,6 +452,23 @@ const autoResolved = computed(
           "
         />
       </div>
+      <div v-if="hints?.length" class="memory-hints">
+        <small>{{ i18n.t("pdf_corpus.memory_hints_title") }}</small>
+        <button
+          v-for="hint in hints"
+          :key="String(hint.value)"
+          type="button"
+          class="hint-chip"
+          :disabled="busy"
+          @click="useHint(hint.value)"
+        >
+          {{ display(hint.value) }}
+          <small
+            >{{ Math.round(hint.similarity * 100) }}% ·
+            {{ i18n.tf("pdf_corpus.memory_hint_support", { count: hint.support }) }}</small
+          >
+        </button>
+      </div>
       <!-- The decision row keeps the same shape in every field: confirm, no value, and (for an optional edit) cancel. -->
       <div class="editor-actions">
         <button
@@ -534,7 +568,7 @@ const autoResolved = computed(
         <dl class="assertion-facts">
           <div v-if="status?.derivation_method">
             <dt>{{ i18n.t("pdf_corpus.assertion_derivation", "Derivation") }}</dt>
-            <dd>{{ humanizeToken(status.derivation_method) }}</dd>
+            <dd>{{ derivationLabel(status.derivation_method) }}</dd>
           </div>
           <div v-if="status?.evaluation_status">
             <dt>{{ i18n.t("pdf_corpus.assertion_evaluation", "Evaluation") }}</dt>
@@ -584,7 +618,7 @@ const autoResolved = computed(
             >
               <span>{{ display(item.value) }}</span>
               <small>
-                {{ humanizeToken(item.derivation_method) }}
+                {{ derivationLabel(item.derivation_method) }}
                 <template v-if="item.authority_status">
                   · {{ humanizeToken(item.authority_status) }}</template
                 >
@@ -910,6 +944,32 @@ const autoResolved = computed(
   background: var(--tone-info-bg);
   color: var(--tone-info-fg);
   font-size: var(--fs-sm);
+}
+.memory-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.memory-hints > small {
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+}
+.hint-chip {
+  padding: 1px 10px;
+  border: 1px dashed var(--border-interactive);
+  border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+  background: var(--surface-card);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.hint-chip:hover:not(:disabled) {
+  color: var(--accent-fg);
+  border-style: solid;
+}
+.hint-chip small {
+  color: var(--text-tertiary);
 }
 @media (max-width: 520px) {
   .field-row {

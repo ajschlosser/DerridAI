@@ -42,7 +42,11 @@ _EVALUATION_STATUSES = {
 }
 _VALUE_STATUSES = {"present", "confirmed_absent", "invalid", "unresolved"}
 _AUTHORITY_STATUSES = {"unreviewed", "human_confirmed", "human_override", "disputed"}
-_DERIVATION_METHODS = {"deterministic", "model", "human", "inherited", "imported", "other"}
+_DERIVATION_METHODS = {
+    "deterministic", "model", "human", "inherited", "imported", "other",
+    # Profile-namespaced methods (see field_assertions.DerivationMethod).
+    "derridai:memory", "derridai:nlp", "derridai:computed",
+}
 
 
 class LedgerValidationError(ValueError):

@@ -5,6 +5,8 @@ import UiStatusBadge from "./ui/UiStatusBadge.vue";
 const props = defineProps<{
   status?: string;
   method?: string;
+  /** The assertion's derivation method; namespaced values (derridai:memory, :nlp, :computed) get their own labels. */
+  derivation?: string;
   verification?: string;
   source?: string;
   audit?: boolean;
@@ -17,6 +19,10 @@ const sourceKind = computed(() => {
   if (status === "human_override") return "override";
   if (status === "human_confirmed" || status === "confirmed_absent") return "human";
   if (status === "inherited") return "inherited";
+  const derivation = String(props.derivation || "");
+  if (derivation === "derridai:memory") return "memory";
+  if (derivation === "derridai:nlp") return "nlp";
+  if (derivation === "derridai:computed") return "computed";
   if (
     method.includes("llm") ||
     method === "hybrid" ||
@@ -37,6 +43,9 @@ const sourceLabel = computed(() =>
         inherited: "Inherited",
         deterministic: "Source derived",
         llm: "LLM source",
+        memory: "Metadata memory",
+        nlp: "NLP-derived",
+        computed: "Computed",
         unknown: "Unclassified",
       } as Record<string, string>
     )[sourceKind.value],
@@ -52,6 +61,10 @@ const sourceHelp = computed(() =>
         inherited: "Inherited from the document manifest; it may be overridden for this record.",
         deterministic: "Derived from source structure or deterministic rules.",
         llm: "The current value or proposal originated with a language model. Verification is shown separately.",
+        memory:
+          "Suggested by earlier reviewed precedents whose evidence matches this source span. A reviewer must confirm it.",
+        nlp: "Proposed by a statistical language tagger. A reviewer must confirm it.",
+        computed: "Computed from an exact pattern or arithmetic. A reviewer must confirm it.",
         unknown: "No source provenance has been recorded.",
       } as Record<string, string>
     )[sourceKind.value],
@@ -60,7 +73,7 @@ const sourceHelp = computed(() =>
 const sourceTone = computed(() =>
   sourceKind.value === "human" || sourceKind.value === "override"
     ? "success"
-    : sourceKind.value === "llm"
+    : ["llm", "memory", "nlp"].includes(sourceKind.value)
       ? "info"
       : "neutral",
 );

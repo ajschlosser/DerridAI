@@ -79,6 +79,8 @@ import CorpusBuilderWorkspaceHeader from "./corpus-builder/CorpusBuilderWorkspac
 import CorpusReviewRecordQueue from "./corpus-builder/CorpusReviewRecordQueue.vue";
 import CorpusReviewToolbar from "./corpus-builder/CorpusReviewToolbar.vue";
 import CorpusReviewEvidencePanel from "./corpus-builder/CorpusReviewEvidencePanel.vue";
+import CorpusRecordSizeAdvice from "./CorpusRecordSizeAdvice.vue";
+import CorpusUnitPolicy from "./CorpusUnitPolicy.vue";
 import CorpusReviewSourcePanel from "./corpus-builder/CorpusReviewSourcePanel.vue";
 import RecordContextReader from "./corpus-builder/RecordContextReader.vue";
 import CorpusEnrichmentConfiguration from "./corpus-builder/CorpusEnrichmentConfiguration.vue";
@@ -210,7 +212,9 @@ async function loadSelectedSchema(id: string) {
 }
 async function loadSchemaChoices() {
   try {
-    schemaChoices.value = (await metadataSchemasApi.list()).items;
+    // A response without a list must not leave the choices undefined: every lookup below would then throw.
+    const items = (await metadataSchemasApi.list())?.items;
+    schemaChoices.value = Array.isArray(items) ? items : [];
     if (!schemaChoices.value.some((item) => item.id === schemaId.value)) schemaId.value = "default";
   } catch {
     /* the built-in schema still works without the list */
@@ -263,6 +267,7 @@ const {
   selectedAsset,
   sourceIllegibility,
   detectPageNumbers,
+  llmPageDetection,
   sourceUrl,
   gutenbergQuery,
   gutenbergHits,
@@ -271,6 +276,7 @@ const {
   lastIngestedAsset,
   refreshAssets,
   upload,
+  applyUnitPolicy,
   loadSourceUrl,
   searchGutenberg,
   searchWikisource,
@@ -280,7 +286,7 @@ const {
   importGutenberg,
   savePageLabels,
   saveDocumentLayout,
-} = useCorpusSourceConfiguration(busy, setMessage);
+} = useCorpusSourceConfiguration(busy, setMessage, () => selectedProviderId.value);
 const error = ref("");
 const notice = ref("");
 const statusRegion = ref<HTMLElement | null>(null);
@@ -1970,6 +1976,7 @@ defineExpose({
           v-model:asset-id="selectedAssetId"
           v-model:illegibility="sourceIllegibility"
           v-model:detect-page-numbers="detectPageNumbers"
+          v-model:llm-page-detection="llmPageDetection"
           v-model:source-url="sourceUrl"
           v-model:gutenberg-query="gutenbergQuery"
           :assets="assets"
@@ -2011,6 +2018,13 @@ defineExpose({
             </p>
           </div>
         </div>
+        <CorpusUnitPolicy
+          v-if="selectedAsset.media_kind !== 'audio'"
+          :asset="selectedAsset"
+          :disabled="Boolean(buildRunning && currentBuild?.asset_id === selectedAssetId)"
+          :busy="busy === 'units'"
+          @apply="applyUnitPolicy"
+        />
         <DocumentStructureConfigurator
           class="document-structure-config"
           :asset="selectedAsset"
@@ -2038,6 +2052,13 @@ defineExpose({
             </h3>
           </div>
         </div>
+        <CorpusUnitPolicy
+          v-if="selectedAsset.media_kind !== 'audio'"
+          :asset="selectedAsset"
+          :disabled="Boolean(buildRunning && currentBuild?.asset_id === selectedAssetId)"
+          :busy="busy === 'units'"
+          @apply="applyUnitPolicy"
+        />
         <MediaStructureConfigurator
           :media-kind="selectedAsset.media_kind"
           :filename="selectedAsset.filename"
@@ -2078,6 +2099,17 @@ defineExpose({
         @update:manual-base-url="manualBaseUrl = $event"
         @update:manual-api-key="manualApiKey = $event"
         @manage-providers="manageProviders"
+      />
+
+      <CorpusRecordSizeAdvice
+        v-if="selectedAsset && selectedAsset.media_kind !== 'audio'"
+        v-show="configurationSection === 'structure'"
+        :asset="selectedAsset"
+        :sizing="recordSizing"
+        :disabled="
+          Boolean(buildRunning && currentBuild?.asset_id === selectedAssetId) || busy !== ''
+        "
+        @apply="applyUnitPolicy"
       />
 
       <details v-show="configurationSection === 'structure'" class="setup-section setup-disclosure">

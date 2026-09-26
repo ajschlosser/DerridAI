@@ -1,39 +1,162 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import type { RecordSizingPolicy } from "../types/corpus";
 import {
+  autoRecordSizingLimits,
   invalidRecordSizingFields,
+  limitsAreAutomatic,
   RECORD_SIZING_MIN,
+  recordSizingMinimums,
 } from "../features/corpus-builder/domain/recordSizing";
+
+/**
+ * Record length: a target, how far from it is fine, and two exception limits. The limits follow the target
+ * automatically (always valid); turn that off to set them yourself, with the smallest allowed value shown
+ * beside each field and a one-click fix instead of a bare error.
+ */
 const props = defineProps<{ modelValue: RecordSizingPolicy; disabled?: boolean }>();
 const emit = defineEmits<{ (event: "update:modelValue", value: RecordSizingPolicy): void }>();
 const i18n = useI18nStore();
-const low = computed(() =>
-  Math.max(
-    0,
-    Number(props.modelValue.preferred_record_chars) -
-      Number(props.modelValue.record_length_tolerance),
-  ),
+
+const PRESETS = [
+  { key: "sentence", preferred: 150, tolerance: 30 },
+  { key: "short", preferred: 400, tolerance: 60 },
+  { key: "paragraph", preferred: 900, tolerance: 120 },
+  { key: "default", preferred: 1750, tolerance: 200 },
+] as const;
+
+const custom = ref(!limitsAreAutomatic(props.modelValue));
+watch(
+  () => props.modelValue,
+  (value) => {
+    // Values that happen to match the automatic rule are automatic; anything else is the reviewer's own.
+    if (limitsAreAutomatic(value)) custom.value = false;
+  },
 );
-const high = computed(
-  () =>
-    Number(props.modelValue.preferred_record_chars) +
-    Number(props.modelValue.record_length_tolerance),
-);
+
+const preferred = computed(() => Number(props.modelValue.preferred_record_chars));
+const tolerance = computed(() => Number(props.modelValue.record_length_tolerance));
+const low = computed(() => Math.max(0, preferred.value - tolerance.value));
+const high = computed(() => preferred.value + tolerance.value);
+const auto = computed(() => autoRecordSizingLimits(preferred.value, tolerance.value));
 const invalid = computed(() => invalidRecordSizingFields(props.modelValue));
+const minimums = computed(() => recordSizingMinimums(props.modelValue));
+
+function commit(next: RecordSizingPolicy) {
+  emit("update:modelValue", next);
+}
 function patch(key: keyof RecordSizingPolicy, event: Event) {
   const raw = Number((event.target as HTMLInputElement).value);
   if (!Number.isFinite(raw)) return;
-  // Never rewrite the reviewer's other fields; an inconsistent policy is
-  // surfaced as a warning and blocks the build instead.
-  emit("update:modelValue", { ...props.modelValue, [key]: Math.round(raw) });
+  const next = { ...props.modelValue, [key]: Math.round(raw) };
+  // Following the target keeps an automatic policy valid; a custom one is never rewritten silently.
+  if (!custom.value && (key === "preferred_record_chars" || key === "record_length_tolerance")) {
+    Object.assign(
+      next,
+      autoRecordSizingLimits(next.preferred_record_chars, next.record_length_tolerance),
+    );
+  }
+  commit(next);
 }
+function setAutomatic(on: boolean) {
+  custom.value = !on;
+  if (on) commit({ ...props.modelValue, ...auto.value });
+}
+function usePreset(preset: (typeof PRESETS)[number]) {
+  const limits = autoRecordSizingLimits(preset.preferred, preset.tolerance);
+  custom.value = false;
+  commit({
+    preferred_record_chars: preset.preferred,
+    record_length_tolerance: preset.tolerance,
+    ...limits,
+  });
+}
+function fix(key: "long_record_chars" | "absolute_record_chars") {
+  const next = { ...props.modelValue, [key]: minimums.value[key] };
+  if (key === "long_record_chars" && next.absolute_record_chars < next.long_record_chars)
+    next.absolute_record_chars = next.long_record_chars;
+  commit(next);
+}
+
+// The ruler: everything on one scale so the relationship between the four numbers is visible.
+const scaleMax = computed(() =>
+  Math.max(Number(props.modelValue.absolute_record_chars) * 1.12, high.value * 1.6, 400),
+);
+const pct = (value: number) => `${Math.min(100, Math.max(0, (value / scaleMax.value) * 100))}%`;
+const segments = computed(() => {
+  const long = Number(props.modelValue.long_record_chars);
+  const absolute = Number(props.modelValue.absolute_record_chars);
+  return {
+    target: { left: pct(low.value), width: `calc(${pct(high.value)} - ${pct(low.value)})` },
+    exception: {
+      left: pct(high.value),
+      width: `calc(${pct(Math.max(high.value, long))} - ${pct(high.value)})`,
+    },
+    ceiling: {
+      left: pct(Math.max(high.value, long)),
+      width: `calc(${pct(Math.max(long, absolute))} - ${pct(Math.max(high.value, long))})`,
+    },
+    absolute: pct(absolute),
+  };
+});
+const rulerLabel = computed(() =>
+  i18n.tf("pdf_corpus.record_sizing.ruler_label", {
+    low: low.value.toLocaleString(),
+    high: high.value.toLocaleString(),
+    long: Number(props.modelValue.long_record_chars).toLocaleString(),
+    absolute: Number(props.modelValue.absolute_record_chars).toLocaleString(),
+  }),
+);
 </script>
+
 <template>
   <fieldset class="record-sizing" :disabled="disabled" aria-describedby="record-sizing-help">
     <legend>{{ i18n.t("pdf_corpus.record_sizing.title") }}</legend>
     <p id="record-sizing-help" class="help">{{ i18n.t("pdf_corpus.record_sizing.help") }}</p>
+
+    <div class="ruler" role="img" :aria-label="rulerLabel">
+      <div class="track">
+        <span class="seg target" :style="segments.target"></span>
+        <span class="seg exception" :style="segments.exception"></span>
+        <span class="seg ceiling" :style="segments.ceiling"></span>
+        <span class="stop" :style="{ left: segments.absolute }"></span>
+      </div>
+      <ul class="legend" aria-hidden="true">
+        <li class="k-target">
+          <b>{{ low.toLocaleString() }}–{{ high.toLocaleString() }}</b>
+          {{ i18n.t("pdf_corpus.record_sizing.ruler_target") }}
+        </li>
+        <li class="k-exception">
+          <b>≤ {{ Number(modelValue.long_record_chars).toLocaleString() }}</b>
+          {{ i18n.t("pdf_corpus.record_sizing.ruler_exception") }}
+        </li>
+        <li class="k-ceiling">
+          <b>≤ {{ Number(modelValue.absolute_record_chars).toLocaleString() }}</b>
+          {{ i18n.t("pdf_corpus.record_sizing.ruler_ceiling") }}
+        </li>
+      </ul>
+    </div>
+
+    <div
+      class="presets"
+      role="group"
+      :aria-label="i18n.t('pdf_corpus.record_sizing.presets_title')"
+    >
+      <span class="presets-title">{{ i18n.t("pdf_corpus.record_sizing.presets_title") }}</span>
+      <button
+        v-for="preset in PRESETS"
+        :key="preset.key"
+        type="button"
+        class="preset"
+        :class="{ 'is-selected': preferred === preset.preferred && tolerance === preset.tolerance }"
+        @click="usePreset(preset)"
+      >
+        {{ i18n.t(`pdf_corpus.record_sizing.preset_${preset.key}`) }}
+        <small>{{ preset.preferred.toLocaleString() }}</small>
+      </button>
+    </div>
+
     <div class="primary-grid">
       <label for="corpus-preferred-chars"
         ><span>{{ i18n.t("pdf_corpus.record_sizing.preferred") }}</span
@@ -61,65 +184,130 @@ function patch(key: keyof RecordSizingPolicy, event: Event) {
           type="number"
           :min="RECORD_SIZING_MIN.record_length_tolerance"
           max="2000"
-          step="25"
+          step="10"
           :value="modelValue.record_length_tolerance"
           @input="patch('record_length_tolerance', $event)"
         /><small>{{ i18n.t("pdf_corpus.record_sizing.tolerance_help") }}</small></label
       >
     </div>
-    <p v-if="invalid.length" class="sizing-warning" role="alert">
-      {{ i18n.t("pdf_corpus.record_sizing.invalid") }}
-    </p>
-    <details
-      :open="invalid.includes('long_record_chars') || invalid.includes('absolute_record_chars')"
-    >
-      <summary>{{ i18n.t("pdf_corpus.record_sizing.advanced") }}</summary>
-      <div class="advanced-grid">
+
+    <label class="auto-switch">
+      <input
+        type="checkbox"
+        :checked="!custom"
+        @change="setAutomatic(($event.target as HTMLInputElement).checked)"
+      />
+      <span>
+        <b>{{ i18n.t("pdf_corpus.record_sizing.auto") }}</b>
+        <small>{{
+          i18n.tf("pdf_corpus.record_sizing.auto_help", {
+            long: auto.long_record_chars.toLocaleString(),
+            absolute: auto.absolute_record_chars.toLocaleString(),
+          })
+        }}</small>
+      </span>
+    </label>
+
+    <div v-if="custom" class="advanced-grid">
+      <div class="limit">
         <label for="corpus-long-chars"
           ><span>{{ i18n.t("pdf_corpus.record_sizing.long") }}</span
           ><input
             id="corpus-long-chars"
             class="control"
             type="number"
-            :min="RECORD_SIZING_MIN.long_record_chars"
+            :min="minimums.long_record_chars"
             max="24000"
-            step="100"
+            step="50"
             :value="modelValue.long_record_chars"
+            :aria-invalid="invalid.includes('long_record_chars')"
+            aria-describedby="long-hint"
             @input="patch('long_record_chars', $event)"
           /><small>{{ i18n.t("pdf_corpus.record_sizing.long_help") }}</small></label
         >
+        <p
+          id="long-hint"
+          class="hint"
+          :class="{ bad: invalid.includes('long_record_chars') }"
+          :role="invalid.includes('long_record_chars') ? 'alert' : undefined"
+        >
+          {{
+            i18n.tf("pdf_corpus.record_sizing.min_hint", {
+              min: minimums.long_record_chars.toLocaleString(),
+            })
+          }}
+          <button
+            v-if="invalid.includes('long_record_chars')"
+            type="button"
+            class="fix"
+            @click="fix('long_record_chars')"
+          >
+            {{
+              i18n.tf("pdf_corpus.record_sizing.fix", {
+                min: minimums.long_record_chars.toLocaleString(),
+              })
+            }}
+          </button>
+        </p>
+      </div>
+      <div class="limit">
         <label for="corpus-absolute-chars"
           ><span>{{ i18n.t("pdf_corpus.record_sizing.absolute") }}</span
           ><input
             id="corpus-absolute-chars"
             class="control"
             type="number"
-            :min="RECORD_SIZING_MIN.absolute_record_chars"
+            :min="minimums.absolute_record_chars"
             max="48000"
             step="100"
             :value="modelValue.absolute_record_chars"
+            :aria-invalid="invalid.includes('absolute_record_chars')"
+            aria-describedby="absolute-hint"
             @input="patch('absolute_record_chars', $event)"
           /><small>{{ i18n.t("pdf_corpus.record_sizing.absolute_help") }}</small></label
         >
+        <p
+          id="absolute-hint"
+          class="hint"
+          :class="{ bad: invalid.includes('absolute_record_chars') }"
+          :role="invalid.includes('absolute_record_chars') ? 'alert' : undefined"
+        >
+          {{
+            i18n.tf("pdf_corpus.record_sizing.min_hint", {
+              min: minimums.absolute_record_chars.toLocaleString(),
+            })
+          }}
+          <button
+            v-if="invalid.includes('absolute_record_chars')"
+            type="button"
+            class="fix"
+            @click="fix('absolute_record_chars')"
+          >
+            {{
+              i18n.tf("pdf_corpus.record_sizing.fix", {
+                min: minimums.absolute_record_chars.toLocaleString(),
+              })
+            }}
+          </button>
+        </p>
       </div>
-    </details>
+    </div>
+    <p v-if="invalid.length" class="sizing-warning" role="status">
+      {{ i18n.t("pdf_corpus.record_sizing.invalid") }}
+    </p>
   </fieldset>
 </template>
+
 <style scoped>
-.sizing-warning {
-  margin: 8px 0 0;
-  color: var(--status-warning-text, var(--text));
-  font-size: var(--text-sm, 0.875rem);
-}
 .record-sizing {
+  display: grid;
+  gap: 12px;
+  min-inline-size: 0;
   margin: 0;
+  padding: 12px 14px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  padding: 10px 12px;
-  display: grid;
-  gap: 8px;
   background: var(--card);
-  min-inline-size: 0;
 }
 .record-sizing legend {
   padding-inline: 4px;
@@ -131,6 +319,106 @@ function patch(key: keyof RecordSizingPolicy, event: Event) {
   color: var(--muted);
   font-size: 0.8125rem;
   line-height: 1.45;
+}
+.ruler {
+  display: grid;
+  gap: 8px;
+}
+.track {
+  position: relative;
+  block-size: 14px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-inset);
+  overflow: hidden;
+}
+.seg {
+  position: absolute;
+  inset-block: 0;
+  transition:
+    left var(--motion-base) var(--ease-standard),
+    width var(--motion-base) var(--ease-standard);
+}
+.seg.target {
+  background: var(--tone-ok-border);
+}
+.seg.exception {
+  background: var(--tone-warn-border);
+  opacity: 0.75;
+}
+.seg.ceiling {
+  background: var(--tone-danger-border);
+  opacity: 0.6;
+}
+.stop {
+  position: absolute;
+  inset-block: 0;
+  inline-size: 3px;
+  background: var(--text);
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.legend li::before {
+  content: "";
+  display: inline-block;
+  inline-size: 10px;
+  block-size: 10px;
+  margin-inline-end: 6px;
+  border-radius: 3px;
+}
+.legend .k-target::before {
+  background: var(--tone-ok-border);
+}
+.legend .k-exception::before {
+  background: var(--tone-warn-border);
+}
+.legend .k-ceiling::before {
+  background: var(--tone-danger-border);
+}
+.legend b {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.presets-title {
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.preset {
+  min-block-size: 28px;
+  padding: 2px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  color: var(--text);
+  background: var(--card);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.preset small {
+  margin-inline-start: 4px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.preset:hover {
+  border-color: var(--accent);
+}
+.preset.is-selected {
+  border-color: var(--accent);
+  background: var(--surface-selected);
+  font-weight: 800;
 }
 .primary-grid,
 .advanced-grid {
@@ -145,28 +433,74 @@ function patch(key: keyof RecordSizingPolicy, event: Event) {
   font-weight: 700;
 }
 .record-sizing small {
-  font-size: 0.8125rem;
-  line-height: 1.35;
   color: var(--muted);
+  font-size: 0.8125rem;
   font-weight: 500;
+  line-height: 1.35;
 }
-.record-sizing details {
-  border-block-start: 1px solid var(--line);
-  padding-block-start: 7px;
-}
-.record-sizing summary {
+.auto-switch {
+  display: flex !important;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-inset);
   cursor: pointer;
-  font-size: 0.8125rem;
-  font-weight: 800;
-  color: var(--muted);
 }
-.advanced-grid {
-  margin-block-start: 8px;
+.auto-switch input {
+  inline-size: 18px;
+  block-size: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+.auto-switch span {
+  display: grid;
+  gap: 2px;
+}
+.limit {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+}
+.hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.hint.bad {
+  color: var(--tone-danger-fg);
+  font-weight: 700;
+}
+.fix {
+  margin-inline-start: 6px;
+  padding: 1px 10px;
+  border: 1px solid var(--tone-danger-edge);
+  border-radius: var(--radius-pill);
+  color: var(--tone-danger-fg);
+  background: var(--tone-danger-bg);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sizing-warning {
+  margin: 0;
+  color: var(--tone-warn-fg);
+  font-size: 0.8125rem;
+}
+.record-sizing :is(button, input):focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
 }
 @media (max-width: 720px) {
   .primary-grid,
   .advanced-grid {
     grid-template-columns: 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .seg {
+    transition: none;
   }
 }
 </style>
