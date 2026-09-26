@@ -467,12 +467,36 @@ transcripts, and missing/invalid timestamps stop ingestion. Diarization failure
 preserves the transcript with a visible warning and no invented speaker.
 The model, provider endpoint, duration, and diarization status are retained.
 
+**Search digital libraries** finds a text in Project Gutenberg or Wikisource
+without leaving the dialog. Results follow what you type (Enter searches at
+once); `↓` moves from the search box into the results and `↑` back. Errors and
+"no results" appear in the dialog, the result being imported says so on its
+row, and a successful import closes the dialog with the new source selected.
+
 Gutenberg search lists separate eBook IDs and languages. Choose an exact entry;
 imports retain its ID, edition label, catalog metadata, exact download URL,
-encoding, retrieval time, and original-byte digest. Missing text, mismatched
-identity, redirects, timeouts, and undecodable content fail visibly. The importer
-does not guess another download or substitute another edition. Two editions
-with identical text remain distinct assets.
+encoding, retrieval time, and original-byte digest. Gutenberg answers a format
+link with one redirect to its cache file; that single hop is followed only when
+it stays on gutenberg.org and names the same eBook. Any other redirect, missing
+text, mismatched identity, timeout, or undecodable content fails visibly. The
+importer does not guess another download or substitute another edition. Two
+editions with identical text remain distinct assets. Imports come from the local
+collection; until it is downloaded the dialog says so and offers the download,
+and searching still works.
+
+Wikisource search covers one language edition at a time (English, French,
+German, and others; French is preselected in the French interface). A work's
+main page on Wikisource is usually its title page and contents, with the text on
+subpages, so results are grouped by work: **Import whole work** fetches the
+contents page and then every subpage it lists, in order, and **Only this part**
+imports a single chapter. The stored source keeps each chapter in a section
+named after its Wikisource page. Wikisource page chrome (header, navigation
+arrows, maintenance notices, hidden metadata) is not extracted as text. A work
+larger than the upload limit fails with a message suggesting its parts instead.
+
+When **let a model help find page numbers** is on, an import uses the selected
+provider profile the same way a build does; a profile the server cannot resolve
+fails the import with that reason rather than being ignored.
 
 ### Corpus Builder review saves
 

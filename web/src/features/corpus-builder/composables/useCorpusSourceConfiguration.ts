@@ -18,6 +18,8 @@ export function useCorpusSourceConfiguration(
   busy: Ref<string>,
   setMessage: (message: string, tone?: MessageTone) => void,
   providerProfileId: () => string = () => "",
+  /** The selected profile's connection (provider, model, endpoint, key), as a build request carries it. */
+  providerConnection: (profileId: string) => Record<string, unknown> | null = () => null,
 ) {
   const i18n = useI18nStore();
   const assets = ref<PdfAsset[]>([]);
@@ -30,14 +32,36 @@ export function useCorpusSourceConfiguration(
   function pageDetection(): PageDetectionRequest {
     if (!detectPageNumbers.value) return { mode: "off" };
     const profile = providerProfileId();
-    return llmPageDetection.value && profile
-      ? { mode: "auto_llm", providerProfileId: profile }
-      : { mode: "auto" };
+    if (!llmPageDetection.value || !profile) return { mode: "auto" };
+    const config = providerConnection(profile) || {};
+    const text = (value: unknown) => (typeof value === "string" && value ? value : undefined);
+    return {
+      mode: "auto_llm",
+      providerProfileId: profile,
+      connection: {
+        provider: text(config.provider),
+        model: text(config.model),
+        base_url: text(config.base_url),
+        api_key: text(config.api_key),
+      },
+    };
   }
   const sourceUrl = ref("");
   const gutenbergQuery = ref("");
   const gutenbergHits = ref<GutenbergHit[]>([]);
   const wikisourceHits = ref<WikisourceHit[]>([]);
+  // Digital-library search state, shown inside the search dialog rather than behind it.
+  const wikisourceLanguage = ref(String(i18n.locale || "en").slice(0, 2) === "fr" ? "fr" : "en");
+  const librarySearched = ref<{ gutenberg: string; wikisource: string }>({
+    gutenberg: "",
+    wikisource: "",
+  });
+  const libraryError = ref("");
+  /** The result being imported: `gutenberg:<id>` or `wikisource:<url>`. */
+  const libraryImporting = ref("");
+  /** Increments after each successful library import, so the dialog can close. */
+  const libraryImported = ref(0);
+  let searchTicket = 0;
   const gutenbergStatus = ref<GutenbergStatus | null>(null);
   const lastIngestedAsset = ref<PdfAsset | null>(null);
 
@@ -123,36 +147,73 @@ export function useCorpusSourceConfiguration(
     }
   }
 
+  /** Import a Wikisource work or part chosen in the search dialog; errors stay in the dialog. */
+  async function importLibraryUrl(url: string) {
+    if (!url || libraryImporting.value) return;
+    libraryImporting.value = `wikisource:${url}`;
+    libraryError.value = "";
+    busy.value = "upload";
+    try {
+      const asset = await corpusBuilderApi.importUrl(
+        url,
+        sourceIllegibility.value,
+        pageDetection(),
+      );
+      await refreshAssets();
+      rememberAsset(asset, true);
+      libraryImported.value += 1;
+    } catch (exc) {
+      libraryError.value = exc instanceof Error ? exc.message : String(exc);
+    } finally {
+      libraryImporting.value = "";
+      busy.value = "";
+    }
+  }
+
+  // Searches run as the reviewer types, so an older, slower answer must never replace a newer one.
   async function searchGutenberg() {
     const query = gutenbergQuery.value.trim();
+    const ticket = ++searchTicket;
+    libraryError.value = "";
     if (!query) {
       gutenbergHits.value = [];
+      librarySearched.value = { ...librarySearched.value, gutenberg: "" };
       return;
     }
-
     busy.value = "gutenberg";
-    setMessage("");
     try {
       const result = await corpusBuilderApi.searchGutenberg(query);
+      if (ticket !== searchTicket) return;
       gutenbergHits.value = result.items || [];
-      if (!gutenbergHits.value.length) setMessage(i18n.t("pdf_corpus.gutenberg_empty"));
+      librarySearched.value = { ...librarySearched.value, gutenberg: query };
     } catch (exc) {
-      setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+      if (ticket === searchTicket)
+        libraryError.value = exc instanceof Error ? exc.message : String(exc);
     } finally {
-      busy.value = "";
+      if (busy.value === "gutenberg") busy.value = "";
     }
   }
 
   async function searchWikisource() {
     const query = gutenbergQuery.value.trim();
-    if (!query) return;
+    const ticket = ++searchTicket;
+    libraryError.value = "";
+    if (!query) {
+      wikisourceHits.value = [];
+      librarySearched.value = { ...librarySearched.value, wikisource: "" };
+      return;
+    }
     busy.value = "wikisource";
     try {
-      wikisourceHits.value = (await corpusBuilderApi.searchWikisource(query)).items || [];
+      const result = await corpusBuilderApi.searchWikisource(query, wikisourceLanguage.value);
+      if (ticket !== searchTicket) return;
+      wikisourceHits.value = result.items || [];
+      librarySearched.value = { ...librarySearched.value, wikisource: query };
     } catch (exc) {
-      setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+      if (ticket === searchTicket)
+        libraryError.value = exc instanceof Error ? exc.message : String(exc);
     } finally {
-      busy.value = "";
+      if (busy.value === "wikisource") busy.value = "";
     }
   }
 
@@ -187,8 +248,10 @@ export function useCorpusSourceConfiguration(
   }
 
   async function importGutenberg(etextId: number) {
+    if (libraryImporting.value) return;
+    libraryImporting.value = `gutenberg:${etextId}`;
+    libraryError.value = "";
     busy.value = "upload";
-    setMessage("");
     try {
       const asset = await corpusBuilderApi.importGutenberg(
         etextId,
@@ -197,9 +260,11 @@ export function useCorpusSourceConfiguration(
       );
       await refreshAssets();
       rememberAsset(asset, true);
+      libraryImported.value += 1;
     } catch (exc) {
-      setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+      libraryError.value = exc instanceof Error ? exc.message : String(exc);
     } finally {
+      libraryImporting.value = "";
       busy.value = "";
     }
   }
@@ -259,6 +324,12 @@ export function useCorpusSourceConfiguration(
     gutenbergQuery,
     gutenbergHits,
     wikisourceHits,
+    wikisourceLanguage,
+    librarySearched,
+    libraryError,
+    libraryImporting,
+    libraryImported,
+    importLibraryUrl,
     gutenbergStatus,
     lastIngestedAsset,
     refreshAssets,

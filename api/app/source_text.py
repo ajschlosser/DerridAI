@@ -559,6 +559,22 @@ def ole_doc_to_text(data: bytes) -> tuple[str, dict[str, str]]:
     return text, {}
 
 
+_VOID_TAGS = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
+# Page chrome that is not part of the work: MediaWiki/Wikisource mark it ws-noexport or noprint (their own export tools
+# drop it: headers, navigation arrows, the hidden ws-data microformat), ambox is a MediaWiki maintenance notice ("not
+# backed by a scanned copy"), and hidden text is unseen. Generic class names are deliberately not treated as chrome.
+_CHROME_CLASSES = {"ws-noexport", "noprint", "ambox"}
+
+
+def _is_chrome(attr: dict[str, str]) -> bool:
+    classes = set((attr.get("class") or "").lower().split())
+    return (
+        bool(classes & _CHROME_CLASSES)
+        or (attr.get("id") or "").lower() == "ws-data"
+        or bool(re.search(r"display\s*:\s*none", attr.get("style") or "", re.I))
+    )
+
+
 class _HtmlText(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -567,9 +583,18 @@ class _HtmlText(HTMLParser):
         self.metas: dict[str, str] = {}
         self._skip = 0
         self._in_title = False
+        self._chrome_tag = ""
+        self._chrome_depth = 0
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attr = {key.lower(): value or "" for key, value in attrs}
+        if self._chrome_depth:
+            if tag == self._chrome_tag and tag not in _VOID_TAGS:
+                self._chrome_depth += 1
+            return
+        if tag not in _VOID_TAGS and tag not in {"html", "head", "body", "title"} and _is_chrome(attr):
+            self._chrome_tag, self._chrome_depth = tag, 1
+            return
         if tag in {"script", "style", "noscript"}:
             self._skip += 1
         if tag == "title":
@@ -590,6 +615,10 @@ class _HtmlText(HTMLParser):
             self.parts.append("\n")
 
     def handle_endtag(self, tag: str) -> None:
+        if self._chrome_depth:
+            if tag == self._chrome_tag:
+                self._chrome_depth -= 1
+            return
         if tag in {"script", "style", "noscript"} and self._skip:
             self._skip -= 1
         if tag == "title":
@@ -600,6 +629,8 @@ class _HtmlText(HTMLParser):
     def handle_data(self, data: str) -> None:
         if self._in_title:
             self.title.append(data)
+        if self._chrome_depth:
+            return
         if not self._skip:
             self.parts.append(data)
 
