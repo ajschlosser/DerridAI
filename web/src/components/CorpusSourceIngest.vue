@@ -808,7 +808,7 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
   gap: var(--space-5, 20px);
-  align-items: stretch;
+  align-items: start;
 }
 .add-source,
 .current-source {
@@ -1100,6 +1100,10 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 5px;
 }
+.url-detect svg {
+  inline-size: 14px;
+  block-size: 14px;
+}
 .url-detect {
   display: flex;
   grid-column: 1 / -1;
@@ -1112,9 +1116,6 @@ onBeforeUnmount(() => {
 }
 
 /* Current source */
-.current-source {
-  grid-template-rows: auto 1fr;
-}
 .source-card {
   align-self: start;
   display: grid;
@@ -1289,6 +1290,7 @@ onBeforeUnmount(() => {
 .source-empty {
   display: grid;
   align-content: center;
+  min-block-size: 280px;
   justify-items: center;
   gap: 8px;
   padding: 36px 24px;
