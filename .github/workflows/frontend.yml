@@ -180,8 +180,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install mypy only
-        run: pip install mypy==2.3.1
+      - name: Install mypy (plus Strawberry, whose decorators define GraphQL type signatures)
+        run: pip install mypy==2.3.1 "strawberry-graphql>=0.327,<0.328"
       - run: mypy
 
   frontend-lint:

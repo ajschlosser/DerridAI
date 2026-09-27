@@ -325,6 +325,15 @@ def test_revisions_are_monotonic_per_resource():
 # -- observer: shared job state -> normalized events -----------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def no_stale_operation_notes():
+    """Corpus tests in the same worker leave build notes behind; each test starts clean."""
+    operation_events.drain()
+    yield
+    operation_events.drain()
+
+
+
 class FakeManager:
     def __init__(self):
         self.jobs: dict[str, dict] = {}

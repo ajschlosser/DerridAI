@@ -42,16 +42,17 @@ def test_graphql_transport_is_a_post_route() -> None:
     assert transport_mismatches(create_app().openapi()) == []
 
 
+# Expected fragments avoid graphql-core's exact wording, which changes between releases.
 @pytest.mark.parametrize(
     ("document", "expected"),
     [
-        ("query Bad { celf_model { no_such_field } }", "Cannot query field 'no_such_field'"),
-        ('query Bad { generated_claim(claim: "x") { claim_id } }', "Unknown argument 'claim'"),
-        ("query Bad($id: Int!) { generated_claim(claim_id: $id) { claim_id } }", "Variable '$id' of type 'Int!'"),
-        ("query Bad { generated_claim { claim_id } }", "argument 'claim_id' of type 'String!' is required"),
-        ("query Bad { celf_model }", "must have a selection of subfields"),
-        ("mutation Bad { celf_model { specification_version } }", "only queries are allowed"),
-        ("query Other { celf_model { specification_version } }", "operation must be named Bad"),
+        ("query Bad { celf_model { no_such_field } }", ("no_such_field",)),
+        ('query Bad { generated_claim(claim: "x") { claim_id } }', ("Unknown argument", "claim")),
+        ("query Bad($id: Int!) { generated_claim(claim_id: $id) { claim_id } }", ("$id", "Int!", "String!")),
+        ("query Bad { generated_claim { claim_id } }", ("claim_id", "String!", "required")),
+        ("query Bad { celf_model }", ("celf_model", "selection")),
+        ("mutation Bad { celf_model { specification_version } }", ("only queries are allowed",)),
+        ("query Other { celf_model { specification_version } }", ("operation must be named Bad",)),
     ],
 )
 def test_the_checker_rejects_each_class_of_mistake(tmp_path, monkeypatch, graphql_schema, document, expected) -> None:
@@ -64,7 +65,7 @@ def test_the_checker_rejects_each_class_of_mistake(tmp_path, monkeypatch, graphq
     (fake / "Bad.graphql").write_text(document, encoding="utf-8")
     (fake / "index.ts").write_text('import Bad from "./Bad.graphql?raw";\n', encoding="utf-8")
     failures = contract_mismatches(graphql_schema, fake)
-    assert any(expected in failure for failure in failures), failures
+    assert any(all(part in failure for part in expected) for failure in failures), failures
     assert directory.exists()
 
 
