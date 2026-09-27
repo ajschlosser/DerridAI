@@ -38,6 +38,7 @@ from ..models import (
     PdfCorpusBulkDisposition,
     PdfCorpusBulkMetadataPatch,
     PdfCorpusEvidencePatch,
+    PdfCorpusEvidenceSuggestLlm,
     PdfCorpusManifestPatch,
     PdfCorpusMetadataCacheClear,
     PdfCorpusMetadataDecision,
@@ -794,6 +795,34 @@ def clear_pdf_corpus_metadata_cache(
 @router.delete("/api/pdf/metadata-cache")
 def clear_all_pdf_corpus_metadata_cache() -> dict[str, Any]:
     return {"cleared": clear_adjudication_cache()}
+
+
+@router.get("/api/pdf/corpus-builds/{build_id}/records/{record_id}/evidence-suggestions")
+def suggest_pdf_corpus_record_evidence(
+    request: Request, build_id: str, record_id: str, field: str = Query(min_length=1, max_length=120), limit: int = Query(5, ge=1, le=20)
+) -> dict[str, Any]:
+    require_admin(request)
+    try:
+        return {"items": pdf_corpus_builds.suggest_evidence(build_id, record_id, field, limit)}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+
+
+@router.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/evidence-suggestions/llm")
+def suggest_pdf_corpus_record_evidence_llm(
+    request: Request, build_id: str, record_id: str, body: PdfCorpusEvidenceSuggestLlm
+) -> dict[str, Any]:
+    require_admin(request)
+    payload = body.model_dump(exclude={"field", "limit"}, exclude_none=True)
+    try:
+        items = pdf_corpus_builds.suggest_evidence_llm(
+            build_id, record_id, body.field, _resolve_pdf_corpus_provider(payload), body.limit
+        )
+        return {"items": items}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.patch("/api/pdf/corpus-builds/{build_id}/records/{record_id}/evidence")

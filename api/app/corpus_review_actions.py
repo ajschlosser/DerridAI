@@ -112,6 +112,7 @@ class ReviewActionsMixin:
         def _profile_for(self, build_id: str) -> dict[str, Any]: ...
         def _profile_of_build(self, build: dict[str, Any]) -> dict[str, Any]: ...
         def _schema_for(self, build_id: str) -> MetadataSchema: ...
+        def _chat_json(self, request: dict[str, Any], prompt: str, *, response_model: type[BaseModel], max_tokens: int = 4096, schema_name: str = "derridai_corpus", attempts: int = 2, build_id: str = "") -> dict[str, Any]: ...
         def _editable_fields(self, build_id: str) -> set[str]: ...
         def _edit_model(self, build_id: str) -> type[BaseModel]: ...
         def _refresh_workflow_fields(self, build: dict[str, Any]) -> dict[str, Any]: ...
@@ -1092,6 +1093,39 @@ class ReviewActionsMixin:
 
 
     @_serialize_record_mutation
+    def _evidence_candidates(self, build_id: str, record_id: str, field: str) -> tuple[Any, list[dict[str, Any]]]:
+        target = self.repo.get_record(build_id, record_id)
+        assertion = current_assertion_by_name(target, field)
+        value = assertion.value if assertion is not None else target.get(field)
+        blocks_by_id = self._blocks_for(build_id)
+        return value, [blocks_by_id[b] for b in map(str, target.get("source_block_ids") or []) if b in blocks_by_id]
+
+    def suggest_evidence(self, build_id: str, record_id: str, field: str, limit: int = 5) -> list[dict[str, Any]]:
+        """Advisory, read-only ranking of the record's source blocks for a field's current value."""
+        from .evidence_suggestions import suggest_evidence_blocks
+
+        value, blocks = self._evidence_candidates(build_id, record_id, field)
+        return suggest_evidence_blocks(value, blocks, limit=limit)
+
+    def suggest_evidence_llm(
+        self, build_id: str, record_id: str, field: str, request: dict[str, Any], limit: int = 5
+    ) -> list[dict[str, Any]]:
+        """Ask a model which of the record's blocks support the value; the answer is validated, never trusted."""
+        from .corpus_models import EvidenceChoiceModel
+        from .evidence_suggestions import LLM_METHOD, llm_prompt, validate_llm_choice
+
+        value, blocks = self._evidence_candidates(build_id, record_id, field)
+        if not blocks:
+            return []
+        result = self._chat_json(
+            request, llm_prompt(field, value, blocks), response_model=EvidenceChoiceModel,
+            max_tokens=800, schema_name="evidence_choice", attempts=2, build_id=build_id,
+        )
+        return [
+            {**item, "method": LLM_METHOD, "model": str(request.get("model") or "")}
+            for item in validate_llm_choice(result, blocks, value, limit=limit)
+        ]
+
     def patch_evidence(
         self,
         build_id: str,

@@ -1,7 +1,8 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import type { CorpusRecord, SourceBlock } from "../../api/corpus";
+import { corpusMetadataApi, type EvidenceSuggestion } from "../../api/corpus/metadata";
 import { timeLabel } from "../../domain/sourceMedia";
 import { metadataValueText } from "../../domain/metadataValues";
 import { useI18nStore } from "../../stores/i18n";
@@ -21,6 +22,10 @@ const props = defineProps<{
   evidenceBlockIds: Set<string>;
   paginatedSource: boolean;
   disabled?: boolean;
+  /** Enables suggestions; without a build there is nothing to ask. */
+  buildId?: string;
+  /** Provider request for model suggestions; the button is hidden when absent. */
+  llmRequest?: Record<string, unknown> | null;
   /** Tab/panel id prefix; Focus View uses its own so it never duplicates the workspace's ids. */
   idPrefix?: string;
 }>();
@@ -32,6 +37,50 @@ const emit = defineEmits<{
 
 const i18n = useI18nStore();
 const query = ref("");
+const suggestions = ref<EvidenceSuggestion[]>([]);
+const suggestState = ref<"idle" | "loading" | "done" | "failed">("idle");
+// Suggestions belong to one field of one record; never carry them across.
+watch(
+  () => [props.record.record_id, props.selectedField],
+  () => {
+    suggestions.value = [];
+    suggestState.value = "idle";
+  },
+);
+async function suggest(kind: "lexical" | "llm") {
+  if (!props.buildId || !props.selectedField) return;
+  suggestState.value = "loading";
+  const field = props.selectedField;
+  const recordId = props.record.record_id;
+  try {
+    const result =
+      kind === "llm" && props.llmRequest
+        ? await corpusMetadataApi.suggestEvidenceLlm(
+            props.buildId,
+            recordId,
+            field,
+            props.llmRequest,
+          )
+        : await corpusMetadataApi.suggestEvidence(props.buildId, recordId, field);
+    if (field !== props.selectedField || recordId !== props.record.record_id) return;
+    suggestions.value = result.items;
+    suggestState.value = "done";
+  } catch {
+    suggestState.value = "failed";
+  }
+}
+const suggestionFor = (blockId: string) =>
+  suggestions.value.find((item) => item.block_id === blockId);
+const suggestionLabel = (item: EvidenceSuggestion) =>
+  item.lexical_support === false
+    ? i18n.t("pdf_corpus.evidence_suggest_unverified")
+    : item.method.startsWith("llm")
+      ? i18n.t("pdf_corpus.evidence_suggested_llm")
+      : i18n.t("pdf_corpus.evidence_suggested_lexical");
+const rank = (blockId: string) => {
+  const index = suggestions.value.findIndex((item) => item.block_id === blockId);
+  return index < 0 ? Number.MAX_SAFE_INTEGER : index;
+};
 const onlySelected = ref(false);
 
 const fieldLabel = computed(() =>
@@ -54,14 +103,16 @@ const nextMissing = computed(
 // Narrowing the list never changes what is selected; a filtered-out span stays cited.
 const shown = computed(() => {
   const needle = query.value.trim().toLocaleLowerCase();
-  return props.blocks.filter(
-    (block) =>
-      (!onlySelected.value || props.evidenceBlockIds.has(block.block_id)) &&
-      (!needle ||
-        String(block.text || "")
-          .toLocaleLowerCase()
-          .includes(needle)),
-  );
+  return props.blocks
+    .filter(
+      (block) =>
+        (!onlySelected.value || props.evidenceBlockIds.has(block.block_id)) &&
+        (!needle ||
+          String(block.text || "")
+            .toLocaleLowerCase()
+            .includes(needle)),
+    )
+    .sort((a, b) => rank(a.block_id) - rank(b.block_id));
 });
 const selectedCount = computed(
   () => props.blocks.filter((block) => props.evidenceBlockIds.has(block.block_id)).length,
@@ -131,6 +182,33 @@ function locator(block: SourceBlock) {
         </div>
       </header>
 
+      <div v-if="props.buildId" class="assign-suggest">
+        <button
+          type="button"
+          class="btn small"
+          :disabled="props.disabled || suggestState === 'loading'"
+          @click="suggest('lexical')"
+        >
+          {{ i18n.t("pdf_corpus.evidence_suggest") }}
+        </button>
+        <button
+          v-if="props.llmRequest"
+          type="button"
+          class="btn small"
+          :disabled="props.disabled || suggestState === 'loading'"
+          @click="suggest('llm')"
+        >
+          {{ i18n.t("pdf_corpus.evidence_suggest_llm") }}
+        </button>
+        <span class="suggest-note" role="status">{{
+          suggestState === "failed"
+            ? i18n.t("pdf_corpus.evidence_suggest_failed")
+            : suggestState === "done" && !suggestions.length
+              ? i18n.t("pdf_corpus.evidence_suggest_none")
+              : i18n.t("pdf_corpus.evidence_suggest_help")
+        }}</span>
+      </div>
+
       <div class="assign-filter">
         <input
           v-model="query"
@@ -170,6 +248,13 @@ function locator(block: SourceBlock) {
               }}<span class="sr-only"> · {{ locator(block) }} · {{ fieldLabel }}</span>
             </button>
           </header>
+          <p v-if="suggestionFor(block.block_id)" class="suggested-note">
+            {{ i18n.t("pdf_corpus.evidence_suggested") }}:
+            {{ suggestionLabel(suggestionFor(block.block_id)!) }}
+            <template v-if="suggestionFor(block.block_id)!.reason">
+              — {{ suggestionFor(block.block_id)!.reason }}
+            </template>
+          </p>
           <p>{{ block.text }}</p>
         </li>
         <li v-if="!shown.length" class="evidence-empty" role="status">
@@ -181,6 +266,22 @@ function locator(block: SourceBlock) {
 </template>
 
 <style scoped>
+.assign-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 0 14px;
+}
+.suggest-note,
+.suggested-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.suggested-note {
+  color: var(--accent);
+}
 .review-inspector-panel {
   min-width: 0;
 }

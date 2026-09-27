@@ -3,6 +3,15 @@ import { apiRequest } from "../http";
 import type { CorpusBuild, CorpusRecord, EnrichmentMetrics } from "./types";
 import { LEGACY_CORPUS_BASE, legacyCorpusUrl } from "./compatibility";
 
+export interface EvidenceSuggestion {
+  block_id: string;
+  reason: string;
+  method: string;
+  score?: number;
+  /** LLM choices only: whether a deterministic text match also supports the block. */
+  lexical_support?: boolean;
+}
+
 /** Authoritative state returned after one or several reviewer metadata decisions. */
 export interface MetadataDecisionResult {
   applied: boolean;
@@ -64,6 +73,20 @@ const recordUrl = (buildId: string, recordId: string) =>
   `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}`;
 
 export const corpusMetadataApi = {
+  suggestEvidence: (buildId: string, recordId: string, field: string) =>
+    apiRequest<{ items: EvidenceSuggestion[] }>(
+      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/evidence-suggestions?field=${encodeURIComponent(field)}`,
+    ),
+  suggestEvidenceLlm: (
+    buildId: string,
+    recordId: string,
+    field: string,
+    request: Record<string, unknown>,
+  ) =>
+    apiRequest<{ items: EvidenceSuggestion[] }>(
+      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/evidence-suggestions/llm`,
+      { method: "POST", body: JSON.stringify({ ...request, field }) },
+    ),
   precedents: (buildId: string, recordId: string, field: string) =>
     apiRequest<MetadataPrecedents>(
       `${recordUrl(buildId, recordId)}/precedents?field=${encodeURIComponent(field)}`,
