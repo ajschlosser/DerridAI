@@ -1,20 +1,13 @@
 # cELF Core Specification 1.0
 
-**Capta Epistemological Ledger Format**
+**Capta-Enriched Lexical Format**
 
 **Author:** Dr. Aaron John Schlosser  
-**Affiliation:** The New England Transcendental Club of California  
 **Specification Version:** 1.0  
 **Date:** September 2026  
 **Status:** Normative specification
 
-cELF (pronounced "self", or letter by letter as "c-elf") defines a normalized, traceable, and reproducible information architecture for AI-assisted documentary research. It is a **ledger** in the accounting sense: every value that enters the research model is entered together with who or what asserted it, on what evidence, under what authority, and in what epistemic state, and later judgments are appended rather than written over earlier ones.
-
-> **Data and capta.** The specification speaks of _capta_ rather than _data_ on purpose. _Data_ (Latin _datum_, "that which is given") suggests observations that exist independently of the observer and are simply collected. _Capta_ (Latin _captum_, "that which is taken") names what research actually works with: information that has been selected, segmented, interpreted, and recorded by someone, for some purpose, under some method - a distinction developed for the humanities by Johanna Drucker. A page number, a speaker attribution, a stance, or a transcription is never simply given by a source; it is taken from it by an extractor, a model, or a reviewer. cELF exists to keep that act of taking visible: the Records, FieldAssertions, EvidenceRefs, and SupportBindings it defines are capta, and the specification requires that their provenance, method, authority, and uncertainty remain recoverable. Where this document uses "data" in ordinary technical phrases (data model, data store, derived data), it does not withdraw that distinction.
-
-> **Name history.** Earlier drafts of this specification were titled the _DERRIDAI Core Specification_ (Document-Extracted Record Retrieval Information Design for Artificial Intelligence). The rename does not change any normative requirement, conformance identifier, or interchange identifier. Implementation identifiers such as `derridai-reference-json-v1` and `derridai-corpus-jsonl-v1` keep their names so that existing exports remain valid.
-
-Retrieval is used in this specification in both a broad research sense - the recovery of relevant documentary information for active use - and a narrower technical sense that includes vector, lexical, hybrid, filtered, and other computational search methods. Vector search is one retrieval mechanism, not the meaning of the specification as a whole.
+The **Capta-Enriched Lexical Format** (**cELF**, pronounced "self") defines a normalized, traceable, and reproducible information architecture for AI-assisted documentary research. **Retrieval** is used in both a broad research sense - the recovery of relevant documentary information for active use - and a narrower technical sense that includes vector, lexical, hybrid, filtered, and other computational search methods. Vector search is one retrieval mechanism, not the meaning of the specification as a whole.
 
 ## Contents
 
@@ -48,7 +41,7 @@ The specification deliberately uses technical object names such as **SourceSpan*
 
 #### Status and purpose
 
-The Capta Epistemological Ledger Format (cELF) defines an information model and interoperability requirements for transforming documents into records that can be extracted, enriched, reviewed, stored, located, selected as evidence, supplied to artificial-intelligence systems, and traced back to authoritative sources.
+The **Capta-Enriched Lexical Format** defines an information model and interoperability requirements for transforming documents into records that can be extracted, enriched, reviewed, stored, located, selected as evidence, supplied to artificial-intelligence systems, and traced back to authoritative sources.
 
 The specification is intended for systems in which document provenance, attribution, evidentiary support, source identity, record identity, normalization, traceability, information quality, and reproducibility materially affect the credibility of AI-assisted research.
 
@@ -57,6 +50,8 @@ cELF is not a retrieval algorithm, model protocol, vector-database format, user-
 A conforming implementation MAY use local or remote databases, files, object stores, APIs, vector indexes, local models, hosted models, browser clients, desktop applications, command-line tools, or other technical means. Conformance depends on preservation of the cELF information model and invariants, not on implementation technology.
 
 The DerridAI application is the originating reference implementation.
+
+> **Terminology note - non-normative.** The name **cELF** expands to **Capta-Enriched Lexical Format**. _Capta_ emphasizes that research objects are selected, delimited, transcribed, categorized, or interpreted through explicit procedures rather than treated as context-free givens. **Lexical** identifies text-bearing documentary representation as the primary interchange substrate; it does not limit source media to plain text. **Enriched** refers to the assertions, provenance, authority, evidence, and run metadata associated with that representation. Source locators remain appropriate to the original medium, including pages, character ranges, image regions, and audio time spans.
 
 #### Normative terms
 
@@ -322,7 +317,7 @@ Queue state, temporary credentials, UI flags, worker checkpoints, cache keys, an
 
 The cELF JSONL Profile defines one complete published Record per UTF-8 line. Line order MUST NOT be the only means of identifying records. Each Record MUST contain its own `record_id`.
 
-Implementation-specific public formats, including `derridai-corpus-jsonl-v1`, MAY define additional requirements while remaining mappings of the cELF Core model.
+Implementation-specific public formats, including `celf-corpus-jsonl-v1`, MAY define additional requirements while remaining mappings of the cELF Core model.
 
 ### Storage and Derived Representations
 
@@ -345,6 +340,16 @@ A vector collection SHOULD declare embedding provider, model, immutable revision
 #### Collection manifest
 
 A derived retrieval collection SHOULD expose a manifest containing a manifest version, collection ID, source publication or snapshot identity, source record count, source works where relevant, embedding contract, filter fields, language coverage, collection role, build ID, build history, and status.
+
+#### Reviewed-assertion exemplar indexes
+
+_Non-normative recommended implementation pattern._
+
+A system can derive a semantic precedent index from reviewed FieldAssertions and the evidence bound to them. A useful projection embeds the exact evidence span or a bounded evidence-centered context as the vector document while storing field identity, asserted value, assertion identity, review/authority state, Record and revision identity, source identity, metadata-contract identity, and evidence locators or hashes as metadata.
+
+The purpose of such an index is advisory transfer: when a new passage is being enriched for a field, semantically similar reviewed evidence can be retrieved as few-shot precedent for how that field has previously been applied. Similarity does not make the prior value true of the new passage. The new passage still requires its own FieldAssertion, evidence, evaluation, and authority state.
+
+A robust implementation derives this index from authoritative reviewed state, treats it as rebuildable, excludes or visibly stales examples whose revision/evidence bindings no longer resolve, and does not promote unresolved or unreviewed model output into trusted precedent merely because the output exists. The same mechanism can preserve reviewed corrections as negative precedents and evidence-bound confirmed absence as a distinct precedent kind. Field-conditioned retrieval is generally safer than allowing unrelated metadata dimensions to contaminate one another.
 
 ### Evidence Acquisition
 
@@ -634,13 +639,13 @@ cELF uses **pipeline sovereignty** to describe the technical capacity of a resea
 
 Pipeline sovereignty is an architectural property, not a legal conclusion about ownership, confidentiality, or compliance.
 
-### Local Sovereign Profile
+### Researcher-Controlled Execution Profile
 
-An implementation claiming **cELF Local Sovereign 1.0 Conformance** MUST permit essential research operations without mandatory remote storage, remote embedding, remote model inference, remote authentication, or remote telemetry.
+An implementation claiming **cELF Researcher-Controlled Execution 1.0 Conformance** MUST permit essential research operations to run within infrastructure controlled by the researcher or research organization. Remote storage, embedding, model inference, authentication, and telemetry MAY be available, but none may be mandatory for the declared profile scope.
 
 At minimum, the profile MUST permit within researcher-controlled infrastructure: document ingestion; source storage; Record construction; metadata and provenance storage; corpus publication; search or evidence acquisition; evidence selection; citation; AI inference; validation; and research-output storage.
 
-An implementation MAY additionally support hosted services. Use of such services MUST be optional for Local Sovereign conformance and SHOULD be identifiable as an explicit execution choice.
+An implementation MAY additionally support hosted services. Their use MUST be optional for Researcher-Controlled Execution conformance and SHOULD be recorded as an explicit execution choice.
 
 ## Interoperability, Portability, and External Standards
 
@@ -670,7 +675,7 @@ A conforming implementation SHOULD distinguish three layers.
 
 Implementations SHOULD avoid conflating these layers. JSON-LD, for example, is a serialization technology; it is not itself a provenance model.
 
-#### Interoperability must not weaken scholarly meaning
+#### Interoperability requirements
 
 An interoperability representation MUST preserve every cELF distinction necessary to interpret the exported object correctly. Where the target standard cannot directly express a cELF concept, the exporter MUST preserve the concept through a cELF-specific extension term, an associated cELF artifact, a documented companion representation, or an explicit loss-of-information declaration.
 
@@ -857,7 +862,7 @@ An implementation MAY serialize a Research Run Crate conceptually as follows. Fi
     `-- provenance/
         `-- prov.jsonld
 
-#### Authoritative versus derived artifacts
+#### Authority of packaged artifacts
 
 A crate MUST distinguish authoritative research information from derived computational artifacts where both are included. CorpusPublication, RecordRevision, retained metadata-contract snapshots, and human-confirmed assertions may be authoritative; embeddings, vector indexes, search rankings, reranker scores, cached responses, and temporary model contexts are normally derived. A consumer SHOULD NOT have to infer authority merely from file names.
 
@@ -885,7 +890,7 @@ A crate MUST NOT imply that a SourceDocument is redistributed when it is merely 
 
 #### Local and confidential research
 
-RO-Crate export MUST NOT require public publication or network transmission. A Local Sovereign implementation MUST be able to construct a cELF research package entirely within researcher-controlled infrastructure. Packaging and publication are distinct operations.
+RO-Crate export MUST NOT require public publication or network transmission. An implementation claiming the Researcher-Controlled Execution profile MUST be able to construct a cELF research package entirely within researcher-controlled infrastructure. Packaging and publication are distinct operations.
 
 #### External-service disclosure
 
@@ -907,11 +912,11 @@ A cELF RO-Crate exporter SHOULD support machine validation against the declared 
 
 #### Status and rationale
 
-Nanopublication interoperability is OPTIONAL in cELF Core 1.0 and is not required for Core, Publication, Retrieval, Evidence, Reproducible Research, or Local Sovereign conformance. A future cELF Nanopublication Profile MAY define a normative serialization once GeneratedClaim and SupportBinding semantics are sufficiently stable.
+Nanopublication interoperability is OPTIONAL in cELF Core 1.0 and is not required for Core, Publication, Retrieval, Evidence, Reproducible Research, or Researcher-Controlled Execution conformance. A future cELF Nanopublication Profile MAY define a normative serialization once GeneratedClaim and SupportBinding semantics are sufficiently stable.
 
 Nanopublications are relevant because cELF increasingly models research output at the level of individual claims. Conceptually, GeneratedClaim can correspond to an assertion, SupportBinding plus EvidenceRef can contribute assertion provenance, and ResearchRun plus agent/model information can contribute publication provenance.
 
-#### Why nanopublications are not Core
+#### Nanopublication scope
 
 Not every generated scholarly answer has been reliably decomposed into atomic claims. A paragraph may contain several propositions, qualification, contrast, negation, citation scope, and interpretive synthesis. Premature publication as independent nanopublications may create false precision.
 
@@ -977,7 +982,7 @@ An exporter SHOULD permit research-sensitive information to be excluded or redac
 
 #### Local interoperability
 
-External-standard support MUST NOT imply cloud dependence. A Local Sovereign implementation SHOULD be able to generate PROV locally, generate RO-Crate locally, validate exported packages locally, and inspect resulting metadata locally without contacting an external service.
+External-standard support MUST NOT imply cloud dependence. An implementation claiming the Researcher-Controlled Execution profile SHOULD be able to generate PROV locally, generate RO-Crate locally, validate exported packages locally, and inspect resulting metadata locally without contacting an external service.
 
 ### Relationship of cELF to External Standards
 
@@ -1078,7 +1083,7 @@ A conformance profile is a named bundle of requirements.
 - **cELF Evidence 1.0** adds EvidenceRef, EvidencePacket, evidence-to-source provenance, declared truncation, and citation integrity.
 - **cELF Claim-Binding 1.0** depends on Core + Evidence and adds GeneratedClaim, SupportBinding, and the claim-to-source chain.
 - **cELF Reproducible Research 1.0** depends on Core + Evidence and adds retained ResearchRun state sufficient for substantial process reconstruction.
-- **cELF Local Sovereign 1.0** adds the ability to perform the declared essential operations within researcher-controlled infrastructure without mandatory remote dependencies.
+- **cELF Researcher-Controlled Execution 1.0** adds the ability to perform the declared essential operations within researcher-controlled infrastructure without mandatory remote dependencies.
 - **cELF PROV Mapping 1.0** and **cELF RO-Crate 1.0** are interoperability adapter profiles.
 
 ### Normative Conformance Requirement Catalog
@@ -1166,7 +1171,7 @@ The following identifiers are the tracked conformance requirements for cELF 1.0.
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
 | **ROCR-ID-001 MUST** | A RO-Crate export declares RO-Crate and cELF adapter versions, stable object references, authoritative/derived status, sufficient ResearchRun/EvidencePacket state, and validates against both contracts. | external+semantic |
 
-#### Local Sovereign requirements
+#### Researcher-Controlled Execution requirements
 
 | Requirement         | Normative statement                                                                                                                                                                                                                                                           | Test class      |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
@@ -1174,17 +1179,17 @@ The following identifiers are the tracked conformance requirements for cELF 1.0.
 
 ### Profile-to-Requirement Matrix
 
-| Profile               | Required dependency | Requirement IDs                 |
-| --------------------- | ------------------- | ------------------------------- |
-| Core                  | -                   | CORE-ID-001 through CORE-ID-018 |
-| Publication           | Core                | PUB-ID-001 through PUB-ID-004   |
-| Retrieval             | Core                | RET-ID-001 through RET-ID-003   |
-| Evidence              | Core                | EVID-ID-001 through EVID-ID-006 |
-| Claim-Binding         | Core + Evidence     | CLM-ID-001 through CLM-ID-006   |
-| Reproducible Research | Core + Evidence     | REP-ID-001, REP-ID-002          |
-| Local Sovereign       | Core                | LOC-ID-001                      |
-| PROV Mapping adapter  | Core                | PROV-ID-001                     |
-| RO-Crate adapter      | Core                | ROCR-ID-001                     |
+| Profile                         | Required dependency | Requirement IDs                 |
+| ------------------------------- | ------------------- | ------------------------------- |
+| Core                            | -                   | CORE-ID-001 through CORE-ID-018 |
+| Publication                     | Core                | PUB-ID-001 through PUB-ID-004   |
+| Retrieval                       | Core                | RET-ID-001 through RET-ID-003   |
+| Evidence                        | Core                | EVID-ID-001 through EVID-ID-006 |
+| Claim-Binding                   | Core + Evidence     | CLM-ID-001 through CLM-ID-006   |
+| Reproducible Research           | Core + Evidence     | REP-ID-001, REP-ID-002          |
+| Researcher-Controlled Execution | Core                | LOC-ID-001                      |
+| PROV Mapping adapter            | Core                | PROV-ID-001                     |
+| RO-Crate adapter                | Core                | ROCR-ID-001                     |
 
 ### Required Invariants and Profile Applicability
 
@@ -1208,7 +1213,7 @@ The following identifiers are the tracked conformance requirements for cELF 1.0.
 
 ### Reference Interchange and Automated Conformance
 
-cELF defines a reference JSON interchange profile, `derridai-reference-json-v1`, so conformance can be tested independently of an implementation's native database or programming language. Native storage MAY differ. For automated assessment, an implementation MUST be able to emit equivalent reference-interchange data or a documented lossless mapping for the claimed profile.
+cELF defines a reference JSON interchange profile, `celf-reference-json-v1`, so conformance can be tested independently of an implementation's native database or programming language. Native storage MAY differ. For automated assessment, an implementation MUST be able to emit equivalent reference-interchange data or a documented lossless mapping for the claimed profile.
 
 The principal top-level first-class collections are:
 
@@ -1384,8 +1389,6 @@ PROV does not by itself define cELF distinctions such as SourceSpan precision, R
 ## Appendix E - Reference Implementation
 
 _This appendix is non-normative._
-
-The published Core Specification 1.0 PDF (issued under the earlier DERRIDAI title) records a pre-publication audit of DerridAI `master` at commit `724bef420a404fb2bc24182d8218f7a56d0ed84f` on 24 September 2026. That audit is a historical implementation snapshot, not part of the normative contract. The repository may advance beyond it while remaining governed by the normative requirements above.
 
 The DerridAI application is the originating reference implementation. Its practical scholarly-provenance shorthand is:
 
