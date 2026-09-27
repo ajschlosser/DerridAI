@@ -911,7 +911,9 @@ def _scope_rag_candidates(
         if language_value is None:
             language_value = record.get("document_languages")
         codes = ChromaStore._record_language_codes(language_value)
-        if not locale_codes or codes & locale_codes:
+        # Records that declare no language cannot be excluded by a locale
+        # filter; dropping them made small single-work corpora return nothing.
+        if not codes or not locale_codes or codes & locale_codes:
             scoped.append(candidate)
     return scoped
 

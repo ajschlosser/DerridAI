@@ -19,7 +19,7 @@ sys.modules.setdefault("chromadb", types.SimpleNamespace())
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"api"))
 from app import corpus_builder as cb
-from app.corpus_segmentation import _best_safety_boundary
+from app.corpus_segmentation import _best_record_sizing_boundary, _best_safety_boundary
 from app.models import PdfCorpusBuildCreate
 
 POLICY={"preferred_record_chars":1750,"record_length_tolerance":200,"long_record_chars":3500,"absolute_record_chars":6000}
@@ -177,3 +177,13 @@ def test_a_unit_larger_than_the_ceiling_does_not_swallow_the_rest_of_the_documen
     assert metrics["long_exception_records"]==sum(
         1 for g in groups if sum(len(b["text"]) for b in g)+2*(len(g)-1)>policy["long_record_chars"]
     )
+
+
+def test_size_split_does_not_strand_a_tiny_tail():
+    """A seam that would leave under a quarter of the target behind is avoided when others exist."""
+    policy={"preferred_record_chars":500,"record_length_tolerance":50,"long_record_chars":1000,"absolute_record_chars":1750}
+    span=[block(i,chars=200) for i in range(5)]+[block(5,chars=30)]
+    choice,_=_best_record_sizing_boundary(span,policy)
+    assert choice is not None
+    tail=sum(len(b["text"])+2 for b in span[span.index(choice)+1:])
+    assert tail>=policy["preferred_record_chars"]//4

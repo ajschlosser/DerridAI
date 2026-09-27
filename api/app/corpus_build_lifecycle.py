@@ -225,6 +225,8 @@ class BuildLifecycleMixin:
         build["resumable"] = True
         build["finished_at"] = None
         build["cancel_requested"] = False
+        build["pause_requested"] = False
+        build["paused"] = False
         build["metadata_settle_requested"] = False
         build["operation_hidden"] = False
         with self._lock:

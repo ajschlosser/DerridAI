@@ -38,6 +38,7 @@ import CorpusReviewSessionBar from "./CorpusReviewSessionBar.vue";
 import CorpusJsonlPreviewDialog from "./CorpusJsonlPreviewDialog.vue";
 import CorpusLlmTextTouchupDialog from "./CorpusLlmTextTouchupDialog.vue";
 import CorpusBoundarySliceDialog from "./CorpusBoundarySliceDialog.vue";
+import CorpusEvidenceBrowserDialog from "./corpus-builder/CorpusEvidenceBrowserDialog.vue";
 import MetadataEnrichmentDialog from "./MetadataEnrichmentDialog.vue";
 import CorpusModelActivity from "./CorpusModelActivity.vue";
 import CorpusHandsFreeSettings from "./CorpusHandsFreeSettings.vue";
@@ -284,6 +285,7 @@ const {
   refreshAssets,
   upload,
   applyUnitPolicy,
+  deleteAsset,
   loadSourceUrl,
   searchGutenberg,
   searchWikisource,
@@ -306,6 +308,7 @@ const decisionDock = ref<InstanceType<typeof CorpusRecordDecisionDock> | null>(n
 const configurationSection = ref<CorpusConfigurationSection>("source");
 const recordSaveQueue = new RecordMutationQueue();
 const documentMetadataOpen = ref(false);
+const confirmingBuildDelete = ref(false);
 const textCleanupOpen = ref(false);
 const sourceTranscriptionOpen = ref(false);
 const {
@@ -380,6 +383,8 @@ const {
   retryIncompleteMetadata,
   confirmManifest,
   cancelBuild,
+  pauseBuild,
+  deleteBuild,
   settleMetadata,
 } = useCorpusBuildLifecycleController({
   builds,
@@ -440,6 +445,7 @@ const {
   rememberMetadataValues,
   saveMetadata,
   toggleEvidenceBlock,
+  setEvidenceBlocks,
   requeueCurrentRecord,
   resolveMetadataField,
   resolveMetadataSuggestions,
@@ -541,6 +547,80 @@ async function resolveMetadataWithSelectionEvidence(
     return;
   }
   await resolveMetadataField(field, value, String(block.block_id));
+}
+
+/** What the reviewer came from Publication readiness to fix, so they can find it and get back. */
+interface FixContext {
+  recordId: string;
+  field: string;
+  code: string;
+  reason: string;
+}
+const fixContext = ref<FixContext | null>(null);
+const fixIssues = computed(() =>
+  (currentBuild.value?.validation?.validation_issues || []).filter((item) => item?.record_id),
+);
+/** Land on the record, on the tab that holds the problem, with the field's editor open. */
+async function fixValidationIssue(issue: {
+  code?: string;
+  record_id?: string;
+  field?: string;
+  reason?: string;
+}) {
+  const recordId = String(issue.record_id || "");
+  if (!recordId) return;
+  const field = String(issue.field || "");
+  fixContext.value = {
+    recordId,
+    field,
+    code: String(issue.code || ""),
+    reason: String(issue.reason || ""),
+  };
+  await openValidationIssueQueue(recordId);
+  await nextTick();
+  if (!field) return;
+  if (issue.code === "metadata_evidence") {
+    reviewInspectorTab.value = "evidence";
+    selectedEvidenceField.value = field;
+    return;
+  }
+  reviewInspectorTab.value = "metadata";
+  await nextTick();
+  const target = document.querySelector<HTMLElement>(`[data-field="${CSS.escape(field)}"]`);
+  target?.scrollIntoView({ block: "center" });
+  target?.querySelector<HTMLElement>(".field-edit")?.click();
+}
+/** Go on to the next finding, or back to Publication readiness when none is left. */
+async function fixNextIssue() {
+  const current = fixContext.value;
+  const remaining = fixIssues.value.filter(
+    (item) => !(item.record_id === current?.recordId && item.field === current?.field),
+  );
+  if (!remaining.length) return returnToReadiness();
+  await fixValidationIssue(remaining[0]);
+}
+function returnToReadiness() {
+  fixContext.value = null;
+  reviewRequested.value = false;
+  reviewQueue.value = "all";
+  recordQuery.value = "";
+}
+
+/** The reviewer answers from their own knowledge: the decision records them, not a source span, as the source. */
+async function resolveMetadataWithHumanSource(field: string, value: unknown, note: string) {
+  await resolveMetadataField(field, value, "", { source: "reviewer_knowledge", note });
+}
+
+/** The value being cited from outside this record, while the browser dialog is open. */
+const evidenceBrowser = ref<{ field: string; value: unknown } | null>(null);
+function openEvidenceBrowser(field: string, value: unknown) {
+  evidenceBrowser.value = { field, value };
+}
+async function confirmExternalEvidence(blockIds: string[]) {
+  const target = evidenceBrowser.value;
+  evidenceBrowser.value = null;
+  if (!target) return;
+  await resolveMetadataField(target.field, target.value, "", { externalBlockIds: blockIds });
 }
 
 const metadataFamilyOptions = computed(
@@ -1754,6 +1834,7 @@ watch(selectedAssetId, () => {
   else configurationSection.value = "source";
 });
 watch(selectedBuildId, () => {
+  confirmingBuildDelete.value = false;
   sourceProblemDialogBuildId.value = "";
 });
 watch(
@@ -2036,6 +2117,7 @@ defineExpose({
           @update-gutenberg-archive="updateGutenbergArchive"
           @import-gutenberg="importGutenberg"
           @import-wikisource="importLibraryUrl"
+          @delete-asset="deleteAsset"
           @continue="configurationSection = 'structure'"
         />
       </section>
@@ -2318,6 +2400,9 @@ defineExpose({
               <p>{{ currentBuild.build_id }}</p>
             </div>
             <div class="summary-actions">
+              <button v-if="buildRunning" type="button" class="btn" @click="pauseBuild">
+                {{ i18n.t("pdf_corpus.pause") }}
+              </button>
               <button v-if="buildRunning" type="button" class="btn" @click="cancelBuild">
                 {{ i18n.t("pdf_corpus.cancel") }}
               </button>
@@ -2329,6 +2414,30 @@ defineExpose({
                 :disabled="busy !== ''"
               >
                 {{ i18n.t("pdf_corpus.resume") }}
+              </button>
+              <span v-if="confirmingBuildDelete" class="delete-confirm" role="group">
+                <span>{{ i18n.t("pdf_corpus.build_delete_confirm") }}</span>
+                <button
+                  type="button"
+                  class="btn danger"
+                  @click="
+                    confirmingBuildDelete = false;
+                    deleteBuild();
+                  "
+                >
+                  {{ i18n.t("pdf_corpus.build_delete") }}
+                </button>
+                <button type="button" class="btn" @click="confirmingBuildDelete = false">
+                  {{ i18n.t("ui.cancel") }}
+                </button>
+              </span>
+              <button
+                v-else-if="!buildRunning"
+                type="button"
+                class="btn"
+                @click="confirmingBuildDelete = true"
+              >
+                {{ i18n.t("pdf_corpus.build_delete") }}
               </button>
               <a
                 v-if="currentBuild.publication"
@@ -2354,7 +2463,8 @@ defineExpose({
             :busy="busy !== ''"
             @retry-metadata="retryIncompleteMetadata"
             @review-metadata="openMetadataIssueQueue"
-            @review-validation="openValidationIssueQueue"
+            @review-validation="openValidationIssueQueue()"
+            @fix-issue="fixValidationIssue"
             @review-topology="openTopologyIssueQueue"
             @review-issues="openIssueQueue"
             @review-rejected="openRejectedQueue"
@@ -2576,6 +2686,22 @@ defineExpose({
             @inspect-editorial-memory="openEditorialMemory"
             @acknowledge-warnings="acknowledgeBuildWarnings"
           />
+
+          <div v-if="fixContext" class="fix-banner" role="status">
+            <span>
+              <b>{{ i18n.t("pdf_corpus.fixing_title") }}</b>
+              {{ fixContext.reason }}
+              <code>{{ fixContext.field || fixContext.recordId }}</code>
+            </span>
+            <span class="fix-banner-actions">
+              <button type="button" class="btn small" @click="fixNextIssue">
+                {{ i18n.t("pdf_corpus.fix_next_issue") }}
+              </button>
+              <button type="button" class="btn small primary" @click="returnToReadiness">
+                {{ i18n.t("pdf_corpus.back_to_readiness") }}
+              </button>
+            </span>
+          </div>
 
           <CorpusReviewSessionBar
             v-if="currentBuild"
@@ -2974,6 +3100,8 @@ defineExpose({
                     @resolve-many="resolveMetadataSuggestions"
                     @source="showMetadataSource"
                     @resolve-with-evidence="resolveMetadataWithSelectionEvidence"
+                    @resolve-with-human-source="resolveMetadataWithHumanSource"
+                    @browse-evidence="openEvidenceBrowser"
                     @dirty="handleMetadataDirty"
                   />
                   <details class="record-data">
@@ -3103,6 +3231,7 @@ defineExpose({
                   :disabled="busy !== ''"
                   @update:selected-field="selectedEvidenceField = $event"
                   @toggle-evidence="toggleEvidenceBlock"
+                  @set-evidence="setEvidenceBlocks"
                 />
                 <CorpusReviewSourcePanel
                   v-else-if="
@@ -3143,6 +3272,7 @@ defineExpose({
                   @update:model-override="llmActionModel = $event"
                   @adjudicate="adjudicateBoundary"
                   @toggle-evidence="toggleEvidenceBlock"
+                  @set-evidence="setEvidenceBlocks"
                   @split="split"
                 />
                 <div v-else class="inspector-empty">
@@ -3385,6 +3515,17 @@ defineExpose({
       @close="metadataEnrichmentOpen = false"
       @run="runMetadataEnrichment"
     />
+    <CorpusEvidenceBrowserDialog
+      v-if="evidenceBrowser && selectedRecord && selectedAssetId"
+      :asset-id="selectedAssetId"
+      :around-block-id="String(selectedRecord.source_block_ids?.[0] || '')"
+      :record-block-ids="(selectedRecord.source_block_ids || []).map(String)"
+      :field-label="
+        i18n.t(`record.${evidenceBrowser.field}`, evidenceBrowser.field.replaceAll('_', ' '))
+      "
+      @close="evidenceBrowser = null"
+      @confirm="confirmExternalEvidence"
+    />
     <Teleport to="body"
       ><CorpusRecordFocusReview
         v-if="focusView && selectedRecord"
@@ -3465,6 +3606,8 @@ defineExpose({
         @open-text-cleanup="textCleanupOpen = true"
         @resolve-metadata="resolveMetadataField"
         @resolve-metadata-with-evidence="resolveMetadataWithSelectionEvidence"
+        @resolve-metadata-with-human-source="resolveMetadataWithHumanSource"
+        @browse-metadata-evidence="openEvidenceBrowser"
         @resolve-metadata-many="resolveMetadataSuggestions"
         @confirm-no-metadata-value="resolveMetadataNoValue"
         @metadata-dirty="handleMetadataDirty"
@@ -3484,6 +3627,7 @@ defineExpose({
         @split-after="split"
         @select-evidence="selectedEvidenceField = $event"
         @toggle-evidence="toggleEvidenceBlock"
+        @set-evidence="setEvidenceBlocks"
         @navigate-record="navigateToQueueRecord"
     /></Teleport>
   </section>

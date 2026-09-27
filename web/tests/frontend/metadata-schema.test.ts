@@ -172,8 +172,8 @@ describe("the schema editor", () => {
     const w = await mountEditor();
     await w.get("tr.field-row").trigger("click");
     expect(w.text()).toContain("Memory & retrieval");
-    expect(w.text()).toContain("Maximum precedents");
-    expect(w.text()).toContain("Minimum similarity");
+    expect(w.text()).toContain("Most examples to show");
+    expect(w.text()).toContain("How alike an example must be");
     const thresholds = w.findAll('input[type="number"][min="0"][max="1"][step="0.05"]');
     expect(thresholds.length).toBeGreaterThan(0);
     expect(w.text()).not.toContain("Response memory");

@@ -1,6 +1,6 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { apiRequest } from "../http";
-import type { CorpusBuild, CorpusRecord, EnrichmentMetrics } from "./types";
+import type { CorpusBuild, CorpusRecord, EnrichmentMetrics, HumanEvidenceSource } from "./types";
 import { LEGACY_CORPUS_BASE, legacyCorpusUrl } from "./compatibility";
 
 export interface EvidenceSuggestion {
@@ -101,6 +101,7 @@ export const corpusMetadataApi = {
     expectedRevision?: number,
     confirmNoSupportedValue = false,
     evidenceBlockIds?: string[],
+    humanSource?: HumanEvidenceSource,
   ) =>
     apiRequest<MetadataDecisionResult>(
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/metadata-decision`,
@@ -113,6 +114,10 @@ export const corpusMetadataApi = {
           confirm_no_supported_value: confirmNoSupportedValue,
           // Only sent when the reviewer saved with selected text as evidence.
           evidence_block_ids: evidenceBlockIds,
+          // Only sent when the reviewer cites their own knowledge, or spans elsewhere in the same source.
+          evidence_source: humanSource?.source,
+          evidence_note: humanSource?.note,
+          external_evidence_block_ids: humanSource?.externalBlockIds,
         }),
       },
     ),

@@ -906,7 +906,7 @@ class ReviewActionsMixin:
 
 
     @_serialize_record_mutation
-    def metadata_decision(self, build_id: str, record_id: str, field: str, value: Any, expected_revision: int | None = None, confirm_no_supported_value: bool = False, evidence_block_ids: list[str] | None = None) -> dict[str, Any]:
+    def metadata_decision(self, build_id: str, record_id: str, field: str, value: Any, expected_revision: int | None = None, confirm_no_supported_value: bool = False, evidence_block_ids: list[str] | None = None, evidence_source: str | None = None, evidence_note: str = "", external_evidence_block_ids: list[str] | None = None) -> dict[str, Any]:
         """Persist one human metadata decision and return authoritative review state.
 
         This endpoint is deliberately transactional from the UI's perspective:
@@ -959,11 +959,14 @@ class ReviewActionsMixin:
             _record, skipped = self._patch_metadata(build_id, record_id, {field: value}, expected_revision)
             if field in skipped:
                 return self._metadata_decision_result(build_id, record_id, applied=[], deferred=[field])
-            if evidence_block_ids:
-                # Bind the reviewer's selected evidence to the value just saved, in the same request.
+            if evidence_block_ids or external_evidence_block_ids or evidence_source == "reviewer_knowledge":
+                # Bind the reviewer's selected evidence (or their own say-so) to the value just saved, in the same request.
                 self.patch_evidence(
-                    build_id, record_id, field, evidence_block_ids,
+                    build_id, record_id, field, evidence_block_ids or [],
+                    reason=evidence_note,
                     expected_revision=int(self.repo.get_record(build_id, record_id).get("record_revision") or 1),
+                    source_kind="reviewer_knowledge" if evidence_source == "reviewer_knowledge" else "source_span",
+                    external_block_ids=external_evidence_block_ids,
                 )
         return self._finish_metadata_decisions(
             build_id,
@@ -1135,9 +1138,13 @@ class ReviewActionsMixin:
         confidence: float = 1.0,
         reason: str = "",
         expected_revision: int | None = None,
+        source_kind: str = "source_span",
+        external_block_ids: list[str] | None = None,
     ) -> dict[str, Any]:
         if field not in self._schema_for(build_id).attribution_fields() and field not in self._edit_model(build_id).model_fields:
             raise ValueError(f"Unsupported metadata evidence field: {field}")
+        if source_kind not in {"source_span", "reviewer_knowledge"}:
+            raise ValueError(f"Unsupported evidence source kind: {source_kind}")
         target = self.repo.get_record(build_id, record_id)
         previous_record = json.loads(json.dumps(target))
         self._assert_human_review_available(build_id, target)
@@ -1150,15 +1157,31 @@ class ReviewActionsMixin:
         invalid = [block_id for block_id in unique_ids if block_id not in allowed_ids]
         if invalid:
             raise ValueError("Evidence blocks must belong to the selected record: " + ", ".join(invalid[:10]))
+        # Spans a reviewer found elsewhere in the same source (another record). They are kept apart from the
+        # record's own spans so exports and audits can always tell which is which.
+        external_ids = [i for i in dict.fromkeys(map(str, external_block_ids or [])) if i not in allowed_ids]
+        if external_ids:
+            asset_ids = {str(b.get("block_id")) for b in self.repo.load_blocks(str(self.repo.get_build(build_id).get("asset_id") or ""))}
+            unknown = [i for i in external_ids if i not in asset_ids]
+            if unknown:
+                raise ValueError("Evidence blocks must come from this build's source: " + ", ".join(unknown[:10]))
+        knowledge = source_kind == "reviewer_knowledge"
+        if knowledge:
+            # The reviewer answers from their own knowledge: no span is cited, and the entry says so plainly.
+            unique_ids, external_ids = [], []
         evidence = dict(target.get("metadata_evidence") or {})
-        if unique_ids:
-            evidence[field] = {
+        if unique_ids or external_ids or knowledge:
+            entry: dict[str, Any] = {
                 "block_ids": unique_ids,
                 "confidence": max(0.0, min(1.0, float(confidence))),
-                "reason": str(reason or "Human-reviewed evidence binding."),
+                "reason": str(reason or ("Reviewer's own knowledge; no source span cited." if knowledge else "Human-reviewed evidence binding.")),
                 "reviewed_by": "human",
                 "reviewed_at": iso_now(),
+                "source_kind": source_kind,
             }
+            if external_ids:
+                entry["external_block_ids"] = external_ids
+            evidence[field] = entry
         else:
             evidence.pop(field, None)
         target["metadata_evidence"] = evidence
@@ -1166,17 +1189,7 @@ class ReviewActionsMixin:
         migrate_record_assertions(target, schema)
         assertion = current_assertion_by_name(target, field)
         if assertion is not None:
-            assertion_evidence = (
-                [{
-                    "block_ids": unique_ids,
-                    "confidence": max(0.0, min(1.0, float(confidence))),
-                    "reason": str(reason or "Human-reviewed evidence binding."),
-                    "reviewed_by": "human",
-                    "reviewed_at": iso_now(),
-                }]
-                if unique_ids
-                else []
-            )
+            assertion_evidence = [dict(evidence[field])] if field in evidence else []
             replace_assertion_evidence(
                 target,
                 assertion,

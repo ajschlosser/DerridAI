@@ -223,6 +223,9 @@ function pickHistory(item: Record<string, unknown>) {
           <option value="evidence" :disabled="evidenceCount === 0">
             {{ i18n.t("research.preset_evidence") }}
           </option>
+          <option value="hybrid" :disabled="evidenceCount === 0">
+            {{ i18n.t("research.preset_hybrid") }}
+          </option>
           <option value="custom">{{ i18n.t("research.preset_custom") }}</option>
         </select>
         <small>{{

@@ -2639,6 +2639,8 @@ class ChromaStore:
                 mirrored.append(child["name"])
         return {"deleted": chroma_id, "mirrored_deletes": mirrored}
 
+    UNTITLED_WORK = "(Untitled work)"
+
     def delete_work_with_language_sync(self, store: str, work: str) -> dict[str, Any]:
         """Delete every record whose decoded ``work`` metadata equals ``work``.
 
@@ -2648,9 +2650,23 @@ class ChromaStore:
         """
         collection = self._collection(store)
         _, role, _ = self._language_spec(collection)
-        where = {"work": str(work)}
-        payload = collection.get(where=where, include=["metadatas"])
-        ids = [str(value) for value in (payload.get("ids") or [])]
+        untitled = str(work) == self.UNTITLED_WORK
+
+        def work_ids(target: Any) -> list[str]:
+            if not untitled:
+                payload = target.get(where={"work": str(work)}, include=["metadatas"])
+                return [str(value) for value in (payload.get("ids") or [])]
+            # The UI groups records that have no ``work`` under one placeholder name, and Chroma
+            # cannot filter on an absent key, so scan for records whose work is missing or blank.
+            payload = target.get(include=["metadatas"])
+            found = []
+            for chroma_id, meta in zip(payload.get("ids") or [], payload.get("metadatas") or []):
+                decoded = decode_metadata(meta or {})
+                if not str(decoded.get("work") or "").strip() or decoded.get("work") == self.UNTITLED_WORK:
+                    found.append(str(chroma_id))
+            return found
+
+        ids = work_ids(collection)
         if ids:
             collection.delete(ids=ids)
 
@@ -2658,8 +2674,7 @@ class ChromaStore:
         if role == "primary":
             for child in self._language_children(store):
                 child_collection = self._collection(child["name"])
-                child_payload = child_collection.get(where=where, include=["metadatas"])
-                child_ids = [str(value) for value in (child_payload.get("ids") or [])]
+                child_ids = work_ids(child_collection)
                 if child_ids:
                     child_collection.delete(ids=child_ids)
                 mirrored[child["name"]] = len(child_ids)

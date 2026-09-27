@@ -223,6 +223,9 @@ BUILD_LEVEL = {
     ("POST", "/api/pdf/corpus-builds"),
     # Returns only the build ID and its warning acknowledgements.
     ("POST", "/api/pdf/corpus-builds/{build_id}/warnings/acknowledge"),
+    # Pause returns the build object like cancel does; delete returns only the deleted id.
+    ("POST", "/api/pdf/corpus-builds/{build_id}/pause"),
+    ("DELETE", "/api/pdf/corpus-builds/{build_id}"),
     ("GET", "/api/pdf/corpus-builds"),
     ("GET", "/api/pdf/corpus-builds/{build_id}"),
     ("PATCH", "/api/pdf/corpus-builds/{build_id}/provider-profile"),

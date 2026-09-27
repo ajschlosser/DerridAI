@@ -62,6 +62,43 @@ if TYPE_CHECKING:
     from pydantic import BaseModel
 
 
+def _validated_work_metadata(schema: MetadataSchema, raw: Any) -> dict[str, Any]:
+    """Keep only well-formed values for fields the schema marks as applying to the whole work.
+
+    Anything else is rejected rather than dropped, so a reviewer never believes a value was applied that was not.
+    """
+    if raw in (None, {}):
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError("Work-wide metadata must be a field-to-value object.")
+    fields = {f.name: f for f in schema.fields}
+    cleaned: dict[str, Any] = {}
+    for name, value in raw.items():
+        field = fields.get(name)
+        if field is None or not field.applies_to_work:
+            raise ValueError(f"'{name}' is not a work-wide field in the selected metadata schema.")
+        if value in (None, "", []):
+            continue
+        if field.type == "list":
+            items = value if isinstance(value, list) else [part for part in str(value).split(",")]
+            value = [str(item).strip() for item in items if str(item).strip()]
+        elif field.type == "number":
+            try:
+                value = float(value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"'{name}' must be a number.") from exc
+            value = int(value) if value == int(value) else value
+        elif field.type == "boolean":
+            value = value if isinstance(value, bool) else str(value).strip().lower() in {"true", "yes", "1"}
+        else:
+            value = str(value).strip()
+            if field.type == "choice" and value not in {v.value for v in field.values}:
+                raise ValueError(f"'{value}' is not an allowed value for '{name}'.")
+        if value not in ("", []):
+            cleaned[name] = value
+    return cleaned
+
+
 class ManifestWorkflowMixin:
     """Mixin members declared here exist on PdfCorpusBuildManager, not on this mixin itself.
 
@@ -138,6 +175,7 @@ class ManifestWorkflowMixin:
         unknown_guidance_fields = sorted(set(guidance) - set(schema.field_names()))
         if unknown_guidance_fields:
             raise ValueError("Run guidance references fields outside the selected schema: " + ", ".join(unknown_guidance_fields))
+        request = {**request, "work_metadata": _validated_work_metadata(schema, request.get("work_metadata"))}
         public_request = {k: v for k, v in request.items() if k not in {"api_key", "_review_provider"}}
         build = self.repo.create_build({
             "schema": schema.model_dump(mode="json"), "schema_id": schema.id, "schema_hash": schema.content_hash(), "schema_name": schema.name,
@@ -454,10 +492,16 @@ CURRENT REVIEWED RECORD TEXT:
                     evidence_errors.append({"record_id": record_id, "field": field, "reason": "missing evidence"})
                     continue
                 bound = [str(v) for v in info.get("block_ids") or [] if str(v) in valid_ids]
+                # Spans the reviewer cited elsewhere in the same source count, kept distinct in the record;
+                # so does an explicit, human-made "own knowledge" attestation, which cites no span at all.
+                bound += [str(v) for v in info.get("external_block_ids") or [] if str(v) in source_index]
+                attested = info.get("source_kind") == "reviewer_knowledge" and info.get("reviewed_by") == "human"
                 try:
                     confidence = float(info.get("confidence") or 0)
                 except (TypeError, ValueError):
                     confidence = 0.0
+                if attested:
+                    continue
                 if not bound:
                     evidence_errors.append({"record_id": record_id, "field": field, "reason": "no valid source block"})
                 elif confidence < min_conf:

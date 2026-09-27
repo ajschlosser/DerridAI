@@ -310,6 +310,16 @@ def list_pdf_assets() -> dict[str, Any]:
     return {"items": pdf_corpus_repository.list_assets()}
 
 
+@router.delete("/api/pdf/assets/{asset_id}")
+def delete_pdf_asset(asset_id: str, cascade: bool = Query(default=False)) -> dict[str, Any]:
+    try:
+        return pdf_corpus_builds.discard_source(asset_id, cascade=cascade)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="PDF asset not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
 @router.get("/api/pdf/assets/{asset_id}")
 def get_pdf_asset(asset_id: str) -> dict[str, Any]:
     try:
@@ -358,9 +368,17 @@ def get_pdf_asset_blocks(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=200, ge=1, le=1000),
     ids: str = Query(default="", max_length=20000),
+    around: str = Query(default="", max_length=200),
 ) -> dict[str, Any]:
     try:
         blocks = pdf_corpus_repository.load_blocks(asset_id)
+        if around.strip():
+            # A window that starts a little before this block, so a reviewer can browse its neighbours.
+            index = next((i for i, block in enumerate(blocks) if str(block.get("block_id") or "") == around.strip()), None)
+            if index is None:
+                raise HTTPException(status_code=404, detail="Source block not found")
+            start = max(0, index - limit // 4)
+            return {"items": blocks[start:start + limit], "total": len(blocks), "offset": start, "limit": limit}
         if ids.strip():
             requested = {value.strip() for value in ids.split(",") if value.strip()}
             selected = [block for block in blocks if str(block.get("block_id") or "") in requested]
@@ -645,6 +663,26 @@ def cancel_pdf_corpus_build(build_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="Corpus build not found") from exc
 
 
+@router.post("/api/pdf/corpus-builds/{build_id}/pause")
+def pause_pdf_corpus_build(build_id: str) -> dict[str, Any]:
+    try:
+        return pdf_corpus_builds.pause(build_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.delete("/api/pdf/corpus-builds/{build_id}")
+def delete_pdf_corpus_build(build_id: str) -> dict[str, Any]:
+    try:
+        return pdf_corpus_builds.discard_build(build_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
 @router.post("/api/pdf/corpus-builds/{build_id}/settle-metadata")
 def settle_pdf_corpus_metadata(build_id: str) -> dict[str, Any]:
     try:
@@ -698,7 +736,7 @@ def patch_pdf_corpus_record_text(build_id: str, record_id: str, body: PdfCorpusR
 @router.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/metadata-decision")
 def decide_pdf_corpus_record_metadata(build_id: str, record_id: str, body: PdfCorpusMetadataDecision) -> dict[str, Any]:
     try:
-        return pdf_corpus_builds.metadata_decision(build_id, record_id, body.field, body.value, body.expected_revision, body.confirm_no_supported_value, body.evidence_block_ids)
+        return pdf_corpus_builds.metadata_decision(build_id, record_id, body.field, body.value, body.expected_revision, body.confirm_no_supported_value, body.evidence_block_ids, body.evidence_source, body.evidence_note, body.external_evidence_block_ids)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
     except ValueError as exc:
@@ -829,7 +867,8 @@ def suggest_pdf_corpus_record_evidence_llm(
 def patch_pdf_corpus_record_evidence(build_id: str, record_id: str, body: PdfCorpusEvidencePatch) -> dict[str, Any]:
     try:
         return pdf_corpus_builds.patch_evidence(
-            build_id, record_id, body.field, body.block_ids, body.confidence, body.reason, body.expected_revision
+            build_id, record_id, body.field, body.block_ids, body.confidence, body.reason, body.expected_revision,
+            body.source_kind, body.external_block_ids,
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc

@@ -311,3 +311,41 @@ def test_fragmented_glyph_record_is_detected():
 
 
 
+
+
+def _evidence_fixture(tmp_path, monkeypatch):
+    record = rec("r1", "b1")
+    record["discourse_role"] = "analysis"
+    record["metadata_field_status"] = {
+        "discourse_role": {"status": "human_confirmed", "method": "human", "confidence": 1.0},
+    }
+    repo, build = install_repo(tmp_path, [record, rec("r2", "b2")])
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    monkeypatch.setattr(review_actions, "persist_record_decision", lambda **kwargs: None)
+    monkeypatch.setattr(manager, "_schedule_metadata_exemplar_projection", lambda build_id: None)
+    return manager, build
+
+
+def test_reviewer_knowledge_is_recorded_as_such_without_a_span(tmp_path, monkeypatch):
+    manager, build = _evidence_fixture(tmp_path, monkeypatch)
+    result = manager.patch_evidence(
+        build["build_id"], "r1", "discourse_role", [],
+        reason="Known from the critical edition's apparatus.", expected_revision=1,
+        source_kind="reviewer_knowledge",
+    )
+    entry = result["metadata_evidence"]["discourse_role"]
+    assert entry["source_kind"] == "reviewer_knowledge" and entry["block_ids"] == []
+    assert entry["reviewed_by"] == "human"
+
+
+def test_external_evidence_must_come_from_the_builds_own_source(tmp_path, monkeypatch):
+    import pytest
+
+    manager, build = _evidence_fixture(tmp_path, monkeypatch)
+    with pytest.raises(ValueError):
+        manager.patch_evidence(build["build_id"], "r1", "discourse_role", [], expected_revision=1,
+                               external_block_ids=["not-in-source"])
+    result = manager.patch_evidence(build["build_id"], "r1", "discourse_role", ["b1"], expected_revision=1,
+                                    external_block_ids=["b2"])
+    entry = result["metadata_evidence"]["discourse_role"]
+    assert entry["block_ids"] == ["b1"] and entry["external_block_ids"] == ["b2"]

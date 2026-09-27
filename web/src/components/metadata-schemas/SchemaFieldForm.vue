@@ -132,20 +132,30 @@ const addValue = () => props.field.values.push({ value: "", definition: "" });
     </div>
 
     <fieldset class="form-block policy" :aria-label="t('field_policy', 'Field policy')">
-      <label class="check"
-        ><input v-model="field.evidence" type="checkbox" /><span>
-          {{ t("evidence", "Must cite the source") }}
-          <UiTooltip :text="t('evidence_help')" /> </span
-      ></label>
-      <label class="check"
-        ><input v-model="field.assess" type="checkbox" /><span>
-          {{ t("assess", "Report its confidence") }} <UiTooltip :text="t('assess_help')" /> </span
-      ></label>
-      <label class="check"
-        ><input v-model="field.review" type="checkbox" /><span>
-          {{ t("review", "A person must settle it before accepting") }}
-          <UiTooltip :text="t('review_help')" /> </span
-      ></label>
+      <label class="option"
+        ><input v-model="field.evidence" type="checkbox" /><span class="option-copy"
+          ><b>{{ t("evidence", "Must cite the source") }}</b
+          ><small>{{ t("evidence_help") }}</small></span
+        ></label
+      >
+      <label class="option"
+        ><input v-model="field.assess" type="checkbox" /><span class="option-copy"
+          ><b>{{ t("assess", "Report its confidence") }}</b
+          ><small>{{ t("assess_help") }}</small></span
+        ></label
+      >
+      <label class="option"
+        ><input v-model="field.review" type="checkbox" /><span class="option-copy"
+          ><b>{{ t("review", "A person must settle it before accepting") }}</b
+          ><small>{{ t("review_help") }}</small></span
+        ></label
+      >
+      <label class="option"
+        ><input v-model="field.applies_to_work" type="checkbox" /><span class="option-copy"
+          ><b>{{ t("applies_to_work", "This field applies to the work as a whole") }}</b
+          ><small>{{ t("applies_to_work_help") }}</small></span
+        ></label
+      >
     </fieldset>
 
     <div class="nlp-hints">
@@ -173,71 +183,81 @@ const addValue = () => props.field.values.push({ value: "", definition: "" });
       </label>
     </div>
 
-    <fieldset class="schema-field schema-memory">
+    <fieldset class="schema-memory">
       <legend>
         {{ t("memory", "Memory & retrieval") }} <UiTooltip :text="t('memory_help')" />
       </legend>
-      <label class="check">
+      <p class="memory-intro">{{ t("memory_intro") }}</p>
+      <label class="option">
         <input v-model="field.retrieval_profile.enabled" type="checkbox" />
-        <span
-          >{{ t("memory_enabled", "Use reviewed precedents") }}
-          <UiTooltip :text="t('memory_enabled_help')"
-        /></span>
+        <span class="option-copy"
+          ><b>{{ t("memory_enabled", "Show the model past reviewed examples") }}</b
+          ><small>{{ t("memory_enabled_help") }}</small></span
+        >
       </label>
-      <label class="check">
-        <input v-model="field.retrieval_profile.include_corrections" type="checkbox" />
-        <span
-          >{{ t("memory_corrections", "Include corrections") }}
-          <UiTooltip :text="t('memory_corrections_help')"
-        /></span>
-      </label>
-      <label class="check">
-        <input v-model="field.retrieval_profile.include_confirmed_absence" type="checkbox" />
-        <span
-          >{{ t("memory_absence", "Include confirmed absence") }}
-          <UiTooltip :text="t('memory_absence_help')"
-        /></span>
-      </label>
-      <label class="num-field">
-        <span
-          >{{ t("memory_limit", "Maximum precedents") }} <UiTooltip :text="t('memory_limit_help')"
-        /></span>
-        <input
-          v-model.number="field.retrieval_profile.max_items"
-          class="control"
-          type="number"
-          min="0"
-          max="50"
-        />
-      </label>
-      <label class="num-field">
-        <span
-          >{{ t("memory_similarity", "Minimum similarity") }}
-          <UiTooltip :text="t('memory_similarity_help')"
-        /></span>
-        <input
-          v-model.number="field.retrieval_profile.min_similarity"
-          class="control"
-          type="number"
-          min="0"
-          max="1"
-          step="0.05"
-        />
-      </label>
-      <label class="num-field">
-        <span
-          >{{ t("memory_max_corrections", "Maximum corrections") }}
-          <UiTooltip :text="t('memory_max_corrections_help')"
-        /></span>
-        <input
-          v-model.number="field.retrieval_profile.max_corrections"
-          class="control"
-          type="number"
-          min="0"
-          max="20"
-          :disabled="!field.retrieval_profile.include_corrections"
-        />
-      </label>
+      <div class="memory-details" :data-off="!field.retrieval_profile.enabled">
+        <label class="option">
+          <input
+            v-model="field.retrieval_profile.include_corrections"
+            type="checkbox"
+            :disabled="!field.retrieval_profile.enabled"
+          />
+          <span class="option-copy"
+            ><b>{{ t("memory_corrections", "Learn from corrections") }}</b
+            ><small>{{ t("memory_corrections_help") }}</small></span
+          >
+        </label>
+        <label class="option">
+          <input
+            v-model="field.retrieval_profile.include_confirmed_absence"
+            type="checkbox"
+            :disabled="!field.retrieval_profile.enabled"
+          />
+          <span class="option-copy"
+            ><b>{{ t("memory_absence", "Learn from “no value” decisions") }}</b
+            ><small>{{ t("memory_absence_help") }}</small></span
+          >
+        </label>
+        <label class="num-field">
+          <span>{{ t("memory_limit", "Most examples to show") }}</span>
+          <input
+            v-model.number="field.retrieval_profile.max_items"
+            class="control"
+            type="number"
+            min="0"
+            max="50"
+            :disabled="!field.retrieval_profile.enabled"
+          />
+          <small class="hint">{{ t("memory_limit_help") }}</small>
+        </label>
+        <label class="num-field">
+          <span>{{ t("memory_similarity", "How alike an example must be") }}</span>
+          <input
+            v-model.number="field.retrieval_profile.min_similarity"
+            class="control"
+            type="number"
+            min="0"
+            max="1"
+            step="0.05"
+            :disabled="!field.retrieval_profile.enabled"
+          />
+          <small class="hint">{{ t("memory_similarity_help") }}</small>
+        </label>
+        <label class="num-field">
+          <span>{{ t("memory_max_corrections", "Maximum corrections") }}</span>
+          <input
+            v-model.number="field.retrieval_profile.max_corrections"
+            class="control"
+            type="number"
+            min="0"
+            max="20"
+            :disabled="
+              !field.retrieval_profile.enabled || !field.retrieval_profile.include_corrections
+            "
+          />
+          <small class="hint">{{ t("memory_max_corrections_help") }}</small>
+        </label>
+      </div>
       <div class="match-fields" role="group" :aria-labelledby="matchTitleId">
         <span :id="matchTitleId" class="num-field"
           >{{ t("memory_match_fields", "Prefer precedents that agree on") }}
@@ -250,6 +270,7 @@ const addValue = () => props.field.values.push({ value: "", definition: "" });
           <input
             type="checkbox"
             :checked="(field.retrieval_profile.match_field_ids || []).includes(option.fieldId)"
+            :disabled="!field.retrieval_profile.enabled"
             @change="toggleMatch(option.fieldId, ($event.target as HTMLInputElement).checked)"
           />
           <span>{{ option.label }}</span>
@@ -274,9 +295,9 @@ const addValue = () => props.field.values.push({ value: "", definition: "" });
   border: 0;
 }
 .form-block.policy {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 10px 20px;
 }
 .schema-field {
   display: grid;
@@ -285,7 +306,7 @@ const addValue = () => props.field.values.push({ value: "", definition: "" });
   font-size: var(--fs-sm);
   font-weight: var(--fw-semibold);
 }
-.schema-field :is(input, select, textarea) {
+.schema-field :is(input:not([type="checkbox"], [type="radio"]), select, textarea) {
   inline-size: 100%;
   font-weight: 500;
 }
@@ -300,6 +321,34 @@ const addValue = () => props.field.values.push({ value: "", definition: "" });
   align-items: center;
   font-size: var(--fs-sm);
   font-weight: 500;
+}
+/* A checkbox stays checkbox-sized; the text beside it says what it does, so no tooltip is needed to decide. */
+.option {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+.option input[type="checkbox"] {
+  flex: none;
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
+  margin: 0.15rem 0 0;
+  accent-color: var(--ui-accent, var(--accent));
+}
+.option-copy {
+  display: grid;
+  gap: 2px;
+  min-inline-size: 0;
+}
+.option-copy b {
+  font-weight: var(--fw-semibold);
+}
+.option-copy small {
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-normal);
 }
 .values {
   display: grid;
@@ -328,9 +377,9 @@ const addValue = () => props.field.values.push({ value: "", definition: "" });
 }
 .schema-memory {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
-  gap: 10px 16px;
-  padding: 10px 12px;
+  gap: 12px;
+  margin: 0;
+  padding: 12px 14px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-control);
   background: var(--surface-inset);
@@ -339,6 +388,21 @@ const addValue = () => props.field.values.push({ value: "", definition: "" });
   padding: 0 4px;
   font-size: var(--fs-sm);
   font-weight: var(--fw-semibold);
+}
+.memory-intro {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-normal);
+}
+.memory-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 12px 20px;
+  padding-inline-start: 28px;
+}
+.memory-details[data-off="true"] {
+  opacity: 0.55;
 }
 .match-fields {
   display: flex;

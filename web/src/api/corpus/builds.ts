@@ -58,6 +58,18 @@ export const corpusBuildsApi = {
         method: "POST",
       },
     ),
+  /** Stop after the current step, keeping checkpoints; Resume continues from there. */
+  pause: (buildId: string) =>
+    apiRequest<CorpusBuild>(
+      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/pause`,
+      { method: "POST" },
+    ),
+  /** Permanently delete a finished/paused build's workspace (published JSONL files are kept). */
+  deleteBuild: (buildId: string) =>
+    apiRequest<{ deleted: string; had_publication: boolean }>(
+      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}`,
+      { method: "DELETE" },
+    ),
   settleMetadata: (buildId: string) =>
     apiRequest<CorpusBuild>(
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/settle-metadata`,

@@ -72,6 +72,61 @@ class OperationsMixin:
         return count
 
 
+    def pause(self, build_id: str) -> dict[str, Any]:
+        """Stop after the current step, keeping every checkpoint, so the build can be resumed.
+
+        Mechanically a cancellation that the run loop records as ``paused`` rather than
+        ``cancelled``; resume is the same for both.
+        """
+        build = self.repo.get_build(build_id)
+        if build.get("status") not in {"queued", "running"}:
+            raise ValueError("Only a running build can be paused.")
+        with self._lock:
+            self._cancel.add(build_id)
+        build["cancel_requested"] = True
+        build["pause_requested"] = True
+        self.repo.save_build(build)
+        return build
+
+
+    def discard_build(self, build_id: str) -> dict[str, Any]:
+        """Permanently delete a build workspace. Published JSONL files are kept."""
+        build = self.repo.get_build(build_id)
+        if build.get("status") in {"queued", "running"}:
+            raise ValueError("Pause or cancel a running build before deleting it.")
+        self.repo.delete_build_files(build_id)
+        with self._lock:
+            self._cancel.discard(build_id)
+        return {"deleted": build_id, "had_publication": bool(build.get("publication"))}
+
+
+    def discard_source(self, asset_id: str, *, cascade: bool = False) -> dict[str, Any]:
+        """Delete a source and the unit-policy variants derived from it.
+
+        Refused while any build on it is active; refused while finished builds still use it
+        unless ``cascade`` is set, in which case those builds are deleted too.
+        """
+        asset = self.repo.get_asset(asset_id)
+        origin_id = str(asset.get("derived_from_asset_id") or asset_id)
+        family = {origin_id} | {
+            str(item["asset_id"]) for item in self.repo.list_assets() if item.get("derived_from_asset_id") == origin_id
+        }
+        targets = family if origin_id == asset_id else {asset_id}
+        builds = [
+            item for item in self.repo.list_builds(offset=0, limit=10000)["items"]
+            if item.get("asset_id") in targets
+        ]
+        if any(item.get("status") in {"queued", "running"} for item in builds):
+            raise ValueError("A build on this source is running. Pause or cancel it first.")
+        if builds and not cascade:
+            raise ValueError(f"{len(builds)} build(s) still use this source; delete them too to remove it.")
+        for item in builds:
+            self.discard_build(str(item["build_id"]))
+        for target in targets:
+            self.repo.delete_asset_files(target)
+        return {"deleted": sorted(targets), "builds_deleted": len(builds)}
+
+
     def cancel(self, build_id: str) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
         with self._lock:

@@ -143,6 +143,10 @@ class SchemaField(BaseModel):
     # participates in the product without hard-coding behavior to its name.
     role: FieldRole = "scholarly"
     review_visibility: ReviewVisibility = "primary"
+    # True when the value is the same for every record of a work (author, edition, ...). Such a field may be filled
+    # once, before segmentation, and every record inherits it. This is separate from ordinary bulk editing, where a
+    # reviewer picks records and fields after the fact.
+    applies_to_work: bool = False
     # For "choice": the allowed values. `strict` makes them the only values the model may return; otherwise they are
     # what it is told to prefer, and a person may still type another.
     values: list[SchemaValue] = Field(default_factory=list, max_length=60)

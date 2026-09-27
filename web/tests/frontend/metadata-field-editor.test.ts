@@ -194,13 +194,13 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
       },
     });
 
-    expect(wrapper.find("input").exists()).toBe(false);
+    expect(wrapper.find("textarea").exists()).toBe(false);
     const edit = wrapper.findAll("button").find((button) => button.text().includes("Edit"));
     expect(edit).toBeTruthy();
     await edit!.trigger("click");
     await nextTick();
-    expect(wrapper.find("input").exists()).toBe(true);
-    expect((wrapper.get("input").element as HTMLInputElement).value).toBe("Jacques Derrida");
+    expect(wrapper.find("textarea").exists()).toBe(true);
+    expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe("Jacques Derrida");
     expect(wrapper.find(".assertion-provenance").exists()).toBe(true);
     wrapper.unmount();
   });
@@ -220,7 +220,7 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
     const edit = wrapper.findAll("button").find((button) => button.text().includes("Edit"));
     await edit!.trigger("click");
     await nextTick();
-    expect((wrapper.get("input").element as HTMLInputElement).value).toBe("Jacques Derrida");
+    expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe("Jacques Derrida");
     wrapper.unmount();
   });
 });

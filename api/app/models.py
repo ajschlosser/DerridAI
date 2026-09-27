@@ -494,6 +494,8 @@ class PdfSourceUnitPolicy(BaseModel):
     """How finely a source is divided into evidence units."""
     mode: Literal["default", "paragraph", "line", "sentence", "chars"] = "default"
     chars: int | None = Field(default=None, ge=60, le=20000)
+    # "Every N paragraphs / sentences"; only meaningful for the paragraph and sentence modes.
+    per: int | None = Field(default=None, ge=1, le=50)
 
 
 class BuildWarningAcknowledgement(BaseModel):
@@ -693,6 +695,8 @@ class PdfCorpusBuildCreate(BaseModel):
     text_cleanup_rules: list[TextCleanupRule] = Field(default_factory=_default_text_cleanup_rules)
     enrichment_mode: Literal["fast", "deep"] = "fast"
     semantic_indexing: bool = False
+    # Values for schema fields flagged "applies to the work as a whole", supplied before segmentation.
+    work_metadata: dict[str, Any] = Field(default_factory=dict, max_length=60)
 
     @field_validator("run_guidance")
     @classmethod
@@ -726,6 +730,10 @@ class PdfCorpusMetadataDecision(BaseModel):
     expected_revision: int | None = Field(default=None, ge=1)
     # Save the value and bind these source blocks as its evidence in one request.
     evidence_block_ids: list[str] | None = Field(default=None, max_length=500)
+    # Cite the reviewer's own knowledge instead of a source span, or spans elsewhere in the same source.
+    evidence_source: Literal["reviewer_knowledge"] | None = None
+    evidence_note: str = Field(default="", max_length=2000)
+    external_evidence_block_ids: list[str] | None = Field(default=None, max_length=100)
 
 
 class PdfCorpusMetadataCacheClear(BaseModel):
@@ -743,6 +751,8 @@ class PdfCorpusEvidencePatch(BaseModel):
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
     reason: str = Field(default="", max_length=2000)
     expected_revision: int | None = Field(default=None, ge=1)
+    source_kind: Literal["source_span", "reviewer_knowledge"] = "source_span"
+    external_block_ids: list[str] = Field(default_factory=list, max_length=100)
 
 
 class PdfCorpusEvidenceSuggestLlm(BaseModel):

@@ -127,6 +127,18 @@ export function useCorpusSourceConfiguration(
     }
   }
 
+  async function deleteAsset(assetId: string) {
+    if (!assetId) return;
+    setMessage("");
+    try {
+      const result = await corpusBuilderApi.deleteAsset(assetId);
+      await refreshAssets();
+      setMessage(i18n.tf("pdf_corpus.source_deleted", { count: result.builds_deleted }));
+    } catch (exc) {
+      setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+    }
+  }
+
   async function loadSourceUrl() {
     const url = sourceUrl.value.trim();
     if (!url) return;
@@ -335,6 +347,7 @@ export function useCorpusSourceConfiguration(
     refreshAssets,
     upload,
     applyUnitPolicy,
+    deleteAsset,
     loadSourceUrl,
     searchGutenberg,
     searchWikisource,

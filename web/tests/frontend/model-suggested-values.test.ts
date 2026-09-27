@@ -121,7 +121,9 @@ describe("evidence selection preview", () => {
     expect(wrapper.get(".selection-preview").text()).toContain("Responsibility precedes freedom.");
     // A selection elsewhere on the page is not the record's text and is ignored.
     window.getSelection()?.removeAllRanges();
-    await wrapper.get(".field-tools .link-button:nth-last-child(2)").trigger("click");
+    // "Confirm" becomes "Confirm value with selected evidence" while a selection is pending.
+    expect(wrapper.get("[data-primary-action]").text()).toContain("selected evidence");
+    await wrapper.get("[data-primary-action]").trigger("click");
     expect(wrapper.emitted("saveWithSelectionEvidence")?.at(-1)?.[1]).toBe(
       "Responsibility precedes freedom.",
     );

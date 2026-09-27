@@ -18,6 +18,8 @@ export interface SourceUnitPolicy {
   mode: SourceUnitMode;
   /** Characters per unit; only for mode "chars". */
   chars?: number;
+  /** Group this many paragraphs or sentences into one unit (1 or absent = no grouping). */
+  per?: number;
 }
 
 export interface SourceUnitPreview {
@@ -894,4 +896,13 @@ export interface EnrichmentMetrics {
   unresolved_remaining: number | null;
   runs: string[];
   concurrency: { limit: number; working: number };
+}
+
+/** Evidence a reviewer supplies beyond selected text in the record itself. */
+export interface HumanEvidenceSource {
+  /** "reviewer_knowledge": the reviewer's own knowledge is the source; no span is cited. */
+  source?: "reviewer_knowledge";
+  note?: string;
+  /** Spans from elsewhere in the same source (another record). */
+  externalBlockIds?: string[];
 }

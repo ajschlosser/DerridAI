@@ -274,6 +274,38 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
     startPolling();
   }
 
+  async function pauseBuild() {
+    if (!options.currentBuild.value) return;
+    try {
+      options.currentBuild.value = await corpusBuilderApi.pause(
+        options.currentBuild.value.build_id,
+      );
+      options.setMessage(options.t("pdf_corpus.pause_requested"));
+    } catch (exc) {
+      options.setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+    }
+    startPolling();
+  }
+
+  async function deleteBuild() {
+    const build = options.currentBuild.value;
+    if (!build) return;
+    try {
+      await corpusBuilderApi.deleteBuild(build.build_id);
+      options.builds.value = options.builds.value.filter(
+        (item) => item.build_id !== build.build_id,
+      );
+      options.buildsTotal.value = Math.max(0, options.buildsTotal.value - 1);
+      options.selectedBuildId.value = options.builds.value[0]?.build_id || "";
+      options.currentBuild.value = null;
+      options.setMessage(options.t("pdf_corpus.build_deleted"));
+      await refreshBuilds();
+      await refreshBuild();
+    } catch (exc) {
+      options.setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+    }
+  }
+
   async function settleMetadata() {
     if (!options.currentBuild.value) return;
     options.busy.value = "settle";
@@ -303,6 +335,8 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
     retryIncompleteMetadata,
     confirmManifest,
     cancelBuild,
+    pauseBuild,
+    deleteBuild,
     settleMetadata,
   };
 }

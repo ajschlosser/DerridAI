@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import type { CorpusBuild } from "../api/pdfCorpus";
 import { useI18nStore } from "../stores/i18n";
 
@@ -8,6 +8,8 @@ const emit = defineEmits<{
   retryMetadata: [];
   reviewMetadata: [];
   reviewValidation: [];
+  /** Open the exact record (and field) a validation finding is about. */
+  fixIssue: [issue: { code?: string; record_id?: string; field?: string; reason?: string }];
   reviewTopology: [];
   reviewIssues: [];
   reviewRejected: [];
@@ -30,6 +32,10 @@ const validationIssues = computed(() =>
   Array.isArray(validation.value.validation_issues) ? validation.value.validation_issues : [],
 );
 const sourceQuality = computed(() => props.build.source_quality || {});
+const showAllIssues = ref(false);
+const shownIssues = computed(() =>
+  showAllIssues.value ? validationIssues.value : validationIssues.value.slice(0, 5),
+);
 const noPublishable = computed(() => Boolean(readiness.value.no_publishable_records));
 const primaryLabel = computed(() => {
   if (publication.value) return i18n.t("pdf_corpus.download_jsonl");
@@ -61,8 +67,12 @@ function fixBlocker(code?: string) {
   const value = String(code || "");
   if (value === "required_document_metadata") emit("editDocumentMetadata");
   else if (value === "required_metadata") emit("reviewMetadata");
-  else if (value === "metadata_validation") emit("reviewValidation");
-  else if (value === "boundary_attention") emit("reviewTopology");
+  else if (value === "metadata_validation") {
+    // Go to the first specific finding (record, field, reason) instead of just a queue.
+    const first = validationIssues.value.find((item) => item?.record_id);
+    if (first) emit("fixIssue", first);
+    else emit("reviewValidation");
+  } else if (value === "boundary_attention") emit("reviewTopology");
   else if (value === "record_attention") emit("reviewIssues");
   else if (value === "source_quality" || value === "source_validation") emit("reviewSource");
   else emit("reviewRecords");
@@ -383,18 +393,37 @@ function fixBlocker(code?: string) {
           }}</b>
           <ul>
             <li
-              v-for="(issue, index) in validationIssues.slice(0, 5)"
+              v-for="(issue, index) in shownIssues"
               :key="`${issue.code}-${issue.record_id}-${issue.field}-${index}`"
             >
               <code>{{ issue.field || issue.record_id || issue.code || "validation" }}</code>
               <span>{{ issue.reason || blockerLabel(issue.code) }}</span>
+              <small v-if="issue.record_id">{{ issue.record_id }}</small>
+              <button
+                v-if="issue.record_id"
+                type="button"
+                class="btn small"
+                @click="emit('fixIssue', issue)"
+              >
+                {{ i18n.t("pdf_corpus.fix_this_issue") }}
+              </button>
             </li>
           </ul>
-          <small v-if="validationIssues.length > 5">{{
-            i18n.tf("pdf_corpus.validation_more_issues", {
-              count: validationIssues.length - 5,
-            })
-          }}</small>
+          <button
+            v-if="validationIssues.length > 5"
+            type="button"
+            class="link-button"
+            :aria-expanded="showAllIssues"
+            @click="showAllIssues = !showAllIssues"
+          >
+            {{
+              showAllIssues
+                ? i18n.t("pdf_corpus.validation_show_fewer")
+                : i18n.tf("pdf_corpus.validation_more_issues", {
+                    count: validationIssues.length - 5,
+                  })
+            }}
+          </button>
         </div>
       </section>
     </div>

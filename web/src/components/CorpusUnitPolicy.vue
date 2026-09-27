@@ -23,24 +23,34 @@ const CHAR_PRESETS = [200, 500, 1000, 2000];
 const current = computed<SourceUnitPolicy>(() => props.asset.unit_policy ?? { mode: "default" });
 const mode = ref<SourceUnitMode>(current.value.mode);
 const chars = ref<number>(current.value.chars ?? 500);
+const per = ref<number>(current.value.per ?? 1);
+const GROUP_PRESETS = [1, 2, 3, 5];
+const groupable = computed(() => mode.value === "paragraph" || mode.value === "sentence");
+const perValid = computed(
+  () => Number.isInteger(Number(per.value)) && Number(per.value) >= 1 && Number(per.value) <= 50,
+);
 const preview = ref<SourceUnitPreview | null>(null);
 const loading = ref(false);
 const error = ref("");
 let timer: number | null = null;
 let sequence = 0;
 
-const policy = computed<SourceUnitPolicy>(() =>
-  mode.value === "chars" ? { mode: "chars", chars: Number(chars.value) } : { mode: mode.value },
-);
+const policy = computed<SourceUnitPolicy>(() => {
+  if (mode.value === "chars") return { mode: "chars", chars: Number(chars.value) };
+  if (groupable.value && Number(per.value) > 1) return { mode: mode.value, per: Number(per.value) };
+  return { mode: mode.value };
+});
 const charsValid = computed(() => Number(chars.value) >= 60 && Number(chars.value) <= 20000);
 const unchanged = computed(
   () =>
     current.value.mode === policy.value.mode &&
-    (policy.value.mode !== "chars" || current.value.chars === policy.value.chars),
+    (policy.value.mode !== "chars" || current.value.chars === policy.value.chars) &&
+    (current.value.per ?? 1) === (policy.value.per ?? 1),
 );
 
 async function refresh() {
   if (mode.value === "chars" && !charsValid.value) return;
+  if (groupable.value && !perValid.value) return;
   const ticket = ++sequence;
   loading.value = true;
   error.value = "";
@@ -65,12 +75,13 @@ function schedule() {
   if (timer !== null) window.clearTimeout(timer);
   timer = window.setTimeout(refresh, 250);
 }
-watch([mode, chars], schedule);
+watch([mode, chars, per], schedule);
 watch(
   () => props.asset.asset_id,
   () => {
     mode.value = current.value.mode;
     chars.value = current.value.chars ?? 500;
+    per.value = current.value.per ?? 1;
     preview.value = null;
     schedule();
   },
@@ -81,7 +92,9 @@ onBeforeUnmount(() => {
 });
 
 function apply() {
-  if (!unchanged.value && (mode.value !== "chars" || charsValid.value)) emit("apply", policy.value);
+  if (unchanged.value) return;
+  if ((mode.value === "chars" && !charsValid.value) || (groupable.value && !perValid.value)) return;
+  emit("apply", policy.value);
 }
 </script>
 
@@ -172,6 +185,44 @@ function apply() {
       <small v-if="!charsValid" role="alert">{{ i18n.t("pdf_corpus.units_chars_invalid") }}</small>
     </div>
 
+    <div v-if="groupable" class="unit-chars">
+      <label for="unit-per-input">{{
+        i18n.t(
+          mode === "paragraph"
+            ? "pdf_corpus.units_group_paragraphs"
+            : "pdf_corpus.units_group_sentences",
+        )
+      }}</label>
+      <input
+        id="unit-per-input"
+        v-model.number="per"
+        class="control"
+        type="number"
+        min="1"
+        max="50"
+        step="1"
+        :disabled="disabled"
+        :aria-invalid="!perValid"
+        aria-describedby="unit-per-help"
+      />
+      <div class="unit-presets" role="group" :aria-label="i18n.t('pdf_corpus.units_presets')">
+        <button
+          v-for="preset in GROUP_PRESETS"
+          :key="preset"
+          type="button"
+          class="preset"
+          :class="{ 'is-selected': Number(per) === preset }"
+          :disabled="disabled"
+          @click="per = preset"
+        >
+          {{ preset }}
+        </button>
+      </div>
+      <small id="unit-per-help" :role="perValid ? undefined : 'alert'">{{
+        i18n.t(perValid ? "pdf_corpus.units_group_help" : "pdf_corpus.units_group_invalid")
+      }}</small>
+    </div>
+
     <div class="unit-preview" :aria-busy="loading" aria-live="polite">
       <template v-if="error">
         <p class="unit-error" role="alert">{{ error }}</p>
@@ -208,7 +259,13 @@ function apply() {
       <button
         type="button"
         class="btn primary"
-        :disabled="disabled || busy || unchanged || (mode === 'chars' && !charsValid)"
+        :disabled="
+          disabled ||
+          busy ||
+          unchanged ||
+          (mode === 'chars' && !charsValid) ||
+          (groupable && !perValid)
+        "
         @click="apply"
       >
         {{ i18n.t("pdf_corpus.units_apply") }}

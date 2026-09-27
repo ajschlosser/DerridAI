@@ -4,6 +4,7 @@ import {
   corpusBuilderApi,
   type CorpusBuild,
   type CorpusRecord,
+  type HumanEvidenceSource,
   type SourceBlock,
 } from "../../../api/corpus";
 import type { ProviderProfile } from "../../../api/system";
@@ -245,6 +246,13 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
     await persistEvidence(field, Array.from(ids));
   }
 
+  /** Replace the selected field's cited spans with exactly `blockIds` (used by select all / clear). */
+  async function setEvidenceBlocks(blockIds: string[]) {
+    const field = options.selectedEvidenceField.value;
+    if (!options.currentBuild.value || !options.selectedRecord.value || !field) return;
+    await persistEvidence(field, Array.from(new Set(blockIds.map(String))));
+  }
+
   async function requeueCurrentRecord() {
     if (!options.currentBuild.value || !options.selectedRecord.value) return;
     options.busy.value = "record";
@@ -285,7 +293,12 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
    * as that value's evidence in the same request (and the same optimistic update), so the
    * reviewer never leaves the field list.
    */
-  async function resolveMetadataField(field: string, value: unknown, evidenceBlockId = "") {
+  async function resolveMetadataField(
+    field: string,
+    value: unknown,
+    evidenceBlockId = "",
+    humanSource?: HumanEvidenceSource,
+  ) {
     if (!options.currentBuild.value || !options.selectedRecord.value) return;
     rememberMetadataValues(field, value);
     const existingEvidence = options.selectedRecord.value.metadata_evidence?.[field];
@@ -328,6 +341,7 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
           rebase ? undefined : context.expectedRevision,
           false,
           evidenceIds,
+          humanSource,
         );
         options.applyAuthoritativeRecord(result.record, result.build);
         if (options.selectedRecordId.value === context.recordId) {
@@ -630,6 +644,7 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
     saveMetadata,
     assignEvidenceBlock,
     toggleEvidenceBlock,
+    setEvidenceBlocks,
     requeueCurrentRecord,
     resolveMetadataField,
     resolveMetadataSuggestions,
