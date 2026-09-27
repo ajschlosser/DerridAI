@@ -543,7 +543,7 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
 
   function showMetadataSource(field: string) {
     options.selectedEvidenceField.value = field;
-    options.reviewInspectorTab.value = "source";
+    options.reviewInspectorTab.value = "evidence";
     const ids = options.selectedRecord.value?.metadata_evidence?.[field]?.block_ids || [];
     const first = options.sourceBlocks.value.find((block) => ids.includes(block.block_id));
     if (first) {
