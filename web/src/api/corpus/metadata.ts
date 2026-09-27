@@ -22,10 +22,6 @@ export interface MetadataDecisionResult {
   deferred_fields: string[];
   /** Non-fatal problems in derived memory; the decisions themselves were saved. */
   warnings: string[];
-  queue_counts?: CorpusBuild["review_queue_counts"];
-  remaining_fields?: string[];
-  ready_for_acceptance?: boolean;
-  review_state?: string;
 }
 
 /** One reviewed precedent, exactly as metadata enrichment would see it. */

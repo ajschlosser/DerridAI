@@ -3,7 +3,6 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { corpusBuilderApi, type RecordContext, type RecordContextItem } from "../../api/corpus";
 import { useI18nStore } from "../../stores/i18n";
-import { fitContext } from "../../features/corpus-builder/domain/contextWindow";
 
 /**
  * The record under review, centred in a reading window with the records around it above and below.
@@ -34,32 +33,51 @@ let ticket = 0;
 
 const enabled = computed(() => props.showContext);
 
-// The window's capacity in characters, from its size and type; unmeasured (0) falls back to a modest default.
-const capacity = ref(0);
-const DEFAULT_CAPACITY = 2400;
-/**
- * Estimate how many characters fit the window: its usable height in lines times its width in characters, from the
- * computed font size (a line is ~1.65em tall, an average glyph ~0.52em wide). It is deliberately approximate: it only
- * decides how many neighbours to offer (see fitContext); the record is centred by real layout afterwards.
- */
-function measure() {
-  const box = window_.value;
-  if (!box || !box.clientWidth) return;
-  const style = getComputedStyle(box);
-  const size = parseFloat(style.fontSize) || 16;
-  const maxHeight = parseFloat(style.maxHeight) || window.innerHeight * 0.62;
-  const width = box.clientWidth - (parseFloat(style.paddingInline) || 48);
-  const lines = maxHeight / (size * 1.65);
-  capacity.value = Math.max(0, Math.floor(lines * (width / (size * 0.52))));
-}
+// How many neighbours are shown on each side; found by real layout (see fit), not by estimating text size.
+const counts = ref({ before: 0, after: 0 });
 const visible = computed(() => {
   const before = context.value?.before ?? [];
   const after = context.value?.after ?? [];
-  const cap = capacity.value || DEFAULT_CAPACITY;
-  // The focus block's padding and each neighbour's heading cost about a line and a half of text each.
-  const line = Math.max(20, Math.floor(cap / 24));
-  return fitContext(before, after, props.text.length + line * 2, cap, { overhead: line * 1.5 });
+  return {
+    before: counts.value.before ? before.slice(-counts.value.before) : [],
+    after: after.slice(0, counts.value.after),
+  };
 });
+let fitTicket = 0;
+/**
+ * Starting at the active record, add the nearest neighbour on alternating sides for as long as the whole stack still
+ * fits the window's height, so the record stays in the middle. A side that runs out (or no longer fits) is skipped.
+ */
+async function fit() {
+  const mine = ++fitTicket;
+  counts.value = { before: 0, after: 0 };
+  const box = window_.value;
+  const before = context.value?.before ?? [];
+  const after = context.value?.after ?? [];
+  if (!box || (!before.length && !after.length)) return;
+  await nextTick();
+  const open = { before: before.length > 0, after: after.length > 0 };
+  let side: "before" | "after" = "before";
+  while (open.before || open.after) {
+    if (mine !== fitTicket) return;
+    const current = side;
+    side = side === "before" ? "after" : "before";
+    if (!open[current]) continue;
+    const limit = current === "before" ? before.length : after.length;
+    if (counts.value[current] >= limit) {
+      open[current] = false;
+      continue;
+    }
+    counts.value = { ...counts.value, [current]: counts.value[current] + 1 };
+    await nextTick();
+    if (box.scrollHeight > box.clientHeight + 1) {
+      counts.value = { ...counts.value, [current]: counts.value[current] - 1 };
+      open[current] = false;
+    }
+  }
+  await nextTick();
+  centre();
+}
 
 async function load() {
   context.value = null;
@@ -79,8 +97,7 @@ async function load() {
     cache.set(key, result);
     if (mine !== ticket) return;
     context.value = result;
-    await nextTick();
-    centre();
+    await fit();
   } catch {
     // Context is a convenience; the record itself is unaffected.
     if (mine === ticket) failed.value = true;
@@ -110,24 +127,21 @@ function pages(item: RecordContextItem) {
 watch(() => [props.buildId, props.recordId, enabled.value], load, { immediate: true });
 watch(
   () => props.text,
-  () => nextTick(centre),
+  () => void fit(),
 );
 let observer: ResizeObserver | null = null;
 let lastWidth = 0;
 onMounted(() => {
-  measure();
   if (typeof ResizeObserver === "undefined" || !window_.value) return;
   // Only a change of width re-fits: the window's own height follows its content, so watching it would loop.
   observer = new ResizeObserver(() => {
     const width = window_.value?.clientWidth ?? 0;
     if (width === lastWidth) return;
     lastWidth = width;
-    measure();
-    void nextTick(centre);
+    void fit();
   });
   observer.observe(window_.value);
 });
-watch(capacity, () => nextTick(centre));
 onBeforeUnmount(() => {
   ticket += 1;
   observer?.disconnect();
@@ -200,7 +214,7 @@ onBeforeUnmount(() => {
   gap: 14px;
   padding: 14px 24px 20px;
   min-block-size: 220px;
-  max-block-size: min(62vh, 640px);
+  max-block-size: max(220px, calc(100vh - 320px));
   overflow-y: auto;
   overscroll-behavior: contain;
   scroll-behavior: smooth;

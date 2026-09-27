@@ -114,9 +114,10 @@ def test_metadata_decision_is_durable_and_moves_record_out_of_metadata_queue(tmp
     repo, build = install_repo(tmp_path, [record])
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
     result = manager.metadata_decision(build["build_id"], "r1", "position_holder", "Derrida", expected_revision=1)
-    assert result["remaining_fields"] == []
-    assert result["ready_for_acceptance"] is True
-    assert result["review_state"] == "ready"
+    assert result["record"]["review_state"] == "ready"
+    assert result["record"]["can_accept"] is True
+    # The scan-backed queue totals are not part of the (latency-sensitive) decision response.
+    assert not {"queue_counts", "remaining_fields", "ready_for_acceptance", "review_state"} & set(result)
     persisted = repo.load_records(build["build_id"])[0]
     assert persisted["metadata_field_status"]["position_holder"]["status"] == "human_confirmed"
     assert persisted["metadata_review_fields"] == []

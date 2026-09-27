@@ -1297,11 +1297,15 @@ function recordMetadata(record: CorpusRecord) {
 }
 function applyAuthoritativeRecord(record: CorpusRecord, build?: CorpusBuild | null) {
   const id = record.record_id;
-  const index = records.value.findIndex((item) => item.record_id === id);
-  if (index >= 0) records.value.splice(index, 1, record);
-  if (selectedRecordId.value === id) {
-    selectedRecord.value = record;
-    metadataDraft.value = JSON.stringify(recordMetadata(record), null, 2);
+  // A later save is already queued and shown optimistically; this older response would briefly revert it.
+  // The last response in the queue carries the authoritative state for all of them.
+  if (!recordSaveQueue.hasQueuedBehind(id)) {
+    const index = records.value.findIndex((item) => item.record_id === id);
+    if (index >= 0) records.value.splice(index, 1, record);
+    if (selectedRecordId.value === id) {
+      selectedRecord.value = record;
+      metadataDraft.value = JSON.stringify(recordMetadata(record), null, 2);
+    }
   }
   if (build && currentBuild.value?.build_id === build.build_id) {
     currentBuild.value = build;
@@ -1771,6 +1775,17 @@ function startNewBuildSetup() {
 }
 function reviewShortcut(event: KeyboardEvent) {
   if (!selectedRecord.value || busy.value) return;
+  if (
+    (event.ctrlKey || event.metaKey) &&
+    !event.altKey &&
+    event.key.toLowerCase() === "s" &&
+    editingText.value &&
+    !focusView.value // Focus View handles its own Ctrl/Cmd+S.
+  ) {
+    event.preventDefault();
+    if (!reviewLocked.value && textDraft.value.trim()) void saveReviewedText();
+    return;
+  }
   const command = corpusReviewCommandFromKeydown(event);
   if (!command) return;
   event.preventDefault();
@@ -2883,13 +2898,14 @@ defineExpose({
                   <aside
                     v-if="selectedRecord.text_touchup_proposal?.status === 'pending_review'"
                     class="review-reason touchup-review-notice"
+                    data-tone="info"
                     role="status"
                   >
-                    <b>{{ i18n.t("pdf_corpus.llm_touchup_proposal_available") }}</b
-                    ><span class="review-reason-text">{{
-                      i18n.t("pdf_corpus.llm_touchup_proposal_help")
-                    }}</span
-                    ><button
+                    <div class="touchup-review-copy">
+                      <b>{{ i18n.t("pdf_corpus.llm_touchup_proposal_available") }}</b>
+                      <span>{{ i18n.t("pdf_corpus.llm_touchup_proposal_help") }}</span>
+                    </div>
+                    <button
                       type="button"
                       class="btn small"
                       @click="beginTextEdit(true)"
@@ -2944,6 +2960,16 @@ defineExpose({
                           :disabled="busy !== '' || reviewLocked"
                         >
                           {{ i18n.t("pdf_corpus.clean_text") }}</button
+                        ><button
+                          v-if="editingText"
+                          type="button"
+                          class="btn small primary"
+                          @click="saveReviewedText()"
+                          :disabled="busy !== '' || reviewLocked || !textDraft.trim()"
+                          aria-keyshortcuts="Control+S Meta+S"
+                          :title="i18n.t('pdf_corpus.save_reviewed_text') + ' (Ctrl/Cmd S)'"
+                        >
+                          {{ i18n.t("ui.save") }}</button
                         ><button
                           v-if="editingText"
                           type="button"

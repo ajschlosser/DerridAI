@@ -178,4 +178,14 @@ describe("RecordMutationQueue", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(contexts).toEqual([false, true]);
   });
+
+  it("reports whether another mutation is queued behind the running one", async () => {
+    const queue = new RecordMutationQueue();
+    const seen: boolean[] = [];
+    queue.enqueue("r1", async () => void seen.push(queue.hasQueuedBehind("r1")), vi.fn());
+    queue.enqueue("r1", async () => void seen.push(queue.hasQueuedBehind("r1")), vi.fn());
+    await queue.waitFor("r1");
+    expect(seen).toEqual([true, false]);
+    expect(queue.hasQueuedBehind("r1")).toBe(false);
+  });
 });

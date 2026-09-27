@@ -1984,3 +1984,23 @@ summary:focus-visible {
   display: inline-flex;
   gap: var(--space-2, 8px);
 }
+
+/* The LLM touch-up notice is informational, not a warning, and its explanation must stay readable: it wraps. */
+.review-frame .review-reason.touchup-review-notice {
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  padding: 0.5rem 0.75rem;
+  border-color: var(--tone-info-border);
+  background: var(--tone-info-bg);
+  color: var(--tone-info-fg);
+}
+.touchup-review-copy {
+  display: grid;
+  flex: 1 1 22ch;
+  gap: 0.125rem;
+  min-width: 0;
+  line-height: 1.45;
+}
+.review-frame .review-reason.touchup-review-notice .btn {
+  margin-inline-start: auto;
+}
