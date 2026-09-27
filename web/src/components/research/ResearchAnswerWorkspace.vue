@@ -3,6 +3,7 @@ import { computed } from "vue";
 import AppIcon from "../AppIcon.vue";
 import { useI18nStore } from "../../stores/i18n";
 import type { ResearchJob, ResearchResult } from "../../types/research";
+import ResearchClaimReviewPanel from "./ResearchClaimReviewPanel.vue";
 import { researchJobDetail } from "./researchI18n";
 
 const props = withDefaults(
@@ -174,6 +175,12 @@ const statusLabel = computed(() => {
           </p>
         </template>
       </article>
+      <ResearchClaimReviewPanel
+        v-if="result.claim_provenance?.claims?.length"
+        :provenance="result.claim_provenance"
+        :evidence="result.evidence || []"
+        @evidence="emit('evidence', $event)"
+      />
       <footer class="research-answer-footer">
         <span>{{ result.evidence?.length || 0 }} {{ i18n.t("research.evidence_records") }}</span>
         <span v-if="result.response_cache?.record_id">{{ i18n.t("research.cached") }}</span>

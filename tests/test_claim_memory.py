@@ -40,6 +40,16 @@ def claim(monkeypatch):
     monkeypatch.setattr(routes, "request_user", lambda request: request.state.user)
     payload = {"claim_id": "c-1", "claim_text": "Presence is deferred.", "owner": "ann", "validation_status": "unvalidated", "created_at": "2026-01-01T00:00:00+00:00"}
     system_store.put_generated_claim(payload)
+    system_store.put_claim_support_binding({
+        "support_binding_id": "s-c-1",
+        "claim_id": "c-1",
+        "owner": "ann",
+        "record_id": "r1",
+        "record_revision": 1,
+        "relation": "supports",
+        "citation": {"inline": "(Derrida, 1)"},
+        "validation_status": "unvalidated",
+    })
     return fake, payload
 
 
@@ -85,9 +95,43 @@ def test_other_users_cannot_validate_someone_elses_claim(claim):
     assert getattr(info.value, "status_code", None) == 404
 
 
+def test_claim_lookup_returns_authoritative_status_and_respects_owner(claim):
+    result = routes.get_claim("c-1", _request(_user()))
+    assert result["claim"]["validation_status"] == "unvalidated"
+
+    with pytest.raises(Exception) as info:
+        routes.get_claim("c-1", _request(_user("bob")))
+    assert getattr(info.value, "status_code", None) == 404
+
+
+def test_claim_without_usable_support_cannot_be_validated(claim):
+    fake, _ = claim
+    payload = {
+        "claim_id": "c-empty",
+        "claim_text": "A claim without bound evidence.",
+        "owner": "ann",
+        "validation_status": "unvalidated",
+        "created_at": "2026-01-01T00:00:00+00:00",
+    }
+    system_store.put_generated_claim(payload)
+
+    with pytest.raises(Exception) as info:
+        routes.set_claim_validation("c-empty", {"status": "validated"}, _request(_user()))
+
+    assert getattr(info.value, "status_code", None) == 422
+    assert "support binding" in str(getattr(info.value, "detail", ""))
+    assert system_store.get_generated_claim("c-empty", owner="ann")["validation_status"] == "unvalidated"
+    assert "c-empty" not in fake.rows
+
+
 def test_only_validated_claims_are_eligible_and_stale_bindings_are_skipped():
     base = {"claim_id": "c", "claim_text": "X.", "owner": "ann"}
     assert claim_memory.derive_entry({**base, "validation_status": "unvalidated"}, []) is None
+    assert claim_memory.derive_entry({**base, "validation_status": "validated"}, []) is None
+    assert claim_memory.derive_entry(
+        {**base, "validation_status": "validated"},
+        [{"claim_id": "c", "record_id": "r1", "relation": "supports", "validation_status": "stale"}],
+    ) is None
     entry = claim_memory.derive_entry(
         {**base, "validation_status": "validated"},
         [{"claim_id": "c", "record_id": "r1", "relation": "supports", "validation_status": "stale"},

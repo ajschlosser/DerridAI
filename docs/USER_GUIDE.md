@@ -743,6 +743,7 @@ FreeLLM/OpenAI-compatible includes model routing, model-kind filtering, output t
 - load evidence into a new JSONL file
 - cached-response identifier
 - generated claims with explicit evidence-marker support bindings when the answer contains `[[E0]]`-style markers. These bindings are re-resolved against the canonical Record revision before they are treated as current; prior answers and claims never become current source evidence.
+- an inline **Review generated claims** section directly beneath the completed answer. Each citation-bound claim shows its current audit status, bound evidence, and **Validate claim**, **Reject claim**, **Mark unresolved**, or **Reopen** actions. Selecting a bound citation focuses that evidence in the Research evidence panel. The older Record → Traceability claim-audit path remains available for provenance inspection.
 - **Re-run with parameters**, which repopulates RAG Research with the original run configuration so it can be modified before launch
 - **Analyze & grade**, which asks the selected LLM provider to evaluate query relevance, source binding, claim traceability, attribution/source discrimination, claim/evidence fidelity, conceptual precision, coverage, interpretive usefulness, and overall quality
 
@@ -753,7 +754,7 @@ Every successfully completed RAG answer is written to the logical `_response_cac
 Research memory is stored separately from that deterministic response cache. Two independent Research settings, both off by default, use it:
 
 - **Use cached responses to steer answers** finds earlier answers to questions similar in meaning to the new one and shows them to the model as advisory context. Only answers graded at or above `RESEARCH_MEMORY_MIN_GRADE` (overall score out of 10, default 7) are eligible; ungraded answers never steer, and an answer graded by the model that wrote it is labelled self-graded. Grades are stored with the durable response, so re-grading an answer can add it to or remove it from this memory.
-- **Use cached provenance to steer claims** finds reviewer-validated claims similar to the question, with the citations their support bindings recorded, and checks each cited record against the run's evidence: present, revised since validation, or absent. The model is told that support absent from the current evidence cannot be cited.
+- **Use cached provenance to steer claims** finds reviewer-validated claims similar to the question, with the citations their support bindings recorded, and checks each cited record against the run's evidence: present, revised since validation, or absent. The model is told that support absent from the current evidence cannot be cited. A claim cannot be validated, indexed in validated-claim memory, or rebuilt into that memory unless it has at least one usable support binding to a Record; legacy or malformed validated rows without usable support are ignored by the projection.
 
 Neither setting adds remembered text to the evidence packet or lets it supply a citation. Both match by meaning through derived, rebuildable projections; if the embedding service is unavailable they fall back to shared-word matching and the run's warnings say so. The run records which prior responses and claims steered it.
 

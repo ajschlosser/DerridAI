@@ -2,8 +2,9 @@
 """Validated-claim memory: reviewer-validated generated claims as retrievable precedent.
 
 SQLite (generated claims + support bindings) is authoritative. A claim enters this
-memory only when a human sets its ``validation_status`` to ``validated``. The Chroma
-collection is a rebuildable projection: the claim text is the embedded document; its
+memory only when a human sets its ``validation_status`` to ``validated`` and at least
+one usable support binding identifies a Record. The Chroma collection is a rebuildable
+projection: the claim text is the embedded document; its
 metadata is the reviewer-validated support (relation, cited Record IDs/revisions) and
 a snapshot of the cited Record's *current, checked* attribution assertions.
 
@@ -94,17 +95,25 @@ def derive_entry(
             continue
         if str(binding.get("validation_status") or "unvalidated") not in _USABLE_BINDING:
             continue
-        record_id = str(binding.get("record_id") or "")
+        record_id = str(binding.get("record_id") or "").strip()
+        relation = str(binding.get("relation") or "").strip()
+        if not record_id or not relation:
+            continue
         citation = binding.get("citation") if isinstance(binding.get("citation"), dict) else {}
         support.append({
             "record_id": record_id,
             "record_revision": binding.get("record_revision"),
-            "relation": binding.get("relation"),
+            "relation": relation,
             "source_document_id": binding.get("source_document_id"),
             # Citations were rendered by deterministic code when the claim was bound.
             "citation": {key: citation.get(key) for key in ("inline", "full") if citation.get(key)},
             "semantic": semantic_snapshot(_verified_record(binding, (records or {}).get(record_id))),
         })
+    # Validated-claim memory is provenance memory, not a bag of approved prose.
+    # A legacy or malformed claim with no usable evidence binding must never become
+    # retrievable precedent merely because its validation_status says "validated".
+    if not support:
+        return None
     return {
         "claim_id": claim_id,
         "claim_text": text,
@@ -255,9 +264,11 @@ def apply_claim_validation(
 ) -> dict[str, Any]:
     """Record a human audit decision on a generated claim, then update the projection.
 
-    The SQLite row is authoritative and committed first. ``validated`` adds the claim
-    to validated-claim memory; any other status removes it. A projection failure is
-    reported in the result and never undoes or hides the audit decision.
+    A claim cannot be validated without at least one usable support binding. The
+    SQLite row is authoritative and committed first once the decision is admissible.
+    ``validated`` adds the claim to validated-claim memory; any other status removes
+    it. A projection failure is reported in the result and never undoes or hides the
+    audit decision.
     """
     if status not in VALIDATION_STATUSES:
         raise ValueError("status must be unvalidated, validated, rejected, or unresolved")
@@ -267,12 +278,20 @@ def apply_claim_validation(
         "validated_by": None if status == "unvalidated" else actor,
         "validated_at": None if status == "unvalidated" else datetime.now(UTC).isoformat(),
     }
-    system_store.put_generated_claim(claim)
     records = {str(record["record_id"]): record} if isinstance(record, dict) and record.get("record_id") else {}
-    projection = {"status": "removed" if status != "validated" else "indexed", "error": ""}
+    bindings = system_store.list_claim_support_bindings(str(claim["claim_id"]), owner=owner)
+    entry = derive_entry(claim, bindings, records)
+    if status == "validated" and entry is None:
+        raise ValueError(
+            "A claim requires at least one usable support binding before it can be validated."
+        )
+
+    # The audit row is canonical and is committed before touching the rebuildable
+    # vector projection. Projection failures therefore never erase a valid decision.
+    system_store.put_generated_claim(claim)
+    projection = {"status": "removed" if entry is None else "indexed", "error": ""}
     try:
         index = index_factory()
-        entry = derive_entry(claim, system_store.list_claim_support_bindings(str(claim["claim_id"]), owner=owner), records)
         if entry is not None:
             index.upsert(entry)
         else:
