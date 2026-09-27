@@ -125,17 +125,16 @@ from .corpus_metadata import (
 )
 from .corpus_metadata_enrichment_execution import MetadataEnrichmentExecutionMixin
 from .corpus_models import (
-    CORPUS_PROFILES,
-    PROFILE_VERSION,
-    DocumentManifestModel,
-    PageMarkerChoiceModel,
-    TextTouchupResponseModel,
+    CORPUS_PROFILES as CORPUS_PROFILES,
 )
 from .corpus_models import (
     DOCUMENT_PROMPT_VERSION as DOCUMENT_PROMPT_VERSION,
 )
 from .corpus_models import (
     METADATA_PROMPT_VERSION as METADATA_PROMPT_VERSION,
+)
+from .corpus_models import (
+    PROFILE_VERSION as PROFILE_VERSION,
 )
 from .corpus_models import (
     SCHEMA_VERSION as SCHEMA_VERSION,
@@ -150,6 +149,11 @@ from .corpus_models import (
     DiscourseMetadataResponseModel as DiscourseMetadataResponseModel,
 )
 from .corpus_models import (
+    DocumentManifestModel,
+    PageMarkerChoiceModel,
+    TextTouchupResponseModel,
+)
+from .corpus_models import (
     IndexMetadataResponseModel as IndexMetadataResponseModel,
 )
 from .corpus_models import (
@@ -162,10 +166,12 @@ from .corpus_operations import OperationsMixin
 from .corpus_pipeline import BuildScope
 from .corpus_publication import (
     build_text_touchup_prompt,
+    provenance_warnings,
     publication_blocker,
     publishable_records,
     serialize_public_record,
     validate_publication_record,
+    warning_key,
 )
 from .corpus_record_quality import (
     _record_extraction_quality_issues,
@@ -843,7 +849,8 @@ class PdfCorpusRepository:
         origin = _json_read(self.asset_meta_path(origin_id))
         if not isinstance(origin, dict):
             raise KeyError(origin_id)
-        digest = hashlib.sha256(f"{origin_id}|units|{resolved['mode']}|{resolved.get('chars', '')}".encode()).hexdigest()
+        size_key = resolved.get("chars", "") if resolved["mode"] != "auto" else f"auto{resolved['max_chars']}"
+        digest = hashlib.sha256(f"{origin_id}|units|{resolved['mode']}|{size_key}".encode()).hexdigest()
         derived_id = f"pdf-{digest[:24]}"
         meta_path = self.asset_meta_path(derived_id)
         with self._lock:
@@ -2545,8 +2552,10 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         # Whoever proposed the boundaries (the model, a checkpoint, a heuristic), a record must not
         # start or end mid-sentence. This is deterministic and idempotent, so it also repairs
         # checkpoints written before it existed.
-        soft_max = int(CORPUS_PROFILES[str(previous_build.get("profile_id") or PROFILE_VERSION)].get("soft_max_chars") or 3500)
-        boundaries, sentence_report = snap_boundaries_to_sentences(semantic_blocks, boundaries, hard_max_chars=soft_max * 3)
+        # The build's own ceiling bounds any join: sentence ends are preferred, never at the cost of the record size
+        # the build asked for (the profile's generic limit let a small-record build grow records to 10,500 characters).
+        ceiling = _record_sizing_policy(request, self._profile_for(build_id))["absolute_record_chars"]
+        boundaries, sentence_report = snap_boundaries_to_sentences(semantic_blocks, boundaries, hard_max_chars=ceiling)
         self._update(build_id, sentence_boundary_report={key: len(value) for key, value in sentence_report.items()})
         self.repo.save_checkpoint(build_id, "boundaries", boundaries)
 
@@ -3357,6 +3366,25 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         return next(row for row in self.repo.load_records(build_id) if row.get("record_id") == record_id)
 
     @_serialize_record_mutation
+    def acknowledge_warnings(self, build_id: str, warnings: list[str], actor: str) -> dict[str, Any]:
+        """Record that a person has seen these build warnings. The warnings stay; they travel with the corpus."""
+        with self._lock:
+            build = self.repo.get_build(build_id)
+            current = {str(item) for item in build.get("warnings") or []}
+            unknown = [text for text in warnings if text not in current]
+            if unknown:
+                raise ValueError(f"Not a warning of this build: {unknown[0][:120]}")
+            acknowledgements = dict(build.get("warning_acknowledgements") or {})
+            now = iso_now()
+            for text in warnings:
+                acknowledgements.setdefault(
+                    warning_key(text),
+                    {"warning": text, "acknowledged_by": actor, "acknowledged_at": now},
+                )
+            build["warning_acknowledgements"] = acknowledgements
+            self.repo.save_build(build)
+            return build
+
     def publish(self, build_id: str, *, require_acceptance: bool = True) -> dict[str, Any]:
         build = self.repo.get_build(build_id)
         if self.repo.records_projection_dirty(build_id):
@@ -3370,6 +3398,16 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             raise ValueError(blocker)
         publication_id = f"publication-{build_id.removeprefix('build-')}-{uuid.uuid4().hex[:8]}"
         created_at = iso_now()
+        # Warnings are provenance: those about a record are published with it, the rest with the publication.
+        build_warnings, record_warnings = provenance_warnings(
+            build, {str(record.get("record_id") or "") for record in publishable}
+        )
+        publishable = [
+            {**record, "provenance_warnings": record_warnings[str(record.get("record_id") or "")]}
+            if str(record.get("record_id") or "") in record_warnings
+            else record
+            for record in publishable
+        ]
         path = self.repo.publication_path(publication_id)
         result = write_jsonl_zst(
             path,
@@ -3393,6 +3431,8 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             "uncompressed_bytes": result.uncompressed_bytes,
             "compressed_bytes": result.compressed_bytes,
             "created_at": created_at,
+            "provenance_warnings": build_warnings,
+            "record_warning_count": sum(len(items) for items in record_warnings.values()),
         }
         build["publication"] = publication
         # Build lifecycle and publication lifecycle are separate. A publication is

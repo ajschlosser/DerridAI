@@ -121,3 +121,45 @@ def test_small_records_need_small_units():
     windows, _ = up.apply_unit_policy(blocks, {"mode": "chars", "chars": 100})
     sizes = _record_sizes(windows, policy)
     assert len(sizes) > 30 and 80 <= sorted(sizes)[len(sizes) // 2] <= 110
+
+
+def test_automatic_units_divide_only_paragraphs_longer_than_the_limit():
+    long = "One claim is made here. Another follows it closely. A third one closes the paragraph."
+    blocks = [
+        {"block_id": "a", "page": 1, "type": "paragraph", "text": "Short enough."},
+        {"block_id": "b", "page": 1, "type": "paragraph", "text": long},
+        {"block_id": "h", "page": 1, "type": "heading", "text": long},
+    ]
+    out, _ = up.apply_unit_policy(blocks, {"mode": "auto", "max_chars": 60})
+    assert [b["block_id"] for b in out] == ["a", "b-u001", "b-u002", "b-u003", "h"]
+    assert "".join(b["text"] + " " for b in out[1:4]).split() == long.split()
+    with pytest.raises(ValueError):
+        up.normalize_policy({"mode": "auto"})
+
+
+def test_a_build_on_extracted_units_gets_automatic_units_but_a_chosen_policy_is_kept(tmp_path, monkeypatch):
+    """Record size is authoritative: paragraphs too long for the requested records are divided when the build starts.
+
+    Why: records are made of whole units, so with paragraph units a 250-character build could only produce
+    paragraph-sized records. A source still on its extracted units is divided automatically (the original is kept and
+    named); a unit policy the reviewer chose explicitly is respected.
+    """
+    from app import corpus_builder as cb
+
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    long = " ".join(f"Sentence number {n} makes one small claim about hospitality." for n in range(12))
+    original = repo.save_asset(("Short opening.\n\n" + long).encode(), filename="essay.txt")
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    monkeypatch.setattr(manager._executor, "submit", lambda *args, **kwargs: None)
+    sizing = {"preferred_record_chars": 150, "record_length_tolerance": 30, "long_record_chars": 300, "absolute_record_chars": 550}
+
+    build = manager.create({"asset_id": original["asset_id"], "provider": "ollama", "model": "m", "record_sizing": sizing})
+    assert build["asset_id"] != original["asset_id"]
+    assert build["automatic_units"]["source_asset_id"] == original["asset_id"]
+    assert build["automatic_units"]["max_chars"] == 300
+    assert build["request"]["asset_id"] == build["asset_id"]
+    assert max(len(b["text"]) for b in repo.load_blocks(build["asset_id"])) <= 300
+
+    chosen = repo.derive_asset_with_units(original["asset_id"], {"mode": "paragraph"})
+    kept = manager.create({"asset_id": chosen["asset_id"], "provider": "ollama", "model": "m", "record_sizing": sizing})
+    assert kept["asset_id"] == chosen["asset_id"] and not kept.get("automatic_units")

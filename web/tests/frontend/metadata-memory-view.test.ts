@@ -1,7 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { metadataMemoryApi } from "../../src/api/metadataMemory";
 import { useI18nStore } from "../../src/stores/i18n";
@@ -55,7 +55,12 @@ const dictionary = {
   "common.next": "Next",
 };
 
+const RouterLink = { props: ["to"], template: '<a :data-to="JSON.stringify(to)"><slot /></a>' };
+const mountView = () =>
+  mount(MetadataMemoryView, { attachTo: document.body, global: { stubs: { RouterLink } } });
+
 describe("Metadata memory page", () => {
+  afterEach(() => vi.useRealTimers());
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.restoreAllMocks();
@@ -107,7 +112,7 @@ describe("Metadata memory page", () => {
   });
 
   it("presents learned metadata as auditable scholarly memory", async () => {
-    const wrapper = mount(MetadataMemoryView, { attachTo: document.body });
+    const wrapper = mountView();
     await flushPromises();
 
     expect(wrapper.get("#metadata-memory-title").text()).toBe("Metadata memory");
@@ -119,6 +124,48 @@ describe("Metadata memory page", () => {
     expect(wrapper.text()).toContain("r1 · r4");
     expect(wrapper.text()).not.toContain("derridai_metadata_exemplars");
 
+    wrapper.unmount();
+  });
+
+  it("applies select filters immediately, shows removable chips, and debounces search", async () => {
+    const list = vi.mocked(metadataMemoryApi.list);
+    const wrapper = mountView();
+    await flushPromises();
+    list.mockClear();
+
+    await wrapper.findAll("select")[0].setValue("position_holder");
+    await flushPromises();
+    expect(list).toHaveBeenCalledTimes(1);
+    expect(list.mock.calls[0][0]).toMatchObject({ field: "position_holder", offset: 0 });
+    expect(wrapper.find(".filter-chips").text()).toContain("position_holder");
+
+    vi.useFakeTimers();
+    await wrapper.get("input[type=search]").setValue("levinas");
+    expect(list).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(350);
+    await flushPromises();
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(list.mock.calls[1][0]).toMatchObject({ q: "levinas" });
+    vi.useRealTimers();
+
+    await wrapper.findAll(".chip")[1].trigger("click");
+    await flushPromises();
+    expect(list.mock.calls.at(-1)?.[0]).toMatchObject({ q: "levinas", field: "" });
+    wrapper.unmount();
+  });
+
+  it("links the related System Data surfaces and reveals details on demand", async () => {
+    const wrapper = mountView();
+    await flushPromises();
+
+    const targets = wrapper.findAll(".memory-relations a").map((a) => a.attributes("data-to"));
+    expect(targets.join()).toContain("semantic_memory_outbox");
+    expect(targets.join()).toContain('"section":"metadata"');
+
+    expect(wrapper.text()).not.toContain("Context around the evidence.");
+    await wrapper.get(".details-toggle").trigger("click");
+    expect(wrapper.text()).toContain("Context around the evidence.");
+    expect(wrapper.get(".details-toggle").attributes("aria-expanded")).toBe("true");
     wrapper.unmount();
   });
 });

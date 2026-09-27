@@ -47,9 +47,18 @@ describe("CorpusRecordSizeAdvice", () => {
     vi.clearAllMocks();
   });
 
-  it("warns when the units are far larger than the requested record length and offers the fix", async () => {
+  it("with Automatic units, says nothing: the build divides paragraphs that are too long itself", async () => {
     corpusBuilderApi.previewUnitPolicy.mockResolvedValue(stats(564, 2047));
     const wrapper = mount(CorpusRecordSizeAdvice, { props: { asset: asset(), sizing: sizing() } });
+    await flushPromises();
+    expect(wrapper.find(".size-advice").exists()).toBe(false);
+  });
+
+  it("warns when explicitly chosen units are far larger than the requested record length and offers the fix", async () => {
+    corpusBuilderApi.previewUnitPolicy.mockResolvedValue(stats(564, 2047));
+    const wrapper = mount(CorpusRecordSizeAdvice, {
+      props: { asset: asset({ unit_policy: { mode: "paragraph" } }), sizing: sizing() },
+    });
     await flushPromises();
     expect(wrapper.get(".size-advice").text()).toContain("564");
     expect(wrapper.get(".size-advice").text()).toContain("2,047");

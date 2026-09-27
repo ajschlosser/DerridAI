@@ -26,7 +26,7 @@ describe("FieldEvidenceList confidence semantics", () => {
   }
 
   it("does not manufacture zero confidence when confidence is unavailable", () => {
-    expect(render(null).text()).toContain("b-1");
+    expect(render(null).text()).toContain("1 span");
     expect(render(null).text()).not.toContain("0%");
     expect(render(undefined).text()).not.toContain("0%");
   });

@@ -44,6 +44,8 @@ _STATUS_TO_CANONICAL: dict[str, tuple[DerivationMethod, EvaluationStatus, Author
 
 _NON_ASSERTION_FIELDS = {
     "record_id", "record_revision", "source_document_id", "source_asset_id",
+    # Build warnings published with the record they concern: provenance, not a metadata field.
+    "provenance_warnings",
     "source_spans", "source_units", "source_unit_ids", "source_block_ids",
     "source_extracted_text", "text", "text_length", "page_start", "page_end",
     "pdf_file", "pdf_page", "pdf_pages", "inline_citation", "full_citation",

@@ -79,6 +79,8 @@ const meta = {
       const editingText = ref(Boolean(args.editingText));
       const textDraft = ref(String(args.textDraft ?? args.record?.text ?? ""));
       const resolveSourceIssues = ref(Boolean(args.resolveSourceIssues));
+      const inspectorTab = ref<"metadata" | "evidence" | "source">(args.inspectorTab ?? "metadata");
+      const showContext = ref(true);
       const beginTextEdit = (proposal = false) => {
         textDraft.value = proposal
           ? String(args.record?.text_touchup_proposal?.proposed_text || args.record?.text || "")
@@ -97,6 +99,8 @@ const meta = {
         editingText,
         textDraft,
         resolveSourceIssues,
+        inspectorTab,
+        showContext,
         beginTextEdit,
         cancelTextEdit,
         saveText,
@@ -105,6 +109,8 @@ const meta = {
     template: `
       <CorpusRecordFocusReview
         v-bind="args"
+        v-model:inspector-tab="inspectorTab"
+        v-model:show-context="showContext"
         :editing-text="editingText"
         :text-draft="textDraft"
         :resolve-source-issues="resolveSourceIssues"
@@ -123,6 +129,10 @@ const meta = {
     canHistoryForward: true,
     canPreviousRecord: true,
     canNextRecord: true,
+    accepted: 42,
+    remaining: 118,
+    total: 340,
+    showPdfExplorer: false,
     record,
     sourceBlocks: [
       {
@@ -149,6 +159,12 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Pending: Story = {};
+export const MetadataDecisionsOpen: Story = {
+  args: { blockingFields: ["speaker", "discourse_role"] },
+};
+export const EvidenceTab: Story = {
+  args: { inspectorTab: "evidence", evidenceFields: ["speaker", "discourse_role"] },
+};
 export const Rejected: Story = {
   args: {
     record: {
@@ -174,7 +190,6 @@ export const LongMetadata: Story = {
 };
 export const HumanCorrectedSourceIssue: Story = {
   args: {
-    canAccept: false,
     record: {
       ...record,
       text: "A human-corrected passage under review. The immutable extracted source remains available in the Source tab.",
@@ -209,7 +224,6 @@ export const HumanCorrectedSourceIssue: Story = {
 };
 export const IllegibleOcr: Story = {
   args: {
-    canAccept: false,
     record: {
       ...record,
       text: "rouge, c'est le res.c;ic, rornrne le t•ail:lit justement K]ossowski. C111.11.31.CS de rockers Oil (11.:CHeS sc. hrisent",
@@ -240,7 +254,6 @@ export const IllegibleOcr: Story = {
 };
 export const PixelatedScan: Story = {
   args: {
-    canAccept: false,
     record: {
       ...record,
       needs_review: true,

@@ -3,10 +3,10 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MetadataPrecedents } from "../../src/api/corpus";
-import type { RetrievalProfile } from "../../src/api/metadataSchemas";
 import CorpusFieldPrecedents from "../../src/components/CorpusFieldPrecedents.vue";
 import CorpusRecordResearchClaims from "../../src/components/CorpusRecordResearchClaims.vue";
-import SchemaRetrievalProfileEditor from "../../src/components/SchemaRetrievalProfileEditor.vue";
+import SchemaFieldForm from "../../src/components/metadata-schemas/SchemaFieldForm.vue";
+import { blankField } from "../../src/api/metadataSchemas";
 import { describeDecisionResult } from "../../src/features/corpus-builder/domain/metadataDecisions";
 
 const precedents: MetadataPrecedents = {
@@ -83,31 +83,22 @@ describe("retrieval policy editor", () => {
   beforeEach(() => setActivePinia(createPinia()));
 
   it("adds and removes analogy conditions by stable field identity", async () => {
-    const profile: RetrievalProfile = {
-      enabled: true,
-      max_items: 6,
-      min_similarity: 0,
-      include_corrections: true,
-      include_confirmed_absence: true,
-      max_corrections: 2,
-      match_field_ids: [] as string[],
-    };
-    let current = profile;
-    const wrapper = mount(SchemaRetrievalProfileEditor, {
+    const field = blankField();
+    const wrapper = mount(SchemaFieldForm, {
       props: {
-        modelValue: profile,
+        field,
+        groupKeys: ["discourse"],
         matchOptions: [{ fieldId: "field-genre", label: "Genre" }],
-        "onUpdate:modelValue": (value: RetrievalProfile) => {
-          current = value;
-          void wrapper.setProps({ modelValue: value });
-        },
       },
     });
-    const genre = wrapper.findAll("input[type=checkbox]").at(-1)!;
+    const genre = wrapper
+      .findAll("label.check")
+      .find((label) => label.text() === "Genre")!
+      .get("input");
     await genre.setValue(true);
-    expect(current.match_field_ids).toEqual(["field-genre"]);
+    expect(field.retrieval_profile.match_field_ids).toEqual(["field-genre"]);
     await genre.setValue(false);
-    expect(current.match_field_ids).toEqual([]);
+    expect(field.retrieval_profile.match_field_ids).toEqual([]);
   });
 });
 

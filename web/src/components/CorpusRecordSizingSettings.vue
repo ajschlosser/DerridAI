@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { useI18nStore } from "../stores/i18n";
+import UiTooltip from "./ui/UiTooltip.vue";
 import type { RecordSizingPolicy } from "../types/corpus";
 import {
   autoRecordSizingLimits,
@@ -8,14 +9,20 @@ import {
   limitsAreAutomatic,
   RECORD_SIZING_MIN,
   recordSizingMinimums,
+  type ObservedRecordSizes,
 } from "../features/corpus-builder/domain/recordSizing";
+import CorpusRecordSizingRuler from "./CorpusRecordSizingRuler.vue";
 
 /**
  * Record length: a target, how far from it is fine, and two exception limits. The limits follow the target
  * automatically (always valid); turn that off to set them yourself, with the smallest allowed value shown
  * beside each field and a one-click fix instead of a bare error.
  */
-const props = defineProps<{ modelValue: RecordSizingPolicy; disabled?: boolean }>();
+const props = defineProps<{
+  modelValue: RecordSizingPolicy;
+  disabled?: boolean;
+  observed?: ObservedRecordSizes | null;
+}>();
 const emit = defineEmits<{ (event: "update:modelValue", value: RecordSizingPolicy): void }>();
 const i18n = useI18nStore();
 
@@ -80,63 +87,21 @@ function fix(key: "long_record_chars" | "absolute_record_chars") {
 }
 
 // The ruler: everything on one scale so the relationship between the four numbers is visible.
-const scaleMax = computed(() =>
-  Math.max(Number(props.modelValue.absolute_record_chars) * 1.12, high.value * 1.6, 400),
-);
-const pct = (value: number) => `${Math.min(100, Math.max(0, (value / scaleMax.value) * 100))}%`;
-const segments = computed(() => {
-  const long = Number(props.modelValue.long_record_chars);
-  const absolute = Number(props.modelValue.absolute_record_chars);
-  return {
-    target: { left: pct(low.value), width: `calc(${pct(high.value)} - ${pct(low.value)})` },
-    exception: {
-      left: pct(high.value),
-      width: `calc(${pct(Math.max(high.value, long))} - ${pct(high.value)})`,
-    },
-    ceiling: {
-      left: pct(Math.max(high.value, long)),
-      width: `calc(${pct(Math.max(long, absolute))} - ${pct(Math.max(high.value, long))})`,
-    },
-    absolute: pct(absolute),
-  };
-});
-const rulerLabel = computed(() =>
-  i18n.tf("pdf_corpus.record_sizing.ruler_label", {
-    low: low.value.toLocaleString(),
-    high: high.value.toLocaleString(),
-    long: Number(props.modelValue.long_record_chars).toLocaleString(),
-    absolute: Number(props.modelValue.absolute_record_chars).toLocaleString(),
-  }),
-);
 </script>
 
 <template>
   <fieldset class="record-sizing" :disabled="disabled" aria-describedby="record-sizing-help">
-    <legend>{{ i18n.t("pdf_corpus.record_sizing.title") }}</legend>
+    <legend>
+      {{ i18n.t("pdf_corpus.record_sizing.title")
+      }}<UiTooltip
+        :text="i18n.t('pdf_corpus.record_sizing.characters_help')"
+        :label="i18n.t('pdf_corpus.record_sizing.characters_help_label')"
+        placement="bottom"
+      />
+    </legend>
     <p id="record-sizing-help" class="help">{{ i18n.t("pdf_corpus.record_sizing.help") }}</p>
 
-    <div class="ruler" role="img" :aria-label="rulerLabel">
-      <div class="track">
-        <span class="seg target" :style="segments.target"></span>
-        <span class="seg exception" :style="segments.exception"></span>
-        <span class="seg ceiling" :style="segments.ceiling"></span>
-        <span class="stop" :style="{ left: segments.absolute }"></span>
-      </div>
-      <ul class="legend" aria-hidden="true">
-        <li class="k-target">
-          <b>{{ low.toLocaleString() }}–{{ high.toLocaleString() }}</b>
-          {{ i18n.t("pdf_corpus.record_sizing.ruler_target") }}
-        </li>
-        <li class="k-exception">
-          <b>≤ {{ Number(modelValue.long_record_chars).toLocaleString() }}</b>
-          {{ i18n.t("pdf_corpus.record_sizing.ruler_exception") }}
-        </li>
-        <li class="k-ceiling">
-          <b>≤ {{ Number(modelValue.absolute_record_chars).toLocaleString() }}</b>
-          {{ i18n.t("pdf_corpus.record_sizing.ruler_ceiling") }}
-        </li>
-      </ul>
-    </div>
+    <CorpusRecordSizingRuler :policy="modelValue" :observed="observed" />
 
     <div
       class="presets"
@@ -169,12 +134,20 @@ const rulerLabel = computed(() =>
           step="50"
           :value="modelValue.preferred_record_chars"
           @input="patch('preferred_record_chars', $event)"
-        /><small>{{
-          i18n.tf("pdf_corpus.record_sizing.preferred_range", {
-            low: low.toLocaleString(),
-            high: high.toLocaleString(),
-          })
-        }}</small></label
+        /><small
+          >{{
+            i18n.tf("pdf_corpus.record_sizing.preferred_range", {
+              low: low.toLocaleString(),
+              high: high.toLocaleString(),
+            })
+          }}
+          ·
+          {{
+            i18n.tf("pdf_corpus.record_sizing.about_words", {
+              count: Math.max(1, Math.round(preferred / 6)).toLocaleString(),
+            })
+          }}</small
+        ></label
       >
       <label for="corpus-tolerance-chars"
         ><span>{{ i18n.t("pdf_corpus.record_sizing.tolerance") }}</span
@@ -320,72 +293,6 @@ const rulerLabel = computed(() =>
   font-size: 0.8125rem;
   line-height: 1.45;
 }
-.ruler {
-  display: grid;
-  gap: 8px;
-}
-.track {
-  position: relative;
-  block-size: 14px;
-  border-radius: var(--radius-pill);
-  background: var(--surface-inset);
-  overflow: hidden;
-}
-.seg {
-  position: absolute;
-  inset-block: 0;
-  transition:
-    left var(--motion-base) var(--ease-standard),
-    width var(--motion-base) var(--ease-standard);
-}
-.seg.target {
-  background: var(--tone-ok-border);
-}
-.seg.exception {
-  background: var(--tone-warn-border);
-  opacity: 0.75;
-}
-.seg.ceiling {
-  background: var(--tone-danger-border);
-  opacity: 0.6;
-}
-.stop {
-  position: absolute;
-  inset-block: 0;
-  inline-size: 3px;
-  background: var(--text);
-}
-.legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 16px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  color: var(--muted);
-  font-size: 0.8125rem;
-}
-.legend li::before {
-  content: "";
-  display: inline-block;
-  inline-size: 10px;
-  block-size: 10px;
-  margin-inline-end: 6px;
-  border-radius: 3px;
-}
-.legend .k-target::before {
-  background: var(--tone-ok-border);
-}
-.legend .k-exception::before {
-  background: var(--tone-warn-border);
-}
-.legend .k-ceiling::before {
-  background: var(--tone-danger-border);
-}
-.legend b {
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-}
 .presets {
   display: flex;
   flex-wrap: wrap;
@@ -496,11 +403,6 @@ const rulerLabel = computed(() =>
   .primary-grid,
   .advanced-grid {
     grid-template-columns: 1fr;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .seg {
-    transition: none;
   }
 }
 </style>
