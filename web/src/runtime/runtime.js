@@ -570,6 +570,7 @@ const {
 });
 const {
   refreshJobs,
+  startRealtime,
   startJobPolling,
   pauseRuntime,
   pruneClientJobState,
@@ -3226,9 +3227,11 @@ async function bootstrapRuntime() {
   // background health/job state only; the mounted view owns #main and its own render.
   if (document.querySelector("#main")) renderView();
   await checkHealth();
-  // One discovery request on startup is not a polling loop. Polling begins only
-  // if this request finds an active job and then runs every four seconds.
+  // One discovery request on startup is not a polling loop. Afterwards job state
+  // follows the realtime socket; REST polling runs only as a fallback while the
+  // socket is unavailable (docs/REALTIME.md).
   await refreshJobs({ rerender: false });
+  startRealtime();
   startJobPolling();
   if (!isResearcher() && state.appConfig.warm_default_provider_on_start === true)
     warmupConfiguredLlm();

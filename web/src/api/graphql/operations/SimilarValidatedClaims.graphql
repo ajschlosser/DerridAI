@@ -1,0 +1,21 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
+# Advisory precedents only: similarity never asserts evidentiary support.
+query SimilarValidatedClaims($claim_id: String!, $limit: Int!) {
+  generated_claim(claim_id: $claim_id) {
+    claim_id
+    similar_validated_claims(limit: $limit) {
+      claim_id
+      claim_text
+      similarity
+      validated_by
+      validated_at
+      advisory
+      support {
+        record_id
+        record_revision
+        relation
+        semantic
+      }
+    }
+  }
+}

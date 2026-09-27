@@ -3,6 +3,7 @@
 // The Record workspace: the record the Record view shows (loaded or from the database), moving between records, and the
 // commands it sends (evidence, selection, citation and JSON copy, saving edits, annotations, the primary action). Moved
 // verbatim from the legacy runtime; the runtime's state object and helpers are passed in as dependencies.
+import { runOperation } from "../api/graphql/client";
 import { fullCitation, inlineCitation, mlaPageSpan } from "./citations";
 import { compactRecordHistory, pdfLinks, recordPayload } from "./recordPayloads";
 import { countOccurrences } from "./recordQuery";
@@ -302,14 +303,13 @@ export function createRecordWorkspace(deps: Deps) {
         ? recordOverride
         : (await getRecordWorkspaceSnapshot()).record;
     if (!source || !String(source.record_id || "").trim()) return null;
-    return api("/api/derridai/graph/record", {
-      method: "POST",
-      body: JSON.stringify({ record: source }),
-    });
+    // cELF reads go through the GraphQL façade; the REST routes remain for compatibility.
+    const { record_graph } = await runOperation("RecordGraph", { record: source });
+    return record_graph;
   }
   async function getDerridaiNormativeModel({ refresh = false } = {}) {
     if (!refresh && derridaiModelCache) return cloneAuditValue(derridaiModelCache);
-    derridaiModelCache = await api("/api/derridai/model");
+    derridaiModelCache = (await runOperation("CelfModel", {})).celf_model;
     return cloneAuditValue(derridaiModelCache);
   }
   async function recordWorkspaceNavigate(delta: Any) {

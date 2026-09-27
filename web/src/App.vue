@@ -406,6 +406,11 @@ onMounted(async () => {
   window.addEventListener("derridai-auth-expired", () => {
     void handleAuthExpired();
   });
+  // The realtime socket reports a role/permission change; re-read the session so
+  // navigation and capability checks reflect it (an expired session still 401s).
+  window.addEventListener("derridai:permissions-changed", () => {
+    void auth.loadStatus();
+  });
   window.addEventListener("derridai:navigate-native", ((event: Event) => {
     const detail = (event as CustomEvent<{ path?: string; runtimeView?: string }>).detail || {};
     if (detail.path) navigateNative(detail.path, detail.runtimeView);

@@ -530,22 +530,73 @@ function defaults(url: URL, method: string, role: Role): unknown {
   return {};
 }
 
+/** Empty results for the read-only GraphQL façade, keyed by operation name. */
+function graphqlDefaults(operationName: string): unknown {
+  if (operationName === "CelfModel")
+    return { data: { celf_model: { specification_version: "1.0", nodes: [], edges: [] } } };
+  if (operationName === "SimilarValidatedClaims")
+    return { data: { generated_claim: { claim_id: "", similar_validated_claims: [] } } };
+  return { data: null, errors: [{ message: `No e2e fixture for ${operationName}` }] };
+}
+
+/**
+ * A minimal realtime server: it accepts the socket, reports ready, acknowledges subscriptions and
+ * answers pings. It never pushes events, so pages rely on the REST resync that follows connecting.
+ * `refused` closes the socket the way a deployment with realtime disabled would.
+ */
+async function mockRealtime(page: Page, mode: "live" | "refused"): Promise<void> {
+  await page.routeWebSocket(
+    (url) => url.pathname === "/api/ws/events",
+    (ws) => {
+      if (mode === "refused") {
+        void ws.close({ code: 4403, reason: "realtime disabled" });
+        return;
+      }
+      const topics = new Set<string>();
+      const frame = (type: string, payload: Record<string, unknown>) =>
+        ws.send(JSON.stringify({ type, timestamp: "2026-03-01T12:00:00Z", payload }));
+      frame("connection.ready", {
+        protocol_version: 1,
+        connection_id: "e2e",
+        last_event_id: 0,
+        heartbeat_seconds: 20,
+        idle_timeout_seconds: 60,
+      });
+      ws.onMessage((raw) => {
+        const message = JSON.parse(String(raw)) as { type: string; topics?: string[] };
+        if (message.type === "subscribe") (message.topics ?? []).forEach((t) => topics.add(t));
+        if (message.type === "unsubscribe") (message.topics ?? []).forEach((t) => topics.delete(t));
+        if (message.type === "subscribe" || message.type === "unsubscribe")
+          frame("subscription.updated", { topics: [...topics].sort(), rejected: [] });
+        if (message.type === "ping") frame("pong", { last_event_id: 0 });
+      });
+    },
+  );
+}
+
 /** Answer every /api/ request. Call before navigating. */
 export async function mockBackend(
   page: Page,
-  options: { role?: Role; fixtures?: Fixtures } = {},
+  options: { role?: Role; fixtures?: Fixtures; realtime?: "live" | "refused" } = {},
 ): Promise<void> {
   const role = options.role ?? "admin";
   const fixtures = options.fixtures ?? {};
+  await mockRealtime(page, options.realtime ?? "live");
   await page.route(
     (url) => url.pathname.startsWith("/api/"),
     async (route) => {
       const url = new URL(route.request().url());
       const method = route.request().method();
       const match = fixtures[`${method} ${url.pathname}`] ?? fixtures[url.pathname];
+      const graphqlOperation =
+        url.pathname === "/api/graphql"
+          ? String((route.request().postDataJSON() as { operationName?: string })?.operationName)
+          : "";
       const body =
         match === undefined
-          ? defaults(url, method, role)
+          ? graphqlOperation
+            ? graphqlDefaults(graphqlOperation)
+            : defaults(url, method, role)
           : typeof match === "function"
             ? match(url, method)
             : match;
