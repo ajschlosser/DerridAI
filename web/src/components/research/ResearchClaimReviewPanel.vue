@@ -280,7 +280,7 @@ watch(
             {{ messages[claim.claim_id] }}
           </p>
           <p v-if="reviewers[claim.claim_id]" class="research-claim-reviewer">
-            {{ i18n.tf("claims.validated_by", { name: reviewers[claim.claim_id] }) }}
+            {{ i18n.tf("claims.reviewed_by", { name: reviewers[claim.claim_id] }) }}
           </p>
         </article>
       </li>
