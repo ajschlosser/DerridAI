@@ -167,9 +167,9 @@ from .corpus_operations import OperationsMixin
 from .corpus_pipeline import BuildScope
 from .corpus_publication import (
     build_text_touchup_prompt,
+    mark_unreviewed_publication,
     provenance_warnings,
     publication_blocker,
-    mark_unreviewed_publication,
     publishable_records,
     serialize_public_record,
     validate_publication_record,
