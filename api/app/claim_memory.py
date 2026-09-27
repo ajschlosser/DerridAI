@@ -105,6 +105,11 @@ def derive_entry(
             "citation": {key: citation.get(key) for key in ("inline", "full") if citation.get(key)},
             "semantic": semantic_snapshot(_verified_record(binding, (records or {}).get(record_id))),
         })
+    # Validated-claim memory is provenance memory, not a bag of approved prose.
+    # A legacy or malformed claim with no usable evidence binding must never become
+    # retrievable precedent merely because its validation_status says "validated".
+    if not support:
+        return None
     return {
         "claim_id": claim_id,
         "claim_text": text,
@@ -267,12 +272,20 @@ def apply_claim_validation(
         "validated_by": None if status == "unvalidated" else actor,
         "validated_at": None if status == "unvalidated" else datetime.now(UTC).isoformat(),
     }
-    system_store.put_generated_claim(claim)
     records = {str(record["record_id"]): record} if isinstance(record, dict) and record.get("record_id") else {}
-    projection = {"status": "removed" if status != "validated" else "indexed", "error": ""}
+    bindings = system_store.list_claim_support_bindings(str(claim["claim_id"]), owner=owner)
+    entry = derive_entry(claim, bindings, records)
+    if status == "validated" and entry is None:
+        raise ValueError(
+            "A claim requires at least one usable support binding before it can be validated."
+        )
+
+    # The audit row is canonical and is committed before touching the rebuildable
+    # vector projection. Projection failures therefore never erase a valid decision.
+    system_store.put_generated_claim(claim)
+    projection = {"status": "removed" if entry is None else "indexed", "error": ""}
     try:
         index = index_factory()
-        entry = derive_entry(claim, system_store.list_claim_support_bindings(str(claim["claim_id"]), owner=owner), records)
         if entry is not None:
             index.upsert(entry)
         else:
