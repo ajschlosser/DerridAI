@@ -993,9 +993,9 @@ const recordSizingValid = computed(
 const canStartConcurrentBuild = computed(() =>
   Boolean(
     recordSizingValid.value &&
-      selectedAsset.value &&
-      contextSafe.value &&
-      (selectedProviderId.value || !activeBuildCount.value),
+    selectedAsset.value &&
+    contextSafe.value &&
+    (selectedProviderId.value || !activeBuildCount.value),
   ),
 );
 const transientNetworkError = computed(() =>
@@ -1460,8 +1460,8 @@ async function refreshRecords(reset = false, preferredId = "") {
     const match = wanted ? records.value.find((row) => row.record_id === wanted) : undefined;
     const preserveDraft = Boolean(
       selectedRecord.value &&
-        selectedRecordId.value === wanted &&
-        (editingText.value || metadataEditorDirty.value),
+      selectedRecordId.value === wanted &&
+      (editingText.value || metadataEditorDirty.value),
     );
     if (match && !preserveDraft) {
       selectRecord(match);
@@ -1757,6 +1757,17 @@ function startNewBuildSetup() {
 }
 function reviewShortcut(event: KeyboardEvent) {
   if (!selectedRecord.value || busy.value) return;
+  if (
+    (event.ctrlKey || event.metaKey) &&
+    !event.altKey &&
+    event.key.toLowerCase() === "s" &&
+    editingText.value &&
+    !focusView.value // Focus View handles its own Ctrl/Cmd+S.
+  ) {
+    event.preventDefault();
+    if (!reviewLocked.value && textDraft.value.trim()) void saveReviewedText();
+    return;
+  }
   const command = corpusReviewCommandFromKeydown(event);
   if (!command) return;
   event.preventDefault();
@@ -2841,13 +2852,14 @@ defineExpose({
                   <aside
                     v-if="selectedRecord.text_touchup_proposal?.status === 'pending_review'"
                     class="review-reason touchup-review-notice"
+                    data-tone="info"
                     role="status"
                   >
-                    <b>{{ i18n.t("pdf_corpus.llm_touchup_proposal_available") }}</b
-                    ><span class="review-reason-text">{{
-                      i18n.t("pdf_corpus.llm_touchup_proposal_help")
-                    }}</span
-                    ><button
+                    <div class="touchup-review-copy">
+                      <b>{{ i18n.t("pdf_corpus.llm_touchup_proposal_available") }}</b>
+                      <span>{{ i18n.t("pdf_corpus.llm_touchup_proposal_help") }}</span>
+                    </div>
+                    <button
                       type="button"
                       class="btn small"
                       @click="beginTextEdit(true)"
@@ -2902,6 +2914,16 @@ defineExpose({
                           :disabled="busy !== '' || reviewLocked"
                         >
                           {{ i18n.t("pdf_corpus.clean_text") }}</button
+                        ><button
+                          v-if="editingText"
+                          type="button"
+                          class="btn small primary"
+                          @click="saveReviewedText()"
+                          :disabled="busy !== '' || reviewLocked || !textDraft.trim()"
+                          aria-keyshortcuts="Control+S Meta+S"
+                          :title="i18n.t('pdf_corpus.save_reviewed_text') + ' (Ctrl/Cmd S)'"
+                        >
+                          {{ i18n.t("ui.save") }}</button
                         ><button
                           v-if="editingText"
                           type="button"
@@ -3401,11 +3423,11 @@ defineExpose({
       :concurrency-risk="
         Boolean(
           providerProfiles.find((p) => p.id === llmActionProviderId)?.type === 'ollama' &&
-            llmActionConcurrentLoad + 1 >
-              Number(
-                providerProfiles.find((p) => p.id === llmActionProviderId)
-                  ?.max_concurrent_requests || 1,
-              ),
+          llmActionConcurrentLoad + 1 >
+            Number(
+              providerProfiles.find((p) => p.id === llmActionProviderId)?.max_concurrent_requests ||
+                1,
+            ),
         )
       "
       :active-requests="llmActionConcurrentLoad"

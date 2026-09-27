@@ -305,3 +305,19 @@ kbd {
     scroll-behavior: auto !important;
   }
 }
+
+/* The LLM touch-up notice: title over a wrapping explanation, with the action kept beside it (or below when narrow). */
+.focus-note.touchup-note {
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+.touchup-note-copy {
+  display: grid;
+  flex: 1 1 22ch;
+  gap: 0.125rem;
+  min-inline-size: 0;
+  line-height: 1.45;
+}
+.focus-note.touchup-note .btn {
+  flex: none;
+}
