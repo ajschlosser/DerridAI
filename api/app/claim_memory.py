@@ -3,7 +3,8 @@
 
 SQLite (generated claims + support bindings) is authoritative. A claim enters this
 memory only when a human sets its ``validation_status`` to ``validated`` and at least
-one usable support binding resolves to a Record. The Chroma collection is a rebuildable projection: the claim text is the embedded document; its
+one usable support binding identifies a Record. The Chroma collection is a rebuildable
+projection: the claim text is the embedded document; its
 metadata is the reviewer-validated support (relation, cited Record IDs/revisions) and
 a snapshot of the cited Record's *current, checked* attribution assertions.
 
