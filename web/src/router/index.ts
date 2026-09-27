@@ -22,6 +22,12 @@ const routes: RouteRecordRaw[] = [
     meta: { view: "record", capability: "page.record", vueNative: true },
   },
   {
+    path: "/relationships",
+    name: "relationships",
+    component: () => import("../views/RelationshipBrowserView.vue"),
+    meta: { view: "relationships", capability: "page.record", vueNative: true },
+  },
+  {
     path: "/works",
     name: "works",
     component: () => import("../views/WorksView.vue"),

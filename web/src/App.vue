@@ -43,6 +43,7 @@ const pageCapability: Record<string, string> = {
   home: "page.dashboard",
   list: "page.records",
   record: "page.record",
+  relationships: "page.record",
   works: "page.works",
   global: "page.search",
   annotations: "page.annotations",
