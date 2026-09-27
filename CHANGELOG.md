@@ -4,6 +4,16 @@
 
 Release history for DerridAI, newest first. Each entry links to the full release note in [`docs/notes/`](docs/notes/). The README describes only the current release.
 
+## 0.80.6 — Danvers
+
+Danvers consolidates the post-Cambridge Corpus Builder work: reliable
+Wikisource/Gutenberg acquisition and page detection, authoritative record
+sizing and source-unit policies, calmer evidence-aware review, bounded cELF
+traceability, provenance-preserving compressed publication ledgers, reviewed
+metadata precedents, validated Research memory, redesigned metadata schemas and
+memory surfaces, and continued Corpus Builder decomposition. See
+[0.80.6](docs/notes/0.80.6.md) for the complete release note.
+
 ## 0.80.5 — Cambridge
 
 Cambridge completes the canonical FieldAssertion migration, tightens metadata
