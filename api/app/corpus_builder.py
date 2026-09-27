@@ -2511,6 +2511,9 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             manifest = self._document_manifest(asset, blocks, request, build_id)
             if bool(request.get("auto_enrich_work_metadata", True)):
                 manifest = self._catalog_enrich_manifest(manifest, request, build_id)
+            if isinstance(request.get("work_metadata"), dict) and request["work_metadata"]:
+                # Reviewer-supplied, work-wide values travel with the manifest, so they survive resume and edits.
+                manifest = {**manifest, "work_metadata": dict(request["work_metadata"])}
             self.repo.save_checkpoint(build_id, "manifest", manifest)
         current_manifest_revision = int(self.repo.get_build(build_id).get("manifest_revision") or 1)
         self._update(build_id, stage="document_review", progress=max(float(build.get("progress") or 0), 0.12), manifest=manifest, manifest_revision=current_manifest_revision)

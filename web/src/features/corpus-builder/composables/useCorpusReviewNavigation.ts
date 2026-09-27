@@ -155,8 +155,8 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
     await openQueue("metadata", recordId, recordId);
   }
 
-  async function openValidationIssueQueue() {
-    const recordId = firstValidationRecordId(options.currentBuild.value);
+  async function openValidationIssueQueue(targetRecordId = "") {
+    const recordId = targetRecordId || firstValidationRecordId(options.currentBuild.value);
     if (recordId) {
       // Validation findings are not necessarily review-queue findings. Target
       // the canonical record directly rather than assuming it also belongs to

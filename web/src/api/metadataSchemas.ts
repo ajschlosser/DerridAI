@@ -23,6 +23,8 @@ export interface SchemaField {
   group: string;
   role?: SchemaFieldRole;
   review_visibility?: SchemaReviewVisibility;
+  /** The value is the same for every record of a work, so it can be filled in once before segmentation. */
+  applies_to_work?: boolean;
   values: SchemaValue[];
   strict: boolean;
   instruction: string;
@@ -105,6 +107,7 @@ export function blankField(group = CORE_GROUP): SchemaField {
     group,
     role: "scholarly",
     review_visibility: "primary",
+    applies_to_work: false,
     values: [],
     strict: false,
     instruction: "",

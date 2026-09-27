@@ -549,6 +549,63 @@ async function resolveMetadataWithSelectionEvidence(
   await resolveMetadataField(field, value, String(block.block_id));
 }
 
+/** What the reviewer came from Publication readiness to fix, so they can find it and get back. */
+interface FixContext {
+  recordId: string;
+  field: string;
+  code: string;
+  reason: string;
+}
+const fixContext = ref<FixContext | null>(null);
+const fixIssues = computed(() =>
+  (currentBuild.value?.validation?.validation_issues || []).filter((item) => item?.record_id),
+);
+/** Land on the record, on the tab that holds the problem, with the field's editor open. */
+async function fixValidationIssue(issue: {
+  code?: string;
+  record_id?: string;
+  field?: string;
+  reason?: string;
+}) {
+  const recordId = String(issue.record_id || "");
+  if (!recordId) return;
+  const field = String(issue.field || "");
+  fixContext.value = {
+    recordId,
+    field,
+    code: String(issue.code || ""),
+    reason: String(issue.reason || ""),
+  };
+  await openValidationIssueQueue(recordId);
+  await nextTick();
+  if (!field) return;
+  if (issue.code === "metadata_evidence") {
+    reviewInspectorTab.value = "evidence";
+    selectedEvidenceField.value = field;
+    return;
+  }
+  reviewInspectorTab.value = "metadata";
+  await nextTick();
+  const target = document.querySelector<HTMLElement>(`[data-field="${CSS.escape(field)}"]`);
+  target?.scrollIntoView({ block: "center" });
+  target?.querySelector<HTMLElement>(".field-edit")?.click();
+}
+/** Go on to the next finding, or back to Publication readiness when none is left. */
+async function fixNextIssue() {
+  const current = fixContext.value;
+  const remaining = fixIssues.value.filter(
+    (item) => !(item.record_id === current?.recordId && item.field === current?.field),
+  );
+  if (!remaining.length) return returnToReadiness();
+  await fixValidationIssue(remaining[0]);
+}
+function returnToReadiness() {
+  fixContext.value = null;
+  reviewRequested.value = false;
+  reviewQueue.value = "all";
+  recordQuery.value = "";
+}
+
 /** The reviewer answers from their own knowledge: the decision records them, not a source span, as the source. */
 async function resolveMetadataWithHumanSource(field: string, value: unknown, note: string) {
   await resolveMetadataField(field, value, "", { source: "reviewer_knowledge", note });
@@ -2406,7 +2463,8 @@ defineExpose({
             :busy="busy !== ''"
             @retry-metadata="retryIncompleteMetadata"
             @review-metadata="openMetadataIssueQueue"
-            @review-validation="openValidationIssueQueue"
+            @review-validation="openValidationIssueQueue()"
+            @fix-issue="fixValidationIssue"
             @review-topology="openTopologyIssueQueue"
             @review-issues="openIssueQueue"
             @review-rejected="openRejectedQueue"
@@ -2628,6 +2686,22 @@ defineExpose({
             @inspect-editorial-memory="openEditorialMemory"
             @acknowledge-warnings="acknowledgeBuildWarnings"
           />
+
+          <div v-if="fixContext" class="fix-banner" role="status">
+            <span>
+              <b>{{ i18n.t("pdf_corpus.fixing_title") }}</b>
+              {{ fixContext.reason }}
+              <code>{{ fixContext.field || fixContext.recordId }}</code>
+            </span>
+            <span class="fix-banner-actions">
+              <button type="button" class="btn small" @click="fixNextIssue">
+                {{ i18n.t("pdf_corpus.fix_next_issue") }}
+              </button>
+              <button type="button" class="btn small primary" @click="returnToReadiness">
+                {{ i18n.t("pdf_corpus.back_to_readiness") }}
+              </button>
+            </span>
+          </div>
 
           <CorpusReviewSessionBar
             v-if="currentBuild"

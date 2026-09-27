@@ -754,6 +754,20 @@ def _apply_manifest_metadata(record: dict[str, Any], manifest: dict[str, Any]) -
             reason="Inherited from the reviewed document manifest." + origin_note(manifest_key, value),
         )
 
+    work_wide = manifest.get("work_metadata") if isinstance(manifest.get("work_metadata"), dict) else {}
+    for name, value in work_wide.items():
+        if value in (None, "", []):
+            continue
+        if human_owned(name):
+            continue
+        create_inherited_assertion(
+            record,
+            str(name),
+            value,
+            method="document_manifest",
+            reason="Supplied by the reviewer for the work as a whole, before segmentation.",
+        )
+
     title = manifest.get("title")
     author = manifest.get("document_author")
     translator = manifest.get("translator")
