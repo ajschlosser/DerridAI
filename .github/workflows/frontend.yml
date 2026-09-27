@@ -369,6 +369,30 @@ jobs:
       - name: Corpus Builder WCAG 2.2 AA sweep
         run: npm run test:e2e:a11y
 
+  docker-smoke:
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Docker Compose
+        run: docker compose config --quiet
+      - name: Build and start Docker stack
+        run: docker compose up -d --build
+      - name: Wait for API and web health
+        run: |
+          timeout 180 bash -c '
+            until curl -fsS http://127.0.0.1:8000/api/live >/dev/null &&
+                  curl -fsS http://127.0.0.1:8181/healthz >/dev/null; do
+              docker compose ps
+              sleep 5
+            done
+          '
+      - name: Inspect Docker stack
+        run: docker compose ps
+      - name: Tear down Docker stack
+        if: always()
+        run: docker compose down --remove-orphans
+
   # Preserve the historical required-check name while allowing unrelated
   # backend-only changes to skip all frontend compute.
   frontend:
