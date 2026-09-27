@@ -51,7 +51,7 @@ A conforming implementation MAY use local or remote databases, files, object sto
 
 The DerridAI application is the originating reference implementation.
 
-> **Terminology note - non-normative.** The name **cELF** expands to **Capta-Enriched Lexical Format**. *Capta* emphasizes that research objects are selected, delimited, transcribed, categorized, or interpreted through explicit procedures rather than treated as context-free givens. **Lexical** identifies text-bearing documentary representation as the primary interchange substrate; it does not limit source media to plain text. **Enriched** refers to the assertions, provenance, authority, evidence, and run metadata associated with that representation. Source locators remain appropriate to the original medium, including pages, character ranges, image regions, and audio time spans.
+> **Terminology note - non-normative.** The name **cELF** expands to **Capta-Enriched Lexical Format**. _Capta_ emphasizes that research objects are selected, delimited, transcribed, categorized, or interpreted through explicit procedures rather than treated as context-free givens. **Lexical** identifies text-bearing documentary representation as the primary interchange substrate; it does not limit source media to plain text. **Enriched** refers to the assertions, provenance, authority, evidence, and run metadata associated with that representation. Source locators remain appropriate to the original medium, including pages, character ranges, image regions, and audio time spans.
 
 #### Normative terms
 
