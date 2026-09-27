@@ -19,7 +19,7 @@ sys.modules.setdefault("chromadb", types.SimpleNamespace())
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"api"))
 from app import corpus_builder as cb
-from app.corpus_segmentation import _best_safety_boundary, _best_record_sizing_boundary
+from app.corpus_segmentation import _best_record_sizing_boundary, _best_safety_boundary
 from app.models import PdfCorpusBuildCreate
 
 POLICY={"preferred_record_chars":1750,"record_length_tolerance":200,"long_record_chars":3500,"absolute_record_chars":6000}
