@@ -1,6 +1,7 @@
-import { mount } from "@vue/test-utils";
+import { mount, shallowMount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import CorpusSourceIngest from "../../src/components/CorpusSourceIngest.vue";
+import SourceTable from "../../src/components/sources/SourceTable.vue";
 
 describe("Corpus source ingest", () => {
   it("places the OCR strategy radios before choose source PDF", () => {
@@ -56,7 +57,7 @@ describe("Corpus source ingest", () => {
   });
 });
 
-it("shows catalogue results before the collection is ready but keeps imports disabled", async () => {
+it("keeps Gutenberg imports available before the local collection is ready", async () => {
   const wrapper = mount(CorpusSourceIngest, {
     props: {
       gutenbergQuery: "austen",
@@ -74,9 +75,11 @@ it("shows catalogue results before the collection is ready but keeps imports dis
   await wrapper.get("button.path-libraries").trigger("click");
   const row = wrapper.get(".ls-results .ls-row");
   expect(row.text()).toContain("Pride and Prejudice");
-  expect(row.get("[data-result-primary]").attributes("disabled")).toBeDefined();
-  // The dialog says why and offers the download in place.
+  // The full local archive is optional: one exact Gutenberg text can be fetched and verified directly.
+  expect(row.get("[data-result-primary]").attributes("disabled")).toBeUndefined();
   expect(wrapper.get(".ls-collection").text()).toMatch(/local collection/i);
+  await row.get("[data-result-primary]").trigger("click");
+  expect(wrapper.emitted("importGutenberg")?.[0]).toEqual([1342]);
 
   await wrapper.get("#library-tab-wikisource").trigger("click");
   expect(wrapper.get(".ls-input").attributes("disabled")).toBeUndefined();
@@ -170,39 +173,42 @@ describe("Corpus source ingest experience", () => {
     expect(wrapper.find(".url-detect").exists()).toBe(false);
   });
 
-  it("shows saved sources as selectable cards and reports the selection", async () => {
-    const wrapper = mount(CorpusSourceIngest, {
-      props: { assets: [asset(1), asset(2)], assetId: "a1" },
-    });
-    const cards = wrapper.findAll(".saved-card");
-    expect(cards).toHaveLength(2);
-    expect(cards[0].attributes("aria-pressed")).toBe("true");
-    await cards[1].trigger("click");
-    expect(wrapper.emitted("update:assetId")?.at(-1)).toEqual(["a2"]);
-    await cards[0].trigger("click");
-    expect(wrapper.emitted("update:assetId")?.at(-1)).toEqual([""]);
-  });
-
-  it("locks saved sources while a build is running but still explains why", () => {
-    const wrapper = mount(CorpusSourceIngest, {
-      props: { assets: [asset(1)], sourceSelectionDisabled: true },
-    });
-    expect(wrapper.get(".saved-card").attributes("disabled")).toBeDefined();
-    expect(wrapper.get(".saved-locked").text()).toContain("can’t be switched");
-  });
-
-  it("offers a filter only once the library is large", async () => {
-    const few = mount(CorpusSourceIngest, { props: { assets: [asset(1), asset(2)] } });
-    expect(few.find(".saved-filter").exists()).toBe(false);
-    const many = mount(CorpusSourceIngest, {
+  it("renders saved sources through the compact source table and reports the selection", async () => {
+    const wrapper = shallowMount(CorpusSourceIngest, {
       props: {
-        assets: [1, 2, 3, 4, 5, 6].map((n) => asset(n, n === 3 ? "Hospitality.pdf" : `x${n}.pdf`)),
+        assets: [asset(1), asset(2)],
+        assetId: "a1",
+        queuedSourceIds: ["a2"],
       },
     });
-    await many.get(".saved-filter input").setValue("hosp");
-    expect(many.findAll(".saved-card")).toHaveLength(1);
-    await many.get(".saved-filter input").setValue("zzz");
-    expect(many.get(".saved-none").text()).toContain("No sources match");
+    const table = wrapper.getComponent(SourceTable);
+    expect(table.props("compact")).toBe(true);
+    expect(table.props("deletable")).toBe(true);
+    expect(table.props("activeId")).toBe("a1");
+    expect(table.props("queuedIds")).toEqual(["a2"]);
+    expect(table.props("pageSize")).toBe(10);
+
+    table.vm.$emit("choose", "a2");
+    await wrapper.vm.$nextTick();
+    expect(wrapper.emitted("update:assetId")?.at(-1)).toEqual(["a2"]);
+  });
+
+  it("locks the compact source table while a build is running and supplies the reason", () => {
+    const wrapper = shallowMount(CorpusSourceIngest, {
+      props: { assets: [asset(1)], sourceSelectionDisabled: true },
+    });
+    const table = wrapper.getComponent(SourceTable);
+    expect(table.props("disabled")).toBe(true);
+    expect(String(table.props("lockedReason"))).toMatch(/switch/i);
+  });
+
+  it("refreshes the compact source table when registered source ids change", async () => {
+    const wrapper = shallowMount(CorpusSourceIngest, {
+      props: { assets: [asset(1), asset(2)] },
+    });
+    expect(wrapper.getComponent(SourceTable).props("refreshKey")).toBe("a1,a2");
+    await wrapper.setProps({ assets: [asset(1), asset(2), asset(3)] });
+    expect(wrapper.getComponent(SourceTable).props("refreshKey")).toBe("a1,a2,a3");
   });
 
   it("presents the current source with its facts and a way forward", async () => {
