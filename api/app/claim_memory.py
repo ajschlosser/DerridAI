@@ -2,8 +2,8 @@
 """Validated-claim memory: reviewer-validated generated claims as retrievable precedent.
 
 SQLite (generated claims + support bindings) is authoritative. A claim enters this
-memory only when a human sets its ``validation_status`` to ``validated``. The Chroma
-collection is a rebuildable projection: the claim text is the embedded document; its
+memory only when a human sets its ``validation_status`` to ``validated`` and at least
+one usable support binding resolves to a Record. The Chroma collection is a rebuildable projection: the claim text is the embedded document; its
 metadata is the reviewer-validated support (relation, cited Record IDs/revisions) and
 a snapshot of the cited Record's *current, checked* attribution assertions.
 
@@ -94,12 +94,15 @@ def derive_entry(
             continue
         if str(binding.get("validation_status") or "unvalidated") not in _USABLE_BINDING:
             continue
-        record_id = str(binding.get("record_id") or "")
+        record_id = str(binding.get("record_id") or "").strip()
+        relation = str(binding.get("relation") or "").strip()
+        if not record_id or not relation:
+            continue
         citation = binding.get("citation") if isinstance(binding.get("citation"), dict) else {}
         support.append({
             "record_id": record_id,
             "record_revision": binding.get("record_revision"),
-            "relation": binding.get("relation"),
+            "relation": relation,
             "source_document_id": binding.get("source_document_id"),
             # Citations were rendered by deterministic code when the claim was bound.
             "citation": {key: citation.get(key) for key in ("inline", "full") if citation.get(key)},
@@ -260,9 +263,11 @@ def apply_claim_validation(
 ) -> dict[str, Any]:
     """Record a human audit decision on a generated claim, then update the projection.
 
-    The SQLite row is authoritative and committed first. ``validated`` adds the claim
-    to validated-claim memory; any other status removes it. A projection failure is
-    reported in the result and never undoes or hides the audit decision.
+    A claim cannot be validated without at least one usable support binding. The
+    SQLite row is authoritative and committed first once the decision is admissible.
+    ``validated`` adds the claim to validated-claim memory; any other status removes
+    it. A projection failure is reported in the result and never undoes or hides the
+    audit decision.
     """
     if status not in VALIDATION_STATUSES:
         raise ValueError("status must be unvalidated, validated, rejected, or unresolved")
