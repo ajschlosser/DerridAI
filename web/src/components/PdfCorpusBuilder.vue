@@ -1859,6 +1859,27 @@ watch(
   },
   { flush: "post" },
 );
+/** Sources handed over from the Sources page or a capture: `/pdf?sources=a,b`. Never starts a build. */
+const queuedSourceIds = computed(() =>
+  String(route.query.sources || "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean),
+);
+async function queueSources(ids: string[]) {
+  await refreshAssets();
+  await router.replace({
+    query: { ...route.query, mode: "builder", sources: ids.join(",") || undefined },
+  });
+  configurationSection.value = "source";
+}
+function viewCaptureSources(captureId: string) {
+  window.dispatchEvent(
+    new CustomEvent("derridai:navigate-native", {
+      detail: { path: `/sources?capture=${encodeURIComponent(captureId)}` },
+    }),
+  );
+}
 watch(selectedAssetId, () => {
   if (selectedAssetId.value) void refreshBuilds();
   else configurationSection.value = "source";
@@ -2177,6 +2198,10 @@ defineExpose({
           @import-wikisource="importLibraryUrl"
           @delete-asset="deleteAsset"
           @continue="configurationSection = 'structure'"
+          :queued-source-ids="queuedSourceIds"
+          @queue-sources="queueSources"
+          @sources-changed="refreshAssets"
+          @view-capture-sources="viewCaptureSources"
         />
       </section>
 

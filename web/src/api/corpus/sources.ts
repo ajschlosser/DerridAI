@@ -10,10 +10,38 @@ import type {
   PageDetectionRequest,
   SourceUnitPolicy,
   SourceUnitPreview,
+  SourceBulkDeleteResult,
+  SourceDetail,
+  SourceListQuery,
+  SourceListResponse,
 } from "./types";
 import { LEGACY_CORPUS_BASE, legacyCorpusUrl } from "./compatibility";
 
+/** Query string for the Sources list; multi-valued filters travel as comma-separated values. */
+export function sourceListQuery(params: SourceListQuery): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    if (Array.isArray(value)) {
+      if (value.length) search.set(key, value.join(","));
+    } else search.set(key, String(value));
+  }
+  const text = search.toString();
+  return text ? `?${text}` : "";
+}
+
 export const corpusSourcesApi = {
+  /** Compact, paginated source rows (never text or blocks), with facet counts. */
+  listSources: (params: SourceListQuery = {}) =>
+    apiRequest<SourceListResponse>(`/api/corpus/sources${sourceListQuery(params)}`),
+  sourceDetail: (sourceId: string) =>
+    apiRequest<SourceDetail>(`/api/corpus/sources/${encodeURIComponent(sourceId)}`),
+  /** Deletes sources no build uses; each refusal comes back with its reason. */
+  bulkDeleteSources: (sourceIds: string[]) =>
+    apiRequest<SourceBulkDeleteResult>("/api/corpus/sources/bulk-delete", {
+      method: "POST",
+      body: JSON.stringify({ source_document_ids: sourceIds }),
+    }),
   gutenbergStatus: () => apiRequest<GutenbergStatus>("/api/gutenberg/status"),
   refreshGutenbergCatalogue: () =>
     apiRequest<GutenbergStatus>("/api/gutenberg/catalogue/refresh", { method: "POST" }),

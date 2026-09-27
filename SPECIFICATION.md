@@ -122,6 +122,8 @@ When the original source bytes are available, an implementation SHOULD record a 
 
 A SourceDocument SHOULD support, where applicable: `source_document_id`, `source_hash`, `media_type`, `source_filename`, `source_uri`, `title`, `document_author`, `edition`, `translator`, `publisher`, `publication_place`, `publication_year`, `original_language`, `document_language`, `page_count`, and domain metadata.
 
+> **Reference implementation note - non-normative.** DerridAI Corpus Capture discovers possible documentary sources through provider catalogues, records discovery/reconciliation state for human review, and acquires only selected candidates. Capture IDs, provider-search diagnostics, candidate-selection state, and background-job state are acquisition bookkeeping rather than SourceDocument identity or scholarly Record content. A successful acquisition enters the same SourceDocument registration path as uploads and direct imports; one registered source may be associated with multiple captures without changing its `source_document_id`. Acquisition does not itself create Records or start a corpus build.
+
 #### Physical and scholarly location
 
 cELF distinguishes physical navigation from scholarly citation. An implementation MUST NOT silently assume that physical PDF page number and printed page number are equivalent.

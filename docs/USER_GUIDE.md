@@ -437,12 +437,14 @@ Export removes Chroma's internal `_chroma_id` field.
 
 ## Corpus Builder source formats
 
-Choose the source format before choosing a file. PDF and image sources offer OCR;
-PDF/image pagination controls are unavailable for text, Word, RTF, Gutenberg, and
-audio sources. The review pane shows source text, the source image, or audio
-playback with timed speaker spans. Audio citations use time ranges and available
-speaker labels, never synthetic page numbers. Correcting a transcript creates a
-record revision and retains the original transcription.
+Corpus Builder accepts PDF, plain-text/HTML/Markdown, DOCX, RTF, PNG/JPEG, audio,
+URL, Project Gutenberg, and Wikisource sources. File format is detected from the
+selected file rather than chosen from a separate source-type selector. Extraction
+and review remain media-aware: paged documents can retain page locations, images
+can use OCR, and audio review uses playback with timed speaker spans. Audio
+citations use time ranges and available speaker labels, never synthetic page
+numbers. Correcting a transcript creates a record revision and retains the
+original transcription.
 
 For PDF and image sources, choose an OCR strategy before selecting the source:
 use embedded text when available, prefer OCR for difficult scans, or always OCR.
@@ -480,11 +482,14 @@ link with one redirect to its cache file; that single hop is followed only when
 it stays on gutenberg.org and names the same eBook. Any other redirect, missing
 text, mismatched identity, timeout, or undecodable content fails visibly. The
 importer does not guess another download or substitute another edition. Two
-editions with identical text remain distinct assets. Imports come from the local
-collection; until it is downloaded the dialog says so and offers the download,
-and searching still works. A paused or failed download resumes from the bytes
-already on disk, and a download that had in fact finished moves straight on to
-unpacking; **Redownload** (after a confirmation) deletes the file and starts over.
+editions with identical text remain distinct assets. The catalogue is required
+for search, but the full local text archive is optional for an individual import:
+when that archive is absent, DerridAI downloads and verifies the selected eBook
+directly instead of disabling the result. The dialog still offers the local
+collection for offline/repeated use. A paused or failed collection download
+resumes from the bytes already on disk, and a download that had in fact finished
+moves straight on to unpacking; **Redownload** (after a confirmation) deletes the
+file and starts over.
 
 Wikisource search covers one language edition at a time (English, French,
 German, and others; French is preselected in the French interface). A work's
@@ -495,6 +500,33 @@ imports a single chapter. The stored source keeps each chapter in a section
 named after its Wikisource page. Wikisource page chrome (header, navigation
 arrows, maintenance notices, hidden metadata) is not extracted as text. A work
 larger than the upload limit fails with a message suggesting its parts instead.
+Available Wikisource language editions come from the API's current project list;
+if Wikimedia's project list is temporarily unavailable, DerridAI labels the
+bounded fallback rather than presenting it as authoritative.
+
+### Corpus Capture and Sources
+
+**Sources** is the registry of documentary sources already acquired by DerridAI.
+It shows source identity, provider, document and original language, edition or
+translation information, contribution role, acquisition state, build state, and
+when the source was added. The table is server-paginated and server-sorted, with
+filters for provider, language, capture, build state, relationship, and role.
+Inspecting a row shows provenance without loading the source text into the table.
+
+**Capture an author** is available from Sources and Corpus Builder. It resolves a
+person through Wikidata, then lets the researcher choose Project Gutenberg and/or
+Wikisource, contribution roles, translations, and language scope. Discovery
+records provider coverage and groups candidate editions by canonical work and
+language for review, but each edition remains its own selectable candidate.
+Nothing is downloaded merely because discovery found it.
+
+After review, **Capture selected** acquires only the selected candidates and
+registers successful acquisitions as sources. Acquisition does not start a corpus
+build. **Use in Corpus Builder** hands the resulting source IDs to the builder,
+where the researcher still chooses what to build. Closing the capture dialog does
+not cancel an active background job; reopening the capture resumes from its
+durable status. Failed acquisitions remain visible and can be retried, while
+registered sources remain distinct from capture/job bookkeeping.
 
 When **let a model help find page numbers** is on, an import uses the selected
 provider profile the same way a build does; a profile the server cannot resolve

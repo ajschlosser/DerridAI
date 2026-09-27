@@ -415,13 +415,17 @@ def infer_initial_metadata(
         values["speakers"] = speakers
 
     catalog = catalog or {}
-    put("edition", catalog.get("edition"), "gutenberg_catalog", 0.99)
-    put("title", catalog.get("title"), "gutenberg_catalog", 0.99)
-    put("document_author", catalog.get("document_author") or catalog.get("author"), "gutenberg_catalog", 0.99)
-    put("language", catalog.get("language"), "gutenberg_catalog", 0.95)
-    put("publisher", catalog.get("publisher"), "gutenberg_catalog", 0.9)
-    put("publication_year", _year(catalog.get("publication_year")), "gutenberg_catalog", 0.9)
-    put("document_type", catalog.get("document_type"), "gutenberg_catalog", 0.9)
+    # Provider catalogue values are provider assertions; name the provider that made them.
+    origin = f"{catalog.get('provider') or 'gutenberg'}_catalog"
+    put("edition", catalog.get("edition"), origin, 0.99)
+    put("title", catalog.get("title"), origin, 0.99)
+    put("document_author", catalog.get("document_author") or catalog.get("author"), origin, 0.99)
+    put("language", catalog.get("language"), origin, 0.95)
+    put("translator", catalog.get("translator"), origin, 0.95)
+    put("original_language", catalog.get("original_language"), origin, 0.9)
+    put("publisher", catalog.get("publisher"), origin, 0.9)
+    put("publication_year", _year(catalog.get("publication_year")), origin, 0.9)
+    put("document_type", catalog.get("document_type"), origin, 0.9)
     if catalog.get("gutenberg_id"):
         values["gutenberg_id"] = int(catalog["gutenberg_id"])
 
