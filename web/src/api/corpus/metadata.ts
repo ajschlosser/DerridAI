@@ -118,10 +118,6 @@ export const corpusMetadataApi = {
           evidence_source: humanSource?.source,
           evidence_note: humanSource?.note,
           external_evidence_block_ids: humanSource?.externalBlockIds,
-          // Only sent when the reviewer cites their own knowledge, or spans elsewhere in the same source.
-          evidence_source: humanSource?.source,
-          evidence_note: humanSource?.note,
-          external_evidence_block_ids: humanSource?.externalBlockIds,
         }),
       },
     ),
