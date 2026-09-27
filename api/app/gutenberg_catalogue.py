@@ -16,6 +16,7 @@ from typing import Any
 import httpx
 
 from .config import settings
+from .source_identity import PersonName, normalize_languages
 
 CATALOGUE_URL = "https://www.gutenberg.org/cache/epub/feeds/pg_catalog.csv"
 ARCHIVE_URL = "https://www.gutenberg.org/cache/epub/feeds/txt-files.tar.zip"
@@ -24,6 +25,43 @@ CHUNK_SIZE = 8 * 1024 * 1024
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+# pg_catalog.csv "Authors": "Nietzsche, Friedrich Wilhelm, 1844-1900; Common, Thomas, 1850-1919 [Translator]".
+# An entry without a bracketed role is an author; a bracketed role we do not map stays "contributor", never author.
+_ROLE_MAP = {"translator": "translator", "editor": "editor", "compiler": "editor"}
+_DATES = re.compile(r",\s*(?:(\d{1,4})\??\s*(BCE)?)?\s*-\s*(?:(\d{1,4})\??\s*(BCE)?)?\s*$")
+CONTRIBUTOR_PARSER_VERSION = 1
+
+
+def parse_gutenberg_contributors(raw: str) -> list[dict[str, Any]]:
+    """Split the catalogue's Authors cell into contributor rows without inventing roles or dates."""
+    rows: list[dict[str, Any]] = []
+    for position, part in enumerate(p.strip() for p in str(raw or "").split(";")):
+        if not part:
+            continue
+        role_match = re.search(r"\[([^\]]+)\]\s*$", part)
+        raw_role = role_match.group(1).strip() if role_match else ""
+        name = part[: role_match.start()].strip() if role_match else part
+        birth = death = None
+        dates = _DATES.search(name)
+        if dates:
+            birth = int(dates.group(1)) * (-1 if dates.group(2) else 1) if dates.group(1) else None
+            death = int(dates.group(3)) * (-1 if dates.group(4) else 1) if dates.group(3) else None
+            name = name[: dates.start()].strip()
+        parsed = PersonName.parse(name)
+        rows.append({
+            "position": position,
+            "name": name,
+            "normalized_name": parsed.full,
+            "surname_key": parsed.surname,
+            "given_key": parsed.first_given,
+            "role": _ROLE_MAP.get(raw_role.lower(), "contributor") if raw_role else "author",
+            "raw_role": raw_role,
+            "birth_year": birth,
+            "death_year": death,
+        })
+    return rows
 
 
 class GutenbergOfflineService:
@@ -79,6 +117,18 @@ class GutenbergOfflineService:
                 "CREATE INDEX IF NOT EXISTS idx_gutenberg_catalogue_author "
                 "ON gutenberg_catalogue_books(author)"
             )
+            # Normalized, rebuildable projections of the catalogue for identity-aware author enumeration.
+            db.execute("""CREATE TABLE IF NOT EXISTS gutenberg_item_contributors (
+                etext_id INTEGER NOT NULL, position INTEGER NOT NULL, name TEXT NOT NULL,
+                normalized_name TEXT NOT NULL, surname_key TEXT NOT NULL, given_key TEXT NOT NULL,
+                role TEXT NOT NULL, raw_role TEXT NOT NULL DEFAULT '',
+                birth_year INTEGER, death_year INTEGER, PRIMARY KEY(etext_id, position))""")
+            db.execute("CREATE INDEX IF NOT EXISTS idx_gutenberg_contrib_surname ON gutenberg_item_contributors(surname_key)")
+            db.execute("""CREATE TABLE IF NOT EXISTS gutenberg_item_languages (
+                etext_id INTEGER NOT NULL, language_code TEXT NOT NULL, PRIMARY KEY(etext_id, language_code))""")
+            catalogue_columns = {row[1] for row in db.execute("PRAGMA table_info(gutenberg_catalogue_books)")}
+            if "item_type" not in catalogue_columns:
+                db.execute("ALTER TABLE gutenberg_catalogue_books ADD COLUMN item_type TEXT NOT NULL DEFAULT ''")
             columns = {row[1] for row in db.execute("PRAGMA table_info(gutenberg_books)")}
             if "content" not in columns:
                 db.execute("ALTER TABLE gutenberg_books ADD COLUMN content TEXT NOT NULL DEFAULT ''")
@@ -98,6 +148,44 @@ class GutenbergOfflineService:
                 "UPDATE gutenberg_archive SET url=?,path=? WHERE id=1",
                 (ARCHIVE_URL, str(self.archive_path)),
             )
+            self._backfill_normalized(db)
+
+    @staticmethod
+    def _index_rows(db: sqlite3.Connection, rows: list[tuple[int, str, str]]) -> None:
+        """(Re)build normalized contributor/language rows for (etext_id, authors, language) triples."""
+        contributors = []
+        languages: list[tuple[int, str]] = []
+        for etext_id, authors, language in rows:
+            for item in parse_gutenberg_contributors(authors):
+                contributors.append((
+                    etext_id, item["position"], item["name"], item["normalized_name"], item["surname_key"],
+                    item["given_key"], item["role"], item["raw_role"], item["birth_year"], item["death_year"],
+                ))
+            languages.extend((etext_id, code) for code in normalize_languages(language))
+        db.executemany("INSERT OR REPLACE INTO gutenberg_item_contributors VALUES(?,?,?,?,?,?,?,?,?,?)", contributors)
+        db.executemany("INSERT OR REPLACE INTO gutenberg_item_languages VALUES(?,?)", languages)
+
+    def _backfill_normalized(self, db: sqlite3.Connection) -> None:
+        """Idempotent migration: installations indexed before normalization keep working without a re-download.
+
+        The flattened table stores the catalogue's raw Authors/Language cells, so the normalized
+        projection can be rebuilt locally. It runs only when the projection is empty or outdated.
+        """
+        has_books = db.execute("SELECT 1 FROM gutenberg_catalogue_books LIMIT 1").fetchone()
+        has_contrib = db.execute("SELECT 1 FROM gutenberg_item_contributors LIMIT 1").fetchone()
+        marker = db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='gutenberg_normalization_version'"
+        ).fetchone()
+        current = None
+        if marker:
+            got = db.execute("SELECT version FROM gutenberg_normalization_version WHERE id=1").fetchone()
+            current = got[0] if got else None
+        if has_books and (not has_contrib or current != CONTRIBUTOR_PARSER_VERSION):
+            db.execute("DELETE FROM gutenberg_item_contributors")
+            db.execute("DELETE FROM gutenberg_item_languages")
+            self._index_rows(db, [tuple(row) for row in db.execute("SELECT etext_id,author,language FROM gutenberg_catalogue_books")])
+        db.execute("CREATE TABLE IF NOT EXISTS gutenberg_normalization_version (id INTEGER PRIMARY KEY CHECK(id=1), version INTEGER NOT NULL)")
+        db.execute("INSERT OR REPLACE INTO gutenberg_normalization_version(id,version) VALUES(1,?)", (CONTRIBUTOR_PARSER_VERSION,))
 
     def status(self) -> dict[str, Any]:
         with sqlite3.connect(self.db_path) as db:
@@ -136,7 +224,7 @@ class GutenbergOfflineService:
             response.raise_for_status()
             text = response.content.decode("utf-8-sig", errors="replace")
             reader = csv.DictReader(io.StringIO(text))
-            rows: list[tuple[int, str, str, str, str, str]] = []
+            rows: list[tuple[int, str, str, str, str, str, str]] = []
             now = _now()
             for raw in reader:
                 if not isinstance(raw, dict):
@@ -164,6 +252,7 @@ class GutenbergOfflineService:
                         self._catalogue_value(raw, "Language", "Languages", "language"),
                         self._catalogue_value(raw, "Issued", "issued"),
                         now,
+                        self._catalogue_value(raw, "Type", "type"),
                     )
                 )
 
@@ -173,14 +262,17 @@ class GutenbergOfflineService:
             with sqlite3.connect(self.db_path) as db:
                 db.execute("UPDATE gutenberg_catalogue SET status='indexing' WHERE id=1")
                 db.execute("DELETE FROM gutenberg_catalogue_books")
+                db.execute("DELETE FROM gutenberg_item_contributors")
+                db.execute("DELETE FROM gutenberg_item_languages")
                 db.executemany(
                     """
                     INSERT INTO gutenberg_catalogue_books(
-                        etext_id,title,author,language,issued,updated_at
-                    ) VALUES(?,?,?,?,?,?)
+                        etext_id,title,author,language,issued,updated_at,item_type
+                    ) VALUES(?,?,?,?,?,?,?)
                     """,
                     rows,
                 )
+                self._index_rows(db, [(row[0], row[2], row[3]) for row in rows])
                 db.execute(
                     """
                     UPDATE gutenberg_catalogue
@@ -385,6 +477,91 @@ class GutenbergOfflineService:
             }
             for row in rows
         ]
+
+    def sources_for_author(
+        self, names: list[str], *, birth_year: int | None = None, death_year: int | None = None
+    ) -> list[dict[str, Any]]:
+        """Every indexed item with a contributor matching the resolved person, with match evidence.
+
+        Identity-aware, not a full-text search: rows are looked up by surname key, then each
+        contributor is compared deterministically against the person's names and life dates.
+
+        * ``exact``      — full name equals an alias, or given name + surname match and life dates agree.
+        * ``needs_review`` — given name + surname match but neither side can confirm dates.
+        * rejected      — dates present on both sides and different: a different person, never included.
+        """
+        wanted = [PersonName.parse(name) for name in names if str(name or "").strip()]
+        surnames = sorted({name.surname for name in wanted if name.surname})
+        if not surnames:
+            return []
+        full_names = {name.full for name in wanted}
+        placeholders = ",".join("?" for _ in surnames)
+        with sqlite3.connect(self.db_path) as db:
+            db.row_factory = sqlite3.Row
+            matches = db.execute(
+                # Placeholders are only "?" (one per surname key).
+                f"SELECT * FROM gutenberg_item_contributors WHERE surname_key IN ({placeholders})",  # noqa: S608
+                surnames,
+            ).fetchall()
+            by_item: dict[int, dict[str, Any]] = {}
+            for row in matches:
+                person = PersonName(row["normalized_name"], row["surname_key"], row["given_key"])
+                exact_name = person.full in full_names
+                given_match = any(
+                    person.surname == name.surname and person.first_given and person.first_given == name.first_given
+                    for name in wanted
+                )
+                if not (exact_name or given_match):
+                    continue
+                dates_known = row["birth_year"] is not None and birth_year is not None
+                if dates_known and row["birth_year"] != birth_year:
+                    continue
+                if row["death_year"] is not None and death_year is not None and row["death_year"] != death_year:
+                    continue
+                confidence = "exact" if (dates_known or exact_name) else "needs_review"
+                current = by_item.get(int(row["etext_id"]))
+                if current and current["identity_confidence"] == "exact":
+                    continue
+                by_item[int(row["etext_id"])] = {
+                    "etext_id": int(row["etext_id"]),
+                    "matched_contributor": dict(row),
+                    "identity_confidence": confidence,
+                    "date_evidence": dates_known,
+                }
+            if not by_item:
+                return []
+            ids = sorted(by_item)
+            results = []
+            for start in range(0, len(ids), 500):
+                chunk = ids[start : start + 500]
+                marks = ",".join("?" for _ in chunk)
+                # Placeholders are only "?" (one per id in this chunk).
+                items = db.execute(f"SELECT * FROM gutenberg_catalogue_books WHERE etext_id IN ({marks})", chunk).fetchall()  # noqa: S608
+                contributors = db.execute(
+                    f"SELECT * FROM gutenberg_item_contributors WHERE etext_id IN ({marks}) ORDER BY etext_id,position",  # noqa: S608
+                    chunk,
+                ).fetchall()
+                languages = db.execute(
+                    f"SELECT * FROM gutenberg_item_languages WHERE etext_id IN ({marks})", chunk  # noqa: S608
+                ).fetchall()
+                people: dict[int, list[dict[str, Any]]] = {}
+                for row in contributors:
+                    people.setdefault(int(row["etext_id"]), []).append(dict(row))
+                langs: dict[int, list[str]] = {}
+                for row in languages:
+                    langs.setdefault(int(row["etext_id"]), []).append(str(row["language_code"]))
+                for item in items:
+                    etext_id = int(item["etext_id"])
+                    results.append({
+                        **by_item[etext_id],
+                        "title": item["title"],
+                        "issued": item["issued"],
+                        "item_type": item["item_type"] if "item_type" in item.keys() else "",
+                        "authors_raw": item["author"],
+                        "languages": sorted(langs.get(etext_id, [])),
+                        "contributors": people.get(etext_id, []),
+                    })
+        return sorted(results, key=lambda row: row["etext_id"])
 
     def text(self, etext_id: int) -> tuple[str, dict[str, Any]] | None:
         with sqlite3.connect(self.db_path) as db:

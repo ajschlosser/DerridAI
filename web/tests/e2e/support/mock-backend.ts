@@ -442,6 +442,49 @@ function defaults(url: URL, method: string, role: Role): unknown {
     );
     return { items: rows.slice(offset, offset + limit), total: rows.length, offset, limit };
   }
+  if (path === "/api/corpus/source-providers")
+    return {
+      items: [
+        {
+          provider: "gutenberg",
+          catalogue_ready: true,
+          catalogue_refreshed_at: "2026-09-26T12:00:00Z",
+          local_collection_ready: true,
+        },
+        {
+          provider: "wikisource",
+          projects: [
+            { code: "en", name: "English" },
+            { code: "fr", name: "French" },
+            { code: "de", name: "German" },
+          ],
+          projects_authoritative: true,
+        },
+      ],
+    };
+  if (path === "/api/corpus/authors/search")
+    return {
+      items: [
+        {
+          wikidata_qid: "Q130631",
+          label: "Jacques Derrida",
+          description: "French philosopher (1930–2004)",
+          aliases: ["Jackie Derrida"],
+          birth_year: 1930,
+          death_year: 2004,
+          wikisource_sitelinks: { fr: "Jacques Derrida" },
+        },
+      ],
+    };
+  if (path === "/api/corpus/captures" && method === "GET") return { items: [] };
+  if (path === "/api/corpus/sources")
+    return {
+      items: [],
+      total: 0,
+      offset: Number(url.searchParams.get("offset") || 0),
+      limit: Number(url.searchParams.get("limit") || 25),
+      facets: {},
+    };
   if (path === "/api/gutenberg/status")
     return {
       ready: true,

@@ -6,23 +6,48 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
-import threading
 import time
+from collections.abc import Iterator
 from datetime import UTC, datetime
-from html import escape, unescape
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote, unquote, urlparse
+from urllib.parse import unquote, urlparse
 
 import httpx
 
+from .source_identity import (
+    CaptureError,
+    CaptureErrorCode,
+    CaptureOptions,
+    ContributionRole,
+    PersonName,
+    ResolvedAuthor,
+    SourceCandidate,
+    WorkRelationship,
+    normalize_languages,
+)
+from .source_provider import (
+    USER_AGENT,
+    AcquiredSource,
+    DiscoveryReport,
+    ProgressCallback,
+    ProviderHttp,
+)
 from .source_safety import MAX_SOURCE_BYTES
 
-_WIKISOURCE_RATE_LOCK = threading.Lock()
-_WIKISOURCE_LAST_REQUEST = 0.0
+# Wikisource moved to its own provider module; these names stay importable from here.
+from .source_wikisource import (  # noqa: F401
+    MAX_WIKISOURCE_SUBPAGES,
+    WIKISOURCE_LANGUAGES,
+    _wikisource_parse,
+    fetch_wikisource_page,
+    search_wikisource,
+    wikisource_subpage_titles,
+)
+from .source_wikisource import wikisource_page_title as _wikisource_page_title
+
 logger = logging.getLogger(__name__)
-# Wikimedia asks API clients to identify the tool and a way to reach its maintainers.
-_USER_AGENT = "DerridAI/1.0 (https://github.com/ajschlosser/DerridAI; local scholarly research tool)"
+_USER_AGENT = USER_AGENT
 
 
 def normalize_gutenberg_hit(item: dict[str, Any]) -> dict[str, Any] | None:
@@ -79,62 +104,6 @@ def search_project_gutenberg(query: str, limit: int = 12) -> list[dict[str, Any]
     return _gutendex_search(text, limit)
 
 
-# Wikisource editions a search may target (a closed list: the language becomes part of the host name).
-WIKISOURCE_LANGUAGES = ("en", "fr", "de", "it", "es", "pt", "la", "el", "ru", "pl", "nl", "sv", "he", "ar", "zh", "ja")
-
-
-def search_wikisource(query: str, limit: int = 12, language: str = "en") -> list[dict[str, Any]]:
-    """Search one language edition of Wikisource through the public MediaWiki API.
-
-    The API is intentionally called only after an explicit user search.  The
-    endpoint is rate-limited by MediaWiki and requests identify this client.
-    """
-    text = str(query or "").strip()
-    if not text:
-        return []
-    if language not in WIKISOURCE_LANGUAGES:
-        raise ValueError(f"Unsupported Wikisource language: {language}")
-    host = f"https://{language}.wikisource.org"
-    limit = max(1, min(30, int(limit)))
-    global _WIKISOURCE_LAST_REQUEST
-    with _WIKISOURCE_RATE_LOCK:
-        elapsed = time.monotonic() - _WIKISOURCE_LAST_REQUEST
-        if elapsed < 0.2:
-            time.sleep(0.2 - elapsed)
-        _WIKISOURCE_LAST_REQUEST = time.monotonic()
-    response = httpx.get(
-        f"{host}/w/api.php",
-        params={
-            "action": "query",
-            "list": "search",
-            "srsearch": text,
-            "srlimit": limit,
-            "srnamespace": 0,
-            "srprop": "snippet|wordcount",
-            "format": "json",
-            "formatversion": 2,
-        },
-        headers={"User-Agent": _USER_AGENT},
-        timeout=httpx.Timeout(30.0, connect=10.0),
-    )
-    response.raise_for_status()
-    payload = response.json()
-    results = payload.get("query", {}).get("search", [])
-    return [
-        {
-            "source": "wikisource",
-            "language": language,
-            "title": str(item.get("title") or ""),
-            "page_id": int(item["pageid"]),
-            "snippet": unescape(re.sub(r"<[^>]+>", "", str(item.get("snippet") or ""))).strip(),
-            "word_count": int(item.get("wordcount") or 0),
-            "url": f"{host}/wiki/{quote(str(item.get('title') or '').replace(' ', '_'))}",
-        }
-        for item in results
-        if isinstance(item, dict) and item.get("title") and item.get("pageid")
-    ]
-
-
 def load_gutenberg_etext(etext_id: int) -> tuple[str, dict[str, Any]]:
     etext_id = int(etext_id)
     if etext_id < 1:
@@ -142,21 +111,12 @@ def load_gutenberg_etext(etext_id: int) -> tuple[str, dict[str, Any]]:
     try:
         from .gutenberg_catalogue import gutenberg_offline
 
-        offline_status = gutenberg_offline.status()
-        if offline_status.get("ready"):
+        # Local exact eText first; otherwise one verified, bounded download of that eText.
+        # The full local collection is optional and never a precondition for importing one book.
+        if gutenberg_offline.status().get("ready"):
             local = gutenberg_offline.text(etext_id)
             if local is not None:
                 return local
-            raise ValueError(
-                f"Project Gutenberg text {etext_id} is not present in the completed local collection."
-            )
-        if offline_status.get("search_ready"):
-            raise ValueError(
-                "The Project Gutenberg catalogue is searchable, but the local text "
-                "collection has not finished downloading and unpacking."
-            )
-    except ValueError:
-        raise
     except Exception:
         logger.warning("Local Gutenberg text unavailable; using remote edition", exc_info=True)
     # Use one bounded catalog/download path for imports. Optional clients cannot
@@ -303,98 +263,6 @@ def _gutendex_etext(etext_id: int) -> tuple[str, dict[str, Any]]:
     return text, catalog
 
 
-_WIKISOURCE_HOST = re.compile(r"^([a-z\-]+\.)?wikisource\.org$", re.IGNORECASE)
-
-
-def _wikisource_page_title(parsed: Any) -> str:
-    """Page title for a /wiki/<Title> or ?title=<Title> Wikisource URL, else ''."""
-    host = (parsed.hostname or "").lower()
-    if not _WIKISOURCE_HOST.match(host):
-        return ""
-    if parsed.path.startswith("/wiki/"):
-        return unquote(parsed.path[len("/wiki/"):]).replace("_", " ").strip()
-    match = re.search(r"(?:^|&)title=([^&]+)", parsed.query or "")
-    return unquote(match.group(1).replace("+", " ")).replace("_", " ").strip() if match else ""
-
-
-# A work's main page is often only its title page and contents; the text is on subpages (Title/Chapter I, …).
-MAX_WIKISOURCE_SUBPAGES = 400
-
-
-def _wikisource_parse(parsed: Any, title: str) -> tuple[str, str]:
-    """(resolved title, rendered HTML) for one page through the MediaWiki parse API, rate-limited like search."""
-    global _WIKISOURCE_LAST_REQUEST
-    with _WIKISOURCE_RATE_LOCK:
-        elapsed = time.monotonic() - _WIKISOURCE_LAST_REQUEST
-        if elapsed < 0.2:
-            time.sleep(0.2 - elapsed)
-        _WIKISOURCE_LAST_REQUEST = time.monotonic()
-    response = httpx.get(
-        f"{parsed.scheme}://{parsed.netloc}/w/api.php",
-        params={
-            "action": "parse",
-            "page": title,
-            "prop": "text",
-            "redirects": 1,
-            "disableeditsection": 1,
-            "disabletoc": 1,
-            "format": "json",
-            "formatversion": 2,
-        },
-        headers={"User-Agent": _USER_AGENT},
-        timeout=httpx.Timeout(45.0, connect=10.0),
-    )
-    response.raise_for_status()
-    payload = response.json()
-    if isinstance(payload.get("error"), dict):
-        raise ValueError(f"Wikisource: {payload['error'].get('info') or 'page not found'}")
-    parse = payload.get("parse") or {}
-    html = str(parse.get("text") or "")
-    if not html:
-        raise ValueError("Wikisource returned no page content.")
-    return str(parse.get("title") or title), html
-
-
-def wikisource_subpage_titles(html: str, root_title: str) -> list[str]:
-    """Subpages of `root_title` linked from its page, in reading order, each once (the work's contents)."""
-    prefix = root_title.replace(" ", "_") + "/"
-    seen: set[str] = set()
-    titles: list[str] = []
-    for href in re.findall(r'href="/wiki/([^"#?]+)', html):
-        name = unquote(href.replace("&amp;", "&"))
-        if not name.startswith(prefix) or name in seen:
-            continue
-        seen.add(name)
-        titles.append(name.replace("_", " "))
-    return titles[:MAX_WIKISOURCE_SUBPAGES]
-
-
-def fetch_wikisource_page(parsed: Any, title: str, *, max_bytes: int) -> tuple[bytes, str, str]:
-    """Fetch a Wikisource work through the MediaWiki API (never by scraping /wiki/).
-
-    Wikimedia rejects anonymous page scraping; the parse API is the supported route. When the page is a work's
-    title/contents page, its subpages are fetched in the order the contents list them and kept, each in a section
-    that names the page it came from, so the whole work is imported rather than its table of contents.
-    """
-    resolved, html = _wikisource_parse(parsed, title)
-    parts = [html]
-    total = len(html.encode("utf-8"))
-    for subpage in wikisource_subpage_titles(html, resolved):
-        sub_title, sub_html = _wikisource_parse(parsed, subpage)
-        section = f'<section data-wikisource-page="{escape(sub_title, quote=True)}">{sub_html}</section>'
-        total += len(section.encode("utf-8"))
-        if total > max_bytes:
-            raise ValueError(
-                "This Wikisource work exceeds the upload size limit; import its parts (subpages) separately."
-            )
-        parts.append(section)
-    data = "\n".join(parts).encode("utf-8")
-    if len(data) > max_bytes:
-        raise ValueError("The URL exceeds the upload size limit.")
-    safe = re.sub(r"[^\w.\- ]+", "_", resolved).strip().replace(" ", "_") or "wikisource"
-    return data, f"{safe}.html", "text/html; charset=utf-8"
-
-
 def fetch_source_url(url: str, *, max_bytes: int) -> tuple[bytes, str, str]:
     parsed = urlparse(str(url or "").strip())
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
@@ -426,3 +294,195 @@ def fetch_source_url(url: str, *, max_bytes: int) -> tuple[bytes, str, str]:
             else ".bin"
         )
     return b"".join(chunks), name, content_type
+
+
+# --- Corpus Capture provider -------------------------------------------------------------
+
+GUTENDEX_MAX_PAGES = 10
+
+
+def candidate_from_catalogue_row(row: dict[str, Any], author: ResolvedAuthor) -> SourceCandidate:
+    """One catalogue item → a provider candidate. Roles come from the catalogue, never from titles."""
+    contributors = [dict(item) for item in row.get("contributors") or []]
+    matched = row.get("matched_contributor") or {}
+    role = str(matched.get("role") or ContributionRole.UNKNOWN)
+    authors = [item for item in contributors if item.get("role") == "author"]
+    if role == "author" and len(authors) > 1:
+        role = ContributionRole.COAUTHOR
+    translators = [str(item.get("name")) for item in contributors if item.get("role") == "translator"]
+    editors = [str(item.get("name")) for item in contributors if item.get("role") == "editor"]
+    etext_id = int(row["etext_id"])
+    issued = str(row.get("issued") or "")
+    return SourceCandidate(
+        provider="gutenberg",
+        provider_item_id=str(etext_id),
+        title=str(row.get("title") or "").replace("\n", " — ").replace("\r", "").strip(),
+        source_uri=f"https://www.gutenberg.org/ebooks/{etext_id}",
+        catalog_uri=f"https://www.gutenberg.org/ebooks/{etext_id}",
+        contribution_role=role,
+        provider_author_identity=str(matched.get("name") or ""),
+        document_author="; ".join(human_author_name(str(item.get("name"))) for item in authors),
+        contributors=[{k: item.get(k) for k in ("name", "role", "raw_role", "birth_year", "death_year")} for item in contributors],
+        document_languages=list(row.get("languages") or []),
+        translators=[human_author_name(name) for name in translators],
+        editors=[human_author_name(name) for name in editors],
+        edition=f"Project Gutenberg eBook #{etext_id}",
+        publisher="Project Gutenberg",
+        # A named translator is catalogue evidence of a translation; without one the relation stays unknown.
+        relationship_to_work=WorkRelationship.TRANSLATION if translators and role in {"author", "coauthor"} else WorkRelationship.UNKNOWN,
+        discovery_method=str(row.get("discovery_method") or "gutenberg_catalogue_contributor"),
+        discovery_evidence={
+            "matched_name": matched.get("name"),
+            "matched_birth_year": matched.get("birth_year"),
+            "matched_death_year": matched.get("death_year"),
+            "date_evidence": bool(row.get("date_evidence")),
+            "issued": issued,
+            "authors_cell": row.get("authors_raw"),
+        },
+        identity_confidence=str(row.get("identity_confidence") or "needs_review"),
+        rights_status=row.get("rights_status"),
+        rights_source=row.get("rights_source"),
+    )
+
+
+def gutendex_rows_for_author(http: ProviderHttp, author: ResolvedAuthor) -> tuple[list[dict[str, Any]], bool]:
+    """Fallback when the local catalogue is not indexed: Gutendex search, then the same identity rules."""
+    names = [PersonName.parse(name) for name in author.names()]
+    surname = next((name.surname for name in names if name.surname), "")
+    if not surname:
+        return [], True
+    url: str | None = "https://gutendex.com/books"
+    params: dict[str, Any] | None = {"search": surname}
+    rows: list[dict[str, Any]] = []
+    for _page in range(GUTENDEX_MAX_PAGES):
+        if not url:
+            return rows, True
+        payload = http.get_json(url, params)
+        params = None
+        for item in payload.get("results") or []:
+            if not isinstance(item, dict) or not str(item.get("media_type") or "Text").lower().startswith("text"):
+                continue
+            people = [{"name": p.get("name"), "role": "author", "raw_role": "", "birth_year": p.get("birth_year"), "death_year": p.get("death_year")} for p in item.get("authors") or [] if isinstance(p, dict)]
+            people += [{"name": p.get("name"), "role": "translator", "raw_role": "Translator", "birth_year": p.get("birth_year"), "death_year": p.get("death_year")} for p in item.get("translators") or [] if isinstance(p, dict)]
+            matched = None
+            confidence = "needs_review"
+            for person in people:
+                parsed = PersonName.parse(str(person.get("name") or ""))
+                if not any(parsed.surname == n.surname and parsed.first_given and parsed.first_given == n.first_given for n in names) and parsed.full not in {n.full for n in names}:
+                    continue
+                if person.get("birth_year") is not None and author.birth_year is not None:
+                    if person["birth_year"] != author.birth_year:
+                        continue
+                    confidence = "exact"
+                matched = person
+                break
+            if not matched:
+                continue
+            rows.append({
+                "etext_id": item.get("id"),
+                "title": item.get("title"),
+                "languages": normalize_languages(item.get("languages") or []),
+                "contributors": people,
+                "matched_contributor": matched,
+                "identity_confidence": confidence,
+                "date_evidence": confidence == "exact",
+                "discovery_method": "gutendex_search_identity_filtered",
+                # Gutendex reports Project Gutenberg's own copyright flag; it is a provider assertion only.
+                "rights_status": None if item.get("copyright") is None else ("provider_not_copyrighted_us" if item.get("copyright") is False else "provider_copyrighted"),
+                "rights_source": "gutendex" if item.get("copyright") is not None else None,
+            })
+        next_url = payload.get("next")
+        url = str(next_url) if next_url else None
+    return rows, url is None
+
+
+class GutenbergProvider:
+    provider_id = "gutenberg"
+
+    def __init__(self, http: ProviderHttp, catalogue: Any = None) -> None:
+        self.http = http
+        if catalogue is None:
+            from .gutenberg_catalogue import gutenberg_offline
+
+            catalogue = gutenberg_offline
+        self.catalogue = catalogue
+
+    def enumerate_author_sources(
+        self, author: ResolvedAuthor, options: CaptureOptions, report: DiscoveryReport, progress: ProgressCallback
+    ) -> Iterator[SourceCandidate]:
+        progress("discovering_gutenberg", {"done": 0, "total": 1})
+        status = self.catalogue.status()
+        if status.get("search_ready"):
+            rows = self.catalogue.sources_for_author(author.names(), birth_year=author.birth_year, death_year=author.death_year)
+            report.catalog_version = "pg_catalog.csv"
+            report.catalog_refreshed_at = (status.get("catalogue") or {}).get("refreshed_at")
+            report.endpoint = "local catalogue"
+        else:
+            report.warnings = [*(report.warnings or []), "gutenberg_catalogue_not_indexed_used_gutendex"]
+            report.endpoint = "https://gutendex.com/books"
+            rows, complete = gutendex_rows_for_author(self.http, author)
+            report.pagination_complete = complete
+        report.projects_searched.append("gutenberg")
+        report.identities_used.extend(author.names())
+        wanted = {str(role) for role in options.roles}
+        skipped_types = 0
+        for row in rows:
+            item_type = str(row.get("item_type") or "Text")
+            if item_type and item_type.lower() != "text":
+                skipped_types += 1
+                continue
+            candidate = candidate_from_catalogue_row(row, author)
+            role = str(candidate.contribution_role)
+            if role not in wanted:
+                continue
+            if not options.include_translations and candidate.relationship_to_work == WorkRelationship.TRANSLATION:
+                continue
+            if options.languages and not set(candidate.document_languages) & set(options.languages):
+                continue
+            if report.result_count >= options.max_candidates_per_provider:
+                report.warnings = [*(report.warnings or []), "candidate_limit_reached"]
+                break
+            report.result_count += 1
+            yield candidate
+        if skipped_types:
+            report.warnings = [*(report.warnings or []), f"non_text_items_skipped:{skipped_types}"]
+        progress("discovering_gutenberg", {"done": 1, "total": 1})
+
+    def fetch_source(self, candidate: SourceCandidate, *, max_bytes: int) -> AcquiredSource:
+        etext_id = int(candidate.provider_item_id)
+        try:
+            text, catalog = load_gutenberg_etext(etext_id)
+        except httpx.TimeoutException as exc:
+            raise CaptureError(CaptureErrorCode.NETWORK_TIMEOUT, "Project Gutenberg did not answer in time.") from exc
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code
+            if status == 404:
+                raise CaptureError(CaptureErrorCode.SOURCE_NOT_FOUND, f"Project Gutenberg has no eText {etext_id}.") from exc
+            code = CaptureErrorCode.RATE_LIMITED if status == 429 else CaptureErrorCode.PROVIDER_UNAVAILABLE if status >= 500 else CaptureErrorCode.ACQUISITION_FAILED
+            raise CaptureError(code, f"Project Gutenberg answered HTTP {status}.") from exc
+        except httpx.TransportError as exc:
+            raise CaptureError(CaptureErrorCode.PROVIDER_UNAVAILABLE, "Could not reach Project Gutenberg.") from exc
+        except ValueError as exc:
+            message = str(exc)
+            code = (
+                CaptureErrorCode.SOURCE_TOO_LARGE if "size limit" in message
+                else CaptureErrorCode.IDENTITY_MISMATCH if "different" in message or "does not identify" in message
+                else CaptureErrorCode.UNSUPPORTED_SOURCE if "Unsupported" in message or "no plain-text" in message
+                else CaptureErrorCode.ACQUISITION_FAILED
+            )
+            raise CaptureError(code, message) from exc
+        data = text.encode("utf-8")
+        if len(data) > max_bytes:
+            raise CaptureError(CaptureErrorCode.SOURCE_TOO_LARGE, "The Gutenberg text exceeds the ingestion size limit.")
+        catalog = {k: v for k, v in catalog.items() if k != "catalog_record"}
+        catalog.update({
+            "provider": "gutenberg",
+            "gutenberg_id": etext_id,
+            "document_author": candidate.document_author or catalog.get("document_author") or "",
+            "translator": "; ".join(candidate.translators) or None,
+            "language": (candidate.document_languages or [catalog.get("language") or ""])[0],
+            "document_languages": candidate.document_languages,
+            "source_sha256": catalog.get("source_sha256") or hashlib.sha256(data).hexdigest(),
+        })
+        safe = re.sub(r"[^\w.\- ]+", "_", str(catalog.get("title") or etext_id)).strip()[:120] or str(etext_id)
+        return AcquiredSource(data=data, filename=f"{safe}.txt", content_type="text/plain", source_uri=candidate.source_uri, catalog_metadata=catalog)

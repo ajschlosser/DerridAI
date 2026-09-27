@@ -1,6 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 export * from "./types";
-export { corpusSourcesApi } from "./sources";
+export { corpusSourcesApi, sourceListQuery } from "./sources";
+export { corpusCaptureApi, type CandidateFilters } from "./capture";
 export { corpusBuildsApi } from "./builds";
 export { corpusRecordsApi } from "./records";
 export { corpusReviewApi } from "./review";

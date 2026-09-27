@@ -25,6 +25,7 @@ from .routers.health import router as health_router
 from .routers.i18n import router as i18n_router
 from .routers.jobs import router as jobs_router
 from .routers.llm import router as llm_router
+from .routers.sources import router as sources_router
 from .routers.stores import router as stores_router
 from .routers.system import router as system_router
 from .routers.system_data import router as system_data_router
@@ -43,6 +44,7 @@ ROUTERS = (
     chroma_router,
     admin_router,
     corpus_router,
+    sources_router,
     derridai_router,
     stores_router,
     # Read-only cELF query façade and the realtime notification plane sit beside

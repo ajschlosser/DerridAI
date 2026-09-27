@@ -4,6 +4,14 @@ import { runOperation } from "./graphql/client";
 
 export type ClaimValidationStatus = "unvalidated" | "validated" | "rejected" | "unresolved";
 
+export interface GeneratedClaimRecord {
+  claim_id: string;
+  claim_text: string;
+  validation_status: ClaimValidationStatus;
+  validated_by?: string | null;
+  validated_at?: string | null;
+}
+
 export interface SimilarValidatedClaim {
   claim_id: string;
   claim_text: string;
@@ -20,13 +28,17 @@ export interface SimilarValidatedClaim {
 }
 
 export const claimsApi = {
+  get: (claimId: string) =>
+    apiRequest<{ claim: GeneratedClaimRecord }>(
+      `/api/derridai/claims/${encodeURIComponent(claimId)}`,
+    ),
   setValidation: (
     claimId: string,
     status: ClaimValidationStatus,
     record?: Record<string, unknown> | null,
   ) =>
     apiRequest<{
-      claim: { claim_id: string; validation_status: ClaimValidationStatus };
+      claim: GeneratedClaimRecord;
       projection: { status: "indexed" | "removed" | "failed"; error: string };
     }>(`/api/derridai/claims/${encodeURIComponent(claimId)}/validation`, {
       method: "POST",

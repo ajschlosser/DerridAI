@@ -52,6 +52,12 @@ const routes: RouteRecordRaw[] = [
     meta: { view: "pdf", capability: "page.pdf", adminOnly: true },
   },
   {
+    path: "/sources",
+    name: "sources",
+    component: () => import("../views/SourcesView.vue"),
+    meta: { view: "sources", capability: "page.pdf", adminOnly: true, vueNative: true },
+  },
+  {
     path: "/compare",
     name: "compare",
     component: () => import("../views/CompareView.vue"),

@@ -55,6 +55,14 @@ def _owned_claim(claim_id: str, user: Any) -> tuple[dict[str, Any], AccessContex
         raise HTTPException(status_code=404, detail="Generated claim not found") from exc
 
 
+@router.get("/api/derridai/claims/{claim_id}")
+def get_claim(claim_id: str, request: Request) -> dict[str, Any]:
+    """Return the authoritative current state of one generated claim."""
+    user = request_user(request)
+    claim, _owner = _owned_claim(claim_id, user)
+    return {"claim": claim}
+
+
 @router.post("/api/derridai/claims/{claim_id}/validation")
 def set_claim_validation(claim_id: str, body: dict[str, Any], request: Request) -> dict[str, Any]:
     """Record a human audit decision on a generated claim.
