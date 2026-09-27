@@ -17,6 +17,7 @@ from typing import Any
 from .field_assertions import (
     FieldAssertion,
     current_assertion_by_name,
+    current_assertions,
     migrate_record_assertions,
 )
 
@@ -24,14 +25,10 @@ DEFAULT_CONTEXT_BLOCK_RADIUS = 1
 PROMPT_EVIDENCE_CHARS = 420
 DEFAULT_PROMPT_TOKEN_BUDGET = 1200
 PROMPT_CHARS_PER_TOKEN = 4
-FIELD_EXAMPLE_LIMITS = {
-    "speaker": 2,
-    "quoted_speaker": 2,
-    "position_holder": 3,
-    "stance": 3,
-    "discourse_role": 2,
-}
+# Per-field limits come from each schema field's retrieval profile (max_items);
+# this default applies only when a schema declares none.
 DEFAULT_FIELD_EXAMPLE_LIMIT = 2
+REVIEWED_AUTHORITY = {"human_confirmed", "human_override"}
 
 
 def _json_key(value: Any) -> str:
@@ -42,6 +39,26 @@ def _unique_strings(values: Any) -> list[str]:
     if not isinstance(values, list):
         return []
     return list(dict.fromkeys(str(value) for value in values if str(value).strip()))
+
+
+def reviewed_values(record: dict[str, Any]) -> dict[str, str]:
+    """Human-reviewed present values on a record, keyed by field name.
+
+    Values are JSON-encoded so they compare exactly. The snapshot is schema-agnostic:
+    it lets a retrieval policy declare which *other* fields a precedent should agree
+    on without this module knowing what any field means. Names are stable here
+    because exemplars are only ever compared within one build's copied schema.
+    """
+    out: dict[str, str] = {}
+    if not isinstance(record, dict):
+        return out
+    row = json.loads(json.dumps(record, default=str))
+    migrate_record_assertions(row)
+    for assertion in current_assertions(row):
+        name = str(assertion.field_name or "")
+        if name and assertion.value_status == "present" and assertion.authority_status in REVIEWED_AUTHORITY:
+            out[name] = _json_key(assertion.value)
+    return out
 
 
 def _reviewed_evidence(assertion: FieldAssertion, evidence: dict[str, Any]) -> bool:
@@ -282,10 +299,7 @@ def build_metadata_exemplar(
         "schema_version": schema_version,
         "language": record.get("language"),
         "region_type": record.get("region_type"),
-        "speaker": record.get("speaker"),
-        "position_holder": record.get("position_holder"),
-        "stance": record.get("stance"),
-        "discourse_role": record.get("discourse_role"),
+        "reviewed_values": reviewed_values(record),
         "page_start": pages[0] if pages else record.get("page_start"),
         "page_end": pages[-1] if pages else record.get("page_end"),
         "reviewed_at": evidence.get("reviewed_at") or record.get("metadata_reviewed_at"),
@@ -409,7 +423,7 @@ def budget_prompt_examples(
             int(
                 (field_limits or {}).get(
                     field,
-                    FIELD_EXAMPLE_LIMITS.get(field, DEFAULT_FIELD_EXAMPLE_LIMIT),
+                    DEFAULT_FIELD_EXAMPLE_LIMIT,
                 )
             ),
         )

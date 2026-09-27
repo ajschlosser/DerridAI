@@ -9,6 +9,10 @@ export interface RetrievalProfile {
   min_similarity: number;
   include_corrections: boolean;
   include_confirmed_absence: boolean;
+  /** Separate quota for reviewed corrections. */
+  max_corrections?: number;
+  /** Stable field identities a precedent's reviewed value should agree on. */
+  match_field_ids?: string[];
 }
 export interface SchemaValue {
   value: string;
@@ -120,6 +124,8 @@ export function blankField(group = CORE_GROUP): SchemaField {
       min_similarity: 0,
       include_corrections: true,
       include_confirmed_absence: true,
+      max_corrections: 2,
+      match_field_ids: [],
     },
   };
 }

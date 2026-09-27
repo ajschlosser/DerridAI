@@ -16,6 +16,8 @@ import { assertionConflict, currentFieldAssertions } from "../domain/fieldAssert
 import type { MetadataSchema, SchemaField } from "../api/metadataSchemas";
 import { reviewableMetadataFieldNames } from "../features/corpus-builder/domain/recordMetadata";
 import CorpusMetadataFieldEditor from "./CorpusMetadataFieldEditor.vue";
+import CorpusFieldPrecedents from "./CorpusFieldPrecedents.vue";
+import CorpusRecordResearchClaims from "./CorpusRecordResearchClaims.vue";
 import CorpusFieldOwnershipBadge from "./CorpusFieldOwnershipBadge.vue";
 import CorpusEnrichmentChanges from "./CorpusEnrichmentChanges.vue";
 import CorpusFieldPolicyBadges from "./CorpusFieldPolicyBadges.vue";
@@ -34,6 +36,8 @@ const props = defineProps<{
   schema?: MetadataSchema | null;
   /** Fields the server requires before it will accept the record; they are listed first and marked. */
   blockingFields?: string[];
+  /** Enables the read-only precedent and Research-claim cross-references. */
+  buildId?: string;
 }>();
 const emit = defineEmits<{
   resolve: [field: string, value: unknown];
@@ -461,6 +465,13 @@ function displayValue(field: string) {
             />
           </template>
         </CorpusMetadataFieldEditor>
+        <CorpusFieldPrecedents
+          v-if="buildId && pendingSet.has(field)"
+          :build-id="buildId"
+          :record-id="record.record_id"
+          :field="field"
+          :field-label="fieldLabel(field)"
+        />
       </div>
     </div>
     <details
@@ -510,6 +521,8 @@ function displayValue(field: string) {
         </div>
       </div>
     </details>
+
+    <CorpusRecordResearchClaims v-if="buildId" :build-id="buildId" :record-id="record.record_id" />
 
     <details v-if="addableFields.length" class="settled-metadata add-metadata">
       <summary>

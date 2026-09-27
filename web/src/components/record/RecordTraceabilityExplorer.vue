@@ -48,7 +48,7 @@ type RelationshipGroup = {
 const modeTabs = computed(() => {
   const tabs = [{ id: "trace", label: i18n.t("traceability.this_record", "This record") }];
   if (props.model)
-    tabs.push({ id: "model", label: i18n.t("traceability.data_model", "DERRIDAI model") });
+    tabs.push({ id: "model", label: i18n.t("traceability.data_model", "cELF model") });
   return tabs;
 });
 
@@ -329,7 +329,7 @@ watch(mode, () => resetFocus());
           {{
             mode === "trace"
               ? i18n.t("traceability.title_record", "Trace this record")
-              : i18n.t("traceability.title_model", "Explore the DERRIDAI model")
+              : i18n.t("traceability.title_model", "Explore the cELF model")
           }}
         </h2>
       </div>
@@ -342,7 +342,7 @@ watch(mode, () => resetFocus());
               )
             : i18n.t(
                 'traceability.model_help',
-                'This view shows the object types and relationships allowed by DERRIDAI 1.0. It is a model, not this record’s stored data.',
+                'This view shows the object types and relationships allowed by cELF 1.0. It is a model, not this record’s stored data.',
               )
         "
         :label="i18n.t('traceability.about_view', 'About this view')"
@@ -400,7 +400,7 @@ watch(mode, () => resetFocus());
                 )
               : i18n.t(
                   "traceability.model_scope_help",
-                  "This is the finite DERRIDAI 1.0 relationship model. Selecting an object highlights the relationships allowed for that type.",
+                  "This is the finite cELF 1.0 relationship model. Selecting an object highlights the relationships allowed for that type.",
                 )
           }}
         </p>
@@ -478,7 +478,7 @@ watch(mode, () => resetFocus());
           />
           <UiStatusBadge
             v-if="!focus.status && mode === 'model'"
-            :label="String(focus.details?.profile || 'DERRIDAI')"
+            :label="String(focus.details?.profile || 'cELF')"
             tone="neutral"
           />
         </div>
@@ -565,17 +565,17 @@ watch(mode, () => resetFocus());
       :title="
         mode === 'trace'
           ? i18n.t('traceability.map_title_record', 'Record relationship map')
-          : i18n.t('traceability.map_title_model', 'DERRIDAI relationship model')
+          : i18n.t('traceability.map_title_model', 'cELF relationship model')
       "
       :description="
         mode === 'trace'
           ? i18n.t(
               'traceability.map_description_record',
-              'A finite map of the provenance retained for this record. Solid lines are DERRIDAI relationships; dashed lines are DerridAI application links.',
+              'A finite map of the provenance retained for this record. Solid lines are cELF relationships; dashed lines are DerridAI application links.',
             )
           : i18n.t(
               'traceability.map_description_model',
-              'The normative DERRIDAI 1.0 object model. Select a node to highlight its direct relationships.',
+              'The normative cELF 1.0 object model. Select a node to highlight its direct relationships.',
             )
       "
       :close-label="i18n.t('ui.close')"
@@ -603,7 +603,7 @@ watch(mode, () => resetFocus());
         <div class="diagram-legend" aria-label="Diagram legend">
           <span
             ><i class="solid"></i
-            >{{ i18n.t("traceability.legend_normative", "DERRIDAI relationship") }}</span
+            >{{ i18n.t("traceability.legend_normative", "cELF relationship") }}</span
           >
           <span
             ><i class="dashed"></i

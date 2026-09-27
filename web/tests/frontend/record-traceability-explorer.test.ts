@@ -238,19 +238,19 @@ describe("RecordTraceabilityExplorer", () => {
     expect(wrapper.text()).toContain("9 objects · 9 relationships");
   });
 
-  it("separates the actual record trace from the normative DERRIDAI model", async () => {
+  it("separates the actual record trace from the normative cELF model", async () => {
     const wrapper = mount(RecordTraceabilityExplorer, { props: { graph, model } });
 
     const modelTab = wrapper
       .findAll('[role="tab"]')
-      .find((button) => button.text().includes("DERRIDAI model"));
+      .find((button) => button.text().includes("cELF model"));
     expect(modelTab).toBeTruthy();
     await modelTab!.trigger("click");
 
-    expect(wrapper.text()).toContain("Explore the DERRIDAI model");
+    expect(wrapper.text()).toContain("Explore the cELF model");
     expect(wrapper.text()).toContain("Normative model");
     expect(wrapper.text()).toContain("3 objects · 2 relationships");
-    expect(wrapper.text()).toContain("This is the finite DERRIDAI 1.0 relationship model.");
+    expect(wrapper.text()).toContain("This is the finite cELF 1.0 relationship model.");
   });
 });
 

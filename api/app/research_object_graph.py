@@ -1,5 +1,5 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
-"""Build walkable instance graphs over DERRIDAI research objects."""
+"""Build walkable instance graphs over cELF research objects."""
 from __future__ import annotations
 
 import hashlib

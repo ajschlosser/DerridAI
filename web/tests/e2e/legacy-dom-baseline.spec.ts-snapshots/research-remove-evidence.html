@@ -400,15 +400,15 @@
 <label class="research-toggle-setting">
 <input type="checkbox">
 <span>
-<b>Use prior responses as guidance</b>
-<small>Prior answers remain advisory and are never treated as current source evidence.</small>
+<b>Use cached responses to steer answers</b>
+<small>Finds earlier answers to similar questions and shows them to the model as advisory context. Only answers graded at or above the configured minimum are used; ungraded answers never steer. Prior answers are never cited as evidence.</small>
 </span>
 </label>
 <label class="research-toggle-setting">
 <input type="checkbox">
 <span>
-<b>Use prior claim provenance as guidance</b>
-<small>Reuse only permission-checked, canonically re-resolved claim links.</small>
+<b>Use cached provenance to steer claims</b>
+<small>Finds reviewer-validated claims similar to your question, with the citations they were bound to. Each cited record is checked against this run’s evidence; support that is not in the current evidence cannot be cited.</small>
 </span>
 </label>
 </div>

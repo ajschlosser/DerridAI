@@ -553,6 +553,7 @@ class RAGJobManager(PersistentJobStateMixin):
                         })
                         system_store.mark_semantic_memory_dirty(
                             "response_memory",
+                            record_id=response_id,
                             reason="completed_research_response",
                         )
                     except Exception as memory_error:

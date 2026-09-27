@@ -3,6 +3,7 @@
 /* eslint-disable vue/no-mutating-props -- the parent hands over its draft on purpose; these components edit it in place and the parent tracks dirtiness by comparing the whole draft. */
 import { computed, nextTick, ref } from "vue";
 import { useSchemaCopy } from "../../composables/useSchemaCopy";
+import { useI18nStore } from "../../stores/i18n";
 import {
   CORE_FIELDS,
   CORE_GROUP,
@@ -25,6 +26,22 @@ const root = ref<HTMLElement | null>(null);
 const filter = ref("");
 const open = ref<SchemaField | null>(null);
 const groupKeys = computed(() => props.draft.groups.map((g) => g.key));
+const i18n = useI18nStore();
+/**
+ * Fields a retrieval policy may name as analogy conditions: the locked core and every
+ * other saved field. A field without a stable identity yet (never saved) is left out,
+ * because a policy must reference identities, not names that may still change.
+ */
+function matchOptionsFor(field: SchemaField) {
+  const core = CORE_FIELDS.map((name) => ({
+    fieldId: `core.${name}`,
+    label: i18n.t(`field.${name}`),
+  }));
+  const others = props.draft.fields
+    .filter((other) => other.field_id && other.field_id !== field.field_id)
+    .map((other) => ({ fieldId: other.field_id, label: other.label || other.name }));
+  return [...core, ...others];
+}
 const needle = computed(() => filter.value.trim().toLowerCase());
 
 const sections = computed(() =>
@@ -206,7 +223,11 @@ function isEdge(field: SchemaField, by: -1 | 1) {
               </tr>
               <tr v-if="open === field" class="detail-row">
                 <td :id="`field-detail-${field.name || 'new'}`" colspan="4">
-                  <SchemaFieldForm :field="field" :group-keys="groupKeys" />
+                  <SchemaFieldForm
+                    :field="field"
+                    :group-keys="groupKeys"
+                    :match-options="matchOptionsFor(field)"
+                  />
                 </td>
               </tr>
             </template>
