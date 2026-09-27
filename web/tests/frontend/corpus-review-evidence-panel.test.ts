@@ -1,6 +1,8 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { mount } from "@vue/test-utils";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { flushPromises } from "@vue/test-utils";
+import { corpusMetadataApi } from "../../src/api/corpus/metadata";
 import type { CorpusRecord, SourceBlock } from "../../src/api/corpus";
 import FieldEvidenceList from "../../src/components/FieldEvidenceList.vue";
 import CorpusReviewEvidencePanel from "../../src/components/corpus-builder/CorpusReviewEvidencePanel.vue";
@@ -123,5 +125,30 @@ describe("Corpus Builder review evidence panel", () => {
     await wrapper.get('input[type="search"]').setValue("");
     await wrapper.get(".only-selected input").setValue(true);
     expect(wrapper.findAll(".source-block")).toHaveLength(1);
+  });
+
+  it("shows suggestions as advisory and never binds evidence on its own", async () => {
+    const spy = vi.spyOn(corpusMetadataApi, "suggestEvidence").mockResolvedValue({
+      items: [
+        { block_id: "block-1", reason: "verbatim", method: "deterministic-lexical-v1", score: 1 },
+      ],
+    });
+    const wrapper = mountPanel({ buildId: "build-1" });
+    await wrapper.findAll(".assign-suggest button")[0].trigger("click");
+    await flushPromises();
+
+    expect(spy).toHaveBeenCalledWith("build-1", "record-1", "speaker");
+    expect(wrapper.find(".suggested-note").exists()).toBe(true);
+    expect(wrapper.emitted("toggleEvidence")).toBeUndefined();
+    spy.mockRestore();
+  });
+
+  it("offers model suggestions only when a provider request exists", () => {
+    expect(mountPanel({ buildId: "build-1" }).findAll(".assign-suggest button")).toHaveLength(1);
+    expect(
+      mountPanel({ buildId: "build-1", llmRequest: { provider_profile_id: "p" } }).findAll(
+        ".assign-suggest button",
+      ),
+    ).toHaveLength(2);
   });
 });

@@ -25,14 +25,11 @@ from .metadata_exemplars import (
 COLLECTION_NAME = "derridai_metadata_exemplars"
 COLLECTION_ROLE = "general"
 PROJECTION_VERSION = 3
-DEFAULT_FIELD_LIMITS = {
-    "speaker": 2,
-    "quoted_speaker": 2,
-    "position_holder": 3,
-    "stance": 3,
-    "discourse_role": 2,
-}
+# Per-field limits come from the schema's retrieval profile; this applies when none is set.
 DEFAULT_FIELD_LIMIT = 2
+DEFAULT_CORRECTION_LIMIT = 2
+# Analogy tiers, best first. "differs" candidates are dropped.
+MATCH_TIERS = ("matched", "not_compared")
 DEFAULT_FETCH_K = 16
 DEFAULT_MMR_LAMBDA = 0.72
 DEFAULT_PACKET_CHAR_BUDGET = DEFAULT_PROMPT_TOKEN_BUDGET * PROMPT_CHARS_PER_TOKEN
@@ -171,6 +168,25 @@ def _where(
     if language:
         terms.append({"language": str(language)})
     return {"$and": terms}
+
+
+def match_tier(
+    exemplar: dict[str, Any],
+    current_values: dict[str, str],
+    match_fields: Iterable[str],
+) -> tuple[str, list[str]]:
+    """Compare a precedent with the current record on the policy's declared fields.
+
+    Only fields reviewed on *both* sides are compared; an unreviewed side is never
+    guessed. Returns ("matched" | "not_compared" | "differs", compared field names).
+    """
+    theirs = exemplar.get("reviewed_values") if isinstance(exemplar.get("reviewed_values"), dict) else {}
+    compared = [name for name in match_fields if name in current_values and name in theirs]
+    if not compared:
+        return "not_compared", []
+    if all(current_values[name] == theirs[name] for name in compared):
+        return "matched", compared
+    return "differs", compared
 
 
 def _candidate_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -432,6 +448,9 @@ class ChromaMetadataExemplarIndex:
         field_limits: dict[str, int] | None = None,
         field_min_similarity: dict[str, float] | None = None,
         field_include_corrections: dict[str, bool] | None = None,
+        field_correction_limits: dict[str, int] | None = None,
+        field_match_fields: dict[str, list[str]] | None = None,
+        current_values: dict[str, str] | None = None,
         packet_char_budget: int = DEFAULT_PACKET_CHAR_BUDGET,
         fetch_k: int = DEFAULT_FETCH_K,
         exclude_record_id: str = "",
@@ -489,20 +508,17 @@ class ChromaMetadataExemplarIndex:
             count = int(collection.count())
 
             def search_field(field: str) -> tuple[str, list[dict[str, Any]], int]:
-                limit = max(
-                    0,
-                    int(
-                        (field_limits or {}).get(
-                            field,
-                            DEFAULT_FIELD_LIMITS.get(field, DEFAULT_FIELD_LIMIT),
-                        )
-                    ),
+                limit = max(0, int((field_limits or {}).get(field, DEFAULT_FIELD_LIMIT)))
+                correction_limit = (
+                    max(0, int((field_correction_limits or {}).get(field, DEFAULT_CORRECTION_LIMIT)))
+                    if bool((field_include_corrections or {}).get(field, True))
+                    else 0
                 )
-                if not limit or not count:
+                if not (limit or correction_limit) or not count:
                     return field, [], 0
                 payload = collection.query(
                     query_embeddings=[query_vector],
-                    n_results=min(max(limit, int(fetch_k)), count),
+                    n_results=min(max(limit + correction_limit, int(fetch_k)), count),
                     where=_where(
                         scope_id,
                         field,
@@ -512,26 +528,38 @@ class ChromaMetadataExemplarIndex:
                     ),
                     include=["metadatas", "distances", "embeddings"],
                 )
-                candidates = [
-                    row
-                    for row in _candidate_rows(payload)
-                    if row["id"] in canonical
-                    and str(canonical[row["id"]].get("field_name") or "") == field
-                    and (
-                        not exclude_record_id
-                        or str(canonical[row["id"]].get("record_id") or "")
-                        != str(exclude_record_id)
-                    )
-                    and (
-                        _distance_similarity(row.get("distance"))
-                        >= max(0.0, min(1.0, float((field_min_similarity or {}).get(field, 0.0))))
-                    )
-                    and (
-                        str(canonical[row["id"]].get("kind") or "positive") != "correction"
-                        or bool((field_include_corrections or {}).get(field, True))
-                    )
-                ]
-                return field, _mmr(candidates, limit), len(candidates)
+                floor = max(0.0, min(1.0, float((field_min_similarity or {}).get(field, 0.0))))
+                match_fields = list((field_match_fields or {}).get(field) or [])
+                candidates = []
+                for row in _candidate_rows(payload):
+                    exemplar = canonical.get(row["id"])
+                    if exemplar is None or str(exemplar.get("field_name") or "") != field:
+                        continue
+                    if exclude_record_id and str(exemplar.get("record_id") or "") == str(exclude_record_id):
+                        continue
+                    if _distance_similarity(row.get("distance")) < floor:
+                        continue
+                    tier, compared = match_tier(exemplar, current_values or {}, match_fields)
+                    if tier == "differs":
+                        continue  # declared analogy conditions contradict this precedent
+                    candidates.append({**row, "match_tier": tier, "match_compared": compared})
+                # Positives (including reviewed absence) and corrections have separate
+                # quotas; within each, precedents that satisfy the declared conditions
+                # come before ones that could not be compared.
+                selected: list[dict[str, Any]] = []
+                for is_correction, quota in ((False, limit), (True, correction_limit)):
+                    pool = [
+                        row for row in candidates
+                        if (str(canonical[row["id"]].get("kind") or "positive") == "correction") == is_correction
+                    ]
+                    for tier in MATCH_TIERS:
+                        remaining = quota - sum(
+                            1 for row in selected
+                            if (str(canonical[row["id"]].get("kind") or "positive") == "correction") == is_correction
+                        )
+                        if remaining > 0:
+                            selected.extend(_mmr([row for row in pool if row["match_tier"] == tier], remaining))
+                return field, selected, len(candidates)
 
             if ordered_fields and count:
                 # One query embedding is shared by a small bounded worker pool.
@@ -564,9 +592,10 @@ class ChromaMetadataExemplarIndex:
                         similarity = 1.0 / (1.0 + max(0.0, float(distance)))
                     except (TypeError, ValueError):
                         similarity = None
-                    rendered.setdefault(field, []).append(
-                        prompt_example(exemplar, similarity=similarity)
-                    )
+                    example = prompt_example(exemplar, similarity=similarity)
+                    if row.get("match_compared"):
+                        example["match"] = {"tier": row["match_tier"], "fields": row["match_compared"]}
+                    rendered.setdefault(field, []).append(example)
             packet, packet_chars = _bounded_packet(
                 rendered,
                 ordered_fields,

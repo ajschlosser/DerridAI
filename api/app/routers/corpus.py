@@ -19,14 +19,13 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, JSONResponse
 
+from ..claim_memory import validated_claims_citing
 from ..config import settings
 from ..corpus_builder import CORPUS_PROFILES, pdf_corpus_builds, pdf_corpus_repository
 from ..corpus_review_state import _queue_counts
-from ..field_assertions import field_identity
 from ..http_auth import require_admin
 from ..llm import TouchupFailure
 from ..metadata_adjudication_cache import clear as clear_adjudication_cache
-from ..metadata_adjudication_cache import remember as remember_adjudication
 from ..metadata_adjudication_cache import suggestions as adjudication_suggestions
 from ..metadata_schema import MetadataSchema, SchemaImportError
 from ..metadata_schema_store import SchemaLocked, SchemaNotFound, SchemaStore
@@ -39,6 +38,7 @@ from ..models import (
     PdfCorpusBulkDisposition,
     PdfCorpusBulkMetadataPatch,
     PdfCorpusEvidencePatch,
+    PdfCorpusEvidenceSuggestLlm,
     PdfCorpusManifestPatch,
     PdfCorpusMetadataCacheClear,
     PdfCorpusMetadataDecision,
@@ -750,41 +750,34 @@ def decide_pdf_corpus_record_metadata_batch(
     body: PdfCorpusMetadataDecisionBatch,
 ) -> dict[str, Any]:
     try:
-        pdf_corpus_builds.patch_metadata(
+        return pdf_corpus_builds.apply_metadata_decisions(
             build_id, record_id, body.changes, body.expected_revision
         )
-        build = pdf_corpus_repository.get_build(build_id)
-        records = pdf_corpus_repository.load_records(build_id)
-        record = next(
-            (
-                row
-                for row in records
-                if str(row.get("record_id") or "") == record_id
-            ),
-            None,
-        )
-        if record is None:
-            raise KeyError(record_id)
-        schema = pdf_corpus_builds._schema_for(build_id)
-        for field, value in body.changes.items():
-            remember_adjudication(
-                record_id=record_id,
-                text=str(record.get("text") or ""),
-                field=field,
-                value=value,
-                schema_version=str(build.get("schema_version") or ""),
-                field_id=field_identity(field, schema),
-            )
-        return {
-            "applied": True,
-            "record": record,
-            "build": build,
-            "changed_fields": list(body.changes),
-        }
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/api/pdf/corpus-builds/{build_id}/records/{record_id}/precedents")
+def get_pdf_corpus_record_precedents(build_id: str, record_id: str, field: str) -> dict[str, Any]:
+    """Advisory reviewed precedents for one field, as metadata enrichment would use them."""
+    try:
+        return pdf_corpus_builds.metadata_precedents(build_id, record_id, field)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/api/pdf/corpus-builds/{build_id}/records/{record_id}/research-claims")
+def get_pdf_corpus_record_research_claims(build_id: str, record_id: str) -> dict[str, Any]:
+    """Reviewer-validated Research claims that cite this record (cross-reference only)."""
+    try:
+        record = pdf_corpus_repository.get_record(build_id, record_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+    return {"items": validated_claims_citing(system_store, record)}
 
 
 @router.get("/api/pdf/corpus-builds/{build_id}/records/{record_id}/metadata-cache")
@@ -840,6 +833,34 @@ def clear_pdf_corpus_metadata_cache(
 @router.delete("/api/pdf/metadata-cache")
 def clear_all_pdf_corpus_metadata_cache() -> dict[str, Any]:
     return {"cleared": clear_adjudication_cache()}
+
+
+@router.get("/api/pdf/corpus-builds/{build_id}/records/{record_id}/evidence-suggestions")
+def suggest_pdf_corpus_record_evidence(
+    request: Request, build_id: str, record_id: str, field: str = Query(min_length=1, max_length=120), limit: int = Query(5, ge=1, le=20)
+) -> dict[str, Any]:
+    require_admin(request)
+    try:
+        return {"items": pdf_corpus_builds.suggest_evidence(build_id, record_id, field, limit)}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+
+
+@router.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/evidence-suggestions/llm")
+def suggest_pdf_corpus_record_evidence_llm(
+    request: Request, build_id: str, record_id: str, body: PdfCorpusEvidenceSuggestLlm
+) -> dict[str, Any]:
+    require_admin(request)
+    payload = body.model_dump(exclude={"field", "limit"}, exclude_none=True)
+    try:
+        items = pdf_corpus_builds.suggest_evidence_llm(
+            build_id, record_id, body.field, _resolve_pdf_corpus_provider(payload), body.limit
+        )
+        return {"items": items}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.patch("/api/pdf/corpus-builds/{build_id}/records/{record_id}/evidence")

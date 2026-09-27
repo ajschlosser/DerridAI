@@ -885,6 +885,17 @@ quoted, attributed, reconstructed, questioned, criticized, or endorsed positions
                 "grade_history_count": len(cached.get("grades") or []),
                 "updated_at": cached.get("updated_at"),
             }
+            # The durable response row carries the grade that decides whether this
+            # answer may steer later Research runs.
+            from .research_memory import PROJECTION, grade_summary
+            from .system_store import system_store
+
+            if system_store.record_response_memory_grade(
+                body.response_record_id, grade_summary(dict(cached.get("latest_grade") or {}))
+            ):
+                system_store.mark_semantic_memory_dirty(
+                    PROJECTION, record_id=body.response_record_id, reason="response_graded"
+                )
         except Exception as exc:
             # The grade itself is valuable even if cache persistence fails. Do
             # not turn an otherwise successful background grading operation into

@@ -11,6 +11,7 @@ import type { ProviderProfile } from "../../../api/system";
 import type { ReviewQueue } from "../../../types/corpus";
 import type { ReviewViewport } from "./useCorpusReviewWorkspace";
 import { reviewableMetadataFieldNames } from "../domain/recordMetadata";
+import { describeDecisionResult } from "../domain/metadataDecisions";
 import { isUsableMetadataSuggestion } from "../../../domain/metadataValues";
 
 type MessageTone = "error" | "notice";
@@ -389,13 +390,8 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
         );
         options.applyAuthoritativeRecord(result.record, result.build);
         metadataSavingField.value = "";
-        options.setMessage(
-          options.tf(
-            "pdf_corpus.metadata_suggestions_saved",
-            "Saved {count} metadata suggestion(s).",
-            { count: Object.keys(changes).length },
-          ),
-        );
+        const summary = describeDecisionResult(result, options.tf);
+        options.setMessage(summary.message, summary.tone);
         return result;
       },
       async () => {

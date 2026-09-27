@@ -30,7 +30,7 @@ SEGMENTATION_PROMPT_VERSION = "derridai-local-boundaries-v7"
 
 
 
-METADATA_PROMPT_VERSION = "derridai-record-metadata-v11"
+METADATA_PROMPT_VERSION = "derridai-record-metadata-v12"
 
 
 
@@ -91,6 +91,13 @@ class BoundaryDecisionModel(BaseModel):
     reason: str = ""
     change: BoundaryChangeModel = Field(default_factory=BoundaryChangeModel)
 
+
+
+class EvidenceChoiceModel(BaseModel):
+    """A model's choice among candidate source blocks: which ones support a field value."""
+    model_config = ConfigDict(extra="forbid")
+    block_ids: list[str] = Field(default_factory=list, max_length=20)
+    reason: str = Field(default="", max_length=600)
 
 
 class PageMarkerChoiceModel(BaseModel):

@@ -49,6 +49,12 @@ function go(view: string) {
     <template #footer>
       <div class="help-footer-actions">
         <UiButton
+          variant="primary"
+          :label="i18n.t('help.open_center')"
+          icon="help"
+          @click="go('help')"
+        />
+        <UiButton
           v-if="canSettings"
           :label="i18n.t('ui.help_settings')"
           icon="gear"

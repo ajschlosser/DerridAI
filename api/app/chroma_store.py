@@ -1962,7 +1962,7 @@ class ChromaStore:
     ) -> list[float]:
         """Deterministic local cache vector; no embedding service required."""
         vector = [0.0] * dimensions
-        tokens = re.findall(r"\\w+", str(text or "").casefold())
+        tokens = re.findall(r"\w+", str(text or "").casefold())
         for token in tokens:
             digest = hashlib.blake2b(
                 token.encode("utf-8"),

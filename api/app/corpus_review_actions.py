@@ -112,6 +112,7 @@ class ReviewActionsMixin:
         def _profile_for(self, build_id: str) -> dict[str, Any]: ...
         def _profile_of_build(self, build: dict[str, Any]) -> dict[str, Any]: ...
         def _schema_for(self, build_id: str) -> MetadataSchema: ...
+        def _chat_json(self, request: dict[str, Any], prompt: str, *, response_model: type[BaseModel], max_tokens: int = 4096, schema_name: str = "derridai_corpus", attempts: int = 2, build_id: str = "") -> dict[str, Any]: ...
         def _editable_fields(self, build_id: str) -> set[str]: ...
         def _edit_model(self, build_id: str) -> type[BaseModel]: ...
         def _refresh_workflow_fields(self, build: dict[str, Any]) -> dict[str, Any]: ...
@@ -647,6 +648,17 @@ class ReviewActionsMixin:
 
     @_serialize_record_mutation
     def patch_metadata(self, build_id: str, record_id: str, changes: dict[str, Any], expected_revision: int | None = None) -> dict[str, Any]:
+        record, _skipped = self._patch_metadata(build_id, record_id, changes, expected_revision)
+        return record
+
+    def _patch_metadata(
+        self, build_id: str, record_id: str, changes: dict[str, Any], expected_revision: int | None = None
+    ) -> tuple[dict[str, Any], set[str]]:
+        """Apply reviewer metadata edits; return the persisted record and the fields left unapplied.
+
+        A field owed a blind second opinion is compared with the first answer and left
+        unchanged, so callers must not treat it as decided.
+        """
         forbidden = sorted(set(changes) - self._editable_fields(build_id))
         if forbidden:
             raise ValueError(
@@ -766,7 +778,7 @@ class ReviewActionsMixin:
             self._schedule_metadata_exemplar_projection(build_id)
         _decorate_review_state(persisted)
         _present_for_reviewer(persisted)
-        return persisted
+        return persisted, skipped
 
 
     @_serialize_record_mutation
@@ -901,8 +913,7 @@ class ReviewActionsMixin:
         one call saves the value, marks the field human-confirmed, recomputes all
         derived metadata/queue state, and returns the updated record and build.
         """
-        if field not in self._editable_fields(build_id) or field in {"needs_review", "review_reason"}:
-            raise ValueError(f"Unsupported review metadata field: {field}")
+        self._validate_decision_fields(build_id, [field])
         if evidence_block_ids:
             # Validate up front so a bad evidence binding cannot leave the value half-saved.
             allowed = set(map(str, self.repo.get_record(build_id, record_id).get("source_block_ids") or []))
@@ -945,7 +956,9 @@ class ReviewActionsMixin:
             )
             self._schedule_metadata_exemplar_projection(build_id)
         else:
-            record = self.patch_metadata(build_id, record_id, {field: value}, expected_revision)
+            _record, skipped = self._patch_metadata(build_id, record_id, {field: value}, expected_revision)
+            if field in skipped:
+                return self._metadata_decision_result(build_id, record_id, applied=[], deferred=[field])
             if evidence_block_ids or external_evidence_block_ids or evidence_source == "reviewer_knowledge":
                 # Bind the reviewer's selected evidence (or their own say-so) to the value just saved, in the same request.
                 self.patch_evidence(
@@ -955,13 +968,63 @@ class ReviewActionsMixin:
                     source_kind="reviewer_knowledge" if evidence_source == "reviewer_knowledge" else "source_span",
                     external_block_ids=external_evidence_block_ids,
                 )
+        return self._finish_metadata_decisions(
+            build_id,
+            record_id,
+            {field: None if confirm_no_supported_value else value},
+            decision="absence" if confirm_no_supported_value else "value",
+        )
+
+    @_serialize_record_mutation
+    def apply_metadata_decisions(
+        self,
+        build_id: str,
+        record_id: str,
+        decisions: dict[str, Any],
+        expected_revision: int | None = None,
+    ) -> dict[str, Any]:
+        """Persist several reviewer value decisions on one record as one revision.
+
+        This is the single authoritative operation behind "Save all suggestions": every
+        field goes through the same path as a one-field decision (human assertion,
+        dispute resolution, reviewed-decision provenance, adjudication memory), so a
+        batch accept is recorded as reviewer decisions rather than as a plain edit.
+        """
+        if not decisions:
+            raise ValueError("Choose at least one metadata decision to save.")
+        self._validate_decision_fields(build_id, decisions)
+        _record, skipped = self._patch_metadata(build_id, record_id, decisions, expected_revision)
+        applied = {name: value for name, value in decisions.items() if name not in skipped}
+        if not applied:
+            return self._metadata_decision_result(build_id, record_id, applied=[], deferred=sorted(skipped))
+        return self._finish_metadata_decisions(
+            build_id, record_id, applied, decision="value", deferred=sorted(skipped)
+        )
+
+    def _validate_decision_fields(self, build_id: str, fields: Any) -> None:
+        editable = self._editable_fields(build_id)
+        unsupported = [name for name in fields if name not in editable or name in {"needs_review", "review_reason"}]
+        if unsupported:
+            raise ValueError("Unsupported review metadata field: " + ", ".join(map(str, unsupported)))
+
+    def _finish_metadata_decisions(
+        self,
+        build_id: str,
+        record_id: str,
+        decisions: dict[str, Any],
+        *,
+        decision: str,
+        deferred: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Settle disputes and adjudication memory for decisions that are already persisted."""
         current_record = self.repo.get_record(build_id, record_id)
         previous_record = json.loads(json.dumps(current_record))
         disputes = current_record.get("metadata_disputes") if isinstance(current_record.get("metadata_disputes"), list) else []
         for dispute in disputes:
-            if isinstance(dispute, dict) and dispute.get("field") == field and not dispute.get("resolved_at"):
+            name = dispute.get("field") if isinstance(dispute, dict) else None
+            if name in decisions and not dispute.get("resolved_at"):
                 dispute["resolved_at"] = iso_now()
-                dispute["resolved_value"] = value
+                dispute["resolved_value"] = decisions[name]
                 dispute["resolution_source"] = "human"
         current_record["metadata_disputes"] = disputes[-100:]
         _sync_record_metadata_state(current_record, self._profile_for(build_id))
@@ -969,24 +1032,60 @@ class ReviewActionsMixin:
         _decorate_review_state(current_record)
         if current_record != previous_record:
             self._rewrite_targeted_record(build_id, current_record, previous_record)
-        record = current_record
         build = self.repo.get_build(build_id)
         self._refresh_workflow_fields(build)
         self.repo.save_build(build)
+        # Adjudication memory is derived, best-effort suggestion state. It is written
+        # only after the authoritative record is saved; a failure is reported rather
+        # than raised so it can never make a saved decision look unsaved.
+        warnings: list[str] = []
+        schema = self._schema_for(build_id)
+        for name, value in decisions.items():
+            try:
+                remember_adjudication(
+                    record_id=record_id,
+                    text=str(current_record.get("text") or ""),
+                    field=name,
+                    value=value,
+                    schema_version=str(build.get("schema_version") or ""),
+                    decision=decision,
+                    field_id=schema.field_id(name),
+                )
+            except Exception as exc:  # noqa: BLE001 - derived memory must not fail a saved decision
+                warnings.append(f"Adjudication memory was not updated for {name}: {exc}")
+        return self._metadata_decision_result(
+            build_id,
+            record_id,
+            applied=list(decisions),
+            deferred=deferred or [],
+            warnings=warnings,
+            record=current_record,
+            build=build,
+        )
+
+    def _metadata_decision_result(
+        self,
+        build_id: str,
+        record_id: str,
+        *,
+        applied: list[str],
+        deferred: list[str],
+        warnings: list[str] | None = None,
+        record: dict[str, Any] | None = None,
+        build: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        record = record if record is not None else self.repo.get_record(build_id, record_id)
+        build = build if build is not None else self.repo.get_build(build_id)
+        _decorate_review_state(record)
         remaining_fields = list(dict.fromkeys([
             str(v) for v in (record.get("metadata_incomplete_fields") or []) + (record.get("metadata_review_fields") or [])
         ]))
-        remember_adjudication(
-            record_id=record_id,
-            text=str(record.get("text") or ""),
-            field=field,
-            value=value,
-            schema_version=str(build.get("schema_version") or ""),
-            decision="absence" if confirm_no_supported_value else "value",
-            field_id=self._schema_for(build_id).field_id(field),
-        )
         return {
-            "applied": True,
+            "applied": bool(applied),
+            "changed_fields": applied,
+            # Fields owed a blind second opinion: the answer was logged, the record unchanged.
+            "deferred_fields": deferred,
+            "warnings": warnings or [],
             "record": record,
             "build": build,
             "queue_counts": _queue_counts(self.repo.load_records(build_id)),
@@ -997,6 +1096,39 @@ class ReviewActionsMixin:
 
 
     @_serialize_record_mutation
+    def _evidence_candidates(self, build_id: str, record_id: str, field: str) -> tuple[Any, list[dict[str, Any]]]:
+        target = self.repo.get_record(build_id, record_id)
+        assertion = current_assertion_by_name(target, field)
+        value = assertion.value if assertion is not None else target.get(field)
+        blocks_by_id = self._blocks_for(build_id)
+        return value, [blocks_by_id[b] for b in map(str, target.get("source_block_ids") or []) if b in blocks_by_id]
+
+    def suggest_evidence(self, build_id: str, record_id: str, field: str, limit: int = 5) -> list[dict[str, Any]]:
+        """Advisory, read-only ranking of the record's source blocks for a field's current value."""
+        from .evidence_suggestions import suggest_evidence_blocks
+
+        value, blocks = self._evidence_candidates(build_id, record_id, field)
+        return suggest_evidence_blocks(value, blocks, limit=limit)
+
+    def suggest_evidence_llm(
+        self, build_id: str, record_id: str, field: str, request: dict[str, Any], limit: int = 5
+    ) -> list[dict[str, Any]]:
+        """Ask a model which of the record's blocks support the value; the answer is validated, never trusted."""
+        from .corpus_models import EvidenceChoiceModel
+        from .evidence_suggestions import LLM_METHOD, llm_prompt, validate_llm_choice
+
+        value, blocks = self._evidence_candidates(build_id, record_id, field)
+        if not blocks:
+            return []
+        result = self._chat_json(
+            request, llm_prompt(field, value, blocks), response_model=EvidenceChoiceModel,
+            max_tokens=800, schema_name="evidence_choice", attempts=2, build_id=build_id,
+        )
+        return [
+            {**item, "method": LLM_METHOD, "model": str(request.get("model") or "")}
+            for item in validate_llm_choice(result, blocks, value, limit=limit)
+        ]
+
     def patch_evidence(
         self,
         build_id: str,

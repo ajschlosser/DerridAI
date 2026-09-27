@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import Any
 
 from .field_assertions import current_assertions, migrate_record_assertions
@@ -24,28 +26,54 @@ from .metadata_exemplar_retrieval import (
     _bounded_query_text,
     _distance_similarity,
 )
+from .provenance_memory import SupportBinding, resolve_support_binding
 
 COLLECTION_NAME = "derridai_validated_claims"
-PROJECTION_VERSION = 1
-# Attribution fields whose reviewed values a similar claim may inform.
-SEMANTIC_FIELDS = ("speaker", "quoted_speaker", "position_holder", "stance", "discourse_role")
+# 2: schema-agnostic reviewed-field snapshot and deterministic citations in support.
+PROJECTION_VERSION = 2
 DEFAULT_LIMIT = 5
 DEFAULT_MIN_SIMILARITY = 0.55
+# Bounds the snapshot so a wide schema cannot bloat projection metadata.
+SNAPSHOT_FIELD_LIMIT = 24
+VALIDATION_STATUSES = {"unvalidated", "validated", "rejected", "unresolved"}
 _USABLE_BINDING = {"validated", "unvalidated"}
 
 
 def semantic_snapshot(record: dict[str, Any] | None) -> dict[str, Any]:
-    """Current present assertion values for the attribution fields, with their authority."""
+    """Reviewed, present field values of a cited Record, keyed by field name.
+
+    The snapshot is schema-agnostic: it does not know which fields matter for
+    attribution. Only human-reviewed values are kept, because an unreviewed model
+    value is not a fact about the Record that a later comparison may rely on.
+    """
     if not isinstance(record, dict):
         return {}
     row = json.loads(json.dumps(record))
     migrate_record_assertions(row)
     out: dict[str, Any] = {}
     for assertion in current_assertions(row):
-        name = str(assertion.field_name or "")
-        if name in SEMANTIC_FIELDS and assertion.value_status == "present":
-            out[name] = {"value": assertion.value, "authority": assertion.authority_status}
+        name = str(assertion.field_name or assertion.field_id or "")
+        if not name or assertion.value_status != "present" or assertion.authority_status == "unreviewed":
+            continue
+        out[name] = {
+            "value": assertion.value,
+            "authority": assertion.authority_status,
+            "field_id": assertion.field_id,
+        }
+        if len(out) >= SNAPSHOT_FIELD_LIMIT:
+            break
     return out
+
+
+def _verified_record(binding: dict[str, Any], record: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Use a caller-supplied Record only when it resolves against the binding's identity and revision."""
+    if not isinstance(record, dict) or str(record.get("record_id") or "") != str(binding.get("record_id") or ""):
+        return None
+    try:
+        resolved = resolve_support_binding(SupportBinding.model_validate(binding), lambda _requested: record)
+    except Exception:
+        return None
+    return record if resolved.validation_status == "validated" else None
 
 
 def derive_entry(
@@ -67,12 +95,15 @@ def derive_entry(
         if str(binding.get("validation_status") or "unvalidated") not in _USABLE_BINDING:
             continue
         record_id = str(binding.get("record_id") or "")
+        citation = binding.get("citation") if isinstance(binding.get("citation"), dict) else {}
         support.append({
             "record_id": record_id,
             "record_revision": binding.get("record_revision"),
             "relation": binding.get("relation"),
             "source_document_id": binding.get("source_document_id"),
-            "semantic": semantic_snapshot((records or {}).get(record_id)),
+            # Citations were rendered by deterministic code when the claim was bound.
+            "citation": {key: citation.get(key) for key in ("inline", "full") if citation.get(key)},
+            "semantic": semantic_snapshot(_verified_record(binding, (records or {}).get(record_id))),
         })
     return {
         "claim_id": claim_id,
@@ -118,6 +149,26 @@ class ClaimMemoryIndex(ChromaMetadataExemplarIndex):
 
     def remove(self, claim_id: str) -> None:
         self._ensure().delete(ids=[str(claim_id)])
+
+    def rebuild(self, system_store: Any) -> int:
+        """Recreate the projection from authoritative validated claims."""
+        collection = self._ensure()
+        existing = [str(value) for value in (collection.get(include=[]).get("ids") or [])]
+        if existing:
+            collection.delete(ids=existing)
+        entries = []
+        for claim in system_store.list_generated_claims(validation_status="validated", limit=1000):
+            entry = derive_entry(claim, system_store.list_claim_support_bindings(str(claim.get("claim_id") or "")))
+            if entry is not None:
+                entries.append(_projection(entry))
+        if entries:
+            self.store.upsert_many(self.collection_name, entries, document_field="claim_text", id_field="claim_id")
+        return len(entries)
+
+    def ensure_current(self, system_store: Any) -> None:
+        """Rebuild when the projection was (re)created empty, e.g. after an embedding change."""
+        if int(self._ensure().count()) == 0 and system_store.list_generated_claims(validation_status="validated", limit=1):
+            self.rebuild(system_store)
 
     def similar(
         self,
@@ -190,3 +241,82 @@ def similar_validated_claims(
             item["semantic"] = stored.get(str(item.get("record_id"))) or {}
         items.append({**entry, "similarity": hit["similarity"], "advisory": True})
     return {"items": items, "elapsed_ms": int((time.monotonic() - started) * 1000)}
+
+
+def apply_claim_validation(
+    system_store: Any,
+    claim: dict[str, Any],
+    *,
+    status: str,
+    actor: str,
+    owner: str | None,
+    record: dict[str, Any] | None = None,
+    index_factory: Callable[[], ClaimMemoryIndex],
+) -> dict[str, Any]:
+    """Record a human audit decision on a generated claim, then update the projection.
+
+    The SQLite row is authoritative and committed first. ``validated`` adds the claim
+    to validated-claim memory; any other status removes it. A projection failure is
+    reported in the result and never undoes or hides the audit decision.
+    """
+    if status not in VALIDATION_STATUSES:
+        raise ValueError("status must be unvalidated, validated, rejected, or unresolved")
+    claim = {
+        **claim,
+        "validation_status": status,
+        "validated_by": None if status == "unvalidated" else actor,
+        "validated_at": None if status == "unvalidated" else datetime.now(UTC).isoformat(),
+    }
+    system_store.put_generated_claim(claim)
+    records = {str(record["record_id"]): record} if isinstance(record, dict) and record.get("record_id") else {}
+    projection = {"status": "removed" if status != "validated" else "indexed", "error": ""}
+    try:
+        index = index_factory()
+        entry = derive_entry(claim, system_store.list_claim_support_bindings(str(claim["claim_id"]), owner=owner), records)
+        if entry is not None:
+            index.upsert(entry)
+        else:
+            index.remove(str(claim["claim_id"]))
+    except Exception as exc:  # noqa: BLE001 - the projection is derived; surface, do not fail
+        projection = {"status": "failed", "error": str(exc)[:300]}
+    return {"claim": claim, "projection": projection}
+
+
+def validated_claims_citing(system_store: Any, record: dict[str, Any], *, limit: int = 50) -> list[dict[str, Any]]:
+    """Reviewer-validated Research claims whose support cites ``record``.
+
+    A cross-reference for Record Review, not metadata memory: each binding is
+    re-resolved against the record as it is now, so support bound to an earlier
+    revision is shown as stale rather than silently applied to the current text.
+    """
+    record_id = str(record.get("record_id") or "")
+    if not record_id:
+        return []
+    resolver_record = dict(record)
+    if not resolver_record.get("source_document_id") and resolver_record.get("source_asset_id"):
+        resolver_record["source_document_id"] = resolver_record["source_asset_id"]
+    out: list[dict[str, Any]] = []
+    for raw in system_store.list_claim_support_bindings_for_record(record_id, owner=None, limit=200):
+        claim = system_store.get_generated_claim(str(raw.get("claim_id") or ""))
+        if not claim or str(claim.get("validation_status") or "") != "validated":
+            continue
+        try:
+            binding = resolve_support_binding(SupportBinding.model_validate(raw), lambda _requested: resolver_record)
+            status = binding.validation_status
+        except Exception:  # noqa: BLE001 - malformed history stays visible as unresolved
+            status = "unresolved"
+        citation = raw.get("citation") if isinstance(raw.get("citation"), dict) else {}
+        out.append({
+            "claim_id": claim.get("claim_id"),
+            "claim_text": claim.get("claim_text"),
+            "run_id": claim.get("run_id"),
+            "validated_by": claim.get("validated_by"),
+            "validated_at": claim.get("validated_at"),
+            "relation": raw.get("relation"),
+            "record_revision": raw.get("record_revision"),
+            "citation": {key: citation.get(key) for key in ("inline", "full") if citation.get(key)},
+            "binding_status": "current" if status == "validated" else status,
+        })
+        if len(out) >= limit:
+            break
+    return out

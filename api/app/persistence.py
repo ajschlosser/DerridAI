@@ -731,6 +731,42 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
             )
             conn.commit()
 
+    def get_response_memory(self, response_id: str, *, owner: str | None = None) -> dict[str, Any] | None:
+        """Resolve one durable Research response while enforcing owner visibility."""
+        owner_filter = str(owner) if owner is not None else None
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT payload_json
+                FROM response_memory
+                WHERE response_id=?
+                  AND (? IS NULL OR owner IS NULL OR owner=?)
+                LIMIT 1
+                """,
+                (str(response_id), owner_filter, owner_filter),
+            ).fetchone()
+        value = _json_loads(row["payload_json"], {}) if row is not None else {}
+        return value if isinstance(value, dict) and value else None
+
+    def record_response_memory_grade(self, response_id: str, grade: dict[str, Any]) -> bool:
+        """Attach the latest grade summary to a durable response; False when it is unknown."""
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT payload_json FROM response_memory WHERE response_id=?", (str(response_id),)
+            ).fetchone()
+            if row is None:
+                return False
+            payload = _json_loads(row["payload_json"], {})
+            if not isinstance(payload, dict):
+                payload = {}
+            payload["latest_grade"] = dict(grade)
+            conn.execute(
+                "UPDATE response_memory SET payload_json=?, updated_at=? WHERE response_id=?",
+                (_json_dumps(payload), _iso_now(), str(response_id)),
+            )
+            conn.commit()
+        return True
+
     def list_response_memory(self, *, owner: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
         owner_filter = str(owner) if owner is not None else None
         with self._lock, self._connect() as conn:
@@ -746,9 +782,17 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
             ).fetchall()
         return [value for value in (_json_loads(row["payload_json"], {}) for row in rows) if isinstance(value, dict)]
 
-    def list_generated_claims(self, *, owner: str | None = None, run_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+    def list_generated_claims(
+        self,
+        *,
+        owner: str | None = None,
+        run_id: str | None = None,
+        validation_status: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
         owner_filter = str(owner) if owner is not None else None
         run_filter = str(run_id) if run_id is not None else None
+        status_filter = str(validation_status) if validation_status is not None else None
         with self._lock, self._connect() as conn:
             rows = conn.execute(
                 """
@@ -756,10 +800,14 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
                 FROM generated_claims
                 WHERE (? IS NULL OR owner IS NULL OR owner=?)
                   AND (? IS NULL OR run_id=?)
+                  AND (? IS NULL OR COALESCE(json_extract(payload_json, '$.validation_status'), 'unvalidated')=?)
                 ORDER BY created_at DESC
                 LIMIT ?
                 """,
-                (owner_filter, owner_filter, run_filter, run_filter, max(1, min(1000, int(limit)))),
+                (
+                    owner_filter, owner_filter, run_filter, run_filter,
+                    status_filter, status_filter, max(1, min(1000, int(limit))),
+                ),
             ).fetchall()
         return [value for value in (_json_loads(row["payload_json"], {}) for row in rows) if isinstance(value, dict)]
 

@@ -186,6 +186,61 @@ def test_a_custom_field_is_proposed_cited_and_reviewed_like_any_other(tmp_path):
     assert out2["metadata_field_status"]["mood"]["status"] == "unresolved"
 
 
+def _no_evidence_answer(**metadata):
+    result = answer(**metadata)
+    result["field_evidence"] = {}
+    return result
+
+
+def test_backfill_mode_attaches_untrusted_evidence_the_model_did_not_cite(tmp_path):
+    m, bid = manager(tmp_path, notes_schema())
+    m._evidence_source_blocks = lambda *a, **k: [
+        {"block_id": "b1", "text": "The mood of the passage is calm and unhurried."},
+        {"block_id": "b2", "text": "Unrelated footnote."},
+    ]
+    record = {"record_id": "r", "text": "t", "metadata_field_status": {}}
+    out = m._reconcile_metadata_results(
+        record, m._profile_for(bid), ["b1", "b2"], [("discourse", _no_evidence_answer(mood="calm"), None)], False,
+        request={"model": "q", "evidence_mode": "backfill"}, build_id=bid, schema=m._schema_for(bid),
+    )
+    evidence = out["metadata_evidence"]["mood"]
+    assert evidence["block_ids"] == ["b1"] and evidence["backfilled"] is True and evidence["confidence"] is None
+    # Populated for the reviewer, but never trusted: pending review, not autofilled.
+    assert out["metadata_field_status"]["mood"]["status"] != "autofilled"
+    assert not out["metadata_field_status"]["mood"].get("autofilled")
+
+
+def test_with_value_mode_never_backfills(tmp_path):
+    m, bid = manager(tmp_path, notes_schema())
+    m._evidence_source_blocks = lambda *a, **k: [{"block_id": "b1", "text": "calm calm calm"}]
+    record = {"record_id": "r", "text": "t", "metadata_field_status": {}}
+    out = m._reconcile_metadata_results(
+        record, m._profile_for(bid), ["b1"], [("discourse", _no_evidence_answer(mood="calm"), None)], False,
+        request={"model": "q"}, build_id=bid, schema=m._schema_for(bid),
+    )
+    assert "mood" not in out["metadata_evidence"] or not out["metadata_evidence"]["mood"].get("block_ids")
+    assert out["metadata_field_status"]["mood"]["status"] == "unresolved"
+
+
+def test_evidence_mode_defaults_to_with_value_and_rejects_unknown_values(monkeypatch):
+    import dataclasses
+
+    from app import config
+    from app import evidence_suggestions as es
+
+    def configured(value):
+        monkeypatch.setattr(config, "settings", dataclasses.replace(config.settings, metadata_evidence_mode=value))
+
+    configured("with_value")
+    assert es.evidence_mode({}) == "with_value"
+    assert es.evidence_mode({"evidence_mode": "backfill"}) == "backfill"
+    assert es.evidence_mode({"evidence_mode": "nonsense"}) == "with_value"
+    configured("backfill")
+    assert es.evidence_mode(None) == "backfill"
+    configured("garbage")
+    assert es.evidence_mode(None) == "with_value"
+
+
 def test_a_field_the_schema_leaves_out_cannot_be_set_by_the_model_or_a_person(tmp_path):
     m, bid = manager(tmp_path, notes_schema())
     record = {"record_id": "r", "text": "t", "metadata_field_status": {}}

@@ -145,7 +145,15 @@ class Settings:
         4096,
     )
     llm_max_fields: int = _int_env("LLM_MAX_FIELDS", 12)
+    # How a model-proposed value gets its source evidence: "with_value" (the model must cite blocks in the same
+    # answer) or "backfill" (the model proposes the value; deterministic suggestion attaches blocks afterwards,
+    # always pending review). See evidence_suggestions.evidence_mode.
+    metadata_evidence_mode: str = os.getenv("METADATA_EVIDENCE_MODE", "with_value").strip().lower()
     api_batch_size: int = _int_env("API_BATCH_SIZE", 128)
+
+    # Prior Research responses steer new answers only when graded at least this
+    # well (0-10 overall score). Ungraded responses never steer.
+    research_memory_min_grade: float = _float_env("RESEARCH_MEMORY_MIN_GRADE", 7.0)
 
     rag_default_k: int = _int_env("RAG_DEFAULT_K", 64)
     rag_default_fetch_k: int = _int_env("RAG_DEFAULT_FETCH_K", 500)

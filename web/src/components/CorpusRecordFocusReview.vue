@@ -80,6 +80,8 @@ const props = withDefaults(
     llmProviderProfileId?: string;
     llmModelOverride?: string;
     activeRequests?: number;
+    /** Provider request for model evidence suggestions. */
+    evidenceLlmRequest?: Record<string, unknown> | null;
   }>(),
   {
     buildId: "",
@@ -528,6 +530,8 @@ watch(
             </section>
             <CorpusReviewEvidencePanel
               id-prefix="focus"
+              :build-id="buildId"
+              :llm-request="evidenceLlmRequest"
               :record="record"
               :fields="evidenceFields"
               :selected-field="selectedEvidenceField"

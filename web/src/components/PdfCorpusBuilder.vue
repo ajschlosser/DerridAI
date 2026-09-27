@@ -3083,6 +3083,7 @@ defineExpose({
                 >
                   <CorpusMetadataResolutionPanel
                     :schema="currentBuild?.schema"
+                    :build-id="currentBuild?.build_id"
                     :record="selectedRecord"
                     :region-types="regionTypes"
                     :discourse-roles="discourseRoles"
@@ -3216,6 +3217,13 @@ defineExpose({
                   "
                   :record="selectedRecord"
                   :fields="evidenceCandidateFields"
+                  :build-id="currentBuild?.build_id || ''"
+                  :llm-request="
+                    directProfilePayloadWithModel(
+                      llmActionProviderId || selectedProviderId || providerProfiles[0]?.id || '',
+                      llmActionModel,
+                    )
+                  "
                   :selected-field="selectedEvidenceField"
                   :blocks="visibleBlocks"
                   :evidence-block-ids="evidenceBlockIds"
@@ -3525,6 +3533,12 @@ defineExpose({
         v-model:inspector-tab="reviewInspectorTab"
         :record="selectedRecord"
         :build-id="currentBuild?.build_id || ''"
+        :evidence-llm-request="
+          directProfilePayloadWithModel(
+            llmActionProviderId || selectedProviderId || providerProfiles[0]?.id || '',
+            llmActionModel,
+          )
+        "
         :schema="currentBuild?.schema"
         :busy="busy !== ''"
         :locked="reviewLocked"

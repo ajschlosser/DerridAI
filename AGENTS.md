@@ -85,7 +85,7 @@ Backend tests stub `chromadb` and put `api/` on `sys.path`; they do not need Doc
 - **Metadata memory and progressive retrieval:**
   - Canonical reviewed records/RecordRevisions, field assertions, review decisions, and bound evidence are authoritative. Metadata exemplars and their Chroma/embedding projection are derived and rebuildable.
   - Never promote unresolved or unreviewed model output into trusted precedent. Corrections may preserve a rejected model value as negative evidence; reviewer-confirmed absence is reusable only when explicit reviewed source evidence is bound to the no-value decision.
-  - Metadata-schema retrieval policy is field/group scoped. The active contract is `enabled`, `max_items`, `min_similarity`, `include_corrections`, and `include_confirmed_absence`; do not revive migrated legacy routing flags.
+  - Metadata-schema retrieval policy is field/group scoped. The active contract is `enabled`, `max_items`, `min_similarity`, `include_corrections`, `include_confirmed_absence`, `max_corrections`, and `match_field_ids` (stable field identities; compared only on reviewed values, never guessed); do not revive migrated legacy routing flags or hard-code field names into retrieval.
   - Metadata exemplar memory is separate from Research response/claim memory. Do not route one into the other merely because both use retrieval or a vector projection.
   - Resolve precedent/support bindings against stable record/revision/source identities and surface stale or unresolvable bindings instead of silently substituting newer text.
 - **Roles:** Researcher accounts must never receive full corpus text or mutate data; enforce this in the API, not just the UI.

@@ -78,3 +78,7 @@ export const Busy: Story = {
 export const FrenchLengthStress: Story = {
   parameters: { locale: "fr-CA" },
 };
+
+export const WithSuggestions: Story = {
+  args: { buildId: "build-1", llmRequest: { provider_profile_id: "local" } },
+};

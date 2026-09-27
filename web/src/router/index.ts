@@ -115,6 +115,13 @@ const routes: RouteRecordRaw[] = [
     },
   },
   {
+    // Every signed-in user may read help; administrator-only topics are filtered in the view.
+    path: "/help",
+    name: "help",
+    component: () => import("../views/HelpCenterView.vue"),
+    meta: { view: "help", vueNative: true },
+  },
+  {
     path: "/settings",
     name: "config",
     component: () => import("../views/SettingsView.vue"),

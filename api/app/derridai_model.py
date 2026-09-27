@@ -1,5 +1,5 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
-"""Normative DERRIDAI 1.0 object and relationship registry.
+"""Normative cELF 1.0 object and relationship registry.
 
 The registry describes semantic object types and walkable relationships. It is
 presentation-neutral: the API and frontend use it to explain cardinality and

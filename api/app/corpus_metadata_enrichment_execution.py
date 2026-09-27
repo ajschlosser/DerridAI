@@ -47,6 +47,7 @@ from .enrichment_ledger import (
     CALL,
     PROPOSED,
 )
+from .evidence_suggestions import backfill_field_evidence, evidence_mode
 from .field_assertions import (
     current_assertion_by_name,
     migrate_record_assertions,
@@ -331,6 +332,7 @@ class MetadataEnrichmentExecutionMixin:
 Build-local editorial conventions confirmed on at least two other records (advisory context only; do not copy unless supported here): {json.dumps(editorial_context, ensure_ascii=False)}
 Relevant human-confirmed examples for fields in THIS metadata family (few-shot guidance only; source evidence in THIS record remains authoritative): {json.dumps(relevant_examples, ensure_ascii=False)}
 If a retrieved example has kind="correction", its value is the human-supported classification and rejected_value is a known prior model mistake. Treat rejected_value as a negative precedent only; never copy or prefer it because it appears in the example.
+If an example has a "match" object, the reviewed values of the listed fields on that example's record equal this record's reviewed values; examples without it were not compared on those fields and are analogous by text only.
 How earlier enrichment in this build went (advisory only; evidence in THIS record remains authoritative). Includes reviewer accepted/rejected counts when present, plus values the previous pass inferred on two or more other records (working conventions, not confirmed). Do not copy these; use them only when THIS record's evidence supports the same reading: {json.dumps(pass_learning or {}, ensure_ascii=False)}
 Human-owned fields on this record (authoritative; DO NOT propose replacements): {json.dumps({field: record.get(field) for field in human_locked_fields}, ensure_ascii=False)}
 Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor_context, ensure_ascii=False)}
@@ -361,6 +363,11 @@ CURRENT REVIEWED RECORD TEXT:
                 allowed_region_types=allowed_region_types,
                 allowed_discourse_roles=allowed_discourse_roles,
             )
+            if evidence_mode(request) == "backfill":
+                prompt += (
+                    "\n\nEVIDENCE IS ATTACHED SEPARATELY: return field_evidence as an empty object {}. DerridAI links "
+                    "source blocks to the values you propose after this step; do not list block IDs."
+                )
             guidance_prompt = format_group_guidance(group_fields, run_guidance, guidance_matches)
             if guidance_prompt:
                 prompt = prompt + "\n\n" + guidance_prompt
@@ -581,6 +588,17 @@ CURRENT REVIEWED RECORD TEXT:
         return stage_results
 
 
+    def _evidence_source_blocks(self, build_id: str, record: dict[str, Any], source_ids: list[str]) -> list[dict[str, Any]]:
+        """This record's source blocks (with text), for evidence backfill; empty when they cannot be loaded."""
+        if not build_id:
+            return []
+        try:
+            asset_id = self.repo.get_build(build_id)["asset_id"]
+            wanted = set(source_ids)
+            return [block for block in self.repo.load_blocks(asset_id) if str(block.get("block_id")) in wanted]
+        except (KeyError, OSError, ValueError):
+            return []
+
     def _reconcile_metadata_results(
         self, record: dict[str, Any], profile: dict[str, Any], source_ids: list[str],
         stage_results: list[tuple[str, dict[str, Any] | None, Exception | None]],
@@ -617,7 +635,7 @@ CURRENT REVIEWED RECORD TEXT:
             The blended confidence (see autofill.py) outranks the model's own needs_review flag, but
             never the absence of a cited source block or a self-report at or below the profile floor.
             """
-            if "autofill" in off or conditions["blind"] or value in (None, "", []) or confidence is None or confidence <= minimum or not evidence_info.get("block_ids"):
+            if "autofill" in off or conditions["blind"] or value in (None, "", []) or confidence is None or confidence <= minimum or not evidence_info.get("block_ids") or evidence_info.get("backfilled"):
                 return None
             reviews, accepted = (0, 0) if "blended_confidence" in off else self._ledger.review_counts(model, field)
             decision = decide_autofill(confidence, reviews, accepted)
@@ -851,6 +869,8 @@ CURRENT REVIEWED RECORD TEXT:
             if reason:
                 model_review_reasons.append(reason)
 
+        backfill = evidence_mode(request) == "backfill"
+        source_blocks = self._evidence_source_blocks(build_id, record, source_ids) if backfill else []
         for field in sorted(evidence_required_fields):
             value = record.get(field)
             if value in (None, "", []):
@@ -858,7 +878,14 @@ CURRENT REVIEWED RECORD TEXT:
             existing_assertion = current_assertion_by_name(record, field)
             if existing_assertion is not None and existing_assertion.derivation_method == "deterministic":
                 continue
+            if backfill and not (clean_evidence.get(field) or {}).get("block_ids"):
+                attached = backfill_field_evidence(value, source_blocks)
+                if attached:
+                    clean_evidence[field] = attached
             info = clean_evidence.get(field)
+            if isinstance(info, dict) and info.get("backfilled"):
+                review_reasons.append(f"{field} evidence was suggested after the value and needs review")
+                continue
             if not isinstance(info, dict):
                 review_reasons.append(f"{field} has no bound source evidence")
                 continue

@@ -187,6 +187,14 @@ class SystemStore:
         with self._lock:
             self.repository.put_response_memory(payload)
 
+    def get_response_memory(self, response_id: str, *, owner: str | None = None) -> dict[str, Any] | None:
+        with self._lock:
+            return self.repository.get_response_memory(response_id, owner=owner)
+
+    def record_response_memory_grade(self, response_id: str, grade: dict[str, Any]) -> bool:
+        with self._lock:
+            return self.repository.record_response_memory_grade(response_id, grade)
+
     def list_response_memory(self, **filters: Any) -> list[dict[str, Any]]:
         with self._lock:
             return self.repository.list_response_memory(**filters)

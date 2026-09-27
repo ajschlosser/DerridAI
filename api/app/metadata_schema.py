@@ -100,6 +100,14 @@ class RetrievalProfile(BaseModel):
     min_similarity: float = Field(default=0.0, ge=0.0, le=1.0)
     include_corrections: bool = True
     include_confirmed_absence: bool = True
+    # Reviewed corrections have their own quota so they cannot crowd out positive
+    # precedents (and vice versa).
+    max_corrections: int = Field(default=2, ge=0, le=20)
+    # Optional analogy conditions, by stable field_id: prefer precedents whose
+    # reviewed value for each listed field equals this record's reviewed value, and
+    # drop ones that differ. Nothing is assumed about which fields exist; a condition
+    # that cannot be compared (either side unreviewed) is skipped, not guessed.
+    match_field_ids: list[str] = Field(default_factory=list, max_length=8)
 
     @model_validator(mode="before")
     @classmethod
@@ -257,6 +265,15 @@ class MetadataSchema(BaseModel):
         for field in self.fields:
             if field.group not in keys:
                 raise ValueError(f"Field '{field.name}' is in a group ('{field.group}') the schema does not have.")
+        known = set(self.field_identity_map().values())
+        owners = [(f"field '{f.name}'", f.retrieval_profile, self.field_id(f.name)) for f in self.fields]
+        owners += [(f"group '{g.key}'", g.retrieval_profile, None) for g in self.groups]
+        for label, profile, own_id in owners:
+            for match_id in (profile.match_field_ids if profile else []):
+                if match_id not in known:
+                    raise ValueError(f"The retrieval policy of {label} matches on an unknown field ({match_id}).")
+                if match_id == own_id:
+                    raise ValueError(f"The retrieval policy of {label} cannot match on the field itself.")
         return self
 
     # ---- what the rest of DerridAI asks a schema ----------------------------------------------------------------

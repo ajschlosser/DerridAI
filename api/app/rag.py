@@ -13,9 +13,11 @@ from typing import Any
 import httpx
 
 from .chroma_store import ChromaStore
+from .claim_memory import ClaimMemoryIndex
 from .config import settings
 from .models import OllamaTouchupOptions, RAGPromptMetadataPolicy, RAGRunRequest
 from .record_types import EvidenceItem, QueryDecomposition, RetrievalCandidate
+from .research_memory import ResponseMemoryIndex, memory_guidance
 from .system_store import system_store
 
 logger = logging.getLogger(__name__)
@@ -916,52 +918,6 @@ def _scope_rag_candidates(
     return scoped
 
 
-def _memory_guidance(
-    query: str,
-    request: RAGRunRequest,
-    owner: str | None,
-) -> tuple[str, str, dict[str, Any]]:
-    """Select advisory memory without promoting it into the evidence packet."""
-    words = {word.casefold() for word in re.findall(r"\w{4,}", query)}
-
-    def relevance(item: dict[str, Any], text_key: str) -> int:
-        return len(words & {
-            word.casefold()
-            for word in re.findall(r"\w{4,}", str(item.get(text_key) or ""))
-        })
-
-    responses = []
-    claims = []
-    if request.use_prior_response_memory:
-        responses = sorted(
-            system_store.list_response_memory(owner=owner, limit=50),
-            key=lambda item: relevance(item, "question"),
-            reverse=True,
-        )[:5]
-    if request.use_prior_claim_memory:
-        claims = sorted(
-            system_store.list_generated_claims(owner=owner, limit=100),
-            key=lambda item: relevance(item, "claim_text"),
-            reverse=True,
-        )[:8]
-    response_text = "\n".join(
-        f"[prior-response:{item.get('response_id')}] {str(item.get('question') or '').strip()}\n"
-        f"Advisory answer: {str(item.get('answer') or '').strip()[:2400]}"
-        for item in responses
-    )
-    claim_text = "\n".join(
-        f"[prior-claim:{item.get('claim_id')}] {str(item.get('claim_text') or '').strip()}"
-        for item in claims
-    )
-    return response_text, claim_text, {
-        "response_count": len(responses),
-        "claim_count": len(claims),
-        "response_ids": [str(item.get("response_id") or "") for item in responses],
-        "claim_ids": [str(item.get("claim_id") or "") for item in claims],
-        "owner_scope": owner,
-    }
-
-
 def run_rag_pipeline(
     request: RAGRunRequest,
     store: ChromaStore,
@@ -1054,9 +1010,6 @@ def run_rag_pipeline(
     })
     update("query_metadata", 1, 1, "Query decomposition complete")
     check_cancel()
-    prior_response_memory, prior_claim_memory, memory_detail = _memory_guidance(
-        query_metadata["prompt_query"], request, owner
-    )
 
     selected_candidates = _selected_evidence_candidates(request, store)
     if request.skip_retrieval and not selected_candidates:
@@ -1349,6 +1302,20 @@ def run_rag_pipeline(
         )
         raise ValueError(f"RAG evidence sufficiency failed: {detail}")
     check_cancel()
+
+    # Advisory memory is chosen after the evidence packet exists so validated-claim
+    # support can be checked against the Records this answer may actually cite.
+    prior_response_memory, prior_claim_memory, memory_detail = memory_guidance(
+        query_metadata["prompt_query"],
+        use_responses=request.use_prior_response_memory,
+        use_claims=request.use_prior_claim_memory,
+        owner=owner,
+        evidence=evidence,
+        system_store=system_store,
+        response_index_factory=lambda: ResponseMemoryIndex(store),
+        claim_index_factory=lambda: ClaimMemoryIndex(store),
+    )
+    warnings.extend(memory_detail["warnings"])
 
     # Step 6: generate answer.
     stage_start = time.perf_counter()

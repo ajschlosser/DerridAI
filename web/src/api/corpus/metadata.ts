@@ -3,7 +3,96 @@ import { apiRequest } from "../http";
 import type { CorpusBuild, CorpusRecord, EnrichmentMetrics, HumanEvidenceSource } from "./types";
 import { LEGACY_CORPUS_BASE, legacyCorpusUrl } from "./compatibility";
 
+export interface EvidenceSuggestion {
+  block_id: string;
+  reason: string;
+  method: string;
+  score?: number;
+  /** LLM choices only: whether a deterministic text match also supports the block. */
+  lexical_support?: boolean;
+}
+
+/** Authoritative state returned after one or several reviewer metadata decisions. */
+export interface MetadataDecisionResult {
+  applied: boolean;
+  record: CorpusRecord;
+  build: CorpusBuild;
+  changed_fields: string[];
+  /** Fields owed a blind second opinion: the answer was logged and the record left unchanged. */
+  deferred_fields: string[];
+  /** Non-fatal problems in derived memory; the decisions themselves were saved. */
+  warnings: string[];
+  queue_counts?: CorpusBuild["review_queue_counts"];
+  remaining_fields?: string[];
+  ready_for_acceptance?: boolean;
+  review_state?: string;
+}
+
+/** One reviewed precedent, exactly as metadata enrichment would see it. */
+export interface MetadataPrecedent {
+  exemplar_id?: string;
+  record_id: string;
+  record_revision?: number | null;
+  value: unknown;
+  /** Absent for an ordinary positive precedent. */
+  kind?: "correction" | "absence";
+  /** For a correction: the model value the reviewer rejected. */
+  rejected_value?: unknown;
+  similarity?: number;
+  /** False for older decisions without reviewed evidence (record excerpt only). */
+  evidence_bound: boolean;
+  evidence?: string;
+  excerpt?: string;
+  /** Present only when the field's declared analogy conditions were compared and agree. */
+  match?: { tier: "matched"; fields: string[] };
+}
+
+export interface MetadataPrecedents {
+  field: string;
+  record_id: string;
+  mode: "semantic" | "lexical" | "none";
+  fallback_reason: string;
+  items: MetadataPrecedent[];
+}
+
+/** A reviewer-validated Research claim whose support cites a record. */
+export interface RecordResearchClaim {
+  claim_id: string;
+  claim_text: string;
+  run_id?: string | null;
+  validated_by?: string | null;
+  validated_at?: string | null;
+  relation?: string | null;
+  record_revision?: number | null;
+  citation: { inline?: string; full?: string };
+  /** "stale": bound to an earlier revision or source; never applied to the current text. */
+  binding_status: "current" | "stale" | "unresolved";
+}
+
+const recordUrl = (buildId: string, recordId: string) =>
+  `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}`;
+
 export const corpusMetadataApi = {
+  suggestEvidence: (buildId: string, recordId: string, field: string) =>
+    apiRequest<{ items: EvidenceSuggestion[] }>(
+      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/evidence-suggestions?field=${encodeURIComponent(field)}`,
+    ),
+  suggestEvidenceLlm: (
+    buildId: string,
+    recordId: string,
+    field: string,
+    request: Record<string, unknown>,
+  ) =>
+    apiRequest<{ items: EvidenceSuggestion[] }>(
+      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/evidence-suggestions/llm`,
+      { method: "POST", body: JSON.stringify({ ...request, field }) },
+    ),
+  precedents: (buildId: string, recordId: string, field: string) =>
+    apiRequest<MetadataPrecedents>(
+      `${recordUrl(buildId, recordId)}/precedents?field=${encodeURIComponent(field)}`,
+    ),
+  researchClaims: (buildId: string, recordId: string) =>
+    apiRequest<{ items: RecordResearchClaim[] }>(`${recordUrl(buildId, recordId)}/research-claims`),
   metadataDecision: (
     buildId: string,
     recordId: string,
@@ -14,15 +103,7 @@ export const corpusMetadataApi = {
     evidenceBlockIds?: string[],
     humanSource?: HumanEvidenceSource,
   ) =>
-    apiRequest<{
-      applied: boolean;
-      record: CorpusRecord;
-      build: CorpusBuild;
-      queue_counts?: CorpusBuild["review_queue_counts"];
-      remaining_fields?: string[];
-      ready_for_acceptance?: boolean;
-      review_state?: string;
-    }>(
+    apiRequest<MetadataDecisionResult>(
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/metadata-decision`,
       {
         method: "POST",
@@ -37,6 +118,10 @@ export const corpusMetadataApi = {
           evidence_source: humanSource?.source,
           evidence_note: humanSource?.note,
           external_evidence_block_ids: humanSource?.externalBlockIds,
+          // Only sent when the reviewer cites their own knowledge, or spans elsewhere in the same source.
+          evidence_source: humanSource?.source,
+          evidence_note: humanSource?.note,
+          external_evidence_block_ids: humanSource?.externalBlockIds,
         }),
       },
     ),
@@ -46,12 +131,7 @@ export const corpusMetadataApi = {
     changes: Record<string, unknown>,
     expectedRevision?: number,
   ) =>
-    apiRequest<{
-      applied: boolean;
-      record: CorpusRecord;
-      build: CorpusBuild;
-      changed_fields: string[];
-    }>(
+    apiRequest<MetadataDecisionResult>(
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/metadata-decisions`,
       {
         method: "POST",

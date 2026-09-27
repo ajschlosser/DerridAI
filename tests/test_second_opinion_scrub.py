@@ -145,6 +145,24 @@ def test_editorial_examples_do_not_teach_a_second_reviewer_the_first_answer(tmp_
     assert "assertion" in mine and "assertion" not in theirs
 
 
+def test_precedents_do_not_show_a_second_reviewer_the_first_answer(tmp_path):
+    m, repo, bid = _manager(tmp_path)
+    rows = [record(record_id=f"rec-{i}") for i in range(3)] + [record(record_id="target", second_opinion={})]
+    repo.save_records(bid, rows)
+    m._progressive_metadata_index = None
+    token = current_reviewer.set("user-1")
+    try:
+        mine = json.dumps(m.metadata_precedents(bid, "target", "discourse_role"))
+    finally:
+        current_reviewer.reset(token)
+    token = current_reviewer.set("user-2")
+    try:
+        theirs = json.dumps(m.metadata_precedents(bid, "target", "discourse_role"))
+    finally:
+        current_reviewer.reset(token)
+    assert "assertion" in mine and "assertion" not in theirs
+
+
 def test_the_ledger_export_does_not_carry_sealed_values(tmp_path):
     from app.enrichment_ledger import EnrichmentLedger
 
@@ -171,6 +189,8 @@ CARRIES_RECORDS = {
     ("GET", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/metadata-cache"),
     ("DELETE", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/metadata-cache"),
     ("PATCH", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/evidence"),
+    ("GET", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/evidence-suggestions"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/evidence-suggestions/llm"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/accept"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/disposition"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/review-decision"),
@@ -185,6 +205,10 @@ CARRIES_RECORDS = {
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/boundary-adjudication"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/split"),
     ("GET", "/api/pdf/corpus-builds/{build_id}/editorial-memory"),
+    # Same per-reviewer exclusion as editorial memory (it is built by _editorial_memory).
+    ("GET", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/precedents"),
+    # Validated Research claims only; no field values of the record or its neighbours.
+    ("GET", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/research-claims"),
     ("GET", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/preview"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/viewed"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/text-touchup"),
