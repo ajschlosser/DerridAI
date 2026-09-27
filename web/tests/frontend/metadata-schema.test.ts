@@ -170,6 +170,7 @@ describe("the schema editor", () => {
 
   it("shows only implemented reviewed-precedent controls, including minimum similarity", async () => {
     const w = await mountEditor();
+    await w.get("tr.field-row").trigger("click");
     expect(w.text()).toContain("Memory & retrieval");
     expect(w.text()).toContain("Maximum precedents");
     expect(w.text()).toContain("Minimum similarity");
@@ -234,6 +235,7 @@ describe("the schema editor", () => {
       attachTo: document.body,
     });
     await flushPromises();
+    await w.get("[role=tab]#schema-tab-preview").trigger("click");
     await w.get("textarea[rows='5']").setValue("A calm evening.");
     await button(w, "Run on this passage").trigger("click");
     await flushPromises();
@@ -256,6 +258,7 @@ describe("the schema editor", () => {
       seconds: 2,
     });
     const w = await mountEditor();
+    await w.get("[role=tab]#schema-tab-preview").trigger("click");
     await w.get("textarea[rows='5']").setValue("A calm evening.");
     await button(w, "Run on this passage").trigger("click");
     await flushPromises();
