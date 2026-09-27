@@ -1184,7 +1184,9 @@ def rerun_pdf_corpus_record_metadata(build_id: str, record_id: str, body: PdfCor
 @router.post("/api/pdf/corpus-builds/{build_id}/publish")
 def publish_pdf_corpus_build(build_id: str, body: PdfCorpusPublishRequest) -> dict[str, Any]:
     try:
-        return pdf_corpus_builds.publish(build_id, require_acceptance=body.require_acceptance)
+        return pdf_corpus_builds.publish(
+            build_id, require_acceptance=body.require_acceptance, accept_unreviewed=body.accept_unreviewed
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus build not found") from exc
     except ValueError as exc:

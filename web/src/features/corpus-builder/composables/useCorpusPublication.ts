@@ -51,20 +51,30 @@ export function useCorpusPublication(options: {
     }
   }
 
-  async function publish(publishOptions: { download?: boolean; automatic?: boolean } = {}) {
+  async function publish(
+    publishOptions: { download?: boolean; automatic?: boolean; acceptUnreviewed?: boolean } = {},
+  ) {
     if (!options.currentBuild.value) return null;
     options.busy.value = "publish";
     try {
-      const result = await corpusBuilderApi.publish(options.currentBuild.value.build_id);
+      const result = await corpusBuilderApi.publish(options.currentBuild.value.build_id, {
+        acceptUnreviewed: publishOptions.acceptUnreviewed,
+      });
       await options.refreshBuild();
       await options.refreshBuilds();
       options.setMessage(
-        publishOptions.automatic
-          ? options.tf("pdf_corpus.auto_published", { count: result.record_count })
-          : options.tf("pdf_corpus.published", {
+        result.celf_conformant === false
+          ? options.tf("pdf_corpus.published_unreviewed", {
               count: result.record_count,
-              hash: result.sha256.slice(0, 12),
-            }),
+              unreviewed: result.unreviewed_record_count || 0,
+              fields: result.unreviewed_accepted_field_count || 0,
+            })
+          : publishOptions.automatic
+            ? options.tf("pdf_corpus.auto_published", { count: result.record_count })
+            : options.tf("pdf_corpus.published", {
+                count: result.record_count,
+                hash: result.sha256.slice(0, 12),
+              }),
       );
       if (publishOptions.download) {
         window.location.href = corpusBuilderApi.publicationUrl(result.publication_id);

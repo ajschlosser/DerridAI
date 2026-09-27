@@ -62,6 +62,11 @@ const pendingQuery = computed(() => {
   const last = (raw.split(/[\n,]/).at(-1) || "").trim().toLocaleLowerCase();
   return unique.value.some((v) => v.toLocaleLowerCase() === last) ? "" : last;
 });
+/** A single value that is the model's suggestion carries the same ★ in the field as it does in the list. */
+const valueIsRecommended = computed(
+  () =>
+    !props.multiple && Boolean(pendingQuery.value) && recommendedSet.value.has(pendingQuery.value),
+);
 const isSelected = (value: string) =>
   props.multiple && currentValues.value.has(value.toLocaleLowerCase());
 const filtered = computed(() => {
@@ -214,6 +219,7 @@ onBeforeUnmount(() => {
       aria-autocomplete="list"
       :aria-expanded="open && filtered.length > 0"
       :aria-controls="`${comboId}-listbox`"
+      :aria-describedby="valueIsRecommended ? `${comboId}-recommended` : undefined"
       :value="modelValue"
       :placeholder="placeholder"
       :disabled="disabled"
@@ -235,6 +241,7 @@ onBeforeUnmount(() => {
       aria-autocomplete="list"
       :aria-expanded="open && filtered.length > 0"
       :aria-controls="`${comboId}-listbox`"
+      :aria-describedby="valueIsRecommended ? `${comboId}-recommended` : undefined"
       :value="modelValue"
       :placeholder="placeholder"
       :disabled="disabled"
@@ -246,6 +253,13 @@ onBeforeUnmount(() => {
       @keydown="keydown"
       @blur="blur"
     />
+    <span
+      v-if="valueIsRecommended"
+      :id="`${comboId}-recommended`"
+      class="combo-badge combo-value-badge"
+      data-testid="combo-value-recommended"
+      ><span aria-hidden="true">★</span> {{ recommendedLabel }}</span
+    >
     <datalist :id="`${comboId}-options`">
       <option v-for="option in unique" :key="option" :value="option" />
     </datalist>
@@ -288,8 +302,18 @@ onBeforeUnmount(() => {
 </template>
 <style scoped>
 .ui-combobox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   min-width: min(320px, 100%);
   flex: 1;
+}
+.ui-combobox > .control {
+  flex: 1;
+  min-width: 0;
+}
+.combo-value-badge {
+  white-space: nowrap;
 }
 .control {
   width: 100%;

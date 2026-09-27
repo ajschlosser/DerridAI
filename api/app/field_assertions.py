@@ -46,6 +46,8 @@ _NON_ASSERTION_FIELDS = {
     "record_id", "record_revision", "source_document_id", "source_asset_id",
     # Build warnings published with the record they concern: provenance, not a metadata field.
     "provenance_warnings",
+    # Whether a reviewer accepted the record or it was published unreviewed: review provenance.
+    "publication_review_status",
     "source_spans", "source_units", "source_unit_ids", "source_block_ids",
     "source_extracted_text", "text", "text_length", "page_start", "page_end",
     "pdf_file", "pdf_page", "pdf_pages", "inline_citation", "full_citation",
@@ -938,6 +940,52 @@ def confirm_model_assertions(
             changed += 1
     project_record_assertions(record)
     return changed
+
+
+UNREVIEWED_ACCEPT_METHOD = "unreviewed_bulk_accept"
+
+
+def accept_unreviewed_suggestions(record: dict[str, Any]) -> int:
+    """Accept every suggested field value on a record copy, without evidence or human confirmation.
+
+    For an unreviewed (non-cELF-conformant) publication only. Human-confirmed, overridden
+    and disputed fields are left alone, as are present values and out-of-vocabulary
+    (`invalid`) proposals. A candidate is the selected assertion's value, or else the latest
+    unreviewed non-human assertion for that field that carries one. The acceptance supersedes
+    the candidate but keeps `authority_status="unreviewed"`: nobody reviewed it.
+    """
+    migrate_record_assertions(record)
+    accepted = 0
+    for field_id in list(_assertions(record)):
+        current = current_assertion(record, field_id)
+        if current is None or current.authority_status != "unreviewed" or current.value_status in {"present", "confirmed_absent"}:
+            continue
+        candidate = current if current.value_status != "invalid" and current.value not in (None, "", []) else None
+        if candidate is None and current.value_status != "invalid":
+            candidate = next(
+                (
+                    item for item in reversed(get_assertions(record, field_id))
+                    if item.authority_status == "unreviewed" and item.derivation_method != "human"
+                    and item.value_status != "invalid" and item.value not in (None, "", [])
+                ),
+                None,
+            )
+        if candidate is None:
+            continue
+        store_assertion(record, candidate.model_copy(update={
+            "assertion_id": f"assertion-{uuid.uuid4().hex}",
+            "value_status": "present",
+            "evaluation_status": "value_supported" if candidate.evaluation_status in {"no_supported_value", "evaluation_failed"} else candidate.evaluation_status,
+            "method": UNREVIEWED_ACCEPT_METHOD,
+            "reason": "Suggested value accepted without evidence or human confirmation for an unreviewed publication.",
+            "legacy_status": None,
+            "record_revision": int(record.get("record_revision") or candidate.record_revision or 1),
+            "supersedes_assertion_id": current.assertion_id,
+            "created_at": _now(),
+        }))
+        accepted += 1
+    project_record_assertions(record)
+    return accepted
 
 
 def validate_projection(record: dict[str, Any]) -> list[str]:

@@ -3,12 +3,13 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import re
 from typing import Any
 
 from .corpus_metadata import DISCOURSE_ROLES, REGION_TYPES
-from .field_assertions import migrate_record_assertions
+from .field_assertions import accept_unreviewed_suggestions, migrate_record_assertions
 
 
 def warning_key(text: str) -> str:
@@ -166,6 +167,39 @@ SOURCE_TEXT:
 """
 
 
+# Segmentation must conserve text even when review is skipped; page mapping and metadata
+# validation issues are review-resolvable and are carried as unreviewed instead.
+TEXT_CONSERVATION_ERROR_KEYS = ("missing_block_ids", "duplicate_block_ids", "text_fidelity_errors", "source_order_errors")
+UNREVIEWED_PUBLISHABLE_STATUSES = frozenset({"ready", "awaiting_review"})
+# Public per-record marker for publications that bypassed human review.
+REVIEWER_ACCEPTED = "reviewer_accepted"
+UNREVIEWED = "unreviewed_suggestion"
+
+
+def mark_unreviewed_publication(records: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int, int]:
+    """Accept every outstanding suggestion in a publication snapshot, without changing stored review state.
+
+    Reviewer decisions made before the bypass are preserved: rejected records are already
+    excluded, and human-confirmed or overridden fields are never replaced. Every other
+    suggested value is accepted as-is (see `accept_unreviewed_suggestions`), and each record
+    is labelled `reviewer_accepted` or `unreviewed_suggestion`.
+    Returns the snapshot, the number of unreviewed records, and the number of accepted fields.
+    """
+    marked: list[dict[str, Any]] = []
+    unreviewed = 0
+    accepted_fields = 0
+    for record in records:
+        snapshot = copy.deepcopy(record)
+        fields = accept_unreviewed_suggestions(snapshot)
+        accepted_fields += fields
+        reviewed = bool(record.get("accepted")) and not record.get("needs_review") and not fields
+        unreviewed += 0 if reviewed else 1
+        snapshot["needs_review"] = False
+        snapshot["publication_review_status"] = REVIEWER_ACCEPTED if reviewed else UNREVIEWED
+        marked.append(snapshot)
+    return marked, unreviewed, accepted_fields
+
+
 def publishable_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [
         record
@@ -181,6 +215,7 @@ def publication_blocker(
     validation: dict[str, Any],
     *,
     require_acceptance: bool,
+    accept_unreviewed: bool = False,
 ) -> str | None:
     """The first reason `publish()` would refuse, or None if the build is publishable.
 
@@ -188,7 +223,19 @@ def publication_blocker(
     metadata totals are read from it), but `validation` is passed separately because the
     caller captures it *before* that refresh -- preserved exactly from the original
     inline `publish()` method, not changed here.
+
+    `accept_unreviewed` skips only the human-review gates (document metadata, metadata
+    completion, pending review, acceptance). Text-conservation validation and an empty
+    publication still block: an unreviewed corpus may be unverified, never lossy.
     """
+    if accept_unreviewed:
+        if str(build.get("status") or "") not in UNREVIEWED_PUBLISHABLE_STATUSES:
+            return "Publication is unavailable until the build has finished processing."
+        if not validation or any(validation.get(key) for key in TEXT_CONSERVATION_ERROR_KEYS):
+            return "Publication is blocked until source coverage and text-fidelity validation pass."
+        if not publishable:
+            return "Publication is unavailable because every record is rejected. Restore at least one record or discard this build."
+        return None
     publication_readiness = build.get("publication_readiness")
     readiness: dict[str, Any] = publication_readiness if isinstance(publication_readiness, dict) else {}
     readiness_blockers_raw = readiness.get("blockers")

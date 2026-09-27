@@ -274,3 +274,30 @@ def test_source_quality_failure_creates_unresolved_assertion_not_absence() -> No
     assert assertion.authority_status == "unreviewed"
     assert assertion.value_status != "confirmed_absent"
     assert "confidence" not in assertion.model_dump(mode="json", exclude_none=True)
+
+
+def test_accept_unreviewed_suggestions_accepts_model_values_but_keeps_human_and_invalid() -> None:
+    """Unreviewed acceptance makes suggestions present, stays `unreviewed`, and never touches human or invalid fields."""
+    from app.field_assertions import accept_unreviewed_suggestions
+
+    record = {"record_id": "r1", "record_revision": 1}
+    low = create_model_assertion(record, "stance", "describe", outcome="uncertain", confidence=0.4)
+    record["field_assertions"][low.field_id][-1]["value_status"] = "unresolved"
+    human = create_model_assertion(record, "speaker", "Derrida", confidence=0.9)
+    confirm_assertion(record, human, actor="reviewer")
+    create_model_assertion(record, "discourse_role", "not-a-role", outcome="evaluation_failed")
+    unselected = create_model_assertion(record, "claim_scope", "local", confidence=0.5, select=False)
+    reset_fields_for_evaluation(record, ["claim_scope"], method="test")
+    project_record_assertions(record)
+
+    assert accept_unreviewed_suggestions(record) == 2
+
+    stance = current_assertion_by_name(record, "stance")
+    assert stance.value == "describe" and stance.value_status == "present"
+    assert stance.authority_status == "unreviewed" and stance.method == "unreviewed_bulk_accept"
+    assert stance.supersedes_assertion_id == low.assertion_id
+    scope = current_assertion_by_name(record, "claim_scope")
+    assert scope.value == unselected.value and scope.value_status == "present"
+    assert current_assertion_by_name(record, "speaker").authority_status == "human_confirmed"
+    assert current_assertion_by_name(record, "discourse_role").value_status == "invalid"
+    assert record["stance"] == "describe" and record["claim_scope"] == "local"

@@ -3214,6 +3214,11 @@ EN_US: dict[str, str] = {'common.apply': 'Apply',
  'pdf_corpus.provider_profile_help': 'Use a centrally managed provider profile. Its model and generation defaults '
                                      'remain reusable across DerridAI workflows.',
  'pdf_corpus.provisional_splits': 'Safety splits',
+ 'pdf_corpus.accept_unreviewed': 'Accept all suggestions and publish',
+ 'pdf_corpus.accept_unreviewed_confirm': 'Accept every suggested value and publish, without evidence or human confirmation? Values you confirmed or corrected are kept, and rejected records stay excluded. The result is usable in Works but is not a valid cELF corpus.',
+ 'pdf_corpus.accept_unreviewed_confirm_action': 'Publish unreviewed',
+ 'pdf_corpus.published_unreviewed': 'Published {count} record(s) without review: {fields} suggested value(s) accepted unconfirmed across {unreviewed} record(s). This corpus is not cELF-conformant.',
+ 'pdf_corpus.publication_not_conformant': 'Not cELF-conformant: {fields} suggested value(s) in {count} record(s) were accepted without evidence or human confirmation. Continue reviewing and publish again for a conformant corpus.',
  'pdf_corpus.publication': 'Publication',
  'pdf_corpus.publication_ready_help': 'All required gates have passed. Publication creates an immutable UTF-8 JSONL '
                                       'snapshot.',

@@ -17,7 +17,7 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"api"))
 from app import corpus_builder as cb
 from app.derridai_ledger import iter_jsonl_zst
-from app.field_assertions import reset_fields_for_evaluation
+from app.field_assertions import create_model_assertion, reset_fields_for_evaluation
 
 
 def _install_publishable(repo: cb.PdfCorpusRepository):
@@ -177,3 +177,85 @@ def test_build_warnings_are_provenance_and_travel_with_the_corpus(tmp_path:Path)
     assert publication["record_warning_count"]==1
     # The stored record itself is not changed by publishing.
     assert "provenance_warnings" not in repo.load_records(build["build_id"])[0]
+
+
+def test_accept_unreviewed_publishes_suggestions_and_preserves_prior_decisions(tmp_path:Path):
+    """Publishing unreviewed skips review gates, keeps reviewer decisions, and is not cELF-conformant.
+
+    r1 was accepted by a reviewer, r2 is still pending with incomplete metadata, r3 was
+    rejected. The normal publish is refused; the unreviewed publish succeeds, excludes r3,
+    labels r1/r2 by review status, and leaves the stored review state untouched.
+    """
+    repo=cb.PdfCorpusRepository(tmp_path/"repo")
+    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
+    build=_install_publishable(repo)
+    rows=repo.load_records(build["build_id"])
+    with repo.asset_blocks_path("pdf-test").open("a") as handle:
+        for block in ("b2","b3"):
+            handle.write(json.dumps({"block_id":block,"page":1,"bbox":[0,0,1,1],"type":"paragraph","text":"Record text","extraction_method":"native","confidence":1.0})+"\n")
+    base={key:value for key,value in rows[0].items() if key!="field_assertions"}
+    pending={**base,"record_id":"r2","source_block_ids":["b2"],"source_spans":[{"block_id":"b2","page":1}],"accepted":False,"review_disposition":"pending","needs_review":True}
+    rejected={**base,"record_id":"r3","source_block_ids":["b3"],"source_spans":[{"block_id":"b3","page":1}],"accepted":False,"rejected":True,"review_disposition":"rejected"}
+    reset_fields_for_evaluation(pending,["discourse_role"],schema=manager._schema_for(build["build_id"]),method="unreviewed_test")
+    # Live shape of a pending suggestion: the selected model assertion carries a value but is unresolved.
+    suggestion=create_model_assertion(pending,"discourse_role","analysis",schema=manager._schema_for(build["build_id"]),outcome="uncertain",confidence=0.3)
+    pending["field_assertions"][suggestion.field_id][-1]["value_status"]="unresolved"
+    manager._rewrite_and_validate(build["build_id"],[rows[0],pending,rejected])
+    try:
+        manager.publish(build["build_id"])
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("reviewed publication should still be blocked")
+    publication=manager.publish(build["build_id"],accept_unreviewed=True)
+    assert publication["review_mode"]=="unreviewed"
+    assert publication["celf_conformant"] is False
+    assert publication["unreviewed_record_count"]==1
+    assert publication["bypassed_review_blocker"]
+    assert publication["unreviewed_accepted_field_count"]==1
+    rows_out={row["record_id"]:row for row in iter_jsonl_zst(repo.publication_path(publication["publication_id"]),rehydrate_evidence=False)}
+    assert set(rows_out)=={"r1","r2"}
+    assert rows_out["r1"]["publication_review_status"]=="reviewer_accepted"
+    assert rows_out["r2"]["publication_review_status"]=="unreviewed_suggestion"
+    assert rows_out["r2"]["needs_review"] is False
+    accepted=[
+        assertion for bucket in rows_out["r2"]["field_assertions"].values() for assertion in bucket
+        if assertion.get("method")=="unreviewed_bulk_accept"
+    ]
+    assert [(a["field_name"],a["value"],a["authority_status"]) for a in accepted]==[("discourse_role","analysis","unreviewed")]
+    assert not any(
+        assertion.get("field_name")=="publication_review_status"
+        for bucket in rows_out["r2"].get("field_assertions",{}).values() for assertion in bucket
+    )
+    stored={row["record_id"]:row for row in repo.load_records(build["build_id"])}
+    assert stored["r2"]["review_disposition"]=="pending" and not stored["r2"].get("accepted")
+    stored_role=[a for a in stored["r2"]["field_assertions"][suggestion.field_id] if a["assertion_id"]==stored["r2"]["current_field_assertions"][suggestion.field_id]]
+    assert stored_role[0]["value_status"]=="unresolved"
+    assert stored["r3"]["review_disposition"]=="rejected"
+
+
+def test_accept_unreviewed_still_requires_text_fidelity_and_a_finished_build(tmp_path:Path):
+    """Bypassing review never bypasses text-conservation validation or an in-progress build."""
+    repo=cb.PdfCorpusRepository(tmp_path/"repo")
+    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
+    build=_install_publishable(repo)
+    for patch,expected in (({"status":"running"},"finished processing"),({"validation":{"valid":False,"missing_block_ids":["b1"]}},"text-fidelity")):
+        current=repo.get_build(build["build_id"])
+        current.update({"status":"ready","validation":{"valid":True},**patch})
+        repo.save_build(current)
+        manager._refresh_workflow_fields=lambda b:None
+        try:
+            manager.publish(build["build_id"],accept_unreviewed=True)
+        except ValueError as exc:
+            assert expected in str(exc)
+        else:
+            raise AssertionError(f"unreviewed publication should be blocked by {patch}")
+
+
+def test_accept_unreviewed_on_a_fully_reviewed_build_stays_conformant(tmp_path:Path):
+    """If nothing was actually bypassed, the publication remains cELF-conformant."""
+    repo=cb.PdfCorpusRepository(tmp_path/"repo")
+    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
+    build=_install_publishable(repo)
+    publication=manager.publish(build["build_id"],accept_unreviewed=True)
+    assert publication["celf_conformant"] is True and publication["unreviewed_record_count"]==0

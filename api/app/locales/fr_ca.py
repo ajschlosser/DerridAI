@@ -3423,6 +3423,11 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'pdf_corpus.provider_profile_help': 'Utilisez un profil de fournisseur géré centralement. Son modèle et ses '
                                      'paramètres de génération demeurent réutilisables dans les flux DerridAI.',
  'pdf_corpus.provisional_splits': 'Scissions de sécurité',
+ 'pdf_corpus.accept_unreviewed': 'Accepter toutes les suggestions et publier',
+ 'pdf_corpus.accept_unreviewed_confirm': 'Accepter toutes les valeurs suggérées et publier, sans preuve ni confirmation humaine? Les valeurs que vous avez confirmées ou corrigées sont conservées et les fiches rejetées restent exclues. Le résultat est utilisable dans Œuvres, mais n’est pas un corpus cELF valide.',
+ 'pdf_corpus.accept_unreviewed_confirm_action': 'Publier sans révision',
+ 'pdf_corpus.published_unreviewed': '{count} fiche(s) publiée(s) sans révision : {fields} valeur(s) suggérée(s) acceptée(s) sans confirmation dans {unreviewed} fiche(s). Ce corpus n’est pas conforme à cELF.',
+ 'pdf_corpus.publication_not_conformant': 'Non conforme à cELF : {fields} valeur(s) suggérée(s) dans {count} fiche(s) ont été acceptées sans preuve ni confirmation humaine. Poursuivez la révision et publiez de nouveau pour obtenir un corpus conforme.',
  'pdf_corpus.publication': 'Publication',
  'pdf_corpus.publication_ready_help': 'Tous les contrôles requis sont réussis. La publication crée un instantané JSONL '
                                       'UTF-8 immuable.',
