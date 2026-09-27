@@ -1568,15 +1568,6 @@ test.describe("legacy runtime DOM baseline", () => {
         expect(stableMarkup).toContain('class="works-workspace-header"');
         expect(stableMarkup).toContain('id="works-page-title"');
       } else {
-        if (
-          /^research-(empty|with-evidence|question|remove-evidence|clear-evidence|expert-settings|runs-drawer|with-jobs|open-job)$/.test(
-            scenario.name,
-          )
-        ) {
-          console.log(
-            `LEGACY_SNAPSHOT_BASE64 ${scenario.name} ${Buffer.from(stableMarkup, "utf8").toString("base64")}`,
-          );
-        }
         expect(stableMarkup).toMatchSnapshot(`${scenario.name}.html`);
       }
     });
