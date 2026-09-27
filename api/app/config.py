@@ -98,6 +98,29 @@ class Settings:
     # How many metadata-enrichment runs may work at once, across all builds. One model per run.
     enrichment_max_concurrent_runs: int = _int_env("ENRICHMENT_MAX_CONCURRENT_RUNS", 1)
 
+    # GraphQL is a read-only cELF query façade beside REST (docs/GRAPHQL.md). The
+    # IDE and introspection are development aids and stay off unless opted into.
+    graphql_ide_enabled: bool = _bool_env("GRAPHQL_IDE_ENABLED", False)
+    graphql_introspection_enabled: bool = _bool_env("GRAPHQL_INTROSPECTION_ENABLED", False)
+    graphql_max_depth: int = _int_env("GRAPHQL_MAX_DEPTH", 8)
+    graphql_max_aliases: int = _int_env("GRAPHQL_MAX_ALIASES", 20)
+    graphql_max_tokens: int = _int_env("GRAPHQL_MAX_TOKENS", 2000)
+    # Largest client-supplied Record snapshot accepted by record_graph, in bytes.
+    graphql_max_record_bytes: int = _int_env("GRAPHQL_MAX_RECORD_BYTES", 2_000_000)
+
+    # The WebSocket realtime plane only delivers notifications (docs/REALTIME.md);
+    # canonical state stays in REST/SQLite, so these bound memory, not durability.
+    realtime_enabled: bool = _bool_env("REALTIME_ENABLED", True)
+    realtime_max_client_message_bytes: int = _int_env("REALTIME_MAX_CLIENT_MESSAGE_BYTES", 65536)
+    realtime_max_queue_events: int = _int_env("REALTIME_MAX_QUEUE_EVENTS", 256)
+    realtime_replay_events: int = _int_env("REALTIME_REPLAY_EVENTS", 512)
+    realtime_progress_max_hz: float = _float_env("REALTIME_PROGRESS_MAX_HZ", 8.0)
+    realtime_heartbeat_seconds: float = _float_env("REALTIME_HEARTBEAT_SECONDS", 20.0)
+    realtime_idle_timeout_seconds: float = _float_env("REALTIME_IDLE_TIMEOUT_SECONDS", 60.0)
+    # Comma-separated browser origins allowed to open the socket in addition to the
+    # request's own host. Empty means same-origin only (non-browser clients send none).
+    realtime_allowed_origins: str = os.getenv("REALTIME_ALLOWED_ORIGINS", "").strip()
+
     ollama_base_url: str = os.getenv(
         "OLLAMA_BASE_URL",
         "http://host.docker.internal:11434",

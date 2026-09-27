@@ -155,3 +155,26 @@ def test_graph_shows_only_current_assertions_by_default():
     assert full["hidden_assertion_count"] == 0
     assert any(e.get("relation") == "supersedes" for e in full["edges"])
     assert not any(e.get("relation") == "supersedes" for e in graph["edges"])
+
+
+def test_audio_spans_keep_time_coordinates_instead_of_pdf_pages():
+    """A transcribed audio span is located by time and speaker, never by page or character offset."""
+    graph = build_record_graph({
+        "record_id": "a1",
+        "source_document_id": "audio-1",
+        "source_spans": [{
+            "source_unit_id": "p00003-b0001",
+            "locator_kind": "time",
+            "page": 3,
+            "start": 12.5,
+            "end": 19.25,
+            "speaker": "SPEAKER_01",
+        }],
+    })
+    span = next(node for node in graph["nodes"] if node["object_type"] == "SourceSpan")
+    assert span["details"]["time_start"] == 12.5
+    assert span["details"]["time_end"] == 19.25
+    assert span["details"]["speaker"] == "SPEAKER_01"
+    assert "physical_page_start" not in span["details"]
+    assert "character_start" not in span["details"]
+    assert span["summary"].startswith("Time ")

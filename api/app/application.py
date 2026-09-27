@@ -1,12 +1,19 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
-from .config import app_version_label
+from .config import app_version_label, settings
+from .graphql.router import graphql_router
 from .middleware import authentication_middleware
+from .realtime.broker import broker as realtime_broker
+from .realtime.events import RealtimeObserver
+from .realtime.router import router as realtime_router
 from .routers.admin import router as admin_router
 from .routers.annotations import router as annotations_router
 from .routers.auth import router as auth_router
@@ -38,12 +45,28 @@ ROUTERS = (
     corpus_router,
     derridai_router,
     stores_router,
+    # Read-only cELF query façade and the realtime notification plane sit beside
+    # the REST command API; neither replaces it (docs/GRAPHQL.md, docs/REALTIME.md).
+    graphql_router,
+    realtime_router,
 )
+
+realtime_observer = RealtimeObserver(realtime_broker)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    if settings.realtime_enabled:
+        realtime_observer.start()
+    try:
+        yield
+    finally:
+        realtime_observer.stop()
 
 
 def create_app() -> FastAPI:
     """Create and compose the DerridAI FastAPI application."""
-    app = FastAPI(title="DerridAI API", version=app_version_label())
+    app = FastAPI(title="DerridAI API", version=app_version_label(), lifespan=lifespan)
 
     app.add_middleware(
         CORSMiddleware,
