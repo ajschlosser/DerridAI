@@ -1,0 +1,12 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
+# Just the text of the currently visible rows, for the clean-up dialog's repeated-running-head
+# detection (recurringShortLines). Queue rows never carry full text, so this reads it narrowly
+# rather than pulling the whole reviewer-presented Record for every visible row.
+query CorpusQueueTexts($build_id: String!, $record_ids: [String!]!) {
+  corpus_build(build_id: $build_id) {
+    records(record_ids: $record_ids) {
+      record_id
+      text
+    }
+  }
+}

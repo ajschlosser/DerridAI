@@ -89,15 +89,23 @@ describe("useQuery", () => {
 
   const page = (rows: string[]) => ({
     corpus_build: {
-      build_id: "b",
       review_queue: {
         total: rows.length,
         offset: 0,
         limit: 50,
-        has_next_page: false,
-        topology_count: rows.length,
-        counts: {},
-        rows: rows.map((record_id) => ({ record_id })),
+        queue_counts: {
+          all: rows.length,
+          ready: 0,
+          preparing: 0,
+          issues: 0,
+          metadata: 0,
+          topology: 0,
+          source: 0,
+          accepted: 0,
+          rejected: 0,
+          pending: rows.length,
+        },
+        items: rows.map((record_id) => ({ record_id })),
       },
     },
   });
@@ -115,7 +123,6 @@ describe("useQuery", () => {
             ? null
             : ({
                 build_id: "b",
-                filter: { queue: "all" },
                 offset: offset.value,
                 limit: 50,
               } satisfies CorpusReviewQueueQueryVariables),
@@ -131,7 +138,7 @@ describe("useQuery", () => {
     await vi.waitFor(() => expect(query.loading.value).toBe(false));
     resolvers[0](new Response(JSON.stringify({ data: page(["rec-1"]) })));
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(query.data.value?.corpus_build.review_queue.rows[0].record_id).toBe("rec-51");
+    expect(query.data.value?.corpus_build.review_queue.items[0]?.record_id).toBe("rec-51");
     offset.value = null;
     await nextTick();
     expect(fetchMock).toHaveBeenCalledTimes(2);

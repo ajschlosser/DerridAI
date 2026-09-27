@@ -1,0 +1,26 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
+# Works are always read; records are fetched only when the Data tab is browsing records.
+query VectorStoreBrowse(
+  $name: String!
+  $includeRecords: Boolean!
+  $offset: Int!
+  $limit: Int!
+  $work: String
+) {
+  vector_store(name: $name) {
+    works {
+      work
+      count
+      total_words
+      average_record_length
+    }
+    records(offset: $offset, limit: $limit, work: $work) @include(if: $includeRecords) {
+      items {
+        ...VectorRecordRowFields
+      }
+      count
+      offset
+      limit
+    }
+  }
+}

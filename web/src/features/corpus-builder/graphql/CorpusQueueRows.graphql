@@ -1,0 +1,10 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
+# Re-read specific rows in place (a realtime record-completed event, a neighbour patch after a
+# save) without re-paging the whole queue.
+query CorpusQueueRows($build_id: String!, $record_ids: [String!]!) {
+  corpus_build(build_id: $build_id) {
+    rows(record_ids: $record_ids) {
+      ...CorpusQueueRowFields
+    }
+  }
+}
