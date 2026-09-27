@@ -146,6 +146,9 @@ describe("Corpus Builder metadata review", () => {
 
     await state.review.resolveMetadataField("target", "Kant");
 
+    // Released before the request is even sent: no saving state, shown as saved.
+    expect(state.review.metadataSavingField.value).toBe("");
+    expect(state.review.metadataSavedField.value).toBe("target");
     expect(state.selectedRecord.value?.target).toBe("Kant");
     expect(state.selectedRecord.value?.record_revision).toBe(2);
     expect(state.review.metadataKnownValues.value.target).toContain("Kant");
@@ -241,7 +244,8 @@ describe("Corpus Builder metadata review", () => {
       target: "hospitality",
     });
 
-    expect(state.review.metadataSavingField.value).toBe("__batch__");
+    // Optimistic: the panel is released as soon as the value is applied locally.
+    expect(state.review.metadataSavingField.value).toBe("");
     expect(state.selectedRecord.value?.target).toBe("hospitality");
     expect(state.queued).toHaveLength(1);
 

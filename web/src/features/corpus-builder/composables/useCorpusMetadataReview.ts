@@ -344,6 +344,9 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
       metadataSavingField.value = "";
       return;
     }
+    // Optimistic: the value is already shown as decided, so release the field now and only report a failure.
+    metadataSavingField.value = "";
+    metadataSavedField.value = field;
     await options.restoreReviewViewport(viewport, { inspector: true });
     options.queueRecordRequest(
       context.recordId,
@@ -360,16 +363,12 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
           humanSource,
         );
         options.applyAuthoritativeRecord(result.record, result.build);
-        if (options.selectedRecordId.value === context.recordId) {
-          metadataSavingField.value = "";
-          metadataSavedField.value = field;
-        }
         return result;
       },
-      () => {
-        if (options.selectedRecordId.value === context.recordId) {
-          metadataSavingField.value = "";
-        }
+      async () => {
+        // Roll the optimistic value back to what the server holds.
+        if (options.selectedRecordId.value === context.recordId) metadataSavedField.value = "";
+        await options.refreshRecords(false, context.recordId);
       },
     );
   }
@@ -393,6 +392,7 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
       metadataSavingField.value = "";
       return;
     }
+    metadataSavingField.value = "";
     await options.restoreReviewViewport(viewport, { inspector: true });
     options.queueRecordRequest(
       context.recordId,
@@ -405,7 +405,6 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
           rebase ? undefined : context.expectedRevision,
         );
         options.applyAuthoritativeRecord(result.record, result.build);
-        metadataSavingField.value = "";
         const summary = describeDecisionResult(result, options.tf);
         options.setMessage(summary.message, summary.tone);
         return result;
@@ -427,6 +426,9 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
       metadataSavingField.value = "";
       return;
     }
+    // Optimistic: the value is already shown as decided, so release the field now and only report a failure.
+    metadataSavingField.value = "";
+    metadataSavedField.value = field;
     await options.restoreReviewViewport(viewport, { inspector: true });
     options.queueRecordRequest(
       context.recordId,
@@ -441,16 +443,12 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
           true,
         );
         options.applyAuthoritativeRecord(result.record, result.build);
-        if (options.selectedRecordId.value === context.recordId) {
-          metadataSavingField.value = "";
-          metadataSavedField.value = field;
-        }
         return result;
       },
-      () => {
-        if (options.selectedRecordId.value === context.recordId) {
-          metadataSavingField.value = "";
-        }
+      async () => {
+        // Roll the optimistic value back to what the server holds.
+        if (options.selectedRecordId.value === context.recordId) metadataSavedField.value = "";
+        await options.refreshRecords(false, context.recordId);
       },
     );
   }
