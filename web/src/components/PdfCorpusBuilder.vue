@@ -97,6 +97,7 @@ import {
   sourceWarningsHidden,
 } from "../domain/sourceQuality";
 import { recurringShortLines } from "../domain/textCleanup";
+import { allEvidenceBlockIds } from "../domain/metadataEvidence";
 import * as runtime from "../runtime/runtime.js";
 
 const i18n = useI18nStore();
@@ -741,11 +742,11 @@ const evidenceBlockIds = computed(() => {
   if (!selectedRecord.value) return new Set<string>();
   if (selectedEvidenceField.value) {
     const info = selectedRecord.value.metadata_evidence?.[selectedEvidenceField.value];
-    return new Set((info?.block_ids || []).map(String));
+    return new Set(allEvidenceBlockIds(info));
   }
   return new Set(
     Object.values(selectedRecord.value.metadata_evidence || {}).flatMap((info) =>
-      (info.block_ids || []).map(String),
+      allEvidenceBlockIds(info),
     ),
   );
 });
@@ -992,9 +993,9 @@ const recordSizingValid = computed(
 const canStartConcurrentBuild = computed(() =>
   Boolean(
     recordSizingValid.value &&
-      selectedAsset.value &&
-      contextSafe.value &&
-      (selectedProviderId.value || !activeBuildCount.value),
+    selectedAsset.value &&
+    contextSafe.value &&
+    (selectedProviderId.value || !activeBuildCount.value),
   ),
 );
 const transientNetworkError = computed(() =>
@@ -1459,8 +1460,8 @@ async function refreshRecords(reset = false, preferredId = "") {
     const match = wanted ? records.value.find((row) => row.record_id === wanted) : undefined;
     const preserveDraft = Boolean(
       selectedRecord.value &&
-        selectedRecordId.value === wanted &&
-        (editingText.value || metadataEditorDirty.value),
+      selectedRecordId.value === wanted &&
+      (editingText.value || metadataEditorDirty.value),
     );
     if (match && !preserveDraft) {
       selectRecord(match);
@@ -1797,7 +1798,7 @@ watch([reviewQueue, recordQuery], () => {
 });
 watch(selectedEvidenceField, (field) => {
   if (!field || !selectedRecord.value) return;
-  const ids = selectedRecord.value.metadata_evidence?.[field]?.block_ids || [];
+  const ids = allEvidenceBlockIds(selectedRecord.value.metadata_evidence?.[field]);
   const first = sourceBlocks.value.find((block) => ids.includes(block.block_id));
   if (first) selectedPdfPage.value = Number(first.page || selectedPdfPage.value);
 });
@@ -3400,11 +3401,11 @@ defineExpose({
       :concurrency-risk="
         Boolean(
           providerProfiles.find((p) => p.id === llmActionProviderId)?.type === 'ollama' &&
-            llmActionConcurrentLoad + 1 >
-              Number(
-                providerProfiles.find((p) => p.id === llmActionProviderId)
-                  ?.max_concurrent_requests || 1,
-              ),
+          llmActionConcurrentLoad + 1 >
+            Number(
+              providerProfiles.find((p) => p.id === llmActionProviderId)?.max_concurrent_requests ||
+                1,
+            ),
         )
       "
       :active-requests="llmActionConcurrentLoad"

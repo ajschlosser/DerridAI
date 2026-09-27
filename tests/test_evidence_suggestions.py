@@ -34,3 +34,11 @@ def test_llm_choice_drops_invented_ids_and_flags_unsupported_blocks():
     out = validate_llm_choice(result, BLOCKS, "il n'y a pas de hors-texte")
     assert [o["block_id"] for o in out] == ["b2", "b1"]
     assert out[0]["lexical_support"] is True and out[1]["lexical_support"] is False
+
+
+def test_citation_strings_do_not_assume_an_author():
+    from app.rag import _citation_strings
+
+    inline, full = _citation_strings({"work": "Of Grammatology", "year": 1967})
+    assert "Derrida" not in inline + full
+    assert full.startswith("Of Grammatology")

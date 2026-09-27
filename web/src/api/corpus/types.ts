@@ -629,6 +629,9 @@ export interface CorpusRecord {
     string,
     {
       block_ids?: string[];
+      /** Spans cited from other records of the same source. */
+      external_block_ids?: string[];
+      source_kind?: string;
       confidence?: number;
       reason?: string;
       reviewed_by?: string;
