@@ -1,10 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import {
-  claimsApi,
-  type ClaimValidationStatus,
-  type GeneratedClaimRecord,
-} from "../../api/claims";
+import { claimsApi, type ClaimValidationStatus, type GeneratedClaimRecord } from "../../api/claims";
 import { useI18nStore } from "../../stores/i18n";
 import type {
   ResearchClaimProvenance,
@@ -65,7 +61,9 @@ async function refreshStatuses() {
   const sequence = ++loadSequence;
   loadError.value = "";
   for (const claim of claims.value) seedClaim(claim);
-  const results = await Promise.allSettled(claims.value.map((claim) => claimsApi.get(claim.claim_id)));
+  const results = await Promise.allSettled(
+    claims.value.map((claim) => claimsApi.get(claim.claim_id)),
+  );
   if (sequence !== loadSequence) return;
   let failures = 0;
   for (const result of results) {
@@ -117,7 +115,9 @@ function supportLabel(binding: ResearchClaimSupportBinding) {
 function evidenceIndex(binding: ResearchClaimSupportBinding) {
   const marker = String(binding.citation?.evidence_marker || "").trim();
   if (marker) {
-    const byMarker = props.evidence.findIndex((item) => String(item.evidence_id || "") === marker);
+    const byMarker = props.evidence.findIndex(
+      (item) => String(item.evidence_id || "") === marker,
+    );
     if (byMarker >= 0) return byMarker;
   }
   return props.evidence.findIndex(
@@ -161,7 +161,10 @@ async function decide(claim: ResearchGeneratedClaim, status: ClaimValidationStat
 }
 
 const pendingCount = computed(
-  () => claims.value.filter((claim) => (statuses.value[claim.claim_id] || "unvalidated") === "unvalidated").length,
+  () =>
+    claims.value.filter(
+      (claim) => (statuses.value[claim.claim_id] || "unvalidated") === "unvalidated",
+    ).length,
 );
 
 watch(
