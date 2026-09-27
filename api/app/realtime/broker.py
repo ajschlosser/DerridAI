@@ -126,7 +126,10 @@ class EventBroker:
                     topics=topics,
                     audience=audience,
                 )
-                self._replay.append(event)
+                if not event.ephemeral:
+                    # Ephemeral hints are never replayed: after a reconnect the
+                    # client reconciles from REST/GraphQL instead.
+                    self._replay.append(event)
                 targets = [sub for sub in self._subscribers.values() if sub.may_receive(event)]
             for subscriber in targets:
                 subscriber.queue.put(event)

@@ -9,7 +9,6 @@ const pdfCorpusApi = vi.hoisted(() => ({
   profiles: vi.fn(),
   listBuilds: vi.fn(),
   build: vi.fn(),
-  records: vi.fn(),
   blocks: vi.fn(),
   markViewed: vi.fn(),
   patchText: vi.fn(),
@@ -22,6 +21,21 @@ vi.mock("../../src/api/corpus", async () => {
   const actual =
     await vi.importActual<typeof import("../../src/api/corpus")>("../../src/api/corpus");
   return { ...actual, corpusBuilderApi: pdfCorpusApi };
+});
+
+const corpusReviewReads = vi.hoisted(() => ({
+  queuePage: vi.fn(),
+  records: vi.fn(),
+  rows: vi.fn(),
+  texts: vi.fn(),
+  metadataFacets: vi.fn(),
+}));
+
+vi.mock("../../src/features/corpus-builder/api/reviewReads", async () => {
+  const actual = await vi.importActual<
+    typeof import("../../src/features/corpus-builder/api/reviewReads")
+  >("../../src/features/corpus-builder/api/reviewReads");
+  return { ...actual, corpusReviewReads };
 });
 
 const systemApi = vi.hoisted(() => ({
@@ -64,6 +78,7 @@ vi.mock("../../src/runtime/runtime.js", () => ({
 }));
 
 import PdfCorpusBuilder from "../../src/components/PdfCorpusBuilder.vue";
+import { queueRowFromRecord } from "../../src/features/corpus-builder/domain/queueRows";
 import { useI18nStore } from "../../src/stores/i18n";
 
 const defaultSchema = {
@@ -119,6 +134,8 @@ const reviewRecord = {
   rejected: false,
 };
 
+const reviewQueueRow = queueRowFromRecord(reviewRecord as never);
+
 describe("PdfCorpusBuilder characterization", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -126,14 +143,19 @@ describe("PdfCorpusBuilder characterization", () => {
     pdfCorpusApi.profiles.mockResolvedValue({ items: [] });
     pdfCorpusApi.listBuilds.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 100 });
     pdfCorpusApi.build.mockResolvedValue(reviewBuild);
-    pdfCorpusApi.records.mockResolvedValue({
-      items: [reviewRecord],
+    corpusReviewReads.queuePage.mockResolvedValue({
+      rows: [reviewQueueRow],
       total: 1,
       offset: 0,
       limit: 50,
-      queue_counts: {},
-      metadata_values: {},
+      hasNextPage: false,
+      topologyCount: 1,
+      counts: {},
     });
+    corpusReviewReads.records.mockResolvedValue([reviewRecord]);
+    corpusReviewReads.rows.mockResolvedValue([reviewQueueRow]);
+    corpusReviewReads.texts.mockResolvedValue([reviewRecord.text]);
+    corpusReviewReads.metadataFacets.mockResolvedValue({});
     pdfCorpusApi.blocks.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 500 });
     pdfCorpusApi.markViewed.mockResolvedValue({});
     systemApi.researcherProviders.mockResolvedValue({ profiles: [] });

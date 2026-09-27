@@ -89,6 +89,25 @@ def record_graph(
     or support authority.
     """
     snapshot = prepare_record_snapshot(record, access)
+    return graph_for_record(
+        snapshot, access, include_assertion_history=include_assertion_history, origin="client_snapshot",
+    )
+
+
+def graph_for_record(
+    record: dict[str, Any],
+    access: AccessContext,
+    *,
+    include_assertion_history: bool = False,
+    origin: str,
+) -> dict[str, Any]:
+    """Graph around an already validated, reviewer-presented Record.
+
+    ``origin`` says where the Record state came from (``client_snapshot`` or
+    ``vector_projection``); it is reported as ``record_state_origin`` so a
+    derived projection is never presented as canonical corpus state.
+    """
+    snapshot = record
     bindings = resolved_support_bindings(snapshot, access)
     claim_ids = sorted({
         str(binding.get("claim_id") or "").strip()
@@ -106,5 +125,5 @@ def record_graph(
         )
     except ValueError as exc:
         raise InvalidQuery(str(exc)) from exc
-    graph["record_state_origin"] = "client_snapshot"
+    graph["record_state_origin"] = origin
     return graph

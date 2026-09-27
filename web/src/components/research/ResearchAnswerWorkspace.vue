@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import AppIcon from "../AppIcon.vue";
 import { useI18nStore } from "../../stores/i18n";
+import type { ResearchDraftState } from "../../features/research/useResearchDraft";
 import type { ResearchJob, ResearchResult } from "../../types/research";
 import ResearchClaimReviewPanel from "./ResearchClaimReviewPanel.vue";
 import { researchJobDetail } from "./researchI18n";
@@ -10,10 +11,12 @@ const props = withDefaults(
   defineProps<{
     job?: ResearchJob | null;
     result?: ResearchResult | null;
+    /** A streamed, unverified draft of the running job's answer (see useResearchDraft). */
+    draft?: ResearchDraftState | null;
     busy?: boolean;
     canGrade?: boolean;
   }>(),
-  { job: null, result: null, busy: false, canGrade: true },
+  { job: null, result: null, draft: null, busy: false, canGrade: true },
 );
 const emit = defineEmits<{
   copy: [];
@@ -204,6 +207,15 @@ const statusLabel = computed(() => {
       <div v-if="job.status === 'failed'" class="research-answer-warning danger" role="alert">
         {{ job.fatal_error || i18n.t("research.run_failed") }}
       </div>
+      <div
+        v-else-if="draft?.text && draft.jobId === job.id"
+        class="research-draft-pane"
+        aria-live="polite"
+      >
+        <span class="research-answer-kicker">{{ i18n.t("research.draft_heading") }}</span>
+        <p class="research-draft-text">{{ draft.text }}</p>
+        <p class="research-draft-help">{{ i18n.t("research.draft_help") }}</p>
+      </div>
     </template>
 
     <template v-else>
@@ -249,6 +261,28 @@ const statusLabel = computed(() => {
     "Segoe UI",
     sans-serif;
   color: var(--text);
+}
+.research-draft-pane {
+  max-width: 700px;
+  margin: 0 auto 28px;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--soft);
+}
+.research-draft-text {
+  margin: 6px 0 8px;
+  color: var(--text);
+  font:
+    14px/1.6 Georgia,
+    "Times New Roman",
+    serif;
+  white-space: pre-line;
+}
+.research-draft-help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
 }
 .research-run-state {
   min-height: 430px;

@@ -15,6 +15,7 @@ from typing import Any
 
 import httpx
 
+from . import operation_events
 from .config import settings
 from .source_identity import PersonName, normalize_languages
 
@@ -204,6 +205,27 @@ class GutenbergOfflineService:
             "search_ready": search_ready,
         }
 
+    def realtime_summary(self) -> dict[str, Any]:
+        """Bounded public state for ``activity:gutenberg``: no paths, URLs or error text."""
+        status = self.status()
+        catalogue, archive = status["catalogue"], status["archive"]
+        return {
+            "catalogue_status": str(catalogue.get("status") or ""),
+            "archive_status": str(archive.get("status") or ""),
+            "bytes_done": int(archive.get("bytes_done") or 0),
+            "total_bytes": int(archive.get("total_bytes") or 0) or None,
+            "ready": bool(status["ready"]),
+            "search_ready": bool(status["search_ready"]),
+            "has_error": bool(catalogue.get("error") or archive.get("error")),
+        }
+
+    def _changed(self) -> None:
+        """Tell watching clients the offline collection changed (never raises)."""
+        try:
+            operation_events.note_activity("gutenberg", self.realtime_summary())
+        except Exception:  # noqa: BLE001, S110 - notifications must never break the download
+            pass
+
     @staticmethod
     def _catalogue_value(row: dict[str, str], *names: str) -> str:
         for name in names:
@@ -219,6 +241,7 @@ class GutenbergOfflineService:
             db.execute(
                 "UPDATE gutenberg_catalogue SET status='refreshing',error=NULL WHERE id=1"
             )
+        self._changed()
         try:
             response = httpx.get(CATALOGUE_URL, timeout=120.0, follow_redirects=True)
             response.raise_for_status()
@@ -288,7 +311,9 @@ class GutenbergOfflineService:
                     "UPDATE gutenberg_catalogue SET status='error',error=? WHERE id=1",
                     (str(exc),),
                 )
+            self._changed()
             raise
+        self._changed()
         return self.status()
 
     def _run_catalogue_worker(self) -> None:
@@ -313,6 +338,7 @@ class GutenbergOfflineService:
             db.execute(
                 "UPDATE gutenberg_catalogue SET status='refreshing',error=NULL WHERE id=1"
             )
+        self._changed()
         if self._start_worker_enabled:
             self._start_catalogue_worker()
         return self.status()
@@ -340,6 +366,7 @@ class GutenbergOfflineService:
                 # chunk asked for bytes past the end of the file and the server answered 416.
                 db.execute("UPDATE gutenberg_archive SET status=?,bytes_done=?,error=NULL,updated_at=? WHERE id=1",
                            (allowed[action], self._bytes_done(), _now()))
+        self._changed()
         if action in {"start", "resume"} and self._start_worker_enabled:
             self._start_worker()
         elif action == "pause":
@@ -372,12 +399,14 @@ class GutenbergOfflineService:
                             "UPDATE gutenberg_archive SET status='unpacking',updated_at=? WHERE id=1",
                             (_now(),),
                         )
+                    self._changed()
                     self.extract_catalogue()
                     with sqlite3.connect(self.db_path) as db:
                         db.execute(
                             "UPDATE gutenberg_archive SET status='ready',error=NULL,updated_at=? WHERE id=1",
                             (_now(),),
                         )
+                    self._changed()
                     break
                 break
         except Exception as exc:
@@ -386,6 +415,7 @@ class GutenbergOfflineService:
                     "UPDATE gutenberg_archive SET status='error',error=?,updated_at=? WHERE id=1",
                     (str(exc), _now()),
                 )
+            self._changed()
 
     def extract_catalogue(self) -> int:
         """Unpack safe text files and persist only searchable file metadata in SQLite."""
@@ -610,6 +640,7 @@ class GutenbergOfflineService:
             with sqlite3.connect(self.db_path) as db:
                 db.execute("UPDATE gutenberg_archive SET status='downloaded',bytes_done=?,total_bytes=?,error=NULL,updated_at=? WHERE id=1",
                            (offset, total, _now()))
+            self._changed()
             return self.status()
         if total and offset > total:
             raise ValueError(
@@ -657,6 +688,7 @@ class GutenbergOfflineService:
         status = "downloaded" if total and done >= total else "downloading"
         with sqlite3.connect(self.db_path) as db:
             db.execute("UPDATE gutenberg_archive SET status=?,bytes_done=?,total_bytes=?,updated_at=? WHERE id=1", (status,done,total or None,_now()))
+        self._changed()
         return self.status()
 
 

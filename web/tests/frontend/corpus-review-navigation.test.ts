@@ -16,13 +16,13 @@ function setup() {
       records: [{ record_id: "metadata-record" }],
     },
   });
-  const records = ref<any[]>([record("r1"), record("r2")]);
+  const queueRows = ref<any[]>([record("r1"), record("r2")]);
   const recordTotal = ref(4);
   const recordOffset = ref(0);
-  const selectedRecord = ref<any | null>(records.value[0]);
+  const selectedRecord = ref<any | null>(queueRows.value[0]);
   const selectedRecordId = ref("r1");
   const selectedRecordIndex = computed(() =>
-    records.value.findIndex((item) => item.record_id === selectedRecord.value?.record_id),
+    queueRows.value.findIndex((item) => item.record_id === selectedRecord.value?.record_id),
   );
   const reviewQueue = ref<any>("all");
   const recordQuery = ref("");
@@ -42,7 +42,7 @@ function setup() {
 
   const navigation = useCorpusReviewNavigation({
     currentBuild,
-    records,
+    queueRows,
     recordTotal,
     recordOffset,
     selectedRecord,
@@ -64,7 +64,7 @@ function setup() {
   return {
     navigation,
     currentBuild,
-    records,
+    queueRows,
     recordOffset,
     selectedRecord,
     selectedRecordId,
@@ -143,7 +143,7 @@ describe("Corpus Builder review navigation", () => {
     const state = setup();
 
     await state.navigation.focusQueueMove(1);
-    expect(state.selectRecord).toHaveBeenCalledWith(state.records.value[1]);
+    expect(state.selectRecord).toHaveBeenCalledWith(state.queueRows.value[1]);
     expect(state.focusHistory.value).toEqual(["r2"]);
     expect(state.refreshRecords).not.toHaveBeenCalled();
   });

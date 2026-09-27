@@ -5,6 +5,7 @@ import { useRouter } from "vue-router";
 import * as runtime from "../runtime/runtime.js";
 import { chromaApi } from "../api/chroma";
 import { systemApi, type ProviderProfile } from "../api/system";
+import { vectorBrowseReads, type VectorBrowseRow } from "../features/vector-stores/api/browseReads";
 import { useAuthStore } from "../stores/auth";
 import { useVectorStore } from "../stores/workspace";
 import { corpusState } from "../state/workspaceState";
@@ -24,7 +25,6 @@ import type {
   ChromaConnectionUpdate,
   ChromaHealth,
   VectorCollection,
-  VectorRecord,
   VectorSearchResult,
   VectorWorkStat,
 } from "../types/vector";
@@ -90,7 +90,7 @@ const connectionError = ref("");
 const pendingCount = ref(0);
 const works = ref<VectorWorkStat[]>([]);
 const browseMode = ref<BrowseMode>(workspace.storeBrowseMode === "records" ? "records" : "works");
-const records = ref<VectorRecord[]>([]);
+const records = ref<VectorBrowseRow[]>([]);
 const recordCount = ref(0);
 const storePage = ref(Number(workspace.storePage) || 1);
 const storeWork = ref(String(workspace.storeWork || ""));
@@ -233,18 +233,19 @@ async function loadData() {
     recordCount.value = 0;
     return;
   }
+  const includeRecords = browseMode.value === "records";
   try {
-    const payload = await chromaApi.works(activeName.value);
-    works.value = payload.stats || (payload.works || []).map((work) => ({ work, count: 0 }));
-    if (browseMode.value === "records") {
-      const params = new URLSearchParams({
-        limit: String(workspace.storePageSize || 50),
-        offset: String(Math.max(0, (storePage.value - 1) * (workspace.storePageSize || 50))),
-      });
-      if (storeWork.value) params.set("work", storeWork.value);
-      const page = await chromaApi.records(activeName.value, params);
-      records.value = page.records || [];
-      recordCount.value = page.count || 0;
+    const limit = Number(workspace.storePageSize) || 50;
+    const result = await vectorBrowseReads.browse(activeName.value, {
+      includeRecords,
+      offset: Math.max(0, (storePage.value - 1) * limit),
+      limit,
+      work: storeWork.value || undefined,
+    });
+    works.value = result.works;
+    if (includeRecords && result.page) {
+      records.value = result.page.rows;
+      recordCount.value = result.page.total;
     }
   } catch (exc) {
     runtime.notifyToast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
@@ -758,12 +759,9 @@ onBeforeUnmount(() => {
                       </tr>
                     </thead>
                     <tbody>
-                      <tr
-                        v-for="record in records"
-                        :key="String(record._chroma_id || record.record_id)"
-                      >
+                      <tr v-for="record in records" :key="record.chroma_id">
                         <td>{{ record.work || "—" }}</td>
-                        <td>{{ record.record_id || record._chroma_id || "—" }}</td>
+                        <td>{{ record.record_id || record.chroma_id || "—" }}</td>
                         <td>
                           {{ record.page_start ?? "—"
                           }}{{
@@ -772,7 +770,7 @@ onBeforeUnmount(() => {
                               : ""
                           }}
                         </td>
-                        <td>{{ snippet(record.text) }}</td>
+                        <td>{{ record.text_preview }}</td>
                       </tr>
                       <tr v-if="!records.length">
                         <td colspan="4" class="note">{{ i18n.t("vector.no_matching_records") }}</td>

@@ -19,12 +19,15 @@ from ..config import settings
 from .errors import should_mask_error
 from .permissions import ROOT_FIELD_POLICY
 from .queries.celf import CelfQueries
+from .queries.corpus import CorpusQueries
+from .queries.metadata import MetadataQueries
 from .queries.records import RecordQueries
 from .queries.research import ResearchQueries
+from .queries.vector import VectorQueries
 
 
 @strawberry.type(description="Read-only cELF queries. Commands are REST; live events are WebSocket.")
-class Query(CelfQueries, RecordQueries, ResearchQueries):
+class Query(CelfQueries, RecordQueries, ResearchQueries, CorpusQueries, VectorQueries, MetadataQueries):
     pass
 
 

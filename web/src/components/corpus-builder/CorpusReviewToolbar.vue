@@ -1,6 +1,5 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import type { CorpusRecord } from "../../api/corpus";
 import type { MetadataSchema } from "../../api/metadataSchemas";
 import type { ReviewQueue } from "../../types/corpus";
 import type { ReviewWorkspaceMode } from "../../features/corpus-builder/composables/useCorpusReviewWorkspace";
@@ -24,7 +23,6 @@ const props = defineProps<{
   bulkActionFeedback: string;
   bulkMetadataOpen: boolean;
   schema?: MetadataSchema | null;
-  records: CorpusRecord[];
   knownValues: Record<string, string[]>;
   regionTypes: string[];
   discourseRoles: string[];
@@ -143,7 +141,6 @@ const i18n = useI18nStore();
     <CorpusBulkMetadataEditor
       v-if="props.bulkMetadataOpen"
       :schema="props.schema"
-      :records="props.records"
       :known-values="props.knownValues"
       :region-types="props.regionTypes"
       :discourse-roles="props.discourseRoles"

@@ -4389,6 +4389,8 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'research.answer_waiting': 'Votre réponse de recherche apparaîtra ici',
  'research.answer_waiting_help': 'Posez une question ci-dessus. La réponse reste dans l’espace de travail avec ses '
                                  'preuves plutôt que dans une fenêtre modale.',
+ 'research.draft_heading': 'Rédaction de la réponse…',
+ 'research.draft_help': 'Cet aperçu s’affiche en direct et les citations ne sont pas encore liées. Il sera remplacé par la réponse vérifiée à la fin de l’exécution.',
  'research.claim_review_kicker': 'Audit des affirmations',
  'research.claim_review_title': 'Réviser les affirmations générées',
  'research.claim_review_help': 'Validez ou rejetez les affirmations liées à des preuves pendant que la réponse et les preuves restent visibles. Les affirmations validées deviennent admissibles à la provenance en cache; DerridAI refuse de valider une affirmation sans lien d’appui utilisable.',

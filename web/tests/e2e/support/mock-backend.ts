@@ -573,12 +573,220 @@ function defaults(url: URL, method: string, role: Role): unknown {
   return {};
 }
 
-/** Empty results for the read-only GraphQL façade, keyed by operation name. */
-function graphqlDefaults(operationName: string): unknown {
+/** A record shaped like one REST response item, read loosely (fixtures may override the shape). */
+type LooseRecord = Record<string, any>;
+
+/** The REST default (or its fixture override) for one synthetic GET, keyed the same way as a real request. */
+function restFallback(
+  path: string,
+  fixtures: Fixtures,
+  role: Role,
+  searchParams: Record<string, string> = {},
+): LooseRecord {
+  const restUrl = new URL(path, "http://mock.local");
+  for (const [key, value] of Object.entries(searchParams)) restUrl.searchParams.set(key, value);
+  const override = fixtures[`GET ${path}`] ?? fixtures[path];
+  const body = override === undefined ? defaults(restUrl, "GET", role) : override;
+  return (typeof body === "function" ? body(restUrl, "GET") : body) as LooseRecord;
+}
+
+/** A review-queue row, the same fields the server derives from a Record (queueRowFromRecord). */
+function queueRow(record: LooseRecord): LooseRecord {
+  const text = String(record.text || "");
+  return {
+    record_id: record.record_id,
+    record_revision: record.record_revision ?? null,
+    topology_index: record.topology_index ?? null,
+    page_start: record.page_start != null ? String(record.page_start) : null,
+    page_end: record.page_end != null ? String(record.page_end) : null,
+    text_length: Number(record.text_length ?? text.length),
+    text_preview: text.length > 90 ? `${text.slice(0, 90)}…` : text,
+    review_state: record.review_state || "ready",
+    review_issue_codes: record.review_issue_codes ?? [],
+    review_disposition: record.review_disposition || (record.accepted ? "accepted" : "pending"),
+    metadata_llm_processed: Boolean(record.metadata_enrichment_finished),
+    source_issue_count: record.source_quality_issues?.length ?? 0,
+  };
+}
+
+function vectorRow(record: LooseRecord): LooseRecord {
+  return {
+    chroma_id: String(record._chroma_id || record.record_id || ""),
+    record_id: record.record_id ?? null,
+    work: record.work ?? null,
+    page_start: record.page_start != null ? String(record.page_start) : null,
+    page_end: record.page_end != null ? String(record.page_end) : null,
+    text_summarized: false,
+    text_preview: String(record.text || "").slice(0, 90),
+  };
+}
+
+/** The full (unpaginated, unfiltered) Corpus Builder record list, for the record-id-scoped reads. */
+function corpusRecordsAll(buildId: string, fixtures: Fixtures, role: Role): LooseRecord[] {
+  const page = restFallback(`/api/pdf/corpus-builds/${buildId}/records`, fixtures, role, {
+    offset: "0",
+    limit: "1000",
+  });
+  return Array.isArray(page.items) ? page.items : [];
+}
+
+/**
+ * Answers for the read-only GraphQL façade. Corpus Builder and Vector Store reads are derived from
+ * the same REST fixtures/defaults their REST predecessors used, so a scenario that overrides one
+ * REST endpoint (or none at all) gets a consistent answer on both transports without duplicating
+ * fixture data. `CelfModel` and `SimilarValidatedClaims` have no REST predecessor and stay static.
+ */
+export function graphqlDefaults(
+  operationName: string,
+  variables: LooseRecord,
+  fixtures: Fixtures,
+  role: Role,
+): unknown {
   if (operationName === "CelfModel")
     return { data: { celf_model: { specification_version: "1.0", nodes: [], edges: [] } } };
   if (operationName === "SimilarValidatedClaims")
     return { data: { generated_claim: { claim_id: "", similar_validated_claims: [] } } };
+
+  if (operationName === "CorpusReviewQueue") {
+    const buildId = String(variables.build_id || "");
+    const queue = String(variables.filter?.queue || "all");
+    const offset = Number(variables.offset || 0);
+    const limit = Number(variables.limit || 50);
+    const page = restFallback(`/api/pdf/corpus-builds/${buildId}/records`, fixtures, role, {
+      offset: String(offset),
+      limit: String(limit),
+      ...(queue && queue !== "all" ? { review_queue: queue } : {}),
+    });
+    const items: LooseRecord[] = Array.isArray(page.items) ? page.items : [];
+    const total = Number(page.total ?? items.length);
+    const build = restFallback(`/api/pdf/corpus-builds/${buildId}`, fixtures, role);
+    const counts = {
+      all: 0,
+      ready: 0,
+      preparing: 0,
+      issues: 0,
+      metadata: 0,
+      topology: 0,
+      source: 0,
+      accepted: 0,
+      rejected: 0,
+      pending: 0,
+      ...(build.review_queue_counts || {}),
+    };
+    return {
+      data: {
+        corpus_build: {
+          build_id: buildId,
+          review_queue: {
+            total,
+            offset,
+            limit,
+            has_next_page: offset + items.length < total,
+            topology_count: total,
+            counts,
+            rows: items.map(queueRow),
+          },
+        },
+      },
+    };
+  }
+
+  if (operationName === "CorpusQueueRows" || operationName === "CorpusReviewRecords") {
+    const buildId = String(variables.build_id || "");
+    const wanted = new Set((variables.record_ids || []).map(String));
+    const items = corpusRecordsAll(buildId, fixtures, role).filter((record) =>
+      wanted.has(String(record.record_id)),
+    );
+    return operationName === "CorpusQueueRows"
+      ? { data: { corpus_build: { rows: items.map(queueRow) } } }
+      : {
+          data: {
+            corpus_build: {
+              records: items.map((record) => ({
+                record_id: record.record_id,
+                record_revision: record.record_revision ?? null,
+                review_document: record,
+              })),
+            },
+          },
+        };
+  }
+
+  if (operationName === "CorpusQueueTexts") {
+    const buildId = String(variables.build_id || "");
+    const wanted = new Set((variables.record_ids || []).map(String));
+    const items = corpusRecordsAll(buildId, fixtures, role).filter((record) =>
+      wanted.has(String(record.record_id)),
+    );
+    return {
+      data: {
+        corpus_build: {
+          records: items.map((record) => ({ record_id: record.record_id, text: record.text })),
+        },
+      },
+    };
+  }
+
+  if (operationName === "CorpusMetadataFacets")
+    return { data: { corpus_build: { metadata_facets: [] } } };
+
+  if (operationName === "VectorStoreBrowse") {
+    const name = String(variables.name || "");
+    const store = restFallback(`/api/stores/${name}/records`, fixtures, role);
+    const records: LooseRecord[] = Array.isArray(store.records) ? store.records : [];
+    const workCounts = new Map<string, number>();
+    for (const record of records) {
+      const work = String(record.work || "");
+      if (work) workCounts.set(work, (workCounts.get(work) || 0) + 1);
+    }
+    const works = [...workCounts.entries()].map(([work, record_count]) => ({ work, record_count }));
+    let recordsField: LooseRecord | null = null;
+    if (variables.include_records) {
+      const filtered = variables.work ? records.filter((r) => r.work === variables.work) : records;
+      const offset = Number(variables.offset || 0);
+      const limit = Number(variables.limit || 50);
+      const page = filtered.slice(offset, offset + limit);
+      recordsField = {
+        total: filtered.length,
+        offset,
+        limit,
+        has_next_page: offset + page.length < filtered.length,
+        rows: page.map(vectorRow),
+      };
+    }
+    return { data: { vector_store: { name, works, records: recordsField } } };
+  }
+
+  if (operationName === "StoredRecordTrace") {
+    const name = String(variables.name || "");
+    const store = restFallback(`/api/stores/${name}/records`, fixtures, role);
+    const records: LooseRecord[] = Array.isArray(store.records) ? store.records : [];
+    const record = records.find(
+      (item) => String(item._chroma_id || "") === String(variables.chroma_id || ""),
+    );
+    if (!record) return { data: { vector_store: { record: null } } };
+    return {
+      data: {
+        vector_store: {
+          record: {
+            chroma_id: String(record._chroma_id || ""),
+            record_id: record.record_id ?? null,
+            materialization: "vector_projection",
+            document: record,
+            graph: {
+              specification_version: "1.0",
+              root_id: String(record._chroma_id || ""),
+              hidden_assertion_count: 0,
+              record_state_origin: "vector_projection",
+              nodes: [],
+              edges: [],
+            },
+          },
+        },
+      },
+    };
+  }
+
   return { data: null, errors: [{ message: `No e2e fixture for ${operationName}` }] };
 }
 
@@ -631,14 +839,19 @@ export async function mockBackend(
       const url = new URL(route.request().url());
       const method = route.request().method();
       const match = fixtures[`${method} ${url.pathname}`] ?? fixtures[url.pathname];
-      const graphqlOperation =
+      const graphqlRequest =
         url.pathname === "/api/graphql"
-          ? String((route.request().postDataJSON() as { operationName?: string })?.operationName)
-          : "";
+          ? (route.request().postDataJSON() as { operationName?: string; variables?: LooseRecord })
+          : null;
       const body =
         match === undefined
-          ? graphqlOperation
-            ? graphqlDefaults(graphqlOperation)
+          ? graphqlRequest
+            ? graphqlDefaults(
+                String(graphqlRequest.operationName || ""),
+                graphqlRequest.variables || {},
+                fixtures,
+                role,
+              )
             : defaults(url, method, role)
           : typeof match === "function"
             ? match(url, method)

@@ -20,6 +20,23 @@ export const Running: Story = {
     },
   },
 };
+export const RunningWithDraft: Story = {
+  args: {
+    job: {
+      id: "run-1",
+      status: "running",
+      prompt: "How are ethics and mortality linked?",
+      stage: "generation",
+      stage_detail: "Generating the answer",
+    },
+    draft: {
+      jobId: "run-1",
+      text: "Derrida treats mortality not simply as an ontological property of Dasein but as a relation to the other that",
+      gap: false,
+      final: false,
+    },
+  },
+};
 export const Completed: Story = {
   args: {
     job: {

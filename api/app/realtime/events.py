@@ -59,7 +59,17 @@ _CORPUS_SUMMARY_KEYS = (
     "started_at",
     "finished_at",
 )
+TERMINAL_JOB_STATUSES = frozenset({"completed", "failed", "cancelled", "interrupted"})
 _METADATA_KEYS = tuple(key for key in _CORPUS_SUMMARY_KEYS if key.startswith("metadata_tasks_"))
+
+METADATA_NOTE_EVENTS = {
+    "record_started": "corpus.record_started",
+    "field_checked": "corpus.field_checked",
+    "record_completed": "corpus.record_completed",
+}
+# One llm.token event carries at most this much text; a longer pending draft is
+# split into several sequence-numbered events.
+MAX_TOKEN_EVENT_CHARS = 4096
 
 
 def job_event_types(previous: dict[str, Any] | None, current: dict[str, Any]) -> list[str]:
@@ -142,6 +152,9 @@ class RealtimeObserver:
         self._jobs: dict[str, dict[str, Any]] = {}
         self._builds: dict[str, dict[str, Any]] = {}
         self._activity: dict[str, dict[str, Any]] = {}
+        self._background: dict[str, dict[str, Any]] = {}
+        self._generation_seq: dict[str, int] = {}
+        self.metadata_notes_dropped = 0
         self._primed = False
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -190,11 +203,18 @@ class RealtimeObserver:
             self._primed = True
         else:
             self._publish_job_diff(current)
-        builds, activity = operation_events.drain()
-        for build_id, raw in builds.items():
+        notes = operation_events.drain()
+        for build_id, raw in notes.builds.items():
             self._publish_build(build_id, raw)
-        for build_id, state in activity.items():
+        for build_id, state in notes.model_activity.items():
             self._publish_activity(build_id, state)
+        self.metadata_notes_dropped += notes.metadata_dropped
+        for note in notes.metadata:
+            self._publish_metadata_note(note)
+        for job_id, buffer in notes.generation.items():
+            self._publish_generation(job_id, buffer)
+        for kind, summary in notes.activity.items():
+            self._publish_background_activity(kind, summary)
 
     def _publish_job(self, event_type: str, summary: dict[str, Any], *, previous_status: Any = None) -> None:
         job_id = str(summary.get("id"))
@@ -215,7 +235,10 @@ class RealtimeObserver:
             previous = self._jobs.get(job_id)
             for event_type in job_event_types(previous, summary):
                 self._publish_job(event_type, summary, previous_status=(previous or {}).get("status"))
+            if str(summary.get("status")) in TERMINAL_JOB_STATUSES:
+                self._generation_seq.pop(job_id, None)
         for job_id in set(self._jobs) - set(current):
+            self._generation_seq.pop(job_id, None)
             gone = self._jobs[job_id]
             self._publish_job("job.removed", {key: gone.get(key) for key in ("id", "type", "owner")})
         self._jobs = current
@@ -258,5 +281,67 @@ class RealtimeObserver:
             resource_id=build_id,
             payload={"activity": dict(state)},
             topics=("corpus-builds", f"corpus-build:{build_id}"),
+            audience=Audience(admin_only=True),
+        )
+
+    def _publish_metadata_note(self, note: dict[str, Any]) -> None:
+        event_type = METADATA_NOTE_EVENTS.get(str(note.get("kind")))
+        build_id = str(note.get("build_id") or "")
+        if event_type is None or not build_id:
+            return
+        # Identifiers, family, terminal state and precedent counts only: never
+        # field values, evidence or model output. Sent on the build's own topic,
+        # not the global feed, because only a watching view can use them.
+        payload = {key: value for key, value in note.items() if key not in {"build_id", "kind"}}
+        self.broker.publish(
+            event_type,
+            resource_type="corpus_build",
+            resource_id=build_id,
+            payload={"metadata": payload},
+            topics=(f"corpus-build:{build_id}",),
+            audience=Audience(admin_only=True),
+        )
+
+    def _publish_generation(self, job_id: str, buffer: operation_events.GenerationBuffer) -> None:
+        """Forward streamed Research draft text on ``job:<id>`` only, to whoever may read that job."""
+        text = "".join(buffer.chunks)
+        pieces = [text[index:index + MAX_TOKEN_EVENT_CHARS] for index in range(0, len(text), MAX_TOKEN_EVENT_CHARS)]
+        if buffer.finished and not pieces:
+            pieces = [""]
+        audience = Audience(owner=buffer.owner, admin_only=False, capability="rag.jobs.own")
+        for index, piece in enumerate(pieces):
+            seq = self._generation_seq.get(job_id, 0) + 1
+            self._generation_seq[job_id] = seq
+            last = index == len(pieces) - 1
+            self.broker.publish(
+                "llm.token",
+                resource_type="job",
+                resource_id=job_id,
+                payload={
+                    "generation": {
+                        "seq": seq,
+                        "delta": piece,
+                        # Text was dropped before this delta: the client must stop
+                        # appending and wait for the final answer.
+                        "gap": bool(buffer.gap and index == 0),
+                        "final": bool(buffer.finished and last),
+                    },
+                },
+                topics=(f"job:{job_id}",),
+                audience=audience,
+            )
+        if buffer.finished:
+            self._generation_seq.pop(job_id, None)
+
+    def _publish_background_activity(self, kind: str, summary: dict[str, Any]) -> None:
+        if self._background.get(kind) == summary:
+            return
+        self._background[kind] = dict(summary)
+        self.broker.publish(
+            "activity.changed",
+            resource_type="activity",
+            resource_id=kind,
+            payload={"activity": dict(summary)},
+            topics=(f"activity:{kind}",),
             audience=Audience(admin_only=True),
         )

@@ -1,32 +1,8 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 # Same payload as POST /api/derridai/graph/record; claims and support are joined server-side.
+# For a Record already stored in a vector store, prefer StoredRecordTrace (no upload).
 query RecordGraph($record: JSON!, $include_assertion_history: Boolean! = false) {
   record_graph(record: $record, include_assertion_history: $include_assertion_history) {
-    specification_version
-    root_id
-    hidden_assertion_count
-    record_state_origin
-    nodes {
-      id
-      object_type
-      object_id
-      label
-      summary
-      materialization
-      status
-      details
-    }
-    edges {
-      id
-      source
-      target
-      relation
-      inverse_relation
-      normative
-      source_cardinality
-      target_cardinality
-      profile
-      status
-    }
+    ...ResearchObjectGraphFields
   }
 }

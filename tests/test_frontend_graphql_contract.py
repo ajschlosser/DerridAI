@@ -58,23 +58,55 @@ def test_graphql_transport_is_a_post_route() -> None:
 def test_the_checker_rejects_each_class_of_mistake(tmp_path, monkeypatch, graphql_schema, document, expected) -> None:
     import scripts.check_frontend_graphql_contract as checker
 
-    directory = ROOT / "web" / "src" / "api" / "graphql" / "operations"
     monkeypatch.setattr(checker, "ROOT", tmp_path)
-    fake = tmp_path / "ops"
+    fake = tmp_path / "src"
     fake.mkdir()
     (fake / "Bad.graphql").write_text(document, encoding="utf-8")
-    (fake / "index.ts").write_text('import Bad from "./Bad.graphql?raw";\n', encoding="utf-8")
     failures = contract_mismatches(graphql_schema, fake)
     assert any(all(part in failure for part in expected) for failure in failures), failures
-    assert directory.exists()
 
 
-def test_the_checker_requires_registration(tmp_path, monkeypatch, graphql_schema) -> None:
+def _write(directory: Path, name: str, source: str) -> None:
+    path = directory / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(source, encoding="utf-8")
+
+
+def test_fragments_colocated_anywhere_are_validated_with_the_queries_that_spread_them(
+    tmp_path, monkeypatch, graphql_schema,
+) -> None:
     import scripts.check_frontend_graphql_contract as checker
 
     monkeypatch.setattr(checker, "ROOT", tmp_path)
-    fake = tmp_path / "ops"
-    fake.mkdir()
-    (fake / "Orphan.graphql").write_text("query Orphan { celf_model { specification_version } }", encoding="utf-8")
-    (fake / "index.ts").write_text("", encoding="utf-8")
-    assert contract_mismatches(graphql_schema, fake) == ["ops/Orphan.graphql: not registered in operations/index.ts"]
+    src = tmp_path / "src"
+    _write(src, "features/a/ModelFields.graphql", "fragment ModelFields on CelfModel { specification_version }")
+    _write(src, "api/Model.graphql", "query Model { celf_model { ...ModelFields } }")
+    _write(src, "api/schema.graphql", "type Query { ignored: String }")
+    assert contract_mismatches(graphql_schema, src) == []
+
+    _write(src, "features/a/ModelFields.graphql", "fragment ModelFields on CelfModel { no_such_field }")
+    assert any("no_such_field" in failure for failure in contract_mismatches(graphql_schema, src))
+
+
+@pytest.mark.parametrize(
+    ("files", "expected"),
+    [
+        ({"Unused.graphql": "fragment Unused on CelfModel { specification_version }"}, "fragment Unused is not used"),
+        ({"Wrong.graphql": "fragment Other on CelfModel { specification_version }"}, "fragment must be named Wrong"),
+        ({"Q.graphql": "query Q { celf_model { ...Missing } }"}, "Missing"),
+        (
+            {"Two.graphql": "query Two { celf_model { nodes { type } } }\nfragment F on CelfModel { edges { id } }"},
+            "expected exactly one definition",
+        ),
+    ],
+)
+def test_the_checker_enforces_fragment_rules(tmp_path, monkeypatch, graphql_schema, files, expected) -> None:
+    import scripts.check_frontend_graphql_contract as checker
+
+    monkeypatch.setattr(checker, "ROOT", tmp_path)
+    src = tmp_path / "src"
+    _write(src, "Model.graphql", "query Model { celf_model { specification_version } }")
+    for name, source in files.items():
+        _write(src, name, source)
+    failures = contract_mismatches(graphql_schema, src)
+    assert any(expected in failure for failure in failures), failures

@@ -142,9 +142,24 @@ def chat_complete(
     max_tokens: int | None = None,
     cancelled: Callable[[], bool] | None = None,
     timeout_seconds: float | None = None,
+    on_delta: Callable[[str], None] | None = None,
 ) -> str:
+    """One chat completion. ``on_delta`` receives streamed text pieces as they arrive.
+
+    Deltas are an untrusted, unvalidated draft for live display only; the return
+    value is the complete answer every caller must validate. A failing callback
+    never interrupts generation.
+    """
     tuning = options or OllamaTouchupOptions()
     provider = provider.strip().lower()
+
+    def emit(piece: str) -> None:
+        if on_delta is None or not piece:
+            return
+        try:
+            on_delta(piece)
+        except Exception:
+            logger.debug("Generation delta callback failed; continuing", exc_info=True)
 
     if provider == "openai":
         url = (base_url or settings.openai_compat_base_url).rstrip("/")
@@ -222,6 +237,7 @@ def chat_complete(
                                 )
                             if piece:
                                 chunks.append(str(piece))
+                                emit(str(piece))
                 return 200, "".join(chunks).strip(), ""
 
             status, content, detail = stream_once(body)
@@ -374,6 +390,7 @@ def chat_complete(
                         piece = ((payload_line.get("message") or {}).get("content") or "")
                         if piece:
                             chunks.append(str(piece))
+                            emit(str(piece))
                         if payload_line.get("done"):
                             break
             return 200, "".join(chunks).strip(), ""
@@ -926,6 +943,7 @@ def run_rag_pipeline(
     progress: Callable[[str, int, int, str], None] | None = None,
     cancelled: Callable[[], bool] | None = None,
     owner: str | None = None,
+    on_generation_delta: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     stages: list[dict[str, Any]] = []
@@ -1343,6 +1361,7 @@ def run_rag_pipeline(
             else 8192
         ),
         cancelled=cancelled,
+        on_delta=on_generation_delta,
     )
     stages.append({
         "name": "generation",

@@ -1,5 +1,4 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
-import type { CorpusRecord } from "../api/pdfCorpus";
 import CorpusBulkMetadataEditor from "./CorpusBulkMetadataEditor.vue";
 const meta: Meta<typeof CorpusBulkMetadataEditor> = {
   title: "Corpus Builder/Review/Bulk Metadata Editor",
@@ -10,28 +9,10 @@ const meta: Meta<typeof CorpusBulkMetadataEditor> = {
     disabled: false,
     regionTypes: ["front_matter", "main_text", "notes", "back_matter"],
     discourseRoles: ["assertion", "analysis", "quotation", "paratext"],
-    records: [
-      {
-        record_id: "r1",
-        text: "Derrida discusses hospitality and forgiveness.",
-        text_length: 45,
-        source_block_ids: ["b1"],
-        source_spans: [],
-        region_type: "main_text",
-        speaker: "Derrida",
-        topics: ["hospitality", "forgiveness"],
-      },
-      {
-        record_id: "r2",
-        text: "Simon Critchley introduces the volume.",
-        text_length: 37,
-        source_block_ids: ["b2"],
-        source_spans: [],
-        region_type: "front_matter",
-        speaker: "Simon Critchley",
-        topics: ["cosmopolitanism"],
-      },
-    ] as CorpusRecord[],
+    knownValues: {
+      speaker: ["Derrida", "Simon Critchley"],
+      topics: ["hospitality", "forgiveness", "cosmopolitanism"],
+    },
   },
 };
 export default meta;
