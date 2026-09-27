@@ -78,6 +78,28 @@ export const LoadError: Story = {
     },
   },
 };
+export const Loading: Story = {
+  args: { load: () => new Promise(() => {}) },
+};
+export const Absence: Story = {
+  args: {
+    load: async () => ({
+      ...precedents,
+      items: [
+        {
+          exemplar_id: "mex-9",
+          record_id: "r-9",
+          record_revision: 2,
+          value: null,
+          kind: "absence",
+          similarity: 0.63,
+          evidence_bound: true,
+          evidence: "The preface names no date of composition.",
+        },
+      ],
+    }),
+  },
+};
 
 /** Kept from the last enrichment: the count shows on the closed toggle, and one precedent has since changed. */
 export const KeptFromEnrichment: Story = {
@@ -91,6 +113,7 @@ export const KeptFromEnrichment: Story = {
     sourceBlockIds: ["b-1", "b-2", "b-3"],
   },
 };
+
 /** Audio: candidates are located by time range, not page. */
 export const TimedSource: Story = {
   args: {

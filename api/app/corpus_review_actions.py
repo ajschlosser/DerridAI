@@ -1077,9 +1077,6 @@ class ReviewActionsMixin:
         record = record if record is not None else self.repo.get_record(build_id, record_id)
         build = build if build is not None else self.repo.get_build(build_id)
         _decorate_review_state(record)
-        remaining_fields = list(dict.fromkeys([
-            str(v) for v in (record.get("metadata_incomplete_fields") or []) + (record.get("metadata_review_fields") or [])
-        ]))
         return {
             "applied": bool(applied),
             "changed_fields": applied,
@@ -1088,10 +1085,6 @@ class ReviewActionsMixin:
             "warnings": warnings or [],
             "record": record,
             "build": build,
-            "queue_counts": _queue_counts(self.repo.load_records(build_id)),
-            "remaining_fields": remaining_fields,
-            "ready_for_acceptance": bool(record.get("can_accept")),
-            "review_state": str(record.get("review_state") or "ready"),
         }
 
 

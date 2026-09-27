@@ -359,6 +359,16 @@ watch(
                 {{ i18n.t("pdf_corpus.clean_text") }}
               </button>
               <button
+                class="btn small primary"
+                type="button"
+                :disabled="busy || !String(textDraft || '').trim()"
+                aria-keyshortcuts="Control+S Meta+S"
+                :title="i18n.t('pdf_corpus.save_reviewed_text') + ' (Ctrl/Cmd S)'"
+                @click="requestSaveText"
+              >
+                {{ i18n.t("ui.save") }}
+              </button>
+              <button
                 class="btn small"
                 type="button"
                 :disabled="busy"
@@ -389,12 +399,14 @@ watch(
 
         <aside
           v-if="record.text_touchup_proposal?.status === 'pending_review'"
-          class="focus-note"
+          class="focus-note touchup-note"
           data-tone="info"
           role="status"
         >
-          <b>{{ i18n.t("pdf_corpus.llm_touchup_proposal_available") }}</b>
-          <span>{{ i18n.t("pdf_corpus.llm_touchup_proposal_help") }}</span>
+          <div class="touchup-note-copy">
+            <b>{{ i18n.t("pdf_corpus.llm_touchup_proposal_available") }}</b>
+            <span>{{ i18n.t("pdf_corpus.llm_touchup_proposal_help") }}</span>
+          </div>
           <button
             class="btn small"
             type="button"

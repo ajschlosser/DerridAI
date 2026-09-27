@@ -14,6 +14,7 @@ export type RecordMutation = (context: RecordMutationContext) => Promise<unknown
  */
 export class RecordMutationQueue {
   private readonly pending = new Map<string, Promise<void>>();
+  private readonly queued = new Map<string, number>();
 
   enqueue(
     recordIds: string | readonly string[],
@@ -26,10 +27,17 @@ export class RecordMutationQueue {
     // A later mutation for the same record must rebase even when the earlier
     // mutation succeeds. Its caller captured an older optimistic revision before
     // the preceding request reached the server.
+    keys.forEach((recordId) => this.queued.set(recordId, (this.queued.get(recordId) || 0) + 1));
     const hadPending = keys.some((recordId) => this.pending.has(recordId));
     const previous = Promise.all(
       keys.map((recordId) => this.pending.get(recordId) || Promise.resolve()),
     );
+    const settle = () =>
+      keys.forEach((recordId) => {
+        const left = (this.queued.get(recordId) || 1) - 1;
+        if (left > 0) this.queued.set(recordId, left);
+        else this.queued.delete(recordId);
+      });
     const current = previous
       .catch(() => undefined)
       .then(async () => {
@@ -55,6 +63,7 @@ export class RecordMutationQueue {
       });
     keys.forEach((recordId) => this.pending.set(recordId, current));
     void current.finally(() => {
+      settle();
       keys.forEach((recordId) => {
         if (this.pending.get(recordId) === current) this.pending.delete(recordId);
       });
@@ -74,6 +83,11 @@ export class RecordMutationQueue {
       // Let the finally handlers remove completed entries before checking again.
       await Promise.resolve();
     }
+  }
+
+  /** True when a mutation for this record is queued behind the one currently running. */
+  hasQueuedBehind(recordId: string): boolean {
+    return (this.queued.get(recordId) || 0) > 1;
   }
 
   hasPending(recordId: string): boolean {

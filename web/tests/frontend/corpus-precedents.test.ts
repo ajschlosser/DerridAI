@@ -66,7 +66,7 @@ describe("reviewed precedents in Record Review", () => {
         preloaded: { ...precedents, source: "enrichment", stale_count: 2 },
       },
     });
-    expect(wrapper.get("button").text()).toContain("(1)");
+    expect(wrapper.get("button").text()).toContain("1 found");
     await wrapper.get("button").trigger("click");
     expect(load).not.toHaveBeenCalled();
     // One status line says where the list came from and what is hidden.
