@@ -97,6 +97,7 @@ import {
   sourceWarningsHidden,
 } from "../domain/sourceQuality";
 import { recurringShortLines } from "../domain/textCleanup";
+import { allEvidenceBlockIds } from "../domain/metadataEvidence";
 import * as runtime from "../runtime/runtime.js";
 
 const i18n = useI18nStore();
@@ -741,11 +742,11 @@ const evidenceBlockIds = computed(() => {
   if (!selectedRecord.value) return new Set<string>();
   if (selectedEvidenceField.value) {
     const info = selectedRecord.value.metadata_evidence?.[selectedEvidenceField.value];
-    return new Set((info?.block_ids || []).map(String));
+    return new Set(allEvidenceBlockIds(info));
   }
   return new Set(
     Object.values(selectedRecord.value.metadata_evidence || {}).flatMap((info) =>
-      (info.block_ids || []).map(String),
+      allEvidenceBlockIds(info),
     ),
   );
 });
@@ -1797,7 +1798,7 @@ watch([reviewQueue, recordQuery], () => {
 });
 watch(selectedEvidenceField, (field) => {
   if (!field || !selectedRecord.value) return;
-  const ids = selectedRecord.value.metadata_evidence?.[field]?.block_ids || [];
+  const ids = allEvidenceBlockIds(selectedRecord.value.metadata_evidence?.[field]);
   const first = sourceBlocks.value.find((block) => ids.includes(block.block_id));
   if (first) selectedPdfPage.value = Number(first.page || selectedPdfPage.value);
 });

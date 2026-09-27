@@ -3,10 +3,12 @@
 import { computed } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import { metadataValueText } from "../domain/metadataValues";
+import { allEvidenceBlockIds } from "../domain/metadataEvidence";
 import AppIcon from "./AppIcon.vue";
 
 type Evidence = {
   block_ids?: string[];
+  external_block_ids?: string[];
   confidence?: number | null;
   reason?: string;
   reviewed_by?: string;
@@ -21,7 +23,7 @@ const props = defineProps<{
 const emit = defineEmits<{ select: [field: string] }>();
 const i18n = useI18nStore();
 
-const spanCount = (field: string) => (props.evidence?.[field]?.block_ids || []).length;
+const spanCount = (field: string) => allEvidenceBlockIds(props.evidence?.[field]).length;
 const valueOf = (field: string) => metadataValueText(props.values?.[field]);
 /** Fields with a value but no evidence come first: they are the work that is left. */
 const fieldNames = computed(() =>
