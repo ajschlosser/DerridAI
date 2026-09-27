@@ -1,47 +1,70 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { computed, ref, useId, watch } from "vue";
-import { corpusBuilderApi, type MetadataPrecedent, type MetadataPrecedents } from "../api/corpus";
+import {
+  corpusBuilderApi,
+  type MetadataPrecedent,
+  type MetadataPrecedents,
+  type PrecedentCandidateUnit,
+} from "../api/corpus";
+import { candidateLocation } from "../domain/metadataPrecedents";
+import { timeLabel } from "../domain/sourceMedia";
 import { useI18nStore } from "../stores/i18n";
 import UiStatusBadge from "./ui/UiStatusBadge.vue";
 
-// "Similar reviewed precedents" for one field: the same selection metadata enrichment
-// uses, shown beside the source evidence. Read-only; loaded only when opened, and it
-// can never set a value.
+// "Similar reviewed precedents" for one field: how reviewers decided it on similar evidence in other records, as
+// metadata enrichment saw them. Kept precedents arrive with the record (`preloaded`), so their count is available
+// before opening; otherwise they load on demand. "Use this value" fills a draft only, and candidate passages are
+// always blocks from the record under review.
 const props = withDefaults(
   defineProps<{
     buildId: string;
     recordId: string;
     field: string;
     fieldLabel: string;
+    /** This field's precedents kept from the last enrichment, when the record has them. */
+    preloaded?: MetadataPrecedents | null;
+    /** The record's block ids in reading order, for locating candidates that have no page or time. */
+    sourceBlockIds?: string[];
+    /** Offer "Use this value"; off where the field cannot be edited. */
+    canUse?: boolean;
     /** Injected for Storybook and tests; defaults to the corpus API. */
-    load?: (buildId: string, recordId: string, field: string) => Promise<MetadataPrecedents>;
+    load?: (
+      buildId: string,
+      recordId: string,
+      field: string,
+      refresh?: boolean,
+    ) => Promise<MetadataPrecedents>;
   }>(),
-  { load: undefined },
+  { preloaded: null, sourceBlockIds: () => [], canUse: true, load: undefined },
 );
+const emit = defineEmits<{ use: [value: unknown] }>();
 
 const i18n = useI18nStore();
 const panelId = useId();
 const open = ref(false);
 const loading = ref(false);
 const error = ref("");
-const result = ref<MetadataPrecedents | null>(null);
+const fetched = ref<MetadataPrecedents | null>(null);
+const usedKey = ref("");
+const result = computed(() => fetched.value ?? props.preloaded ?? null);
 
 watch(
   () => [props.buildId, props.recordId, props.field],
   () => {
-    result.value = null;
+    fetched.value = null;
     error.value = "";
-    if (open.value) void fetchPrecedents();
+    usedKey.value = "";
+    if (open.value && !props.preloaded) void fetchPrecedents(false);
   },
 );
 
-async function fetchPrecedents() {
+async function fetchPrecedents(refresh: boolean) {
   loading.value = true;
   error.value = "";
   try {
     const load = props.load ?? corpusBuilderApi.precedents;
-    result.value = await load(props.buildId, props.recordId, props.field);
+    fetched.value = await load(props.buildId, props.recordId, props.field, refresh);
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);
   } finally {
@@ -51,16 +74,30 @@ async function fetchPrecedents() {
 
 function toggle() {
   open.value = !open.value;
-  if (open.value && !result.value && !loading.value) void fetchPrecedents();
+  if (open.value && !result.value && !loading.value) void fetchPrecedents(false);
 }
 
-const modeNote = computed(() => {
-  const mode = result.value?.mode;
-  if (mode === "semantic") return i18n.t("pdf_corpus.precedents_mode_semantic");
-  if (mode === "lexical") return i18n.t("pdf_corpus.precedents_mode_lexical");
-  return "";
+// One compact status line: where the list came from, matching mode, and anything now stale.
+const statusParts = computed(() => {
+  const current = result.value;
+  if (!current) return [];
+  const parts: string[] = [];
+  if (current.source === "enrichment") {
+    const when = current.computed_at ? new Date(current.computed_at) : null;
+    parts.push(
+      i18n.tf("pdf_corpus.precedents_kept", {
+        time: when && !Number.isNaN(when.getTime()) ? when.toLocaleString() : "—",
+      }),
+    );
+  }
+  if (current.fallback_reason)
+    parts.push(i18n.tf("pdf_corpus.precedents_fallback", { detail: current.fallback_reason }));
+  else if (current.mode === "semantic") parts.push(i18n.t("pdf_corpus.precedents_mode_semantic"));
+  else if (current.mode === "lexical") parts.push(i18n.t("pdf_corpus.precedents_mode_lexical"));
+  if (current.stale_count)
+    parts.push(i18n.tf("pdf_corpus.precedents_stale", { count: current.stale_count }));
+  return parts;
 });
-
 function display(value: unknown): string {
   if (value === null || value === undefined || value === "") return "—";
   if (Array.isArray(value)) return value.map(display).join(", ");
@@ -82,6 +119,27 @@ function kindLabel(item: MetadataPrecedent): {
   if (item.kind === "absence")
     return { label: i18n.t("pdf_corpus.precedent_kind_absence"), tone: "neutral" };
   return { label: i18n.t("pdf_corpus.precedent_kind_positive"), tone: "info" };
+}
+
+const itemKey = (item: MetadataPrecedent) =>
+  item.exemplar_id || `${item.record_id}:${display(item.value)}`;
+
+function candidateLabel(unit: PrecedentCandidateUnit) {
+  const score = Math.max(0, Math.min(100, Math.round(unit.score * 100)));
+  const where = candidateLocation(unit, props.sourceBlockIds);
+  if (where.kind === "page")
+    return i18n.tf("pdf_corpus.precedent_candidate_page", { page: where.page, percent: score });
+  if (where.kind === "time")
+    return i18n.tf("pdf_corpus.precedent_candidate_time", {
+      time: timeLabel(where.start, where.end),
+      percent: score,
+    });
+  return i18n.tf("pdf_corpus.precedent_candidate_passage", { index: where.index, percent: score });
+}
+
+function useValue(item: MetadataPrecedent) {
+  usedKey.value = itemKey(item);
+  emit("use", item.value);
 }
 </script>
 
@@ -107,7 +165,7 @@ function kindLabel(item: MetadataPrecedent): {
       <span class="toggle-label">
         {{ i18n.tf("pdf_corpus.precedents_toggle", { field: fieldLabel }) }}
       </span>
-      <span v-if="result && result.items.length" class="toggle-count">
+      <span v-if="result" class="toggle-count">
         {{ i18n.tf("pdf_corpus.precedents_count", { count: result.items.length }) }}
       </span>
     </button>
@@ -120,24 +178,34 @@ function kindLabel(item: MetadataPrecedent): {
       </div>
       <div v-else-if="error" role="alert" class="field-precedents-error">
         <span>{{ i18n.tf("pdf_corpus.precedents_error", { detail: error }) }}</span>
-        <button type="button" class="btn small" @click="fetchPrecedents">
+        <button type="button" class="btn small" @click="fetchPrecedents(false)">
           {{ i18n.t("pdf_corpus.precedents_retry") }}
         </button>
       </div>
       <template v-else-if="result">
-        <p v-if="result.fallback_reason" role="status" class="field-precedents-callout">
-          {{ i18n.tf("pdf_corpus.precedents_fallback", { detail: result.fallback_reason }) }}
-        </p>
-        <p v-else-if="modeNote" class="field-precedents-note field-precedents-mode">
-          {{ modeNote }}
-        </p>
-        <p v-if="!result.items.length" role="status" class="field-precedents-empty">
-          {{ i18n.t("pdf_corpus.precedents_empty") }}
-        </p>
-        <ol v-else class="field-precedents-list">
+        <div class="field-precedents-status">
+          <p
+            v-if="statusParts.length || !result.items.length"
+            role="status"
+            :class="[
+              'field-precedents-note',
+              { 'field-precedents-callout': Boolean(result.fallback_reason) },
+            ]"
+          >
+            <template v-if="!result.items.length">
+              {{ i18n.t("pdf_corpus.precedents_empty") }}
+              <span v-if="statusParts.length"> · </span>
+            </template>
+            {{ statusParts.join(" · ") }}
+          </p>
+          <button type="button" class="btn tiny" :disabled="loading" @click="fetchPrecedents(true)">
+            {{ i18n.t("pdf_corpus.precedents_refresh") }}
+          </button>
+        </div>
+        <ol v-if="result.items.length" class="field-precedents-list">
           <li
             v-for="item in result.items"
-            :key="item.exemplar_id || `${item.record_id}:${display(item.value)}`"
+            :key="itemKey(item)"
             class="precedent-card"
             :data-kind="item.kind || 'positive'"
           >
@@ -155,6 +223,14 @@ function kindLabel(item: MetadataPrecedent): {
                   i18n.tf("pdf_corpus.precedent_similarity", { percent: percent(item) ?? 0 })
                 }}</span>
               </span>
+              <button
+                v-if="canUse && item.kind !== 'absence'"
+                type="button"
+                class="btn small precedent-use"
+                @click="useValue(item)"
+              >
+                {{ i18n.t("pdf_corpus.precedent_use") }}
+              </button>
             </div>
             <div v-if="item.kind === 'correction'" class="precedent-correction">
               <span class="precedent-label">{{ i18n.t("pdf_corpus.precedent_model_said") }}</span>
@@ -168,12 +244,12 @@ function kindLabel(item: MetadataPrecedent): {
               {{ i18n.t("pdf_corpus.precedent_no_value_label") }}
             </strong>
             <strong v-else class="precedent-value">{{ display(item.value) }}</strong>
+            <p v-if="usedKey === itemKey(item)" role="status" class="precedent-used">
+              {{ i18n.t("pdf_corpus.precedent_used") }}
+            </p>
             <p v-if="item.match" class="precedent-match">
               {{ i18n.tf("pdf_corpus.precedent_match", { fields: item.match.fields.join(", ") }) }}
             </p>
-            <blockquote v-if="item.evidence || item.excerpt" class="precedent-evidence">
-              {{ item.evidence || item.excerpt }}
-            </blockquote>
             <p class="precedent-source">
               {{
                 i18n.tf("pdf_corpus.precedent_source", {
@@ -184,6 +260,13 @@ function kindLabel(item: MetadataPrecedent): {
               <span v-if="!item.evidence_bound" class="precedent-unbound">
                 {{ i18n.t("pdf_corpus.precedent_not_evidence_bound") }}
               </span>
+            </p>
+            <blockquote v-if="item.evidence || item.excerpt" class="precedent-evidence">
+              {{ item.evidence || item.excerpt }}
+            </blockquote>
+            <p v-if="item.candidate_source_units?.length" class="precedent-candidates">
+              <strong>{{ i18n.t("pdf_corpus.precedent_candidates") }}</strong>
+              {{ item.candidate_source_units.map(candidateLabel).join(", ") }}
             </p>
           </li>
         </ol>
@@ -241,6 +324,13 @@ function kindLabel(item: MetadataPrecedent): {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--surface-inset);
+}
+.field-precedents-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+  justify-content: space-between;
 }
 .field-precedents-note {
   margin: 0;
@@ -349,6 +439,9 @@ function kindLabel(item: MetadataPrecedent): {
   align-items: center;
   justify-content: space-between;
 }
+.precedent-use {
+  margin-inline-start: auto;
+}
 .precedent-similarity {
   display: inline-flex;
   gap: 6px;
@@ -394,10 +487,19 @@ function kindLabel(item: MetadataPrecedent): {
   font-size: 0.875rem;
 }
 .precedent-match,
-.precedent-source {
+.precedent-source,
+.precedent-used,
+.precedent-candidates {
   margin: 0;
   color: var(--muted);
   font-size: 0.75rem;
+}
+.precedent-used {
+  color: var(--accent-fg);
+}
+.precedent-candidates strong {
+  color: var(--text);
+  font-weight: 600;
 }
 .precedent-unbound {
   margin-inline-start: 6px;

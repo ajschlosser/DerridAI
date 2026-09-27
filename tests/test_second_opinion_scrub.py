@@ -207,6 +207,8 @@ CARRIES_RECORDS = {
     ("GET", "/api/pdf/corpus-builds/{build_id}/editorial-memory"),
     # Same per-reviewer exclusion as editorial memory (it is built by _editorial_memory).
     ("GET", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/precedents"),
+    # Kept precedents are re-verified through _editorial_memory for the current reviewer.
+    ("GET", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/field-precedents"),
     # Validated Research claims only; no field values of the record or its neighbours.
     ("GET", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/research-claims"),
     ("GET", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/preview"),

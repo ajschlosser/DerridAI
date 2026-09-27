@@ -759,11 +759,22 @@ def decide_pdf_corpus_record_metadata_batch(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@router.get("/api/pdf/corpus-builds/{build_id}/records/{record_id}/precedents")
-def get_pdf_corpus_record_precedents(build_id: str, record_id: str, field: str) -> dict[str, Any]:
-    """Advisory reviewed precedents for one field, as metadata enrichment would use them."""
+@router.get("/api/pdf/corpus-builds/{build_id}/records/{record_id}/field-precedents")
+def get_pdf_corpus_record_field_precedents(build_id: str, record_id: str) -> dict[str, Any]:
+    """Every field's precedents kept from the last enrichment, re-verified for this reviewer."""
     try:
-        return pdf_corpus_builds.metadata_precedents(build_id, record_id, field)
+        return pdf_corpus_builds.record_precedents(build_id, record_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+
+
+@router.get("/api/pdf/corpus-builds/{build_id}/records/{record_id}/precedents")
+def get_pdf_corpus_record_precedents(
+    build_id: str, record_id: str, field: str, refresh: bool = False
+) -> dict[str, Any]:
+    """Advisory reviewed precedents for one field, as metadata enrichment used them (``refresh`` searches again)."""
+    try:
+        return pdf_corpus_builds.metadata_precedents(build_id, record_id, field, refresh=refresh)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
     except ValueError as exc:

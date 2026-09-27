@@ -7,6 +7,7 @@ import { timeLabel } from "../../domain/sourceMedia";
 import { metadataValueText } from "../../domain/metadataValues";
 import { useI18nStore } from "../../stores/i18n";
 import { allEvidenceBlockIds } from "../../domain/metadataEvidence";
+import { precedentEvidenceSuggestions } from "../../domain/metadataPrecedents";
 import AppIcon from "../AppIcon.vue";
 import FieldEvidenceList from "../FieldEvidenceList.vue";
 
@@ -50,23 +51,30 @@ watch(
     suggestState.value = "idle";
   },
 );
-async function suggest(kind: "lexical" | "llm") {
+async function suggest(kind: "lexical" | "llm" | "precedents") {
   if (!props.buildId || !props.selectedField) return;
   suggestState.value = "loading";
   const field = props.selectedField;
   const recordId = props.record.record_id;
   try {
-    const result =
-      kind === "llm" && props.llmRequest
-        ? await corpusMetadataApi.suggestEvidenceLlm(
-            props.buildId,
-            recordId,
-            field,
-            props.llmRequest,
+    // Precedents contribute only this record's own blocks that resemble their reviewed evidence.
+    const items =
+      kind === "precedents"
+        ? precedentEvidenceSuggestions(
+            await corpusMetadataApi.precedents(props.buildId, recordId, field),
+            props.record.source_block_ids || [],
           )
-        : await corpusMetadataApi.suggestEvidence(props.buildId, recordId, field);
+        : (kind === "llm" && props.llmRequest
+            ? await corpusMetadataApi.suggestEvidenceLlm(
+                props.buildId,
+                recordId,
+                field,
+                props.llmRequest,
+              )
+            : await corpusMetadataApi.suggestEvidence(props.buildId, recordId, field)
+          ).items;
     if (field !== props.selectedField || recordId !== props.record.record_id) return;
-    suggestions.value = result.items;
+    suggestions.value = items;
     suggestState.value = "done";
   } catch {
     suggestState.value = "failed";
@@ -79,7 +87,9 @@ const suggestionLabel = (item: EvidenceSuggestion) =>
     ? i18n.t("pdf_corpus.evidence_suggest_unverified")
     : item.method.startsWith("llm")
       ? i18n.t("pdf_corpus.evidence_suggested_llm")
-      : i18n.t("pdf_corpus.evidence_suggested_lexical");
+      : item.method.startsWith("precedent")
+        ? i18n.t("pdf_corpus.evidence_suggested_precedent")
+        : i18n.t("pdf_corpus.evidence_suggested_lexical");
 const rank = (blockId: string) => {
   const index = suggestions.value.findIndex((item) => item.block_id === blockId);
   return index < 0 ? Number.MAX_SAFE_INTEGER : index;
@@ -218,6 +228,14 @@ function locator(block: SourceBlock) {
           @click="suggest('llm')"
         >
           {{ i18n.t("pdf_corpus.evidence_suggest_llm") }}
+        </button>
+        <button
+          type="button"
+          class="btn small"
+          :disabled="props.disabled || suggestState === 'loading'"
+          @click="suggest('precedents')"
+        >
+          {{ i18n.t("pdf_corpus.evidence_suggest_precedents") }}
         </button>
         <span class="suggest-note" role="status">{{
           suggestState === "failed"

@@ -41,13 +41,35 @@ export interface MetadataPrecedent {
   excerpt?: string;
   /** Present only when the field's declared analogy conditions were compared and agree. */
   match?: { tier: "matched"; fields: string[] };
+  /**
+   * Blocks of the record under review ranked against this precedent's evidence. Advisory: they
+   * bind nothing, and they never come from the precedent's own record.
+   */
+  candidate_source_units?: PrecedentCandidateUnit[];
+}
+
+/** One of this record's own source blocks that resembles a precedent's reviewed evidence. */
+export interface PrecedentCandidateUnit {
+  block_id: string;
+  score: number;
+  method: string;
+  source_unit_id?: string;
+  page?: number;
+  printed_page_label?: string;
+  start?: number;
+  end?: number;
 }
 
 export interface MetadataPrecedents {
   field: string;
   record_id: string;
+  /** "enrichment": kept from the last metadata enrichment and re-verified; "live": searched now. */
+  source?: "enrichment" | "live";
+  computed_at?: string;
   mode: "semantic" | "lexical" | "none";
   fallback_reason: string;
+  /** Kept precedents that changed or are hidden from this reviewer since enrichment; not shown. */
+  stale_count?: number;
   items: MetadataPrecedent[];
 }
 
@@ -83,9 +105,14 @@ export const corpusMetadataApi = {
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/evidence-suggestions/llm`,
       { method: "POST", body: JSON.stringify({ ...request, field }) },
     ),
-  precedents: (buildId: string, recordId: string, field: string) =>
+  precedents: (buildId: string, recordId: string, field: string, refresh = false) =>
     apiRequest<MetadataPrecedents>(
-      `${recordUrl(buildId, recordId)}/precedents?field=${encodeURIComponent(field)}`,
+      `${recordUrl(buildId, recordId)}/precedents?field=${encodeURIComponent(field)}${refresh ? "&refresh=true" : ""}`,
+    ),
+  /** Every field's precedents kept from the last enrichment; fields not kept are absent. */
+  fieldPrecedents: (buildId: string, recordId: string) =>
+    apiRequest<{ record_id: string; fields: Record<string, MetadataPrecedents> }>(
+      `${recordUrl(buildId, recordId)}/field-precedents`,
     ),
   researchClaims: (buildId: string, recordId: string) =>
     apiRequest<{ items: RecordResearchClaim[] }>(`${recordUrl(buildId, recordId)}/research-claims`),
