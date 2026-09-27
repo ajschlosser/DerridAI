@@ -899,6 +899,8 @@ class PdfCorpusTextTouchupProposalStatus(BaseModel):
 
 class PdfCorpusPublishRequest(BaseModel):
     require_acceptance: bool = True
+    # Skip every human-review gate and publish outstanding suggestions as-is (not cELF-conformant).
+    accept_unreviewed: bool = False
 
 class RAGGradeRequest(BaseModel):
     question: str = Field(min_length=1)

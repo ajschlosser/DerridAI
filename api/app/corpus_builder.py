@@ -169,6 +169,7 @@ from .corpus_publication import (
     build_text_touchup_prompt,
     provenance_warnings,
     publication_blocker,
+    mark_unreviewed_publication,
     publishable_records,
     serialize_public_record,
     validate_publication_record,
@@ -3414,7 +3415,13 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             self.repo.save_build(build)
             return build
 
-    def publish(self, build_id: str, *, require_acceptance: bool = True) -> dict[str, Any]:
+    def publish(self, build_id: str, *, require_acceptance: bool = True, accept_unreviewed: bool = False) -> dict[str, Any]:
+        """Publish an immutable snapshot of the build's non-rejected records.
+
+        With `accept_unreviewed`, every outstanding suggestion is published as-is without
+        mutating stored review state, so the reviewer can keep reviewing and republish a
+        conformant corpus later. Such a publication is marked not cELF-conformant.
+        """
         build = self.repo.get_build(build_id)
         if self.repo.records_projection_dirty(build_id):
             self.repo.refresh_records_projection(build_id)
@@ -3422,9 +3429,20 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         validation = build.get("validation") or {}
         self._refresh_workflow_fields(build)
         publishable = publishable_records(records)
-        blocker = publication_blocker(build, publishable, validation, require_acceptance=require_acceptance)
+        blocker = publication_blocker(
+            build, publishable, validation, require_acceptance=require_acceptance, accept_unreviewed=accept_unreviewed
+        )
         if blocker:
             raise ValueError(blocker)
+        bypassed_review = accept_unreviewed and publication_blocker(
+            build, publishable, validation, require_acceptance=True
+        )
+        unreviewed_count = accepted_field_count = 0
+        if accept_unreviewed:
+            publishable, unreviewed_count, accepted_field_count = mark_unreviewed_publication(publishable)
+            bypassed_review = bypassed_review or (
+                f"{accepted_field_count} suggested field value(s) were accepted without review." if accepted_field_count else False
+            )
         publication_id = f"publication-{build_id.removeprefix('build-')}-{uuid.uuid4().hex[:8]}"
         created_at = iso_now()
         # Warnings are provenance: those about a record are published with it, the rest with the publication.
@@ -3462,6 +3480,12 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             "created_at": created_at,
             "provenance_warnings": build_warnings,
             "record_warning_count": sum(len(items) for items in record_warnings.values()),
+            "review_mode": "unreviewed" if accept_unreviewed else "reviewed",
+            # A publication that skipped any human-review gate is usable but not a valid cELF corpus.
+            "celf_conformant": not bypassed_review,
+            "unreviewed_record_count": unreviewed_count,
+            "unreviewed_accepted_field_count": accepted_field_count,
+            "bypassed_review_blocker": bypassed_review or None,
         }
         build["publication"] = publication
         # Build lifecycle and publication lifecycle are separate. A publication is

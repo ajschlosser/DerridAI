@@ -297,6 +297,11 @@ export interface CorpusBuild {
     sha256: string;
     record_count: number;
     created_at: string;
+    /** "unreviewed" when human-review gates were skipped; such a publication is not cELF-conformant. */
+    review_mode?: "reviewed" | "unreviewed";
+    celf_conformant?: boolean;
+    unreviewed_record_count?: number;
+    unreviewed_accepted_field_count?: number;
   } | null;
   publication_status?: "unpublished" | "published";
   provider_profile_history?: Array<{

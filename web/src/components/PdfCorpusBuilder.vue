@@ -310,6 +310,20 @@ const configurationSection = ref<CorpusConfigurationSection>("source");
 const recordSaveQueue = new RecordMutationQueue();
 const documentMetadataOpen = ref(false);
 const confirmingBuildDelete = ref(false);
+const confirmingUnreviewedPublish = ref(false);
+/** Skipping review is offered once processing is done and until a publication exists. */
+const canPublishUnreviewed = computed(() =>
+  Boolean(
+    currentBuild.value &&
+      !currentBuild.value.publication &&
+      Number(currentBuild.value.record_count || 0) > 0 &&
+      ["ready", "awaiting_review"].includes(String(currentBuild.value.status || "")),
+  ),
+);
+async function publishUnreviewed() {
+  confirmingUnreviewedPublish.value = false;
+  await publish({ download: false, acceptUnreviewed: true });
+}
 const textCleanupOpen = ref(false);
 const sourceTranscriptionOpen = ref(false);
 const {
@@ -2001,6 +2015,34 @@ defineExpose({
           @select="chooseBuild"
           @refresh="refreshBuilds"
         />
+        <span
+          v-if="canPublishUnreviewed && confirmingUnreviewedPublish"
+          class="delete-confirm"
+          role="group"
+          :aria-label="i18n.t('pdf_corpus.accept_unreviewed')"
+        >
+          <span>{{ i18n.t("pdf_corpus.accept_unreviewed_confirm") }}</span>
+          <button
+            type="button"
+            class="btn danger"
+            :disabled="busy !== ''"
+            @click="publishUnreviewed"
+          >
+            {{ i18n.t("pdf_corpus.accept_unreviewed_confirm_action") }}
+          </button>
+          <button type="button" class="btn" @click="confirmingUnreviewedPublish = false">
+            {{ i18n.t("ui.cancel") }}
+          </button>
+        </span>
+        <button
+          v-else-if="canPublishUnreviewed"
+          type="button"
+          class="btn"
+          :disabled="busy !== ''"
+          @click="confirmingUnreviewedPublish = true"
+        >
+          {{ i18n.t("pdf_corpus.accept_unreviewed") }}
+        </button>
         <button
           v-if="
             currentBuild &&

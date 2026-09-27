@@ -163,6 +163,14 @@ function fixBlocker(code?: string) {
           i18n.tf("pdf_corpus.publication_snapshot_summary", { count: publication.record_count })
         }}
       </p>
+      <p v-if="publication.celf_conformant === false" class="not-conformant">
+        {{
+          i18n.tf("pdf_corpus.publication_not_conformant", {
+            count: publication.unreviewed_record_count || 0,
+            fields: publication.unreviewed_accepted_field_count || 0,
+          })
+        }}
+      </p>
       <code>{{ publication.publication_id }}</code>
     </section>
 
@@ -516,6 +524,15 @@ function fixBlocker(code?: string) {
   padding: var(--space-3) var(--space-4);
   border-color: var(--tone-success-border);
   background: var(--tone-success-bg);
+}
+.publication-snapshot .not-conformant {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--tone-warn-border);
+  border-radius: var(--radius-card);
+  background: var(--tone-warn-bg);
+  color: var(--tone-warn-fg);
 }
 .publication-snapshot > div {
   display: grid;
