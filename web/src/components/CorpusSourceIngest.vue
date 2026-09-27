@@ -7,6 +7,10 @@ import type { GutenbergHit, PdfAsset, WikisourceHit, GutenbergStatus } from "../
 import { hasPages } from "../domain/sourceMedia";
 import AppIcon from "./AppIcon.vue";
 import CorpusLibrarySearch from "./corpus-builder/CorpusLibrarySearch.vue";
+import CorpusCaptureDialog from "./capture/CorpusCaptureDialog.vue";
+import SourceTable from "./sources/SourceTable.vue";
+import SourceInspector from "./sources/SourceInspector.vue";
+import type { CorpusCapture } from "../api/corpus";
 const formats: Record<string, string> = {
   pdf: ".pdf",
   text: ".txt,.text,.md,.html,.htm",
@@ -37,6 +41,8 @@ const props = withDefaults(
     disabled?: boolean;
     sourceSelectionDisabled?: boolean;
     busy?: string;
+    /** Source ids handed over from the Sources page or a capture (`/pdf?sources=…`). */
+    queuedSourceIds?: string[];
   }>(),
   {
     assets: () => [],
@@ -58,6 +64,7 @@ const props = withDefaults(
     disabled: false,
     sourceSelectionDisabled: false,
     busy: "",
+    queuedSourceIds: () => [],
   },
 );
 
@@ -81,6 +88,11 @@ const emit = defineEmits<{
   importWikisource: [string];
   deleteAsset: [string];
   continue: [];
+  /** Captured sources to offer in the source table (never starts a build). */
+  queueSources: [ids: string[]];
+  /** A capture registered new sources; the asset list should be reloaded. */
+  sourcesChanged: [];
+  viewCaptureSources: [captureId: string];
 }>();
 
 const i18n = useI18nStore();
@@ -140,17 +152,6 @@ function pageDetectionText(detection: NonNullable<PdfAsset["page_number_detectio
       ? "pdf_corpus.source_page_detect_off"
       : "pdf_corpus.source_page_not_found",
   );
-}
-
-function formatShortDate(value?: string | null) {
-  if (!value) return unset();
-  try {
-    return new Intl.DateTimeFormat(i18n.locale || undefined, { dateStyle: "medium" }).format(
-      new Date(value),
-    );
-  } catch {
-    return value;
-  }
 }
 
 function onOcrStrategy(strategy: string) {
@@ -225,14 +226,13 @@ async function toggleUrl() {
 }
 
 // --- Saved sources ---------------------------------------------------------
-const libraryFilter = ref("");
-const FILTER_THRESHOLD = 6;
-const visibleAssets = computed(() => {
-  const needle = libraryFilter.value.trim().toLowerCase();
-  return needle
-    ? props.assets.filter((asset) => asset.filename.toLowerCase().includes(needle))
-    : props.assets;
-});
+/** Reload the compact table whenever the parent's asset list changes (upload, import, delete). */
+const assetsKey = computed(() => props.assets.map((asset) => asset.asset_id).join(","));
+const inspectedSource = ref("");
+function deleteName(assetId: string) {
+  return props.assets.find((asset) => asset.asset_id === assetId)?.filename || assetId;
+}
+
 const KIND_MARKS: Record<string, string> = {
   pdf: "PDF",
   text: "TXT",
@@ -245,6 +245,17 @@ function kindMark(asset: { media_kind?: string; filename: string }) {
   if (asset.media_kind && KIND_MARKS[asset.media_kind]) return KIND_MARKS[asset.media_kind];
   const extension = asset.filename.split(".").pop() || "";
   return extension.length <= 4 ? extension.toUpperCase() : "FILE";
+}
+
+// --- Corpus Capture ----------------------------------------------------------
+const captureOpen = ref(false);
+function onCaptureChanged(capture: CorpusCapture) {
+  if (!capture.active_job && ["complete", "partial"].includes(capture.status))
+    emit("sourcesChanged");
+}
+function useCaptured(ids: string[]) {
+  captureOpen.value = false;
+  emit("queueSources", ids);
 }
 const formatChips = ["PDF", "DOCX", "RTF", "TXT · MD · HTML", "PNG · JPG", "Audio"];
 
@@ -392,6 +403,18 @@ onBeforeUnmount(() => {
             <span class="path-copy">
               <strong>{{ i18n.t("pdf_corpus.search_library", "Search digital libraries") }}</strong>
               <small>{{ i18n.t("pdf_corpus.source_path_libraries_help") }}</small>
+            </span>
+          </button>
+          <button
+            type="button"
+            class="path-card path-capture"
+            :disabled="disabled"
+            @click="captureOpen = true"
+          >
+            <span class="path-icon" aria-hidden="true"><AppIcon name="users" /></span>
+            <span class="path-copy">
+              <strong>{{ i18n.t("capture.path_title") }}</strong>
+              <small>{{ i18n.t("capture.path_help") }}</small>
             </span>
           </button>
           <button
@@ -560,67 +583,47 @@ onBeforeUnmount(() => {
           {{ i18n.t("pdf_corpus.source_library_title") }}
           <span class="count-chip">{{ assets.length }}</span>
         </h4>
-        <label v-if="assets.length >= FILTER_THRESHOLD" class="saved-filter">
-          <span class="sr-only">{{ i18n.t("pdf_corpus.source_library_filter") }}</span>
-          <input
-            v-model="libraryFilter"
-            class="control"
-            type="search"
-            :placeholder="i18n.t('pdf_corpus.source_library_filter')"
-          />
-        </label>
       </header>
-      <p v-if="sourceSelectionDisabled" class="saved-locked" role="status">
-        <AppIcon name="lock" />{{ i18n.t("pdf_corpus.source_locked_help") }}
-      </p>
-      <ul class="saved-grid" role="list">
-        <li v-for="asset in visibleAssets" :key="asset.asset_id">
-          <button
-            type="button"
-            class="saved-card"
-            :class="{ 'is-selected': asset.asset_id === assetId }"
-            :aria-pressed="asset.asset_id === assetId"
-            :disabled="sourceSetupDisabled"
-            @click="emit('update:assetId', asset.asset_id === assetId ? '' : asset.asset_id)"
-          >
-            <span class="kind-mark" aria-hidden="true">{{ kindMark(asset) }}</span>
-            <span class="saved-copy">
-              <strong>{{ asset.filename }}</strong>
-              <small
-                >{{ asset.block_count }} {{ i18n.t("pdf_corpus.source_stat_units_short") }} ·
-                {{ formatShortDate(asset.created_at) }}</small
-              >
-            </span>
-            <span v-if="asset.asset_id === assetId" class="saved-check" aria-hidden="true"
-              ><AppIcon name="check"
-            /></span>
-          </button>
-          <div v-if="confirmingDelete === asset.asset_id" class="saved-confirm" role="group">
-            <span>{{ i18n.t("pdf_corpus.source_delete_confirm") }}</span>
-            <button type="button" class="btn danger" @click="confirmDelete(asset.asset_id)">
-              {{ i18n.t("pdf_corpus.source_delete") }}
-            </button>
-            <button type="button" class="btn" @click="confirmingDelete = ''">
-              {{ i18n.t("ui.cancel") }}
-            </button>
-          </div>
-          <button
-            v-else
-            type="button"
-            class="saved-delete btn icon-only"
-            :disabled="sourceSetupDisabled"
-            :aria-label="i18n.tf('pdf_corpus.source_delete_named', { name: asset.filename })"
-            :title="i18n.t('pdf_corpus.source_delete')"
-            @click="confirmingDelete = asset.asset_id"
-          >
-            <AppIcon name="trash" />
-          </button>
-        </li>
-      </ul>
-      <p v-if="!visibleAssets.length" class="saved-none">
-        {{ i18n.t("pdf_corpus.source_library_none") }}
-      </p>
+      <div v-if="confirmingDelete" class="saved-confirm" role="group">
+        <span>{{
+          i18n.tf("pdf_corpus.source_delete_named", { name: deleteName(confirmingDelete) })
+        }}</span>
+        <span>{{ i18n.t("pdf_corpus.source_delete_confirm") }}</span>
+        <button type="button" class="btn danger" @click="confirmDelete(confirmingDelete)">
+          {{ i18n.t("pdf_corpus.source_delete") }}
+        </button>
+        <button type="button" class="btn" @click="confirmingDelete = ''">
+          {{ i18n.t("ui.cancel") }}
+        </button>
+      </div>
+      <SourceTable
+        compact
+        deletable
+        :active-id="assetId"
+        :queued-ids="queuedSourceIds"
+        :disabled="sourceSetupDisabled"
+        :locked-reason="sourceSelectionDisabled ? i18n.t('pdf_corpus.source_locked_help') : ''"
+        :refresh-key="assetsKey"
+        :page-size="10"
+        @choose="emit('update:assetId', $event)"
+        @inspect="inspectedSource = $event"
+        @delete="confirmingDelete = $event"
+      />
+      <SourceInspector
+        v-if="inspectedSource"
+        :source-id="inspectedSource"
+        @close="inspectedSource = ''"
+      />
     </section>
+
+    <CorpusCaptureDialog
+      v-if="captureOpen"
+      :open="captureOpen"
+      @close="captureOpen = false"
+      @changed="onCaptureChanged"
+      @use-in-builder="useCaptured"
+      @view-sources="emit('viewCaptureSources', $event)"
+    />
 
     <CorpusLibrarySearch
       v-if="searchOpen"
@@ -842,19 +845,6 @@ onBeforeUnmount(() => {
 }
 .source-loading .spinner {
   margin: 0;
-}
-.saved-grid > li {
-  position: relative;
-}
-.saved-delete {
-  position: absolute;
-  inset-block-start: 6px;
-  inset-inline-end: 6px;
-  opacity: 0.7;
-}
-.saved-delete:hover,
-.saved-delete:focus-visible {
-  opacity: 1;
 }
 .saved-confirm {
   display: flex;
@@ -1276,106 +1266,6 @@ onBeforeUnmount(() => {
   background: var(--surface-inset);
   font-size: var(--fs-xs);
 }
-.saved-filter {
-  inline-size: min(260px, 100%);
-}
-.saved-locked {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  margin: 0;
-  color: var(--tone-warn-fg);
-  font-size: var(--fs-sm);
-}
-.saved-locked svg {
-  inline-size: 14px;
-  block-size: 14px;
-}
-.saved-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: var(--space-2, 8px);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.saved-card {
-  position: relative;
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  inline-size: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-card);
-  color: var(--text);
-  background: var(--surface-card);
-  text-align: start;
-  cursor: pointer;
-  transition:
-    border-color var(--motion-fast) var(--ease-standard),
-    background-color var(--motion-fast) var(--ease-standard),
-    transform var(--motion-fast) var(--ease-standard);
-}
-.saved-card:hover:not(:disabled) {
-  border-color: var(--border-interactive);
-  background: var(--surface-hover);
-  transform: translateY(-1px);
-}
-.saved-card.is-selected {
-  border-color: var(--ui-accent, var(--accent));
-  background: var(--surface-selected);
-  box-shadow: 0 0 0 1px var(--ui-accent, var(--accent));
-}
-.saved-card:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-.saved-card .kind-mark {
-  inline-size: 38px;
-  block-size: 44px;
-}
-.saved-copy {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-.saved-copy strong {
-  overflow: hidden;
-  font-size: var(--fs-base);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.saved-copy small {
-  color: var(--text-tertiary);
-  font-size: var(--fs-xs);
-}
-.saved-check {
-  display: grid;
-  place-items: center;
-  flex: none;
-  inline-size: 22px;
-  block-size: 22px;
-  margin-inline-start: auto;
-  border-radius: var(--radius-pill);
-  color: var(--accent-on);
-  background: var(--ui-accent, var(--accent));
-  animation: source-pop var(--motion-base) var(--ease-standard);
-}
-.saved-check svg {
-  inline-size: 14px;
-  block-size: 14px;
-}
-@keyframes source-pop {
-  from {
-    transform: scale(0.4);
-    opacity: 0;
-  }
-}
-.saved-none {
-  margin: 0;
-  color: var(--text-tertiary);
-}
 
 .source-ingest :is(button, input, select):focus-visible {
   outline: var(--focus-ring-width) solid var(--ui-accent, var(--accent));
@@ -1400,12 +1290,10 @@ onBeforeUnmount(() => {
   .dropzone,
   .dropzone-icon,
   .path-card,
-  .saved-card,
   .ocr-options label {
     transition: none;
   }
   .source-card,
-  .saved-check,
   .dropzone-progress {
     animation: none;
   }
@@ -1413,7 +1301,6 @@ onBeforeUnmount(() => {
     transform: none;
   }
   .path-card:hover:not(:disabled),
-  .saved-card:hover:not(:disabled),
   .dropzone:hover:not(:disabled) .dropzone-icon {
     transform: none;
   }

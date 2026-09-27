@@ -26,7 +26,13 @@ from .source_identity import (
     WorkRelationship,
     normalize_languages,
 )
-from .source_provider import USER_AGENT, AcquiredSource, DiscoveryReport, ProgressCallback, ProviderHttp
+from .source_provider import (
+    USER_AGENT,
+    AcquiredSource,
+    DiscoveryReport,
+    ProgressCallback,
+    ProviderHttp,
+)
 from .source_safety import MAX_SOURCE_BYTES
 
 # Wikisource moved to its own provider module; these names stay importable from here.

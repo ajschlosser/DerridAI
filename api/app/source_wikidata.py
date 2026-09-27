@@ -10,7 +10,13 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .source_identity import AuthorCandidate, CaptureError, CaptureErrorCode, ResolvedAuthor, SourceCandidate
+from .source_identity import (
+    AuthorCandidate,
+    CaptureError,
+    CaptureErrorCode,
+    ResolvedAuthor,
+    SourceCandidate,
+)
 from .source_provider import ProviderHttp
 
 API = "https://www.wikidata.org/w/api.php"

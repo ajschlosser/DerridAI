@@ -30,7 +30,13 @@ from .source_identity import (
     fold,
     normalize_language,
 )
-from .source_provider import USER_AGENT, AcquiredSource, DiscoveryReport, ProgressCallback, ProviderHttp
+from .source_provider import (
+    USER_AGENT,
+    AcquiredSource,
+    DiscoveryReport,
+    ProgressCallback,
+    ProviderHttp,
+)
 
 _RATE_LOCK = threading.Lock()
 _LAST_REQUEST = 0.0
@@ -272,9 +278,14 @@ def classify_section(heading: str) -> str:
     text = fold(heading)
     if not text:
         return ContributionRole.UNKNOWN
+    padded = f" {text} "
     for role, needles in _SECTION_RULES:
-        if any(fold(needle) and fold(needle) in text for needle in needles):
-            return role
+        for needle in needles:
+            key = fold(needle)
+            # Needles match at a word start; a trailing space marks a whole word, so "über " never
+            # matches "Übersetzungen" and "zu " never matches inside another word.
+            if key and (f" {key} " if needle.endswith(" ") else f" {key}") in padded:
+                return role
     return ContributionRole.UNKNOWN
 
 

@@ -23,7 +23,12 @@ from .source_identity import (
     ResolvedAuthor,
     SourceCandidate,
 )
-from .source_provider import AcquiredSource, DiscoveryReport, ProviderHttp, SourceProvider
+from .source_provider import (
+    AcquiredSource,
+    DiscoveryReport,
+    ProviderHttp,
+    SourceProvider,
+)
 from .source_reconcile import dedupe_exact, reconcile, summarize
 from .source_safety import MAX_SOURCE_BYTES
 

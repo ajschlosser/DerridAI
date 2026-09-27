@@ -145,7 +145,7 @@ class CaptureStore:
         Selection, acquisition state and registered sources of known candidates are preserved.
         Candidates the provider no longer lists are marked ``upstream_status=missing`` — never deleted.
         """
-        diff = {"new": [], "changed": [], "unchanged": 0, "missing": []}
+        diff: dict[str, Any] = {"new": [], "changed": [], "unchanged": 0, "missing": []}
         with self._lock, self._connect() as db:
             existing = {
                 row["provider_key"]: json.loads(row["payload_json"])

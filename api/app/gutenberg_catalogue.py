@@ -154,7 +154,7 @@ class GutenbergOfflineService:
     def _index_rows(db: sqlite3.Connection, rows: list[tuple[int, str, str]]) -> None:
         """(Re)build normalized contributor/language rows for (etext_id, authors, language) triples."""
         contributors = []
-        languages = []
+        languages: list[tuple[int, str]] = []
         for etext_id, authors, language in rows:
             for item in parse_gutenberg_contributors(authors):
                 contributors.append((

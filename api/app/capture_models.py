@@ -11,9 +11,17 @@ ProviderId = Literal["gutenberg", "wikisource"]
 RoleId = Literal["author", "coauthor", "translator", "editor", "contributor", "about_author"]
 
 
+def _default_providers() -> list[ProviderId]:
+    return ["gutenberg", "wikisource"]
+
+
+def _default_roles() -> list[RoleId]:
+    return ["author", "coauthor"]
+
+
 class CaptureOptionsBody(BaseModel):
-    providers: list[ProviderId] = Field(default_factory=lambda: ["gutenberg", "wikisource"], min_length=1, max_length=2)
-    roles: list[RoleId] = Field(default_factory=lambda: ["author", "coauthor"], min_length=1, max_length=6)
+    providers: list[ProviderId] = Field(default_factory=_default_providers, min_length=1, max_length=2)
+    roles: list[RoleId] = Field(default_factory=_default_roles, min_length=1, max_length=6)
     include_translations: bool = True
     # None/empty = every available language.
     languages: list[str] | None = Field(default=None, max_length=100)

@@ -17,7 +17,14 @@ from starlette.background import BackgroundTask
 from ..auth import SESSION_COOKIE, auth_store
 from ..config import APP_VERSION, settings
 from ..corpus_builder import pdf_corpus_builds, pdf_corpus_repository
-from ..services import capture_jobs, llm_jobs, llm_tool_jobs, rag_jobs, store, upsert_jobs
+from ..services import (
+    capture_jobs,
+    llm_jobs,
+    llm_tool_jobs,
+    rag_jobs,
+    store,
+    upsert_jobs,
+)
 from ..system_store import system_store
 
 logger = logging.getLogger(__name__)
