@@ -745,6 +745,17 @@ class PdfCorpusEvidencePatch(BaseModel):
     expected_revision: int | None = Field(default=None, ge=1)
 
 
+class PdfCorpusEvidenceSuggestLlm(BaseModel):
+    """Provider selection for an LLM evidence suggestion; nothing here is persisted."""
+    field: str = Field(min_length=1, max_length=120)
+    provider_profile_id: str | None = Field(default=None, max_length=200)
+    model: str | None = Field(default=None, max_length=200)
+    provider: str | None = Field(default=None, max_length=40)
+    base_url: str | None = Field(default=None, max_length=500)
+    api_key: str | None = Field(default=None, max_length=500)
+    limit: int = Field(default=5, ge=1, le=20)
+
+
 class PdfCorpusRecordAccept(BaseModel):
     accepted: bool = True
     expected_revision: int | None = Field(default=None, ge=1)

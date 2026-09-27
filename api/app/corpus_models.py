@@ -93,6 +93,13 @@ class BoundaryDecisionModel(BaseModel):
 
 
 
+class EvidenceChoiceModel(BaseModel):
+    """A model's choice among candidate source blocks: which ones support a field value."""
+    model_config = ConfigDict(extra="forbid")
+    block_ids: list[str] = Field(default_factory=list, max_length=20)
+    reason: str = Field(default="", max_length=600)
+
+
 class PageMarkerChoiceModel(BaseModel):
     """A model's choice among candidate lines: which ones are printed page numbers."""
     model_config = ConfigDict(extra="forbid")

@@ -171,6 +171,8 @@ CARRIES_RECORDS = {
     ("GET", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/metadata-cache"),
     ("DELETE", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/metadata-cache"),
     ("PATCH", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/evidence"),
+    ("GET", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/evidence-suggestions"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/evidence-suggestions/llm"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/accept"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/disposition"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/review-decision"),
