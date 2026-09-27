@@ -217,7 +217,7 @@ describe("Corpus Builder metadata review", () => {
     );
   });
 
-  it("routes metadata source inspection to the matching source block", () => {
+  it("opens the Evidence tab and the matching source page", () => {
     const state = setup();
     state.selectedRecord.value = row({
       metadata_evidence: {
@@ -227,7 +227,7 @@ describe("Corpus Builder metadata review", () => {
 
     state.review.showMetadataSource("speaker");
 
-    expect(state.reviewInspectorTab.value).toBe("source");
+    expect(state.reviewInspectorTab.value).toBe("evidence");
     expect(state.selectedPdfPage.value).toBe(4);
   });
 
