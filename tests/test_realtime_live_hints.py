@@ -38,7 +38,11 @@ from app.realtime.protocol import (  # noqa: E402
     Audience,
     Event,
 )
-from app.realtime.subscriptions import ACTIVITY_KINDS, TopicDecision, authorize_topic  # noqa: E402
+from app.realtime.subscriptions import (  # noqa: E402
+    ACTIVITY_KINDS,
+    TopicDecision,
+    authorize_topic,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -493,7 +497,9 @@ def test_rag_job_generation_deltas_are_noted_with_the_jobs_owner(monkeypatch):
 
 
 def test_with_progress_notes_calls_the_wrapped_callback_and_notes_field_progress():
-    from app.corpus_metadata_enrichment_execution import MetadataEnrichmentExecutionMixin
+    from app.corpus_metadata_enrichment_execution import (
+        MetadataEnrichmentExecutionMixin,
+    )
 
     schema = default_schema()
 
@@ -526,7 +532,9 @@ def test_with_progress_notes_calls_the_wrapped_callback_and_notes_field_progress
 
 
 def test_with_progress_notes_skips_the_note_for_a_state_outside_the_closed_vocabulary():
-    from app.corpus_metadata_enrichment_execution import MetadataEnrichmentExecutionMixin
+    from app.corpus_metadata_enrichment_execution import (
+        MetadataEnrichmentExecutionMixin,
+    )
 
     class Harness(MetadataEnrichmentExecutionMixin):
         def _schema_for(self, build_id):

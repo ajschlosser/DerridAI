@@ -590,13 +590,12 @@ function restFallback(
   return (typeof body === "function" ? body(restUrl, "GET") : body) as LooseRecord;
 }
 
-/** A review-queue row, the same fields the server derives from a Record (queueRowFromRecord). */
+/** A review-queue row, the same fields the server derives from a Record (CorpusQueueRow.from_presented_record). */
 function queueRow(record: LooseRecord): LooseRecord {
   const text = String(record.text || "");
   return {
     record_id: record.record_id,
     record_revision: record.record_revision ?? null,
-    topology_index: record.topology_index ?? null,
     page_start: record.page_start != null ? String(record.page_start) : null,
     page_end: record.page_end != null ? String(record.page_end) : null,
     text_length: Number(record.text_length ?? text.length),
@@ -605,7 +604,9 @@ function queueRow(record: LooseRecord): LooseRecord {
     review_issue_codes: record.review_issue_codes ?? [],
     review_disposition: record.review_disposition || (record.accepted ? "accepted" : "pending"),
     metadata_llm_processed: Boolean(record.metadata_enrichment_finished),
-    source_issue_count: record.source_quality_issues?.length ?? 0,
+    needs_review: Boolean(record.needs_review),
+    source_quality_issues: Boolean(record.source_quality_issues && record.source_quality_issues.length),
+    metadata_complete: Boolean(record.metadata_complete),
   };
 }
 
@@ -649,7 +650,7 @@ export function graphqlDefaults(
 
   if (operationName === "CorpusReviewQueue") {
     const buildId = String(variables.build_id || "");
-    const queue = String(variables.filter?.queue || "all");
+    const queue = String(variables.review_queue || "all");
     const offset = Number(variables.offset || 0);
     const limit = Number(variables.limit || 50);
     const page = restFallback(`/api/pdf/corpus-builds/${buildId}/records`, fixtures, role, {
@@ -660,7 +661,7 @@ export function graphqlDefaults(
     const items: LooseRecord[] = Array.isArray(page.items) ? page.items : [];
     const total = Number(page.total ?? items.length);
     const build = restFallback(`/api/pdf/corpus-builds/${buildId}`, fixtures, role);
-    const counts = {
+    const queue_counts = {
       all: 0,
       ready: 0,
       preparing: 0,
@@ -678,13 +679,11 @@ export function graphqlDefaults(
         corpus_build: {
           build_id: buildId,
           review_queue: {
+            items: items.map(queueRow),
             total,
             offset,
             limit,
-            has_next_page: offset + items.length < total,
-            topology_count: total,
-            counts,
-            rows: items.map(queueRow),
+            queue_counts,
           },
         },
       },
@@ -734,31 +733,42 @@ export function graphqlDefaults(
     const name = String(variables.name || "");
     const store = restFallback(`/api/stores/${name}/records`, fixtures, role);
     const records: LooseRecord[] = Array.isArray(store.records) ? store.records : [];
-    const workCounts = new Map<string, number>();
+    const workStats = new Map<string, { count: number; total_words: number }>();
     for (const record of records) {
       const work = String(record.work || "");
-      if (work) workCounts.set(work, (workCounts.get(work) || 0) + 1);
+      if (!work) continue;
+      const words = String(record.text || "")
+        .split(/\s+/)
+        .filter(Boolean).length;
+      const stat = workStats.get(work) || { count: 0, total_words: 0 };
+      stat.count += 1;
+      stat.total_words += words;
+      workStats.set(work, stat);
     }
-    const works = [...workCounts.entries()].map(([work, record_count]) => ({ work, record_count }));
+    const works = [...workStats.entries()].map(([work, stat]) => ({
+      work,
+      count: stat.count,
+      total_words: stat.total_words,
+      average_record_length: stat.count ? Math.round(stat.total_words / stat.count) : 0,
+    }));
     let recordsField: LooseRecord | null = null;
-    if (variables.include_records) {
+    if (variables.includeRecords) {
       const filtered = variables.work ? records.filter((r) => r.work === variables.work) : records;
       const offset = Number(variables.offset || 0);
       const limit = Number(variables.limit || 50);
       const page = filtered.slice(offset, offset + limit);
       recordsField = {
-        total: filtered.length,
+        items: page.map(vectorRow),
+        count: filtered.length,
         offset,
         limit,
-        has_next_page: offset + page.length < filtered.length,
-        rows: page.map(vectorRow),
       };
     }
     return { data: { vector_store: { name, works, records: recordsField } } };
   }
 
   if (operationName === "StoredRecordTrace") {
-    const name = String(variables.name || "");
+    const name = String(variables.store || "");
     const store = restFallback(`/api/stores/${name}/records`, fixtures, role);
     const records: LooseRecord[] = Array.isArray(store.records) ? store.records : [];
     const record = records.find(
