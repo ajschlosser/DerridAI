@@ -269,8 +269,8 @@ from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
 from .rag import _citation_strings, chat_complete
 from .run_guidance import find_guidance_matches
 from .sentence_boundaries import snap_boundaries_to_sentences
-from .source_quality import assess_extracted_source, page_source_quality_report
 from .source_embeddings import SourceEmbeddingProjection
+from .source_quality import assess_extracted_source, page_source_quality_report
 from .text_noise import (
     DEFAULT_NOISE_THRESHOLD,
     TEXT_NOISE_LLM_PROMPT,

@@ -318,8 +318,8 @@ def reconcile_source_units(
             unit = by_id.get(unit_id)
             if not unit:
                 continue
-            start = int(item.get("start") or 0)
-            end = int(item.get("end") if item.get("end") is not None else len(str(unit.get("text") or "")))
+            start = int(str(item.get("start") or 0))
+            end = int(str(item.get("end") if item.get("end") is not None else len(str(unit.get("text") or ""))))
             whole = start <= 0 and end >= len(str(unit.get("text") or ""))
             if whole:
                 assigned.append(unit_id)

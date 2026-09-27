@@ -10,7 +10,7 @@ text on every pass.
 from __future__ import annotations
 
 import hashlib
-from typing import Any
+from typing import Any, cast
 
 COLLECTION_NAME = "derridai_source_unit_embeddings"
 SOURCE_BLOCK_COLLECTION_NAME = COLLECTION_NAME
@@ -39,7 +39,7 @@ def source_unit_identity(source_document_id: Any, source_unit_id: Any) -> str:
 
     document = _normalise(source_document_id)
     unit = _normalise(source_unit_id)
-    digest = hashlib.sha256(f"{document}\0{unit}".encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(f"{document}\0{unit}".encode()).hexdigest()
     return f"su-{digest}"
 
 
@@ -161,7 +161,7 @@ class SourceEmbeddingProjection:
         if not isinstance(state, dict) or state.get("contract") != contract:
             state = {"contract": contract, "rows": {}}
             setattr(self.store, _FALLBACK_STATE_KEY, state)
-        return state["rows"]
+        return cast(dict[str, dict[str, Any]], state["rows"])
 
     @staticmethod
     def _rows(blocks: list[dict[str, Any]], source_document_id: str) -> list[dict[str, Any]]:
@@ -218,7 +218,7 @@ class SourceEmbeddingProjection:
             )
             for unit_id in stale:
                 rows.pop(unit_id, None)
-            pending: list[dict[str, Any]] = []
+            fallback_pending: list[dict[str, Any]] = []
             reused = 0
             for row in desired:
                 prior = existing.get(row["source_unit_id"])
@@ -229,10 +229,12 @@ class SourceEmbeddingProjection:
                 if prior and prior.get("embedding_identity") == identity:
                     reused += 1
                     continue
-                pending.append(row)
-            vectors = self._embed_unique(pending, resolved_provider, resolved_model)
-            embedded = len({row["text_hash"] for row in pending})
-            vector_by_hash = {row["text_hash"]: vector for row, vector in zip(pending, vectors)}
+                fallback_pending.append(row)
+            vectors = self._embed_unique(fallback_pending, resolved_provider, resolved_model)
+            embedded = len({row["text_hash"] for row in fallback_pending})
+            vector_by_hash = {
+                row["text_hash"]: vector for row, vector in zip(fallback_pending, vectors)
+            }
             for row in desired:
                 prior = existing.get(row["source_unit_id"])
                 identity = embedding_identity(
@@ -250,7 +252,7 @@ class SourceEmbeddingProjection:
                 "desired": len(desired),
                 "embedded": embedded,
                 "reused": reused,
-                "upserted": len(pending),
+                "upserted": len(fallback_pending),
                 "deleted": len(stale),
             }
 
@@ -275,7 +277,7 @@ class SourceEmbeddingProjection:
         if stale_ids:
             collection.delete(ids=stale_ids)
 
-        pending: list[dict[str, Any]] = []
+        chroma_pending: list[dict[str, Any]] = []
         for row in desired:
             identity = embedding_identity(
                 document_id, row["source_unit_id"], row["text"],
@@ -283,20 +285,20 @@ class SourceEmbeddingProjection:
             )
             prior = current.get(row["source_unit_id"])
             if not prior or str(prior.get("embedding_identity") or "") != identity:
-                pending.append({**row, "embedding_identity": identity})
-        vectors = self._embed_unique(pending, resolved_provider, resolved_model)
-        if pending:
+                chroma_pending.append({**row, "embedding_identity": identity})
+        vectors = self._embed_unique(chroma_pending, resolved_provider, resolved_model)
+        if chroma_pending:
             collection.upsert(
-                ids=[source_unit_identity(document_id, row["source_unit_id"]) for row in pending],
-                documents=[row["text"] for row in pending],
-                metadatas=pending,
+                ids=[source_unit_identity(document_id, row["source_unit_id"]) for row in chroma_pending],
+                documents=[row["text"] for row in chroma_pending],
+                metadatas=chroma_pending,
                 embeddings=vectors,
             )
         return {
             "desired": len(desired),
-            "embedded": len({row["text_hash"] for row in pending}),
-            "reused": len(desired) - len(pending),
-            "upserted": len(pending),
+            "embedded": len({row["text_hash"] for row in chroma_pending}),
+            "reused": len(desired) - len(chroma_pending),
+            "upserted": len(chroma_pending),
             "deleted": len(stale_ids),
         }
 

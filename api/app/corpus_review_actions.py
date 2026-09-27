@@ -30,8 +30,8 @@ from .corpus_metadata import MANIFEST_INHERITED_FIELDS, apply_metadata_constrain
 from .corpus_record_quality import iso_now
 from .corpus_record_restructure import (
     JOIN,
-    assert_text_conserved,
     assert_active_source_unit_ownership,
+    assert_text_conserved,
     block_ids_for_range,
     mint_record,
     new_record_id,
@@ -109,6 +109,7 @@ class ReviewActionsMixin:
         repo: Any
         _lock: Any
         _ledger: Any
+        _progressive_metadata_index: Any
 
         def _rewrite_and_validate(self, build_id: str, records: list[dict[str, Any]], *, persist_records: bool = True) -> dict[str, Any]: ...
         def _rewrite_targeted_record(self, build_id: str, record: dict[str, Any], previous: dict[str, Any]) -> dict[str, Any]: ...
