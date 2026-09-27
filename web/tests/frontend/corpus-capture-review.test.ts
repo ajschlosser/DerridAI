@@ -9,10 +9,7 @@ import {
   stepForCapture,
 } from "../../src/domain/captureReview";
 
-function candidate(
-  id: string,
-  overrides: Partial<CaptureCandidate> = {},
-): CaptureCandidate {
+function candidate(id: string, overrides: Partial<CaptureCandidate> = {}): CaptureCandidate {
   return {
     candidate_id: id,
     provider: "wikisource",
@@ -109,7 +106,7 @@ describe("Corpus Capture review domain", () => {
     });
   });
 
-  it("groups editions by canonical work without merging candidates and puts originals first", () => {
+  it("groups canonical work candidates without merging editions", () => {
     const translation = candidate("translation", {
       title: "Of Grammatology",
       document_languages: ["en"],
