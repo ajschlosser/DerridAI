@@ -6,7 +6,7 @@
 
 DerridAI è un'applicazione Docker orientata all'esecuzione locale per creare, verificare e interrogare corpora accademici di testi filosofici. Acquisisce fonti PDF, testo/RTF/DOCX, immagini, audio, URL e Project Gutenberg trasformandole in record accademici che preservano la provenienza; supporta la revisione umana o tramite LLM e l'arricchimento dei metadati vincolato alle evidenze; costruisce proiezioni di ricerca derivate in ChromaDB; ed esegue sul risultato una pipeline di retrieval-augmented generation (RAG) basata sulle evidenze.
 
-Versione corrente: **0.80.5 — Cambridge** ([note di rilascio](docs/notes/0.80.5.md)).
+Versione corrente: **0.80.6 — Danvers** ([note di rilascio](docs/notes/0.80.6.md)).
 
 ## Funzionalità
 

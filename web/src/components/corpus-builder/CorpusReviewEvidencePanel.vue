@@ -6,6 +6,7 @@ import { corpusMetadataApi, type EvidenceSuggestion } from "../../api/corpus/met
 import { timeLabel } from "../../domain/sourceMedia";
 import { metadataValueText } from "../../domain/metadataValues";
 import { useI18nStore } from "../../stores/i18n";
+import { allEvidenceBlockIds } from "../../domain/metadataEvidence";
 import AppIcon from "../AppIcon.vue";
 import FieldEvidenceList from "../FieldEvidenceList.vue";
 
@@ -95,7 +96,7 @@ const values = computed(() => props.record as unknown as Record<string, unknown>
 // Fields that have a value but no bound evidence: the work still to do, and what "Next field" walks through.
 const missing = computed(() =>
   props.fields.filter((field) => {
-    const has = (props.record.metadata_evidence?.[field]?.block_ids || []).length > 0;
+    const has = allEvidenceBlockIds(props.record.metadata_evidence?.[field]).length > 0;
     return !has && metadataValueText(values.value[field]) !== "";
   }),
 );

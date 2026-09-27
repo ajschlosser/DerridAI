@@ -13,6 +13,7 @@ import type { ReviewViewport } from "./useCorpusReviewWorkspace";
 import { reviewableMetadataFieldNames } from "../domain/recordMetadata";
 import { describeDecisionResult } from "../domain/metadataDecisions";
 import { isUsableMetadataSuggestion } from "../../../domain/metadataValues";
+import { allEvidenceBlockIds } from "../../../domain/metadataEvidence";
 
 type MessageTone = "error" | "notice";
 type I18nValues = Record<string, string | number>;
@@ -305,11 +306,26 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
     const evidenceIds = evidenceBlockId
       ? Array.from(new Set([...(existingEvidence?.block_ids || []).map(String), evidenceBlockId]))
       : undefined;
+    const externalIds = humanSource?.externalBlockIds?.map(String);
     const viewport = options.captureReviewViewport();
     metadataSavingField.value = field;
     metadataSavedField.value = "";
     const context = applyOptimisticMetadata({
       [field]: value,
+      // Spans cited from other records show as the field's evidence at once, like the record's own spans.
+      ...(externalIds?.length
+        ? {
+            metadata_evidence: {
+              ...(options.selectedRecord.value.metadata_evidence || {}),
+              [field]: {
+                ...(existingEvidence || {}),
+                external_block_ids: externalIds,
+                confidence: existingEvidence?.confidence ?? 1,
+                reason: existingEvidence?.reason || options.t("pdf_corpus.human_evidence_reason"),
+              },
+            },
+          }
+        : {}),
       ...(evidenceIds
         ? {
             metadata_evidence: {
@@ -544,7 +560,7 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
   function showMetadataSource(field: string) {
     options.selectedEvidenceField.value = field;
     options.reviewInspectorTab.value = "evidence";
-    const ids = options.selectedRecord.value?.metadata_evidence?.[field]?.block_ids || [];
+    const ids = allEvidenceBlockIds(options.selectedRecord.value?.metadata_evidence?.[field]);
     const first = options.sourceBlocks.value.find((block) => ids.includes(block.block_id));
     if (first) {
       options.selectedPdfPage.value = Number(first.page || options.selectedPdfPage.value);

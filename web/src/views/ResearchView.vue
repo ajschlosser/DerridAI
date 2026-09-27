@@ -19,6 +19,29 @@ import * as runtime from "../runtime/runtime.js";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
 
 const route = useRoute();
+function evidenceTarget(index: number) {
+  const item = activeResult.value?.evidence?.[index];
+  const recordId = String(item?.record?.record_id || "").trim();
+  const store = String(item?.collection || "").trim();
+  return recordId ? { recordId, store } : null;
+}
+function openEvidenceRecord(index: number) {
+  const target = evidenceTarget(index);
+  if (!target) return;
+  runtime.openAnnotationsWorkspaceRecord({
+    server: true,
+    source: target.store,
+    record_id: target.recordId,
+  });
+}
+function openEvidenceRelationships(index: number, mode: "trace" | "model") {
+  const target = evidenceTarget(index);
+  if (!target) return;
+  void router.push({
+    name: "relationships",
+    query: { record: target.recordId, store: target.store, mode },
+  });
+}
 const router = useRouter();
 const auth = useAuthStore();
 const i18n = useI18nStore();
@@ -626,6 +649,8 @@ onBeforeUnmount(() => {
         @select-evidence="activeEvidenceIndex = $event"
         @remove-selected="removeEvidence"
         @clear-selected="clearEvidence"
+        @open-record="openEvidenceRecord"
+        @open-relationships="openEvidenceRelationships"
       />
 
       <ResearchSettingsDrawer

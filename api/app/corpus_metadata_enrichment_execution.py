@@ -258,6 +258,7 @@ class MetadataEnrichmentExecutionMixin:
             previous_text, next_text, stage_callback,
             pass_learning=editorial_memory.get("pass_learning") if isinstance(editorial_memory, dict) else None,
             schema=schema,
+            labelled_blocks=self._labelled_source_blocks(build_id, record, request),
         )
         stage_results = self._execute_metadata_tasks(record, request, tasks, build_id, stage_callback)
         return self._reconcile_metadata_results(record, profile, source_ids, stage_results, obvious_apparatus, request=request, build_id=build_id, schema=schema)
@@ -269,6 +270,7 @@ class MetadataEnrichmentExecutionMixin:
         previous_text: str, next_text: str,
         stage_callback: Callable[[dict[str, Any], str, str, str | None], None] | None,
         *, pass_learning: dict[str, Any] | None = None, schema: MetadataSchema | None = None,
+        labelled_blocks: str = "",
     ) -> tuple[list[tuple[str, str, type[BaseModel], int, str]], list[str], bool]:
         """Bound source context and select structured tasks without invoking a provider."""
         schema = schema or default_schema()
@@ -337,7 +339,7 @@ How earlier enrichment in this build went (advisory only; evidence in THIS recor
 Human-owned fields on this record (authoritative; DO NOT propose replacements): {json.dumps({field: record.get(field) for field in human_locked_fields}, ensure_ascii=False)}
 Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor_context, ensure_ascii=False)}
 {_nlp_hint_line(record, group_fields)}Current source block IDs: {source_id_json}
-CURRENT REVIEWED RECORD TEXT:
+{labelled_blocks}CURRENT REVIEWED RECORD TEXT:
 {source_text}
 """
 
@@ -587,6 +589,26 @@ CURRENT REVIEWED RECORD TEXT:
 
         return stage_results
 
+
+    def _labelled_source_blocks(self, build_id: str, record: dict[str, Any], request: dict[str, Any]) -> str:
+        """The record's source blocks, each under its ID, so the model can cite the block that supports a value.
+
+        Without this the model sees block IDs and one undivided text, and cannot say which ID holds which words. Empty
+        when evidence is attached afterwards (backfill mode) or the blocks cannot be loaded; the prompt is then unchanged.
+        """
+        if evidence_mode(request) == "backfill":
+            return ""
+        ids = [str(value) for value in record.get("source_block_ids") or []]
+        blocks = self._evidence_source_blocks(build_id, record, ids)
+        if not blocks:
+            return ""
+        lines = [f"[{block.get('block_id')}] {str(block.get('text') or '').strip()}" for block in blocks]
+        # Bounded like the record text itself; a cited ID must still be one of the record's own blocks.
+        body = "\n".join(lines)[:12000]
+        return (
+            "SOURCE BLOCKS (cite only these IDs in field_evidence, choosing the block whose words support each value):\n"
+            + body + "\n"
+        )
 
     def _evidence_source_blocks(self, build_id: str, record: dict[str, Any], source_ids: list[str]) -> list[dict[str, Any]]:
         """This record's source blocks (with text), for evidence backfill; empty when they cannot be loaded."""

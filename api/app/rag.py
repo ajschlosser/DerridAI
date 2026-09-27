@@ -406,7 +406,7 @@ def chat_complete(
 
 
 def _citation_strings(record: dict[str, Any]) -> tuple[str, str]:
-    author = str(record.get("document_author") or record.get("speaker") or "Jacques Derrida")
+    author = str(record.get("document_author") or record.get("speaker") or "")
     work = str(record.get("work") or "")
     edition = str(record.get("edition") or "")
     year = record.get("year") or ""
@@ -439,7 +439,8 @@ def _citation_strings(record: dict[str, Any]) -> tuple[str, str]:
         if len(parts) > 1 else author
     )
     full = (
-        f"{reversed_name}. {work}."
+        # No author is assumed: when the record names none, the citation simply omits it.
+        f"{reversed_name + '. ' if reversed_name else ''}{work}."
         f"{f' {translator} trans.' if translator else ''}"
         f"{f' {edition}.' if edition else ''}"
         f"{f' {year}.' if year else ''}"
