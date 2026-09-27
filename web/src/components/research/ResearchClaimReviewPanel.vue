@@ -113,9 +113,7 @@ function supportLabel(binding: ResearchClaimSupportBinding) {
 function evidenceIndex(binding: ResearchClaimSupportBinding) {
   const marker = String(binding.citation?.evidence_marker || "").trim();
   if (marker) {
-    const byMarker = props.evidence.findIndex(
-      (item) => String(item.evidence_id || "") === marker,
-    );
+    const byMarker = props.evidence.findIndex((item) => String(item.evidence_id || "") === marker);
     if (byMarker >= 0) return byMarker;
   }
   return props.evidence.findIndex(
