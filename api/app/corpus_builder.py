@@ -15,6 +15,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import sqlite3
 import tempfile
 import threading
@@ -850,7 +851,8 @@ class PdfCorpusRepository:
         if not isinstance(origin, dict):
             raise KeyError(origin_id)
         size_key = resolved.get("chars", "") if resolved["mode"] != "auto" else f"auto{resolved['max_chars']}"
-        digest = hashlib.sha256(f"{origin_id}|units|{resolved['mode']}|{size_key}".encode()).hexdigest()
+        per_key = f"|per{resolved['per']}" if resolved.get("per") else ""
+        digest = hashlib.sha256(f"{origin_id}|units|{resolved['mode']}|{size_key}{per_key}".encode()).hexdigest()
         derived_id = f"pdf-{digest[:24]}"
         meta_path = self.asset_meta_path(derived_id)
         with self._lock:
@@ -865,7 +867,9 @@ class PdfCorpusRepository:
             pages = []
             for page in origin.get("pages") or []:
                 page = dict(page)
-                page["block_ids"] = [child for old in page.get("block_ids") or [] for child in children.get(str(old), [str(old)])]
+                page["block_ids"] = list(dict.fromkeys(
+                    child for old in page.get("block_ids") or [] for child in children.get(str(old), [str(old)])
+                ))
                 pages.append(page)
             suffix = str(origin.get("content_suffix") or ".pdf")
             source_path = self.asset_content_path(origin_id, suffix)
@@ -1291,6 +1295,25 @@ class PdfCorpusRepository:
         }
         _json_write(self.build_path(build_id), build)
         return build
+
+    _SAFE_ID = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
+
+    def delete_build_files(self, build_id: str) -> None:
+        """Remove a build's whole workspace (records, checkpoints, history). Publications are separate files."""
+        if not self._SAFE_ID.match(build_id):
+            raise KeyError(build_id)
+        target = self.root / "builds" / build_id
+        if not target.is_dir():
+            raise KeyError(build_id)
+        shutil.rmtree(target)
+
+    def delete_asset_files(self, asset_id: str) -> None:
+        """Remove a source asset's metadata, extracted blocks and stored bytes."""
+        if not self._SAFE_ID.match(asset_id) or not self.asset_meta_path(asset_id).exists():
+            raise KeyError(asset_id)
+        for path in (self.root / "assets").glob(f"{asset_id}.*"):
+            if path.is_file():
+                path.unlink()
 
     def save_build(self, build: dict[str, Any]) -> None:
         _json_write(self.build_path(str(build["build_id"])), build)
@@ -2444,7 +2467,10 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             if AutonomousPolicy.from_request(request).enabled:
                 self.run_autonomous(build_id, request)
         except InterruptedError as exc:
-            self._update(build_id, status="cancelled", stage="cancelled", finished_at=iso_now(), error=str(exc), resumable=True, retrying_segmentation=False)
+            if self.repo.get_build(build_id).get("pause_requested"):
+                self._update(build_id, status="cancelled", stage="paused", finished_at=iso_now(), error=None, resumable=True, paused=True, pause_requested=False, retrying_segmentation=False)
+            else:
+                self._update(build_id, status="cancelled", stage="cancelled", finished_at=iso_now(), error=str(exc), resumable=True, paused=False, retrying_segmentation=False)
         except Exception as exc:
             # Checkpoints intentionally survive a failed stage. The user can repair
             # provider configuration and resume instead of restarting a long book.

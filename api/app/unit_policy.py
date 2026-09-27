@@ -17,6 +17,8 @@ from typing import Any
 
 MODES = ("default", "paragraph", "line", "sentence", "chars", "auto")
 MIN_CHARS, MAX_CHARS = 60, 20000
+MAX_GROUP = 50
+GROUPABLE = {"paragraph", "sentence"}
 DIVISIBLE = {"paragraph", "block_quote", "list_item", "footnote", "speech", "text"}
 _ABBREVIATIONS = {
     "mr", "mrs", "ms", "dr", "prof", "st", "sr", "jr", "vs", "cf", "etc", "eg", "ie", "fig", "no", "vol", "pp", "p",
@@ -53,6 +55,17 @@ def normalize_policy(policy: dict[str, Any] | None) -> dict[str, Any]:
         if not MIN_CHARS <= size <= MAX_CHARS:
             raise ValueError(f"Characters per unit must be between {MIN_CHARS} and {MAX_CHARS}.")
         out["chars"] = size
+    if mode in GROUPABLE:
+        raw_per = raw.get("per")
+        if raw_per not in (None, ""):
+            try:
+                per = int(raw_per)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("Units per group must be a whole number.") from exc
+            if not 1 <= per <= MAX_GROUP:
+                raise ValueError(f"Units per group must be between 1 and {MAX_GROUP}.")
+            if per > 1:
+                out["per"] = per
     return out
 
 
@@ -109,7 +122,12 @@ def split_chars(text: str, size: int) -> list[str]:
 def divide(text: str, policy: dict[str, Any]) -> list[str]:
     mode = policy["mode"]
     if mode == "sentence":
-        return split_sentences(text)
+        sentences = split_sentences(text)
+        per = int(policy.get("per") or 1)
+        if per > 1:
+            # Whitespace stays attached to each sentence, so joining a group loses nothing.
+            return ["".join(sentences[i:i + per]) for i in range(0, len(sentences), per)]
+        return sentences
     if mode == "line":
         return split_lines(text)
     if mode == "chars":
@@ -128,6 +146,8 @@ def apply_unit_policy(
     untouched. Child IDs are ``<parent>-u001``; children keep the parent's page and locators.
     """
     resolved = normalize_policy(policy)
+    if resolved["mode"] == "paragraph" and resolved.get("per"):
+        return _group_paragraphs(blocks, int(resolved["per"]), resolved)
     if resolved["mode"] in {"default", "paragraph"}:
         return [dict(block) for block in blocks], {i: [str(b.get("block_id"))] for i, b in enumerate(blocks)}
     out: list[dict[str, Any]] = []
@@ -154,6 +174,60 @@ def apply_unit_policy(
             out.append(child)
             ids.append(child["block_id"])
         remap[index] = ids
+    return out, remap
+
+
+def _mergeable(block: dict[str, Any]) -> bool:
+    return (
+        not block.get("excluded_reason")
+        and str(block.get("type") or "paragraph") == "paragraph"
+        and str(block.get("locator_kind") or "") != "time"
+    )
+
+
+def _group_paragraphs(
+    blocks: list[dict[str, Any]], per: int, resolved: dict[str, Any],
+) -> tuple[list[dict[str, Any]], dict[int, list[str]]]:
+    """Merge runs of ``per`` adjacent paragraphs that sit on the same page into one unit.
+
+    Text is conserved: a merged unit is its paragraphs joined by a blank line, in order. Runs never
+    cross a page, an excluded block or a non-paragraph block, so page semantics stay truthful.
+    """
+    out: list[dict[str, Any]] = []
+    remap: dict[int, list[str]] = {}
+    run: list[tuple[int, dict[str, Any]]] = []
+    group_number = 0
+
+    def flush() -> None:
+        nonlocal group_number
+        if not run:
+            return
+        if len(run) == 1:
+            index, block = run[0]
+            out.append(dict(block))
+            remap[index] = [str(block.get("block_id"))]
+        else:
+            group_number += 1
+            merged = dict(run[0][1])
+            merged["block_id"] = f"{run[0][1].get('block_id')}-g{group_number:03d}"
+            merged["text"] = "\n\n".join(str(b.get("text") or "").strip() for _, b in run)
+            merged["parent_block_ids"] = [str(b.get("block_id")) for _, b in run]
+            merged["unit_policy"] = "paragraph"
+            out.append(merged)
+            for index, _ in run:
+                remap[index] = [merged["block_id"]]
+        run.clear()
+
+    for index, block in enumerate(blocks):
+        if not _mergeable(block):
+            flush()
+            out.append(dict(block))
+            remap[index] = [str(block.get("block_id"))]
+            continue
+        if run and (block.get("page") != run[0][1].get("page") or len(run) >= per):
+            flush()
+        run.append((index, block))
+    flush()
     return out, remap
 
 

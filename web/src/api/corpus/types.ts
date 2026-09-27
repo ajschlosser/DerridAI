@@ -18,6 +18,8 @@ export interface SourceUnitPolicy {
   mode: SourceUnitMode;
   /** Characters per unit; only for mode "chars". */
   chars?: number;
+  /** Group this many paragraphs or sentences into one unit (1 or absent = no grouping). */
+  per?: number;
 }
 
 export interface SourceUnitPreview {

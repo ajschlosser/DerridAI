@@ -310,6 +310,16 @@ def list_pdf_assets() -> dict[str, Any]:
     return {"items": pdf_corpus_repository.list_assets()}
 
 
+@router.delete("/api/pdf/assets/{asset_id}")
+def delete_pdf_asset(asset_id: str, cascade: bool = Query(default=False)) -> dict[str, Any]:
+    try:
+        return pdf_corpus_builds.discard_source(asset_id, cascade=cascade)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="PDF asset not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
 @router.get("/api/pdf/assets/{asset_id}")
 def get_pdf_asset(asset_id: str) -> dict[str, Any]:
     try:
@@ -643,6 +653,26 @@ def cancel_pdf_corpus_build(build_id: str) -> dict[str, Any]:
         return pdf_corpus_builds.cancel(build_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+
+
+@router.post("/api/pdf/corpus-builds/{build_id}/pause")
+def pause_pdf_corpus_build(build_id: str) -> dict[str, Any]:
+    try:
+        return pdf_corpus_builds.pause(build_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.delete("/api/pdf/corpus-builds/{build_id}")
+def delete_pdf_corpus_build(build_id: str) -> dict[str, Any]:
+    try:
+        return pdf_corpus_builds.discard_build(build_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/api/pdf/corpus-builds/{build_id}/settle-metadata")

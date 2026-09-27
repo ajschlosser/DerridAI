@@ -19,6 +19,12 @@ export const corpusSourcesApi = {
     apiRequest<GutenbergStatus>("/api/gutenberg/catalogue/refresh", { method: "POST" }),
   gutenbergArchiveAction: (action: "start" | "pause" | "resume" | "refetch") =>
     apiRequest<GutenbergStatus>(`/api/gutenberg/archive/${action}`, { method: "POST" }),
+  /** Delete a source and the builds made from it (refused by the API while one is running). */
+  deleteAsset: (assetId: string) =>
+    apiRequest<{ deleted: string[]; builds_deleted: number }>(
+      `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}?cascade=true`,
+      { method: "DELETE" },
+    ),
   listAssets: () => apiRequest<{ items: PdfAsset[] }>(legacyCorpusUrl("assets")),
   async uploadAsset(
     file: File,

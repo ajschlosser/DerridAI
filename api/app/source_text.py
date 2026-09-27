@@ -115,6 +115,9 @@ def prose_to_blocks(
     """
     from . import page_markers
 
+    text, stripped_prefix = strip_line_frame(text)
+    if detection_out is not None and stripped_prefix:
+        detection_out["line_frame_stripped"] = stripped_prefix
     if detect_pages:
         detection = page_markers.detect(text)
         if detection.status != "detected" and page_llm is not None:
@@ -138,6 +141,36 @@ def prose_to_blocks(
         if detection_out is not None:
             detection_out.update(status="not_found", reason="markers found but no text could be assigned to pages")
     return _synthetic_page_blocks(text, extraction_method=extraction_method, confidence=confidence)
+
+
+_LEAD_PIPE = re.compile(r"^[ \t]*\|[ \t]?")
+_TRAIL_PIPE = re.compile(r"[ \t]?\|[ \t]*$")
+
+
+def strip_line_frame(text: str) -> tuple[str, str]:
+    """Remove a leading/trailing ``|`` that frames (almost) every line, e.g. quoted or table-style dumps.
+
+    Only applied when at least 80% of the non-blank lines carry the frame, so ordinary text with an
+    occasional pipe is untouched. Returns the text and a short description of what was removed
+    (empty when nothing was), which the caller records as provenance.
+    """
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    filled = [line for line in lines if line.strip()]
+    if len(filled) < 3:
+        return text, ""
+    lead = sum(1 for line in filled if _LEAD_PIPE.match(line))
+    if lead / len(filled) < 0.8:
+        return text, ""
+    trail = sum(1 for line in filled if _TRAIL_PIPE.search(line))
+    strip_trail = trail / len(filled) >= 0.8
+    out = []
+    for line in lines:
+        if line.strip():
+            line = _LEAD_PIPE.sub("", line, count=1)
+            if strip_trail:
+                line = _TRAIL_PIPE.sub("", line, count=1)
+        out.append(line)
+    return "\n".join(out), "leading_and_trailing_pipe" if strip_trail else "leading_pipe"
 
 
 def _paragraph_spans(lines: list[str]) -> list[tuple[int, int]]:

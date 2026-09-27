@@ -279,8 +279,18 @@ def _record_sizing_policy(request: dict[str, Any], profile: dict[str, Any]) -> d
         supplied = {}
     preferred = int(supplied.get("preferred_record_chars") or profile.get("preferred_record_chars") or 1750)
     tolerance = int(supplied.get("record_length_tolerance") or profile.get("record_length_tolerance") or 200)
-    long_limit = int(supplied.get("long_record_chars") or profile.get("long_record_chars") or 3500)
-    absolute = int(supplied.get("absolute_record_chars") or profile.get("absolute_record_chars") or 6000)
+    long_limit = int(supplied.get("long_record_chars") or 0)
+    absolute = int(supplied.get("absolute_record_chars") or 0)
+    if not long_limit or not absolute:
+        # A reviewer-supplied target must scale the exception ceilings; a fixed 3500/6000
+        # made a 500-char target accept 1,500-char records as "coherent exceptions".
+        custom = bool(supplied.get("preferred_record_chars")) and preferred != int(profile.get("preferred_record_chars") or 1750)
+        if custom:
+            long_limit = long_limit or preferred * 2
+            absolute = absolute or preferred * 3
+        else:
+            long_limit = long_limit or int(profile.get("long_record_chars") or 3500)
+            absolute = absolute or int(profile.get("absolute_record_chars") or 6000)
     # Floors mirror PdfCorpusRecordSizing; a reviewer's small target must not be silently raised.
     preferred = max(100, min(12000, preferred))
     tolerance = max(10, min(2000, tolerance))
@@ -352,6 +362,13 @@ def _best_record_sizing_boundary(
             "quality": quality, "protected": protected, "signals": signals,
         })
     target_low, target_high = preferred - tolerance, preferred + tolerance
+    # Do not strand a tiny tail: a seam leaving less than a quarter of the target behind
+    # produces the 82-char records reviewers reported, unless it is the only choice.
+    whole = sum(len(str(b.get("text") or "")) + 2 for b in span)
+    min_tail = preferred // 4
+    roomy = [x for x in seams if whole - x["chars"] >= min_tail]
+    if roomy:
+        seams = roomy
     target = [x for x in seams if target_low <= x["chars"] <= target_high and not x["protected"]]
     if target:
         best=max(target,key=lambda x:(x["quality"],-abs(x["chars"]-preferred)))

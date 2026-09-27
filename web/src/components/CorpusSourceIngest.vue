@@ -79,12 +79,19 @@ const emit = defineEmits<{
   updateGutenbergArchive: [action: "start" | "pause" | "resume" | "refetch"];
   importGutenberg: [number];
   importWikisource: [string];
+  deleteAsset: [string];
   continue: [];
 }>();
 
 const i18n = useI18nStore();
 const uploadInput = ref<HTMLInputElement | null>(null);
 const searchOpen = ref(false);
+/** The source whose inline "delete?" confirmation is showing. */
+const confirmingDelete = ref("");
+function confirmDelete(assetId: string) {
+  confirmingDelete.value = "";
+  emit("deleteAsset", assetId);
+}
 
 const sourceSetupDisabled = computed(() => props.disabled || props.sourceSelectionDisabled);
 
@@ -349,6 +356,10 @@ onBeforeUnmount(() => {
           <span class="dropzone-sub">{{ i18n.t("pdf_corpus.choose_pdf") }}</span>
           <span v-if="busy === 'upload'" class="dropzone-progress" aria-hidden="true"></span>
         </button>
+        <p v-if="busy === 'upload'" class="source-loading" role="status">
+          <span class="spinner" aria-hidden="true"></span>
+          <span>{{ i18n.t("pdf_corpus.source_loading_status") }}</span>
+        </p>
         <input
           ref="uploadInput"
           :disabled="sourceSetupDisabled"
@@ -584,6 +595,26 @@ onBeforeUnmount(() => {
               ><AppIcon name="check"
             /></span>
           </button>
+          <div v-if="confirmingDelete === asset.asset_id" class="saved-confirm" role="group">
+            <span>{{ i18n.t("pdf_corpus.source_delete_confirm") }}</span>
+            <button type="button" class="btn danger" @click="confirmDelete(asset.asset_id)">
+              {{ i18n.t("pdf_corpus.source_delete") }}
+            </button>
+            <button type="button" class="btn" @click="confirmingDelete = ''">
+              {{ i18n.t("ui.cancel") }}
+            </button>
+          </div>
+          <button
+            v-else
+            type="button"
+            class="saved-delete btn icon-only"
+            :disabled="sourceSetupDisabled"
+            :aria-label="i18n.tf('pdf_corpus.source_delete_named', { name: asset.filename })"
+            :title="i18n.t('pdf_corpus.source_delete')"
+            @click="confirmingDelete = asset.asset_id"
+          >
+            <AppIcon name="trash" />
+          </button>
         </li>
       </ul>
       <p v-if="!visibleAssets.length" class="saved-none">
@@ -800,6 +831,38 @@ onBeforeUnmount(() => {
   font-weight: var(--fw-semibold);
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+.source-loading {
+  display: flex;
+  gap: var(--space-2, 8px);
+  align-items: center;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--fs-base);
+}
+.source-loading .spinner {
+  margin: 0;
+}
+.saved-grid > li {
+  position: relative;
+}
+.saved-delete {
+  position: absolute;
+  inset-block-start: 6px;
+  inset-inline-end: 6px;
+  opacity: 0.7;
+}
+.saved-delete:hover,
+.saved-delete:focus-visible {
+  opacity: 1;
+}
+.saved-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2, 8px);
+  align-items: center;
+  margin-block-start: var(--space-2, 8px);
+  font-size: var(--fs-sm);
 }
 .dropzone-progress {
   position: absolute;

@@ -249,12 +249,17 @@ function applyPreset(value: string) {
     updateConfig({ skip_retrieval: true });
     return;
   }
+  if (value === "hybrid" && !selectedEvidence.value.length) {
+    preset.value = "balanced";
+    return;
+  }
+  // Hybrid = the balanced search plus the researcher's own evidence, which the API pins in the packet.
   const common = {
     skip_retrieval: false,
     reranker: "cross_encoder",
     search_types: ["similarity", "lexical", "mmr"],
   };
-  if (value === "balanced")
+  if (value === "balanced" || value === "hybrid")
     updateConfig({ ...common, k: 64, fetch_k: 500, lambda_mult: 0.7, rrf_k: 60, rerank_top_n: 24 });
   else if (value === "precision")
     updateConfig({

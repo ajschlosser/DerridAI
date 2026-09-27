@@ -494,6 +494,8 @@ class PdfSourceUnitPolicy(BaseModel):
     """How finely a source is divided into evidence units."""
     mode: Literal["default", "paragraph", "line", "sentence", "chars"] = "default"
     chars: int | None = Field(default=None, ge=60, le=20000)
+    # "Every N paragraphs / sentences"; only meaningful for the paragraph and sentence modes.
+    per: int | None = Field(default=None, ge=1, le=50)
 
 
 class BuildWarningAcknowledgement(BaseModel):

@@ -530,7 +530,7 @@ export function createWorkDialogs(deps: Deps) {
           if (!file) continue;
           const before = file.records.length;
           file.records = file.records.filter(
-            (record: Any) => String(record.work || tr("works.untitled")) !== work,
+            (record: Any) => String(record.work || "(Untitled work)") !== work,
           );
           const removed = before - file.records.length;
           if (removed) {

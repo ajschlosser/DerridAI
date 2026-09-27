@@ -152,7 +152,8 @@ export function createAppLifecycle(deps: Deps) {
     const requestedUrlState = shareParams.get("ts");
     let first = null,
       total = 0,
-      errors = 0;
+      errors = 0,
+      alreadyOpen = 0;
     for (const file of [...fileList]) {
       let text: string;
       let name: string = file.name;
@@ -182,6 +183,7 @@ export function createAppLifecycle(deps: Deps) {
       const existing = state.files.find((item: Any) => item.id === identity.id);
       if (existing) {
         first ||= existing.id;
+        alreadyOpen += 1;
         total += existing.records.length;
         errors += existing.errors?.length || 0;
         continue;
@@ -205,10 +207,16 @@ export function createAppLifecycle(deps: Deps) {
       if (requestedUrlState)
         applyCompressedTableUrlState(decompressUrlState(requestedUrlState), state.view);
     } else if (first) state.activeFileId = first;
+    // Always drop derived caches: a file that was already open may have been edited or emptied.
+    invalidateCorpusCache();
     persistPrefs();
     shell();
     renderView();
     syncUrl({ replace: true });
+    if (alreadyOpen && alreadyOpen === [...fileList].length && !errors) {
+      toast(trf("dynamic.already_loaded", { count: total }));
+      return;
+    }
     toast(
       errors
         ? trf("dynamic.loaded_records_issues", { count: total, issues: errors })

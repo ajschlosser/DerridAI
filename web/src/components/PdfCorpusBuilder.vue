@@ -284,6 +284,7 @@ const {
   refreshAssets,
   upload,
   applyUnitPolicy,
+  deleteAsset,
   loadSourceUrl,
   searchGutenberg,
   searchWikisource,
@@ -306,6 +307,7 @@ const decisionDock = ref<InstanceType<typeof CorpusRecordDecisionDock> | null>(n
 const configurationSection = ref<CorpusConfigurationSection>("source");
 const recordSaveQueue = new RecordMutationQueue();
 const documentMetadataOpen = ref(false);
+const confirmingBuildDelete = ref(false);
 const textCleanupOpen = ref(false);
 const sourceTranscriptionOpen = ref(false);
 const {
@@ -380,6 +382,8 @@ const {
   retryIncompleteMetadata,
   confirmManifest,
   cancelBuild,
+  pauseBuild,
+  deleteBuild,
   settleMetadata,
 } = useCorpusBuildLifecycleController({
   builds,
@@ -1754,6 +1758,7 @@ watch(selectedAssetId, () => {
   else configurationSection.value = "source";
 });
 watch(selectedBuildId, () => {
+  confirmingBuildDelete.value = false;
   sourceProblemDialogBuildId.value = "";
 });
 watch(
@@ -2036,6 +2041,7 @@ defineExpose({
           @update-gutenberg-archive="updateGutenbergArchive"
           @import-gutenberg="importGutenberg"
           @import-wikisource="importLibraryUrl"
+          @delete-asset="deleteAsset"
           @continue="configurationSection = 'structure'"
         />
       </section>
@@ -2318,6 +2324,9 @@ defineExpose({
               <p>{{ currentBuild.build_id }}</p>
             </div>
             <div class="summary-actions">
+              <button v-if="buildRunning" type="button" class="btn" @click="pauseBuild">
+                {{ i18n.t("pdf_corpus.pause") }}
+              </button>
               <button v-if="buildRunning" type="button" class="btn" @click="cancelBuild">
                 {{ i18n.t("pdf_corpus.cancel") }}
               </button>
@@ -2329,6 +2338,30 @@ defineExpose({
                 :disabled="busy !== ''"
               >
                 {{ i18n.t("pdf_corpus.resume") }}
+              </button>
+              <span v-if="confirmingBuildDelete" class="delete-confirm" role="group">
+                <span>{{ i18n.t("pdf_corpus.build_delete_confirm") }}</span>
+                <button
+                  type="button"
+                  class="btn danger"
+                  @click="
+                    confirmingBuildDelete = false;
+                    deleteBuild();
+                  "
+                >
+                  {{ i18n.t("pdf_corpus.build_delete") }}
+                </button>
+                <button type="button" class="btn" @click="confirmingBuildDelete = false">
+                  {{ i18n.t("ui.cancel") }}
+                </button>
+              </span>
+              <button
+                v-else-if="!buildRunning"
+                type="button"
+                class="btn"
+                @click="confirmingBuildDelete = true"
+              >
+                {{ i18n.t("pdf_corpus.build_delete") }}
               </button>
               <a
                 v-if="currentBuild.publication"
