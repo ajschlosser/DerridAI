@@ -1,5 +1,6 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { apiRequest } from "./http";
+import { runOperation } from "./graphql/client";
 
 export type ClaimValidationStatus = "unvalidated" | "validated" | "rejected" | "unresolved";
 
@@ -45,8 +46,14 @@ export const claimsApi = {
       // attribution can be snapshotted next to the validated claim.
       body: JSON.stringify({ status, record: record ?? undefined }),
     }),
-  similar: (claimId: string, limit = 5) =>
-    apiRequest<{ items: SimilarValidatedClaim[] }>(
-      `/api/derridai/claims/${encodeURIComponent(claimId)}/similar?limit=${limit}`,
-    ),
+  // Read through the GraphQL façade (GET /api/derridai/claims/{id}/similar remains for compatibility).
+  similar: async (claimId: string, limit = 5): Promise<{ items: SimilarValidatedClaim[] }> => {
+    const { generated_claim } = await runOperation("SimilarValidatedClaims", {
+      claim_id: claimId,
+      limit,
+    });
+    return {
+      items: generated_claim.similar_validated_claims.map((item) => ({ ...item, advisory: true })),
+    };
+  },
 };

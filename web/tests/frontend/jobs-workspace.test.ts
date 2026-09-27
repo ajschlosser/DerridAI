@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createJobsWorkspace } from "../../src/domain/jobsWorkspace";
 import { createRuntimeState } from "../../src/runtime/runtimeState";
 import { jobsState } from "../../src/state/jobsState";
+import { RealtimeClient } from "../../src/realtime/client";
+import { MockSocket, jobEvent } from "./realtime-support";
 
 type Anything = any;
 
@@ -17,6 +19,8 @@ function setup(overrides: Record<string, unknown> = {}) {
     {
       state,
       isActiveJobStatus: (status: string) => ["queued", "running", "cancelling"].includes(status),
+      // Never started: behaves like the pre-realtime client.
+      realtime: new RealtimeClient({ createSocket: (url) => new MockSocket(url) }),
       ...overrides,
     } as Record<string, unknown>,
     {
@@ -100,5 +104,95 @@ describe("jobs workspace", () => {
     expect(state.jobs).toEqual([]);
     expect(spies.persistPrefs).toHaveBeenCalled();
     expect(api).toHaveBeenCalledWith("/api/jobs");
+  });
+
+  describe("with the realtime socket", () => {
+    function liveSetup(overrides: Record<string, unknown> = {}) {
+      MockSocket.instances = [];
+      const realtime = new RealtimeClient({
+        createSocket: (url) => new MockSocket(url),
+        url: () => "ws://t",
+        random: () => 1,
+      });
+      const context = setup({ realtime, ...overrides });
+      context.workspace.startRealtime();
+      const socket = MockSocket.instances[0];
+      socket.ready();
+      return { ...context, realtime, socket };
+    }
+
+    it("replaces polling with events while the socket is healthy", () => {
+      const api = vi.fn(async () => ({ jobs: [] }));
+      const { state, workspace, socket } = liveSetup({ api });
+      state.jobs = [{ id: "a", status: "running" }];
+      workspace.startJobPolling();
+      expect(state.jobsPollTimer ?? null).toBeNull();
+      expect(socket.sent[0]).toEqual({ type: "subscribe", topics: ["jobs"] });
+    });
+
+    it("merges a job event through the shared reconciliation and notifies once", async () => {
+      const api = vi.fn(async () => ({
+        jobs: [{ id: "a", type: "llm", status: "completed", completed: 3, total: 3 }],
+      }));
+      const { state, spies, socket } = liveSetup({ api });
+      await vi.advanceTimersByTimeAsync(0); // initial "connected" resync
+      api.mockClear();
+      state.jobs = [
+        { id: "a", type: "llm", status: "running", completed: 1, total: 3, label: "LLM" },
+      ];
+
+      socket.frame(
+        jobEvent(1, 1, { id: "a", type: "llm", status: "running", completed: 2, total: 3 }),
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      expect(state.jobs[0]).toMatchObject({ completed: 2, label: "LLM" });
+      expect(spies.notifyOperationsChanged).toHaveBeenCalled();
+      expect(api).not.toHaveBeenCalled();
+
+      socket.frame(
+        jobEvent(
+          2,
+          2,
+          { id: "a", type: "llm", status: "completed", completed: 3 },
+          "job.completed",
+        ),
+      );
+      await vi.advanceTimersByTimeAsync(300);
+      // The terminal summary is followed by one authoritative REST snapshot.
+      expect(api).toHaveBeenCalledWith("/api/jobs");
+      expect(state.jobs[0].status).toBe("completed");
+      const completions = spies.toast.mock.calls.filter(([message]: unknown[]) =>
+        String(message).includes("completed"),
+      );
+      expect(completions).toHaveLength(1);
+    });
+
+    it("fetches the REST snapshot for jobs it has not loaded yet", async () => {
+      const api = vi.fn(async () => ({ jobs: [{ id: "new", status: "queued" }] }));
+      api.mockResolvedValueOnce({ jobs: [] });
+      const { state, socket } = liveSetup({ api });
+      await vi.advanceTimersByTimeAsync(300);
+      api.mockClear();
+      socket.frame(jobEvent(1, 1, { id: "new", status: "queued" }, "job.created"));
+      await vi.advanceTimersByTimeAsync(300);
+      expect(api).toHaveBeenCalledWith("/api/jobs");
+      expect(state.jobs.map((job: { id: string }) => job.id)).toEqual(["new"]);
+    });
+
+    it("falls back to slow polling when the socket keeps failing, and closes on pause", async () => {
+      const api = vi.fn(async () => ({ jobs: [{ id: "a", status: "running" }] }));
+      const { state, workspace, realtime, socket } = liveSetup({ api });
+      state.jobs = [{ id: "a", status: "running" }];
+      socket.serverClose(1006);
+      for (let i = 0; i < 3; i += 1) {
+        await vi.runOnlyPendingTimersAsync();
+        MockSocket.instances[MockSocket.instances.length - 1].serverClose(1006);
+      }
+      expect(realtime.fallbackActive).toBe(true);
+      expect(state.jobsPollTimer).not.toBeNull();
+      workspace.pauseRuntime();
+      expect(state.jobsPollTimer).toBeNull();
+      expect(realtime.status).toBe("idle");
+    });
   });
 });

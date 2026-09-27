@@ -230,6 +230,24 @@ class SystemStore:
         with self._lock:
             return self.repository.get_generated_claim(claim_id, owner=owner)
 
+    def get_generated_claims(
+        self,
+        claim_ids: list[str],
+        *,
+        owner: str | None = None,
+    ) -> dict[str, dict[str, Any]]:
+        with self._lock:
+            return self.repository.get_generated_claims(claim_ids, owner=owner)
+
+    def list_claim_support_bindings_for_claims(
+        self,
+        claim_ids: list[str],
+        *,
+        owner: str | None = None,
+    ) -> dict[str, list[dict[str, Any]]]:
+        with self._lock:
+            return self.repository.list_claim_support_bindings_for_claims(claim_ids, owner=owner)
+
     def embedding_defaults(self) -> dict[str, Any]:
         with self._lock:
             stored = self.repository.get_setting("embedding_defaults")

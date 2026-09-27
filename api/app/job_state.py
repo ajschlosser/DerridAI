@@ -79,6 +79,59 @@ def store_job_error(job: JobPayload, exc: Exception) -> dict[str, Any]:
     return details
 
 
+# Small, text-free fields that describe a job's live state. The realtime plane
+# publishes only these; clients fetch full job detail (results, requests,
+# evidence, diagnostics) through the owner-scoped REST endpoints.
+_REALTIME_SCALAR_KEYS = (
+    "id",
+    "type",
+    "tool",
+    "mode",
+    "owner",
+    "status",
+    "stage",
+    "total",
+    "completed",
+    "failed",
+    "cancel_requested",
+    "created_at",
+    "started_at",
+    "finished_at",
+    "store_name",
+    "build_id",
+    "dismissed",
+)
+_REALTIME_TEXT_LIMIT = 240
+# Grading details quote the research question; it stays in the owner-scoped REST
+# job detail rather than generic progress events.
+_REALTIME_DETAIL_EXCLUDED_TOOLS = frozenset({"rag_grade", "rag_grade_batch"})
+_REALTIME_ACTIVE_STATUSES = frozenset({"queued", "running", "cancelling"})
+
+
+def job_realtime_summary(job: JobPayload) -> JobPayload:
+    """Bounded live-state summary shared by every manager's realtime feed."""
+    summary: JobPayload = {key: job.get(key) for key in _REALTIME_SCALAR_KEYS if key in job}
+    detail = job.get("stage_detail")
+    # Only live operational detail is published. A finished job's detail can be
+    # an upstream error message, which clients read from REST with the rest of
+    # the error metadata.
+    if (
+        detail not in (None, "")
+        and job.get("status") in _REALTIME_ACTIVE_STATUSES
+        and (job.get("tool") or job.get("mode")) not in _REALTIME_DETAIL_EXCLUDED_TOOLS
+    ):
+        summary["stage_detail"] = str(detail)[:_REALTIME_TEXT_LIMIT]
+    summary["warnings_count"] = len(job.get("warnings") or [])
+    summary["has_error"] = bool(job.get("fatal_error") or job.get("error_message") or job.get("error"))
+    results = job.get("results")
+    if job.get("type") == "llm" and isinstance(results, list):
+        summary["pending_result_count"] = sum(
+            1 for result in results
+            if isinstance(result, dict) and not result.get("error") and result.get("proposal")
+        )
+    return summary
+
+
 class PersistentJobStateMixin:
     """Mirror live worker state into the durable SQLite operation ledger.
 
@@ -138,6 +191,21 @@ class PersistentJobStateMixin:
         with self._lock:
             jobs = [copy.deepcopy(job) for job in self._jobs.values()]
         job_repository.upsert_many(jobs)
+
+    def realtime_job_summaries(self) -> JobPayloadList:
+        """Live-state summaries for the realtime observer (read-only, no deep copy).
+
+        Event emission is derived from this one shared view rather than from
+        per-manager socket calls, so status/terminal semantics stay identical to
+        the REST snapshot and a publishing failure can never affect a worker.
+        """
+        with self._lock:
+            return [job_realtime_summary(job) for job in self._jobs.values()]
+
+    def realtime_job_summary(self, job_id: str) -> JobPayload | None:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            return job_realtime_summary(job) if job is not None else None
 
     def clear_all(self) -> int:
         """Drop in-memory and durable history for this manager."""

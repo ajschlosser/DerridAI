@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import OperationsPanel from "../../src/components/OperationsPanel.vue";
 import { useI18nStore } from "../../src/stores/i18n";
 import type { OperationView, OperationsBridge } from "../../src/domain/operationsPanel";
+import { realtimeFallback, realtimeStatus } from "../../src/realtime";
 
 const NOW = new Date("2026-09-20T15:00:00").getTime();
 const iso = (seconds: number) => new Date(NOW + seconds * 1000).toISOString();
@@ -403,5 +404,36 @@ describe("language and formatting", () => {
     await more.trigger("click");
     expect(wrapper.findAll("li.ops-row")).toHaveLength(9);
     expect(more.attributes("aria-expanded")).toBe("true");
+  });
+});
+
+describe("operations panel realtime status", () => {
+  afterEach(() => {
+    realtimeStatus.value = "idle";
+    realtimeFallback.value = false;
+  });
+
+  it("shows a quiet connection line that is not a live region", async () => {
+    realtimeStatus.value = "connected";
+    const { wrapper } = await mountPanel([job()]);
+    const line = wrapper.get('[data-testid="realtime-status"]');
+    expect(line.attributes("data-state")).toBe("connected");
+    expect(line.text()).toBe("Live updates on");
+    expect(line.attributes("role")).toBeUndefined();
+    expect(line.attributes("aria-live")).toBeUndefined();
+  });
+
+  it("explains the fallback refresh cadence when live updates are unavailable", async () => {
+    realtimeStatus.value = "offline";
+    realtimeFallback.value = true;
+    const { wrapper } = await mountPanel([job()]);
+    const line = wrapper.get('[data-testid="realtime-status"]');
+    expect(line.attributes("data-state")).toBe("offline");
+    expect(line.text()).toContain("25 s");
+  });
+
+  it("stays hidden before the realtime client starts", async () => {
+    const { wrapper } = await mountPanel([job()]);
+    expect(wrapper.find('[data-testid="realtime-status"]').exists()).toBe(false);
   });
 });

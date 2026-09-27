@@ -1,6 +1,8 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
 import { esc, icon } from "./html";
+import { realtime } from "../realtime";
+import { followResource } from "../realtime/follow";
 import { llmReviewDialogHtml } from "./jobReviewMarkup";
 import { recordPreviewDialogHtml } from "./recordPreviewMarkup";
 import { createJobDialogCopy } from "./jobDialogCopy";
@@ -598,7 +600,7 @@ export function createJobDialogs(deps: Deps) {
       );
 
       const close = () => {
-        if (liveTimer) clearInterval(liveTimer);
+        if (liveTimer) liveTimer();
         dialog.close();
         dialog.remove();
       };
@@ -665,27 +667,27 @@ export function createJobDialogs(deps: Deps) {
 
     render();
     if (["queued", "running", "cancelling"].includes(job.status)) {
-      liveTimer = setInterval(async () => {
-        if (!dialog.isConnected) {
-          clearInterval(liveTimer);
-          return;
-        }
-        const before = job.completed;
-        const pendingBefore = job.pending_result_count;
-        if (await refreshJob()) {
-          if (
-            job.completed !== before ||
-            job.pending_result_count !== pendingBefore ||
-            !["queued", "running", "cancelling"].includes(job.status)
-          ) {
-            render({ preserveScroll: true });
+      // Follow this job's realtime events; REST polling only while the socket is unavailable.
+      liveTimer = followResource({
+        topic: `job:${job.id}`,
+        fallbackMs: realtime.status === "idle" ? 4000 : undefined,
+        isDone: () =>
+          !dialog.isConnected || !["queued", "running", "cancelling"].includes(job.status),
+        refresh: async () => {
+          if (!dialog.isConnected) return;
+          const before = job.completed;
+          const pendingBefore = job.pending_result_count;
+          if (await refreshJob()) {
+            if (
+              job.completed !== before ||
+              job.pending_result_count !== pendingBefore ||
+              !["queued", "running", "cancelling"].includes(job.status)
+            ) {
+              render({ preserveScroll: true });
+            }
           }
-          if (!["queued", "running", "cancelling"].includes(job.status)) {
-            clearInterval(liveTimer);
-            liveTimer = null;
-          }
-        }
-      }, 4000);
+        },
+      });
     }
   }
   async function openRagResult(job: Any) {

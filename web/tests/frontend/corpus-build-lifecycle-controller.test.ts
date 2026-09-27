@@ -25,6 +25,26 @@ const runtime = vi.hoisted(() => ({
 
 vi.mock("../../src/runtime/runtime.js", () => runtime);
 
+const follow = vi.hoisted(() => ({
+  calls: [] as Array<Record<string, any>>,
+  stop: vi.fn(),
+}));
+vi.mock("../../src/realtime/follow", async () => {
+  const actual = await vi.importActual<typeof import("../../src/realtime/follow")>(
+    "../../src/realtime/follow",
+  );
+  return {
+    followResource: (options: Record<string, any>) => {
+      follow.calls.push(options);
+      const stopReal = actual.followResource(options as any);
+      return () => {
+        follow.stop();
+        stopReal();
+      };
+    },
+  };
+});
+
 import { useCorpusBuildLifecycleController } from "../../src/features/corpus-builder/composables/useCorpusBuildLifecycleController";
 
 function build(id = "build-1") {
@@ -184,6 +204,27 @@ describe("Corpus Builder lifecycle controller", () => {
     expect(corpusBuilderApi.build).toHaveBeenCalledTimes(1);
     expect(state.refreshRecords).not.toHaveBeenCalled();
 
+    state.controller.stopPolling();
+  });
+
+  it("follows the running build's realtime topic and stops once it settles", async () => {
+    follow.calls.length = 0;
+    const running = { ...build("build-1"), status: "running", stage: "enriching" };
+    const settled = { ...build("build-1"), status: "awaiting_review" };
+    corpusBuilderApi.build.mockResolvedValueOnce(settled);
+    corpusBuilderApi.listBuilds.mockResolvedValue({ items: [settled], total: 1 });
+    const state = setup();
+    state.selectedBuildId.value = "build-1";
+    state.currentBuild.value = running;
+
+    state.controller.startPolling();
+    expect(follow.calls.at(-1)?.topic).toBe("corpus-build:build-1");
+
+    // A corpus-build event (or fallback tick) runs the same refresh.
+    await follow.calls.at(-1)?.refresh();
+    expect(state.currentBuild.value?.status).toBe("awaiting_review");
+    expect(state.refreshRecords).toHaveBeenCalledTimes(1);
+    expect(follow.calls.at(-1)?.isDone()).toBe(true);
     state.controller.stopPolling();
   });
 });

@@ -13,12 +13,22 @@ This document describes the current `master` architecture. For user-visible beha
 
 Background work runs in the API process. There is no external worker/queue service.
 
+### Transports
+
+The browser talks to the API over three deliberately separate transports, all served by the same process and proxied under `/api/`:
+
+- **REST** (`/api/...`) owns every command and mutation: uploads, review decisions, claim validation, job creation/cancellation, schema/provider/user administration, publication, backup/restore.
+- **GraphQL** (`POST /api/graphql`) is a read-only, cELF-aware query façade over shared read services (`celf_queries/`). No mutations, no subscriptions. See [GRAPHQL.md](GRAPHQL.md).
+- **WebSocket** (`WS /api/ws/events`) is an authenticated realtime notification plane for job, corpus-build and model-activity progress. It is never canonical state; clients resynchronize from REST/GraphQL. See [REALTIME.md](REALTIME.md).
+
 ## Backend boundaries
 
 | Area                                       | Current ownership                                                                                                                                                                                      |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Application composition                    | `main.py`, `application.py`, `middleware.py`, `route_policy.py`, `response_filters.py`, `validation_handlers.py`                                                                                       |
 | HTTP routes                                | `routers/{admin,annotations,auth,chroma,corpus,health,i18n,jobs,llm,sources,stores,system,system_data}.py`                                                                                             |
+| cELF reads / GraphQL                       | `celf_queries/` (transport-independent read services shared with REST), `graphql/` (query-only Strawberry schema, permissions, request-scoped loaders)                                                 |
+| Realtime                                   | `realtime/` (WebSocket endpoint, protocol, broker, subscriptions, observer), `operation_events.py` (transport-neutral change notes)                                                                    |
 | Corpus orchestration                       | `corpus_builder.py` plus focused `corpus_*` modules for lifecycle, manifest workflow, segmentation, enrichment, review, quality, publication, and schema/profile behavior                              |
 | Source discovery / acquisition             | `source_capture.py`, `source_provider.py`, `source_identity.py`, `source_wikidata.py`, `source_gutenberg.py`, `source_wikisource.py`, `source_reconcile.py`, `source_registry.py`, `capture_store.py`  |
 | Source extraction                          | `corpus_extraction.py`, `source_media.py`, `source_text.py`, `source_audio.py`, `source_safety.py`, `source_quality.py`, `source_kinds.py`                                                             |
@@ -99,10 +109,12 @@ System Data exposes administrative inspection of application/system datasets, in
 - `domain/` owns pure rules/formatting;
 - `composables/` and `stores/` own reusable stateful behavior;
 - `runtime/` is a remaining compatibility/orchestration boundary, not the preferred home for new feature logic;
+- `api/graphql/` holds the typed GraphQL client and checked-in operation documents; `realtime/` holds the single WebSocket connection manager and `followResource()`;
 - semantic tokens in `styles/tokens.css` and accessible primitives are the styling/interaction contract.
 
 ## Known constraints
 
 - The application still assumes one API process for in-flight job execution and mutable embedded-storage coordination.
+- The realtime broker and its replay ring are in-memory in that one process; a restart forgets events and clients resynchronize from REST.
 - `chroma_store.py`, `corpus_builder.py`, and some frontend compatibility/style surfaces remain large; refactor them only along verified domain seams with regression coverage.
 - Historical versioned design documents describe the release that created them, not the current architecture.

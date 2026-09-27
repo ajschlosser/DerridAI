@@ -70,7 +70,7 @@ npm run format:repo:check
 Python static analysis remains separate:
 
 ```bash
-ruff check api/app tests scripts/check_frontend_api_contract.py
+ruff check api/app tests scripts/check_frontend_api_contract.py scripts/check_frontend_graphql_contract.py
 mypy
 ```
 
@@ -82,13 +82,14 @@ Backend/release regression:
 
 ```bash
 python -m compileall -q api/app
-pytest -q -n auto --dist=worksteal --ignore=tests/test_frontend_api_contract.py
+pytest -q -n auto --dist=worksteal --ignore=tests/test_frontend_api_contract.py --ignore=tests/test_frontend_graphql_contract.py
 ```
 
-Frontend/FastAPI contract:
+Frontend/FastAPI (REST) and frontend/GraphQL operation contracts, checked independently:
 
 ```bash
 pytest -q -m contract tests/test_frontend_api_contract.py
+pytest -q -m contract tests/test_frontend_graphql_contract.py
 ```
 
 Frontend static/unit/build:
@@ -123,11 +124,12 @@ See [tests/README.md](tests/README.md) for pytest markers, test taxonomy, and fo
 | Gate                        | Command / responsibility                                                                |
 | --------------------------- | --------------------------------------------------------------------------------------- |
 | Repository format           | `cd web && npm run format:repo:check` for Prettier-supported tracked source/docs/config |
-| Backend lint                | `ruff check api/app tests scripts/check_frontend_api_contract.py`                       |
+| Backend lint                | `ruff check api/app tests scripts/check_frontend_*_contract.py`                         |
 | Backend types               | `mypy` using `mypy.ini`                                                                 |
 | Frontend lint               | `cd web && npm run lint`                                                                |
 | Backend tests               | compile Python, then parallel pytest excluding the focused contract test                |
 | Frontend / FastAPI contract | live FastAPI OpenAPI routes versus frontend requests                                    |
+| Frontend / GraphQL contract | frontend `.graphql` operations validated against the live Strawberry schema             |
 | Frontend static             | typecheck app/tests, unit tests, production build, Storybook build                      |
 | Legacy DOM regression       | sharded characterization suite                                                          |
 | Composed UI / app E2E       | sharded production/Storybook Playwright coverage                                        |
@@ -155,10 +157,11 @@ Run the smallest set of checks that covers the change, then report exactly what 
 ```bash
 cd web && npm run format:repo:check && npm run lint && npm run typecheck && npm run typecheck:tests && npm run test:unit
 cd ..
-ruff check api/app tests scripts/check_frontend_api_contract.py
+ruff check api/app tests scripts/check_frontend_api_contract.py scripts/check_frontend_graphql_contract.py
 mypy
-pytest -q -n auto --dist=worksteal --ignore=tests/test_frontend_api_contract.py
+pytest -q -n auto --dist=worksteal --ignore=tests/test_frontend_api_contract.py --ignore=tests/test_frontend_graphql_contract.py
 pytest -q -m contract tests/test_frontend_api_contract.py
+pytest -q -m contract tests/test_frontend_graphql_contract.py
 ```
 
 Add the relevant build/Storybook/Playwright gates when frontend rendering or browser behavior changed. If a required check could not be run, state why in the PR instead of implying that it passed.

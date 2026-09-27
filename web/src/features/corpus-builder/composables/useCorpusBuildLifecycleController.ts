@@ -7,6 +7,7 @@ import {
   type PdfAsset,
 } from "../../../api/corpus";
 import * as runtime from "../../../runtime/runtime.js";
+import { followResource } from "../../../realtime/follow";
 
 type MessageTone = "error" | "notice";
 
@@ -37,7 +38,7 @@ interface CorpusBuildLifecycleControllerOptions {
 }
 
 export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleControllerOptions) {
-  let pollTimer: number | undefined;
+  let stopFollowing: (() => void) | undefined;
 
   function buildRunning(build = options.currentBuild.value): boolean {
     return Boolean(build && ["queued", "running"].includes(String(build.status || "")));
@@ -123,33 +124,42 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
   }
 
   function stopPolling() {
-    if (pollTimer !== undefined) {
-      clearInterval(pollTimer);
-      pollTimer = undefined;
-    }
+    stopFollowing?.();
+    stopFollowing = undefined;
   }
 
+  /**
+   * Follow the selected running build. Its realtime `corpus-build:<id>` events trigger a refresh;
+   * REST polling runs only while the socket is unavailable. The name is kept for callers.
+   */
   function startPolling() {
     stopPolling();
-    pollTimer = window.setInterval(async () => {
-      if (!options.selectedBuildId.value) return;
-
-      // Build polling owns build-state freshness only. PdfCorpusBuilder's build-state
-      // watcher is the single owner of incremental record hydration. Keeping record
-      // reads out of this timer prevents the poll callback and the watcher from
-      // independently issuing the same /records request every 1.4 seconds.
-      const wasRunning = buildRunning();
-      await refreshBuild();
-
-      if (wasRunning && !buildRunning()) {
-        stopPolling();
-        await refreshBuilds();
-        // One terminal refresh is still useful because completion can settle queue
-        // membership without changing record_count/metadata_enriched_count.
-        await nextTick();
-        await options.refreshRecords(false, options.selectedRecordId.value);
-      }
-    }, 1400);
+    const buildId = options.selectedBuildId.value;
+    if (!buildId) return;
+    let finished = false;
+    stopFollowing = followResource({
+      topic: `corpus-build:${buildId}`,
+      minIntervalMs: 700,
+      // Model loading (llm_activity) changes without a build save; reconcile slowly while live.
+      reconcileMs: 15_000,
+      isDone: () => finished,
+      refresh: async () => {
+        if (!options.selectedBuildId.value) return;
+        // Build refresh owns build-state freshness only. PdfCorpusBuilder's build-state
+        // watcher is the single owner of incremental record hydration, so records are
+        // not re-read here on every event.
+        const wasRunning = buildRunning();
+        await refreshBuild();
+        if (wasRunning && !buildRunning()) {
+          finished = true;
+          await refreshBuilds();
+          // One terminal refresh is still useful because completion can settle queue
+          // membership without changing record_count/metadata_enriched_count.
+          await nextTick();
+          await options.refreshRecords(false, options.selectedRecordId.value);
+        }
+      },
+    });
   }
 
   async function startBuild() {

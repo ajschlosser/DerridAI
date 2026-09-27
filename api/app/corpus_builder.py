@@ -265,6 +265,7 @@ from .metadata_schema_store import SchemaStore
 from .metadata_values import is_placeholder
 from .models import WorkMetadataRequest, WorkMetadataSeed
 from .nlp_annotations import annotate_record
+from .operation_events import note_corpus_build
 from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
 from .rag import _citation_strings, chat_complete
 from .run_guidance import find_guidance_matches
@@ -1389,6 +1390,9 @@ class PdfCorpusRepository:
 
     def save_build(self, build: dict[str, Any]) -> None:
         _json_write(self.build_path(str(build["build_id"])), build)
+        # Realtime clients learn that the durable build changed; they still read
+        # the build itself through REST.
+        note_corpus_build(_operation_from_build(build))
 
     def _record_schema(self, build_id: str) -> MetadataSchema | None:
         build = self.get_build(build_id)

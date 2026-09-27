@@ -78,6 +78,8 @@ The filter chips (**All**, **Running**, **Needs attention**, **Finished**) show 
 
 **Remove** and **Clear finished** are undoable instead of asking for confirmation: the rows disappear at once, an **Undo** button stays for a few seconds, and the deletion is only sent to the server afterwards (or immediately if you leave the page). **Clear finished** never removes running operations.
 
+Operations update live: the page keeps one connection to the server and changes appear as they happen, without reloading. A small line under the panel heading says whether live updates are on. If a network or proxy blocks the connection, DerridAI keeps working and refreshes the list every 25 seconds instead (a watched corpus build, job dialog or translation every 5 seconds), then switches back automatically when the connection returns. Signing out closes the connection.
+
 The panel is built for keyboard and screen-reader use: real headings and lists, a labelled progress bar per operation, buttons named after their row ("Cancel PDF corpus build"), status shown as text plus an icon, and one polite announcement when an operation completes, fails, or is cancelled. Updates never move keyboard focus. Motion follows the "reduce motion" system setting, and the panel adapts to high-contrast (forced colors) modes.
 
 Supported operation types:
