@@ -3329,6 +3329,7 @@
   "claims.similar_none": "No similar validated claims yet.",
   "claims.similarity": "{value}% similar",
   "claims.validated_by": "validated by {name}",
+  "claims.reviewed_by": "reviewed by {name}",
   "traceability.back_to_record": "Back to record",
   "traceability.binding_count": "{count} support links",
   "traceability.bounded_trace": "Bounded record trace",
