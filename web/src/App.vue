@@ -558,9 +558,9 @@ watch(
   min-height: 100vh;
   display: grid;
   place-items: center;
-  color: var(--muted, #667085);
+  color: var(--muted);
   font-size: 0.875rem;
-  background: var(--bg, #f5f7fa);
+  background: var(--bg);
 }
 .app-shell-modern {
   grid-template-columns: var(--ref-sidebar) minmax(0, 1fr);
@@ -588,7 +588,7 @@ watch(
   z-index: 2000;
   padding: 9px 12px;
   border-radius: 7px;
-  background: #17233b;
+  background: var(--tone-info-fg);
   color: var(--accent-on);
   font-size: 0.8125rem;
   font-weight: 700;

@@ -66,6 +66,8 @@ Do not conflate these systems:
 - **metadata exemplars / metadata memory** guide metadata enrichment;
 - **Research response/claim memory** stores prior Research outputs, generated claims, and support bindings;
 - **metadata adjudication cache** supports exact/same-context deterministic review assistance;
+- **source-unit embeddings** are a reusable derived projection of source-block text; metadata prefill
+  reuses those vectors and never owns their lifecycle;
 - **Response Library/cache** is operational Research cache/history;
 - **ordinary corpus vector collections** support Search/Research over scholarly records.
 

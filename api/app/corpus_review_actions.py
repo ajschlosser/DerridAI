@@ -31,9 +31,12 @@ from .corpus_record_quality import iso_now
 from .corpus_record_restructure import (
     JOIN,
     assert_text_conserved,
+    assert_active_source_unit_ownership,
     block_ids_for_range,
     mint_record,
     new_record_id,
+    reconcile_source_units,
+    remap_evidence_bindings,
     tombstone,
 )
 from .corpus_review_mutations import requeue_record_metadata
@@ -176,6 +179,7 @@ class ReviewActionsMixin:
         undo.append({
             "action": action, "selected_record_id": selected_record_id,
             "created_at": iso_now(), "records": json.loads(json.dumps(records)),
+            "source_units": json.loads(json.dumps(self.repo.load_source_units(build_id))),
         })
         self.repo.save_checkpoint(build_id, "review_history", {"undo": undo[-40:], "redo": []})
 
@@ -518,8 +522,11 @@ class ReviewActionsMixin:
         redo.append({
             "action": entry.get("action"), "selected_record_id": entry.get("selected_record_id"),
             "created_at": iso_now(), "records": json.loads(json.dumps(current)),
+            "source_units": json.loads(json.dumps(self.repo.load_source_units(build_id))),
         })
         records = entry["records"]
+        if isinstance(entry.get("source_units"), list):
+            self.repo.save_source_units(build_id, json.loads(json.dumps(entry["source_units"])))
         self._rewrite_and_validate(build_id, records)
         self.repo.save_checkpoint(build_id, "review_history", {"undo": undo, "redo": redo[-40:]})
         self._invalidate_metadata_exemplar_projection(
@@ -560,8 +567,11 @@ class ReviewActionsMixin:
         undo.append({
             "action": entry.get("action"), "selected_record_id": entry.get("selected_record_id"),
             "created_at": iso_now(), "records": json.loads(json.dumps(current)),
+            "source_units": json.loads(json.dumps(self.repo.load_source_units(build_id))),
         })
         records = entry["records"]
+        if isinstance(entry.get("source_units"), list):
+            self.repo.save_source_units(build_id, json.loads(json.dumps(entry["source_units"])))
         self._rewrite_and_validate(build_id, records)
         self.repo.save_checkpoint(build_id, "review_history", {"undo": undo[-40:], "redo": redo})
         self._invalidate_metadata_exemplar_projection(
@@ -916,7 +926,9 @@ class ReviewActionsMixin:
         self._validate_decision_fields(build_id, [field])
         if evidence_block_ids:
             # Validate up front so a bad evidence binding cannot leave the value half-saved.
-            allowed = set(map(str, self.repo.get_record(build_id, record_id).get("source_block_ids") or []))
+            selected = self.repo.get_record(build_id, record_id)
+            allowed = set(map(str, selected.get("source_unit_ids") or []))
+            allowed.update(map(str, selected.get("source_block_ids") or []))
             invalid = [b for b in dict.fromkeys(map(str, evidence_block_ids)) if b not in allowed]
             if invalid:
                 raise ValueError("Evidence blocks must belong to the selected record: " + ", ".join(invalid[:10]))
@@ -1094,14 +1106,55 @@ class ReviewActionsMixin:
         assertion = current_assertion_by_name(target, field)
         value = assertion.value if assertion is not None else target.get(field)
         blocks_by_id = self._blocks_for(build_id)
-        return value, [blocks_by_id[b] for b in map(str, target.get("source_block_ids") or []) if b in blocks_by_id]
+        unit_ids = target.get("source_unit_ids") or target.get("source_block_ids") or []
+        return value, [blocks_by_id[b] for b in map(str, unit_ids) if b in blocks_by_id]
 
     def suggest_evidence(self, build_id: str, record_id: str, field: str, limit: int = 5) -> list[dict[str, Any]]:
         """Advisory, read-only ranking of the record's source blocks for a field's current value."""
-        from .evidence_suggestions import suggest_evidence_blocks
+        return self.suggest_evidence_result(build_id, record_id, field, limit=limit)["items"]
+
+    def suggest_evidence_result(
+        self, build_id: str, record_id: str, field: str, limit: int = 5
+    ) -> dict[str, Any]:
+        """Return advisory lexical/local-semantic suggestions plus retrieval status."""
+        from .evidence_suggestions import suggest_evidence_blocks_semantic
+        from .source_embeddings import SourceEmbeddingProjection
 
         value, blocks = self._evidence_candidates(build_id, record_id, field)
-        return suggest_evidence_blocks(value, blocks, limit=limit)
+        record = self.repo.get_record(build_id, record_id)
+        schema = self._schema_for(build_id)
+        field_spec = schema.by_name().get(field)
+        if field_spec is not None:
+            field_metadata: Any = field_spec.model_dump(mode="json")
+            field_metadata["group_label"] = schema.group(field_spec.group).label
+        else:
+            # Core/fixed fields do not have SchemaField rows; their owning group
+            # still supplies schema-authored context without field-name rules.
+            field_group = next(
+                (group for group, names in schema.family_fields().items() if field in names),
+                "",
+            )
+            field_metadata = {
+                "name": field,
+                "group_label": schema.group(field_group).label if field_group else "",
+                "instruction": schema.group(field_group).intro if field_group else "",
+            }
+        source_document_id = str(
+            record.get("source_document_id")
+            or record.get("source_asset_id")
+            or self.repo.get_build(build_id).get("asset_id")
+            or ""
+        )
+        projection = SourceEmbeddingProjection(self._progressive_metadata_index.store)
+        items, status = suggest_evidence_blocks_semantic(
+            value,
+            blocks,
+            field_metadata=field_metadata,
+            source_document_id=source_document_id,
+            projection=projection,
+            limit=limit,
+        )
+        return {"items": items, "status": status}
 
     def suggest_evidence_llm(
         self, build_id: str, record_id: str, field: str, request: dict[str, Any], limit: int = 5
@@ -1145,7 +1198,8 @@ class ReviewActionsMixin:
         if expected_revision is not None and current_revision != int(expected_revision):
             raise ValueError("This record changed after it was opened. Reload it before editing evidence.")
         self._push_record_review_history(build_id, action="evidence_edit", record_id=record_id, previous_record=previous_record)
-        allowed_ids = set(map(str, target.get("source_block_ids") or []))
+        allowed_ids = set(map(str, target.get("source_unit_ids") or []))
+        allowed_ids.update(map(str, target.get("source_block_ids") or []))
         unique_ids = list(dict.fromkeys(map(str, block_ids)))
         invalid = [block_id for block_id in unique_ids if block_id not in allowed_ids]
         if invalid:
@@ -1283,6 +1337,32 @@ class ReviewActionsMixin:
             _mark_human_touch(row, ["__text__", "__boundary__"])
             row["review_events"] = [{"at": iso_now(), "event": operation, "transaction_id": transaction_id, "parent_record_ids": row["lineage"]["parent_record_ids"]}]
             created.append(row)
+        source_units = self.repo.load_source_units(build_id)
+        source_units, _replacement_ids = reconcile_source_units(
+            source_units,
+            retiring,
+            pieces,
+            created,
+            source_document_id=str(build["asset_id"]),
+            operation=operation,
+            transaction_id=transaction_id,
+        )
+        remapped_evidence, pending_evidence = remap_evidence_bindings(
+            retiring, created, source_units
+        )
+        for index, evidence in remapped_evidence.items():
+            created[int(index)]["metadata_evidence"] = evidence
+        if pending_evidence:
+            prior_pending = self.repo.load_checkpoint(build_id, "evidence_remap_pending", {})
+            pending_entries = list(prior_pending.get("entries") or []) if isinstance(prior_pending, dict) else []
+            self.repo.save_checkpoint(
+                build_id,
+                "evidence_remap_pending",
+                {"entries": [*pending_entries, *pending_evidence][-200:]},
+            )
+        for row in records:
+            if not row.get("source_unit_ids"):
+                row["source_unit_ids"] = list(row.get("source_block_ids") or [])
         successor_ids = [str(row["record_id"]) for row in created]
         stored = self.repo.load_checkpoint(build_id, "retired_records", {})
         entries = list(stored.get("entries") or []) if isinstance(stored, dict) else []
@@ -1292,6 +1372,13 @@ class ReviewActionsMixin:
         entries.extend(tombstone(row, operation=operation, transaction_id=transaction_id, successors=successor_ids) for row in retiring)
         self.repo.save_checkpoint(build_id, "retired_records", {"entries": entries})
         records[lo:hi + 1] = created
+        assert_active_source_unit_ownership(records, source_units)
+        self.repo.save_source_units(build_id, source_units)
+        current_build = self.repo.get_build(build_id)
+        projection_state = dict(current_build.get("source_unit_embedding_projection") or {})
+        projection_state.update({"status": "dirty", "dirty": True, "updated_at": iso_now()})
+        current_build["source_unit_embedding_projection"] = projection_state
+        self.repo.save_build(current_build)
         self._rewrite_and_validate(build_id, records)
         with self._lock:
             current = self.repo.get_build(build_id)
@@ -1310,6 +1397,18 @@ class ReviewActionsMixin:
             "records": created,
             "record": created[selected_piece],
             "retired_record_ids": [str(row.get("record_id")) for row in retiring],
+            "new_source_unit_ids": [
+                str(unit.get("source_unit_id") or unit.get("unit_id"))
+                for unit in source_units
+                if str(unit.get("transaction_id") or "") == transaction_id and unit.get("active")
+            ],
+            "retired_source_unit_ids": [
+                str(unit.get("source_unit_id") or unit.get("unit_id"))
+                for unit in source_units
+                if str(unit.get("retired_transaction_id") or "") == transaction_id
+            ],
+            "evidence_remap_pending": pending_evidence,
+            "source_unit_projection": projection_state,
             "transaction_id": transaction_id,
         }
 
@@ -1321,7 +1420,74 @@ class ReviewActionsMixin:
 
     def _blocks_for(self, build_id: str) -> dict[str, dict[str, Any]]:
         asset_id = self.repo.get_build(build_id)["asset_id"]
-        return {block["block_id"]: block for block in self.repo.load_blocks(asset_id)}
+        blocks = {
+            block["block_id"]: block
+            for block in self.repo.load_blocks(asset_id)
+            if block.get("block_id")
+        }
+        for unit in self.repo.load_source_units(build_id):
+            if not unit.get("active", True):
+                continue
+            unit_id = str(unit.get("source_unit_id") or unit.get("unit_id") or "")
+            if not unit_id:
+                continue
+            blocks[unit_id] = {
+                **unit,
+                "block_id": unit_id,
+                "source_unit_id": unit_id,
+            }
+        return blocks
+
+    @staticmethod
+    def _unit_ranges(text: str, block_ids: list[str], blocks: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+        """Locate compatibility blocks in reviewed text for unit reconciliation."""
+        cursor = 0
+        ranges: list[dict[str, Any]] = []
+        for block_id in block_ids:
+            block_text = str((blocks.get(block_id) or {}).get("text") or "").strip()
+            if not block_text:
+                continue
+            found = text.find(block_text, cursor)
+            if found < 0:
+                return [{"unit_id": str(value), "start": 0, "end": len(text)} for value in block_ids]
+            source = blocks.get(block_id) or {}
+            ranges.append({
+                "unit_id": str(block_id),
+                "start": found,
+                "end": found + len(block_text),
+                "text": block_text,
+                "type": source.get("type"),
+                "locator_kind": source.get("locator_kind"),
+                "page": source.get("page"),
+                "locator_start": source.get("start"),
+                "locator_end": source.get("end"),
+            })
+            cursor = found + len(block_text)
+        return ranges
+
+    @classmethod
+    def _unit_ranges_for_slice(
+        cls, text: str, block_ids: list[str], blocks: dict[str, dict[str, Any]], start: int, end: int
+    ) -> list[dict[str, Any]]:
+        spans = cls._unit_ranges(text, block_ids, blocks)
+        selected: list[dict[str, Any]] = []
+        for span in spans:
+            lo, hi = int(span["start"]), int(span["end"])
+            overlap_lo, overlap_hi = max(start, lo), min(end, hi)
+            if overlap_lo >= overlap_hi:
+                continue
+            selected.append({
+                **{
+                    key: span[key]
+                    for key in ("type", "locator_kind", "page", "locator_start", "locator_end")
+                    if key in span
+                },
+                "unit_id": str(span["unit_id"]),
+                "start": overlap_lo - lo,
+                "end": overlap_hi - lo,
+                "text": text[overlap_lo:overlap_hi],
+            })
+        return selected
 
     @_serialize_record_mutation
     def merge(self, build_id: str, record_id: str, direction: str, expected_revision: int | None = None) -> dict[str, Any]:
@@ -1339,6 +1505,10 @@ class ReviewActionsMixin:
             "block_ids": [*(first.get("source_block_ids") or []), *(second.get("source_block_ids") or [])],
             "precise": True,
             "parents": [first, second],
+            "unit_ranges": [
+                *self._unit_ranges(str(first.get("text") or ""), list(first.get("source_unit_ids") or first.get("source_block_ids") or []), self._blocks_for(build_id)),
+                *self._unit_ranges(str(second.get("text") or ""), list(second.get("source_unit_ids") or second.get("source_block_ids") or []), self._blocks_for(build_id)),
+            ],
         }
         return self._restructure(build_id, records, lo, hi, [piece], operation="merge", selected_piece=0)
 
@@ -1352,6 +1522,7 @@ class ReviewActionsMixin:
         target = records[index]
         text = str(target.get("text") or "")
         block_ids = list(target.get("source_block_ids") or [])
+        unit_ids = list(target.get("source_unit_ids") or block_ids)
         blocks = self._blocks_for(build_id)
         if offset is None:
             if not after_block_id or after_block_id not in block_ids:
@@ -1375,8 +1546,10 @@ class ReviewActionsMixin:
         lids, lp = block_ids_for_range(text, block_ids, blocks, 0, offset)
         rids, rp = block_ids_for_range(text, block_ids, blocks, offset, len(text))
         pieces = [
-            {"text": left, "block_ids": lids, "precise": lp, "parents": [target]},
-            {"text": right, "block_ids": rids, "precise": rp, "parents": [target]},
+            {"text": left, "block_ids": lids, "precise": lp, "parents": [target],
+             "unit_ranges": self._unit_ranges_for_slice(text, unit_ids, blocks, 0, offset)},
+            {"text": right, "block_ids": rids, "precise": rp, "parents": [target],
+             "unit_ranges": self._unit_ranges_for_slice(text, unit_ids, blocks, offset, len(text))},
         ]
         return self._restructure(build_id, records, index, index, pieces, operation="split", selected_piece=0)
 
@@ -1402,6 +1575,7 @@ class ReviewActionsMixin:
             raise ValueError("The selection is the whole record; nothing would change.")
         before, chosen, after = text[:start], text[start:end], text[end:]
         block_ids = list(target.get("source_block_ids") or [])
+        unit_ids = list(target.get("source_unit_ids") or block_ids)
         blocks = self._blocks_for(build_id)
 
         def ids(lo: int, hi: int) -> tuple[list[str], bool]:
@@ -1419,11 +1593,17 @@ class ReviewActionsMixin:
                 pieces.append({
                     "text": str(prior.get("text") or "").rstrip() + JOIN + before.lstrip(),
                     "block_ids": [*(prior.get("source_block_ids") or []), *bids], "precise": bp, "parents": [prior, target],
+                    "unit_ranges": [
+                        *self._unit_ranges(str(prior.get("text") or ""), list(prior.get("source_unit_ids") or prior.get("source_block_ids") or []), blocks),
+                        *self._unit_ranges_for_slice(text, unit_ids, blocks, 0, start),
+                    ],
                 })
             else:
-                pieces.append({"text": before, "block_ids": bids, "precise": bp, "parents": [target]})
+                pieces.append({"text": before, "block_ids": bids, "precise": bp, "parents": [target],
+                               "unit_ranges": self._unit_ranges_for_slice(text, unit_ids, blocks, 0, start)})
         cids, cp = ids(start, end)
-        pieces.append({"text": chosen, "block_ids": cids, "precise": cp, "parents": [target]})
+        pieces.append({"text": chosen, "block_ids": cids, "precise": cp, "parents": [target],
+                       "unit_ranges": self._unit_ranges_for_slice(text, unit_ids, blocks, start, end)})
         selected = len(pieces) - 1
         if after.strip():
             aids, ap = ids(end, len(text))
@@ -1435,9 +1615,14 @@ class ReviewActionsMixin:
                 pieces.append({
                     "text": after.rstrip() + JOIN + str(following.get("text") or "").lstrip(),
                     "block_ids": [*aids, *(following.get("source_block_ids") or [])], "precise": ap, "parents": [target, following],
+                    "unit_ranges": [
+                        *self._unit_ranges_for_slice(text, unit_ids, blocks, end, len(text)),
+                        *self._unit_ranges(str(following.get("text") or ""), list(following.get("source_unit_ids") or following.get("source_block_ids") or []), blocks),
+                    ],
                 })
             else:
-                pieces.append({"text": after, "block_ids": aids, "precise": ap, "parents": [target]})
+                pieces.append({"text": after, "block_ids": aids, "precise": ap, "parents": [target],
+                               "unit_ranges": self._unit_ranges_for_slice(text, unit_ids, blocks, end, len(text))})
         return self._restructure(build_id, records, lo, hi, pieces, operation="create_from_selection", selected_piece=selected)
 
     @_serialize_record_mutation
@@ -1466,5 +1651,3 @@ class ReviewActionsMixin:
         current_build["boundary_second_reader_history"] = history[-100:]
         self.repo.save_build(current_build)
         return {"decision": decision, "left_record": left, "right_record": right, "build": current_build}
-
-
