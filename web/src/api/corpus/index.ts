@@ -4,7 +4,13 @@ export { corpusSourcesApi } from "./sources";
 export { corpusBuildsApi } from "./builds";
 export { corpusRecordsApi } from "./records";
 export { corpusReviewApi } from "./review";
-export { corpusMetadataApi } from "./metadata";
+export {
+  corpusMetadataApi,
+  type MetadataDecisionResult,
+  type MetadataPrecedent,
+  type MetadataPrecedents,
+  type RecordResearchClaim,
+} from "./metadata";
 export { corpusPublicationsApi } from "./publications";
 
 import { corpusSourcesApi } from "./sources";

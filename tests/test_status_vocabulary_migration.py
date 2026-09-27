@@ -1,6 +1,6 @@
 """Assertion-status vocabulary rename: llm_inferred/human_confirmed_absent migrate on read.
 
-Why: the DERRIDAI Core Specification names the assertion-status vocabulary
+Why: the cELF Core Specification names the assertion-status vocabulary
 `model_inferred` and `confirmed_absent`; the codebase previously used
 `llm_inferred` and `human_confirmed_absent`. Builds and records written before
 the rename still have the old values on disk, and must keep working without a

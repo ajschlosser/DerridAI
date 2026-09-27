@@ -2957,6 +2957,7 @@ defineExpose({
                 >
                   <CorpusMetadataResolutionPanel
                     :schema="currentBuild?.schema"
+                    :build-id="currentBuild?.build_id"
                     :record="selectedRecord"
                     :region-types="regionTypes"
                     :discourse-roles="discourseRoles"

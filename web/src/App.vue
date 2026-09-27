@@ -285,6 +285,10 @@ function navigate(view: string) {
     navigateNative("/metadata-memory");
     return;
   }
+  if (view === "help") {
+    navigateNative("/help");
+    return;
+  }
   if (view === "users") {
     navigateNative("/users");
     return;
@@ -319,7 +323,7 @@ function isNavActive(item: ShellNavItem) {
   if (item.id === "roles") return route.name === "roles";
   if (item.id === "languages") return route.name === "languages";
   return (
-    !["metadatamemory", "users", "roles", "languages"].includes(String(route.name || "")) &&
+    !["metadatamemory", "users", "roles", "languages", "help"].includes(String(route.name || "")) &&
     s.value.view === item.id
   );
 }

@@ -1,7 +1,7 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 /* eslint-disable vue/no-mutating-props -- the parent hands over its draft on purpose; these components edit it in place and the parent tracks dirtiness by comparing the whole draft. */
-import { computed } from "vue";
+import { computed, useId } from "vue";
 import { useSchemaCopy } from "../../composables/useSchemaCopy";
 import { NER_TAG_OPTIONS, UNIVERSAL_POS_TAG_OPTIONS } from "../../domain/nlpTags";
 import type { SchemaField } from "../../api/metadataSchemas";
@@ -11,8 +11,14 @@ import UiTooltip from "../ui/UiTooltip.vue";
 
 // Everything one metadata field can say: identity, how it is reviewed, how the model is told to fill it, and
 // whether reviewed precedents are retrieved for it. The parent owns the draft; this edits the field in place.
-const props = defineProps<{ field: SchemaField; groupKeys: string[] }>();
+const props = defineProps<{
+  field: SchemaField;
+  groupKeys: string[];
+  /** Other fields this field's retrieval policy may require precedents to agree on. */
+  matchOptions?: { fieldId: string; label: string }[];
+}>();
 const { t } = useSchemaCopy();
+const matchTitleId = useId();
 
 const posTagOptions = computed(() =>
   UNIVERSAL_POS_TAG_OPTIONS.map((o) => ({
@@ -23,6 +29,12 @@ const posTagOptions = computed(() =>
 const nerTagOptions = computed(() =>
   NER_TAG_OPTIONS.map((o) => ({ ...o, label: t(`ner_tag.${o.value.toLowerCase()}`, o.label) })),
 );
+function toggleMatch(fieldId: string, checked: boolean) {
+  const current = new Set(props.field.retrieval_profile.match_field_ids || []);
+  if (checked) current.add(fieldId);
+  else current.delete(fieldId);
+  props.field.retrieval_profile.match_field_ids = [...current];
+}
 const addValue = () => props.field.values.push({ value: "", definition: "" });
 </script>
 
@@ -212,6 +224,37 @@ const addValue = () => props.field.values.push({ value: "", definition: "" });
           step="0.05"
         />
       </label>
+      <label class="num-field">
+        <span
+          >{{ t("memory_max_corrections", "Maximum corrections") }}
+          <UiTooltip :text="t('memory_max_corrections_help')"
+        /></span>
+        <input
+          v-model.number="field.retrieval_profile.max_corrections"
+          class="control"
+          type="number"
+          min="0"
+          max="20"
+          :disabled="!field.retrieval_profile.include_corrections"
+        />
+      </label>
+      <div class="match-fields" role="group" :aria-labelledby="matchTitleId">
+        <span :id="matchTitleId" class="num-field"
+          >{{ t("memory_match_fields", "Prefer precedents that agree on") }}
+          <UiTooltip :text="t('memory_match_fields_help')"
+        /></span>
+        <p v-if="!matchOptions?.length" class="hint">
+          {{ t("memory_match_none", "No other fields are available to compare.") }}
+        </p>
+        <label v-for="option in matchOptions" :key="option.fieldId" class="check">
+          <input
+            type="checkbox"
+            :checked="(field.retrieval_profile.match_field_ids || []).includes(option.fieldId)"
+            @change="toggleMatch(option.fieldId, ($event.target as HTMLInputElement).checked)"
+          />
+          <span>{{ option.label }}</span>
+        </label>
+      </div>
     </fieldset>
   </div>
 </template>
@@ -296,6 +339,16 @@ const addValue = () => props.field.values.push({ value: "", definition: "" });
   padding: 0 4px;
   font-size: var(--fs-sm);
   font-weight: var(--fw-semibold);
+}
+.match-fields {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  gap: 6px 14px;
+  align-items: center;
+}
+.match-fields > .num-field {
+  flex-basis: 100%;
 }
 .num-field {
   display: grid;
