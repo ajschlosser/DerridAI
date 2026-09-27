@@ -74,6 +74,48 @@ export type ResearchResultEvidence = {
   record?: Record<string, unknown>;
 };
 
+export type ResearchClaimValidationStatus =
+  | "unvalidated"
+  | "validated"
+  | "rejected"
+  | "unresolved";
+
+export type ResearchGeneratedClaim = {
+  claim_id: string;
+  run_id?: string | null;
+  response_record_id?: string | null;
+  owner?: string | null;
+  claim_text: string;
+  answer_start?: number | null;
+  answer_end?: number | null;
+  validation_status?: ResearchClaimValidationStatus;
+  validated_by?: string | null;
+  validated_at?: string | null;
+  created_at?: string | null;
+};
+
+export type ResearchClaimSupportBinding = {
+  support_binding_id: string;
+  claim_id: string;
+  owner?: string | null;
+  record_id: string;
+  record_revision?: number | null;
+  source_document_id?: string | null;
+  relation?: string | null;
+  citation?: {
+    inline?: string | null;
+    full?: string | null;
+    evidence_marker?: string | null;
+  } | null;
+  validation_status?: "unvalidated" | "validated" | "stale" | "rejected" | "unresolved";
+  created_at?: string | null;
+};
+
+export type ResearchClaimProvenance = {
+  claims: ResearchGeneratedClaim[];
+  support_bindings: ResearchClaimSupportBinding[];
+};
+
 export type ResearchResult = {
   prompt?: string;
   answer?: string;
@@ -92,6 +134,7 @@ export type ResearchResult = {
   auto_grade_provider?: string;
   auto_grade_model?: string;
   rag_request?: Record<string, unknown>;
+  claim_provenance?: ResearchClaimProvenance | null;
 };
 
 export type ResearchJob = {
