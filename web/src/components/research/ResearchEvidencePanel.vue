@@ -215,7 +215,11 @@ function selectedRows(item: ResearchEvidenceSelection) {
           role="group"
           :aria-label="i18n.t('research.evidence_links')"
         >
-          <button type="button" class="research-text-action" @click="emit('openRecord', activeIndex)">
+          <button
+            type="button"
+            class="research-text-action"
+            @click="emit('openRecord', activeIndex)"
+          >
             {{ i18n.t("research.open_in_record_view") }}
           </button>
           <button

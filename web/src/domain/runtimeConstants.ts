@@ -69,7 +69,6 @@ export const viewConfig = [
   { id: "home", label: "Home", icon: "dashboard", section: "Overview" },
   { id: "list", label: "Records", icon: "list", section: "Corpus" },
   { id: "record", label: "Record View", icon: "record", section: "Corpus" },
-  { id: "relationships", label: "Relationships", icon: "record", section: "Corpus" },
   { id: "works", label: "Works", icon: "books", section: "Corpus" },
   { id: "global", label: "Search", icon: "search", section: "Corpus" },
   { id: "annotations", label: "Annotations", icon: "record", section: "Corpus" },

@@ -6974,7 +6974,7 @@ EN_US: dict[str, str] = {'common.apply': 'Apply',
  'schemas.hidden_short': 'Hidden',
  'schemas.applies_to_work': 'This field applies to the work as a whole',
  'schemas.applies_to_work_help': 'Turn this on for facts that are the same for every record of a work, such as the author, edition or period. You can then fill it in once, before the text is split into records, and every record starts with that value. This is different from bulk editing, where you pick records and fields after the records exist.',
- 'schemas.memory_intro': 'Let the model see how reviewers handled similar passages before. This only changes future model runs, never records you have already reviewed.'
+ 'schemas.memory_intro': 'Let the model see how reviewers handled similar passages before. This only changes future model runs, never records you have already reviewed.',
  'research.evidence_links': 'Evidence links',
  'research.open_in_record_view': 'Open in Record View',
  'research.open_relationship_map': 'Relationship map',
