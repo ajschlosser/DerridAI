@@ -10,8 +10,9 @@ const claimsApi = vi.hoisted(() => ({
 vi.mock("../../src/api/claims", () => ({ claimsApi }));
 
 import ResearchClaimReviewPanel from "../../src/components/research/ResearchClaimReviewPanel.vue";
+import type { ResearchClaimProvenance } from "../../src/types/research";
 
-function supportedProvenance() {
+function supportedProvenance(): ResearchClaimProvenance {
   return {
     claims: [
       {
