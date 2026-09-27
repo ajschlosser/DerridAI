@@ -107,7 +107,12 @@ export type ResearchClaimSupportBinding = {
     full?: string | null;
     evidence_marker?: string | null;
   } | null;
-  validation_status?: "unvalidated" | "validated" | "stale" | "rejected" | "unresolved";
+  validation_status?:
+    | "unvalidated"
+    | "validated"
+    | "stale"
+    | "rejected"
+    | "unresolved";
   created_at?: string | null;
 };
 
