@@ -277,7 +277,9 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
   async function pauseBuild() {
     if (!options.currentBuild.value) return;
     try {
-      options.currentBuild.value = await corpusBuilderApi.pause(options.currentBuild.value.build_id);
+      options.currentBuild.value = await corpusBuilderApi.pause(
+        options.currentBuild.value.build_id,
+      );
       options.setMessage(options.t("pdf_corpus.pause_requested"));
     } catch (exc) {
       options.setMessage(exc instanceof Error ? exc.message : String(exc), "error");
@@ -290,7 +292,9 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
     if (!build) return;
     try {
       await corpusBuilderApi.deleteBuild(build.build_id);
-      options.builds.value = options.builds.value.filter((item) => item.build_id !== build.build_id);
+      options.builds.value = options.builds.value.filter(
+        (item) => item.build_id !== build.build_id,
+      );
       options.buildsTotal.value = Math.max(0, options.buildsTotal.value - 1);
       options.selectedBuildId.value = options.builds.value[0]?.build_id || "";
       options.currentBuild.value = null;

@@ -41,6 +41,8 @@ const emit = defineEmits<{
   resolveMany: [changes: Record<string, unknown>];
   source: [field: string];
   resolveWithEvidence: [field: string, value: unknown, text: string];
+  resolveWithHumanSource: [field: string, value: unknown, note: string];
+  browseEvidence: [field: string, value: unknown];
   dirty: [dirty: boolean];
   /** Every pending field has been decided from this panel: the record is ready for its decision. */
   complete: [];
@@ -223,6 +225,15 @@ const llmSuggestions = computed(() => {
 const llmSuggestionCount = computed(() => Object.keys(llmSuggestions.value).length);
 type MemoryHint = { value: unknown; similarity: number; support: number; absence?: boolean };
 /** Less certain values earlier reviews attached to matching source spans (never pre-filled). */
+/** How many reviewed examples the model's prompt carried for this field (0 = the model worked alone). */
+function memoryExamples(field: string): number {
+  const used = (
+    props.record as unknown as {
+      editorial_memory_used?: { example_counts?: Record<string, number> };
+    }
+  ).editorial_memory_used;
+  return Number(used?.example_counts?.[field] || 0);
+}
 function memoryHints(field: string): MemoryHint[] {
   const all = (props.record as unknown as { memory_hints?: Record<string, MemoryHint[]> })
     .memory_hints;
@@ -420,6 +431,7 @@ function displayValue(field: string) {
           :field="field"
           :value="fieldValue(field)"
           :status="status(field)"
+          :memory-examples="memoryExamples(field)"
           :revealed="(record as any).blind_reveals?.[field]"
           :recheck="(record as any).recheck_results?.[field]"
           :options="options(field)"
@@ -451,6 +463,10 @@ function displayValue(field: string) {
               decided(field);
             }
           "
+          @save-with-human-source="
+            (value, note) => emit('resolveWithHumanSource', field, value, note)
+          "
+          @browse-evidence="(value) => emit('browseEvidence', field, value)"
           @dirty="(value) => emit('dirty', value)"
         >
           <template #policy>
@@ -480,6 +496,7 @@ function displayValue(field: string) {
             :field="field"
             :value="fieldValue(field)"
             :status="status(field)"
+            :memory-examples="memoryExamples(field)"
             :revealed="(record as any).blind_reveals?.[field]"
             :recheck="(record as any).recheck_results?.[field]"
             :options="options(field)"
@@ -497,6 +514,10 @@ function displayValue(field: string) {
             @save-with-selection-evidence="
               (value, text) => emit('resolveWithEvidence', field, value, text)
             "
+            @save-with-human-source="
+              (value, note) => emit('resolveWithHumanSource', field, value, note)
+            "
+            @browse-evidence="(value) => emit('browseEvidence', field, value)"
             @dirty="(value) => emit('dirty', value)"
           >
             <template #policy>
@@ -526,6 +547,7 @@ function displayValue(field: string) {
             :field="field"
             :value="fieldValue(field)"
             :status="status(field)"
+            :memory-examples="memoryExamples(field)"
             :options="options(field)"
             :control="spec(field).control"
             :allow-custom="Boolean(spec(field).allowCustom)"
@@ -539,6 +561,10 @@ function displayValue(field: string) {
             @save-with-selection-evidence="
               (value, text) => emit('resolveWithEvidence', field, value, text)
             "
+            @save-with-human-source="
+              (value, note) => emit('resolveWithHumanSource', field, value, note)
+            "
+            @browse-evidence="(value) => emit('browseEvidence', field, value)"
             @dirty="(value) => emit('dirty', value)"
           >
             <template #policy>

@@ -154,7 +154,10 @@ const emit = defineEmits<{
   navigateRecord: [recordId: string];
   selectEvidence: [field: string];
   toggleEvidence: [blockId: string];
+  setEvidence: [blockIds: string[]];
   resolveMetadataWithEvidence: [field: string, value: unknown, text: string];
+  resolveMetadataWithHumanSource: [field: string, value: unknown, note: string];
+  browseMetadataEvidence: [field: string, value: unknown];
 }>();
 const i18n = useI18nStore();
 const dialog = ref<HTMLElement | null>(null);
@@ -496,6 +499,10 @@ watch(
               @resolve-with-evidence="
                 (field, value, text) => emit('resolveMetadataWithEvidence', field, value, text)
               "
+              @resolve-with-human-source="
+                (field, value, note) => emit('resolveMetadataWithHumanSource', field, value, note)
+              "
+              @browse-evidence="(field, value) => emit('browseMetadataEvidence', field, value)"
             />
           </section>
 
@@ -530,6 +537,7 @@ watch(
               :disabled="busy"
               @update:selected-field="emit('selectEvidence', $event)"
               @toggle-evidence="emit('toggleEvidence', $event)"
+              @set-evidence="emit('setEvidence', $event)"
             />
           </template>
 
@@ -582,6 +590,7 @@ watch(
                   emit('adjudicateBoundary', direction, profileId, model)
               "
               @toggle-evidence="emit('toggleEvidence', $event)"
+              @set-evidence="emit('setEvidence', $event)"
               @split="emit('splitAfter', $event)"
             />
           </template>

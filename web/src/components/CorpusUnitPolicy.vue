@@ -187,7 +187,11 @@ function apply() {
 
     <div v-if="groupable" class="unit-chars">
       <label for="unit-per-input">{{
-        i18n.t(mode === "paragraph" ? "pdf_corpus.units_group_paragraphs" : "pdf_corpus.units_group_sentences")
+        i18n.t(
+          mode === "paragraph"
+            ? "pdf_corpus.units_group_paragraphs"
+            : "pdf_corpus.units_group_sentences",
+        )
       }}</label>
       <input
         id="unit-per-input"
@@ -256,7 +260,11 @@ function apply() {
         type="button"
         class="btn primary"
         :disabled="
-          disabled || busy || unchanged || (mode === 'chars' && !charsValid) || (groupable && !perValid)
+          disabled ||
+          busy ||
+          unchanged ||
+          (mode === 'chars' && !charsValid) ||
+          (groupable && !perValid)
         "
         @click="apply"
       >

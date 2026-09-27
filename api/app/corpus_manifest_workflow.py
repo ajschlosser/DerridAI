@@ -454,10 +454,16 @@ CURRENT REVIEWED RECORD TEXT:
                     evidence_errors.append({"record_id": record_id, "field": field, "reason": "missing evidence"})
                     continue
                 bound = [str(v) for v in info.get("block_ids") or [] if str(v) in valid_ids]
+                # Spans the reviewer cited elsewhere in the same source count, kept distinct in the record;
+                # so does an explicit, human-made "own knowledge" attestation, which cites no span at all.
+                bound += [str(v) for v in info.get("external_block_ids") or [] if str(v) in source_index]
+                attested = info.get("source_kind") == "reviewer_knowledge" and info.get("reviewed_by") == "human"
                 try:
                     confidence = float(info.get("confidence") or 0)
                 except (TypeError, ValueError):
                     confidence = 0.0
+                if attested:
+                    continue
                 if not bound:
                     evidence_errors.append({"record_id": record_id, "field": field, "reason": "no valid source block"})
                 elif confidence < min_conf:

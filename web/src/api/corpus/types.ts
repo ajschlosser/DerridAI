@@ -897,3 +897,12 @@ export interface EnrichmentMetrics {
   runs: string[];
   concurrency: { limit: number; working: number };
 }
+
+/** Evidence a reviewer supplies beyond selected text in the record itself. */
+export interface HumanEvidenceSource {
+  /** "reviewer_knowledge": the reviewer's own knowledge is the source; no span is cited. */
+  source?: "reviewer_knowledge";
+  note?: string;
+  /** Spans from elsewhere in the same source (another record). */
+  externalBlockIds?: string[];
+}

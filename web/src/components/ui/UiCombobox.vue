@@ -10,6 +10,10 @@ const props = withDefaults(
     allowCustom?: boolean;
     multiple?: boolean;
     type?: "text" | "number";
+    /** Render a wrapping, auto-growing text box instead of a one-line input (long strings stay readable). */
+    multiline?: boolean;
+    /** Shown on a multi-select option that is already in the list; clicking it removes it. */
+    selectedLabel?: string;
     /** Values the model proposed: listed first and marked, in words as well as colour. */
     recommended?: string[];
     recommendedLabel?: string;
@@ -21,6 +25,8 @@ const props = withDefaults(
     allowCustom: true,
     multiple: false,
     type: "text",
+    multiline: false,
+    selectedLabel: "Selected",
     recommended: () => [],
     recommendedLabel: "Suggested",
   },
@@ -29,7 +35,7 @@ const emit = defineEmits<{ "update:modelValue": [value: string]; change: [value:
 const comboId = useId();
 const open = ref(false);
 const active = ref(-1);
-const input = ref<HTMLInputElement | null>(null);
+const input = ref<HTMLInputElement | HTMLTextAreaElement | null>(null);
 const popup = ref({ left: 0, top: 0, width: 320, maxHeight: 240 });
 const unique = computed(() =>
   Array.from(new Set(props.options.map((v) => String(v).trim()).filter(Boolean))),
@@ -49,13 +55,20 @@ const recommendedSet = computed(
   () => new Set(props.recommended.map((v) => String(v).trim().toLocaleLowerCase()).filter(Boolean)),
 );
 const isRecommended = (value: string) => recommendedSet.value.has(value.toLocaleLowerCase());
-const filtered = computed(() => {
+/** In multi-select mode the text after the last comma is what is being typed, unless it is already a whole entry. */
+const pendingQuery = computed(() => {
   const raw = String(props.modelValue || "");
-  const q = (props.multiple ? raw.split(/[\n,]/).at(-1) || raw : raw).trim().toLocaleLowerCase();
+  if (!props.multiple) return raw.trim().toLocaleLowerCase();
+  const last = (raw.split(/[\n,]/).at(-1) || "").trim().toLocaleLowerCase();
+  return unique.value.some((v) => v.toLocaleLowerCase() === last) ? "" : last;
+});
+const isSelected = (value: string) =>
+  props.multiple && currentValues.value.has(value.toLocaleLowerCase());
+const filtered = computed(() => {
+  const q = pendingQuery.value;
   const matches = unique.value.filter((v) => {
     const lower = v.toLocaleLowerCase();
-    if (props.multiple && currentValues.value.has(lower)) return false;
-    return !q || lower.includes(q) || q.includes(lower);
+    return !q || lower.includes(q) || (!props.multiple && q.includes(lower));
   });
   // The model's proposal leads the list (stable, so the rest keep their order) and is never cut by the cap.
   return [...matches.filter(isRecommended), ...matches.filter((v) => !isRecommended(v))].slice(
@@ -72,13 +85,23 @@ watch(
 watch(open, (value) => {
   if (value) void nextTick(positionPopup);
 });
-function appendValue(current: string, value: string) {
-  const entries = String(current || "")
-    .split(/[\n,]/)
-    .map((v) => v.trim())
-    .filter(Boolean);
-  const merged = [...new Set([...entries, value.trim()].filter(Boolean))];
-  return merged.join(", ");
+/**
+ * Toggle ``value`` in a comma-separated list: present values are removed, absent ones added.
+ * Text still being typed after the last comma is dropped, since choosing an option finishes it.
+ */
+function toggleValue(current: string, value: string) {
+  const raw = String(current || "");
+  const parts = raw.split(/[\n,]/).map((v) => v.trim());
+  const last = (parts.at(-1) || "").toLocaleLowerCase();
+  // A trailing token only counts as a finished entry when it is one of the known options.
+  const lastIsWhole = unique.value.some((v) => v.toLocaleLowerCase() === last);
+  const entries = (lastIsWhole || !last ? parts : parts.slice(0, -1)).filter(Boolean);
+  const target = value.trim();
+  const present = entries.some((v) => v.toLocaleLowerCase() === target.toLocaleLowerCase());
+  const next = present
+    ? entries.filter((v) => v.toLocaleLowerCase() !== target.toLocaleLowerCase())
+    : [...new Set([...entries, target].filter(Boolean))];
+  return next.join(", ");
 }
 function positionPopup() {
   const el = input.value;
@@ -102,17 +125,31 @@ function positionPopup() {
   };
 }
 function commit(value: string) {
-  const next = props.multiple ? appendValue(props.modelValue, value) : value;
+  const next = props.multiple ? toggleValue(props.modelValue, value) : value;
   emit("update:modelValue", next);
   emit("change", next);
-  open.value = false;
-  active.value = -1;
-  void nextTick(() => input.value?.focus());
+  // A multi-select stays open so several values can be added or removed in one go.
+  if (!props.multiple) {
+    open.value = false;
+    active.value = -1;
+  }
+  void nextTick(() => {
+    input.value?.focus();
+    grow();
+  });
+}
+/** Size a multiline box to its content so a long value is fully visible without scrolling. */
+function grow() {
+  const el = input.value;
+  if (!props.multiline || !el || !("style" in el)) return;
+  el.style.height = "auto";
+  el.style.height = `${el.scrollHeight}px`;
 }
 function onInput(event: Event) {
-  emit("update:modelValue", (event.target as HTMLInputElement).value);
+  emit("update:modelValue", (event.target as HTMLInputElement | HTMLTextAreaElement).value);
   open.value = true;
   positionPopup();
+  grow();
 }
 function keydown(event: KeyboardEvent) {
   if (event.key === "ArrowDown") {
@@ -128,6 +165,15 @@ function keydown(event: KeyboardEvent) {
   } else if (event.key === "Enter" && open.value && active.value >= 0) {
     event.preventDefault();
     commit(filtered.value[active.value]);
+  } else if (
+    event.key === "Enter" &&
+    props.multiline &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.shiftKey
+  ) {
+    // Wrapping is visual only; metadata values never contain a hard line break from Enter.
+    event.preventDefault();
   } else if (event.key === "Escape") {
     open.value = false;
     active.value = -1;
@@ -142,7 +188,12 @@ function blur() {
 function reposition() {
   if (open.value) positionPopup();
 }
+watch(
+  () => props.modelValue,
+  () => void nextTick(grow),
+);
 onMounted(() => {
+  grow();
   window.addEventListener("resize", reposition);
   window.addEventListener("scroll", reposition, true);
 });
@@ -153,7 +204,29 @@ onBeforeUnmount(() => {
 </script>
 <template>
   <div class="ui-combobox">
+    <textarea
+      v-if="multiline"
+      ref="input"
+      class="control combo-textarea"
+      rows="1"
+      role="combobox"
+      :aria-label="label"
+      aria-autocomplete="list"
+      :aria-expanded="open && filtered.length > 0"
+      :aria-controls="`${comboId}-listbox`"
+      :value="modelValue"
+      :placeholder="placeholder"
+      :disabled="disabled"
+      @input="onInput"
+      @focus="
+        open = true;
+        positionPopup();
+      "
+      @keydown="keydown"
+      @blur="blur"
+    ></textarea>
     <input
+      v-else
       ref="input"
       class="control"
       :type="type"
@@ -182,6 +255,7 @@ onBeforeUnmount(() => {
         :id="`${comboId}-listbox`"
         class="combo-list"
         role="listbox"
+        :aria-multiselectable="multiple ? 'true' : undefined"
         :style="{
           left: `${popup.left}px`,
           top: `${popup.top}px`,
@@ -193,12 +267,17 @@ onBeforeUnmount(() => {
           v-for="(option, index) in filtered"
           :key="option"
           role="option"
-          :aria-selected="option === modelValue"
+          :aria-selected="multiple ? isSelected(option) : option === modelValue"
           :data-active="index === active ? 'true' : 'false'"
+          :data-selected="isSelected(option) ? 'true' : undefined"
           :data-recommended="isRecommended(option) ? 'true' : undefined"
           @mousedown.prevent="commit(option)"
         >
+          <span v-if="multiple" class="combo-check" aria-hidden="true">{{
+            isSelected(option) ? "✓" : ""
+          }}</span>
           <span class="combo-option-text">{{ option }}</span>
+          <span v-if="isSelected(option)" class="combo-state">{{ selectedLabel }}</span>
           <span v-if="isRecommended(option)" class="combo-badge"
             ><span aria-hidden="true">★</span> {{ recommendedLabel }}</span
           >
@@ -247,6 +326,32 @@ onBeforeUnmount(() => {
   background: var(--tone-info-bg);
   color: var(--tone-info-fg);
   font-weight: 650;
+}
+.combo-list li[data-selected="true"] {
+  background: var(--surface-selected);
+  font-weight: 650;
+}
+.combo-check {
+  flex: none;
+  inline-size: 1.1em;
+  color: var(--ui-accent, var(--accent));
+  font-weight: 800;
+  text-align: center;
+}
+.combo-option-text {
+  flex: 1;
+  min-width: 0;
+}
+.combo-state {
+  flex: none;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+.combo-textarea {
+  resize: none;
+  overflow: hidden;
+  line-height: var(--lh-normal, 1.45);
+  padding-block: 8px;
 }
 .combo-badge {
   flex: none;

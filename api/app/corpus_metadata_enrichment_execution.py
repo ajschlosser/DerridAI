@@ -162,6 +162,13 @@ class MetadataEnrichmentExecutionMixin:
             "example_record_ids": sorted({str(item.get("record_id") or "") for values in editorial_examples.values() if isinstance(values, list) for item in values if isinstance(item, dict) and item.get("record_id")}),
             "example_exemplar_ids": sorted({str(item.get("exemplar_id") or "") for values in editorial_examples.values() if isinstance(values, list) for item in values if isinstance(item, dict) and item.get("exemplar_id")}),
             "example_count": example_count,
+            # Per field: how many reviewed examples the prompt carried, so a suggestion can be labelled as
+            # "model alone" or "model + metadata memory" without guessing.
+            "example_counts": {
+                str(field): len(values)
+                for field, values in editorial_examples.items()
+                if isinstance(values, list) and values
+            },
             "packet_token_estimate": example_token_estimate,
             "progressive_retrieval": {
                 key: progressive_retrieval[key]

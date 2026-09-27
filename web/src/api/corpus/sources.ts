@@ -116,6 +116,11 @@ export const corpusSourcesApi = {
         ids.length ? `&ids=${encodeURIComponent(ids.join(","))}` : ""
       }`,
     ),
+  /** A window of blocks that starts a little before `blockId`, with its offset for further paging. */
+  blocksAround: (assetId: string, blockId: string, limit = 60) =>
+    apiRequest<{ items: SourceBlock[]; total: number; offset: number }>(
+      `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/blocks?around=${encodeURIComponent(blockId)}&limit=${limit}`,
+    ),
   profiles: () =>
     apiRequest<{ items: Array<Record<string, unknown>> }>(legacyCorpusUrl("corpus-profiles")),
 };

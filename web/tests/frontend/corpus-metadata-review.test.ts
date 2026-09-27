@@ -160,6 +160,7 @@ describe("Corpus Builder metadata review", () => {
       1,
       false,
       undefined,
+      undefined,
     );
     expect(state.applyAuthoritativeRecord).toHaveBeenCalled();
   });
@@ -185,6 +186,7 @@ describe("Corpus Builder metadata review", () => {
       1,
       false,
       ["block-9"],
+      undefined,
     );
     // No separate evidence round trip.
     expect(corpusBuilderApi.patchEvidence).not.toHaveBeenCalled();

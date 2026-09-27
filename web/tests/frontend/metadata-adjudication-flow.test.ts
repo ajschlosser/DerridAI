@@ -156,10 +156,10 @@ describe("a field's decision controls", () => {
       props: { field: "speaker", value: "Jacques Derrida", control: "text", status: {} },
     });
     await wrapper.get(".field-edit").trigger("click");
-    expect(wrapper.find("input").exists()).toBe(true);
+    expect(wrapper.find("textarea").exists()).toBe(true);
     const cancel = wrapper.findAll("button").find((b) => b.text() === "Cancel")!;
     await cancel.trigger("click");
-    expect(wrapper.find("input").exists()).toBe(false);
+    expect(wrapper.find("textarea").exists()).toBe(false);
     expect(wrapper.emitted("save")).toBeUndefined();
     wrapper.unmount();
   });

@@ -28,6 +28,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   "update:selectedField": [field: string];
   toggleEvidence: [blockId: string];
+  /** Replace the field's cited spans with exactly these block ids (select all / clear). */
+  setEvidence: [blockIds: string[]];
 }>();
 
 const i18n = useI18nStore();
@@ -66,6 +68,22 @@ const shown = computed(() => {
 const selectedCount = computed(
   () => props.blocks.filter((block) => props.evidenceBlockIds.has(block.block_id)).length,
 );
+// "Select all" and "Clear" act on what is shown, so a filter narrows them; spans filtered out stay as they are.
+const allShownSelected = computed(
+  () => shown.value.length > 0 && shown.value.every((b) => props.evidenceBlockIds.has(b.block_id)),
+);
+function selectAllShown() {
+  const ids = new Set(props.evidenceBlockIds);
+  for (const block of shown.value) ids.add(block.block_id);
+  emit("setEvidence", [...ids]);
+}
+function clearShown() {
+  const remove = new Set(shown.value.map((b) => b.block_id));
+  emit(
+    "setEvidence",
+    [...props.evidenceBlockIds].filter((id) => !remove.has(id)),
+  );
+}
 function locator(block: SourceBlock) {
   return block.locator_kind === "time"
     ? timeLabel(block.start, block.end)
@@ -143,6 +161,18 @@ function locator(block: SourceBlock) {
           <input v-model="onlySelected" type="checkbox" />
           {{ i18n.t("pdf_corpus.evidence_only_selected") }}
         </label>
+        <button
+          type="button"
+          class="btn small"
+          :disabled="props.disabled || !shown.length"
+          @click="allShownSelected ? clearShown() : selectAllShown()"
+        >
+          {{
+            allShownSelected
+              ? i18n.tf("pdf_corpus.evidence_clear_shown", { count: shown.length })
+              : i18n.tf("pdf_corpus.evidence_select_all", { count: shown.length })
+          }}
+        </button>
       </div>
 
       <ol class="source-blocks compact-source-blocks">

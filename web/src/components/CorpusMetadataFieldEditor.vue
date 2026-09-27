@@ -37,12 +37,18 @@ const props = defineProps<{
   hints?: { value: unknown; similarity: number; support: number }[];
   /** The server will not accept the record until this field is decided. */
   requiredToAccept?: boolean;
+  /** How many reviewed examples the model's prompt carried for this field (metadata memory), if any. */
+  memoryExamples?: number;
 }>();
 const emit = defineEmits<{
   save: [value: unknown];
   noValue: [];
   source: [];
   saveWithSelectionEvidence: [value: unknown, text: string];
+  /** The reviewer's own knowledge is the source; no span is cited. */
+  saveWithHumanSource: [value: unknown, note: string];
+  /** Open the browser for citing units elsewhere in the source. */
+  browseEvidence: [value: unknown];
   dirty: [dirty: boolean];
 }>();
 const i18n = useI18nStore();
@@ -171,18 +177,21 @@ watch(
   },
 );
 
+/** The ★ that marks a suggested or auto-filled option is decoration; it must never reach a saved value. */
+const stripStar = (value: string) => value.replace(/^\s*★\s*/u, "").trim();
 function normalized() {
   if (props.control === "multi-combobox")
     return [
       ...new Set(
         String(draft.value || "")
           .split(/[\n,]/)
-          .map((v) => v.trim())
+          .map((v) => stripStar(v))
           .filter(Boolean),
       ),
     ];
   if (props.control === "number" && draft.value !== "") return Number(draft.value);
-  return normalizeMetadataFieldValue(props.field, draft.value);
+  const raw = typeof draft.value === "string" ? stripStar(draft.value) : draft.value;
+  return normalizeMetadataFieldValue(props.field, raw);
 }
 const selectionMissing = ref(false);
 const canSave = computed(
@@ -193,9 +202,17 @@ const canSave = computed(
     draft.value !== undefined &&
     !(props.required && draft.value === null),
 );
+/** One confirm action: it cites the reviewer's own knowledge, the selected text, or nothing extra, in that order. */
 function save() {
   if (!canSave.value) return;
-  emit("save", normalized());
+  if (citeSelf.value) {
+    emit("saveWithHumanSource", normalized(), selfNote.value.trim());
+    citeSelf.value = false;
+    selfNote.value = "";
+  } else if (liveSelection.value) {
+    saveWithSelection();
+    return;
+  } else emit("save", normalized());
   dirty.value = false;
   emit("dirty", false);
   // A pending field stays open until the saved record says it is decided; an optional edit closes at once.
@@ -220,7 +237,7 @@ function onKeydown(event: KeyboardEvent) {
 }
 function saveWithSelection() {
   if (!canSave.value) return;
-  const selected = selectedRecordText();
+  const selected = liveSelection.value || selectedRecordText();
   if (!selected) {
     selectionMissing.value = true;
     return;
@@ -236,7 +253,26 @@ function markDirty() {
   dirty.value = true;
   emit("dirty", true);
 }
-const { selection: liveSelection, capture: selectedRecordText } = useRecordTextSelection(editing);
+const {
+  selection: liveSelection,
+  capture: selectedRecordText,
+  clear: clearSelection,
+  selectAll: selectWholeRecord,
+} = useRecordTextSelection(editing);
+const citeSelf = ref(false);
+const selfNote = ref("");
+function browseOtherRecords() {
+  if (canSave.value) emit("browseEvidence", normalized());
+}
+const confirmLabelKey = computed(() =>
+  citeSelf.value
+    ? "pdf_corpus.confirm_own_knowledge"
+    : liveSelection.value
+      ? "pdf_corpus.confirm_with_evidence"
+      : dirty.value || !hasValue(resolvedValue.value)
+        ? "pdf_corpus.save_field_value"
+        : "pdf_corpus.confirm_field_value",
+);
 function selectFromText() {
   const selected = selectedRecordText();
   if (!selected) return;
@@ -277,6 +313,63 @@ const verificationStatus = computed(() => String(props.status?.verification_stat
 const autoResolved = computed(
   () => verificationStatus.value === "auto_resolved" || props.status?.autofilled === true,
 );
+/** Who or what proposed the current value, in words, including whether metadata memory shaped the model's answer. */
+const sourceLabel = computed(() => {
+  const status = props.status || {};
+  if (String(status.derivation_method || "") === "derridai:memory")
+    return i18n.t("pdf_corpus.derivation_memory");
+  if (status.method === "human" || status.value_source === "human")
+    return i18n.t("pdf_corpus.source_reviewer");
+  if (!isLlm.value) return "";
+  const examples = Number(props.memoryExamples || 0);
+  return examples > 0
+    ? i18n.tf("pdf_corpus.source_llm_memory", { count: examples })
+    : i18n.t("pdf_corpus.source_llm_only");
+});
+const evidenceSummary = computed(() => {
+  const evidence = (props.status as { evidence?: unknown } | undefined)?.evidence;
+  return Array.isArray(evidence) ? evidence.length : 0;
+});
+/** The traceability matrix: every signal behind the value, each row shown only when it exists. */
+const traceRows = computed(() => {
+  const status = props.status || {};
+  const rows: { label: string; value: string }[] = [];
+  const add = (labelKey: string, value: unknown) => {
+    const text = metadataValueText(value);
+    if (text) rows.push({ label: i18n.t(labelKey), value: text });
+  };
+  add("pdf_corpus.trace_source", sourceLabel.value);
+  if (hasValue(status.deterministic_value))
+    add("pdf_corpus.trace_deterministic", display(status.deterministic_value));
+  add("pdf_corpus.trace_deterministic_reason", status.deterministic_reason);
+  if (hasValue(status.llm_value ?? (isLlm.value ? props.value : undefined)))
+    add("pdf_corpus.trace_llm", display(status.llm_value ?? props.value));
+  if (typeof status.llm_confidence === "number")
+    add("pdf_corpus.trace_llm_confidence", `${Math.round(Number(status.llm_confidence) * 100)}%`);
+  add("pdf_corpus.trace_llm_reason", status.llm_reason);
+  if (props.memoryExamples)
+    add(
+      "pdf_corpus.trace_memory",
+      i18n.tf("pdf_corpus.trace_memory_count", { count: props.memoryExamples }),
+    );
+  if (props.hints?.length)
+    add("pdf_corpus.trace_memory_hint", props.hints.map((hint) => display(hint.value)).join(", "));
+  add("pdf_corpus.trace_confidence", confidence.value === null ? "" : confidenceLabel.value);
+  add("pdf_corpus.trace_verification", humanizeToken(verificationStatus.value));
+  add("pdf_corpus.trace_status", humanizeToken(status.status));
+  add("pdf_corpus.trace_reason", status.reason);
+  if (status.autofilled === true) add("pdf_corpus.trace_autofilled", i18n.t("ui.yes"));
+  if (evidenceSummary.value)
+    add(
+      "pdf_corpus.trace_evidence",
+      i18n.tf("pdf_corpus.assertion_evidence_count", { count: evidenceSummary.value }),
+    );
+  add(
+    "pdf_corpus.trace_checked",
+    status.llm_checked === false ? String(status.llm_skip_reason || i18n.t("ui.no")) : "",
+  );
+  return rows;
+});
 </script>
 
 <template>
@@ -294,7 +387,13 @@ const autoResolved = computed(
     <!-- A decided field is one line: what it is, its value, where the value came from. -->
     <div v-if="!editing" class="field-row">
       <span :id="labelId" class="field-label">{{ fieldLabel }}</span>
-      <span class="field-current">{{ display(resolvedValue) }}</span>
+      <span class="field-current"
+        >{{ display(resolvedValue) }}
+        <template v-if="autoResolved"
+          ><span class="auto-star" aria-hidden="true">★</span
+          ><span class="sr-only">{{ i18n.t("pdf_corpus.auto_filled_marker") }}</span></template
+        ></span
+      >
       <span class="field-row-aside">
         <span v-if="saved" class="saved" role="status"
           ><AppIcon name="check" />{{ i18n.t("pdf_corpus.field_saved_short") }}</span
@@ -445,6 +544,8 @@ const autoResolved = computed(
           :recommended="modelSuggestion"
           :recommended-label="i18n.t('pdf_corpus.model_suggested_short')"
           :label="fieldLabel"
+          :multiline="true"
+          :selected-label="i18n.t('pdf_corpus.combo_selected')"
           @update:model-value="
             (value) => {
               draft = value;
@@ -475,6 +576,8 @@ const autoResolved = computed(
           :recommended-label="i18n.t('pdf_corpus.model_suggested_short')"
           :type="control === 'number' ? 'number' : 'text'"
           :label="fieldLabel"
+          :multiline="control === 'text'"
+          :selected-label="i18n.t('pdf_corpus.combo_selected')"
           @update:model-value="
             (value) => {
               draft = value;
@@ -510,12 +613,7 @@ const autoResolved = computed(
           aria-keyshortcuts="Control+Enter Meta+Enter"
           @click="save"
         >
-          {{
-            saving
-              ? i18n.t("pdf_corpus.saving_decision")
-              : dirty || !hasValue(resolvedValue)
-                ? i18n.t("pdf_corpus.save_field_value")
-                : i18n.t("pdf_corpus.confirm_field_value")
+          {{ saving ? i18n.t("pdf_corpus.saving_decision") : i18n.t(confirmLabelKey)
           }}<kbd aria-hidden="true">{{ i18n.t("pdf_corpus.shortcut.confirm_field") }}</kbd>
         </button>
         <button
@@ -531,7 +629,20 @@ const autoResolved = computed(
           {{ i18n.t("ui.cancel") }}
         </button>
       </div>
-      <CorpusFieldSelectionPreview :selection="liveSelection" @clear="liveSelection = ''" />
+      <CorpusFieldSelectionPreview :selection="liveSelection" @clear="clearSelection" />
+      <div v-if="citeSelf" class="cite-self">
+        <label>
+          <span>{{ i18n.t("pdf_corpus.own_knowledge_note") }}</span>
+          <input
+            v-model="selfNote"
+            class="control"
+            type="text"
+            maxlength="500"
+            :placeholder="i18n.t('pdf_corpus.own_knowledge_placeholder')"
+          />
+        </label>
+        <small>{{ i18n.t("pdf_corpus.own_knowledge_help") }}</small>
+      </div>
       <div class="field-tools">
         <template v-if="textSelectable">
           <button
@@ -547,12 +658,30 @@ const autoResolved = computed(
         <button
           type="button"
           class="link-button"
-          :disabled="!canSave"
-          :title="i18n.t('pdf_corpus.assign_selected_evidence_help')"
-          @click="saveWithSelection"
+          :title="i18n.t('pdf_corpus.select_all_evidence_help')"
+          @click="selectWholeRecord"
         >
-          {{ i18n.t("pdf_corpus.assign_selected_evidence_short") }}</button
-        ><button type="button" class="link-button" @click="emit('source')">
+          {{ i18n.t("pdf_corpus.select_all_evidence") }}
+        </button>
+        <button
+          type="button"
+          class="link-button"
+          :aria-pressed="citeSelf"
+          :title="i18n.t('pdf_corpus.own_knowledge_help')"
+          @click="citeSelf = !citeSelf"
+        >
+          {{ i18n.t("pdf_corpus.own_knowledge_toggle") }}
+        </button>
+        <button
+          type="button"
+          class="link-button"
+          :disabled="!canSave"
+          :title="i18n.t('pdf_corpus.browse_evidence_help')"
+          @click="browseOtherRecords"
+        >
+          {{ i18n.t("pdf_corpus.browse_evidence") }}
+        </button>
+        <button type="button" class="link-button" @click="emit('source')">
           {{ i18n.t("pdf_corpus.view_evidence") }}
         </button>
       </div>
@@ -662,6 +791,19 @@ const autoResolved = computed(
         </div>
       </details>
     </div>
+    <!-- Available on every field, decided or not: why this value was suggested, by whom, and on what evidence. -->
+    <details v-if="traceRows.length" class="trace-matrix">
+      <summary>
+        {{ i18n.t("pdf_corpus.trace_title") }}
+        <span v-if="sourceLabel" class="trace-source">{{ sourceLabel }}</span>
+      </summary>
+      <dl class="trace-grid">
+        <div v-for="row in traceRows" :key="row.label">
+          <dt>{{ row.label }}</dt>
+          <dd>{{ row.value }}</dd>
+        </div>
+      </dl>
+    </details>
   </article>
 </template>
 
@@ -686,6 +828,64 @@ const autoResolved = computed(
 .metadata-field[data-mode="edit"]:focus-within {
   border-color: var(--ui-accent, var(--accent));
   box-shadow: 0 0 0 1px var(--ui-accent, var(--accent));
+}
+.auto-star {
+  color: var(--tone-info-fg);
+  font-size: 0.9em;
+}
+.cite-self {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--tone-info-edge);
+  border-radius: var(--radius-control);
+  background: var(--tone-info-bg);
+  color: var(--tone-info-fg);
+  font-size: var(--fs-sm);
+}
+.cite-self label {
+  display: grid;
+  gap: 4px;
+  font-weight: 700;
+}
+.trace-matrix {
+  font-size: var(--fs-sm);
+}
+.trace-matrix summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-weight: 700;
+}
+.trace-source {
+  color: var(--tone-info-fg);
+}
+.trace-grid {
+  display: grid;
+  gap: 2px;
+  margin: 6px 0 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+}
+.trace-grid > div {
+  display: grid;
+  grid-template-columns: minmax(7rem, 0.5fr) minmax(0, 1fr);
+  gap: 8px;
+  padding: 4px 8px;
+}
+.trace-grid > div:nth-child(odd) {
+  background: var(--surface-hover);
+}
+.trace-grid dt {
+  color: var(--text-secondary);
+  font-weight: 700;
+}
+.trace-grid dd {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 .field-row {
   display: grid;

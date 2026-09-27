@@ -40,5 +40,21 @@ export function useRecordTextSelection(active: Ref<boolean>) {
   );
   onBeforeUnmount(() => document.removeEventListener("selectionchange", track));
   const capture = () => selection.value || String(window.getSelection()?.toString() || "").trim();
-  return { selection, capture };
+  /** Drop the tracked selection and the browser's own, so it cannot come back through `capture`. */
+  function clear() {
+    selection.value = "";
+    window.getSelection()?.removeAllRanges();
+  }
+  /** Select the record's whole text (the first marked element), making all of it the pending evidence. */
+  function selectAll() {
+    const element = document.querySelector(`[${RECORD_TEXT_ATTRIBUTE}]`);
+    if (!element) return;
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    const current = window.getSelection();
+    current?.removeAllRanges();
+    current?.addRange(range);
+    track();
+  }
+  return { selection, capture, clear, selectAll };
 }

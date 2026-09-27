@@ -38,6 +38,7 @@ import CorpusReviewSessionBar from "./CorpusReviewSessionBar.vue";
 import CorpusJsonlPreviewDialog from "./CorpusJsonlPreviewDialog.vue";
 import CorpusLlmTextTouchupDialog from "./CorpusLlmTextTouchupDialog.vue";
 import CorpusBoundarySliceDialog from "./CorpusBoundarySliceDialog.vue";
+import CorpusEvidenceBrowserDialog from "./corpus-builder/CorpusEvidenceBrowserDialog.vue";
 import MetadataEnrichmentDialog from "./MetadataEnrichmentDialog.vue";
 import CorpusModelActivity from "./CorpusModelActivity.vue";
 import CorpusHandsFreeSettings from "./CorpusHandsFreeSettings.vue";
@@ -444,6 +445,7 @@ const {
   rememberMetadataValues,
   saveMetadata,
   toggleEvidenceBlock,
+  setEvidenceBlocks,
   requeueCurrentRecord,
   resolveMetadataField,
   resolveMetadataSuggestions,
@@ -545,6 +547,23 @@ async function resolveMetadataWithSelectionEvidence(
     return;
   }
   await resolveMetadataField(field, value, String(block.block_id));
+}
+
+/** The reviewer answers from their own knowledge: the decision records them, not a source span, as the source. */
+async function resolveMetadataWithHumanSource(field: string, value: unknown, note: string) {
+  await resolveMetadataField(field, value, "", { source: "reviewer_knowledge", note });
+}
+
+/** The value being cited from outside this record, while the browser dialog is open. */
+const evidenceBrowser = ref<{ field: string; value: unknown } | null>(null);
+function openEvidenceBrowser(field: string, value: unknown) {
+  evidenceBrowser.value = { field, value };
+}
+async function confirmExternalEvidence(blockIds: string[]) {
+  const target = evidenceBrowser.value;
+  evidenceBrowser.value = null;
+  if (!target) return;
+  await resolveMetadataField(target.field, target.value, "", { externalBlockIds: blockIds });
 }
 
 const metadataFamilyOptions = computed(
@@ -3006,6 +3025,8 @@ defineExpose({
                     @resolve-many="resolveMetadataSuggestions"
                     @source="showMetadataSource"
                     @resolve-with-evidence="resolveMetadataWithSelectionEvidence"
+                    @resolve-with-human-source="resolveMetadataWithHumanSource"
+                    @browse-evidence="openEvidenceBrowser"
                     @dirty="handleMetadataDirty"
                   />
                   <details class="record-data">
@@ -3128,6 +3149,7 @@ defineExpose({
                   :disabled="busy !== ''"
                   @update:selected-field="selectedEvidenceField = $event"
                   @toggle-evidence="toggleEvidenceBlock"
+                  @set-evidence="setEvidenceBlocks"
                 />
                 <CorpusReviewSourcePanel
                   v-else-if="
@@ -3168,6 +3190,7 @@ defineExpose({
                   @update:model-override="llmActionModel = $event"
                   @adjudicate="adjudicateBoundary"
                   @toggle-evidence="toggleEvidenceBlock"
+                  @set-evidence="setEvidenceBlocks"
                   @split="split"
                 />
                 <div v-else class="inspector-empty">
@@ -3410,6 +3433,17 @@ defineExpose({
       @close="metadataEnrichmentOpen = false"
       @run="runMetadataEnrichment"
     />
+    <CorpusEvidenceBrowserDialog
+      v-if="evidenceBrowser && selectedRecord && selectedAssetId"
+      :asset-id="selectedAssetId"
+      :around-block-id="String(selectedRecord.source_block_ids?.[0] || '')"
+      :record-block-ids="(selectedRecord.source_block_ids || []).map(String)"
+      :field-label="
+        i18n.t(`record.${evidenceBrowser.field}`, evidenceBrowser.field.replaceAll('_', ' '))
+      "
+      @close="evidenceBrowser = null"
+      @confirm="confirmExternalEvidence"
+    />
     <Teleport to="body"
       ><CorpusRecordFocusReview
         v-if="focusView && selectedRecord"
@@ -3484,6 +3518,8 @@ defineExpose({
         @open-text-cleanup="textCleanupOpen = true"
         @resolve-metadata="resolveMetadataField"
         @resolve-metadata-with-evidence="resolveMetadataWithSelectionEvidence"
+        @resolve-metadata-with-human-source="resolveMetadataWithHumanSource"
+        @browse-metadata-evidence="openEvidenceBrowser"
         @resolve-metadata-many="resolveMetadataSuggestions"
         @confirm-no-metadata-value="resolveMetadataNoValue"
         @metadata-dirty="handleMetadataDirty"
@@ -3503,6 +3539,7 @@ defineExpose({
         @split-after="split"
         @select-evidence="selectedEvidenceField = $event"
         @toggle-evidence="toggleEvidenceBlock"
+        @set-evidence="setEvidenceBlocks"
         @navigate-record="navigateToQueueRecord"
     /></Teleport>
   </section>
