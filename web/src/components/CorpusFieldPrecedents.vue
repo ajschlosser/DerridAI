@@ -198,12 +198,7 @@ function useValue(item: MetadataPrecedent) {
             </template>
             {{ statusParts.join(" · ") }}
           </p>
-          <button
-            type="button"
-            class="btn tiny"
-            :disabled="loading"
-            @click="fetchPrecedents(true)"
-          >
+          <button type="button" class="btn tiny" :disabled="loading" @click="fetchPrecedents(true)">
             {{ i18n.t("pdf_corpus.precedents_refresh") }}
           </button>
         </div>

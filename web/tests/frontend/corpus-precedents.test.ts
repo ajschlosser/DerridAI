@@ -92,7 +92,7 @@ describe("reviewed precedents in Record Review", () => {
     await again.trigger("click");
     await flushPromises();
     expect(load).toHaveBeenCalledWith("b1", "r1", "mood", true);
-    expect(wrapper.get("button").text()).toContain("(0)");
+    expect(wrapper.get("button").text()).toContain("0 found");
   });
 
   it("uses a precedent's value without carrying its evidence, and lists this record's passages", async () => {
