@@ -47,6 +47,7 @@ from .enrichment_ledger import (
     CALL,
     PROPOSED,
 )
+from .evidence_suggestions import backfill_field_evidence, evidence_mode
 from .field_assertions import (
     current_assertion_by_name,
     migrate_record_assertions,
@@ -354,6 +355,11 @@ CURRENT REVIEWED RECORD TEXT:
                 allowed_region_types=allowed_region_types,
                 allowed_discourse_roles=allowed_discourse_roles,
             )
+            if evidence_mode(request) == "backfill":
+                prompt += (
+                    "\n\nEVIDENCE IS ATTACHED SEPARATELY: return field_evidence as an empty object {}. DerridAI links "
+                    "source blocks to the values you propose after this step; do not list block IDs."
+                )
             guidance_prompt = format_group_guidance(group_fields, run_guidance, guidance_matches)
             if guidance_prompt:
                 prompt = prompt + "\n\n" + guidance_prompt
@@ -574,6 +580,17 @@ CURRENT REVIEWED RECORD TEXT:
         return stage_results
 
 
+    def _evidence_source_blocks(self, build_id: str, record: dict[str, Any], source_ids: list[str]) -> list[dict[str, Any]]:
+        """This record's source blocks (with text), for evidence backfill; empty when they cannot be loaded."""
+        if not build_id:
+            return []
+        try:
+            asset_id = self.repo.get_build(build_id)["asset_id"]
+            wanted = set(source_ids)
+            return [block for block in self.repo.load_blocks(asset_id) if str(block.get("block_id")) in wanted]
+        except (KeyError, OSError, ValueError):
+            return []
+
     def _reconcile_metadata_results(
         self, record: dict[str, Any], profile: dict[str, Any], source_ids: list[str],
         stage_results: list[tuple[str, dict[str, Any] | None, Exception | None]],
@@ -610,7 +627,7 @@ CURRENT REVIEWED RECORD TEXT:
             The blended confidence (see autofill.py) outranks the model's own needs_review flag, but
             never the absence of a cited source block or a self-report at or below the profile floor.
             """
-            if "autofill" in off or conditions["blind"] or value in (None, "", []) or confidence is None or confidence <= minimum or not evidence_info.get("block_ids"):
+            if "autofill" in off or conditions["blind"] or value in (None, "", []) or confidence is None or confidence <= minimum or not evidence_info.get("block_ids") or evidence_info.get("backfilled"):
                 return None
             reviews, accepted = (0, 0) if "blended_confidence" in off else self._ledger.review_counts(model, field)
             decision = decide_autofill(confidence, reviews, accepted)
@@ -844,6 +861,8 @@ CURRENT REVIEWED RECORD TEXT:
             if reason:
                 model_review_reasons.append(reason)
 
+        backfill = evidence_mode(request) == "backfill"
+        source_blocks = self._evidence_source_blocks(build_id, record, source_ids) if backfill else []
         for field in sorted(evidence_required_fields):
             value = record.get(field)
             if value in (None, "", []):
@@ -851,7 +870,14 @@ CURRENT REVIEWED RECORD TEXT:
             existing_assertion = current_assertion_by_name(record, field)
             if existing_assertion is not None and existing_assertion.derivation_method == "deterministic":
                 continue
+            if backfill and not (clean_evidence.get(field) or {}).get("block_ids"):
+                attached = backfill_field_evidence(value, source_blocks)
+                if attached:
+                    clean_evidence[field] = attached
             info = clean_evidence.get(field)
+            if isinstance(info, dict) and info.get("backfilled"):
+                review_reasons.append(f"{field} evidence was suggested after the value and needs review")
+                continue
             if not isinstance(info, dict):
                 review_reasons.append(f"{field} has no bound source evidence")
                 continue

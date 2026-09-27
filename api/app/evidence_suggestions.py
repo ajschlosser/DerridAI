@@ -17,6 +17,44 @@ from difflib import SequenceMatcher
 from typing import Any
 
 METHOD = "deterministic-lexical-v1"
+EVIDENCE_MODES = ("with_value", "backfill")
+DEFAULT_EVIDENCE_MODE = "with_value"
+BACKFILL_MIN_SCORE = 0.5
+BACKFILL_MAX_BLOCKS = 2
+
+
+def evidence_mode(request: dict[str, Any] | None = None) -> str:
+    """How model-proposed values get evidence: a request's ``evidence_mode`` wins over the setting.
+
+    ``with_value`` (default): the model must cite blocks in the same answer as the value.
+    ``backfill``: the model proposes the value only; deterministic suggestion attaches blocks afterwards.
+    An unrecognised value falls back to the default rather than silently weakening the requirement.
+    """
+    from .config import settings
+
+    for candidate in ((request or {}).get("evidence_mode"), settings.metadata_evidence_mode):
+        if str(candidate or "").strip().lower() in EVIDENCE_MODES:
+            return str(candidate).strip().lower()
+    return DEFAULT_EVIDENCE_MODE
+
+
+def backfill_field_evidence(value: Any, blocks: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Evidence for a value the model proposed without any, or None when no block supports it well enough.
+
+    Never trusted: confidence is unreported (so the field stays pending review and cannot autofill) and the entry
+    says it was attached after the fact, with the deterministic score.
+    """
+    picks = suggest_evidence_blocks(value, blocks, limit=BACKFILL_MAX_BLOCKS, min_score=BACKFILL_MIN_SCORE)
+    if not picks:
+        return None
+    return {
+        "block_ids": [item["block_id"] for item in picks],
+        "confidence": None,
+        "reason": f"Suggested after the value was proposed ({picks[0]['reason']}); not cited by the model.",
+        "backfilled": True,
+        "method": METHOD,
+        "score": picks[0]["score"],
+    }
 _TOKEN = re.compile(r"\w+", re.UNICODE)
 
 
