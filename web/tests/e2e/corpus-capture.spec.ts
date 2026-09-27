@@ -16,7 +16,7 @@ async function expectWcag2AA(page: Page, include: string) {
   expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
 }
 
-test("Sources opens Corpus Capture and exposes provider-backed author options", async ({ page }) => {
+test("Sources opens Corpus Capture with provider-backed options", async ({ page }) => {
   await mockBackend(page);
   await page.goto(`${APP}/sources`);
   await page.locator(".sources-page").waitFor();
