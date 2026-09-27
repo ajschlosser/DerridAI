@@ -993,9 +993,9 @@ const recordSizingValid = computed(
 const canStartConcurrentBuild = computed(() =>
   Boolean(
     recordSizingValid.value &&
-    selectedAsset.value &&
-    contextSafe.value &&
-    (selectedProviderId.value || !activeBuildCount.value),
+      selectedAsset.value &&
+      contextSafe.value &&
+      (selectedProviderId.value || !activeBuildCount.value),
   ),
 );
 const transientNetworkError = computed(() =>
@@ -1460,8 +1460,8 @@ async function refreshRecords(reset = false, preferredId = "") {
     const match = wanted ? records.value.find((row) => row.record_id === wanted) : undefined;
     const preserveDraft = Boolean(
       selectedRecord.value &&
-      selectedRecordId.value === wanted &&
-      (editingText.value || metadataEditorDirty.value),
+        selectedRecordId.value === wanted &&
+        (editingText.value || metadataEditorDirty.value),
     );
     if (match && !preserveDraft) {
       selectRecord(match);
@@ -3423,11 +3423,11 @@ defineExpose({
       :concurrency-risk="
         Boolean(
           providerProfiles.find((p) => p.id === llmActionProviderId)?.type === 'ollama' &&
-          llmActionConcurrentLoad + 1 >
-            Number(
-              providerProfiles.find((p) => p.id === llmActionProviderId)?.max_concurrent_requests ||
-                1,
-            ),
+            llmActionConcurrentLoad + 1 >
+              Number(
+                providerProfiles.find((p) => p.id === llmActionProviderId)
+                  ?.max_concurrent_requests || 1,
+              ),
         )
       "
       :active-requests="llmActionConcurrentLoad"
