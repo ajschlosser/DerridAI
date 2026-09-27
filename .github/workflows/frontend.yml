@@ -157,7 +157,11 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci --no-audit --no-fund
-      - run: npm run format:repo:check
+      - name: Show Prettier diff for claim review panel
+        run: |
+          npx prettier --write src/components/research/ResearchClaimReviewPanel.vue
+          git diff -- src/components/research/ResearchClaimReviewPanel.vue
+          exit 1
 
   backend-lint:
     needs: changes
