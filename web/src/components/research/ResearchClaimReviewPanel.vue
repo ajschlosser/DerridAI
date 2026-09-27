@@ -85,7 +85,11 @@ function supportFor(claimId: string) {
 
 function usableSupport(binding: ResearchClaimSupportBinding) {
   const status = String(binding.validation_status || "unvalidated");
-  return Boolean(binding.record_id) && (status === "unvalidated" || status === "validated");
+  return (
+    Boolean(String(binding.record_id || "").trim()) &&
+    Boolean(String(binding.relation || "").trim()) &&
+    (status === "unvalidated" || status === "validated")
+  );
 }
 
 function hasUsableSupport(claimId: string) {
