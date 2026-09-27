@@ -6,7 +6,7 @@
 
 A DerridAI egy helyi futtatásra összpontosító Docker-alkalmazás filozófiai szövegek tudományos korpuszainak létrehozására, auditálására és lekérdezésére. PDF-, szöveg/RTF/DOCX-, kép-, hang-, URL- és Project Gutenberg-forrásokat dolgoz fel eredetmegőrző tudományos rekordokká; támogatja az emberi és LLM-alapú ellenőrzést, valamint a bizonyítékhoz kötött metaadat-gazdagítást; származtatott ChromaDB keresési vetületeket hoz létre; és az eredményen bizonyítékalapú retrieval-augmented generation (RAG) folyamatot futtat.
 
-Jelenlegi verzió: **0.80.5 — Cambridge** ([kiadási megjegyzések](docs/notes/0.80.5.md)).
+Jelenlegi verzió: **0.80.6 — Danvers** ([kiadási megjegyzések](docs/notes/0.80.6.md)).
 
 ## Funkciók
 
