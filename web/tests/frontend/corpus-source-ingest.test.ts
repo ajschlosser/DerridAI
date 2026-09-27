@@ -77,7 +77,7 @@ it("keeps Gutenberg imports available before the local collection is ready", asy
   expect(row.text()).toContain("Pride and Prejudice");
   // The full local archive is optional: one exact Gutenberg text can be fetched and verified directly.
   expect(row.get("[data-result-primary]").attributes("disabled")).toBeUndefined();
-  expect(wrapper.get(".ls-collection").text()).toMatch(/local collection/i);
+  expect(wrapper.get(".ls-collection").text()).toMatch(/one verified text/i);
   await row.get("[data-result-primary]").trigger("click");
   expect(wrapper.emitted("importGutenberg")?.[0]).toEqual([1342]);
 
