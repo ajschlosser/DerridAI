@@ -24,11 +24,13 @@ const props = withDefaults(
     error?: string;
     /** The record being audited; passed to claim validation. */
     record?: Record<string, unknown> | null;
+    /** Which lens to open on: this record's instance graph or the cELF model. */
+    initialMode?: "trace" | "model";
   }>(),
-  { graph: null, model: null, loading: false, error: "", record: null },
+  { graph: null, model: null, loading: false, error: "", record: null, initialMode: "trace" },
 );
 const i18n = useI18nStore();
-const mode = ref<"trace" | "model">("trace");
+const mode = ref<"trace" | "model">(props.initialMode);
 const focusId = ref("");
 const diagramOpen = ref(false);
 

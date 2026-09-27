@@ -35,6 +35,8 @@ const emit = defineEmits<{
   selectEvidence: [index: number];
   removeSelected: [key: string];
   clearSelected: [];
+  openRecord: [index: number];
+  openRelationships: [index: number, mode: "trace" | "model"];
 }>();
 </script>
 
@@ -60,6 +62,8 @@ const emit = defineEmits<{
       @select="emit('selectEvidence', $event)"
       @remove="emit('removeSelected', $event)"
       @clear="emit('clearSelected')"
+      @open-record="emit('openRecord', $event)"
+      @open-relationships="(index, mode) => emit('openRelationships', index, mode)"
     />
   </div>
 </template>

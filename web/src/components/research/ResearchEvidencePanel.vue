@@ -24,7 +24,16 @@ const props = withDefaults(
     researcher: false,
   },
 );
-const emit = defineEmits<{ select: [index: number]; remove: [key: string]; clear: [] }>();
+const emit = defineEmits<{
+  select: [index: number];
+  remove: [key: string];
+  clear: [];
+  openRecord: [index: number];
+  openRelationships: [index: number, mode: "trace" | "model"];
+}>();
+const linkable = computed(() =>
+  Boolean(active.value && String(record.value.record_id || "").trim()),
+);
 const i18n = useI18nStore();
 const showingResult = computed(() => props.resultEvidence.length > 0);
 const active = computed(() =>
@@ -200,6 +209,30 @@ function selectedRows(item: ResearchEvidenceSelection) {
             <dd>{{ row.value }}</dd></template
           >
         </dl>
+        <div
+          v-if="linkable"
+          class="research-evidence-links"
+          role="group"
+          :aria-label="i18n.t('research.evidence_links')"
+        >
+          <button type="button" class="research-text-action" @click="emit('openRecord', activeIndex)">
+            {{ i18n.t("research.open_in_record_view") }}
+          </button>
+          <button
+            type="button"
+            class="research-text-action"
+            @click="emit('openRelationships', activeIndex, 'trace')"
+          >
+            {{ i18n.t("research.open_relationship_map") }}
+          </button>
+          <button
+            type="button"
+            class="research-text-action"
+            @click="emit('openRelationships', activeIndex, 'model')"
+          >
+            {{ i18n.t("research.open_celf_model") }}
+          </button>
+        </div>
         <p v-if="display(record.text)" class="research-evidence-text">{{ display(record.text) }}</p>
         <p v-else class="note">
           {{
