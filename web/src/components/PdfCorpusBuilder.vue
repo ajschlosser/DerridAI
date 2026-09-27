@@ -992,9 +992,9 @@ const recordSizingValid = computed(
 const canStartConcurrentBuild = computed(() =>
   Boolean(
     recordSizingValid.value &&
-      selectedAsset.value &&
-      contextSafe.value &&
-      (selectedProviderId.value || !activeBuildCount.value),
+    selectedAsset.value &&
+    contextSafe.value &&
+    (selectedProviderId.value || !activeBuildCount.value),
   ),
 );
 const transientNetworkError = computed(() =>
@@ -1282,11 +1282,15 @@ function recordMetadata(record: CorpusRecord) {
 }
 function applyAuthoritativeRecord(record: CorpusRecord, build?: CorpusBuild | null) {
   const id = record.record_id;
-  const index = records.value.findIndex((item) => item.record_id === id);
-  if (index >= 0) records.value.splice(index, 1, record);
-  if (selectedRecordId.value === id) {
-    selectedRecord.value = record;
-    metadataDraft.value = JSON.stringify(recordMetadata(record), null, 2);
+  // A later save is already queued and shown optimistically; this older response would briefly revert it.
+  // The last response in the queue carries the authoritative state for all of them.
+  if (!recordSaveQueue.hasQueuedBehind(id)) {
+    const index = records.value.findIndex((item) => item.record_id === id);
+    if (index >= 0) records.value.splice(index, 1, record);
+    if (selectedRecordId.value === id) {
+      selectedRecord.value = record;
+      metadataDraft.value = JSON.stringify(recordMetadata(record), null, 2);
+    }
   }
   if (build && currentBuild.value?.build_id === build.build_id) {
     currentBuild.value = build;
@@ -1459,8 +1463,8 @@ async function refreshRecords(reset = false, preferredId = "") {
     const match = wanted ? records.value.find((row) => row.record_id === wanted) : undefined;
     const preserveDraft = Boolean(
       selectedRecord.value &&
-        selectedRecordId.value === wanted &&
-        (editingText.value || metadataEditorDirty.value),
+      selectedRecordId.value === wanted &&
+      (editingText.value || metadataEditorDirty.value),
     );
     if (match && !preserveDraft) {
       selectRecord(match);
@@ -3400,11 +3404,11 @@ defineExpose({
       :concurrency-risk="
         Boolean(
           providerProfiles.find((p) => p.id === llmActionProviderId)?.type === 'ollama' &&
-            llmActionConcurrentLoad + 1 >
-              Number(
-                providerProfiles.find((p) => p.id === llmActionProviderId)
-                  ?.max_concurrent_requests || 1,
-              ),
+          llmActionConcurrentLoad + 1 >
+            Number(
+              providerProfiles.find((p) => p.id === llmActionProviderId)?.max_concurrent_requests ||
+                1,
+            ),
         )
       "
       :active-requests="llmActionConcurrentLoad"
