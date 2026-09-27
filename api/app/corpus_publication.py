@@ -123,6 +123,8 @@ def serialize_public_record(record: dict[str, Any]) -> dict[str, Any]:
         "metadata_enrichment_state",
         "metadata_enrichment_history",
         "metadata_disputes",
+        # Review aid: references to other records' reviewed precedents, not scholarly metadata.
+        "metadata_precedents_cache",
         "record_revision",
         "review_state",
         "can_accept",

@@ -14,6 +14,7 @@ import { metadataConstraints } from "../domain/metadataConstraints";
 import { metadataFieldSpec, metadataSuggestions } from "../domain/metadataFieldRegistry";
 import { assertionConflict, currentFieldAssertions } from "../domain/fieldAssertions";
 import type { MetadataSchema, SchemaField } from "../api/metadataSchemas";
+import { corpusBuilderApi, type MetadataPrecedents } from "../api/corpus";
 import { reviewableMetadataFieldNames } from "../features/corpus-builder/domain/recordMetadata";
 import CorpusMetadataFieldEditor from "./CorpusMetadataFieldEditor.vue";
 import CorpusFieldPrecedents from "./CorpusFieldPrecedents.vue";
@@ -169,6 +170,36 @@ const attentionFields = computed(() =>
 );
 const blocking = computed(() => new Set(props.blockingFields || []));
 const pendingSet = computed(() => new Set(attentionFields.value));
+// Precedents kept from the last enrichment arrive in one request per record, so each pending field shows its count
+// without being opened. A field without kept precedents (or a failed request) loads its own when opened.
+const keptPrecedents = ref<Record<string, MetadataPrecedents>>({});
+watch(
+  () => [props.buildId, props.record.record_id, attentionFields.value.length > 0] as const,
+  async ([buildId, recordId, anyPending]) => {
+    keptPrecedents.value = {};
+    if (!buildId || !anyPending) return;
+    try {
+      const result = await corpusBuilderApi.fieldPrecedents(buildId, recordId);
+      if (buildId === props.buildId && recordId === props.record.record_id)
+        keptPrecedents.value = result.fields || {};
+    } catch {
+      keptPrecedents.value = {};
+    }
+  },
+  { immediate: true },
+);
+// "Use this value" from a precedent fills that field's draft; the reviewer still chooses evidence and saves.
+const prefills = ref<Record<string, { value: unknown; key: number }>>({});
+let prefillKey = 0;
+function usePrecedentValue(field: string, value: unknown) {
+  prefills.value = { ...prefills.value, [field]: { value, key: ++prefillKey } };
+}
+watch(
+  () => props.record.record_id,
+  () => {
+    prefills.value = {};
+  },
+);
 // The fields to decide keep the order they had when the record opened. A field that is decided stays where it was, folded
 // to one line, instead of jumping to another list; the reviewer's place, and everything below it, stays put.
 const sessionFields = ref<string[]>([]);
@@ -450,6 +481,7 @@ function displayValue(field: string) {
           :calibrated-acceptance="calibrated(field)"
           :open="pendingSet.has(field)"
           :hints="memoryHints(field)"
+          :prefill="prefills[field] || null"
           @save="
             (value) => {
               emit('resolve', field, value);
@@ -487,6 +519,10 @@ function displayValue(field: string) {
           :record-id="record.record_id"
           :field="field"
           :field-label="fieldLabel(field)"
+          :preloaded="keptPrecedents[field] || null"
+          :source-block-ids="record.source_block_ids || []"
+          :can-use="!fieldBusy(field)"
+          @use="(value) => usePrecedentValue(field, value)"
         />
       </div>
     </div>

@@ -144,11 +144,46 @@ describe("Corpus Builder review evidence panel", () => {
   });
 
   it("offers model suggestions only when a provider request exists", () => {
-    expect(mountPanel({ buildId: "build-1" }).findAll(".assign-suggest button")).toHaveLength(1);
+    const labels = (wrapper: ReturnType<typeof mountPanel>) =>
+      wrapper.findAll(".assign-suggest button").map((button) => button.text());
+    expect(labels(mountPanel({ buildId: "build-1" }))).not.toContain("Ask the model");
     expect(
-      mountPanel({ buildId: "build-1", llmRequest: { provider_profile_id: "p" } }).findAll(
-        ".assign-suggest button",
-      ),
-    ).toHaveLength(2);
+      labels(mountPanel({ buildId: "build-1", llmRequest: { provider_profile_id: "p" } })),
+    ).toContain("Ask the model");
+  });
+
+  it("suggests this record's passages that resemble reviewed precedents, and binds nothing", async () => {
+    const spy = vi.spyOn(corpusMetadataApi, "precedents").mockResolvedValue({
+      field: "speaker",
+      record_id: "record-1",
+      mode: "semantic",
+      fallback_reason: "",
+      items: [
+        {
+          record_id: "record-9",
+          value: "Derrida",
+          evidence_bound: true,
+          evidence: "Another record's words.",
+          candidate_source_units: [
+            { block_id: "block-1", score: 0.7, method: "precedent-semantic-v1" },
+            { block_id: "not-in-this-record", score: 0.9, method: "precedent-semantic-v1" },
+          ],
+        },
+      ],
+    });
+    const wrapper = mountPanel({ buildId: "build-1" });
+    const button = wrapper
+      .findAll(".assign-suggest button")
+      .find((item) => item.text() === "Like reviewed precedents")!;
+    await button.trigger("click");
+    await flushPromises();
+
+    expect(spy).toHaveBeenCalledWith("build-1", "record-1", "speaker");
+    expect(wrapper.get(".suggested-note").text()).toContain(
+      "reviewer cited for this field elsewhere",
+    );
+    expect(wrapper.text()).not.toContain("Another record's words.");
+    expect(wrapper.emitted("toggleEvidence")).toBeUndefined();
+    spy.mockRestore();
   });
 });

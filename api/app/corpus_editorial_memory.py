@@ -32,6 +32,12 @@ from .metadata_exemplars import (
     prompt_example_token_estimate,
     reviewed_values,
 )
+from .metadata_precedents_cache import (
+    cached_field,
+    precedent_mode,
+    rank_candidates,
+    resolve_cached_precedents,
+)
 
 
 class EditorialMemoryMixin:
@@ -49,6 +55,7 @@ class EditorialMemoryMixin:
         _progressive_metadata_warning_builds: set[str]
 
         def _append_warning(self, build_id: str, message: str) -> None: ...
+        def _blocks_for(self, build_id: str) -> dict[str, dict[str, Any]]: ...
         def _editable_fields(self, build_id: str) -> set[str]: ...
 
 
@@ -60,6 +67,7 @@ class EditorialMemoryMixin:
         exclude_record_id: str = "",
         use_global: bool = True,
         use_progressive: bool = True,
+        include_canonical: bool = False,
     ) -> dict[str, Any]:
         """Build advisory context from human decisions and the last enrichment pass.
 
@@ -68,6 +76,9 @@ class EditorialMemoryMixin:
         ``pass_learning`` also includes last-pass LLM inferences on two or more records
         (working conventions, not confirmed) so a later pass can start before every
         record has been reviewed. Nothing here is copied as truth.
+
+        ``include_canonical`` adds ``canonical_exemplars`` (exemplar ID -> exemplar) for callers
+        that must re-verify stored precedent references; it is never part of an API response.
         """
         try:
             rows = self.repo.load_records(build_id)
@@ -391,44 +402,115 @@ class EditorialMemoryMixin:
         # reviewers always take precedence over the shared ones.
         for field, convention in (self._global_learning.conventions(exclude_build_id=build_id).items() if use_global else []):
             conventions.setdefault(field, convention)
-        return {
+        memory: dict[str, Any] = {
             "conventions": conventions,
             "examples": examples,
             "example_token_estimate": example_token_estimate,
             "progressive_retrieval": retrieval_telemetry,
             "pass_learning": learn_from_pass([row for row in rows if str(row.get("record_id") or "") != exclude_record_id]),
         }
+        if include_canonical:
+            memory["canonical_exemplars"] = {
+                str(item["metadata_exemplar_id"]): item for item in canonical_exemplars
+            }
+        return memory
 
 
-    def metadata_precedents(self, build_id: str, record_id: str, field: str) -> dict[str, Any]:
-        """Reviewed precedents for one field of one record, as the enrichment prompt sees them.
+    def metadata_precedents(
+        self, build_id: str, record_id: str, field: str, *, refresh: bool = False
+    ) -> dict[str, Any]:
+        """Reviewed precedents for one field of one record, as the enrichment prompt saw them.
 
-        Read-only and advisory: this is the same selection metadata enrichment uses
-        (schema retrieval policy, separate correction quota, declared analogy
-        conditions), shown to the reviewer beside the source evidence. Nothing here can
-        set a value; the record under review is excluded from its own precedents.
+        Read-only and advisory: this is the selection metadata enrichment used (schema
+        retrieval policy, separate correction quota, declared analogy conditions), shown to
+        the reviewer beside the source evidence. Nothing here can set a value; the record under
+        review is excluded from its own precedents. When the last enrichment kept its retrieval
+        on the record, those references are re-verified against the current reviewed records
+        (see metadata_precedents_cache) instead of repeating the search; ``refresh`` or a record
+        enriched before that was kept searches live. Each precedent may carry
+        ``candidate_source_units``: blocks of *this* record ranked against the precedent's
+        evidence, for the reviewer to check. They never bind evidence.
         """
         if field not in self._editable_fields(build_id):
             raise ValueError(f"Unsupported review metadata field: {field}")
         record = self.repo.get_record(build_id, record_id)
+        cached = None if refresh else cached_field(record, field)
+        if cached is not None:
+            return self._cached_precedents(build_id, record, {field: cached})[field]
         memory = self._editorial_memory(
             build_id, current_record=record, exclude_record_id=record_id, use_global=False
         )
-        items = list((memory.get("examples") or {}).get(field) or [])
+        items = [dict(item) for item in (memory.get("examples") or {}).get(field) or []]
         retrieval = memory.get("progressive_retrieval") or {}
-        if field in (retrieval.get("fields_served") or []):
-            mode = "semantic"
-        elif items:
-            mode = "lexical"
-        else:
-            mode = "none"
+        try:
+            blocks = self._blocks_for(build_id) if items else {}
+        except (KeyError, OSError):  # candidates are advisory; precedents still show without them
+            blocks = {}
+        candidates = rank_candidates(items, record, blocks, embed=self._precedent_embedder())
+        for item, picks in zip(items, candidates):
+            item["candidate_source_units"] = picks
         return {
             "field": field,
             "record_id": record_id,
-            "mode": mode,
+            "source": "live",
+            "computed_at": iso_now(),
+            "mode": precedent_mode(field, items, retrieval),
             "fallback_reason": str(retrieval.get("fallback_reason") or ""),
+            "stale_count": 0,
             "items": items,
         }
+
+    def record_precedents(self, build_id: str, record_id: str) -> dict[str, Any]:
+        """Every field's kept precedents for one record, re-verified with one memory rebuild.
+
+        Fields the last enrichment did not keep are absent; the panel loads those one at a
+        time through metadata_precedents when a reviewer opens them.
+        """
+        record = self.repo.get_record(build_id, record_id)
+        kept = {
+            field: cached
+            for field in sorted(self._editable_fields(build_id))
+            if (cached := cached_field(record, field)) is not None
+        }
+        return {"record_id": record_id, "fields": self._cached_precedents(build_id, record, kept) if kept else {}}
+
+    def _cached_precedents(
+        self,
+        build_id: str,
+        record: dict[str, Any],
+        kept: dict[str, tuple[dict[str, Any], dict[str, Any]]],
+    ) -> dict[str, dict[str, Any]]:
+        record_id = str(record.get("record_id") or "")
+        memory = self._editorial_memory(
+            build_id,
+            current_record=record,
+            exclude_record_id=record_id,
+            use_global=False,
+            use_progressive=False,
+            include_canonical=True,
+        )
+        canonical = memory.get("canonical_exemplars") or {}
+        out: dict[str, dict[str, Any]] = {}
+        for field, (entry, cache) in kept.items():
+            items, stale = resolve_cached_precedents(entry, canonical, record)
+            out[field] = {
+                "field": field,
+                "record_id": record_id,
+                "source": "enrichment",
+                "computed_at": str(cache.get("computed_at") or ""),
+                "mode": str(entry.get("mode") or "none"),
+                "fallback_reason": str(cache.get("fallback_reason") or ""),
+                "stale_count": stale,
+                "items": items,
+            }
+        return out
+
+    def _precedent_embedder(self) -> Any:
+        """Embedding callable for ranking source blocks, or None to rank lexically."""
+        index: Any = getattr(self, "_progressive_metadata_index", None)
+        if index is None or index.disabled_reason or not callable(getattr(index, "embed_texts", None)):
+            return None
+        return index.embed_texts
 
     def _editorial_context(self, build_id: str, *, exclude_record_id: str = "") -> dict[str, Any]:
         # Retained as the small conventions-only API used by older internal tests;

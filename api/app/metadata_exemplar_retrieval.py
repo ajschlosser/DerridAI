@@ -348,6 +348,30 @@ class ChromaMetadataExemplarIndex:
                 raise
         return self.store.client.get_collection(name=self.collection_name)
 
+    def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        """Embed texts with the provider this projection queries with, without touching any collection.
+
+        Used to rank a record's own source blocks against reviewed precedent evidence; nothing
+        is written to Chroma. Raises when retrieval is disabled or vectors cannot be computed.
+        """
+
+        if self._disabled_reason:
+            raise RuntimeError(self._disabled_reason)
+        provider: str | None = None
+        model: str | None = None
+        default_spec = getattr(self.store, "default_embedding_spec", None)
+        if callable(default_spec):
+            provider, model = default_spec()
+        if provider == "precomputed":
+            raise ValueError("Precomputed embeddings cannot embed source blocks for ranking.")
+        return self.store.embeddings.embed(
+            [_bounded_query_text(str(text)) for text in texts],
+            [{} for _ in texts],
+            "embedding",
+            provider=provider,
+            model=model,
+        )
+
     def sync(self, scope_id: str, exemplars: list[dict[str, Any]]) -> dict[str, int]:
         """Incrementally mirror known record/field exemplars without scope churn.
 

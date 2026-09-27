@@ -63,7 +63,7 @@ _NON_ASSERTION_FIELDS = {
     "topology_index", "topology_count", "boundary_review", "boundary_suspicion",
     "corpus_build_details", "schema", "schema_id", "schema_hash", "schema_name",
     "human_touched_revision", "accepted_by", "autonomous_decision",
-    "editorial_memory_used", "metadata_adjudication_prefills", "llm_rejections",
+    "editorial_memory_used", "metadata_precedents_cache", "metadata_adjudication_prefills", "llm_rejections",
     "metadata_enrichment_finished", "metadata_requeue_requested",
     "metadata_requeue_reason", "metadata_reviewed_at", "review_issue_codes",
     "metadata_stage_results", "field_assessments", "field_evidence",

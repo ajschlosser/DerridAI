@@ -9,6 +9,7 @@ export {
   type MetadataDecisionResult,
   type MetadataPrecedent,
   type MetadataPrecedents,
+  type PrecedentCandidateUnit,
   type RecordResearchClaim,
 } from "./metadata";
 export { corpusPublicationsApi } from "./publications";

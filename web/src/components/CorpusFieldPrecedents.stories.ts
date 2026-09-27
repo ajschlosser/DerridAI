@@ -18,6 +18,10 @@ const precedents: MetadataPrecedents = {
       evidence_bound: true,
       evidence: "The letter proceeds without haste, each clause set down evenly.",
       match: { tier: "matched", fields: ["genre"] },
+      candidate_source_units: [
+        { block_id: "b-2", score: 0.78, method: "precedent-semantic-v1", page: 14 },
+        { block_id: "b-3", score: 0.52, method: "precedent-semantic-v1", page: 15 },
+      ],
     },
     {
       exemplar_id: "mex-2",
@@ -71,6 +75,35 @@ export const LoadError: Story = {
   args: {
     load: async () => {
       throw new Error("Corpus record not found");
+    },
+  },
+};
+
+/** Kept from the last enrichment: the count shows on the closed toggle, and one precedent has since changed. */
+export const KeptFromEnrichment: Story = {
+  args: {
+    preloaded: {
+      ...precedents,
+      source: "enrichment",
+      computed_at: "2026-09-20T14:05:00Z",
+      stale_count: 1,
+    },
+    sourceBlockIds: ["b-1", "b-2", "b-3"],
+  },
+};
+/** Audio: candidates are located by time range, not page. */
+export const TimedSource: Story = {
+  args: {
+    preloaded: {
+      ...precedents,
+      items: [
+        {
+          ...precedents.items[0],
+          candidate_source_units: [
+            { block_id: "seg-4", score: 0.66, method: "precedent-lexical-v1", start: 62, end: 75 },
+          ],
+        },
+      ],
     },
   },
 };

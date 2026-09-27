@@ -160,7 +160,7 @@ def _merge_enrichment_snapshot(live: dict[str, Any], worker: dict[str, Any], all
         "metadata_review_fields", "metadata_needs_attention", "metadata_attention_reasons",
         "metadata_complete", "metadata_enrichment_state", "metadata_enrichment_finished",
         "semantic_classification_confidence", "attribution_confidence", "editorial_memory_used",
-        "text_touchup_proposal",
+        "metadata_precedents_cache", "text_touchup_proposal",
     ):
         if key in worker:
             merged[key] = worker[key]

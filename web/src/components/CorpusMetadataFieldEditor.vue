@@ -39,6 +39,8 @@ const props = defineProps<{
   requiredToAccept?: boolean;
   /** How many reviewed examples the model's prompt carried for this field (metadata memory), if any. */
   memoryExamples?: number;
+  /** A value to put in the draft (a reviewed precedent's); a new `key` applies it again. Never saved by itself. */
+  prefill?: { value: unknown; key: number } | null;
 }>();
 const emit = defineEmits<{
   save: [value: unknown];
@@ -174,6 +176,13 @@ watch(
       // A pending field that has just been decided folds back into its one-line summary.
       editing.value = false;
     }
+  },
+);
+
+watch(
+  () => props.prefill?.key,
+  (key) => {
+    if (key !== undefined && props.prefill) useHint(props.prefill.value);
   },
 );
 

@@ -9,6 +9,7 @@ why every mixin's mypy stub block must be wrapped in `if TYPE_CHECKING:`).
 from __future__ import annotations
 
 import json
+import logging
 import re
 import time
 import uuid
@@ -54,6 +55,8 @@ from .field_assertions import (
     reopen_assertion,
 )
 from .metadata_adjudication_cache import suggestions as adjudication_suggestions
+from .metadata_precedents_cache import CACHE_KEY as PRECEDENTS_CACHE_KEY
+from .metadata_precedents_cache import build_precedents_cache
 from .metadata_schema import (
     CORE_FIELDS,
     CORE_GROUP,
@@ -66,6 +69,7 @@ from .nlp_annotations import prompt_hints
 from .rag import _citation_strings
 from .run_guidance import find_guidance_matches, format_group_guidance
 
+logger = logging.getLogger(__name__)
 
 class MetadataEnrichmentExecutionMixin:
     """Mixin members declared here exist on PdfCorpusBuildManager, not on this mixin itself.
@@ -80,6 +84,9 @@ class MetadataEnrichmentExecutionMixin:
 
         def _adaptive_family_should_skip(self, build_id: str | None, family: str, request: dict[str, Any]) -> tuple[bool, str]: ...
         def _append_warning(self, build_id: str, message: str) -> None: ...
+        def _blocks_for(self, build_id: str) -> dict[str, dict[str, Any]]: ...
+        def _editable_fields(self, build_id: str) -> set[str]: ...
+        def _precedent_embedder(self) -> Any: ...
         def _chat_json(self, request: dict[str, Any], prompt: str, *, response_model: type[BaseModel], max_tokens: int = ..., schema_name: str = ..., attempts: int = ..., build_id: str = ...) -> dict[str, Any]: ...
         def _editorial_memory(self, build_id: str, current_record: dict[str, Any] | None = None, *, exclude_record_id: str = "", use_global: bool = True, use_progressive: bool = True) -> dict[str, Any]: ...
         def _increment_metric(self, build_id: str, key: str, amount: int = 1) -> None: ...
@@ -88,6 +95,36 @@ class MetadataEnrichmentExecutionMixin:
         def _record_family_effectiveness(self, build_id: str | None, family: str, result: dict[str, Any] | None, *, elapsed_ms: int = 0, provider_profile_id: str = "", provider: str = "", model: str = "") -> None: ...
         def _schema_for(self, build_id: str) -> MetadataSchema: ...
         def touchup_record_text(self, build_id: str, record_id: str, request: dict[str, Any], instructions: str = "", text_override: str | None = None) -> dict[str, Any]: ...
+
+    def _keep_precedent_retrieval(
+        self,
+        build_id: str,
+        record: dict[str, Any],
+        editorial_memory: dict[str, Any],
+    ) -> None:
+        """Keep this pass's precedent retrieval on the record for Record Review.
+
+        The retrieval already ran for the prompt; keeping references to it (and ranking this
+        record's own blocks against each precedent's evidence) spares the reviewer a second
+        search. It is advisory: if it cannot be kept, the panel searches live instead.
+        """
+        examples = editorial_memory.get("examples") if isinstance(editorial_memory, dict) else None
+        telemetry = editorial_memory.get("progressive_retrieval") if isinstance(editorial_memory, dict) else None
+        try:
+            examples = examples if isinstance(examples, dict) else {}
+            blocks = self._blocks_for(build_id) if any(examples.values()) else {}
+            record[PRECEDENTS_CACHE_KEY] = build_precedents_cache(
+                sorted(self._editable_fields(build_id)),
+                examples,
+                telemetry if isinstance(telemetry, dict) else {},
+                record,
+                blocks,
+                computed_at=iso_now(),
+                embed=self._precedent_embedder(),
+            )
+        except Exception as exc:  # noqa: BLE001 - advisory; Record Review falls back to a live search
+            record.pop(PRECEDENTS_CACHE_KEY, None)
+            logger.warning("Could not keep precedent retrieval for record %s: %s", record.get("record_id"), exc)
 
     def _enrich_record(
         self,
@@ -138,6 +175,10 @@ class MetadataEnrichmentExecutionMixin:
                 and "reviewer_conventions" not in off
             ),
         ) if build_id else {"conventions": {}, "examples": {}}
+        if build_id and "reviewer_conventions" not in off:
+            self._keep_precedent_retrieval(build_id, record, editorial_memory)
+        else:
+            record.pop(PRECEDENTS_CACHE_KEY, None)
         if "reviewer_conventions" in off:
             editorial_memory = {**editorial_memory, "conventions": {}, "examples": {}}
         if "rejection_memory" in off:
