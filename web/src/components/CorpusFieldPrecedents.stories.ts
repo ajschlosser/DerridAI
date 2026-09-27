@@ -74,3 +74,25 @@ export const LoadError: Story = {
     },
   },
 };
+export const Loading: Story = {
+  args: { load: () => new Promise(() => {}) },
+};
+export const Absence: Story = {
+  args: {
+    load: async () => ({
+      ...precedents,
+      items: [
+        {
+          exemplar_id: "mex-9",
+          record_id: "r-9",
+          record_revision: 2,
+          value: null,
+          kind: "absence",
+          similarity: 0.63,
+          evidence_bound: true,
+          evidence: "The preface names no date of composition.",
+        },
+      ],
+    }),
+  },
+};
