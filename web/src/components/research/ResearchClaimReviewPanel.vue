@@ -264,9 +264,7 @@ watch(
             <UiButton
               size="small"
               :label="i18n.t('claims.unresolved')"
-              :disabled="
-                Boolean(busy[claim.claim_id]) || statuses[claim.claim_id] === 'unresolved'
-              "
+              :disabled="Boolean(busy[claim.claim_id]) || statuses[claim.claim_id] === 'unresolved'"
               @click="decide(claim, 'unresolved')"
             />
             <UiButton
