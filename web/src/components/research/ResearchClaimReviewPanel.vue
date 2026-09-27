@@ -185,7 +185,9 @@ watch(
   >
     <header class="research-claim-review-heading">
       <div>
-        <span class="research-claim-review-kicker">{{ i18n.t("research.claim_review_kicker") }}</span>
+        <span class="research-claim-review-kicker">{{
+          i18n.t("research.claim_review_kicker")
+        }}</span>
         <h3 id="research-claim-review-title">{{ i18n.t("research.claim_review_title") }}</h3>
         <p>{{ i18n.t("research.claim_review_help") }}</p>
       </div>
@@ -232,7 +234,9 @@ watch(
                 >
                   {{ supportLabel(binding) }}
                 </button>
-                <span v-else class="research-claim-evidence-label">{{ supportLabel(binding) }}</span>
+                <span v-else class="research-claim-evidence-label">{{
+                  supportLabel(binding)
+                }}</span>
               </template>
             </div>
             <p v-if="!hasUsableSupport(claim.claim_id)" class="research-claim-support-warning">
