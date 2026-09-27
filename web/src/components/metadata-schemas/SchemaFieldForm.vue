@@ -251,7 +251,9 @@ const addValue = () => props.field.values.push({ value: "", definition: "" });
             type="number"
             min="0"
             max="20"
-            :disabled="!field.retrieval_profile.enabled || !field.retrieval_profile.include_corrections"
+            :disabled="
+              !field.retrieval_profile.enabled || !field.retrieval_profile.include_corrections
+            "
           />
           <small class="hint">{{ t("memory_max_corrections_help") }}</small>
         </label>
