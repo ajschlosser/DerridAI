@@ -95,6 +95,15 @@ def test_other_users_cannot_validate_someone_elses_claim(claim):
     assert getattr(info.value, "status_code", None) == 404
 
 
+def test_claim_lookup_returns_authoritative_status_and_respects_owner(claim):
+    result = routes.get_claim("c-1", _request(_user()))
+    assert result["claim"]["validation_status"] == "unvalidated"
+
+    with pytest.raises(Exception) as info:
+        routes.get_claim("c-1", _request(_user("bob")))
+    assert getattr(info.value, "status_code", None) == 404
+
+
 def test_claim_without_usable_support_cannot_be_validated(claim):
     fake, _ = claim
     payload = {
