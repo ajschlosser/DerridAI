@@ -146,13 +146,13 @@ function kindLabel(item: MetadataPrecedent): {
               <span
                 v-if="percent(item) !== null"
                 class="precedent-similarity"
-                :title="i18n.tf('pdf_corpus.precedent_similarity', { percent: percent(item) })"
+                :title="i18n.tf('pdf_corpus.precedent_similarity', { percent: percent(item) ?? 0 })"
               >
                 <span class="meter" aria-hidden="true">
                   <span class="meter-fill" :style="{ width: `${percent(item)}%` }" />
                 </span>
                 <span>{{
-                  i18n.tf("pdf_corpus.precedent_similarity", { percent: percent(item) })
+                  i18n.tf("pdf_corpus.precedent_similarity", { percent: percent(item) ?? 0 })
                 }}</span>
               </span>
             </div>
