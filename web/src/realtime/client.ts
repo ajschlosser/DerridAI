@@ -188,8 +188,10 @@ export class RealtimeClient {
     this.clearTimers();
     if (!this.running) return;
     if (code === CLOSE_CODES.unauthenticated) {
-      // Never keep reconnecting with an expired cookie.
+      // Never keep reconnecting with an expired cookie. Keep fallback polling
+      // until the app confirms (over REST) whether the session really ended.
       this.running = false;
+      this.fallbackActive = true;
       this.setStatus("offline");
       this.options.onAuthExpired?.();
       return;

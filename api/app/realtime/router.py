@@ -106,16 +106,18 @@ class RealtimeSession:
             return
         if message.type == "subscribe":
             rejected = []
+            accepted: set[str] = set()
             for topic in message.topics:
-                if topic in self.subscriber.topics:
+                if topic in self.subscriber.topics or topic in accepted:
                     continue
-                if len(self.subscriber.topics) >= MAX_TOPICS_PER_CONNECTION:
+                if len(self.subscriber.topics) + len(accepted) >= MAX_TOPICS_PER_CONNECTION:
                     raise ProtocolError(CLOSE_POLICY, "too many topics")
                 decision = await asyncio.to_thread(authorize_topic, self.subscriber, topic)
                 if decision.allowed:
-                    self.subscriber.topics.add(topic)
+                    accepted.add(topic)
                 else:
                     rejected.append({"topic": topic, "code": decision.code, "reason": decision.reason})
+            self.broker.add_topics(self.subscriber, accepted)
             await self._subscription_updated(rejected)
         if message.last_event_id is not None and message.type in {"subscribe", "resync"}:
             await self._replay(message.last_event_id)
@@ -130,11 +132,10 @@ class RealtimeSession:
         })
 
     async def _replay(self, last_event_id: int) -> None:
-        replay = self.broker.replay_since(self.subscriber, last_event_id)
-        if replay is None:
+        # Replayed events go through the outgoing queue so they are delivered in
+        # event_id order ahead of anything published afterwards.
+        if not self.broker.resume(self.subscriber, last_event_id):
             await self.resync_required("replay_unavailable")
-        else:
-            await self.send_events(replay)
 
     async def reader(self) -> None:
         while True:

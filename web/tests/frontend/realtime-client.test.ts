@@ -143,6 +143,8 @@ describe("realtime client", () => {
     latest().ready();
     latest().serverClose(4401, "session expired");
     expect(onAuthExpired).toHaveBeenCalledTimes(1);
+    // Polling continues until the app confirms the session over REST.
+    expect(rt.fallbackActive).toBe(true);
     vi.advanceTimersByTime(60_000);
     expect(MockSocket.instances).toHaveLength(1);
   });

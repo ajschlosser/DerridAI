@@ -507,3 +507,16 @@ def test_realtime_summaries_never_carry_error_text_or_research_questions():
     assert "stage_detail" not in summaries["grading"]
     assert summaries["live"]["stage_detail"] == "Reranking 12 candidates"
 
+
+
+def test_resume_requeues_replay_in_event_order_ahead_of_newer_live_events():
+    broker = EventBroker(replay_events=16)
+    admin = Subscriber(username="root", role="admin", topics={"jobs"})
+    broker.register(admin)
+    first = _publish(broker, "j1", owner=None, rag=False, event_type="job.started")
+    missed = [_publish(broker, "j1", owner=None, rag=False, event_type=kind) for kind in ("job.stage_changed", "job.completed")]
+    admin.queue.drain()  # the client never saw these (socket dropped)
+    live = _publish(broker, "j2", owner=None, rag=False, event_type="job.created")
+    assert broker.resume(admin, first.event_id) is True
+    events, _ = admin.queue.drain()
+    assert [event.event_id for event in events] == [missed[0].event_id, missed[1].event_id, live.event_id]

@@ -141,16 +141,41 @@ class EventBroker:
         with self._lock:
             self._revisions.pop((resource_type, resource_id), None)
 
-    # -- replay ------------------------------------------------------------
+    # -- subscriptions and replay -------------------------------------------
+    def add_topics(self, subscriber: Subscriber, topics: set[str]) -> None:
+        with self._lock:
+            subscriber.topics.update(topics)
+
+    def _replay_locked(self, subscriber: Subscriber, last_event_id: int) -> list[Event] | None:
+        if last_event_id >= self._last_event_id:
+            return []
+        oldest = self._replay[0].event_id if self._replay else self._last_event_id + 1
+        if last_event_id + 1 < oldest:
+            return None
+        return [event for event in self._replay if event.event_id > last_event_id and subscriber.may_receive(event)]
+
     def replay_since(self, subscriber: Subscriber, last_event_id: int) -> list[Event] | None:
         """Events after ``last_event_id`` visible to ``subscriber``; ``None`` if the gap is not covered."""
         with self._lock:
-            if last_event_id >= self._last_event_id:
-                return []
-            oldest = self._replay[0].event_id if self._replay else self._last_event_id + 1
-            if last_event_id + 1 < oldest:
-                return None
-            return [event for event in self._replay if event.event_id > last_event_id and subscriber.may_receive(event)]
+            return self._replay_locked(subscriber, last_event_id)
+
+    def resume(self, subscriber: Subscriber, last_event_id: int) -> bool:
+        """Re-queue everything after ``last_event_id`` in ``event_id`` order.
+
+        Runs under the broker lock, so no live event can be stamped between the
+        replay and the queue rebuild; pending items are replaced because the
+        replay already contains every visible event newer than the client's
+        position. Returns ``False`` when the ring no longer covers the gap.
+        """
+        with self._lock:
+            replay = self._replay_locked(subscriber, last_event_id)
+            if replay is None:
+                return False
+            subscriber.queue.clear()
+            for event in replay:
+                subscriber.queue.put(event)
+        subscriber.notify()
+        return True
 
 
 broker = EventBroker()

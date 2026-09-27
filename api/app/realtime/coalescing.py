@@ -53,6 +53,11 @@ class OutgoingQueue:
                     self.overflowed = True
             self._items.append(event)
 
+    def clear(self) -> None:
+        with self._lock:
+            self._items.clear()
+            self.overflowed = False
+
     def drain(self) -> tuple[list[Event], bool]:
         """Take every pending event plus whether an overflow happened since last drain."""
         with self._lock:

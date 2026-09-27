@@ -31,20 +31,20 @@ Job managers never call the socket. The observer thread reads `realtime_job_summ
 1. The browser connects after authentication (`bootstrapRuntime` → `startRealtime`).
 2. The server authenticates the `derridai_session` cookie (identity never comes from the client), checks `Origin` (same host or `REALTIME_ALLOWED_ORIGINS`), and sends `connection.ready` with `protocol_version`, `connection_id`, the current `last_event_id`, `heartbeat_seconds` and `idle_timeout_seconds`.
 3. The client subscribes to its topics, passing `last_event_id` when resuming.
-4. The server replays missed events from its ring buffer, or sends `connection.resync_required`.
+4. The server re-queues missed events from its ring buffer in `event_id` order ahead of anything newer, or sends `connection.resync_required`.
 5. Every `REALTIME_HEARTBEAT_SECONDS` the server re-validates the session (closing 4401 if it expired, 4403 with `auth.permissions_changed` if the role changed) and sends `connection.heartbeat`. The client pings every ¾ heartbeat; a socket silent for `REALTIME_IDLE_TIMEOUT_SECONDS` is closed.
 6. Logout, session expiry and account switches pause the runtime, which closes the socket; nothing reconnects until the next login. Nuke/reset invalidates sessions, which the next heartbeat turns into a 4401 close.
 
 ### Close codes
 
-| Code | Meaning                                                                        | Client behaviour                               |
-| ---- | ------------------------------------------------------------------------------ | ---------------------------------------------- |
-| 4400 | Malformed frame, unknown message type, invalid topic list                      | Reconnect with backoff                         |
-| 4401 | No valid session / session expired                                             | Stop; dispatch the existing auth-expiry flow   |
-| 4403 | Forbidden: realtime disabled, origin refused, no topic available, role changed | Fallback polling; slow retry (or refresh auth) |
-| 4404 | Resource not found (used in subscription rejections)                           | —                                              |
-| 4408 | Policy: oversized message, rate limit, too many topics, idle timeout           | Reconnect with backoff                         |
-| 1011 | Unexpected internal failure                                                    | Reconnect with backoff                         |
+| Code | Meaning                                                                        | Client behaviour                                                                                                                                                                        |
+| ---- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 4400 | Malformed frame, unknown message type, invalid topic list                      | Reconnect with backoff                                                                                                                                                                  |
+| 4401 | No valid session / session expired                                             | Stop reconnecting and poll; confirm with `GET /api/auth/me` and run the auth-expiry flow only if REST also reports 401 (a proxy that drops cookies on upgrades must not log anyone out) |
+| 4403 | Forbidden: realtime disabled, origin refused, no topic available, role changed | Fallback polling; slow retry (or refresh auth)                                                                                                                                          |
+| 4404 | Resource not found (used in subscription rejections)                           | —                                                                                                                                                                                       |
+| 4408 | Policy: oversized message, rate limit, too many topics, idle timeout           | Reconnect with backoff                                                                                                                                                                  |
+| 1011 | Unexpected internal failure                                                    | Reconnect with backoff                                                                                                                                                                  |
 
 ## Protocol (version 1)
 
