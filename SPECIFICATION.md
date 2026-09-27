@@ -1179,17 +1179,17 @@ The following identifiers are the tracked conformance requirements for cELF 1.0.
 
 ### Profile-to-Requirement Matrix
 
-| Profile               | Required dependency | Requirement IDs                 |
-| --------------------- | ------------------- | ------------------------------- |
-| Core                  | -                   | CORE-ID-001 through CORE-ID-018 |
-| Publication           | Core                | PUB-ID-001 through PUB-ID-004   |
-| Retrieval             | Core                | RET-ID-001 through RET-ID-003   |
-| Evidence              | Core                | EVID-ID-001 through EVID-ID-006 |
-| Claim-Binding         | Core + Evidence     | CLM-ID-001 through CLM-ID-006   |
-| Reproducible Research | Core + Evidence     | REP-ID-001, REP-ID-002          |
-| Researcher-Controlled Execution       | Core                | LOC-ID-001                      |
-| PROV Mapping adapter  | Core                | PROV-ID-001                     |
-| RO-Crate adapter      | Core                | ROCR-ID-001                     |
+| Profile                         | Required dependency | Requirement IDs                 |
+| ------------------------------- | ------------------- | ------------------------------- |
+| Core                            | -                   | CORE-ID-001 through CORE-ID-018 |
+| Publication                     | Core                | PUB-ID-001 through PUB-ID-004   |
+| Retrieval                       | Core                | RET-ID-001 through RET-ID-003   |
+| Evidence                        | Core                | EVID-ID-001 through EVID-ID-006 |
+| Claim-Binding                   | Core + Evidence     | CLM-ID-001 through CLM-ID-006   |
+| Reproducible Research           | Core + Evidence     | REP-ID-001, REP-ID-002          |
+| Researcher-Controlled Execution | Core                | LOC-ID-001                      |
+| PROV Mapping adapter            | Core                | PROV-ID-001                     |
+| RO-Crate adapter                | Core                | ROCR-ID-001                     |
 
 ### Required Invariants and Profile Applicability
 
