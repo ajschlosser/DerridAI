@@ -94,9 +94,7 @@ function hasUsableSupport(claimId: string) {
   return supportFor(claimId).some(usableSupport);
 }
 
-function statusTone(
-  status: ClaimValidationStatus,
-): "neutral" | "success" | "warning" | "danger" {
+function statusTone(status: ClaimValidationStatus): "neutral" | "success" | "warning" | "danger" {
   if (status === "validated") return "success";
   if (status === "rejected") return "danger";
   if (status === "unresolved") return "warning";
