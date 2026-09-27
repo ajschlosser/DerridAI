@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import {
   claimsApi,
   type ClaimValidationStatus,
@@ -19,8 +19,9 @@ const props = withDefaults(
   defineProps<{
     provenance?: ResearchClaimProvenance | null;
     evidence?: ResearchResultEvidence[];
+    refreshAuthoritative?: boolean;
   }>(),
-  { provenance: null, evidence: () => [] },
+  { provenance: null, evidence: () => [], refreshAuthoritative: true },
 );
 const emit = defineEmits<{ evidence: [index: number] }>();
 const i18n = useI18nStore();
@@ -52,7 +53,7 @@ function normalizeStatus(value: unknown): ClaimValidationStatus {
 
 function seedClaim(claim: ResearchGeneratedClaim) {
   statuses.value[claim.claim_id] = normalizeStatus(claim.validation_status);
-  if (claim.validated_by) reviewers.value[claim.claim_id] = claim.validated_by;
+  reviewers.value[claim.claim_id] = String(claim.validated_by || "");
 }
 
 function applyAuthoritativeClaim(claim: GeneratedClaimRecord) {
@@ -161,9 +162,12 @@ const pendingCount = computed(
 
 watch(
   () => claims.value.map((claim) => claim.claim_id).join("|"),
-  () => void refreshStatuses(),
+  () => {
+    for (const claim of claims.value) seedClaim(claim);
+    if (props.refreshAuthoritative) void refreshStatuses();
+  },
+  { immediate: true },
 );
-onMounted(() => void refreshStatuses());
 </script>
 
 <template>
