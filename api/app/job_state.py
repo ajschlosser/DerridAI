@@ -102,13 +102,24 @@ _REALTIME_SCALAR_KEYS = (
     "dismissed",
 )
 _REALTIME_TEXT_LIMIT = 240
+# Grading details quote the research question; it stays in the owner-scoped REST
+# job detail rather than generic progress events.
+_REALTIME_DETAIL_EXCLUDED_TOOLS = frozenset({"rag_grade", "rag_grade_batch"})
+_REALTIME_ACTIVE_STATUSES = frozenset({"queued", "running", "cancelling"})
 
 
 def job_realtime_summary(job: JobPayload) -> JobPayload:
     """Bounded live-state summary shared by every manager's realtime feed."""
     summary: JobPayload = {key: job.get(key) for key in _REALTIME_SCALAR_KEYS if key in job}
     detail = job.get("stage_detail")
-    if detail not in (None, ""):
+    # Only live operational detail is published. A finished job's detail can be
+    # an upstream error message, which clients read from REST with the rest of
+    # the error metadata.
+    if (
+        detail not in (None, "")
+        and job.get("status") in _REALTIME_ACTIVE_STATUSES
+        and (job.get("tool") or job.get("mode")) not in _REALTIME_DETAIL_EXCLUDED_TOOLS
+    ):
         summary["stage_detail"] = str(detail)[:_REALTIME_TEXT_LIMIT]
     summary["warnings_count"] = len(job.get("warnings") or [])
     summary["has_error"] = bool(job.get("fatal_error") or job.get("error_message") or job.get("error"))
