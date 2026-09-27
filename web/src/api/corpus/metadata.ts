@@ -5,11 +5,33 @@ import { LEGACY_CORPUS_BASE, legacyCorpusUrl } from "./compatibility";
 
 export interface EvidenceSuggestion {
   block_id: string;
+  source_unit_id?: string;
   reason: string;
   method: string;
   score?: number;
+  lexical_score?: number | null;
+  lexical_method?: string;
+  lexical_reason?: string;
+  semantic_score?: number | null;
+  semantic_method?: string;
+  semantic_reason?: string;
+  semantic_status?: "available" | "fallback" | "no_match";
+  signals?: {
+    lexical?: { score?: number | null; method?: string; reason?: string; status?: string };
+    semantic?: { score?: number | null; method?: string; reason?: string; status?: string };
+  };
   /** LLM choices only: whether a deterministic text match also supports the block. */
   lexical_support?: boolean;
+}
+
+export interface EvidenceSuggestionStatus {
+  semantic?: "available" | "fallback";
+  reason?: string;
+}
+
+export interface EvidenceSuggestionsResponse {
+  items: EvidenceSuggestion[];
+  status?: EvidenceSuggestionStatus;
 }
 
 /** Authoritative state returned after one or several reviewer metadata decisions. */
@@ -92,7 +114,7 @@ const recordUrl = (buildId: string, recordId: string) =>
 
 export const corpusMetadataApi = {
   suggestEvidence: (buildId: string, recordId: string, field: string) =>
-    apiRequest<{ items: EvidenceSuggestion[] }>(
+    apiRequest<EvidenceSuggestionsResponse>(
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/evidence-suggestions?field=${encodeURIComponent(field)}`,
     ),
   suggestEvidenceLlm: (

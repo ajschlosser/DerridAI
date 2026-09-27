@@ -852,7 +852,7 @@ def suggest_pdf_corpus_record_evidence(
 ) -> dict[str, Any]:
     require_admin(request)
     try:
-        return {"items": pdf_corpus_builds.suggest_evidence(build_id, record_id, field, limit)}
+        return pdf_corpus_builds.suggest_evidence_result(build_id, record_id, field, limit)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
 

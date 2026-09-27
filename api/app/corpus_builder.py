@@ -269,6 +269,7 @@ from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
 from .rag import _citation_strings, chat_complete
 from .run_guidance import find_guidance_matches
 from .sentence_boundaries import snap_boundaries_to_sentences
+from .source_embeddings import SourceEmbeddingProjection
 from .source_quality import assess_extracted_source, page_source_quality_report
 from .text_noise import (
     DEFAULT_NOISE_THRESHOLD,
@@ -1196,6 +1197,76 @@ class PdfCorpusRepository:
 
     def build_records_db_path(self, build_id: str) -> Path:
         return self.root / "builds" / build_id / "records.sqlite3"
+
+    def build_source_units_path(self, build_id: str) -> Path:
+        return self.root / "builds" / build_id / "source_units.jsonl"
+
+    def _set_source_units_projection_state(self, build_id: str, *, dirty: bool) -> None:
+        build_path = self.build_path(build_id)
+        build = _json_read(build_path)
+        if not isinstance(build, dict):
+            raise KeyError(build_id)
+        state = dict(build.get("source_unit_projection") or {})
+        revision = int(state.get("revision") or 0) + (1 if dirty else 0)
+        build["source_unit_projection"] = {
+            "revision": revision,
+            "dirty": dirty,
+            "updated_at": iso_now(),
+        }
+        _json_write(build_path, build)
+
+    def source_unit_projection_dirty(self, build_id: str) -> bool:
+        build = self.get_build(build_id)
+        return bool((build.get("source_unit_projection") or {}).get("dirty"))
+
+    def load_source_units(self, build_id: str) -> list[dict[str, Any]]:
+        """Load authoritative source units, migrating legacy blocks on demand."""
+        build = self.get_build(build_id)
+        path = self.build_source_units_path(build_id)
+        rows: list[dict[str, Any]] = []
+        if path.exists():
+            with path.open("r", encoding="utf-8") as handle:
+                rows = [json.loads(line) for line in handle if line.strip()]
+        blocks = self.load_blocks(str(build["asset_id"]))
+        from .corpus_record_restructure import normalize_source_units
+
+        normalized = normalize_source_units(
+            rows,
+            blocks,
+            source_document_id=str(build["asset_id"]),
+        )
+        if normalized != rows:
+            self.save_source_units(build_id, normalized)
+        return normalized
+
+    def normalize_source_units(self, build_id: str) -> list[dict[str, Any]]:
+        """Public migration helper for builds created before source units existed."""
+        return self.load_source_units(build_id)
+
+    def load_active_source_units(self, build_id: str) -> list[dict[str, Any]]:
+        return [unit for unit in self.load_source_units(build_id) if unit.get("active")]
+
+    def save_source_units(self, build_id: str, units: list[dict[str, Any]]) -> None:
+        """Persist canonical source-unit rows; vectors remain a derived projection."""
+        self.get_build(build_id)
+        path = self.build_source_units_path(build_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with self._lock:
+            self._set_source_units_projection_state(build_id, dirty=True)
+            fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+            tmp = Path(tmp_name)
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                    for unit in units:
+                        handle.write(json.dumps(unit, ensure_ascii=False) + "\n")
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                os.replace(tmp, path)
+            finally:
+                try:
+                    tmp.unlink(missing_ok=True)
+                except OSError:
+                    pass
 
     def _set_records_projection_state(self, build_id: str, *, dirty: bool) -> None:
         build_path = self.build_path(build_id)
@@ -2624,6 +2695,32 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 record["full_citation"] = full
                 # Deterministic POS/NER candidates: hints for the metadata prompt, never values.
                 annotate_record(record, nlp_schema, language=str(manifest.get("language") or ""))
+            # Source-unit embeddings are a shared, rebuildable projection. Build
+            # them after the active source-unit topology is known and before any
+            # consumer (metadata memory or local evidence retrieval) asks for vectors.
+            source_projection = SourceEmbeddingProjection(self._progressive_metadata_index.store)
+            try:
+                provider, model = source_projection.store.default_embedding_spec()
+                source_embedding_projection = source_projection.sync(
+                    str(asset.get("asset_id") or build_id),
+                    source_blocks,
+                    provider=provider,
+                    model=model,
+                    prune=True,
+                )
+            except Exception as exc:  # derived state must not block canonical topology
+                source_embedding_projection = {
+                    "status": "unavailable",
+                    "error": f"{type(exc).__name__}: {exc}"[:300],
+                }
+                self._append_warning(
+                    build_id,
+                    "Source-unit semantic indexing is unavailable; canonical source and records remain intact. "
+                    + str(source_embedding_projection["error"]),
+                )
+            current_build = self.repo.get_build(build_id)
+            current_build["source_unit_embedding_projection"] = source_embedding_projection
+            self.repo.save_build(current_build)
             # Pre-fill from reviewed precedents matched on each record's source spans (advisory).
             memory_prefill = (
                 prefill_records(records, source_blocks, nlp_schema, self._progressive_metadata_index, build_id=build_id)

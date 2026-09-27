@@ -10,6 +10,7 @@ retired ones, or the edit is refused.
 
 from __future__ import annotations
 
+import hashlib
 import re
 import uuid
 from typing import Any
@@ -22,6 +23,125 @@ JOIN = "\n\n"
 
 def _squash(text: str) -> str:
     return "".join(str(text or "").split())
+
+
+def source_unit_text_hash(text: str) -> str:
+    """Return the content identity persisted for an authoritative source unit."""
+    return hashlib.sha256(str(text or "").encode("utf-8")).hexdigest()
+
+
+def normalize_source_units(
+    rows: list[dict[str, Any]] | None,
+    blocks: list[dict[str, Any]],
+    *,
+    source_document_id: str,
+) -> list[dict[str, Any]]:
+    """Normalize legacy block rows into the build's source-unit representation.
+
+    Older builds have no unit store and only carry ``source_block_ids`` on
+    records.  A block is therefore the compatibility unit until a structural
+    edit explicitly replaces it.
+    """
+    by_id = {str(block.get("block_id")): block for block in blocks if block.get("block_id")}
+    source: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for raw in rows or []:
+        if not isinstance(raw, dict):
+            continue
+        unit_id = str(raw.get("source_unit_id") or raw.get("unit_id") or raw.get("block_id") or "")
+        if not unit_id or unit_id in seen:
+            continue
+        block_id = str(raw.get("block_id") or (raw.get("source_block_ids") or [unit_id])[0] or unit_id)
+        block = by_id.get(block_id) or {}
+        text = str(raw.get("text") if raw.get("text") is not None else block.get("text") or "")
+        item = {
+            **dict(block),
+            **dict(raw),
+            "source_unit_id": unit_id,
+            "unit_id": unit_id,
+            "block_id": block_id,
+            "source_block_ids": list(dict.fromkeys(str(value) for value in (raw.get("source_block_ids") or [block_id]) if value)),
+            "source_document_id": str(raw.get("source_document_id") or source_document_id),
+            "text": text,
+            "text_hash": source_unit_text_hash(text),
+            "parent_unit_ids": list(dict.fromkeys(str(value) for value in (raw.get("parent_unit_ids") or []) if value)),
+            "consumed_ranges": list(raw.get("consumed_ranges") or []),
+            "active": bool(raw.get("active", True)),
+        }
+        item.setdefault("locator_kind", block.get("locator_kind"))
+        source.append(item)
+        seen.add(unit_id)
+    for block in blocks:
+        block_id = str(block.get("block_id") or "")
+        if not block_id or block_id in seen:
+            continue
+        text = str(block.get("text") or "")
+        source.append({
+            **dict(block),
+            "source_unit_id": block_id,
+            "unit_id": block_id,
+            "block_id": block_id,
+            "source_block_ids": [block_id],
+            "source_document_id": str(source_document_id),
+            "text": text,
+            "text_hash": source_unit_text_hash(text),
+            "parent_unit_ids": [],
+            "consumed_ranges": [],
+            "active": True,
+        })
+    return source
+
+
+def safe_neighbor_absorption(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    """Whether two adjacent source units may be folded into one replacement.
+
+    Missing locators are deliberately unsafe.  This keeps a structural edit
+    from silently erasing an unknown page/time/type boundary.
+    """
+    if str(left.get("type") or "") != str(right.get("type") or ""):
+        return False
+    left_kind = str(left.get("locator_kind") or ("time" if left.get("start") is not None else "page"))
+    right_kind = str(right.get("locator_kind") or ("time" if right.get("start") is not None else "page"))
+    if left_kind != right_kind:
+        return False
+    if left_kind == "time":
+        try:
+            left_end = left.get("locator_end", left.get("end"))
+            right_start = right.get("locator_start", right.get("start"))
+            return abs(float(right_start) - float(left_end)) <= 0.001
+        except (TypeError, ValueError):
+            return False
+    try:
+        left_page = int(left.get("page"))
+        right_page = int(right.get("page"))
+    except (TypeError, ValueError):
+        return False
+    return left_page == right_page
+
+
+def assert_active_source_unit_ownership(
+    records: list[dict[str, Any]],
+    units: list[dict[str, Any]],
+) -> None:
+    """Reject active topology that shares or references a retired unit."""
+    active = {
+        str(unit.get("source_unit_id") or unit.get("unit_id"))
+        for unit in units
+        if unit.get("active")
+    }
+    owners: dict[str, str] = {}
+    for record in records:
+        record_id = str(record.get("record_id") or "")
+        for value in record.get("source_unit_ids") or record.get("source_block_ids") or []:
+            unit_id = str(value)
+            if not unit_id:
+                continue
+            if unit_id not in active:
+                raise ValueError("A Record references an inactive source unit.")
+            prior = owners.get(unit_id)
+            if prior is not None and prior != record_id:
+                raise ValueError("An active source unit cannot be shared across Records.")
+            owners[unit_id] = record_id
 
 
 def assert_text_conserved(before: list[str], after: list[str]) -> None:
@@ -119,3 +239,218 @@ def tombstone(record: dict[str, Any], *, operation: str, transaction_id: str, su
         "successor_record_ids": successors,
         "record": json.loads(json.dumps(record)),
     }
+
+
+def reconcile_source_units(
+    units: list[dict[str, Any]],
+    retiring: list[dict[str, Any]],
+    pieces: list[dict[str, Any]],
+    created: list[dict[str, Any]],
+    *,
+    source_document_id: str,
+    operation: str,
+    transaction_id: str,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Reconcile active units and return the IDs assigned to each new record.
+
+    ``unit_ranges`` is optional metadata supplied by the structural action.  A
+    full range reuses its unit; a partial range mints a replacement unit.  A
+    leading/trailing partial range may absorb its complete neighbour only when
+    :func:`safe_neighbor_absorption` proves that the locator boundary is safe.
+    """
+    by_id = {str(item.get("source_unit_id") or item.get("unit_id")): item for item in units}
+    retired_ids: list[str] = []
+    old_ids: list[str] = []
+    for record in retiring:
+        for value in record.get("source_unit_ids") or record.get("source_block_ids") or []:
+            value = str(value)
+            if value and value not in old_ids:
+                old_ids.append(value)
+    for value in old_ids:
+        if value in by_id:
+            retired_ids.append(value)
+
+    taken = set(by_id)
+    replacement_ids: list[str] = []
+
+    def mint(text: str, parent_ids: list[str], consumed: list[dict[str, Any]], template: dict[str, Any] | None = None) -> str:
+        seed = str(parent_ids[0] if parent_ids else source_document_id or "unit")
+        while True:
+            candidate = f"{seed}-u-{uuid.uuid4().hex[:8]}"
+            if candidate not in taken:
+                break
+        taken.add(candidate)
+        row = {
+            **({k: v for k, v in (template or {}).items() if k not in {"source_unit_id", "unit_id", "text", "text_hash", "active", "parent_unit_ids", "consumed_ranges", "lineage"}}),
+            "source_unit_id": candidate,
+            "unit_id": candidate,
+            "source_document_id": source_document_id,
+            "source_block_ids": list(dict.fromkeys(str(value) for value in parent_ids if value)),
+            "text": str(text),
+            "text_hash": source_unit_text_hash(text),
+            "parent_unit_ids": list(dict.fromkeys(parent_ids)),
+            "consumed_ranges": consumed,
+            "transaction_id": transaction_id,
+            "active": True,
+            "lineage": {
+                "operation": operation,
+                "transaction_id": transaction_id,
+                "parent_unit_ids": list(dict.fromkeys(parent_ids)),
+                "consumed_ranges": consumed,
+                "at": iso_now(),
+            },
+        }
+        by_id[candidate] = row
+        replacement_ids.append(candidate)
+        return candidate
+
+    for piece, record in zip(pieces, created):
+        ranges = list(piece.get("unit_ranges") or [])
+        assigned: list[str] = []
+        if not ranges:
+            ranges = [
+                {"unit_id": str(value), "start": 0, "end": len(str((by_id.get(str(value)) or {}).get("text") or ""))}
+                for value in piece.get("block_ids") or []
+            ]
+        partial: list[tuple[dict[str, Any], dict[str, Any]]] = []
+        for item in ranges:
+            unit_id = str(item.get("unit_id") or item.get("source_unit_id") or "")
+            unit = by_id.get(unit_id)
+            if not unit:
+                continue
+            start = int(str(item.get("start") or 0))
+            end = int(str(item.get("end") if item.get("end") is not None else len(str(unit.get("text") or ""))))
+            whole = start <= 0 and end >= len(str(unit.get("text") or ""))
+            if whole:
+                assigned.append(unit_id)
+            else:
+                partial.append((item, unit))
+        # Fold a partial at either edge into a complete adjacent unit only when
+        # the source locator says the join is unambiguous.
+        if len(partial) > 1 and all(item.get("text") is None for item, _unit in partial):
+            parent_ids = [
+                str(item.get("unit_id") or item.get("source_unit_id") or "")
+                for item, _unit in partial
+            ]
+            assigned = [mint(str(piece.get("text") or ""), parent_ids, ranges)]
+            partial = []
+        if partial and len(ranges) == 2 and len(assigned) == 1:
+            item, fragment = partial[0]
+            neighbour = by_id.get(assigned[0])
+            if neighbour and (
+                safe_neighbor_absorption(fragment, neighbour)
+                or safe_neighbor_absorption(neighbour, fragment)
+            ):
+                ordered = [str(item.get("unit_id") or item.get("source_unit_id") or "") for item in ranges]
+                parent_ids = list(dict.fromkeys(value for value in ordered if value))
+                assigned = [mint(str(record.get("text") or piece.get("text") or ""), parent_ids, ranges, fragment)]
+                partial = []
+        for item, unit in partial:
+            unit_id = str(unit.get("source_unit_id") or unit.get("unit_id"))
+            fragment_text = str(item.get("text") if item.get("text") is not None else piece.get("text") or "")
+            assigned.append(mint(fragment_text, [unit_id], [item], unit))
+        assigned = list(dict.fromkeys(assigned))
+        record["source_unit_ids"] = assigned
+        # source_block_ids remains the compatibility field. Replacement units
+        # carry their consumed legacy block IDs so existing evidence lookups
+        # continue to resolve while source_unit_ids carries new topology.
+        record["source_block_ids"] = list(dict.fromkeys(
+            source_block_id
+            for unit_id in assigned
+            for source_block_id in (
+                (by_id.get(unit_id) or {}).get("source_block_ids")
+                or [str((by_id.get(unit_id) or {}).get("block_id") or unit_id)]
+            )
+        ))
+        record["source_unit_ids"] = assigned
+    reused_ids = {
+        str(unit_id)
+        for record in created
+        for unit_id in record.get("source_unit_ids") or []
+    }
+    for unit_id in retired_ids:
+        if unit_id in reused_ids:
+            continue
+        by_id[unit_id]["active"] = False
+        by_id[unit_id]["retired_at"] = iso_now()
+        by_id[unit_id]["retired_transaction_id"] = transaction_id
+        successors = [value for value in replacement_ids if unit_id in (by_id.get(value) or {}).get("parent_unit_ids", [])]
+        if successors:
+            by_id[unit_id]["successor_unit_ids"] = successors
+    active = [item for item in by_id.values() if item.get("active")]
+    inactive = [item for item in by_id.values() if not item.get("active")]
+    return inactive + active, replacement_ids
+
+
+def remap_evidence_bindings(
+    retiring: list[dict[str, Any]],
+    created: list[dict[str, Any]],
+    units: list[dict[str, Any]],
+) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
+    """Carry reviewed source-unit evidence across a structural replacement.
+
+    Evidence is copied only when every referenced unit resolves to one created
+    record. A split or other one-to-many mapping is retained as an explicit
+    review item instead of binding evidence to an arbitrary successor.
+    """
+    by_id = {
+        str(unit.get("source_unit_id") or unit.get("unit_id")): unit
+        for unit in units
+        if str(unit.get("source_unit_id") or unit.get("unit_id") or "")
+    }
+    created_by_unit: dict[str, list[int]] = {}
+    for index, record in enumerate(created):
+        for unit_id in record.get("source_unit_ids") or record.get("source_block_ids") or []:
+            created_by_unit.setdefault(str(unit_id), []).append(index)
+    result: dict[str, dict[str, Any]] = {}
+    pending: list[dict[str, Any]] = []
+    for parent in retiring:
+        evidence = parent.get("metadata_evidence")
+        if not isinstance(evidence, dict):
+            continue
+        for field, raw in evidence.items():
+            if not isinstance(raw, dict) or not raw.get("block_ids"):
+                continue
+            target_indexes: set[int] = set()
+            replacement_ids: list[str] = []
+            ambiguous = False
+            for raw_id in raw.get("block_ids") or []:
+                unit_id = str(raw_id)
+                unit = by_id.get(unit_id) or {}
+                successors = [str(value) for value in unit.get("successor_unit_ids") or []]
+                candidates = successors or [unit_id]
+                owners = {
+                    owner
+                    for candidate in candidates
+                    for owner in created_by_unit.get(candidate, [])
+                }
+                if len(owners) != 1:
+                    ambiguous = True
+                    break
+                target_indexes.update(owners)
+            if ambiguous or len(target_indexes) != 1:
+                pending.append({
+                    "field": str(field),
+                    "parent_record_id": str(parent.get("record_id") or ""),
+                    "block_ids": [str(value) for value in raw.get("block_ids") or []],
+                    "reason": "Structural edit changed the evidence topology; reviewer remapping is required.",
+                })
+                continue
+            target_index = next(iter(target_indexes))
+            for raw_id in raw.get("block_ids") or []:
+                unit_id = str(raw_id)
+                unit = by_id.get(unit_id) or {}
+                candidates = [str(value) for value in unit.get("successor_unit_ids") or []] or [unit_id]
+                replacement_ids.extend(
+                    candidate
+                    for candidate in candidates
+                    if target_index in created_by_unit.get(candidate, [])
+                )
+            target = dict(raw)
+            target["block_ids"] = list(dict.fromkeys(replacement_ids)) or list(
+                map(str, raw.get("block_ids") or [])
+            )
+            target["remapped_from_record_id"] = str(parent.get("record_id") or "")
+            target["remapped_at"] = iso_now()
+            result.setdefault(str(target_index), {})[str(field)] = target
+    return result, pending
