@@ -18,14 +18,15 @@ Background work runs in the API process. There is no external worker/queue servi
 | Area                                       | Current ownership                                                                                                                                                                                      |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Application composition                    | `main.py`, `application.py`, `middleware.py`, `route_policy.py`, `response_filters.py`, `validation_handlers.py`                                                                                       |
-| HTTP routes                                | `routers/{admin,annotations,auth,chroma,corpus,health,i18n,jobs,llm,stores,system,system_data}.py`                                                                                                     |
+| HTTP routes                                | `routers/{admin,annotations,auth,chroma,corpus,health,i18n,jobs,llm,sources,stores,system,system_data}.py`                                                                                             |
 | Corpus orchestration                       | `corpus_builder.py` plus focused `corpus_*` modules for lifecycle, manifest workflow, segmentation, enrichment, review, quality, publication, and schema/profile behavior                              |
-| Source ingestion                           | `corpus_extraction.py`, `source_media.py`, `source_text.py`, `source_audio.py`, `source_gutenberg.py`, `source_safety.py`, `source_quality.py`, `source_kinds.py`                                      |
+| Source discovery / acquisition             | `source_capture.py`, `source_provider.py`, `source_identity.py`, `source_wikidata.py`, `source_gutenberg.py`, `source_wikisource.py`, `source_reconcile.py`, `source_registry.py`, `capture_store.py`   |
+| Source extraction                          | `corpus_extraction.py`, `source_media.py`, `source_text.py`, `source_audio.py`, `source_safety.py`, `source_quality.py`, `source_kinds.py`                                                            |
 | Metadata schemas and progressive precedent | `metadata_schema.py`, `metadata_schema_store.py`, `metadata_exemplars.py`, `metadata_exemplar_projection.py`, `metadata_exemplar_retrieval.py`, `metadata_memory.py`, `metadata_adjudication_cache.py` |
 | Durable provenance / Research memory       | `provenance_memory.py`, `system_store.py`, related Research/job persistence                                                                                                                            |
 | Search/vector storage                      | `chroma_store.py`, `chroma_connection.py`, `system_chroma_console.py`                                                                                                                                  |
 | Research/RAG                               | `rag.py`, `researcher_view.py`, bibliography/evaluation helpers                                                                                                                                        |
-| Background jobs                            | `job_llm.py`, `job_rag.py`, `job_tools.py`, `job_upsert.py`; `job_state.py` owns shared durable state; `jobs.py` is a compatibility export layer                                                       |
+| Background jobs                            | `job_capture.py`, `job_llm.py`, `job_rag.py`, `job_tools.py`, `job_upsert.py`; `job_state.py` owns shared durable state; `jobs.py` is a compatibility export layer                                    |
 | Providers/tools                            | `llm.py`, `llm_tools.py`, `provider_profile_options.py`, translation/content-policy helpers                                                                                                            |
 | Auth/system persistence                    | `auth.py`, `persistence.py`, `system_store.py`, `database_backend.py`                                                                                                                                  |
 
@@ -33,15 +34,20 @@ The decomposition is intentional: do not move ordinary routes back into `main.py
 
 ## Sources and corpus build flow
 
-Corpus Builder is source-media aware rather than PDF-only.
+Corpus Builder is source-media aware rather than PDF-only. Source acquisition and corpus building are deliberately separate: acquiring or registering a SourceDocument does not start a build.
 
-1. **Register and validate source.** Enforce format-specific byte/resource limits and reject unsafe active content before expensive extraction.
-2. **Extract/transcribe.** Preserve the immutable extracted source and extractor/tool/version provenance. PDF extraction may use OCR; audio may use transcription/diarization; text/document/image/Gutenberg paths have their own adapters.
-3. **Normalize source spans.** Build source units with medium-appropriate coordinates. Pages/printed folios are meaningful for paged documents; audio evidence uses time ranges/speakers.
-4. **Structure and segment.** Reviewer-confirmed structure is authoritative. Semantic boundary proposals are validated for text conservation and coherent source mapping.
-5. **Enrich.** Metadata-family tasks combine deterministic facts, optional run guidance, and bounded evidence-bound reviewed precedents. Model output is a proposal until schema/provenance checks pass.
-6. **Review.** Reviewer edits are revisioned and preserve field/evidence provenance. The frontend applies ordinary review edits optimistically while serializing conflicting same-record persistence and handling rejection/rebase/rollback.
-7. **Publish/index.** Validated records are serialized for publication. Vector indexes are explicit derived projections that can be rebuilt from authoritative records.
+1. **Discover/acquire sources (optional).** Corpus Capture resolves a researcher-selected person through Wikidata, discovers Project Gutenberg/Wikisource candidates through provider adapters, reconciles work/edition identity, and records coverage. The researcher selects candidates before acquisition. Successful acquisition registers ordinary SourceDocument assets; the capture itself remains acquisition bookkeeping.
+2. **Register and validate source.** Uploads, URLs, single-library imports, and Corpus Capture acquisitions converge on the same source-registration path. Enforce format-specific byte/resource limits and reject unsafe active content before expensive extraction.
+3. **Extract/transcribe.** Preserve the immutable extracted source and extractor/tool/version provenance. PDF extraction may use OCR; audio may use transcription/diarization; text/document/image/library paths have their own adapters.
+4. **Normalize source spans.** Build source units with medium-appropriate coordinates. Pages/printed folios are meaningful for paged documents; audio evidence uses time ranges/speakers.
+5. **Structure and segment.** Reviewer-confirmed structure is authoritative. Semantic boundary proposals are validated for text conservation and coherent source mapping.
+6. **Enrich.** Metadata-family tasks combine deterministic facts, optional run guidance, and bounded evidence-bound reviewed precedents. Model output is a proposal until schema/provenance checks pass.
+7. **Review.** Reviewer edits are revisioned and preserve field/evidence provenance. The frontend applies ordinary review edits optimistically while serializing conflicting same-record persistence and handling rejection/rebase/rollback.
+8. **Publish/index.** Validated records are serialized for publication. Vector indexes are explicit derived projections that can be rebuilt from authoritative records.
+
+Corpus Capture discovery/acquisition jobs run through `job_capture.py` and the shared operation ledger. `capture_store.py` persists captures, candidates, and provider snapshots in System SQLite. Those rows are not corpus content: registered sources remain canonical SourceDocument assets, and `source_capture_links` is a many-to-many provenance association so one source can be reached by multiple captures without making a capture ID part of source identity. Interrupted capture workers are marked interrupted/failed rather than silently replayed after restart.
+
+The Sources workspace is a compact projection over canonical source assets plus capture links and build summaries. `source_registry.py` never exposes source text or blocks in its table rows; the projection can be rebuilt from source/build state.
 
 The compatibility storage namespace still contains `.home/pdf-corpus`; that path name is historical and must not be interpreted as a PDF-only product contract.
 
@@ -68,6 +74,7 @@ All paths derive from `CHROMA_DATA_ROOT` (default `/data`).
 | Users, roles, sessions, login throttle                                                    | Auth SQLite                         | Authoritative auth state                                             |
 | Provider profiles, annotations, languages, job snapshots/history, provenance/memory state | System SQLite                       | Durable application state                                            |
 | Source assets, build/review checkpoints, publications                                     | Files under DerridAI data root      | Authoritative corpus/build artifacts; atomic writes where applicable |
+| Corpus Capture state, candidates, source/capture links                                    | System SQLite                       | Durable acquisition/provenance bookkeeping; not corpus content       |
 | Vector/search collections                                                                 | Chroma embedded path or HTTP server | Derived/rebuildable from canonical data                              |
 | Metadata exemplar semantic projection                                                     | Internal Chroma/system projection   | Derived/rebuildable; hidden from ordinary research collections       |
 | Response cache                                                                            | Chroma/system cache role            | Operational cache, not corpus truth                                  |
