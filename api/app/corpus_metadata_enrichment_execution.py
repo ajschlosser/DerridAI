@@ -333,7 +333,10 @@ class MetadataEnrichmentExecutionMixin:
             "previous_record_tail": previous_text[-1800:] if previous_text else "",
             "next_record_head": next_text[:1800] if next_text else "",
         }
-        source_ids = [str(value) for value in record.get("source_block_ids") or []]
+        source_ids = [
+            str(value)
+            for value in (record.get("source_unit_ids") or record.get("source_block_ids") or [])
+        ]
         source_id_json = json.dumps(source_ids, ensure_ascii=False)
         # Semantic records should already be bounded. This is a context-safety
         # guard, not a segmentation rule: no source text is rewritten or split here.
@@ -678,7 +681,10 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
         """
         if evidence_mode(request) == "backfill":
             return ""
-        ids = [str(value) for value in record.get("source_block_ids") or []]
+        ids = [
+            str(value)
+            for value in (record.get("source_unit_ids") or record.get("source_block_ids") or [])
+        ]
         blocks = self._evidence_source_blocks(build_id, record, ids)
         if not blocks:
             return ""
