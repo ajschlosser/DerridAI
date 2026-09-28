@@ -112,8 +112,8 @@ export function useCorpusSourceConfiguration(
       error: "",
     };
     const configured = providerConnection(providerProfileId()) || {};
-    const hasConfiguredFallback = ["provider", "model", "base_url", "api_key"].some(
-      (key) => Boolean(configured[key]),
+    const hasConfiguredFallback = ["provider", "model", "base_url", "api_key"].some((key) =>
+      Boolean(configured[key]),
     );
     if (!hasConfiguredFallback) {
       languagePrompt.value = {
@@ -125,7 +125,9 @@ export function useCorpusSourceConfiguration(
     }
     const connection = Object.fromEntries(
       Object.entries(configured)
-        .filter(([key, value]) => ["provider", "model", "base_url", "api_key"].includes(key) && value)
+        .filter(
+          ([key, value]) => ["provider", "model", "base_url", "api_key"].includes(key) && value,
+        )
         .map(([key, value]) => [key, String(value)]),
     );
     try {
