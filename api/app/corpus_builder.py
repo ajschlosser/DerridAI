@@ -2290,7 +2290,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                             cancelled=(lambda: self._cancelled(build_id)) if build_id else None,
                             timeout_seconds=float(_stage_timeouts(request).get(timeout_key, 240)),
                             on_delta=(
-                                (lambda piece: self._note_llm_call_delta(build_id, call_token, piece))
+                                (lambda piece, token=call_token: self._note_llm_call_delta(build_id, token, piece))
                                 if build_id
                                 else None
                             ),
