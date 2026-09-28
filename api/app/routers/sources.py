@@ -12,8 +12,10 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from ..capture_models import CaptureCreate, CaptureSelectionPatch, SourceBulkDelete
+from ..celf_queries import document_intelligence as document_queries
+from ..celf_queries.access import AccessContext, NotFound
 from ..corpus_builder import pdf_corpus_builds, pdf_corpus_repository
-from ..http_auth import request_user
+from ..http_auth import request_user, require_admin
 from ..services import capture_jobs, capture_service, capture_store
 from ..source_identity import CaptureError, CaptureErrorCode, CaptureOptions
 from ..source_provider import ProviderHttp
@@ -272,29 +274,13 @@ def get_sources(
 
 
 @router.get("/api/corpus/sources/{source_id}")
-def get_source_detail(source_id: str) -> dict[str, Any]:
+def get_source_detail(source_id: str, request: Request) -> dict[str, Any]:
     """Identity, language, provider, provenance and processing facts — never the source text."""
+    access = AccessContext.for_user(require_admin(request))
     try:
-        asset = pdf_corpus_repository.get_asset(source_id)
-    except KeyError as exc:
+        return document_queries.source_detail_payload(access, source_id)
+    except NotFound as exc:
         raise _not_found("Source") from exc
-    builds = pdf_corpus_repository.list_builds(offset=0, limit=100000, asset_id=source_id)["items"]
-    keep = ("asset_id", "sha256", "filename", "created_at", "media_type", "media_kind", "content_suffix", "source_url", "page_count", "block_count", "ocr_pages", "extraction_provenance", "catalog_metadata", "initial_metadata", "derived_from_asset_id", "page_number_detection")
-    detail = {k: asset.get(k) for k in keep}
-    catalog = dict(detail.get("catalog_metadata") or {})
-    for bulky in ("wikisource_pages", "catalog_record"):
-        if isinstance(catalog.get(bulky), list):
-            catalog[f"{bulky}_count"] = len(catalog.pop(bulky))
-    proofread = catalog.get("proofread")
-    if isinstance(proofread, dict):
-        catalog["proofread"] = {k: v for k, v in proofread.items() if k != "pages"}
-    detail["catalog_metadata"] = catalog
-    initial = dict(detail.get("initial_metadata") or {})
-    initial.pop("field_provenance", None)
-    detail["initial_metadata"] = {k: v for k, v in initial.items() if isinstance(v, (str, int, float)) or v is None}
-    detail["captures"] = capture_store.links_for_sources([source_id]).get(source_id, [])
-    detail["builds"] = [{"build_id": b.get("build_id"), "status": b.get("status"), "created_at": b.get("created_at"), "record_count": b.get("record_count")} for b in builds]
-    return detail
 
 
 @router.post("/api/corpus/sources/bulk-delete")
