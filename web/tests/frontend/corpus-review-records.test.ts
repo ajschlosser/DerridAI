@@ -251,8 +251,9 @@ describe("useCorpusReviewRecords", () => {
     const selecting = state.reviewRecords.selectRecord(row("r2"));
 
     expect(state.selectedRecord.value).toBeNull();
+    const callsBeforeRefresh = corpusReviewReads.records.mock.calls.length;
     await state.reviewRecords.refreshRows(["r1"]);
-    expect(corpusReviewReads.records).toHaveBeenCalledTimes(2);
+    expect(corpusReviewReads.records).toHaveBeenCalledTimes(callsBeforeRefresh);
 
     resolveR2([record("r2")]);
     await selecting;
