@@ -148,6 +148,70 @@ describe("useCorpusReviewRecords", () => {
     expect(state.selectedRecord.value?.text).toBe("Updated");
   });
 
+
+  it("refreshes an already-open Record when enrichment completes without changing its revision", async () => {
+    const state = setup();
+    corpusReviewReads.queuePage.mockResolvedValue(page([row("r1", 1)]));
+    corpusReviewReads.records
+      .mockResolvedValueOnce([
+        record("r1", 1, {
+          speaker: null,
+          metadata_evidence: {},
+          metadata_field_status: {},
+        }),
+      ])
+      .mockResolvedValueOnce([
+        record("r1", 1, {
+          speaker: "Jacques Derrida",
+          metadata_evidence: {
+            speaker: { block_ids: ["b1"], confidence: null, reason: "Suggested after enrichment." },
+          },
+          metadata_field_status: {
+            speaker: {
+              status: "unresolved",
+              method: "llm",
+              proposed_value: "Jacques Derrida",
+              verification_status: "pending_review",
+            },
+          },
+        }),
+      ]);
+    corpusReviewReads.rows.mockResolvedValue([
+      row("r1", 1, { metadata_llm_processed: true, needs_review: true }),
+    ]);
+
+    await state.reviewRecords.refreshRecords(true);
+    expect(state.selectedRecord.value?.speaker).toBeNull();
+
+    // Backend enrichment persists reviewer-facing suggestions but leaves the
+    // documentary Record revision unchanged. The normal realtime row invalidation
+    // must refresh the full open Record without navigation or a browser reload.
+    await state.reviewRecords.refreshRows(["r1"]);
+
+    expect(corpusReviewReads.records).toHaveBeenCalledTimes(2);
+    expect(state.selectedRecord.value?.record_revision).toBe(1);
+    expect(state.selectedRecord.value?.speaker).toBe("Jacques Derrida");
+    expect(state.selectedRecord.value?.metadata_evidence?.speaker?.block_ids).toEqual(["b1"]);
+  });
+
+  it("force-refreshes the selected Record on a reset even when its revision is unchanged", async () => {
+    const state = setup();
+    corpusReviewReads.queuePage.mockResolvedValue(page([row("r1", 1)]));
+    corpusReviewReads.records
+      .mockResolvedValueOnce([record("r1", 1, { speaker: null })])
+      .mockResolvedValueOnce([record("r1", 1, { speaker: "Jacques Derrida" })]);
+
+    await state.reviewRecords.refreshRecords(true);
+    expect(state.selectedRecord.value?.speaker).toBeNull();
+
+    // Build polling uses reset refreshes when metadata_enriched_count advances.
+    // Same-revision cached projections must not suppress newly persisted metadata.
+    await state.reviewRecords.refreshRecords(true, "r1");
+
+    expect(corpusReviewReads.records).toHaveBeenCalledTimes(2);
+    expect(state.selectedRecord.value?.speaker).toBe("Jacques Derrida");
+  });
+
   it("keeps only the latest selection when a slower one resolves after it", async () => {
     const state = setup();
     corpusReviewReads.queuePage.mockResolvedValue(page([row("r1"), row("r2")]));
