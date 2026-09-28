@@ -158,6 +158,7 @@ const emit = defineEmits<{
   selectEvidence: [field: string];
   toggleEvidence: [blockId: string];
   setEvidence: [blockIds: string[]];
+  browseExternalEvidence: [field: string];
   resolveMetadataWithEvidence: [field: string, value: unknown, text: string];
   resolveMetadataWithHumanSource: [field: string, value: unknown, note: string];
   browseMetadataEvidence: [field: string, value: unknown];
@@ -564,6 +565,7 @@ watch(
               @update:selected-field="emit('selectEvidence', $event)"
               @toggle-evidence="emit('toggleEvidence', $event)"
               @set-evidence="emit('setEvidence', $event)"
+              @browse-external="emit('browseExternalEvidence', selectedEvidenceField)"
             />
           </template>
 

@@ -205,21 +205,22 @@ describe("useCorpusReviewRecords", () => {
     expect(state.reviewRecords.loadingRecordId.value).toBe("");
   });
 
-  it("refreshes the selected full Record when enrichment completes", async () => {
+  it("refreshes the selected full Record when enrichment completes without a revision change", async () => {
     const state = setup();
     corpusReviewReads.queuePage.mockResolvedValue(page([row("r1", 1)]));
     corpusReviewReads.records.mockResolvedValueOnce([record("r1", 1)]);
     await state.reviewRecords.refreshRecords(true);
 
     corpusReviewReads.records.mockResolvedValueOnce([
-      record("r1", 2, {
+      record("r1", 1, {
         speaker: "Derrida",
         metadata_evidence: { speaker: { block_ids: ["b1"] } },
       }),
     ]);
     await state.reviewRecords.refreshRecord("r1");
 
-    expect(state.selectedRecord.value?.record_revision).toBe(2);
+    expect(corpusReviewReads.records).toHaveBeenCalledTimes(2);
+    expect(state.selectedRecord.value?.record_revision).toBe(1);
     expect(state.selectedRecord.value?.speaker).toBe("Derrida");
     expect(state.selectedRecord.value?.metadata_evidence?.speaker?.block_ids).toEqual(["b1"]);
   });
@@ -236,6 +237,44 @@ describe("useCorpusReviewRecords", () => {
     await state.reviewRecords.refreshRecord("r1");
 
     expect(state.selectedRecord.value?.text).toBe("Local unsaved edit");
+  });
+
+  it("does not reactivate an old Record while another selection is loading", async () => {
+    const state = setup();
+    corpusReviewReads.queuePage.mockResolvedValue(page([row("r1", 1)]));
+    corpusReviewReads.records.mockResolvedValueOnce([record("r1", 1)]);
+    await state.reviewRecords.refreshRecords(true);
+
+    let resolveR2: (records: unknown[]) => void = () => undefined;
+    corpusReviewReads.records
+      .mockImplementationOnce(() => new Promise((resolve) => (resolveR2 = resolve)))
+      .mockResolvedValueOnce([record("r1", 1, { speaker: "Late refresh" })]);
+
+    const selecting = state.reviewRecords.selectRecord(row("r2", 1));
+    expect(state.selectedRecord.value).toBeNull();
+
+    await state.reviewRecords.refreshRecord("r1");
+    expect(state.selectedRecord.value).toBeNull();
+
+    resolveR2([record("r2", 1)]);
+    await selecting;
+    expect(state.selectedRecord.value?.record_id).toBe("r2");
+  });
+
+  it("force-refreshes a same-revision Record on reset", async () => {
+    const state = setup();
+    corpusReviewReads.queuePage.mockResolvedValue(page([row("r1", 1)]));
+    corpusReviewReads.records
+      .mockResolvedValueOnce([record("r1", 1, { speaker: null })])
+      .mockResolvedValueOnce([record("r1", 1, { speaker: "Jacques Derrida" })]);
+
+    await state.reviewRecords.refreshRecords(true);
+    expect(state.selectedRecord.value?.speaker).toBeNull();
+
+    await state.reviewRecords.refreshRecords(true, "r1");
+
+    expect(corpusReviewReads.records).toHaveBeenCalledTimes(2);
+    expect(state.selectedRecord.value?.speaker).toBe("Jacques Derrida");
   });
 
   it("invalidates read projections before a mutation-triggered queue reset", async () => {
