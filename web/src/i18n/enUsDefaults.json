@@ -4798,6 +4798,7 @@
   "vector.unsynced_changes": "Unsynced local changes",
   "vector.unsynced_changes_count": "{count} unsynced local changes",
   "vector.unsynced_changes_help": "This queue is derived from the server-confirmed collection state and the current record revision. Browser storage is only a disposable cache: a fresh instance rechecks presence, and removing an item suppresses only that exact revision; a later change queues it again.",
+  "vector.sync_suppression_failed": "Could not save this queue decision; the item remains available.",
   "vector.unsynced_changes_what": "What is this list?",
   "vector.workspace_actions": "Collection workspace",
   "vector.workspace_sections": "Collection sections",
