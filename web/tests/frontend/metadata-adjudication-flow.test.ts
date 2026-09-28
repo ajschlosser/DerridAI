@@ -93,8 +93,9 @@ describe("adjudicating a record's metadata", () => {
     wrapper.unmount();
   });
 
-  it("waits for a save in flight before moving focus", async () => {
-    // As the workspace does, the save marks its field as saving the moment the panel emits it.
+  it("honors an explicit saving prop before moving focus", async () => {
+    // The panel still supports a caller that deliberately holds a field in a
+    // saving state, even though Record Review releases optimistic decisions immediately.
     const wrapper: ReturnType<typeof mountPanel> = mountPanel({
       onResolve: (field: string) => void wrapper.setProps({ savingField: field }),
     });
