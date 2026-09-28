@@ -45,6 +45,7 @@ from .field_assertions import (
     store_assertion,
 )
 from .metadata_schema import MetadataSchema, default_schema
+from .operation_events import note_record_metadata
 
 
 class EnrichmentRerunsMixin:
@@ -649,6 +650,8 @@ class EnrichmentRerunsMixin:
                         if was_accepted and result["outcome"] != "unchanged":
                             totals["records_reopened"] += 1
                     self.repo.save_records(build_id, live_records)
+                # The event promises that an immediate read sees the merged result.
+                note_record_metadata(build_id, record_id, "record_completed")
                 totals["records_processed"] += 1
                 for key, name in (("added", "fields_added"), ("replaced", "fields_replaced"), ("kept", "fields_kept"), ("disputed", "fields_disputed")):
                     totals[name] += result.get(key, 0)
@@ -817,4 +820,5 @@ class EnrichmentRerunsMixin:
             build_id=build_id,
         )
         self._rewrite_and_validate(build_id, records)
+        note_record_metadata(build_id, record_id, "record_completed")
         return target
