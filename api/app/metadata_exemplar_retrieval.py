@@ -189,14 +189,26 @@ def match_tier(
     return "differs", compared
 
 
+def _first_row(payload: dict[str, Any], key: str) -> list[Any]:
+    """Return payload[key][0] as a plain list, tolerating numpy arrays.
+
+    Chroma query results can hold numpy arrays instead of lists; `x or default`
+    on a multi-element array raises ValueError ("truth value of an array with
+    more than one element is ambiguous"), so check identity/None explicitly.
+    """
+    value = payload.get(key)
+    if hasattr(value, "tolist"):
+        value = value.tolist()
+    if not value:
+        return []
+    return list(value[0])
+
+
 def _candidate_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    ids = (payload.get("ids") or [[]])[0]
-    distances = (payload.get("distances") or [[]])[0]
-    metadatas = (payload.get("metadatas") or [[]])[0]
-    embeddings = payload.get("embeddings")
-    if hasattr(embeddings, "tolist"):
-        embeddings = embeddings.tolist()
-    embeddings = (embeddings or [[]])[0]
+    ids = _first_row(payload, "ids")
+    distances = _first_row(payload, "distances")
+    metadatas = _first_row(payload, "metadatas")
+    embeddings = _first_row(payload, "embeddings")
 
     rows: list[dict[str, Any]] = []
     for index, exemplar_id in enumerate(ids):

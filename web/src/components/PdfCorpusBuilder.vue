@@ -2735,6 +2735,7 @@ defineExpose({
             @switch-profile="switchBuildProvider"
             @settle="settleMetadata"
             @cancel="cancelBuild"
+            @resume="resumeBuild"
             @run-another="
               llmActionProviderId =
                 llmActionProviderId || selectedProviderId || providerProfiles[0]?.id || '';

@@ -589,6 +589,13 @@ def evidence_sufficiency_issues(evidence: Sequence[Mapping[str, Any]]) -> list[d
 
 
 _EVIDENCE_TAG_GROUP = r"((?:E\d+)(?:\s*[,;]\s*E\d+)*)"
+# Memory-guidance prompt tags (see research_memory.render_claims/render_responses)
+# are internal grounding context, never citation syntax. The model occasionally
+# echoes one into the answer text; strip stray occurrences rather than let them
+# leak to the reader as raw "[[prior-claim:...]]"-style tokens.
+_STRAY_MEMORY_TAG_PATTERN = re.compile(
+    r"\[{1,2}\s*(?:prior-claim|prior-response):[^\[\]]+\]{1,2}"
+)
 EVIDENCE_MARKER_PATTERNS = (
     rf"\[\[\s*{_EVIDENCE_TAG_GROUP}\s*\]\]",
     rf"\(\(\s*{_EVIDENCE_TAG_GROUP}\s*\)\)",
@@ -639,7 +646,7 @@ def _bind_sources(answer: str, evidence: list[EvidenceItem], include_works_cited
     used_ids = set(extract_evidence_ids(answer))
     # Generators do not always obey one citation wrapper exactly. Keep rendering
     # and durable claim/support persistence on the same accepted marker syntax.
-    bound = answer
+    bound = _STRAY_MEMORY_TAG_PATTERN.sub("", answer)
     for pattern in EVIDENCE_MARKER_PATTERNS:
         bound = re.sub(pattern, replace_group, bound)
 
@@ -1365,7 +1372,7 @@ def run_rag_pipeline(
             request.include_works_cited,
         )
         if request.bind_citations
-        else raw_answer
+        else _STRAY_MEMORY_TAG_PATTERN.sub("", raw_answer)
     )
     stages.append({
         "name": "bind_sources",

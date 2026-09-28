@@ -2408,18 +2408,21 @@ async function exportStoreJsonl({
   work = null,
   downloadFile = false,
   loadTab = false,
+  navigate = true,
+  silent = false,
 } = {}) {
-  if (!store) return toast(tr("records.toast.select_collection"));
+  if (!store) return silent ? null : toast(tr("records.toast.select_collection"));
   const params = new URLSearchParams();
   if (work) params.set("work", work);
-  const op = showOperationProgress(`Exporting ${store}`, 1);
+  const op = silent ? null : showOperationProgress(`Exporting ${store}`, 1);
   try {
-    updateOperationProgress(
-      op,
-      0,
-      1,
-      work ? `Reading work: ${work}` : "Reading complete collection…",
-    );
+    if (op)
+      updateOperationProgress(
+        op,
+        0,
+        1,
+        work ? `Reading work: ${work}` : "Reading complete collection…",
+      );
     const payload = await api(
       `/api/stores/${encodeURIComponent(store)}/export${params.toString() ? `?${params}` : ""}`,
     );
@@ -2447,18 +2450,46 @@ async function exportStoreJsonl({
       await persistFileNow(file);
       state.activeFileId = file.id;
       persistPrefs();
-      navigateTo("list", { fileId: file.id });
+      if (navigate) navigateTo("list", { fileId: file.id });
     }
-    updateOperationProgress(op, 1, 1, `${records.length.toLocaleString()} records exported`);
-    setTimeout(() => hideOperationProgress(op), 600);
-    if (!loadTab) toast(`Exported ${records.length.toLocaleString()} records from ${store}`);
+    if (op) {
+      updateOperationProgress(op, 1, 1, `${records.length.toLocaleString()} records exported`);
+      setTimeout(() => hideOperationProgress(op), 600);
+    }
+    if (!loadTab && !silent)
+      toast(`Exported ${records.length.toLocaleString()} records from ${store}`);
     return records;
   } catch (error) {
-    updateOperationProgress(op, 0, 1, `Failed: ${error.message}`);
-    setTimeout(() => hideOperationProgress(op), 1800);
-    toast(`Chroma export failed: ${error.message}`);
+    if (op) {
+      updateOperationProgress(op, 0, 1, `Failed: ${error.message}`);
+      setTimeout(() => hideOperationProgress(op), 1800);
+    }
+    if (!silent) toast(`Chroma export failed: ${error.message}`);
     return null;
   }
+}
+// Records/Works read from the browser-local JSONL workspace, not the corpus
+// DB directly; without this, a freshly built corpus looks empty everywhere
+// until someone finds "Open in Records" on the Vector Stores page. Loads the
+// active (or largest) corpus collection into the workspace once, quietly, the
+// first time an admin opens a workspace view with nothing loaded yet.
+let corpusWorkspaceAutoLoadAttempted = false;
+async function ensureCorpusWorkspaceLoaded() {
+  if (isResearcher() || state.files.length || corpusWorkspaceAutoLoadAttempted) return;
+  corpusWorkspaceAutoLoadAttempted = true;
+  try {
+    if (!state.stores.length) await refreshStores();
+  } catch {
+    return;
+  }
+  const stores = recordStores().filter((item) => Number(item.count || 0) > 0);
+  if (!stores.length) return;
+  const target =
+    stores.find((item) => item.name === state.activeStore) ||
+    [...stores].sort((a, b) => Number(b.count || 0) - Number(a.count || 0))[0];
+  if (!target) return;
+  state.activeStore = target.name;
+  await exportStoreJsonl({ store: target.name, loadTab: true, navigate: false, silent: true });
 }
 const vectorCollectionBridge = createVectorCollectionBridge({
   state,
@@ -3310,6 +3341,7 @@ export {
   openCollectionCreationWizard,
   upsertRows,
   exportStoreJsonl,
+  ensureCorpusWorkspaceLoaded,
   persistPrefs,
   lookupRecord,
   getCompareLibrary,

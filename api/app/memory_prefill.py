@@ -163,8 +163,16 @@ def prefill_records(
             payload = collection.query(
                 query_embeddings=vectors, n_results=FETCH_K, where=where, include=["metadatas", "distances"],
             )
+            # `x or []` raises on a numpy array (Chroma may return one instead of
+            # a list); check for None explicitly instead.
+            payload_ids = payload.get("ids")
+            payload_metas = payload.get("metadatas")
+            payload_distances = payload.get("distances")
             for text, ids, metas, distances in zip(
-                batch, payload.get("ids") or [], payload.get("metadatas") or [], payload.get("distances") or [],
+                batch,
+                payload_ids if payload_ids is not None else [],
+                payload_metas if payload_metas is not None else [],
+                payload_distances if payload_distances is not None else [],
             ):
                 for exemplar_id, meta, distance in zip(ids, metas, distances):
                     if not isinstance(meta, dict):

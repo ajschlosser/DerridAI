@@ -28,7 +28,7 @@ type AnswerBlock = {
   items?: string[];
 };
 function cleanInline(value: string) {
-  return value.replace(/^\*\*(.+)\*\*$/, "$1").trim();
+  return value.replace(/^\*\*(.+?)\*\*$/, "$1").trim();
 }
 function parseBodyBlock(value: string): AnswerBlock[] {
   const block = value.trim();
@@ -63,21 +63,37 @@ const answerBlocks = computed<AnswerBlock[]>(() => {
   return output;
 });
 
-type TextSegment = { text: string; evidenceIndex?: number };
+type TextSegment = { text: string; evidenceIndex?: number; bold?: boolean };
+// Non-greedy, order-preserving split of "**bold**" spans so bold emphasis can
+// never swallow text past its own closing marker (e.g. across a citation or
+// into the rest of the paragraph).
+function splitBold(text: string): TextSegment[] {
+  const segments: TextSegment[] = [];
+  const pattern = /\*\*(.+?)\*\*/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(text))) {
+    if (match.index > lastIndex) segments.push({ text: text.slice(lastIndex, match.index) });
+    if (match[1]) segments.push({ text: match[1], bold: true });
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) segments.push({ text: text.slice(lastIndex) });
+  return segments.length ? segments : [{ text }];
+}
 function citedSegments(value: string): TextSegment[] {
   const citations = (props.result?.evidence || [])
     .map((item, index) => ({ citation: String(item.inline_citation || "").trim(), index }))
     .filter((item) => item.citation)
     .sort((a, b) => b.citation.length - a.citation.length);
-  if (!citations.length) return [{ text: value }];
+  if (!citations.length) return splitBold(value);
   const escaped = citations.map((item) => item.citation.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
   const pattern = new RegExp(`(${escaped.join("|")})`, "g");
   return value
     .split(pattern)
     .filter(Boolean)
-    .map((text) => {
+    .flatMap((text) => {
       const match = citations.find((item) => item.citation === text);
-      return match ? { text, evidenceIndex: match.index } : { text };
+      return match ? [{ text, evidenceIndex: match.index }] : splitBold(text);
     });
 }
 const runDetail = computed(() =>
@@ -138,6 +154,7 @@ const statusLabel = computed(() => {
                   @click="emit('evidence', segment.evidenceIndex)"
                 >
                   {{ segment.text }}</button
+                ><strong v-else-if="segment.bold">{{ segment.text }}</strong
                 ><template v-else>{{ segment.text }}</template></template
               >
             </li>
@@ -153,6 +170,7 @@ const statusLabel = computed(() => {
                   @click="emit('evidence', segment.evidenceIndex)"
                 >
                   {{ segment.text }}</button
+                ><strong v-else-if="segment.bold">{{ segment.text }}</strong
                 ><template v-else>{{ segment.text }}</template></template
               >
             </li>
@@ -169,6 +187,7 @@ const statusLabel = computed(() => {
                 @click="emit('evidence', segment.evidenceIndex)"
               >
                 {{ segment.text }}</button
+              ><strong v-else-if="segment.bold">{{ segment.text }}</strong
               ><template v-else>{{ segment.text }}</template></template
             >
           </p>
