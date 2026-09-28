@@ -463,6 +463,7 @@ export interface CorpusBuild {
   resumable?: boolean;
   boundary_count?: number;
   boundary_candidate_count?: number;
+  boundary_candidates_completed?: number;
   segmentation_degraded?: boolean;
   segmentation_failed_windows?: number;
   segmentation_total_windows?: number;
