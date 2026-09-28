@@ -12,6 +12,7 @@ sys.modules.setdefault("chromadb", types.SimpleNamespace())
 
 from app.rag import (
     evidence_sufficiency_issues,
+    partition_sufficient_records,
     extract_evidence_ids,
     strip_evidence_markers,
 )
@@ -53,3 +54,14 @@ def test_evidence_marker_parser_matches_all_rendered_citation_forms():
     assert extract_evidence_ids(text) == ["E0", "E1", "E2", "E3", "E4", "E5", "E6", "E7"]
     stripped = strip_evidence_markers("A claim [[E0, E2]].")
     assert stripped == "A claim."
+
+
+def test_partition_excludes_only_provenance_incomplete_records():
+    complete = {"record": {
+        "record_id": "r1", "work": "Of Grammatology",
+        "document_author": "Jacques Derrida", "text": "Il n'y a pas de hors-texte.",
+    }}
+    authorless = {"record": {"record_id": "r2", "work": "Anonymous gloss", "text": "Unattributed."}}
+    kept, excluded = partition_sufficient_records([authorless, complete])
+    assert [item["record"]["record_id"] for item in kept] == ["r1"]
+    assert excluded == [{"record_id": "r2", "missing": "document_author, inline_citation"}]
