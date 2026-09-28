@@ -598,6 +598,28 @@ The LLM returns each metadata field (or `null` when unsupported) together with a
 - Each schema field has a stable identity separate from its display name. A deliberate rename can retain that identity, so reviewed precedents continue to belong to the same semantic field. Field-level **Memory & retrieval** settings control whether evidence-bound reviewed values, corrections, and confirmed absences may guide later metadata enrichment. **Maximum precedents** bounds the field's ordinary precedents in the prompt packet and **Maximum corrections** gives reviewed corrections their own quota, so neither crowds out the other; **Minimum similarity** rejects weaker semantic matches. **Prefer precedents that agree on** optionally names other fields (by stable identity): precedents whose reviewed value for those fields equals the current record's reviewed value come first, ones that differ are left out, and a field that is unreviewed on either side is simply not compared. DerridAI assumes nothing about which fields a schema has. Corrections retain the rejected model value as negative evidence, and confirmed absence is reusable only when a reviewer has explicitly bound source evidence to that no-value decision. These controls do not alter the canonical reviewed Record or route metadata exemplars into Research response/claim memory.
 - **Run-specific field guidance** is configured beside schema selection and is saved only with that build. For any field, add an instruction and/or names, titles, concepts, or variants to look for. Exact phrase matches are shown as review cues and passed to the corresponding field group's LLM task; they do not change the schema, restrict the allowed values, or count as evidence that the value applies. The model must still use this record's context and bind evidence where the schema requires it.
 
+### Document Intelligence and relationship maps
+
+The **Enrichment** setup workspace includes **Document intelligence**. It analyzes the complete reviewed document before per-Record metadata calls and makes document-scale entity/coreference/quotation structure available as advisory context.
+
+Choose **Scholarly / non-fiction** for philosophical, critical, historical, and other non-fiction texts. The resulting index combines document-level people/entities with the schema's reviewed or proposed `persons`, `concepts`, `works_referenced`, and `topics`. Choose **Fiction / characters** when person/coreference clusters should be presented as characters. **General** keeps the analysis genre-neutral. **Off** skips whole-document analysis.
+
+**Automatic** uses the isolated BookNLP provider for English when it is configured and available, then falls back to the installed local spaCy analyzer. **BookNLP only** records the analysis as unavailable rather than silently changing providers. A missing Document Intelligence provider never aborts the corpus build. BookNLP is optional and English-only in the current integration; see [DOCUMENT_INTELLIGENCE.md](DOCUMENT_INTELLIGENCE.md) for local model/service setup.
+
+Entity aliases, coreference clusters, quotation-speaker candidates, and optional event output are model-derived navigation/enrichment hints. They do not count as source evidence, do not confirm who holds a proposition, and do not become human-confirmed metadata automatically.
+
+In Record Review, open **Entities & relationships** to inspect the build-wide content map. The panel includes:
+
+- a complete searchable entity/concept index with type, aliases, mention count, and Record coverage;
+- an interactive relationship diagram (bounded to a legible subset of the current filter while the table remains complete);
+- semantic relationships projected from current attribution metadata and its evidence/authority state;
+- observational relationships such as co-occurrence and dialogue proximity, drawn separately because they do not assert friendship, influence, agreement, addressee, or another stronger relation;
+- a node inspector showing aliases and adjacent relationships.
+
+For fiction, the index supplies the requested character list and the graph provides a character network without turning simple proximity into a literary claim. For scholarly/non-fiction text, the index supplies people, concepts, works, topics and other named entities, while existing fields such as `position_holder`, `target`, `stance`, `speaker`, `quoted_speaker`, `quoted_author`, and `quoted_work` contribute evidence-aware semantic edges.
+
+If reviewed text changes after analysis, the panel marks Document Intelligence **stale**. Select **Reanalyse document** to refresh text-bound annotations and the relationship map. Stale document annotations are not used to build the current graph.
+
 Records enriched before this behavior existed are not changed automatically. **Retry metadata** skips completed metadata families by design, so it will not repopulate them. To repopulate an affected record, use **Run metadata enrichment again** (or **Rerun** on a family) and choose **Discourse / attribution**; this clears only LLM-owned values in that family and keeps reviewer-owned, deterministic, and inherited values. Rebuilding also works.
 
 ## Corpus Builder review workspace
