@@ -45,7 +45,7 @@ from .field_assertions import (
     project_record_assertions,
     reset_fields_for_evaluation,
 )
-from .operation_events import note_model_activity
+from .operation_events import note_corpus_generation_progress, note_model_activity
 from .reviewer_context import current_reviewer
 
 
@@ -433,6 +433,93 @@ class BuildLifecycleMixin:
         raise RuntimeError("unreachable")  # pragma: no cover
 
 
+    def _llm_trace_start(
+        self,
+        build_id: str,
+        *,
+        call_id: str,
+        schema_name: str,
+        role: str,
+        attempt: int,
+        provider: str,
+        model: str,
+        prompt: str,
+        response_schema: dict[str, Any],
+        generation: Any,
+        max_tokens: int,
+    ) -> None:
+        """Persist the exact rendered prompt for an administrator-inspectable model call.
+
+        Credentials and connection details are deliberately excluded. The trace is
+        build-local provenance, not canonical scholarly evidence.
+        """
+        if not build_id or not call_id:
+            return
+        generation_payload = (
+            generation.model_dump(mode="json")
+            if hasattr(generation, "model_dump")
+            else {}
+        )
+        entry = {
+            "call_id": call_id,
+            "schema_name": schema_name,
+            "role": role,
+            "attempt": attempt,
+            "provider": provider,
+            "model": model,
+            "prompt": prompt,
+            "response_schema": response_schema,
+            "generation": generation_payload,
+            "max_tokens": max_tokens,
+            "started_at": iso_now(),
+            "status": "running",
+        }
+        with self._lock:
+            trace = self.repo.load_checkpoint(build_id, "llm_trace", [])
+            if not isinstance(trace, list):
+                trace = []
+            trace.append(entry)
+            # Keep enough history for book-scale builds without allowing an
+            # accidentally unbounded diagnostic checkpoint.
+            self.repo.save_checkpoint(build_id, "llm_trace", trace[-250:])
+
+
+    def _llm_trace_finish(
+        self,
+        build_id: str,
+        call_id: str,
+        *,
+        raw_response: str | None = None,
+        validated_response: dict[str, Any] | None = None,
+        error: str | None = None,
+    ) -> None:
+        if not build_id or not call_id:
+            return
+        with self._lock:
+            trace = self.repo.load_checkpoint(build_id, "llm_trace", [])
+            if not isinstance(trace, list):
+                return
+            for entry in reversed(trace):
+                if isinstance(entry, dict) and entry.get("call_id") == call_id:
+                    if raw_response is not None:
+                        entry["raw_response"] = raw_response
+                    if validated_response is not None:
+                        entry["validated_response"] = validated_response
+                    entry["error"] = error
+                    entry["status"] = "failed" if error else "complete"
+                    entry["finished_at"] = iso_now()
+                    break
+            self.repo.save_checkpoint(build_id, "llm_trace", trace)
+
+
+    def llm_trace(self, build_id: str) -> dict[str, Any]:
+        """Return build-local prompt/output provenance for the administrator UI."""
+        self.repo.get_build(build_id)
+        trace = self.repo.load_checkpoint(build_id, "llm_trace", [])
+        items = trace if isinstance(trace, list) else []
+        return {"items": items, "total": len(items)}
+
+
     def _note_llm_call_start(self, build_id: str, task: str, provider: str, model: str, base_url: str) -> int:
         token = time.monotonic_ns()
         if build_id:
@@ -447,21 +534,96 @@ class BuildLifecycleMixin:
                     "provider": provider,
                     "model": model,
                     "base_url": base_url,
+                    "draft": "",
+                    "draft_seq": 0,
+                    "draft_gap": False,
                 }
                 calls = list(self._llm_inflight[build_id].values())
             note_model_activity(build_id, calls)
         return token
 
 
+    def _note_llm_call_delta(self, build_id: str, token: int, piece: str) -> None:
+        """Retain a bounded live draft for authenticated inspection and emit text-free progress."""
+        if not build_id or not piece:
+            return
+        call_id = f"{build_id}:{token}"
+        seq = 0
+        chars = 0
+        gap = False
+        with self._lock:
+            calls = self._llm_inflight.get(build_id)
+            call = calls.get(token) if calls else None
+            if call is None:
+                return
+            current = str(call.get("draft") or "")
+            room = max(0, 64_000 - len(current))
+            addition = piece if len(piece) <= room else piece[:room]
+            call["draft"] = current + addition
+            call["draft_gap"] = bool(call.get("draft_gap")) or len(addition) < len(piece)
+            call["draft_seq"] = int(call.get("draft_seq") or 0) + 1
+            seq = int(call["draft_seq"])
+            chars = len(str(call.get("draft") or ""))
+            gap = bool(call.get("draft_gap"))
+        note_corpus_generation_progress(
+            build_id,
+            call_id,
+            seq=seq,
+            chars=chars,
+            gap=gap,
+        )
+
+
+    def llm_live_output(self, build_id: str) -> dict[str, Any]:
+        """Current unvalidated drafts for the administrator Model activity inspector.
+
+        This is intentionally a REST-only read. The ordinary model-activity and
+        WebSocket summaries remain text-free so source-derived model output never
+        leaks through the global operations/realtime plane.
+        """
+        self.repo.get_build(build_id)
+        with self._lock:
+            calls = [
+                {
+                    "call_id": f"{build_id}:{token}",
+                    "task": call.get("task"),
+                    "provider": call.get("provider"),
+                    "model": call.get("model"),
+                    "seq": int(call.get("draft_seq") or 0),
+                    "text": str(call.get("draft") or ""),
+                    "gap": bool(call.get("draft_gap")),
+                }
+                for token, call in (self._llm_inflight.get(build_id) or {}).items()
+            ]
+        return {"items": calls, "total": len(calls)}
+
     def _note_llm_call_end(self, build_id: str, token: int) -> None:
         if build_id:
+            final_progress: tuple[int, int, bool] | None = None
             with self._lock:
                 calls = self._llm_inflight.get(build_id)
                 if calls is not None:
+                    call = calls.get(token)
+                    if call is not None:
+                        final_progress = (
+                            int(call.get("draft_seq") or 0) + 1,
+                            len(str(call.get("draft") or "")),
+                            bool(call.get("draft_gap")),
+                        )
                     calls.pop(token, None)
                     if not calls:
                         self._llm_inflight.pop(build_id, None)
                 remaining = list((self._llm_inflight.get(build_id) or {}).values())
+            if final_progress is not None:
+                seq, chars, gap = final_progress
+                note_corpus_generation_progress(
+                    build_id,
+                    f"{build_id}:{token}",
+                    seq=seq,
+                    chars=chars,
+                    gap=gap,
+                    final=True,
+                )
             note_model_activity(build_id, remaining)
 
 

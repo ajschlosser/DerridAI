@@ -11,7 +11,8 @@ client can resynchronize from REST or GraphQL.
 Every note is bounded. Latest-wins notes (build summaries, model activity,
 activity summaries) keep one entry per resource; discrete notes (per-record
 metadata progress) live in a fixed-size ring that counts what it had to drop;
-generation text is capped per job and marks a gap instead of growing.
+generation text is capped per Research job and marks a gap instead of growing. Corpus
+Builder generation notes contain counters only; raw drafts stay behind authenticated REST.
 """
 from __future__ import annotations
 
@@ -38,6 +39,7 @@ _activity: dict[str, dict[str, Any]] = {}
 _metadata_notes: deque[dict[str, Any]] = deque(maxlen=MAX_METADATA_NOTES)
 _metadata_dropped = 0
 _generation: dict[str, GenerationBuffer] = {}
+_corpus_generation: dict[tuple[str, str], dict[str, Any]] = {}
 
 
 @dataclass
@@ -59,6 +61,7 @@ class Drained:
     metadata: list[dict[str, Any]]
     metadata_dropped: int
     generation: dict[str, GenerationBuffer]
+    corpus_generation: list[dict[str, Any]]
 
 
 def note_corpus_build(summary: dict[str, Any]) -> None:
@@ -158,6 +161,35 @@ def note_generation_delta(job_id: str, text: str, *, owner: str | None) -> None:
         pass
 
 
+def note_corpus_generation_progress(
+    build_id: str,
+    call_id: str,
+    *,
+    seq: int,
+    chars: int,
+    gap: bool = False,
+    final: bool = False,
+) -> None:
+    """Record text-free live progress for one Corpus Builder model call.
+
+    The raw draft is intentionally NOT placed on the realtime plane. An administrator
+    who explicitly opens Model activity reads it through the authenticated REST endpoint.
+    """
+    if not build_id or not call_id:
+        return
+    try:
+        with _lock:
+            _corpus_generation[(str(build_id), str(call_id))] = {
+                "build_id": str(build_id),
+                "call_id": str(call_id),
+                "seq": max(0, int(seq)),
+                "chars": max(0, int(chars)),
+                "gap": bool(gap),
+                "final": bool(final),
+            }
+    except Exception:  # noqa: BLE001, S110 - notifications must never break generation
+        pass
+
 def note_generation_finished(job_id: str, *, owner: str | None) -> None:
     """The draft stream ended (the final answer is then read over REST/GraphQL)."""
     if not job_id:
@@ -183,6 +215,7 @@ def drain() -> Drained:
             metadata=list(_metadata_notes),
             metadata_dropped=_metadata_dropped,
             generation=dict(_generation),
+            corpus_generation=list(_corpus_generation.values()),
         )
         _corpus_builds.clear()
         _model_activity.clear()
@@ -190,4 +223,5 @@ def drain() -> Drained:
         _metadata_notes.clear()
         _metadata_dropped = 0
         _generation.clear()
+        _corpus_generation.clear()
     return drained

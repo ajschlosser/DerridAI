@@ -81,23 +81,43 @@ def test_drain_returns_the_documented_dataclass_shape_and_clears_state():
     operation_events.note_activity("gutenberg", {"ready": True})
     operation_events.note_record_metadata("b1", "r1", "record_started")
     operation_events.note_generation_delta("job-x", "hi", owner="ann")
+    operation_events.note_corpus_generation_progress(
+        "b1", "b1:7", seq=2, chars=42, gap=False, final=False
+    )
 
     drained = operation_events.drain()
 
     assert isinstance(drained, operation_events.Drained)
     assert {f.name for f in dataclasses.fields(drained)} == {
-        "builds", "model_activity", "activity", "metadata", "metadata_dropped", "generation",
+        "builds",
+        "model_activity",
+        "activity",
+        "metadata",
+        "metadata_dropped",
+        "generation",
+        "corpus_generation",
     }
     assert drained.builds == {"b1": {"id": "b1", "status": "running"}}
     assert drained.model_activity == {"b1": {"calls_in_flight": 1, "task": "t", "provider": "p", "model": "m"}}
     assert drained.activity == {"gutenberg": {"ready": True}}
     assert len(drained.metadata) == 1 and drained.metadata_dropped == 0
     assert drained.generation["job-x"].owner == "ann"
+    assert drained.corpus_generation == [
+        {
+            "build_id": "b1",
+            "call_id": "b1:7",
+            "seq": 2,
+            "chars": 42,
+            "gap": False,
+            "final": False,
+        }
+    ]
 
     # Draining clears every bucket for the next observer tick.
     second = operation_events.drain()
     assert second.builds == {} and second.model_activity == {} and second.activity == {}
     assert second.metadata == [] and second.metadata_dropped == 0 and second.generation == {}
+    assert second.corpus_generation == []
 
 
 # -- operation_events: generation buffering, cap, gap -------------------------------------------
@@ -274,6 +294,46 @@ def test_llm_token_owner_audience_excludes_other_users_and_wrong_topics():
     assert owner_on_wrong_topic.may_receive(token_event) is False  # only published on job:<id>
 
 
+# -- realtime/events.py: observer -> corpus.llm_progress ---------------------------------------
+
+
+def test_corpus_llm_progress_is_text_free_and_build_scoped():
+    broker = EventBroker()
+    seen = _collect(broker)
+    observer = RealtimeObserver(broker, managers=lambda: [], interval=0.01)
+    observer.tick()
+
+    operation_events.note_corpus_generation_progress(
+        "build-llm",
+        "build-llm:4",
+        seq=3,
+        chars=1234,
+        gap=False,
+        final=False,
+    )
+    observer.tick()
+
+    progress = [event for event in seen if event.type == "corpus.llm_progress"]
+    assert len(progress) == 1
+    event = progress[0]
+    assert event.topics == ("corpus-build:build-llm",)
+    assert event.audience == Audience(admin_only=True)
+    assert event.resource_type == "corpus_build" and event.resource_id == "build-llm"
+    assert event.payload == {
+        "generation": {
+            "call_id": "build-llm:4",
+            "seq": 3,
+            "chars": 1234,
+            "gap": False,
+            "final": False,
+        }
+    }
+    payload_text = str(event.payload)
+    assert "prompt" not in payload_text
+    assert "delta" not in payload_text
+    assert "source" not in payload_text
+
+
 # -- realtime/events.py: observer -> corpus.record_* ------------------------------------------
 
 
@@ -342,7 +402,11 @@ def test_activity_changed_deduplicates_identical_summaries():
 
 def test_ephemeral_event_types_are_exactly_the_documented_set():
     assert EPHEMERAL_EVENT_TYPES == frozenset({
-        "llm.token", "corpus.record_started", "corpus.field_checked", "corpus.record_completed",
+        "llm.token",
+        "corpus.llm_progress",
+        "corpus.record_started",
+        "corpus.field_checked",
+        "corpus.record_completed",
     })
 
 

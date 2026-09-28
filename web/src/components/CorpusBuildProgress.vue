@@ -34,6 +34,14 @@ const props = defineProps<{
   } | null;
   unresolvedCount?: number;
   metadataOperation?: CorpusBuild["metadata_operation"] | null;
+  metadataActiveTasks?: Array<{ record_id?: string; task?: string; started_at?: string | null }>;
+  metadataTasksTotal?: number;
+  metadataTasksCompleted?: number;
+  metadataTasksFailed?: number;
+  metadataTasksSkipped?: number;
+  metadataTasksRunning?: number;
+  metadataTasksQueued?: number;
+  boundaryCandidatesCompleted?: number;
   segmentationTelemetry?: CorpusSegmentationTelemetryData | null;
 }>();
 const i18n = useI18nStore();
@@ -84,18 +92,24 @@ const validationCitationIssues = computed(() =>
 const stageExplanation = computed(() => {
   const stage = String(props.stage || "");
   const map: Record<string, string> = {
-    structure: "Reading the PDF and identifying document-level structure and bibliography.",
-    document_review: "Finalizing document-level metadata automatically before segmentation.",
+    preparing: "Preparing the durable build workspace and restoring any valid checkpoints.",
+    resuming: "Restoring the last valid checkpoint before continuing the interrupted build.",
+    structure: "Reading source structure and establishing document-level metadata.",
+    document_review: "Finalizing document-level metadata before segmentation.",
+    constructing_topology:
+      "Preparing conserved SourceUnits and the semantic topology used to construct Records.",
     segmenting:
-      "Generating plausible boundary candidates deterministically and asking the LLM only a budgeted set of small local split/keep questions.",
+      "Generating boundary candidates deterministically and asking the LLM only bounded local split/keep questions where needed.",
     constructing_records:
-      "Constructing reviewable records from the conserved source topology. Advisory suspicious-boundary checks no longer block this step.",
+      "Constructing reviewable Records from conserved SourceUnits, validating topology, indexing source units, and applying deterministic cleanup.",
     document_intelligence:
       "Analysing the complete reviewed document for derived entity, coreference, and quotation structure before record-level metadata enrichment.",
-    reconciling: "Finalizing topology for a build created by an older pipeline.",
+    reconciling: "Finalizing topology from an earlier compatible build checkpoint.",
     enriching:
-      "Enriching each constructed record with discourse, quotation, and indexing metadata. Source text and boundaries are already preserved.",
-    review: "Automated processing is complete. Review the proposed records.",
+      "Enriching each constructed Record with discourse, quotation, and indexing metadata. Source text and boundaries are already preserved.",
+    finalizing_review:
+      "Revalidating the completed build, updating review queues, and preparing the human-review workspace.",
+    review: "Automated processing is complete. Review the proposed Records.",
     ready: "All quality gates have passed. The corpus is ready to publish.",
     published: "The reviewed corpus has been finalized as JSONL and is ready to download.",
   };
@@ -106,11 +120,14 @@ const stageExplanation = computed(() => {
 });
 const nextStage = computed(() => {
   const order = [
+    "preparing",
     "structure",
+    "document_review",
     "segmenting",
     "constructing_records",
     "document_intelligence",
     "enriching",
+    "finalizing_review",
     "review",
     "ready",
     "published",
@@ -119,6 +136,55 @@ const nextStage = computed(() => {
   return i >= 0 && i < order.length - 1
     ? i18n.t(`pdf_corpus.stage.${order[i + 1]}`, order[i + 1].replace(/_/g, " "))
     : "";
+});
+const currentOperation = computed(() => {
+  const stage = String(props.stage || "");
+  if (stage === "segmenting") {
+    const total = Number(props.segmentationTelemetry?.candidateCount || 0);
+    const completed = Number(props.boundaryCandidatesCompleted || 0);
+    if (total > 0) {
+      return i18n.tf("pdf_corpus.progress.boundary_candidates", {
+        completed: Math.min(completed, total),
+        total,
+      });
+    }
+  }
+  if (stage === "constructing_records") {
+    return i18n.t("pdf_corpus.progress.constructing_detail");
+  }
+  if (stage === "document_intelligence") {
+    return i18n.t("pdf_corpus.progress.document_intelligence_detail");
+  }
+  if (stage === "enriching") {
+    const active = props.metadataActiveTasks || [];
+    const total = Number(props.metadataTasksTotal || 0);
+    const settled =
+      Number(props.metadataTasksCompleted || 0) +
+      Number(props.metadataTasksFailed || 0) +
+      Number(props.metadataTasksSkipped || 0);
+    if (active.length) {
+      const first = active[0];
+      return i18n.tf("pdf_corpus.progress.metadata_active", {
+        record: first.record_id || "—",
+        family: first.task || "metadata",
+        active: Number(props.metadataTasksRunning || active.length),
+        settled,
+        total,
+      });
+    }
+    if (total > 0) {
+      return i18n.tf("pdf_corpus.progress.metadata_queue", {
+        settled,
+        total,
+        running: Number(props.metadataTasksRunning || 0),
+        queued: Number(props.metadataTasksQueued || 0),
+      });
+    }
+  }
+  if (stage === "finalizing_review") {
+    return i18n.t("pdf_corpus.progress.finalizing_review_detail");
+  }
+  return "";
 });
 
 function acknowledgement(warning: string) {
@@ -184,6 +250,10 @@ function formatWhen(value?: string) {
       <b>{{ stageLabel() }}</b
       ><span>{{ stageExplanation }}</span
       ><small v-if="nextStage">{{ i18n.t("pdf_corpus.next_stage") }}: {{ nextStage }}</small>
+    </div>
+    <div v-if="currentOperation" class="current-operation" role="status">
+      <span>{{ i18n.t("pdf_corpus.progress.current_operation") }}</span>
+      <b>{{ currentOperation }}</b>
     </div>
     <CorpusSegmentationTelemetry
       v-if="props.segmentationTelemetry"
@@ -313,6 +383,25 @@ function formatWhen(value?: string) {
   color: var(--muted);
   white-space: nowrap;
 }
+.current-operation {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 8px 12px;
+  align-items: baseline;
+  padding: 9px 10px;
+  border: 1px solid var(--tone-info-border);
+  border-radius: 8px;
+  background: var(--tone-info-bg);
+  color: var(--tone-info-fg);
+  font-size: 0.8125rem;
+}
+.current-operation span {
+  font-weight: 600;
+}
+.current-operation b {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .unresolved-line {
   padding: 7px 9px;
   border-radius: 8px;
@@ -385,6 +474,15 @@ function formatWhen(value?: string) {
 .validation-strip.invalid {
   background: var(--tone-warn-bg);
   color: var(--tone-warn-fg);
+}
+@media (max-width: 700px) {
+  .stage-explanation,
+  .current-operation {
+    grid-template-columns: 1fr;
+  }
+  .stage-explanation small {
+    white-space: normal;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .progress-track span {

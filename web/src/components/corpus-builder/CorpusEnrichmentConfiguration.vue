@@ -16,6 +16,7 @@ const props = defineProps<{
   defaultProfileId: string;
   selectedProviderLabel: string;
   selectedProfileModel: string;
+  mediaKind?: string;
   disabled?: boolean;
 }>();
 const emit = defineEmits<{ manageProviders: [] }>();
@@ -229,6 +230,7 @@ const advancedOpen = ref(false);
         <CorpusTextNoiseSettings
           :threshold="noiseUnusableThreshold"
           :llm-assist="llmAssessTextNoise"
+          :media-kind="props.mediaKind || ''"
           :disabled="props.disabled"
           @update:threshold="noiseUnusableThreshold = $event"
           @update:llm-assist="llmAssessTextNoise = $event"

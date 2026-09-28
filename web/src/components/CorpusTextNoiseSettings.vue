@@ -1,10 +1,19 @@
 <script setup lang="ts">
-import { useId } from "vue";
+import { computed, useId } from "vue";
 import { useI18nStore } from "../stores/i18n";
 
-withDefaults(defineProps<{ threshold: number; llmAssist: boolean; disabled?: boolean }>(), {
-  disabled: false,
-});
+const props = withDefaults(
+  defineProps<{
+    threshold: number;
+    llmAssist: boolean;
+    mediaKind?: string;
+    disabled?: boolean;
+  }>(),
+  {
+    mediaKind: "",
+    disabled: false,
+  },
+);
 const emit = defineEmits<{
   "update:threshold": [value: number];
   "update:llmAssist": [value: boolean];
@@ -12,6 +21,7 @@ const emit = defineEmits<{
 const i18n = useI18nStore();
 const id = useId();
 const percent = (value: number) => `${Math.round(value)}%`;
+const supportsLlmSecondRead = computed(() => !props.mediaKind || props.mediaKind === "pdf");
 </script>
 
 <template>
@@ -41,7 +51,7 @@ const percent = (value: number) => `${Math.round(value)}%`;
       />
       <small>{{ i18n.t("pdf_corpus.text_noise.threshold_help") }}</small>
     </label>
-    <label class="noise-check">
+    <label v-if="supportsLlmSecondRead" class="noise-check">
       <input
         type="checkbox"
         :checked="llmAssist"
@@ -52,6 +62,9 @@ const percent = (value: number) => `${Math.round(value)}%`;
         <small>{{ i18n.t("pdf_corpus.text_noise.llm_help") }}</small>
       </span>
     </label>
+    <p v-else class="format-note">
+      {{ i18n.t("pdf_corpus.text_noise.llm_pdf_only") }}
+    </p>
   </fieldset>
 </template>
 
@@ -72,7 +85,8 @@ legend {
 }
 p,
 .noise-field small,
-.noise-check small {
+.noise-check small,
+.format-note {
   margin: 0;
   font-size: 0.8125rem;
   line-height: 1.45;

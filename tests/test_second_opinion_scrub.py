@@ -213,6 +213,9 @@ CARRIES_RECORDS = {
     # Kept precedents are re-verified through _editorial_memory for the current reviewer.
     ("GET", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/field-precedents"),
     # Validated Research claims only; no field values of the record or its neighbours.
+    # Administrator-only model diagnostics carry source/model text derived from Records.
+    ("GET", "/api/pdf/corpus-builds/{build_id}/llm-live-output"),
+    ("GET", "/api/pdf/corpus-builds/{build_id}/llm-trace"),
     ("GET", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/research-claims"),
     ("GET", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/preview"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/viewed"),

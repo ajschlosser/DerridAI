@@ -11,6 +11,9 @@ const props = withDefaults(
     status?: string;
     recordCount?: number;
     acceptedCount?: number;
+    workspace?: "setup" | "build" | "review";
+    canBuild?: boolean;
+    canReview?: boolean;
     sticky?: boolean;
   }>(),
   {
@@ -21,10 +24,14 @@ const props = withDefaults(
     status: "",
     recordCount: 0,
     acceptedCount: 0,
+    workspace: "setup",
+    canBuild: false,
+    canReview: false,
     sticky: true,
   },
 );
 
+const emit = defineEmits<{ workspace: [value: "setup" | "build" | "review"] }>();
 const i18n = useI18nStore();
 const contextual = computed(() => Boolean(props.sourceFilename || props.buildId));
 const lifecycleLabel = computed(() => {
@@ -61,6 +68,34 @@ const progressLabel = computed(() => {
         </span>
         <span v-else-if="buildId">{{ buildId }}</span>
       </div>
+      <nav class="workspace-mode-nav" :aria-label="i18n.t('pdf_corpus.workspace.navigation')">
+        <button
+          type="button"
+          :aria-pressed="workspace === 'setup'"
+          :class="{ active: workspace === 'setup' }"
+          @click="emit('workspace', 'setup')"
+        >
+          {{ i18n.t("pdf_corpus.workspace.setup") }}
+        </button>
+        <button
+          type="button"
+          :disabled="!canBuild"
+          :aria-pressed="workspace === 'build'"
+          :class="{ active: workspace === 'build' }"
+          @click="emit('workspace', 'build')"
+        >
+          {{ i18n.t("pdf_corpus.workspace.build") }}
+        </button>
+        <button
+          type="button"
+          :disabled="!canReview"
+          :aria-pressed="workspace === 'review'"
+          :class="{ active: workspace === 'review' }"
+          @click="emit('workspace', 'review')"
+        >
+          {{ i18n.t("pdf_corpus.workspace.review") }}
+        </button>
+      </nav>
     </div>
     <div class="corpus-workspace-actions">
       <slot name="actions"></slot>
@@ -144,6 +179,40 @@ const progressLabel = computed(() => {
 .corpus-workspace-context span:last-child {
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: var(--fs-xs);
+}
+.workspace-mode-nav {
+  display: inline-flex;
+  gap: 2px;
+  margin-top: var(--space-2);
+  padding: 3px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-subtle);
+}
+.workspace-mode-nav button {
+  min-height: 34px;
+  padding: 0.35rem 0.75rem;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.workspace-mode-nav button.active {
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+.workspace-mode-nav button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  outline-offset: 1px;
+}
+.workspace-mode-nav button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 .corpus-workspace-actions {
   display: flex;

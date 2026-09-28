@@ -1,6 +1,11 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { apiRequest } from "../http";
-import type { CorpusBuild, DocumentIntelligenceRun, SemanticContentGraph } from "./types";
+import type {
+  CorpusBuild,
+  CorpusLlmTraceEntry,
+  DocumentIntelligenceRun,
+  SemanticContentGraph,
+} from "./types";
 import { LEGACY_CORPUS_BASE, legacyCorpusUrl } from "./compatibility";
 
 export const corpusBuildsApi = {
@@ -12,6 +17,23 @@ export const corpusBuildsApi = {
     ),
   build: (buildId: string) =>
     apiRequest<CorpusBuild>(`${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}`),
+  llmTrace: (buildId: string) =>
+    apiRequest<{ items: CorpusLlmTraceEntry[]; total: number }>(
+      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/llm-trace`,
+    ),
+  llmLiveOutput: (buildId: string) =>
+    apiRequest<{
+      items: Array<{
+        call_id: string;
+        task?: string;
+        provider?: string;
+        model?: string;
+        seq: number;
+        text: string;
+        gap: boolean;
+      }>;
+      total: number;
+    }>(`${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/llm-live-output`),
   semanticContentGraph: (buildId: string) =>
     apiRequest<SemanticContentGraph>(
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/semantic-content-graph`,
