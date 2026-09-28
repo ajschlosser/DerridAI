@@ -1867,7 +1867,8 @@ watch([reviewQueue, recordQuery], () => {
 });
 watch([reviewRequested, reviewQueue], ([requested, queue], [wasRequested, wasQueue]) => {
   if (!hasRecordTopology.value || workspaceMode.value === "review") return;
-  const explicitReviewNavigation = (requested && !wasRequested) || (queue !== "all" && queue !== wasQueue);
+  const explicitReviewNavigation =
+    (requested && !wasRequested) || (queue !== "all" && queue !== wasQueue);
   if (explicitReviewNavigation) void switchWorkspace("review");
 });
 watch(
