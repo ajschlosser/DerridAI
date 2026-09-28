@@ -239,6 +239,42 @@ def test_record_returns_the_full_reviewer_presented_record(build):
     assert record["review_state"] == "accepted"
 
 
+
+def test_reviewer_projection_retains_metadata_evidence_source_unit_bindings(build):
+    """Persisted evidence suggestions remain visible in the reviewer-facing Record projection."""
+    repo, build_id = build
+    records = repo.load_records(build_id)
+    target = next(record for record in records if record["record_id"] == "r3")
+    target["field_assertions"] = {}
+    target["current_field_assertions"] = {}
+    target["metadata_field_status"]["speaker"] = {
+        "status": "unresolved",
+        "method": "llm",
+        "confidence": None,
+        "proposed_value": target["speaker"],
+        "verification_status": "pending_review",
+    }
+    target["source_unit_ids"] = ["u-1"]
+    target["metadata_evidence"] = {
+        "speaker": {
+            "block_ids": ["u-1"],
+            "confidence": None,
+            "reason": "Deterministic fallback suggestion.",
+            "backfilled": True,
+            "method": "deterministic-lexical-v1",
+        }
+    }
+    repo.save_records(build_id, records)
+
+    data = gql(RECORD_QUERY, {"build_id": build_id, "record_id": "r3"}).json()
+    assert "errors" not in data, data
+    presented = data["data"]["corpus_build"]["record"]["review_document"]
+
+    assert presented["source_unit_ids"] == ["u-1"]
+    assert presented["metadata_evidence"]["speaker"]["block_ids"] == ["u-1"]
+    assert presented["metadata_evidence"]["speaker"]["method"] == "deterministic-lexical-v1"
+
+
 def test_record_reads_a_missing_id_as_not_found(build):
     repo, build_id = build
     data = gql(RECORD_QUERY, {"build_id": build_id, "record_id": "nope"}).json()

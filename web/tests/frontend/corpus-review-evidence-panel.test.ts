@@ -143,6 +143,33 @@ describe("Corpus Builder review evidence panel", () => {
     spy.mockRestore();
   });
 
+  it("surfaces semantic retrieval fallback while keeping lexical suggestions usable", async () => {
+    const spy = vi.spyOn(corpusMetadataApi, "suggestEvidence").mockResolvedValue({
+      items: [
+        {
+          block_id: "block-1",
+          reason: "value appears verbatim",
+          method: "deterministic-lexical-v1",
+          score: 1,
+          lexical_score: 1,
+          semantic_score: null,
+          semantic_status: "fallback",
+          semantic_reason: "provider unavailable",
+        },
+      ],
+      status: { semantic: "fallback", reason: "provider unavailable" },
+    });
+    const wrapper = mountPanel({ buildId: "build-1" });
+
+    await wrapper.findAll(".assign-suggest button")[0].trigger("click");
+    await flushPromises();
+
+    expect(wrapper.get(".suggest-note").text()).toContain("provider unavailable");
+    expect(wrapper.get(".suggested-note").text()).toContain("value appears verbatim");
+    expect(wrapper.emitted("toggleEvidence")).toBeUndefined();
+    spy.mockRestore();
+  });
+
   it("offers model suggestions only when a provider request exists", () => {
     const labels = (wrapper: ReturnType<typeof mountPanel>) =>
       wrapper.findAll(".assign-suggest button").map((button) => button.text());
