@@ -5857,10 +5857,7 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'vector.text_field': 'Champ texte',
  'vector.unsynced_changes': 'Modifications locales non synchronisées',
  'vector.unsynced_changes_count': '{count} modifications locales non synchronisées',
- 'vector.unsynced_changes_help': 'Il s’agit des fiches de l’espace de travail modifiées depuis leur dernière '
-                                 'synchronisation confirmée, ainsi que de celles dont DerridAI a confirmé l’absence '
-                                 'dans la collection sélectionnée. Retirer un élément ne masque que sa version '
-                                 'actuelle; une modification ultérieure le remettra dans la file.',
+ 'vector.unsynced_changes_help': 'Cette file repose sur l’état de collection confirmé par le serveur et la révision actuelle de la fiche. Le stockage du navigateur n’est qu’un cache jetable : une nouvelle instance revérifie la présence, et la suppression ne masque que cette révision précise; une modification ultérieure la remet en file.',
  'vector.unsynced_changes_what': 'Que contient cette liste?',
  'vector.workspace_actions': 'Espace des collections',
  'vector.workspace_sections': 'Sections de la collection',
