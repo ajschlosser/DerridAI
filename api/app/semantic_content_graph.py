@@ -192,7 +192,8 @@ class _Graph:
                 "count": 0,
             },
         )
-        row["count"] = int(row.get("count") or 0) + 1
+        prior_count = int(row.get("count") or 0)
+        row["count"] = prior_count + 1
         if record_id and record_id not in row["record_ids"]:
             row["record_ids"].append(record_id)
         for ref in evidence_refs or []:
@@ -201,11 +202,23 @@ class _Graph:
         row["supporting_fields"] = list(
             dict.fromkeys([*row["supporting_fields"], *(supporting_fields or [])])
         )
-        if authority_status in {"human_confirmed", "human_override"}:
-            if row["authority_status"] == "unreviewed":
-                row["authority_status"] = "human_confirmed"
-        elif authority_status == "disputed":
+        # An aggregate edge must never look more authoritative than all of
+        # its supporting occurrences. One unreviewed occurrence therefore
+        # downgrades a previously confirmed aggregate; any dispute dominates.
+        incoming = (
+            "human_confirmed"
+            if authority_status in {"human_confirmed", "human_override"}
+            else authority_status
+        )
+        existing = str(row.get("authority_status") or "unreviewed")
+        if prior_count == 0:
+            row["authority_status"] = incoming
+        elif "disputed" in {existing, incoming}:
             row["authority_status"] = "disputed"
+        elif existing == "human_confirmed" and incoming == "human_confirmed":
+            row["authority_status"] = "human_confirmed"
+        else:
+            row["authority_status"] = "unreviewed"
 
 
 def build_semantic_content_graph(
@@ -281,9 +294,9 @@ def build_semantic_content_graph(
         for alias in node.get("aliases") or []:
             labels_to_nodes[str(alias).casefold()].append(node_id)
 
-    def metadata_node(kind: str, label: str) -> str:
+    def metadata_node(kind: str, label: str, *, prefer_existing: bool = False) -> str:
         existing = labels_to_nodes.get(label.casefold())
-        if existing and kind in {"person", "character"}:
+        if existing and (prefer_existing or kind in {"person", "character"}):
             return existing[0]
         node_id = graph.node(kind, label)
         labels_to_nodes[label.casefold()].append(node_id)
@@ -350,7 +363,11 @@ def build_semantic_content_graph(
             for holder in holders:
                 source = metadata_node("person", holder)
                 for target in targets:
-                    target_id = metadata_node("concept", target)
+                    # target is polymorphic in scholarly prose: it may be a
+                    # person, work, concept, institution, etc. Reuse an entity
+                    # already established by the document/indexing layer before
+                    # falling back to a concept node.
+                    target_id = metadata_node("concept", target, prefer_existing=True)
                     graph.edge(
                         source,
                         predicate,
