@@ -38,7 +38,9 @@ const filteredNodes = computed(() => {
     if (selectedType.value !== "all" && node.type !== selectedType.value) return false;
     if (!query) return true;
     return [node.label, ...(node.aliases || [])].some((value) =>
-      String(value || "").toLocaleLowerCase().includes(query),
+      String(value || "")
+        .toLocaleLowerCase()
+        .includes(query),
     );
   });
 });
@@ -48,8 +50,7 @@ const visibleNodeIds = computed(() => new Set(visibleNodes.value.map((node) => n
 const visibleEdges = computed(() =>
   (graph.value?.edges || [])
     .filter(
-      (edge) =>
-        visibleNodeIds.value.has(edge.source) && visibleNodeIds.value.has(edge.target),
+      (edge) => visibleNodeIds.value.has(edge.source) && visibleNodeIds.value.has(edge.target),
     )
     .slice(0, 90),
 );
@@ -70,10 +71,7 @@ const positionedNodes = computed<PositionedNode[]>(() => {
     return nodes.map((node, row) => ({
       ...node,
       x,
-      y:
-        nodes.length <= 1
-          ? 215
-          : 50 + (row * height) / Math.max(1, nodes.length - 1),
+      y: nodes.length <= 1 ? 215 : 50 + (row * height) / Math.max(1, nodes.length - 1),
       type,
     }));
   });
@@ -86,10 +84,7 @@ const selectedNode = computed(
 const selectedRelations = computed(() => {
   if (!selectedNodeId.value) return [];
   return (graph.value?.edges || [])
-    .filter(
-      (edge) =>
-        edge.source === selectedNodeId.value || edge.target === selectedNodeId.value,
-    )
+    .filter((edge) => edge.source === selectedNodeId.value || edge.target === selectedNodeId.value)
     .slice(0, 16);
 });
 
@@ -108,10 +103,7 @@ async function load() {
     ]);
     graph.value = nextGraph;
     intelligence.value = nextIntelligence;
-    if (
-      selectedNodeId.value &&
-      !nextGraph.nodes.some((node) => node.id === selectedNodeId.value)
-    )
+    if (selectedNodeId.value && !nextGraph.nodes.some((node) => node.id === selectedNodeId.value))
       selectedNodeId.value = "";
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);
@@ -256,8 +248,16 @@ watch(
             </g>
           </svg>
           <div class="graph-legend" aria-hidden="true">
-            <span><i class="legend-line semantic" />{{ i18n.t("pdf_corpus.semantic_graph_semantic") }}</span>
-            <span><i class="legend-line observational" />{{ i18n.t("pdf_corpus.semantic_graph_observational") }}</span>
+            <span
+              ><i class="legend-line semantic" />{{
+                i18n.t("pdf_corpus.semantic_graph_semantic")
+              }}</span
+            >
+            <span
+              ><i class="legend-line observational" />{{
+                i18n.t("pdf_corpus.semantic_graph_observational")
+              }}</span
+            >
           </div>
         </div>
 
@@ -283,8 +283,7 @@ watch(
                   {{
                     graph.nodes.find(
                       (node) =>
-                        node.id ===
-                        (edge.source === selectedNode?.id ? edge.target : edge.source),
+                        node.id === (edge.source === selectedNode?.id ? edge.target : edge.source),
                     )?.label || ""
                   }}
                 </span>
@@ -333,11 +332,7 @@ watch(
             <tbody>
               <tr v-for="node in filteredNodes" :key="node.id">
                 <td>
-                  <button
-                    type="button"
-                    class="entity-link"
-                    @click="selectedNodeId = node.id"
-                  >
+                  <button type="button" class="entity-link" @click="selectedNodeId = node.id">
                     {{ node.label }}
                   </button>
                   <small v-if="node.aliases?.length">{{ node.aliases.join(" · ") }}</small>
