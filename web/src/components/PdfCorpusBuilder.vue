@@ -132,6 +132,9 @@ const {
   recordSizing,
   enrichmentMode,
   semanticIndexing,
+  documentIntelligenceProfile,
+  documentNlpProvider,
+  documentNlpIncludeEvents,
   autoCleanText,
   llmTouchupDuringEnrichment,
   noiseUnusableThreshold,
@@ -725,6 +728,21 @@ function restoreBuilderDraft() {
       enrichmentMode.value = draft.enrichmentMode;
     if (typeof draft.semanticIndexing === "boolean")
       semanticIndexing.value = draft.semanticIndexing;
+    if (
+      draft.documentIntelligenceProfile === "none" ||
+      draft.documentIntelligenceProfile === "general" ||
+      draft.documentIntelligenceProfile === "fiction" ||
+      draft.documentIntelligenceProfile === "scholarly"
+    )
+      documentIntelligenceProfile.value = draft.documentIntelligenceProfile;
+    if (
+      draft.documentNlpProvider === "auto" ||
+      draft.documentNlpProvider === "spacy" ||
+      draft.documentNlpProvider === "booknlp"
+    )
+      documentNlpProvider.value = draft.documentNlpProvider;
+    if (typeof draft.documentNlpIncludeEvents === "boolean")
+      documentNlpIncludeEvents.value = draft.documentNlpIncludeEvents;
     if (typeof draft.autoCleanText === "boolean") autoCleanText.value = draft.autoCleanText;
     if (typeof draft.llmTouchupDuringEnrichment === "boolean")
       llmTouchupDuringEnrichment.value = draft.llmTouchupDuringEnrichment;
@@ -756,6 +774,9 @@ function persistBuilderDraft() {
         maxConcurrentRequests: maxConcurrentRequests.value,
         enrichmentMode: enrichmentMode.value,
         semanticIndexing: semanticIndexing.value,
+        documentIntelligenceProfile: documentIntelligenceProfile.value,
+        documentNlpProvider: documentNlpProvider.value,
+        documentNlpIncludeEvents: documentNlpIncludeEvents.value,
         autoCleanText: autoCleanText.value,
         llmTouchupDuringEnrichment: llmTouchupDuringEnrichment.value,
         noiseUnusableThreshold: noiseUnusableThreshold.value,
@@ -1923,6 +1944,9 @@ watch(
     maxConcurrentRequests,
     enrichmentMode,
     semanticIndexing,
+    documentIntelligenceProfile,
+    documentNlpProvider,
+    documentNlpIncludeEvents,
     autoCleanText,
     llmTouchupDuringEnrichment,
     noiseUnusableThreshold,
@@ -2235,6 +2259,9 @@ defineExpose({
         :selected-profile-model="selectedProfileModel"
         :enrichment-mode="enrichmentMode"
         :semantic-indexing="semanticIndexing"
+        :document-intelligence-profile="documentIntelligenceProfile"
+        :document-nlp-provider="documentNlpProvider"
+        :document-nlp-include-events="documentNlpIncludeEvents"
         :auto-clean-text="autoCleanText"
         :llm-touchup-during-enrichment="llmTouchupDuringEnrichment"
         :noise-unusable-threshold="noiseUnusableThreshold"
@@ -2248,6 +2275,9 @@ defineExpose({
         @update:selected-review-provider-id="selectedReviewProviderId = $event"
         @update:enrichment-mode="enrichmentMode = $event"
         @update:semantic-indexing="semanticIndexing = $event"
+        @update:document-intelligence-profile="documentIntelligenceProfile = $event"
+        @update:document-nlp-provider="documentNlpProvider = $event"
+        @update:document-nlp-include-events="documentNlpIncludeEvents = $event"
         @update:auto-clean-text="autoCleanText = $event"
         @update:llm-touchup-during-enrichment="llmTouchupDuringEnrichment = $event"
         @update:noise-unusable-threshold="noiseUnusableThreshold = $event"
