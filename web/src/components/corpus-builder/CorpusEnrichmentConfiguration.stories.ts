@@ -1,4 +1,5 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */\nimport type { Meta, StoryObj } from "@storybook/vue3-vite";
+/* Copyright 2026 Aaron John Schlosser, PhD. */
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import CorpusEnrichmentConfiguration from "./CorpusEnrichmentConfiguration.vue";
 
 const profiles = [
