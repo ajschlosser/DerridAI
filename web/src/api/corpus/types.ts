@@ -226,6 +226,12 @@ export interface DocumentIntelligenceRun {
   quotations?: Array<Record<string, unknown>>;
 }
 
+export interface SemanticContentGraphFeature {
+  label: string;
+  count?: number;
+  record_ids?: string[];
+}
+
 export interface SemanticContentGraphNode {
   id: string;
   type: string;
@@ -234,6 +240,12 @@ export interface SemanticContentGraphNode {
   record_ids?: string[];
   mention_count?: number;
   derivation_method?: string;
+  character_profile?: {
+    actions_as_agent?: SemanticContentGraphFeature[];
+    actions_as_patient?: SemanticContentGraphFeature[];
+    possessions?: SemanticContentGraphFeature[];
+    modifiers?: SemanticContentGraphFeature[];
+  };
 }
 
 export interface SemanticContentGraphEdge {
@@ -247,6 +259,12 @@ export interface SemanticContentGraphEdge {
   record_ids?: string[];
   evidence_refs?: Array<Record<string, unknown>>;
   supporting_fields?: string[];
+  observations?: Array<{
+    verb?: string;
+    token_id?: number;
+    record_id?: string;
+    [key: string]: unknown;
+  }>;
   count?: number;
 }
 
