@@ -148,10 +148,8 @@ describe("useCorpusReviewRecords", () => {
     expect(state.selectedRecord.value?.text).toBe("Updated");
   });
 
-  it(
-    "refreshes an already-open Record when enrichment completes without changing its revision",
-    async () => {
-      const state = setup();
+  it("refreshes an open same-revision Record after enrichment", async () => {
+    const state = setup();
     corpusReviewReads.queuePage.mockResolvedValue(page([row("r1", 1)]));
     corpusReviewReads.records
       .mockResolvedValueOnce([
@@ -196,9 +194,9 @@ describe("useCorpusReviewRecords", () => {
     expect(corpusReviewReads.records).toHaveBeenCalledTimes(2);
     expect(state.selectedRecord.value?.record_revision).toBe(1);
     expect(state.selectedRecord.value?.speaker).toBe("Jacques Derrida");
-      expect(state.selectedRecord.value?.metadata_evidence?.speaker?.block_ids).toEqual(["b1"]);
-    },
-  );
+    const speakerEvidence = state.selectedRecord.value?.metadata_evidence?.speaker;
+    expect(speakerEvidence?.block_ids).toEqual(["b1"]);
+  });
 
   it("force-refreshes the selected Record on a reset even when its revision is unchanged", async () => {
     const state = setup();
@@ -237,13 +235,13 @@ describe("useCorpusReviewRecords", () => {
     expect(state.selectedRecord.value?.record_id).toBe("r2");
   });
 
-  it(
-    "does not let an event for the old Record supersede a selection already in flight",
-    async () => {
-      const state = setup();
+  it("does not let an old-Record event supersede a selection in flight", async () => {
+    const state = setup();
     corpusReviewReads.queuePage.mockResolvedValue(page([row("r1"), row("r2")]));
     corpusReviewReads.records.mockResolvedValueOnce([record("r1")]);
-    corpusReviewReads.rows.mockResolvedValueOnce([row("r1", 1, { metadata_llm_processed: true })]);
+    corpusReviewReads.rows.mockResolvedValueOnce([
+      row("r1", 1, { metadata_llm_processed: true }),
+    ]);
 
     await state.reviewRecords.refreshRecords(true);
     expect(state.selectedRecord.value?.record_id).toBe("r1");
@@ -260,9 +258,8 @@ describe("useCorpusReviewRecords", () => {
 
     resolveR2([record("r2")]);
     await selecting;
-      expect(state.selectedRecord.value?.record_id).toBe("r2");
-    },
-  );
+    expect(state.selectedRecord.value?.record_id).toBe("r2");
+  });
 
   it("preserves an active draft across refreshRecords instead of re-reading the server", async () => {
     const state = setup();
