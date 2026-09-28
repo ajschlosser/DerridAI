@@ -340,7 +340,13 @@ class MetadataEnrichmentExecutionMixin:
             "previous_record_tail": previous_text[-1800:] if previous_text else "",
             "next_record_head": next_text[:1800] if next_text else "",
         }
-        source_ids = [str(value) for value in record.get("source_block_ids") or []]
+        # Evidence must follow the current source-unit topology. Structural edits
+        # can retire the original extraction blocks and mint new source-unit ids.
+        source_ids = [
+            str(value)
+            for value in (record.get("source_unit_ids") or record.get("source_block_ids") or [])
+            if str(value)
+        ]
         source_id_json = json.dumps(source_ids, ensure_ascii=False)
         # Semantic records should already be bounded. This is a context-safety
         # guard, not a segmentation rule: no source text is rewritten or split here.
@@ -685,7 +691,11 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
         """
         if evidence_mode(request) == "backfill":
             return ""
-        ids = [str(value) for value in record.get("source_block_ids") or []]
+        ids = [
+            str(value)
+            for value in (record.get("source_unit_ids") or record.get("source_block_ids") or [])
+            if str(value)
+        ]
         blocks = self._evidence_source_blocks(build_id, record, ids)
         if not blocks:
             return ""
@@ -698,13 +708,22 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
         )
 
     def _evidence_source_blocks(self, build_id: str, record: dict[str, Any], source_ids: list[str]) -> list[dict[str, Any]]:
-        """This record's source blocks (with text), for evidence backfill; empty when they cannot be loaded."""
+        """Return current record-owned source units in record order for evidence work.
+
+        _blocks_for resolves both legacy extraction blocks and active source units
+        minted by structural review. This keeps prompt citations, automatic
+        evidence backfill, and review-time suggestions on one topology.
+        """
         if not build_id:
             return []
         try:
-            asset_id = self.repo.get_build(build_id)["asset_id"]
-            wanted = set(source_ids)
-            return [block for block in self.repo.load_blocks(asset_id) if str(block.get("block_id")) in wanted]
+            blocks_by_id = self._blocks_for(build_id)
+            return [
+                blocks_by_id[source_id]
+                for source_id in dict.fromkeys(map(str, source_ids))
+                if source_id in blocks_by_id
+                and str(blocks_by_id[source_id].get("text") or "").strip()
+            ]
         except (KeyError, OSError, ValueError):
             return []
 
