@@ -17,7 +17,9 @@ const phase = computed(() => job.value?.stage || props.capture.phase);
 const done = computed(() => Number(job.value?.completed ?? props.capture.progress?.done ?? 0));
 const total = computed(() => Number(job.value?.total ?? props.capture.progress?.total ?? 0));
 const finished = computed(() =>
-  ["completed", "failed", "cancelled", "canceled"].includes(String(props.capture.status || "")),
+  ["complete", "completed", "partial", "failed", "cancelled", "canceled"].includes(
+    String(props.capture.status || ""),
+  ),
 );
 const progressValue = computed(() =>
   total.value ? Math.min(total.value, Math.max(0, done.value)) : finished.value ? 1 : undefined,
