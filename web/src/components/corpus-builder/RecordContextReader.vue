@@ -29,11 +29,9 @@ const visible = computed(() => ({
 }));
 
 function preview(item: RecordContextItem) {
-  const text = String(item.text || "")
-    .replace(/\s+/g, " ")
-    .trim();
+  const text = String(item.text || "");
   if (expanded.value.has(item.record_id) || text.length <= 150) return text;
-  return `${text.slice(0, 150).trimEnd()}…`;
+  return `${text.slice(0, 150)}…`;
 }
 function toggleExpanded(recordId: string) {
   const next = new Set(expanded.value);
@@ -104,9 +102,18 @@ onBeforeUnmount(() => {
             type="button"
             class="ctx-expand"
             :aria-expanded="expanded.has(item.record_id)"
+            :aria-label="
+              expanded.has(item.record_id)
+                ? i18n.t('pdf_corpus.context_collapse')
+                : i18n.t('pdf_corpus.context_expand')
+            "
             @click.stop="toggleExpanded(item.record_id)"
           >
-            {{ expanded.has(item.record_id) ? i18n.t("ui.collapse") : "…" }}
+            {{
+              expanded.has(item.record_id)
+                ? i18n.t("ui.collapse")
+                : i18n.t("pdf_corpus.context_expand")
+            }}
           </button>
         </p>
       </li>
@@ -131,9 +138,18 @@ onBeforeUnmount(() => {
             type="button"
             class="ctx-expand"
             :aria-expanded="expanded.has(item.record_id)"
+            :aria-label="
+              expanded.has(item.record_id)
+                ? i18n.t('pdf_corpus.context_collapse')
+                : i18n.t('pdf_corpus.context_expand')
+            "
             @click.stop="toggleExpanded(item.record_id)"
           >
-            {{ expanded.has(item.record_id) ? i18n.t("ui.collapse") : "…" }}
+            {{
+              expanded.has(item.record_id)
+                ? i18n.t("ui.collapse")
+                : i18n.t("pdf_corpus.context_expand")
+            }}
           </button>
         </p>
       </li>

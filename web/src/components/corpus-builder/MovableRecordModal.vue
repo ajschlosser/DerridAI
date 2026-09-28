@@ -22,7 +22,8 @@ function beginDrag(event: PointerEvent) {
     top: position.value.y,
   };
   dragging.value = true;
-  (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+  const target = event.currentTarget as HTMLElement;
+  target.setPointerCapture?.(event.pointerId);
 }
 function moveDrag(event: PointerEvent) {
   if (!dragging.value || event.pointerId !== pointerId) return;
@@ -70,7 +71,12 @@ onBeforeUnmount(() => {
         @pointercancel="endDrag"
       >
         <b>{{ props.recordId }}</b>
-        <button type="button" class="btn small" :aria-label="i18n.t('ui.close')" @click="emit('close')">
+        <button
+          type="button"
+          class="btn small"
+          :aria-label="i18n.t('ui.close')"
+          @click="emit('close')"
+        >
           {{ i18n.t("ui.close") }}
         </button>
       </header>
@@ -111,7 +117,9 @@ onBeforeUnmount(() => {
   cursor: move;
   touch-action: none;
 }
-.record-popout-head.dragging { cursor: grabbing; }
+.record-popout-head.dragging {
+  cursor: grabbing;
+}
 .record-popout-body {
   overflow: auto;
   padding: 1.25rem 1.5rem;

@@ -51,12 +51,17 @@ function setup() {
   const selectedProviderId = ref("local");
   const providerProfiles = ref<any[]>([{ id: "local", model: "qwen" }]);
   const queued: Array<(rebase: boolean) => Promise<unknown>> = [];
+  const failures: Array<() => void | Promise<void>> = [];
   const queueRecordRequest = vi.fn(
     (
       _recordId: string | readonly string[],
       _fields: string[],
       request: (rebase: boolean) => Promise<unknown>,
-    ) => queued.push(request),
+      onFailure?: () => void | Promise<void>,
+    ) => {
+      queued.push(request);
+      if (onFailure) failures.push(onFailure);
+    },
   );
   const applyAuthoritativeRecord = vi.fn((record: any, build?: any) => {
     selectedRecord.value = record;
@@ -126,6 +131,7 @@ function setup() {
     reviewInspectorTab,
     selectedPdfPage,
     queued,
+    failures,
     applyAuthoritativeRecord,
   };
 }
@@ -192,6 +198,20 @@ describe("Corpus Builder metadata review", () => {
     );
     // No separate evidence round trip.
     expect(corpusBuilderApi.patchEvidence).not.toHaveBeenCalled();
+  });
+
+  it("keeps the optimistic confirmation pending and refreshes only after failure", async () => {
+    const state = setup();
+    await state.review.resolveMetadataField("target", "Kant");
+
+    expect(state.selectedRecord.value?.target).toBe("Kant");
+    expect(state.review.metadataSavingField.value).toBe("target");
+    expect(state.failures).toHaveLength(1);
+
+    await state.failures[0]();
+
+    expect(state.review.metadataSavingField.value).toBe("");
+    expect(state.review.metadataSavedField.value).toBe("");
   });
 
   it("adds evidence through the shared metadata evidence path", async () => {

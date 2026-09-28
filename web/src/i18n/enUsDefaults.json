@@ -2945,6 +2945,8 @@
   "pdf_corpus.context_before": "Previous records",
   "pdf_corpus.context_after": "Following records",
   "pdf_corpus.context_unavailable": "Surrounding records could not be loaded.",
+  "pdf_corpus.context_expand": "Show full record",
+  "pdf_corpus.context_collapse": "Show less",
   "pdf_corpus.page_abbrev": "p.",
   "pdf_corpus.source_page_detect_llm": "If none are found, ask the AI model",
   "pdf_corpus.source_page_detect_llm_help": "The model only points at candidate lines; its answer must still form a believable page sequence. Uses your selected provider. Turn off to stay fully deterministic.",
