@@ -61,6 +61,177 @@ class SourceBuildReference:
         )
 
 
+@strawberry.type(description="One model artifact used by a Document Intelligence provider.")
+class DocumentIntelligenceArtifact:
+    role: str | None
+    name: str | None
+    sha256: str | None
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> DocumentIntelligenceArtifact:
+        return cls(
+            role=opt_str(payload.get("role")),
+            name=opt_str(payload.get("name")),
+            sha256=opt_str(payload.get("sha256")),
+        )
+
+
+@strawberry.type(description="One Record's offset range in the conserved whole-document analysis text.")
+class DocumentIntelligenceRecordSpan:
+    record_id: str
+    record_revision: int | None
+    start: int | None
+    end: int | None
+    text_sha256: str | None
+    source_unit_ids: list[str]
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> DocumentIntelligenceRecordSpan:
+        return cls(
+            record_id=str(payload.get("record_id") or ""),
+            record_revision=opt_int(payload.get("record_revision")),
+            start=opt_int(payload.get("start")),
+            end=opt_int(payload.get("end")),
+            text_sha256=opt_str(payload.get("text_sha256")),
+            source_unit_ids=str_list(payload.get("source_unit_ids")),
+        )
+
+
+@strawberry.type(description="One normalized entity/coreference cluster from Document Intelligence.")
+class DocumentEntityCluster:
+    cluster_id: str
+    canonical: str
+    aliases: list[str]
+    entity_type: str | None
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> DocumentEntityCluster:
+        return cls(
+            cluster_id=str(payload.get("cluster_id") or ""),
+            canonical=str(payload.get("canonical") or ""),
+            aliases=str_list(payload.get("aliases")),
+            entity_type=opt_str(payload.get("entity_type")),
+        )
+
+
+@strawberry.type(description="One normalized entity mention in conserved whole-document offsets.")
+class DocumentEntityMention:
+    cluster_id: str
+    start_char: int | None
+    end_char: int | None
+    text: str
+    mention_type: str | None
+    entity_type: str | None
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> DocumentEntityMention:
+        return cls(
+            cluster_id=str(payload.get("cluster_id") or ""),
+            start_char=opt_int(payload.get("start_char")),
+            end_char=opt_int(payload.get("end_char")),
+            text=str(payload.get("text") or ""),
+            mention_type=opt_str(payload.get("mention_type")),
+            entity_type=opt_str(payload.get("entity_type")),
+        )
+
+
+@strawberry.type(description="One normalized quotation and its candidate speaker attribution.")
+class DocumentQuotation:
+    start_char: int | None
+    end_char: int | None
+    text: str
+    speaker_cluster_id: str | None
+    speaker_text: str | None
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> DocumentQuotation:
+        return cls(
+            start_char=opt_int(payload.get("start_char")),
+            end_char=opt_int(payload.get("end_char")),
+            text=str(payload.get("text") or ""),
+            speaker_cluster_id=opt_str(payload.get("speaker_cluster_id")),
+            speaker_text=opt_str(payload.get("speaker_text")),
+        )
+
+
+@strawberry.type(
+    description=(
+        "Retained, derived whole-document linguistic analysis. Advisory only: it is not evidence "
+        "and does not make any FieldAssertion authoritative."
+    ),
+)
+class DocumentIntelligenceRun:
+    version: int | None
+    status: str
+    profile: str | None
+    selected_provider: str | None
+    provider: str | None
+    provider_version: str | None
+    model: str | None
+    capabilities: list[str]
+    model_artifacts: list[DocumentIntelligenceArtifact]
+    configuration: JSON
+    text_sha256: str | None
+    current_text_sha256: str | None
+    text_length: int | None
+    stale: bool
+    reason: str | None
+    warnings: list[str]
+    record_spans: list[DocumentIntelligenceRecordSpan]
+    entity_clusters: list[DocumentEntityCluster]
+    entities: list[DocumentEntityMention]
+    quotations: list[DocumentQuotation]
+    characters: JSON
+    events: JSON
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> DocumentIntelligenceRun:
+        return cls(
+            version=opt_int(payload.get("version")),
+            status=str(payload.get("status") or ""),
+            profile=opt_str(payload.get("profile")),
+            selected_provider=opt_str(payload.get("selected_provider")),
+            provider=opt_str(payload.get("provider")),
+            provider_version=opt_str(payload.get("provider_version")),
+            model=opt_str(payload.get("model")),
+            capabilities=str_list(payload.get("capabilities")),
+            model_artifacts=[
+                DocumentIntelligenceArtifact.from_payload(item)
+                for item in payload.get("model_artifacts") or []
+                if isinstance(item, dict)
+            ],
+            configuration=JSON(dict(payload.get("configuration") or {})),
+            text_sha256=opt_str(payload.get("text_sha256")),
+            current_text_sha256=opt_str(payload.get("current_text_sha256")),
+            text_length=opt_int(payload.get("text_length")),
+            stale=bool(payload.get("stale")),
+            reason=opt_str(payload.get("reason")),
+            warnings=str_list(payload.get("warnings")),
+            record_spans=[
+                DocumentIntelligenceRecordSpan.from_payload(item)
+                for item in payload.get("record_spans") or []
+                if isinstance(item, dict)
+            ],
+            entity_clusters=[
+                DocumentEntityCluster.from_payload(item)
+                for item in payload.get("entity_clusters") or []
+                if isinstance(item, dict)
+            ],
+            entities=[
+                DocumentEntityMention.from_payload(item)
+                for item in payload.get("entities") or []
+                if isinstance(item, dict)
+            ],
+            quotations=[
+                DocumentQuotation.from_payload(item)
+                for item in payload.get("quotations") or []
+                if isinstance(item, dict)
+            ],
+            characters=JSON(list(payload.get("characters") or [])),
+            events=JSON(list(payload.get("events") or [])),
+        )
+
+
 @strawberry.type(description="One medium page/layout projection for a SourceDocument.")
 class SourceDocumentPage:
     physical_page: int
