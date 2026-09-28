@@ -38,8 +38,6 @@ describe("SourceInspector extracted-text preview", () => {
         block("b2", "<script>alert('not rendered')</script>"),
       ],
       total: 2,
-      offset: 0,
-      limit: 8,
     });
 
     const wrapper = mount(SourceInspector, { props: { sourceId: "source-1", detail } });
@@ -56,8 +54,6 @@ describe("SourceInspector extracted-text preview", () => {
       vi.spyOn(corpusSourcesApi, "blocks").mockResolvedValue({
         items: [block("b1", `Preview for ${media_kind}`)],
         total: 1,
-        offset: 0,
-        limit: 8,
       });
       const wrapper = mount(SourceInspector, {
         props: { sourceId: "source-1", detail: { ...detail, media_kind } },
