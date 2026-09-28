@@ -163,7 +163,7 @@ function isEdge(field: SchemaField, by: -1 | 1) {
             </tr>
             <template
               v-for="field in section.shown"
-              :key="field.field_id || field.name || field.label"
+              :key="field.field_id || draft.fields.indexOf(field)"
             >
               <tr class="field-row" :class="{ selected: open === field }" @click="toggle(field)">
                 <td>
