@@ -81,10 +81,10 @@ def source_repo(tmp_path, monkeypatch):
     repo = PdfCorpusRepository(tmp_path / "corpus")
     asset = repo.save_asset(
         (
-            "Of Hospitality\n\n"
-            "The threshold is not a simple door.\n\n"
-            "A second paragraph keeps the source unit boundary visible."
-        ).encode(),
+            b"Of Hospitality\n\n"
+            b"The threshold is not a simple door.\n\n"
+            b"A second paragraph keeps the source unit boundary visible."
+        ),
         filename="hospitality.txt",
         catalog_metadata={
             "provider": "gutenberg",
