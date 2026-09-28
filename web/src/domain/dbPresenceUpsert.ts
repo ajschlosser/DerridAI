@@ -297,7 +297,12 @@ export function createDbPresenceUpsert(deps: Deps) {
     const fingerprint = recordFingerprint(row.record);
     const recordId = String(row.record?.record_id || "");
     if (!recordId) {
-      toast(tr("vector.sync_suppression_failed", "Could not save this queue decision; the item remains available."));
+      toast(
+        tr(
+          "vector.sync_suppression_failed",
+          "Could not save this queue decision; the item remains available.",
+        ),
+      );
       return;
     }
     state.upsertIgnored[store][localRecordKey(row.file, row.index)] = fingerprint;
@@ -305,13 +310,20 @@ export function createDbPresenceUpsert(deps: Deps) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ record_id: recordId, fingerprint }),
-    }).then(() => {
-      persistPrefs();
-    }).catch(() => {
-      delete state.upsertIgnored[store][localRecordKey(row.file, row.index)];
-      toast(tr("vector.sync_suppression_failed", "Could not save this queue decision; the item remains available."));
-      persistPrefs();
-    });
+    })
+      .then(() => {
+        persistPrefs();
+      })
+      .catch(() => {
+        delete state.upsertIgnored[store][localRecordKey(row.file, row.index)];
+        toast(
+          tr(
+            "vector.sync_suppression_failed",
+            "Could not save this queue decision; the item remains available.",
+          ),
+        );
+        persistPrefs();
+      });
   }
   async function buildUpsertItems(rows: Any, store: Any, { yieldEvery = 0 } = {}) {
     const idCounts = new Map();
