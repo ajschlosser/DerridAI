@@ -121,14 +121,23 @@ Record-local `document_intelligence` data contains only the compact projection i
 The primary application read interface is GraphQL:
 
 ```graphql
-source_document(source_document_id: String!) {
-  extraction_provenance
-  pages
-  source_units
-}
-
-corpus_build(build_id: String!) {
-  document_intelligence
+query DocumentIntelligence($sourceId: String!, $buildId: String!) {
+  source_document(source_document_id: $sourceId) {
+    extraction_provenance
+    pages {
+      total
+    }
+    source_units(limit: 20) {
+      total
+    }
+  }
+  corpus_build(build_id: $buildId) {
+    document_intelligence {
+      status
+      provider
+      stale
+    }
+  }
 }
 ```
 
