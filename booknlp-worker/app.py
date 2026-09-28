@@ -10,6 +10,7 @@ Record/source identity, evidence, review authority, and semantic interpretation.
 from __future__ import annotations
 
 import csv
+import hashlib
 import importlib.metadata
 import json
 import os
@@ -35,15 +36,14 @@ class AnalyzeRequest(BaseModel):
     include_events: bool = False
 
 
-def _paths(include_events: bool) -> dict[str, str]:
-    required = {
+def _paths(_include_events: bool = False) -> dict[str, str]:
+    # BookNLP's event head is part of the entity tagger model; it does not use a
+    # separate event-model artifact. Keep one artifact contract for both modes.
+    return {
         "entity_model_path": os.environ.get("BOOKNLP_ENTITY_MODEL", ""),
         "coref_model_path": os.environ.get("BOOKNLP_COREF_MODEL", ""),
         "quote_attribution_model_path": os.environ.get("BOOKNLP_QUOTE_MODEL", ""),
     }
-    if include_events:
-        required["event_model_path"] = os.environ.get("BOOKNLP_EVENT_MODEL", "")
-    return required
 
 
 def _missing_models(include_events: bool = False) -> list[str]:
@@ -93,7 +93,14 @@ def _int(row: dict[str, str], *keys: str, default: int = -1) -> int:
     return default
 
 
-def _byte_map(text: str) -> tuple[list[int], dict[int, int]]:
+def _utf8_map(text: str) -> tuple[list[int], dict[int, int]]:
+    """Compatibility map for BookNLP variants that emit true byte offsets.
+
+    BookNLP 1.0.8 names its columns byte_onset/byte_offset but populates them
+    from spaCy token.idx, which is a Python character offset. We therefore use
+    raw character offsets first and only fall back to UTF-8 conversion when an
+    offset lies beyond the character length.
+    """
     boundaries = [0]
     lookup = {0: 0}
     total = 0
@@ -104,7 +111,7 @@ def _byte_map(text: str) -> tuple[list[int], dict[int, int]]:
     return boundaries, lookup
 
 
-def _to_char(offset: int, boundaries: list[int], lookup: dict[int, int]) -> int:
+def _utf8_to_char(offset: int, boundaries: list[int], lookup: dict[int, int]) -> int:
     if offset in lookup:
         return lookup[offset]
     return max(0, bisect_right(boundaries, max(0, offset)) - 1)
@@ -134,10 +141,15 @@ def _token_span(
         ]
     if not selected:
         return -1, -1
-    byte_start = min(_int(row, "byte_onset", "byte_start", default=0) for row in selected)
-    byte_end = max(_int(row, "byte_offset", "byte_end", default=byte_start) for row in selected)
-    start = _to_char(byte_start, boundaries, lookup)
-    end = _to_char(byte_end, boundaries, lookup)
+    raw_start = min(_int(row, "byte_onset", "byte_start", default=0) for row in selected)
+    raw_end = max(_int(row, "byte_offset", "byte_end", default=raw_start) for row in selected)
+    if 0 <= raw_start <= raw_end <= len(text):
+        # BookNLP 1.0.8 writes spaCy character offsets despite the historical
+        # "byte_*" column names.
+        start, end = raw_start, raw_end
+    else:
+        start = _utf8_to_char(raw_start, boundaries, lookup)
+        end = _utf8_to_char(raw_end, boundaries, lookup)
     expected = expected_text.strip()
     if expected:
         broad_start = max(0, start - 2)
@@ -149,36 +161,117 @@ def _token_span(
     return start, max(start, end)
 
 
-def _book_aliases(path: Path) -> dict[str, list[str]]:
+def _artifact_manifest() -> list[dict[str, str]]:
+    artifacts: list[dict[str, str]] = []
+    for role, value in _paths().items():
+        path = Path(value)
+        if not value or not path.is_file():
+            continue
+        digest = hashlib.sha256()
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        artifacts.append(
+            {
+                "role": role,
+                "name": path.name,
+                "sha256": digest.hexdigest(),
+            }
+        )
+    return artifacts
+
+
+def _book_character_data(
+    path: Path,
+    token_rows: list[dict[str, str]],
+    text: str,
+    boundaries: list[int],
+    lookup: dict[int, int],
+) -> list[dict[str, Any]]:
+    """Normalize BookNLP's .book character summaries without gender inference."""
     if not path.is_file():
-        return {}
+        return []
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return {}
+        return []
     characters = payload.get("characters") if isinstance(payload, dict) else None
     if not isinstance(characters, list):
-        return {}
-    out: dict[str, list[str]] = {}
+        return []
+
+    token_by_id = {
+        _int(row, "token_ID_within_document", "tokenId", "token_ID"): row
+        for row in token_rows
+    }
+
+    def syntax_items(raw: Any) -> list[dict[str, Any]]:
+        output: list[dict[str, Any]] = []
+        for item in raw if isinstance(raw, list) else []:
+            if not isinstance(item, dict):
+                continue
+            token_id = _int(item, "i", "token_id")
+            row = token_by_id.get(token_id)
+            if row is None:
+                output.append({"text": str(item.get("w") or ""), "token_id": token_id})
+                continue
+            start, end = _token_span(
+                token_rows,
+                token_id,
+                token_id,
+                text,
+                boundaries,
+                lookup,
+                str(item.get("w") or ""),
+            )
+            output.append(
+                {
+                    "text": str(item.get("w") or row.get("word") or ""),
+                    "lemma": str(row.get("lemma") or ""),
+                    "token_id": token_id,
+                    "start_char": start,
+                    "end_char": end,
+                }
+            )
+        return output
+
+    normalized: list[dict[str, Any]] = []
     for character in characters:
         if not isinstance(character, dict):
             continue
         cid = str(character.get("id") or character.get("char_id") or character.get("coref") or "")
         if not cid:
             continue
-        names: list[str] = []
+        mentions = character.get("mentions")
+        mentions = mentions if isinstance(mentions, dict) else {}
+        aliases: list[str] = []
+        mention_groups: dict[str, list[dict[str, Any]]] = {}
         for key in ("proper", "common", "pronoun"):
-            section = character.get(key)
-            values = section if isinstance(section, list) else []
-            for item in values:
+            values: list[dict[str, Any]] = []
+            for item in mentions.get(key) if isinstance(mentions.get(key), list) else []:
                 if isinstance(item, dict):
-                    value = item.get("phrase") or item.get("text") or item.get("name")
+                    value = str(item.get("n") or item.get("name") or "").strip()
+                    count = int(item.get("c") or item.get("count") or 0)
                 else:
-                    value = item
-                if str(value or "").strip():
-                    names.append(str(value).strip())
-        out[cid] = list(dict.fromkeys(names))
-    return out
+                    value = str(item or "").strip()
+                    count = 0
+                if not value:
+                    continue
+                aliases.append(value)
+                values.append({"text": value, "count": count})
+            mention_groups[key] = values
+        normalized.append(
+            {
+                "cluster_id": cid,
+                "aliases": list(dict.fromkeys(aliases)),
+                "mention_count": int(character.get("count") or 0),
+                "mentions": mention_groups,
+                "actions_as_agent": syntax_items(character.get("agent")),
+                "actions_as_patient": syntax_items(character.get("patient")),
+                "possessions": syntax_items(character.get("poss")),
+                "modifiers": syntax_items(character.get("mod")),
+            }
+        )
+    return normalized
 
 
 @app.get("/health")
@@ -217,8 +310,23 @@ def analyze(body: AnalyzeRequest) -> dict[str, Any]:
         tokens = _rows(out / f"{book_id}.tokens")
         entities_native = _rows(out / f"{book_id}.entities")
         quotes_native = _rows(out / f"{book_id}.quotes")
-        aliases = _book_aliases(out / f"{book_id}.book")
-        boundaries, byte_lookup = _byte_map(body.text)
+        boundaries, byte_lookup = _utf8_map(body.text)
+        characters = _book_character_data(
+            out / f"{book_id}.book",
+            tokens,
+            body.text,
+            boundaries,
+            byte_lookup,
+        )
+        aliases = {
+            str(character.get("cluster_id") or ""): [
+                str(value)
+                for value in (character.get("aliases") or [])
+                if str(value).strip()
+            ]
+            for character in characters
+            if character.get("cluster_id")
+        }
 
         entities: list[dict[str, Any]] = []
         for row in entities_native:
@@ -294,12 +402,44 @@ def analyze(body: AnalyzeRequest) -> dict[str, Any]:
             }
             for cid, values in clusters.items()
         ]
+        events: list[dict[str, Any]] = []
+        if body.include_events:
+            for row in tokens:
+                if str(row.get("event") or "").upper() != "EVENT":
+                    continue
+                token_id = _int(row, "token_ID_within_document", "tokenId", "token_ID")
+                start, end = _token_span(
+                    tokens,
+                    token_id,
+                    token_id,
+                    body.text,
+                    boundaries,
+                    byte_lookup,
+                    str(row.get("word") or ""),
+                )
+                if start < 0 or end <= start:
+                    continue
+                events.append(
+                    {
+                        "token_id": token_id,
+                        "start_char": start,
+                        "end_char": end,
+                        "text": body.text[start:end] or str(row.get("word") or ""),
+                        "lemma": str(row.get("lemma") or ""),
+                    }
+                )
 
         return {
             "status": "ok",
             "provider": "booknlp",
             "provider_version": importlib.metadata.version("booknlp"),
             "model": "custom-approved-artifacts",
+            "model_artifacts": _artifact_manifest(),
+            "configuration": {
+                "pipeline": "entity,quote,coref,event" if body.include_events else "entity,quote,coref",
+                "pronominal_coref_only": True,
+                "profile": body.profile,
+            },
             "capabilities": [
                 "entities",
                 "coreference",
@@ -310,8 +450,6 @@ def analyze(body: AnalyzeRequest) -> dict[str, Any]:
             "entities": entities,
             "entity_clusters": entity_clusters,
             "quotations": quotations,
-            "characters": [
-                {"cluster_id": cid, "aliases": values}
-                for cid, values in aliases.items()
-            ],
+            "characters": characters,
+            "events": events,
         }
