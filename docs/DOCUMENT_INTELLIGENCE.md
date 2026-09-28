@@ -70,7 +70,6 @@ BOOKNLP_QUOTE_MODEL
 Optional:
 
 ```text
-BOOKNLP_EVENT_MODEL
 BOOKNLP_SPACY_MODEL=en_core_web_sm
 DOCUMENT_NLP_TIMEOUT_SECONDS=900
 ```
@@ -101,7 +100,7 @@ Corpus Builder exposes four Document Intelligence profiles:
 
 Provider selection is independent: **Auto**, **local spaCy fallback**, or **BookNLP only**.
 
-BookNLP event annotations are opt-in and experimental. They are not enabled merely because the Fiction profile is selected.
+BookNLP event annotations are opt-in and experimental. BookNLP's event head is supplied by the same approved entity-tagger artifact, so no separate event-model file is required. Events are not enabled merely because the Fiction profile is selected.
 
 ## Normalized annotation state
 
