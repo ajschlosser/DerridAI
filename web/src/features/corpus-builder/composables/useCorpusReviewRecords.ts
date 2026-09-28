@@ -192,9 +192,11 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
   async function refreshRecords(reset = false, preferredId = ""): Promise<void> {
     if (!options.selectedBuildId.value) return;
     if (reset) {
-      // Queue pages and record projections contain server-authoritative review state, including
-      // suppressions. Never let the short-lived GraphQL read cache hide a mutation-triggered reset.
+      // Queue pages and full Record projections contain server-authoritative review state,
+      // including enrichment proposals that may change without advancing RecordRevision.
+      // A reset is therefore an explicit invalidation boundary for both cache layers.
       clearGraphQLReadCache();
+      cache.clear();
       options.recordOffset.value = 0;
     }
     const ticket = latestPage.start();
@@ -244,10 +246,14 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
       if (!record) return;
       const index = queueRows.value.findIndex((row) => row.record_id === record.record_id);
       if (index >= 0) queueRows.value.splice(index, 1, queueRowFromRecord(record));
-      // Do not replace an optimistic/local edit while it is still open.
-      if (record.record_id === options.selectedRecordId.value && options.hasActiveDraft()) return;
+      // Selection changes clear selectedRecord before the new Record arrives, while selectedRecordId
+      // can still point at the old Record. Do not let a late realtime refresh resurrect that old view.
+      const selectedStillOpen =
+        record.record_id === options.selectedRecordId.value &&
+        options.selectedRecord.value?.record_id === record.record_id;
+      if (selectedStillOpen && options.hasActiveDraft()) return;
       cache.set(record.record_id, record);
-      if (record.record_id === options.selectedRecordId.value) options.activateRecord(record);
+      if (selectedStillOpen) options.activateRecord(record);
     } catch (exc) {
       if (!isAbortError(exc)) options.onError(messageOf(exc));
     }

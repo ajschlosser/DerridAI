@@ -69,6 +69,9 @@ const isLlm = computed(
     String(props.status?.derivation_method || "") === "model",
 );
 const isMultiCombobox = computed(() => props.control === "multi-combobox");
+const usesCombobox = computed(() =>
+  ["combobox", "multi-combobox", "text", "number"].includes(String(props.control)),
+);
 const assertionAlternatives = computed<Record<string, unknown>[]>(() =>
   Array.isArray(props.status?.conflicting_assertions)
     ? (props.status?.conflicting_assertions as Record<string, unknown>[])
@@ -546,46 +549,18 @@ const traceRows = computed(() => {
             /><span>{{ i18n.t("ui.no") }}</span></label
           >
         </fieldset>
+        <!-- One combobox serves every free-value role: it wraps and grows for text and lists, and stays a
+             one-line numeric input for numbers. Closed vocabularies keep the select above. -->
         <UiCombobox
-          v-else-if="control === 'combobox'"
-          :model-value="String(draft ?? '')"
-          :options="autocompleteOptions"
-          :recommended="modelSuggestion"
-          :recommended-label="i18n.t('pdf_corpus.model_suggested_short')"
-          :label="fieldLabel"
-          :multiline="true"
-          :selected-label="i18n.t('pdf_corpus.combo_selected')"
-          @update:model-value="
-            (value) => {
-              draft = value;
-              markDirty();
-            }
-          "
-        />
-        <UiCombobox
-          v-else-if="isMultiCombobox"
-          :model-value="String(draft ?? '')"
-          :options="autocompleteOptions"
-          :recommended="modelSuggestion"
-          :recommended-label="i18n.t('pdf_corpus.model_suggested_short')"
-          :label="fieldLabel"
-          :multiple="true"
-          @update:model-value="
-            (value) => {
-              draft = value;
-              markDirty();
-            }
-          "
-        />
-        <UiCombobox
-          v-else-if="control === 'text' || control === 'number'"
+          v-else-if="usesCombobox"
           :model-value="String(draft ?? '')"
           :options="autocompleteOptions"
           :recommended="modelSuggestion"
           :recommended-label="i18n.t('pdf_corpus.model_suggested_short')"
           :type="control === 'number' ? 'number' : 'text'"
           :label="fieldLabel"
-          :multiline="control === 'text'"
+          :multiple="isMultiCombobox"
+          :multiline="control !== 'number'"
           :selected-label="i18n.t('pdf_corpus.combo_selected')"
           @update:model-value="
             (value) => {

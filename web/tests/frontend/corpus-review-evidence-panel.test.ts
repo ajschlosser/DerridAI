@@ -107,7 +107,7 @@ describe("Corpus Builder review evidence panel", () => {
     const buttons = wrapper.findAll(".assign-actions button");
     await buttons[0].trigger("click");
     expect(wrapper.emitted("update:selectedField")?.at(-1)).toEqual(["position_holder"]);
-    await buttons[1].trigger("click");
+    await buttons.find((button) => button.text() === "Done")!.trigger("click");
     expect(wrapper.emitted("update:selectedField")?.at(-1)).toEqual([""]);
   });
 
@@ -139,6 +139,33 @@ describe("Corpus Builder review evidence panel", () => {
 
     expect(spy).toHaveBeenCalledWith("build-1", "record-1", "speaker");
     expect(wrapper.find(".suggested-note").exists()).toBe(true);
+    expect(wrapper.emitted("toggleEvidence")).toBeUndefined();
+    spy.mockRestore();
+  });
+
+  it("surfaces semantic retrieval fallback while keeping lexical suggestions usable", async () => {
+    const spy = vi.spyOn(corpusMetadataApi, "suggestEvidence").mockResolvedValue({
+      items: [
+        {
+          block_id: "block-1",
+          reason: "value appears verbatim",
+          method: "deterministic-lexical-v1",
+          score: 1,
+          lexical_score: 1,
+          semantic_score: null,
+          semantic_status: "fallback",
+          semantic_reason: "provider unavailable",
+        },
+      ],
+      status: { semantic: "fallback", reason: "provider unavailable" },
+    });
+    const wrapper = mountPanel({ buildId: "build-1" });
+
+    await wrapper.findAll(".assign-suggest button")[0].trigger("click");
+    await flushPromises();
+
+    expect(wrapper.get(".suggest-note").text()).toContain("provider unavailable");
+    expect(wrapper.get(".suggested-note").text()).toContain("value appears verbatim");
     expect(wrapper.emitted("toggleEvidence")).toBeUndefined();
     spy.mockRestore();
   });
@@ -185,5 +212,20 @@ describe("Corpus Builder review evidence panel", () => {
     expect(wrapper.text()).not.toContain("Another record's words.");
     expect(wrapper.emitted("toggleEvidence")).toBeUndefined();
     spy.mockRestore();
+  });
+
+  it("cites spans from other records for the selected field and counts them apart", async () => {
+    const wrapper = mountPanel({
+      record: {
+        ...record,
+        metadata_evidence: {
+          speaker: { block_ids: ["block-1"], external_block_ids: ["other-1", "other-2"] },
+        },
+      },
+    });
+    expect(wrapper.get("[data-testid=external-evidence-count]").text()).toContain("2");
+    const browse = wrapper.findAll("button").find((b) => b.text() === "Cite other records…")!;
+    await browse.trigger("click");
+    expect(wrapper.emitted("browseExternal")).toHaveLength(1);
   });
 });

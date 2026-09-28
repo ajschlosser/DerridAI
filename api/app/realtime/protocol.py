@@ -52,6 +52,7 @@ RESOURCE_EVENT_TYPES = frozenset({
     "corpus.record_started",
     "corpus.field_checked",
     "corpus.record_completed",
+    "corpus.llm_progress",
     "llm.token",
     "activity.changed",
 })
@@ -79,6 +80,7 @@ EPHEMERAL_EVENT_TYPES = frozenset({
     "corpus.record_started",
     "corpus.field_checked",
     "corpus.record_completed",
+    "corpus.llm_progress",
 })
 
 CLIENT_MESSAGE_TYPES = frozenset({"subscribe", "unsubscribe", "resync", "ping"})

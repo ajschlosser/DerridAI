@@ -409,6 +409,25 @@ export interface AutonomousReport {
   published?: boolean;
 }
 import type { MetadataSchema } from "../metadataSchemas";
+export interface CorpusLlmTraceEntry {
+  call_id: string;
+  schema_name?: string;
+  role?: string;
+  attempt?: number;
+  provider?: string;
+  model?: string;
+  prompt?: string;
+  response_schema?: Record<string, unknown>;
+  generation?: Record<string, unknown>;
+  max_tokens?: number;
+  started_at?: string;
+  finished_at?: string;
+  status?: "running" | "complete" | "failed" | string;
+  raw_response?: string;
+  validated_response?: Record<string, unknown>;
+  error?: string | null;
+}
+
 export interface CorpusBuild {
   /** The metadata schema this build was started with: its own copy, unaffected by later edits to the saved one. */
   schema?: MetadataSchema | null;
@@ -417,6 +436,7 @@ export interface CorpusBuild {
   document_intelligence?: {
     status?: string;
     profile?: string;
+    selected_provider?: string;
     provider?: string;
     provider_version?: string;
     model?: string;
@@ -432,6 +452,7 @@ export interface CorpusBuild {
       sha256?: string;
     }>;
     warnings?: string[];
+    reason?: string;
     text_sha256?: string;
   };
   semantic_content_graph?: SemanticContentGraph["summary"];
@@ -535,6 +556,7 @@ export interface CorpusBuild {
   resumable?: boolean;
   boundary_count?: number;
   boundary_candidate_count?: number;
+  boundary_candidates_completed?: number;
   segmentation_degraded?: boolean;
   segmentation_failed_windows?: number;
   segmentation_total_windows?: number;
