@@ -205,6 +205,39 @@ describe("useCorpusReviewRecords", () => {
     expect(state.reviewRecords.loadingRecordId.value).toBe("");
   });
 
+  it("refreshes the selected full Record when enrichment completes", async () => {
+    const state = setup();
+    corpusReviewReads.queuePage.mockResolvedValue(page([row("r1", 1)]));
+    corpusReviewReads.records.mockResolvedValueOnce([record("r1", 1)]);
+    await state.reviewRecords.refreshRecords(true);
+
+    corpusReviewReads.records.mockResolvedValueOnce([
+      record("r1", 2, {
+        speaker: "Derrida",
+        metadata_evidence: { speaker: { block_ids: ["b1"] } },
+      }),
+    ]);
+    await state.reviewRecords.refreshRecord("r1");
+
+    expect(state.selectedRecord.value?.record_revision).toBe(2);
+    expect(state.selectedRecord.value?.speaker).toBe("Derrida");
+    expect(state.selectedRecord.value?.metadata_evidence?.speaker?.block_ids).toEqual(["b1"]);
+  });
+
+  it("does not overwrite an active draft during a realtime full-record refresh", async () => {
+    const state = setup();
+    corpusReviewReads.queuePage.mockResolvedValue(page([row("r1", 1)]));
+    corpusReviewReads.records.mockResolvedValueOnce([record("r1", 1)]);
+    await state.reviewRecords.refreshRecords(true);
+    state.selectedRecord.value = { ...state.selectedRecord.value, text: "Local unsaved edit" };
+    state.setActiveDraft(true);
+
+    corpusReviewReads.records.mockResolvedValueOnce([record("r1", 2, { text: "Server update" })]);
+    await state.reviewRecords.refreshRecord("r1");
+
+    expect(state.selectedRecord.value?.text).toBe("Local unsaved edit");
+  });
+
   it("invalidates read projections before a mutation-triggered queue reset", async () => {
     const state = setup();
     corpusReviewReads.queuePage.mockResolvedValue(page([row("r1")]));
