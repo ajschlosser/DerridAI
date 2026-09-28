@@ -73,6 +73,7 @@ _NON_ASSERTION_FIELDS = {
     "semantic_classification_confidence", "attribution_confidence", "extraction_quality",
     "acceptance_blocking_fields", "slice_lineage", "boundary_quality_issues",
     "text_cleanup_status", "text_cleanup_report", "text_touchup_proposal",
+    "nlp_candidates", "document_intelligence",
     "field_assertion_errors",
 }
 
