@@ -13,9 +13,9 @@ const items = ref<CorpusLlmTraceEntry[]>([]);
 const loading = ref(false);
 const error = ref("");
 const open = ref(false);
-const drafts = ref<
-  Record<string, { text: string; gap: boolean; final: boolean; lastSeq: number }>
->({});
+const drafts = ref<Record<string, { text: string; gap: boolean; final: boolean; lastSeq: number }>>(
+  {},
+);
 let unsubscribe: (() => void) | null = null;
 let liveTimer: number | null = null;
 
