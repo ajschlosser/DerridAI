@@ -69,22 +69,19 @@ Ollama `bge-m3:latest`, and retrieval telemetry records the provider and model
 used for each query.
 
 Candidate ordering uses semantic distance with a bounded lexical-overlap
-signal, then the existing diversity selection. This improves resilience when a
-generic phrase is semantically close but lacks the field-specific terms in the
-record. It is intentionally not a cross-encoder: adding one would require
-another model request per candidate and can add material latency on local
-hardware. Query embedding, Chroma search, and selection times are reported
-separately so a deployment can measure that trade-off before enabling a
-cross-encoder.
+signal. When enabled and available, the existing RAG CrossEncoder capability
+can rerank a small, field-balanced top-K candidate set in one batch. The
+metadata-memory path never loads a second model implementation: it uses the
+shared provider/model cache and inference boundary used by RAG. The configured
+top-K is hard-capped, and the existing positive/correction quotas and MMR
+diversity selection still run after reranking.
 
-This is the supported reranking fallback, not a hidden approximation of a
-cross-encoder. Its contract is deterministic for a fixed candidate set:
-semantic similarity supplies the primary score, lexical overlap contributes a
-bounded secondary score, field/match quotas are applied, and MMR limits
-near-duplicate evidence within the packet budget. Retrieval telemetry exposes
-the selected mode and fallback reason, so evaluations can compare latency and
-selection quality before introducing a separately versioned provider-backed
-reranker.
+CrossEncoder use is advisory and fails open. Missing dependencies, model-load
+failures, inference timeouts, malformed/non-finite scores, and disabled
+configuration preserve the semantic-plus-lexical ranking. Retrieval telemetry
+records the configured provider/model, candidate and reranked counts, mode,
+fallback reason when applicable, and timing. The deterministic hybrid fallback
+remains the supported behavior for fixed inputs and existing deployments.
 
 ## Separation from other memory
 

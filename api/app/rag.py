@@ -7,7 +7,6 @@ import math
 import re
 import time
 from collections.abc import Callable, Mapping, Sequence
-from pathlib import Path
 from typing import Any
 
 import httpx
@@ -15,6 +14,7 @@ import httpx
 from .chroma_store import ChromaStore
 from .claim_memory import ClaimMemoryIndex
 from .config import settings
+from .cross_encoder import predict_scores
 from .models import OllamaTouchupOptions, RAGPromptMetadataPolicy, RAGRunRequest
 from .record_types import EvidenceItem, QueryDecomposition, RetrievalCandidate
 from .research_memory import ResponseMemoryIndex, memory_guidance
@@ -47,9 +47,6 @@ Rules:
 - response_language should be "fr" only when the user clearly requests a French answer or writes primarily in French; otherwise "en".
 - Return JSON only.
 """.strip()
-
-_CROSS_ENCODER_CACHE: dict[str, Any] = {}
-
 
 FOCUSED_PROMPT = """
 You are DerridAI, an evidence-grounded scholarly research assistant.
@@ -783,42 +780,26 @@ def _cross_encoder_rerank(
     top_n: int,
     model_name: str,
 ) -> tuple[list[dict[str, Any]], str | None]:
-    try:
-        from sentence_transformers import CrossEncoder
-    except Exception as exc:
-        return _lexical_rerank(query, docs, top_n), (
-            f"Cross-encoder unavailable ({exc}); used lexical/vector fallback."
-        )
-
-    cache_dir = Path(settings.rag_model_cache)
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    try:
-        model = _CROSS_ENCODER_CACHE.get(model_name)
-        if model is None:
-            model = CrossEncoder(
-                model_name,
-                cache_dir=str(cache_dir),
-            )
-            _CROSS_ENCODER_CACHE[model_name] = model
-        pairs = [
-            [query, str(item["record"].get("text") or "")]
+    scores, telemetry = predict_scores(
+        [
+            (query, str(item["record"].get("text") or ""))
             for item in docs
-        ]
-        scores = model.predict(pairs)
-        ranked = []
-        for item, score in zip(docs, scores):
-            row = dict(item)
-            row["rerank_score"] = float(score)
-            ranked.append(row)
-        ranked.sort(
-            key=lambda item: item["rerank_score"],
-            reverse=True,
-        )
-        return ranked[:top_n], None
-    except Exception as exc:
+        ],
+        model_name=model_name,
+        timeout_seconds=settings.ollama_timeout_seconds,
+    )
+    if scores is None:
         return _lexical_rerank(query, docs, top_n), (
-            f"Cross-encoder failed ({exc}); used lexical/vector fallback."
+            f"Cross-encoder fallback ({telemetry.get('fallback_reason')}); "
+            "used lexical/vector fallback."
         )
+    ranked = []
+    for item, score in zip(docs, scores):
+        row = dict(item)
+        row["rerank_score"] = score
+        ranked.append(row)
+    ranked.sort(key=lambda item: item["rerank_score"], reverse=True)
+    return ranked[:top_n], None
 
 
 def _resolve_search_collections(
