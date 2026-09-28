@@ -34,6 +34,8 @@ from ..models import (
     BuildWarningAcknowledgement,
     GutenbergImport,
     MetadataSchemaPreview,
+    PdfAssetLanguagePatch,
+    PdfAssetMetadataPatch,
     PdfCorpusBoundaryAdjudication,
     PdfCorpusBuildCreate,
     PdfCorpusBulkDisposition,
@@ -61,8 +63,6 @@ from ..models import (
     PdfDocumentLayoutPatch,
     PdfLlmRequest,
     PdfPageLabelsPatch,
-    PdfAssetLanguagePatch,
-    PdfAssetMetadataPatch,
     PdfSourceUnitPolicy,
     PdfSourceUrlImport,
 )
