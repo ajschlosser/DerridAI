@@ -35,6 +35,11 @@ def non_admin_route_allowed(role: str, path: str, method: str) -> bool:
     if path == "/api/system/researcher-providers" and method == "GET":
         return role_has_capability(role, "providers.researcher.use")
 
+    # One transport route for the read-only GraphQL façade. Each root field then
+    # enforces its own capability (app/graphql/permissions.py); only POST is served.
+    if path == "/api/graphql" and method == "POST":
+        return role_has_capability(role, "corpus.read")
+
     if path == "/api/annotations" and method == "GET":
         return role_has_capability(role, "annotations.read")
     if path == "/api/annotations" and method == "POST":

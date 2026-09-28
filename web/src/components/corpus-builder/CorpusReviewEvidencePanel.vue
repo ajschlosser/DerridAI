@@ -42,12 +42,16 @@ const emit = defineEmits<{
 const i18n = useI18nStore();
 const query = ref("");
 const suggestions = ref<EvidenceSuggestion[]>([]);
+const semanticStatus = ref<"available" | "fallback" | "idle">("idle");
+const semanticStatusReason = ref("");
 const suggestState = ref<"idle" | "loading" | "done" | "failed">("idle");
 // Suggestions belong to one field of one record; never carry them across.
 watch(
   () => [props.record.record_id, props.selectedField],
   () => {
     suggestions.value = [];
+    semanticStatus.value = "idle";
+    semanticStatusReason.value = "";
     suggestState.value = "idle";
   },
 );
@@ -58,21 +62,26 @@ async function suggest(kind: "lexical" | "llm" | "precedents") {
   const recordId = props.record.record_id;
   try {
     // Precedents contribute only this record's own blocks that resemble their reviewed evidence.
-    const items =
-      kind === "precedents"
-        ? precedentEvidenceSuggestions(
-            await corpusMetadataApi.precedents(props.buildId, recordId, field),
-            props.record.source_block_ids || [],
-          )
-        : (kind === "llm" && props.llmRequest
-            ? await corpusMetadataApi.suggestEvidenceLlm(
-                props.buildId,
-                recordId,
-                field,
-                props.llmRequest,
-              )
-            : await corpusMetadataApi.suggestEvidence(props.buildId, recordId, field)
-          ).items;
+    let items: EvidenceSuggestion[];
+    if (kind === "precedents") {
+      items = precedentEvidenceSuggestions(
+        await corpusMetadataApi.precedents(props.buildId, recordId, field),
+        props.record.source_block_ids || [],
+      );
+      semanticStatus.value = "idle";
+      semanticStatusReason.value = "";
+    } else if (kind === "llm" && props.llmRequest) {
+      items = (
+        await corpusMetadataApi.suggestEvidenceLlm(props.buildId, recordId, field, props.llmRequest)
+      ).items;
+      semanticStatus.value = "idle";
+      semanticStatusReason.value = "";
+    } else {
+      const response = await corpusMetadataApi.suggestEvidence(props.buildId, recordId, field);
+      items = response.items;
+      semanticStatus.value = response.status?.semantic === "fallback" ? "fallback" : "available";
+      semanticStatusReason.value = response.status?.reason || "";
+    }
     if (field !== props.selectedField || recordId !== props.record.record_id) return;
     suggestions.value = items;
     suggestState.value = "done";
@@ -89,7 +98,11 @@ const suggestionLabel = (item: EvidenceSuggestion) =>
       ? i18n.t("pdf_corpus.evidence_suggested_llm")
       : item.method.startsWith("precedent")
         ? i18n.t("pdf_corpus.evidence_suggested_precedent")
-        : i18n.t("pdf_corpus.evidence_suggested_lexical");
+        : item.lexical_score != null && item.semantic_score != null
+          ? i18n.t("pdf_corpus.evidence_suggested_lexical_semantic")
+          : item.semantic_score != null
+            ? i18n.t("pdf_corpus.evidence_suggested_semantic")
+            : i18n.t("pdf_corpus.evidence_suggested_lexical");
 const rank = (blockId: string) => {
   const index = suggestions.value.findIndex((item) => item.block_id === blockId);
   return index < 0 ? Number.MAX_SAFE_INTEGER : index;
@@ -240,9 +253,11 @@ function locator(block: SourceBlock) {
         <span class="suggest-note" role="status">{{
           suggestState === "failed"
             ? i18n.t("pdf_corpus.evidence_suggest_failed")
-            : suggestState === "done" && !suggestions.length
-              ? i18n.t("pdf_corpus.evidence_suggest_none")
-              : i18n.t("pdf_corpus.evidence_suggest_help")
+            : semanticStatus === "fallback"
+              ? `${i18n.t("pdf_corpus.evidence_suggest_semantic_fallback")} ${semanticStatusReason}`
+              : suggestState === "done" && !suggestions.length
+                ? i18n.t("pdf_corpus.evidence_suggest_none")
+                : i18n.t("pdf_corpus.evidence_suggest_help")
         }}</span>
       </div>
 

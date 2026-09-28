@@ -108,7 +108,13 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
       signal: init.signal ?? timeoutController?.signal,
     });
   } catch (cause) {
-    const timedOut = cause instanceof DOMException && cause.name === "AbortError" && !hasOwnSignal;
+    // A deliberately cancelled request is not a failure worth recording.
+    if (init.signal?.aborted) throw cause;
+    const timedOut =
+      !hasOwnSignal &&
+      Boolean(timeoutController?.signal.aborted) &&
+      cause instanceof DOMException &&
+      cause.name === "AbortError";
     const detail = timedOut
       ? `timed out after ${DEFAULT_REQUEST_TIMEOUT_MS / 1000}s`
       : cause instanceof Error

@@ -181,10 +181,15 @@ from .corpus_record_quality import (
     iso_now,
 )
 from .corpus_review_actions import ReviewActionsMixin, _serialize_record_mutation
+from .corpus_review_queue import (
+    QueueFilter,
+    empty_page,
+    observed_metadata_values,
+    select_queue,
+)
 from .corpus_review_state import (
     _decorate_review_state,
     _enforce_review_invariants,
-    _matches_review_queue,
     _metadata_enrichment_finished,
     _queue_counts,
     _sync_record_metadata_state,
@@ -262,13 +267,14 @@ from .metadata_schema import (
     MetadataSchema,
 )
 from .metadata_schema_store import SchemaStore
-from .metadata_values import is_placeholder
 from .models import WorkMetadataRequest, WorkMetadataSeed
 from .nlp_annotations import annotate_record
+from .operation_events import note_corpus_build
 from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
 from .rag import _citation_strings, chat_complete
 from .run_guidance import find_guidance_matches
 from .sentence_boundaries import snap_boundaries_to_sentences
+from .source_embeddings import SourceEmbeddingProjection
 from .source_quality import assess_extracted_source, page_source_quality_report
 from .text_noise import (
     DEFAULT_NOISE_THRESHOLD,
@@ -1046,6 +1052,88 @@ class PdfCorpusRepository:
             _json_write(self.asset_meta_path(asset_id), asset)
             return asset
 
+    def update_asset_language(self, asset_id: str, *, language: str | None, skipped: bool = False) -> dict[str, Any]:
+        """Persist an explicit language decision without rewriting extracted source data."""
+        with self._lock:
+            asset = self.get_asset(asset_id)
+            initial = dict(asset.get("initial_metadata") or {})
+            provenance = dict(initial.get("field_provenance") or {})
+            if skipped:
+                initial.pop("language", None)
+                initial["language_status"] = "confirmed_absent"
+                provenance["language"] = {
+                    "method": "human_review",
+                    "confidence": 1.0,
+                    "derivation": "human",
+                    "status": "confirmed_absent",
+                }
+            else:
+                assert language
+                initial["language"] = language
+                initial["language_status"] = "human_confirmed"
+                provenance["language"] = {
+                    "method": "human_review",
+                    "confidence": 1.0,
+                    "derivation": "human",
+                    "status": "human_confirmed",
+                }
+            initial["field_provenance"] = provenance
+            asset["initial_metadata"] = initial
+            asset["metadata_revision"] = int(asset.get("metadata_revision") or 0) + 1
+            asset["metadata_updated_at"] = iso_now()
+            _json_write(self.asset_meta_path(asset_id), asset)
+            return asset
+
+    def update_asset_metadata(
+        self,
+        asset_id: str,
+        *,
+        metadata: dict[str, Any],
+        skip_fields: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Persist explicit source metadata decisions without changing extracted source text."""
+        from .source_text import MANIFEST_FIELDS
+
+        allowed = set(MANIFEST_FIELDS) | {"original_language", "document_is_translation"}
+        unknown = (set(metadata) | set(skip_fields or [])) - allowed
+        if unknown:
+            raise ValueError("Unsupported source metadata field(s): " + ", ".join(sorted(unknown)))
+        skipped = set(skip_fields or [])
+        if skipped & set(metadata):
+            raise ValueError("A source metadata field cannot be entered and skipped together.")
+        with self._lock:
+            asset = self.get_asset(asset_id)
+            initial = dict(asset.get("initial_metadata") or {})
+            provenance = dict(initial.get("field_provenance") or {})
+            for field, value in metadata.items():
+                if value in (None, "", []):
+                    raise ValueError(f"Metadata field '{field}' needs a value or must be skipped.")
+                if isinstance(value, str):
+                    value = value.strip()
+                    if not value:
+                        raise ValueError(f"Metadata field '{field}' needs a value or must be skipped.")
+                initial[field] = value
+                provenance[field] = {
+                    "method": "human_review",
+                    "confidence": 1.0,
+                    "derivation": "human",
+                    "status": "human_confirmed",
+                }
+            for field in skipped:
+                initial.pop(field, None)
+                provenance[field] = {
+                    "method": "human_review",
+                    "confidence": 1.0,
+                    "derivation": "human",
+                    "status": "confirmed_absent",
+                }
+            initial["field_provenance"] = provenance
+            asset["initial_metadata"] = initial
+            asset["metadata_revision"] = int(asset.get("metadata_revision") or 0) + 1
+            asset["metadata_updated_at"] = iso_now()
+            _json_write(self.asset_meta_path(asset_id), asset)
+            return asset
+
     def update_document_layout(self, asset_id: str, plan: dict[str, Any]) -> dict[str, Any]:
         """Persist reviewer-owned document structure and derive page metadata deterministically.
 
@@ -1054,6 +1142,8 @@ class PdfCorpusRepository:
         and alternating thread hints. These reviewer-owned facts outrank later LLM guesses.
         """
         with self._lock:
+            from .unit_policy import normalize_policy
+
             asset = self.get_asset(asset_id)
             if asset.get("media_kind", "pdf") not in {"pdf", "image"}:
                 raise ValueError("Page layout is unavailable for this source format.")
@@ -1080,6 +1170,7 @@ class PdfCorpusRepository:
             valid_thread_modes = {"continuous", "odd_even", "even_odd", "left_right", "right_left"}
             if thread_mode not in valid_thread_modes:
                 raise ValueError("Unsupported thread_mode")
+            unit_policy = normalize_policy(plan.get("unit_policy"))
             clean_plan = {
                 "page_layout": layout, "reading_order": order,
                 "main_text_pdf_start": main_pdf, "main_text_printed_start": main_printed,
@@ -1087,6 +1178,7 @@ class PdfCorpusRepository:
                 "bibliography_pdf_start": bib_pdf, "thread_mode": thread_mode,
                 "thread_a_language": str(plan.get("thread_a_language") or "").strip() or None,
                 "thread_b_language": str(plan.get("thread_b_language") or "").strip() or None,
+                "unit_policy": unit_policy,
                 "confirmed_by": "human", "updated_at": iso_now(),
             }
             pages = asset.get("pages") or []
@@ -1183,6 +1275,7 @@ class PdfCorpusRepository:
                     handle.write(json.dumps(block, ensure_ascii=False) + "\n")
             os.replace(tmp, self.asset_blocks_path(asset_id))
             asset["pages"] = pages
+            asset["unit_policy"] = unit_policy
             asset["document_layout"] = clean_plan
             asset["document_layout_revision"] = int(asset.get("document_layout_revision") or 0) + 1
             _json_write(self.asset_meta_path(asset_id), asset)
@@ -1196,6 +1289,76 @@ class PdfCorpusRepository:
 
     def build_records_db_path(self, build_id: str) -> Path:
         return self.root / "builds" / build_id / "records.sqlite3"
+
+    def build_source_units_path(self, build_id: str) -> Path:
+        return self.root / "builds" / build_id / "source_units.jsonl"
+
+    def _set_source_units_projection_state(self, build_id: str, *, dirty: bool) -> None:
+        build_path = self.build_path(build_id)
+        build = _json_read(build_path)
+        if not isinstance(build, dict):
+            raise KeyError(build_id)
+        state = dict(build.get("source_unit_projection") or {})
+        revision = int(state.get("revision") or 0) + (1 if dirty else 0)
+        build["source_unit_projection"] = {
+            "revision": revision,
+            "dirty": dirty,
+            "updated_at": iso_now(),
+        }
+        _json_write(build_path, build)
+
+    def source_unit_projection_dirty(self, build_id: str) -> bool:
+        build = self.get_build(build_id)
+        return bool((build.get("source_unit_projection") or {}).get("dirty"))
+
+    def load_source_units(self, build_id: str) -> list[dict[str, Any]]:
+        """Load authoritative source units, migrating legacy blocks on demand."""
+        build = self.get_build(build_id)
+        path = self.build_source_units_path(build_id)
+        rows: list[dict[str, Any]] = []
+        if path.exists():
+            with path.open("r", encoding="utf-8") as handle:
+                rows = [json.loads(line) for line in handle if line.strip()]
+        blocks = self.load_blocks(str(build["asset_id"]))
+        from .corpus_record_restructure import normalize_source_units
+
+        normalized = normalize_source_units(
+            rows,
+            blocks,
+            source_document_id=str(build["asset_id"]),
+        )
+        if normalized != rows:
+            self.save_source_units(build_id, normalized)
+        return normalized
+
+    def normalize_source_units(self, build_id: str) -> list[dict[str, Any]]:
+        """Public migration helper for builds created before source units existed."""
+        return self.load_source_units(build_id)
+
+    def load_active_source_units(self, build_id: str) -> list[dict[str, Any]]:
+        return [unit for unit in self.load_source_units(build_id) if unit.get("active")]
+
+    def save_source_units(self, build_id: str, units: list[dict[str, Any]]) -> None:
+        """Persist canonical source-unit rows; vectors remain a derived projection."""
+        self.get_build(build_id)
+        path = self.build_source_units_path(build_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with self._lock:
+            self._set_source_units_projection_state(build_id, dirty=True)
+            fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+            tmp = Path(tmp_name)
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                    for unit in units:
+                        handle.write(json.dumps(unit, ensure_ascii=False) + "\n")
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                os.replace(tmp, path)
+            finally:
+                try:
+                    tmp.unlink(missing_ok=True)
+                except OSError:
+                    pass
 
     def _set_records_projection_state(self, build_id: str, *, dirty: bool) -> None:
         build_path = self.build_path(build_id)
@@ -1318,6 +1481,9 @@ class PdfCorpusRepository:
 
     def save_build(self, build: dict[str, Any]) -> None:
         _json_write(self.build_path(str(build["build_id"])), build)
+        # Realtime clients learn that the durable build changed; they still read
+        # the build itself through REST.
+        note_corpus_build(_operation_from_build(build))
 
     def _record_schema(self, build_id: str) -> MetadataSchema | None:
         build = self.get_build(build_id)
@@ -1545,88 +1711,34 @@ class PdfCorpusRepository:
         return records
 
     def page_records(self, build_id: str, *, offset: int = 0, limit: int = 50, needs_review: bool | None = None, disposition: str | None = None, metadata_incomplete: bool | None = None, source_problem: bool | None = None, review_queue: str | None = None, query: str = "") -> dict[str, Any]:
-        # Read the transactional index so review pagination sees interactive
-        # updates immediately. Structural edits intentionally use load_records().
-        self.get_build(build_id)
-        if not self.build_records_path(build_id).exists() and not self.build_records_db_path(build_id).exists():
-            return {
-                "items": [],
-                "total": 0,
-                "offset": offset,
-                "limit": limit,
-                "queue_counts": _queue_counts([]),
-                "metadata_values": {},
-            }
-        q = query.casefold().strip()
-        items: list[dict[str, Any]] = []
-        queue_records: list[dict[str, Any]] = []
-        metadata_values: dict[str, set[str]] = {field: set() for field in ALLOWED_METADATA_FIELDS}
-        total = 0
-        topology_count = 0
-        for record in self.load_records(build_id):
-            for field, value in record.items():
-                if field not in metadata_values and not isinstance(value, (str, list, tuple)):
-                    continue
-                metadata_values.setdefault(field, set())
-                value = record.get(field)
-                values = value if isinstance(value, list) else [value]
-                for item in values:
-                    if isinstance(item, str) and item.strip() and not is_placeholder(item):
-                        metadata_values[field].add(item.strip())
-            deterministic_ingest = record.get("deterministic_ingest")
-            if isinstance(deterministic_ingest, dict):
-                speakers = deterministic_ingest.get("speakers")
-                if isinstance(speakers, (list, tuple)):
-                    for speaker in speakers:
-                        if isinstance(speaker, str) and speaker.strip() and not is_placeholder(speaker):
-                            metadata_values.setdefault("speaker", set()).add(speaker.strip())
-            field_status = record.get("metadata_field_status")
-            if isinstance(field_status, dict):
-                for field, status in field_status.items():
-                    if not isinstance(status, dict):
-                        continue
-                    for candidate_key in ("proposed_value", "llm_value"):
-                        candidate = status.get(candidate_key)
-                        candidates = candidate if isinstance(candidate, (list, tuple)) else [candidate]
-                        for item in candidates:
-                            if isinstance(item, str) and item.strip() and not is_placeholder(item):
-                                metadata_values.setdefault(field, set()).add(item.strip())
-            topology_index = topology_count
-            topology_count += 1
-            if needs_review is not None and bool(record.get("needs_review")) is not needs_review:
-                continue
-            record_disposition = str(record.get("review_disposition") or ("accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"))
-            if disposition is not None and record_disposition != disposition:
-                continue
-            if metadata_incomplete is not None and (not bool(record.get("metadata_complete"))) is not metadata_incomplete:
-                continue
-            if source_problem is not None and bool(record.get("source_quality_issues")) is not source_problem:
-                continue
-            if q and q not in json.dumps(record, ensure_ascii=False).casefold():
-                continue
-            queue_records.append(record)
-            if review_queue and not _matches_review_queue(record, review_queue):
-                continue
-            if total >= offset and len(items) < limit:
-                record["topology_index"] = topology_index
-                _decorate_review_state(record)
-                _present_for_reviewer(record)
-                items.append(record)
-            total += 1
-        for record in items:
-            record["topology_count"] = topology_count
+        """REST's composite review page: full presented Records, queue counts and observed values.
+
+        Reads the transactional index so review pagination sees interactive
+        updates immediately. Structural edits intentionally use load_records().
+        """
+        filters = QueueFilter(
+            needs_review=needs_review, disposition=disposition, metadata_incomplete=metadata_incomplete,
+            source_problem=source_problem, review_queue=review_queue, query=query,
+        )
+        records = self.review_records(build_id)
+        if records is None:
+            return empty_page(offset, limit)
+        selection = select_queue(records, filters, offset=offset, limit=limit)
         return {
-            "items": items,
-            "total": total,
+            "items": selection.items,
+            "total": selection.total,
             "offset": offset,
             "limit": limit,
-            "queue_counts": _queue_counts(queue_records),
-            "metadata_values": {
-                field: sorted(values, key=str.casefold)
-                for field, values in metadata_values.items()
-                if values
-            },
+            "queue_counts": selection.queue_counts,
+            "metadata_values": observed_metadata_values(records),
         }
+
+    def review_records(self, build_id: str) -> list[dict[str, Any]] | None:
+        """Every Record of a build in topology order, or ``None`` before segmentation stored any."""
+        self.get_build(build_id)
+        if not self.build_records_path(build_id).exists() and not self.build_records_db_path(build_id).exists():
+            return None
+        return self.load_records(build_id)
 
     def publication_path(self, publication_id: str) -> Path:
         """Return the immutable publication path, preserving legacy JSONL snapshots."""
@@ -1636,6 +1748,11 @@ class PdfCorpusRepository:
             return compressed
         return legacy
 
+    def publication_integrity_path(self, publication_id: str) -> Path:
+        """Return the SHA-512 sidecar path for a publication artifact."""
+        return self.publication_path(publication_id).with_name(
+            f"{self.publication_path(publication_id).name}.sha512"
+        )
 
 
 
@@ -2624,6 +2741,32 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 record["full_citation"] = full
                 # Deterministic POS/NER candidates: hints for the metadata prompt, never values.
                 annotate_record(record, nlp_schema, language=str(manifest.get("language") or ""))
+            # Source-unit embeddings are a shared, rebuildable projection. Build
+            # them after the active source-unit topology is known and before any
+            # consumer (metadata memory or local evidence retrieval) asks for vectors.
+            source_projection = SourceEmbeddingProjection(self._progressive_metadata_index.store)
+            try:
+                provider, model = source_projection.store.default_embedding_spec()
+                source_embedding_projection = source_projection.sync(
+                    str(asset.get("asset_id") or build_id),
+                    source_blocks,
+                    provider=provider,
+                    model=model,
+                    prune=True,
+                )
+            except Exception as exc:  # derived state must not block canonical topology
+                source_embedding_projection = {
+                    "status": "unavailable",
+                    "error": f"{type(exc).__name__}: {exc}"[:300],
+                }
+                self._append_warning(
+                    build_id,
+                    "Source-unit semantic indexing is unavailable; canonical source and records remain intact. "
+                    + str(source_embedding_projection["error"]),
+                )
+            current_build = self.repo.get_build(build_id)
+            current_build["source_unit_embedding_projection"] = source_embedding_projection
+            self.repo.save_build(current_build)
             # Pre-fill from reviewed precedents matched on each record's source spans (advisory).
             memory_prefill = (
                 prefill_records(records, source_blocks, nlp_schema, self._progressive_metadata_index, build_id=build_id)
@@ -2672,9 +2815,14 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                     f"{issue} ({count} records)" if count > 1 else issue
                     for issue, count in counts.items()
                 ]
+                detail = ", ".join(issues or ["unknown topology error"])
+                if "topology.over_absolute_limit" in raw_issues:
+                    detail += (
+                        ". One or more source units exceed the absolute character ceiling; "
+                        "choose a finer evidence-unit rule or split the affected unit during review."
+                    )
                 raise RuntimeError(
-                    "Deterministic topology sanity check failed before metadata enrichment: "
-                    + ", ".join(issues or ["unknown topology error"])
+                    "Deterministic topology sanity check failed before metadata enrichment: " + detail
                 )
             # Optionally clean obvious extraction/layout noise before metadata
             # enrichment. The immutable extracted text remains bound in
@@ -3463,6 +3611,17 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             validate_record=validate_publication_record,
             compression_level=10,
         )
+        integrity_path = self.repo.publication_integrity_path(publication_id)
+        integrity_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_integrity = integrity_path.with_name(f".{integrity_path.name}.{uuid.uuid4().hex}.tmp")
+        try:
+            temporary_integrity.write_text(
+                f"{result.archive_sha512}  {path.name}\n",
+                encoding="ascii",
+            )
+            os.replace(temporary_integrity, integrity_path)
+        finally:
+            temporary_integrity.unlink(missing_ok=True)
         publication = {
             "publication_id": publication_id,
             "filename": f"{Path(build.get('source_filename') or 'corpus').stem}.jsonl.zst",
@@ -3471,6 +3630,10 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             # the exact compressed artifact.
             "sha256": result.content_sha256,
             "archive_sha256": result.archive_sha256,
+            "sha512": result.archive_sha512,
+            "content_sha512": result.content_sha512,
+            "archive_sha512": result.archive_sha512,
+            "integrity_filename": integrity_path.name,
             "compression": "zstd",
             "media_type": "application/zstd",
             "record_count": result.record_count,

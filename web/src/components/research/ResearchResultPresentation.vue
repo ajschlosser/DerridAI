@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ResearchDraftState } from "../../features/research/useResearchDraft";
 import ResearchAnswerWorkspace from "./ResearchAnswerWorkspace.vue";
 import ResearchEvidencePanel from "./ResearchEvidencePanel.vue";
 import type { ResearchEvidenceSelection, ResearchJob, ResearchResult } from "../../types/research";
@@ -7,6 +8,8 @@ withDefaults(
   defineProps<{
     job?: ResearchJob | null;
     result?: ResearchResult | null;
+    /** A streamed, unverified draft of the running job's answer (see useResearchDraft). */
+    draft?: ResearchDraftState | null;
     selectedEvidence?: ResearchEvidenceSelection[];
     activeEvidenceIndex?: number;
     busy?: boolean;
@@ -17,6 +20,7 @@ withDefaults(
   {
     job: null,
     result: null,
+    draft: null,
     selectedEvidence: () => [],
     activeEvidenceIndex: 0,
     busy: false,
@@ -45,6 +49,7 @@ const emit = defineEmits<{
     <ResearchAnswerWorkspace
       :job="job"
       :result="result"
+      :draft="draft"
       :busy="busy"
       :can-grade="canGrade"
       @copy="emit('copy')"

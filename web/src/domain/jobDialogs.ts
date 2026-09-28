@@ -1,6 +1,8 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
 import { esc, icon } from "./html";
+import { realtime } from "../realtime";
+import { followResource } from "../realtime/follow";
 import { llmReviewDialogHtml } from "./jobReviewMarkup";
 import { recordPreviewDialogHtml } from "./recordPreviewMarkup";
 import { createJobDialogCopy } from "./jobDialogCopy";
@@ -147,59 +149,69 @@ export function createJobDialogs(deps: Deps) {
     const safeRequest = cloneAuditValue(request);
     if (safeRequest && typeof safeRequest === "object") delete safeRequest.api_key;
 
-    const resultSummary =
-      job.type === "llm"
-        ? {
-            pending_result_count: job.pending_result_count ?? (job.results || []).length,
-            pending_proposed_changes:
-              job.pending_change_count ??
-              (job.results || []).reduce(
-                (sum: Any, result: Any) => sum + Object.keys(result.proposal?.changes || {}).length,
-                0,
-              ),
-            accepted_results: job.accepted_results || 0,
-            accepted_fields: job.accepted_fields || 0,
-            rejected_results: job.rejected_results || 0,
-            rejected_fields: job.rejected_fields || 0,
-            resolution_state: job.resolution_state || "pending",
-            unprocessed_records:
-              job.remaining_record_count ?? Math.max(0, (job.total || 0) - (job.completed || 0)),
-            failures: (job.results || []).filter((result: Any) => result.error).length,
-          }
-        : job.type === "upsert"
-          ? {
-              committed: job.completed || 0,
-              requested: job.total || 0,
-              target_collection: job.store_name,
-              language_mirrors: job.mirrored || {},
-              receipt_count: (job.results || []).length,
-            }
-          : job.type === "pdf_corpus"
-            ? {
-                source_pdf: job.source_filename || null,
-                build_id: job.build_id || job.id,
-                raw_status: job.raw_status || job.status,
-                stage: job.stage || null,
-                record_count: job.record_count || 0,
-                review_count: job.review_count || 0,
-                unresolved_regions: job.unresolved_regions || 0,
-              }
-            : job.type === "llm_tool"
-              ? {
-                  operation: job.label || job.tool || job.mode,
-                  provider_profile_id: job.provider_profile_id || null,
-                  max_concurrent_requests: job.max_concurrent_requests || null,
-                  has_result: Boolean(job.result),
-                  result_keys:
-                    job.result && typeof job.result === "object" ? Object.keys(job.result) : [],
-                }
-              : {
-                  has_result: Boolean(job.result),
-                  evidence_count: job.result?.evidence?.length || 0,
-                  elapsed_seconds: job.result?.elapsed_seconds ?? null,
-                  collections: job.result?.collections || [],
-                  response_cache: job.result?.response_cache || job.response_cache || null,
-                };
+    let resultSummary: Any;
+    if (job.type === "llm") {
+      resultSummary = {
+        pending_result_count: job.pending_result_count ?? (job.results || []).length,
+        pending_proposed_changes:
+          job.pending_change_count ??
+          (job.results || []).reduce(
+            (sum: Any, result: Any) => sum + Object.keys(result.proposal?.changes || {}).length,
+            0,
+          ),
+        accepted_results: job.accepted_results || 0,
+        accepted_fields: job.accepted_fields || 0,
+        rejected_results: job.rejected_results || 0,
+        rejected_fields: job.rejected_fields || 0,
+        resolution_state: job.resolution_state || "pending",
+        unprocessed_records:
+          job.remaining_record_count ?? Math.max(0, (job.total || 0) - (job.completed || 0)),
+        failures: (job.results || []).filter((result: Any) => result.error).length,
+      };
+    } else if (job.type === "upsert") {
+      resultSummary = {
+        committed: job.completed || 0,
+        requested: job.total || 0,
+        target_collection: job.store_name,
+        language_mirrors: job.mirrored || {},
+        receipt_count: (job.results || []).length,
+      };
+    } else if (job.type === "corpus_capture") {
+      resultSummary = {
+        capture_id: job.capture_id || job.id,
+        mode: job.mode || null,
+        raw_status: job.status || null,
+        candidate_count: job.result?.candidate_count ?? job.candidate_count ?? null,
+        has_capture_state: Boolean(job.capture_id),
+        error_count: (job.errors || []).length,
+      };
+    } else if (job.type === "pdf_corpus") {
+      resultSummary = {
+        source_pdf: job.source_filename || null,
+        build_id: job.build_id || job.id,
+        raw_status: job.raw_status || job.status,
+        stage: job.stage || null,
+        record_count: job.record_count || 0,
+        review_count: job.review_count || 0,
+        unresolved_regions: job.unresolved_regions || 0,
+      };
+    } else if (job.type === "llm_tool") {
+      resultSummary = {
+        operation: job.label || job.tool || job.mode,
+        provider_profile_id: job.provider_profile_id || null,
+        max_concurrent_requests: job.max_concurrent_requests || null,
+        has_result: Boolean(job.result),
+        result_keys: job.result && typeof job.result === "object" ? Object.keys(job.result) : [],
+      };
+    } else {
+      resultSummary = {
+        has_result: Boolean(job.result),
+        evidence_count: job.result?.evidence?.length || 0,
+        elapsed_seconds: job.result?.elapsed_seconds ?? null,
+        collections: job.result?.collections || [],
+        response_cache: job.result?.response_cache || job.response_cache || null,
+      };
+    }
 
     dialog.innerHTML = `<div class="dh">
     <div><h2 class="dialog-title">${esc(trf("operations.details_title", { label: jobLabel(job) }))}</h2><div class="dialog-subtitle">${esc(job.id)} · ${esc(tr(`operations.status.${job.status}`, String(job.status || "")))} · ${esc(trf("operations.created", { when: formatTimestamp(job.created_at) }))}</div></div>
@@ -598,7 +610,7 @@ export function createJobDialogs(deps: Deps) {
       );
 
       const close = () => {
-        if (liveTimer) clearInterval(liveTimer);
+        if (liveTimer) liveTimer();
         dialog.close();
         dialog.remove();
       };
@@ -665,27 +677,27 @@ export function createJobDialogs(deps: Deps) {
 
     render();
     if (["queued", "running", "cancelling"].includes(job.status)) {
-      liveTimer = setInterval(async () => {
-        if (!dialog.isConnected) {
-          clearInterval(liveTimer);
-          return;
-        }
-        const before = job.completed;
-        const pendingBefore = job.pending_result_count;
-        if (await refreshJob()) {
-          if (
-            job.completed !== before ||
-            job.pending_result_count !== pendingBefore ||
-            !["queued", "running", "cancelling"].includes(job.status)
-          ) {
-            render({ preserveScroll: true });
+      // Follow this job's realtime events; REST polling only while the socket is unavailable.
+      liveTimer = followResource({
+        topic: `job:${job.id}`,
+        fallbackMs: realtime.status === "idle" ? 4000 : undefined,
+        isDone: () =>
+          !dialog.isConnected || !["queued", "running", "cancelling"].includes(job.status),
+        refresh: async () => {
+          if (!dialog.isConnected) return;
+          const before = job.completed;
+          const pendingBefore = job.pending_result_count;
+          if (await refreshJob()) {
+            if (
+              job.completed !== before ||
+              job.pending_result_count !== pendingBefore ||
+              !["queued", "running", "cancelling"].includes(job.status)
+            ) {
+              render({ preserveScroll: true });
+            }
           }
-          if (!["queued", "running", "cancelling"].includes(job.status)) {
-            clearInterval(liveTimer);
-            liveTimer = null;
-          }
-        }
-      }, 4000);
+        },
+      });
     }
   }
   async function openRagResult(job: Any) {

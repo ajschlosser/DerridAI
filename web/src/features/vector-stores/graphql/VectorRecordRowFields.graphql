@@ -1,0 +1,9 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
+fragment VectorRecordRowFields on VectorRecordRow {
+  chroma_id
+  record_id
+  work
+  page_start
+  page_end
+  text_preview
+}

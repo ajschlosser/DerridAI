@@ -48,6 +48,7 @@ const pageCapability: Record<string, string> = {
   global: "page.search",
   annotations: "page.annotations",
   pdf: "page.pdf",
+  sources: "page.pdf",
   compare: "page.compare",
   vector: "page.vector",
   rag: "page.research",
@@ -104,6 +105,19 @@ const groupedNav = computed(() => {
               : i18n.t(`nav.${item.id}`, item.label),
       })),
   }));
+  if (auth.isAdmin && canNav("sources")) {
+    // Sources sits in Tools next to Corpus Builder: capture and manage sources there, build here.
+    const tools = groups.find((group) => group.items.some((item) => item.id === "pdf"));
+    if (tools) {
+      const at = tools.items.findIndex((item) => item.id === "pdf");
+      tools.items.splice(at + 1, 0, {
+        id: "sources",
+        label: i18n.t("nav.sources"),
+        icon: "books",
+        section: "Tools",
+      } as ShellNavItem);
+    }
+  }
   if (auth.isAdmin) {
     const systemLabel = i18n.t("section.system");
     let system = groups.find((group) => group.section === systemLabel);
@@ -179,36 +193,40 @@ const utilityNavItems = computed<SidebarNavEntry[]>(() =>
   })),
 );
 const breadcrumbTitle = computed(() =>
-  route.name === "metadatamemory"
-    ? i18n.t("metadata_memory.title")
-    : route.name === "users"
-      ? i18n.t("nav.users")
-      : route.name === "roles"
-        ? i18n.t("nav.roles")
-        : route.name === "languages"
-          ? i18n.t("language.manage")
-          : route.name === "config"
-            ? i18n.t("nav.config")
-            : route.name === "compare"
-              ? i18n.t("nav.compare")
-              : route.name === "list"
-                ? i18n.t("nav.records")
-                : route.name === "works"
-                  ? i18n.t("nav.works")
-                  : s.value.context.title || i18n.t("nav.home"),
+  route.name === "sources"
+    ? i18n.t("sources.title")
+    : route.name === "metadatamemory"
+      ? i18n.t("metadata_memory.title")
+      : route.name === "users"
+        ? i18n.t("nav.users")
+        : route.name === "roles"
+          ? i18n.t("nav.roles")
+          : route.name === "languages"
+            ? i18n.t("language.manage")
+            : route.name === "config"
+              ? i18n.t("nav.config")
+              : route.name === "compare"
+                ? i18n.t("nav.compare")
+                : route.name === "list"
+                  ? i18n.t("nav.records")
+                  : route.name === "works"
+                    ? i18n.t("nav.works")
+                    : s.value.context.title || i18n.t("nav.home"),
 );
 const breadcrumbMeta = computed(() =>
-  route.name === "metadatamemory"
-    ? i18n.t("metadata_memory.help")
-    : route.name === "config"
-      ? i18n.t("settings.page_help_short")
-      : route.name === "compare"
-        ? i18n.t("context.compare.meta")
-        : route.name === "list"
-          ? i18n.t("context.list.meta")
-          : ["users", "roles", "languages"].includes(String(route.name || ""))
-            ? ""
-            : s.value.context.meta,
+  route.name === "sources"
+    ? i18n.t("sources.help_short")
+    : route.name === "metadatamemory"
+      ? i18n.t("metadata_memory.help")
+      : route.name === "config"
+        ? i18n.t("settings.page_help_short")
+        : route.name === "compare"
+          ? i18n.t("context.compare.meta")
+          : route.name === "list"
+            ? i18n.t("context.list.meta")
+            : ["users", "roles", "languages"].includes(String(route.name || ""))
+              ? ""
+              : s.value.context.meta,
 );
 const canBreadcrumbBack = computed(() => Boolean(nativeBackPath.value) || s.value.canGoBack);
 const canBreadcrumbForward = computed(
@@ -286,6 +304,10 @@ function navigate(view: string) {
     navigateNative("/metadata-memory");
     return;
   }
+  if (view === "sources") {
+    navigateNative("/sources");
+    return;
+  }
   if (view === "help") {
     navigateNative("/help");
     return;
@@ -320,12 +342,14 @@ function navigate(view: string) {
 function isNavActive(item: ShellNavItem) {
   if (operationsActive.value && item.id === "home") return false;
   if (item.id === "metadatamemory") return route.name === "metadatamemory";
+  if (item.id === "sources") return route.name === "sources";
   if (item.id === "users") return route.name === "users";
   if (item.id === "roles") return route.name === "roles";
   if (item.id === "languages") return route.name === "languages";
   return (
-    !["metadatamemory", "users", "roles", "languages", "help"].includes(String(route.name || "")) &&
-    s.value.view === item.id
+    !["metadatamemory", "sources", "users", "roles", "languages", "help"].includes(
+      String(route.name || ""),
+    ) && s.value.view === item.id
   );
 }
 function submitTopSearch() {
@@ -405,6 +429,11 @@ async function handleAuthExpired() {
 onMounted(async () => {
   window.addEventListener("derridai-auth-expired", () => {
     void handleAuthExpired();
+  });
+  // The realtime socket reports a role/permission change; re-read the session so
+  // navigation and capability checks reflect it (an expired session still 401s).
+  window.addEventListener("derridai:permissions-changed", () => {
+    void auth.loadStatus();
   });
   window.addEventListener("derridai:navigate-native", ((event: Event) => {
     const detail = (event as CustomEvent<{ path?: string; runtimeView?: string }>).detail || {};
@@ -558,9 +587,9 @@ watch(
   min-height: 100vh;
   display: grid;
   place-items: center;
-  color: var(--muted, #667085);
+  color: var(--muted);
   font-size: 0.875rem;
-  background: var(--bg, #f5f7fa);
+  background: var(--bg);
 }
 .app-shell-modern {
   grid-template-columns: var(--ref-sidebar) minmax(0, 1fr);
@@ -588,7 +617,7 @@ watch(
   z-index: 2000;
   padding: 9px 12px;
   border-radius: 7px;
-  background: #17233b;
+  background: var(--tone-info-fg);
   color: var(--accent-on);
   font-size: 0.8125rem;
   font-weight: 700;

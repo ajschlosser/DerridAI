@@ -139,72 +139,50 @@ async function submit() {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: 32px;
-  background:
-    radial-gradient(circle at 20% 10%, rgba(79, 70, 229, 0.08), transparent 34%), var(--bg, #f5f7fa);
+  padding: 24px;
+  background: linear-gradient(120deg, var(--card) 0, var(--tone-info-bg) 100%);
 }
 .auth-card {
-  width: min(460px, 100%);
-  background: var(--panel, #fff);
-  border: 1px solid var(--line, #e5e7eb);
-  border-radius: 22px;
-  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.12);
-  padding: 30px;
+  width: min(780px, calc(100vw - 32px));
+  border: 1px solid var(--line);
+  border-radius: var(--radius-overlay);
+  background: var(--card);
+  box-shadow: var(--shadow-overlay);
+  padding: 24px;
 }
 .auth-form {
   display: grid;
-  gap: 15px;
-  margin-top: 25px;
+  gap: 12px;
 }
 .auth-form label {
   display: grid;
-  gap: 7px;
-  font-size: 0.8125rem;
-  font-weight: 700;
+  gap: 5px;
 }
 .auth-submit {
-  width: 100%;
   justify-content: center;
-  margin-top: 4px;
-  min-height: 42px;
 }
 .auth-error {
   padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid rgba(185, 28, 28, 0.2);
-  background: rgba(185, 28, 28, 0.06);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--tone-danger-border);
+  background: var(--tone-danger-bg);
   color: var(--tone-danger-fg);
   font-size: 0.8125rem;
 }
 .auth-note {
   margin-top: 18px;
   padding-top: 15px;
-  border-top: 1px solid var(--line, #e5e7eb);
+  border-top: 1px solid var(--line);
   font-size: 0.8125rem;
   line-height: 1.5;
-  color: var(--muted, #667085);
+  color: var(--muted);
 }
 .auth-build {
   margin: 16px 0 0;
   text-align: center;
-  color: var(--muted, #667085);
+  color: var(--muted);
   font-size: 0.8125rem;
   font-variant-numeric: tabular-nums;
-}
-.auth-page {
-  min-height: 100vh;
-  background: linear-gradient(120deg, var(--card) 0, var(--tone-info-bg) 100%);
-  display: grid;
-  place-items: center;
-  padding: 24px;
-}
-.auth-card {
-  width: min(780px, calc(100vw - 32px));
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--card);
-  box-shadow: 0 26px 80px rgba(15, 23, 42, 0.09);
-  padding: 24px;
 }
 .auth-card-topline {
   display: flex;

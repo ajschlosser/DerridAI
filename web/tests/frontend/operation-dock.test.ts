@@ -26,9 +26,37 @@ describe("operation dock summary", () => {
     dock.updateOperationStackCount();
     expect(document.querySelector("#operationStackCount")?.textContent).toBe("2 failed");
   });
+
+  it("publishes an explicit summary event for the docked top bar", () => {
+    const listener = vi.fn();
+    globalThis.addEventListener("derridai:operation-summary", listener);
+    const dock = setup('<div class="operation-progress"></div>');
+    dock.updateOperationStackCount();
+    globalThis.removeEventListener("derridai:operation-summary", listener);
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "derridai:operation-summary",
+        detail: expect.objectContaining({ visible: true }),
+      }),
+    );
+  });
 });
 
 describe("operation dock placement", () => {
+  it("uses double-click and keyboard activation to request a mode switch", () => {
+    const listener = vi.fn();
+    globalThis.addEventListener("derridai:operation-mode-toggle", listener);
+    const dock = setup("");
+    document.querySelector("#operationProgressStack")?.remove();
+    dock.progressStack();
+    const toolbar = document.querySelector<HTMLElement>("[data-operation-drag]")!;
+    toolbar.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    toolbar.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    globalThis.removeEventListener("derridai:operation-mode-toggle", listener);
+    expect(listener).toHaveBeenCalledTimes(2);
+    dock.setOperationDockMinimized(true);
+  });
+
   it("slides an expanded dock back on screen when it would overflow the right or bottom edge", () => {
     const viewport = { width: 1200, height: 800 };
     // Minimized pill left near the bottom-right corner, then expanded to 380 x 500.

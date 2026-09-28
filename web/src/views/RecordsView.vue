@@ -887,8 +887,12 @@ onBeforeUnmount(() => tableObserver?.disconnect());
   background: var(--surface-card);
 }
 .records-search-icon {
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
   width: 1.125rem;
   height: 1.125rem;
+  max-inline-size: 1.125rem;
+  max-block-size: 1.125rem;
   flex: 0 0 1.125rem;
   display: block;
 }

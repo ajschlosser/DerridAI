@@ -40,6 +40,7 @@ type Helper =
 type Deps = { state: Loose; corpusCache: Loose } & Record<Helper, Fn>;
 
 let pendingUpsertCache: Any = { key: "", at: 0, rows: [] };
+const suppressionLoads = new Set<string>();
 export function createDbPresenceUpsert(deps: Deps) {
   const {
     state,
@@ -71,6 +72,25 @@ export function createDbPresenceUpsert(deps: Deps) {
   } = deps;
   // The legacy code queries the page freely; untyped, as it was written.
   const document: Any = globalThis.document;
+  function loadServerSuppressions(store: string) {
+    if (!store) return;
+    void api(`/api/stores/${encodeURIComponent(store)}/sync-suppressions`)
+      .then((payload: Any) => {
+        const serverSuppressions = payload?.suppressions || {};
+        const mapped: Record<string, string> = {};
+        for (const row of allRows()) {
+          const recordId = String(row.record?.record_id || "");
+          if (!recordId || !(recordId in serverSuppressions)) continue;
+          mapped[localRecordKey(row.file, row.index)] = String(serverSuppressions[recordId]);
+        }
+        state.upsertIgnored[store] = { ...(state.upsertIgnored[store] || {}), ...mapped };
+        pendingUpsertCache.key = "";
+        persistPrefs();
+      })
+      .catch(() => {
+        // Presence remains authoritative; a failed suppression refresh must not hide rows.
+      });
+  }
   function recordDbStatus(file: Any, index: Any, record: Any, store = state.activeStore) {
     if (!hasCorpusDb()) return { kind: "none", label: "No database", title: dbUnavailableReason() };
     if (!store)
@@ -215,6 +235,10 @@ export function createDbPresenceUpsert(deps: Deps) {
   }
   function pendingUpsertRows() {
     if (!hasCorpusDb() || !state.activeStore) return [];
+    if (!suppressionLoads.has(state.activeStore)) {
+      suppressionLoads.add(state.activeStore);
+      loadServerSuppressions(state.activeStore);
+    }
     const dirtyCount = state.files.reduce(
       (sum: Any, file: Any) => sum + (file.dirty?.size || 0),
       0,
@@ -270,8 +294,36 @@ export function createDbPresenceUpsert(deps: Deps) {
     const store = state.activeStore;
     if (!store) return;
     if (!state.upsertIgnored[store]) state.upsertIgnored[store] = {};
-    state.upsertIgnored[store][localRecordKey(row.file, row.index)] = recordFingerprint(row.record);
-    persistPrefs();
+    const fingerprint = recordFingerprint(row.record);
+    const recordId = String(row.record?.record_id || "");
+    if (!recordId) {
+      toast(
+        tr(
+          "vector.sync_suppression_failed",
+          "Could not save this queue decision; the item remains available.",
+        ),
+      );
+      return;
+    }
+    state.upsertIgnored[store][localRecordKey(row.file, row.index)] = fingerprint;
+    void api(`/api/stores/${encodeURIComponent(store)}/sync-suppressions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ record_id: recordId, fingerprint }),
+    })
+      .then(() => {
+        persistPrefs();
+      })
+      .catch(() => {
+        delete state.upsertIgnored[store][localRecordKey(row.file, row.index)];
+        toast(
+          tr(
+            "vector.sync_suppression_failed",
+            "Could not save this queue decision; the item remains available.",
+          ),
+        );
+        persistPrefs();
+      });
   }
   async function buildUpsertItems(rows: Any, store: Any, { yieldEvery = 0 } = {}) {
     const idCounts = new Map();

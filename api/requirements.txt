@@ -5,6 +5,9 @@ chromadb>=1.0,<2
 httpx>=0.28,<1
 pydantic>=2.10,<3
 python-multipart>=0.0.20,<1
+# Read-only cELF GraphQL façade (docs/GRAPHQL.md). Pinned to a minor series:
+# Strawberry changes extension/router APIs between minors.
+strawberry-graphql[fastapi]>=0.327,<0.328
 
 pymupdf>=1.26,<2
 Pillow>=12.1,<13

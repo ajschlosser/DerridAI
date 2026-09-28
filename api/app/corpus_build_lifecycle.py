@@ -45,6 +45,7 @@ from .field_assertions import (
     project_record_assertions,
     reset_fields_for_evaluation,
 )
+from .operation_events import note_model_activity
 from .reviewer_context import current_reviewer
 
 
@@ -447,6 +448,8 @@ class BuildLifecycleMixin:
                     "model": model,
                     "base_url": base_url,
                 }
+                calls = list(self._llm_inflight[build_id].values())
+            note_model_activity(build_id, calls)
         return token
 
 
@@ -458,6 +461,8 @@ class BuildLifecycleMixin:
                     calls.pop(token, None)
                     if not calls:
                         self._llm_inflight.pop(build_id, None)
+                remaining = list((self._llm_inflight.get(build_id) or {}).values())
+            note_model_activity(build_id, remaining)
 
 
     def _ollama_loaded_models(self, base_url: str) -> set[str] | None:

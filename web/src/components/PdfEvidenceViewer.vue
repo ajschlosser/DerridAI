@@ -15,8 +15,16 @@ const props = withDefaults(
     blocks?: SourceBlock[];
     evidenceBlockIds?: string[];
     zoomable?: boolean;
+    maxWidth?: number;
   }>(),
-  { pageWidth: 0, pageHeight: 0, blocks: () => [], evidenceBlockIds: () => [], zoomable: false },
+  {
+    pageWidth: 0,
+    pageHeight: 0,
+    blocks: () => [],
+    evidenceBlockIds: () => [],
+    zoomable: false,
+    maxWidth: 720,
+  },
 );
 const i18n = useI18nStore();
 const canvas = ref<HTMLCanvasElement | null>(null);
@@ -41,11 +49,15 @@ function boxStyle(block: SourceBlock) {
   const width = Number(props.pageWidth || 0),
     height = Number(props.pageHeight || 0);
   if (!width || !height) return { display: "none" };
+  const left = Math.max(0, Math.min(width, Math.min(Number(x0), Number(x1))));
+  const right = Math.max(left, Math.min(width, Math.max(Number(x0), Number(x1))));
+  const top = Math.max(0, Math.min(height, Math.min(Number(y0), Number(y1))));
+  const bottom = Math.max(top, Math.min(height, Math.max(Number(y0), Number(y1))));
   return {
-    insetInlineStart: `${Math.max(0, Math.min(100, (x0 / width) * 100))}%`,
-    top: `${Math.max(0, Math.min(100, (y0 / height) * 100))}%`,
-    width: `${Math.max(0, Math.min(100, ((x1 - x0) / width) * 100))}%`,
-    height: `${Math.max(0, Math.min(100, ((y1 - y0) / height) * 100))}%`,
+    insetInlineStart: `${(left / width) * 100}%`,
+    top: `${(top / height) * 100}%`,
+    width: `${((right - left) / width) * 100}%`,
+    height: `${((bottom - top) / height) * 100}%`,
   };
 }
 async function cancelRender() {
@@ -118,7 +130,9 @@ async function renderPage() {
     const safePage = Math.min(Math.max(1, Number(props.page) || 1), pdfDocument.numPages);
     const page = await pdfDocument.getPage(safePage);
     if (token !== renderGeneration) return;
-    const available = Math.max(160, Math.min(900, shell.value?.clientWidth || 700)) * zoom.value;
+    const available =
+      Math.max(160, Math.min(Number(props.maxWidth) || 720, shell.value?.clientWidth || 700)) *
+      zoom.value;
     if (safePage === lastRenderedPage && Math.abs(available - lastRenderedWidth) < 3) return;
     const base = page.getViewport({ scale: 1 });
     const viewport = page.getViewport({ scale: available / base.width });
@@ -213,7 +227,12 @@ onBeforeUnmount(async () => {
         })
       }}
     </div>
-    <div class="page-stage" :class="{ zoomed: zoom > 1 }" :aria-busy="loading ? 'true' : 'false'">
+    <div
+      class="page-stage"
+      :class="{ zoomed: zoom > 1 }"
+      :aria-busy="loading ? 'true' : 'false'"
+      :style="{ maxWidth: `${props.maxWidth}px` }"
+    >
       <canvas ref="canvas" :aria-label="i18n.tf('pdf_corpus.pdf_page_canvas', { page })"></canvas>
       <div class="block-overlay" aria-hidden="true">
         <span

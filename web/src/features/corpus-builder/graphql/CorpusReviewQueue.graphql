@@ -1,0 +1,46 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
+# The paged, filtered review queue (REST: GET /api/pdf/corpus-builds/{id}/records). Rows only:
+# full Records are read with CorpusReviewRecords once a row is opened.
+query CorpusReviewQueue(
+  $build_id: String!
+  $offset: Int = 0
+  $limit: Int = 50
+  $needs_review: Boolean
+  $disposition: String
+  $metadata_incomplete: Boolean
+  $source_problem: Boolean
+  $review_queue: String
+  $query: String = ""
+) {
+  corpus_build(build_id: $build_id) {
+    review_queue(
+      offset: $offset
+      limit: $limit
+      needs_review: $needs_review
+      disposition: $disposition
+      metadata_incomplete: $metadata_incomplete
+      source_problem: $source_problem
+      review_queue: $review_queue
+      query: $query
+    ) {
+      items {
+        ...CorpusQueueRowFields
+      }
+      total
+      offset
+      limit
+      queue_counts {
+        all
+        ready
+        preparing
+        issues
+        metadata
+        topology
+        source
+        accepted
+        rejected
+        pending
+      }
+    }
+  }
+}

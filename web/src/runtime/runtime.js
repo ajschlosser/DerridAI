@@ -570,6 +570,7 @@ const {
 });
 const {
   refreshJobs,
+  startRealtime,
   startJobPolling,
   pauseRuntime,
   pruneClientJobState,
@@ -2468,11 +2469,6 @@ async function exportStoreJsonl({
     return null;
   }
 }
-// Records/Works read from the browser-local JSONL workspace, not the corpus
-// DB directly; without this, a freshly built corpus looks empty everywhere
-// until someone finds "Open in Records" on the Vector Stores page. Loads the
-// active (or largest) corpus collection into the workspace once, quietly, the
-// first time an admin opens a workspace view with nothing loaded yet.
 let corpusWorkspaceAutoLoadAttempted = false;
 async function ensureCorpusWorkspaceLoaded() {
   if (isResearcher() || state.files.length || corpusWorkspaceAutoLoadAttempted) return;
@@ -3257,9 +3253,11 @@ async function bootstrapRuntime() {
   // background health/job state only; the mounted view owns #main and its own render.
   if (document.querySelector("#main")) renderView();
   await checkHealth();
-  // One discovery request on startup is not a polling loop. Polling begins only
-  // if this request finds an active job and then runs every four seconds.
+  // One discovery request on startup is not a polling loop. Afterwards job state
+  // follows the realtime socket; REST polling runs only as a fallback while the
+  // socket is unavailable (docs/REALTIME.md).
   await refreshJobs({ rerender: false });
+  startRealtime();
   startJobPolling();
   if (!isResearcher() && state.appConfig.warm_default_provider_on_start === true)
     warmupConfiguredLlm();

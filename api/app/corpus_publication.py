@@ -48,22 +48,28 @@ def provenance_warnings(
 
 def validate_publication_record(record: dict[str, Any]) -> list[str]:
     errors: list[str] = []
+    record_id = str(record.get("record_id") or "").strip()
+
+    def add(message: str) -> None:
+        prefix = f"Record {record_id}: " if record_id else ""
+        errors.append(f"{prefix}{message}")
+
     if not str(record.get("record_id") or "").strip():
-        errors.append("record_id is required")
+        add("record_id is required")
     if (
         not isinstance(record.get("text"), str)
         or not str(record.get("text") or "").strip()
     ):
-        errors.append("text is required")
+        add("text is required")
     region = record.get("region_type")
     role = record.get("discourse_role")
     primary = record.get("primary_text")
     if region not in (None, "") and str(region) not in REGION_TYPES:
-        errors.append(f"region_type is not a supported enum value: {region}")
+        add(f"region_type is not a supported enum value: {region}")
     if role not in (None, "") and str(role) not in DISCOURSE_ROLES:
-        errors.append(f"discourse_role is not a supported enum value: {role}")
+        add(f"discourse_role is not a supported enum value: {role}")
     if primary is not None and not isinstance(primary, bool):
-        errors.append("primary_text must be boolean when present")
+        add("primary_text must be boolean when present")
     return errors
 
 

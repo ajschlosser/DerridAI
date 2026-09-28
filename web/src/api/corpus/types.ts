@@ -71,6 +71,12 @@ export interface PdfAsset {
     speaker?: string;
     speakers?: string[];
     language?: string;
+    language_status?:
+      | "deterministic"
+      | "llm_proposed"
+      | "human_confirmed"
+      | "confirmed_absent"
+      | "unresolved";
     [key: string]: unknown;
   };
   document_layout?: DocumentLayoutPlan;
@@ -187,6 +193,7 @@ export interface DocumentLayoutPlan {
   thread_mode: "continuous" | "odd_even" | "even_odd" | "left_right" | "right_left";
   thread_a_language?: string | null;
   thread_b_language?: string | null;
+  unit_policy?: SourceUnitPolicy;
 }
 
 export interface LlmActivity {
@@ -913,4 +920,334 @@ export interface HumanEvidenceSource {
   note?: string;
   /** Spans from elsewhere in the same source (another record). */
   externalBlockIds?: string[];
+}
+
+// --- Corpus Capture and the Sources workspace ----------------------------------------------------
+
+export type SourceProviderId = "gutenberg" | "wikisource";
+export type ContributionRole =
+  | "author"
+  | "coauthor"
+  | "translator"
+  | "editor"
+  | "contributor"
+  | "about_author"
+  | "unknown";
+export type WorkRelationship = "original_language_edition" | "translation" | "edition" | "unknown";
+export type IdentityConfidence = "exact" | "probable" | "needs_review";
+export type CaptureStatus =
+  | "draft"
+  | "discovering"
+  | "awaiting_review"
+  | "acquiring"
+  | "partial"
+  | "complete"
+  | "cancelled"
+  | "interrupted"
+  | "failed";
+export type CandidateAcquisitionStatus =
+  | "pending"
+  | "fetching"
+  | "acquired"
+  | "registered"
+  | "failed"
+  | "cancelled";
+export type SourceBuildStatus = "not_built" | "building" | "built" | "failed";
+
+/** A classified provider/capture failure, as the API reports it in `detail`. */
+export interface CaptureErrorInfo {
+  code: string;
+  message: string;
+}
+
+export interface WikisourceProject {
+  code: string;
+  name: string;
+}
+export interface GutenbergProviderInfo {
+  provider: "gutenberg";
+  catalogue_ready: boolean;
+  catalogue_refreshed_at?: string | null;
+  local_collection_ready: boolean;
+}
+export interface WikisourceProviderInfo {
+  provider: "wikisource";
+  projects: WikisourceProject[];
+  /** False when Wikimedia's project list was unreachable and a bounded fallback is shown. */
+  projects_authoritative: boolean;
+}
+export type SourceProviderInfo = GutenbergProviderInfo | WikisourceProviderInfo;
+
+export interface AuthorCandidate {
+  wikidata_qid: string;
+  label: string;
+  description: string;
+  aliases: string[];
+  birth_year: number | null;
+  death_year: number | null;
+  wikisource_sitelinks: Record<string, string>;
+  /** Authoritative work-level original languages only; usually empty until known. */
+  original_languages?: string[];
+  /** Ordered language signals from Wikidata and the author's source projects. */
+  languages?: string[];
+}
+
+export interface CaptureOptions {
+  providers: SourceProviderId[];
+  roles: Exclude<ContributionRole, "unknown">[];
+  include_translations: boolean;
+  include_originals?: boolean;
+  /** null = every available language. */
+  languages: string[] | null;
+}
+
+export interface CaptureAuthor {
+  identity_id?: string;
+  canonical_name: string;
+  wikidata_qid: string | null;
+  aliases?: string[];
+  description?: string;
+  birth_year: number | null;
+  death_year: number | null;
+  original_languages?: string[];
+  languages?: string[];
+}
+
+export interface CaptureSummary {
+  candidates: number;
+  work_groups: number;
+  languages: Record<string, number>;
+  providers: Record<string, number>;
+  projects: Record<string, number>;
+  roles: Record<string, number>;
+  translations: number;
+  possible_duplicates: number;
+  needs_review: number;
+  selected: number;
+  acquisition: Record<string, number>;
+}
+
+export interface ProviderSnapshot {
+  provider: SourceProviderId;
+  projects_searched: string[];
+  identities_used: string[];
+  result_count: number;
+  pagination_complete: boolean;
+  catalog_version?: string | null;
+  catalog_refreshed_at?: string | null;
+  endpoint?: string | null;
+  warnings?: string[] | null;
+  errors?: Array<CaptureErrorInfo & { project?: string }> | null;
+  searched_at?: string;
+}
+
+export interface CaptureRefreshDiff {
+  new: number;
+  changed: number;
+  unchanged: number;
+  missing: number;
+  new_ids: string[];
+  changed_ids: string[];
+  missing_ids: string[];
+}
+
+/** The durable job driving a capture, while one runs. */
+export interface CaptureJob {
+  id: string;
+  type: "corpus_capture";
+  mode: "discover" | "acquire" | "retry" | "refresh";
+  status: string;
+  stage: string;
+  stage_detail: string;
+  completed: number;
+  total: number;
+}
+
+export interface CorpusCapture {
+  capture_id: string;
+  author: CaptureAuthor;
+  options: CaptureOptions;
+  status: CaptureStatus;
+  phase: string;
+  created_at: string;
+  updated_at?: string;
+  discovery_started_at?: string | null;
+  discovery_completed_at: string | null;
+  last_refreshed_at: string | null;
+  provider_snapshots: ProviderSnapshot[];
+  summary: CaptureSummary;
+  progress: { done?: number; total?: number; current?: string; project?: string };
+  warnings: string[];
+  errors: Array<CaptureErrorInfo & { provider?: string }>;
+  last_refresh_diff: CaptureRefreshDiff | null;
+  discovery_contract_version: string;
+  active_job: CaptureJob | null;
+}
+
+/** A capture row in the captures list (no snapshots or progress). */
+export type CorpusCaptureListItem = Pick<
+  CorpusCapture,
+  | "capture_id"
+  | "status"
+  | "phase"
+  | "created_at"
+  | "discovery_completed_at"
+  | "last_refreshed_at"
+  | "summary"
+> & { author: CaptureAuthor };
+
+export interface CaptureCandidate {
+  candidate_id: string;
+  provider: SourceProviderId;
+  provider_item_id: string;
+  title: string;
+  document_author: string;
+  contribution_role: ContributionRole;
+  document_languages: string[];
+  original_language: string | null;
+  source_project_language: string | null;
+  translators: string[];
+  editors: string[];
+  publication_year: number | null;
+  edition: string | null;
+  source_uri: string;
+  catalog_uri: string | null;
+  wikidata_work_id: string | null;
+  wikidata_edition_id: string | null;
+  canonical_work_id: string;
+  relationship_to_work: WorkRelationship;
+  reconciliation_status: "exact_identity" | "deterministic_match" | "possible_match" | "separate";
+  possible_duplicates: string[] | null;
+  identity_confidence: IdentityConfidence;
+  selection_status: "selected" | "excluded";
+  selection_reason: string;
+  acquisition_status: CandidateAcquisitionStatus;
+  source_document_id: string | null;
+  digital_duplicate_of: string | null;
+  error: CaptureErrorInfo | null;
+  upstream_status: "present" | "missing" | null;
+  metadata_changed_fields: string[] | null;
+  discovery_method: string;
+  discovery_evidence: Record<string, unknown>;
+  discovered_at: string | null;
+  acquired_at: string | null;
+  rights_status: string | null;
+  rights_source: string | null;
+}
+
+export interface CaptureCandidatePage {
+  items: CaptureCandidate[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
+/** A compact Sources row: identity, language and status only — never text or blocks. */
+export interface SourceRow {
+  source_document_id: string;
+  title: string;
+  filename: string;
+  provider: string;
+  provider_item_id: string | null;
+  document_author: string | null;
+  document_languages: string[];
+  original_language: string | null;
+  source_project_language: string | null;
+  canonical_work_id: string | null;
+  relationship_to_work: WorkRelationship | null;
+  contribution_role: ContributionRole | null;
+  edition: string | null;
+  translator: string | null;
+  media_kind: string;
+  acquisition_status: string;
+  source_hash_short: string | null;
+  created_at: string | null;
+  derived_from_asset_id: string | null;
+  block_count: number | null;
+  capture_ids: string[];
+  build_status: SourceBuildStatus;
+  build_count: number;
+  latest_build_id: string | null;
+}
+
+export type SourceFacetName =
+  | "provider"
+  | "document_language"
+  | "original_language"
+  | "capture_id"
+  | "build_status"
+  | "relationship"
+  | "role"
+  | "media_kind";
+export type SourceSort = "title" | "added" | "provider" | "language" | "author";
+
+export interface SourceListQuery {
+  q?: string;
+  provider?: string[];
+  document_language?: string[];
+  original_language?: string[];
+  capture_id?: string[];
+  build_status?: string[];
+  relationship?: string[];
+  role?: string[];
+  ids?: string[];
+  sort?: SourceSort;
+  order?: "asc" | "desc";
+  offset?: number;
+  limit?: number;
+}
+
+export interface SourceListResponse {
+  items: SourceRow[];
+  total: number;
+  offset: number;
+  limit: number;
+  all_total: number;
+  facets: Record<SourceFacetName, Record<string, number>>;
+}
+
+export interface SourceCaptureLink {
+  capture_id: string;
+  candidate_id: string;
+  provider: string;
+  provider_item_id: string;
+  discovery_method: string;
+  discovered_at: string | null;
+  acquired_at: string;
+  author_name: string | null;
+}
+
+export interface SourceDetail {
+  asset_id: string;
+  sha256: string;
+  filename: string;
+  created_at: string;
+  media_type?: string | null;
+  media_kind?: string | null;
+  content_suffix?: string | null;
+  source_url?: string | null;
+  page_count?: number | null;
+  block_count?: number | null;
+  ocr_pages?: number | null;
+  extraction_provenance?: Record<string, unknown> | null;
+  catalog_metadata: Record<string, unknown>;
+  initial_metadata: Record<string, string | number | null>;
+  derived_from_asset_id?: string | null;
+  captures: SourceCaptureLink[];
+  builds: Array<{
+    build_id: string;
+    status: string;
+    created_at: string | null;
+    record_count: number | null;
+  }>;
+}
+
+export interface SourceBulkDeleteResult {
+  items: Array<{
+    source_document_id: string;
+    deleted: boolean;
+    removed?: string[];
+    reason?: "in_use" | "not_found";
+    message?: string;
+  }>;
 }

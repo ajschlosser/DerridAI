@@ -4,7 +4,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "api"))
 
-from app.evidence_suggestions import suggest_evidence_blocks, validate_llm_choice
+from app.evidence_suggestions import (
+    semantic_query,
+    suggest_evidence_blocks,
+    suggest_evidence_blocks_semantic,
+    validate_llm_choice,
+)
 
 BLOCKS = [
     {"block_id": "b1", "text": "Preface by the editor on translation."},
@@ -42,3 +47,98 @@ def test_citation_strings_do_not_assume_an_author():
     inline, full = _citation_strings({"work": "Of Grammatology", "year": 1967})
     assert "Derrida" not in inline + full
     assert full.startswith("Of Grammatology")
+
+
+class LocalProjection:
+    def __init__(self, vectors, query_vector=None, error=None):
+        self.vectors = vectors
+        self.query_vector = query_vector or [1.0, 0.0]
+        self.error = error
+        self.queries = []
+
+    def sync(self, *args, **kwargs):
+        if self.error:
+            raise self.error
+
+    def embeddings_for(self, _document_id, _unit_ids, **_kwargs):
+        return self.vectors
+
+    def embed_query(self, query, **_kwargs):
+        self.queries.append(query)
+        return self.query_vector
+
+
+def test_semantic_query_uses_schema_metadata_and_proposed_value():
+    query = semantic_query(
+        {
+            "name": "custom_field",
+            "label": "Custom field",
+            "type": "choice",
+            "instruction": "Describe the relevant orientation.",
+            "values": [{"value": "affirming"}, {"value": "critical"}],
+        },
+        "affirming",
+    )
+    assert "Custom field" in query
+    assert "Describe the relevant orientation." in query
+    assert "Proposed value: affirming" in query
+    assert "affirming, critical" in query
+
+
+def test_semantic_only_paraphrase_is_returned_with_separate_signal():
+    blocks = [{"block_id": "b1", "text": "A passage about hospitality."}]
+    projection = LocalProjection({"b1": [1.0, 0.0]})
+    items, status = suggest_evidence_blocks_semantic(
+        "welcoming the stranger",
+        blocks,
+        field_metadata={"label": "Ethical relation", "instruction": "Describe the relation."},
+        source_document_id="doc",
+        projection=projection,
+    )
+    assert status["semantic"] == "available"
+    assert items[0]["block_id"] == "b1"
+    assert items[0]["lexical_score"] is None
+    assert items[0]["semantic_score"] == 1.0
+    assert items[0]["method"] == "local-semantic-v1"
+    assert "Ethical relation" in projection.queries[0]
+    assert "welcoming the stranger" in projection.queries[0]
+
+
+def test_lexical_and_semantic_signals_are_kept_separate():
+    blocks = [{"block_id": "b1", "text": "Hospitality welcomes the stranger."}]
+    projection = LocalProjection({"b1": [1.0, 0.0]})
+    items, _ = suggest_evidence_blocks_semantic(
+        "hospitality",
+        blocks,
+        field_metadata={"label": "Topic"},
+        source_document_id="doc",
+        projection=projection,
+    )
+    item = items[0]
+    assert item["lexical_score"] == 1.0
+    assert item["semantic_score"] == 1.0
+    assert item["signals"]["lexical"]["method"].startswith("deterministic-lexical")
+    assert item["signals"]["semantic"]["method"] == "local-semantic-v1"
+
+
+def test_semantic_provider_failure_falls_back_to_lexical_and_is_visible():
+    blocks = [{"block_id": "b1", "text": "Hospitality welcomes the stranger."}]
+    projection = LocalProjection({}, error=RuntimeError("provider unavailable"))
+    items, status = suggest_evidence_blocks_semantic(
+        "hospitality",
+        blocks,
+        field_metadata={"label": "Topic"},
+        source_document_id="doc",
+        projection=projection,
+    )
+    assert items[0]["block_id"] == "b1"
+    assert status["semantic"] == "fallback"
+    assert "provider unavailable" in status["reason"]
+    assert items[0]["semantic_status"] == "fallback"
+    assert "provider unavailable" in items[0]["semantic_reason"]
+
+
+def test_llm_choice_remains_closed_and_bounded():
+    result = {"block_ids": ["b2", "b3", "b1"], "reason": "supported"}
+    out = validate_llm_choice(result, BLOCKS, "speech", limit=1)
+    assert [item["block_id"] for item in out] == ["b2"]

@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
 
 from app import source_gutenberg as sg  # noqa: E402
+from app import source_wikisource as ws  # noqa: E402
 from app.source_text import html_to_text  # noqa: E402
 
 CONTENTS = """
@@ -49,7 +50,7 @@ def wikisource(monkeypatch):
         fetched.append(title)
         return title, PAGES[title]
 
-    monkeypatch.setattr(sg, "_wikisource_parse", parse)
+    monkeypatch.setattr(ws, "_wikisource_parse", parse)
     return fetched
 
 

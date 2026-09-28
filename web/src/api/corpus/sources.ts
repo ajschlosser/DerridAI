@@ -10,10 +10,38 @@ import type {
   PageDetectionRequest,
   SourceUnitPolicy,
   SourceUnitPreview,
+  SourceBulkDeleteResult,
+  SourceDetail,
+  SourceListQuery,
+  SourceListResponse,
 } from "./types";
 import { LEGACY_CORPUS_BASE, legacyCorpusUrl } from "./compatibility";
 
+/** Query string for the Sources list; multi-valued filters travel as comma-separated values. */
+export function sourceListQuery(params: SourceListQuery): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    if (Array.isArray(value)) {
+      if (value.length) search.set(key, value.join(","));
+    } else search.set(key, String(value));
+  }
+  const text = search.toString();
+  return text ? `?${text}` : "";
+}
+
 export const corpusSourcesApi = {
+  /** Compact, paginated source rows (never text or blocks), with facet counts. */
+  listSources: (params: SourceListQuery = {}) =>
+    apiRequest<SourceListResponse>(`/api/corpus/sources${sourceListQuery(params)}`),
+  sourceDetail: (sourceId: string) =>
+    apiRequest<SourceDetail>(`/api/corpus/sources/${encodeURIComponent(sourceId)}`),
+  /** Deletes sources no build uses; each refusal comes back with its reason. */
+  bulkDeleteSources: (sourceIds: string[]) =>
+    apiRequest<SourceBulkDeleteResult>("/api/corpus/sources/bulk-delete", {
+      method: "POST",
+      body: JSON.stringify({ source_document_ids: sourceIds }),
+    }),
   gutenbergStatus: () => apiRequest<GutenbergStatus>("/api/gutenberg/status"),
   refreshGutenbergCatalogue: () =>
     apiRequest<GutenbergStatus>("/api/gutenberg/catalogue/refresh", { method: "POST" }),
@@ -110,6 +138,34 @@ export const corpusSourcesApi = {
         body: JSON.stringify(plan),
       },
     ),
+  updateAssetLanguage: (assetId: string, language: string | null) =>
+    apiRequest<PdfAsset>(`${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/language`, {
+      method: "PATCH",
+      body: JSON.stringify(language ? { language } : { skip_language: true }),
+    }),
+  suggestAssetLanguage: (
+    assetId: string,
+    connection: { provider?: string; model?: string; base_url?: string; api_key?: string } = {},
+  ) =>
+    apiRequest<{
+      mode: "detect_language";
+      language: string | null;
+      confidence?: number;
+      reason?: string;
+      source?: string;
+    }>(`${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/language-suggestion`, {
+      method: "POST",
+      body: JSON.stringify({ mode: "detect_language", ...connection }),
+    }),
+  updateAssetMetadata: (
+    assetId: string,
+    metadata: Record<string, unknown>,
+    skipFields: string[] = [],
+  ) =>
+    apiRequest<PdfAsset>(`${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/metadata`, {
+      method: "PATCH",
+      body: JSON.stringify({ metadata, skip_fields: skipFields }),
+    }),
   blocks: (assetId: string, offset = 0, limit = 200, ids: string[] = []) =>
     apiRequest<{ items: SourceBlock[]; total: number }>(
       `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/blocks?offset=${offset}&limit=${limit}${

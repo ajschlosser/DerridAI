@@ -20,7 +20,7 @@ DerridAI is a local-first Docker application for building, auditing, and queryin
 
 ## Layout
 
-- `api/app/` — FastAPI backend (Python 3.12). `main.py` is only the ASGI entrypoint; `application.py` builds the app and composes `routers/`. Corpus building is split across `corpus_builder.py` plus focused `corpus_*` and `source_*` modules. Background managers live in `job_llm.py`, `job_rag.py`, `job_tools.py`, and `job_upsert.py`; `jobs.py` is a compatibility export layer and `job_state.py` owns shared durable checkpoint/error behavior. Metadata memory/provenance lives in `metadata_*` and `provenance_memory.py`. Other major boundaries include `chroma_store.py`, `rag.py`, `llm.py` / `llm_tools.py`, `auth.py`, `researcher_view.py`, `persistence.py` / `system_store.py`, `locales/`, and `config.py`.
+- `api/app/` — FastAPI backend (Python 3.12). `main.py` is only the ASGI entrypoint; `application.py` builds the app and composes `routers/`. Corpus building is split across `corpus_builder.py` plus focused `corpus_*` and `source_*` modules. Background managers live in `job_llm.py`, `job_rag.py`, `job_tools.py`, and `job_upsert.py`; `jobs.py` is a compatibility export layer and `job_state.py` owns shared durable checkpoint/error behavior. Metadata memory/provenance lives in `metadata_*` and `provenance_memory.py`. `celf_queries/` holds transport-independent cELF reads shared by REST and the read-only GraphQL façade in `graphql/` (see `docs/GRAPHQL.md`); `realtime/` is the WebSocket notification plane (see `docs/REALTIME.md`). Other major boundaries include `chroma_store.py`, `rag.py`, `llm.py` / `llm_tools.py`, `auth.py`, `researcher_view.py`, `persistence.py` / `system_store.py`, `locales/`, and `config.py`.
 - `web/src/` — Vue 3 + TypeScript frontend: `views/`, `components/` (with Storybook coverage where applicable), `stores/` (Pinia), `router/`, `api/`, `composables/`, `domain/`, `runtime/` (remaining compatibility/runtime orchestration), `types/`.
 - `web/tests/frontend/` (Vitest + Vue Test Utils + happy-dom) and `web/tests/e2e/` (Playwright + axe-core).
 - `tests/` — Python regression suite; topical `test_<subject>.py` files (named for the behavior under test, not a release; see `tests/README.md`), and `tests/fixtures/`.
@@ -32,7 +32,7 @@ DerridAI is a local-first Docker application for building, auditing, and queryin
 
 ```bash
 pytest -q -n auto --dist=worksteal         # backend + release regression tests (from repo root)
-pytest -q -m contract tests/test_frontend_api_contract.py
+pytest -q -m contract tests/test_frontend_api_contract.py tests/test_frontend_graphql_contract.py
 python -m compileall -q api/app             # syntax check
 cd web && npm run format:repo:check         # repository-wide Prettier check
 cd web && npm run typecheck                 # vue-tsc
@@ -91,6 +91,7 @@ Backend tests stub `chromadb` and put `api/` on `sys.path`; they do not need Doc
 - **Roles:** Researcher accounts must never receive full corpus text or mutate data; enforce this in the API, not just the UI.
 - **Only send what is needed** in API requests, LLM prompts, and updates (for example, a PATCH carries only the changed field). Use operation-specific schemas rather than one giant record payload.
 - **Reproducibility:** RAG runs keep enough state to inspect and rerun them. Grades stay attached to their run and record the grader model; warn on self-grading.
+- **Transports:** REST owns commands and mutations; GraphQL is query-only (no Mutation/Subscription roots, every root field classified with a permission); the WebSocket only notifies and is never canonical state. Resolvers and routes share `celf_queries/`; job managers never import realtime code (emit through `job_realtime_summary`/`operation_events.py`). Keep realtime payloads bounded and free of source text, prompts, secrets and hidden reviewer values.
 - **Background work:** long operations are cancellable jobs with visible progress; respect per-provider concurrency limits. Active execution is process-local, but job snapshots/history are durably mirrored to SQLite. After restart, interrupted queued/running/cancelling work is marked failed rather than silently replayed. Keep job-specific behavior in the owning `job_*.py` manager instead of growing `jobs.py`.
 - **Chroma:** one writer per persistence path. The logical `_response_cache` collection is stored physically as `derridai_response_cache` and is a system cache, not a corpus store.
 - **Secrets:** `.env` is git-ignored. Backups and provider profiles can contain API keys; never log or commit them.

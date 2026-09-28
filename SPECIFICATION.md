@@ -1,29 +1,97 @@
-# cELF Core Specification 1.0
-
-**Capta-Enriched Lexical Format**
+# cELF 1.0 - Capta-Enriched Lexical Format
 
 **Author:** Dr. Aaron John Schlosser  
 **Specification Version:** 1.0  
 **Date:** September 2026  
-**Status:** Normative specification
+**Status:** Normative specification; the accompanying white paper is non-normative  
+**Short name:** cELF (pronounced "self")  
+**Reference implementation:** DerridAI
+
+> **Publication note - non-normative.** This edition uses **Capta-Enriched Lexical Format (cELF, pronounced "self")** as the specification name. The tracked conformance requirement identifiers are unchanged. The accompanying DerridAI white paper is explanatory and does not add, remove, or modify conformance requirements.
 
 The **Capta-Enriched Lexical Format** (**cELF**, pronounced "self") defines a normalized, traceable, and reproducible information architecture for AI-assisted documentary research. **Retrieval** is used in both a broad research sense - the recovery of relevant documentary information for active use - and a narrower technical sense that includes vector, lexical, hybrid, filtered, and other computational search methods. Vector search is one retrieval mechanism, not the meaning of the specification as a whole.
 
 ## Contents
 
+### Part I - Normative specification
+
 - [How to Read This Specification](#how-to-read-this-specification)
 - [Foundations](#foundations)
+  - [Status, Purpose, and Normative Language](#status-purpose-and-normative-language)
+  - [Architectural Model](#architectural-model)
 - [Documentary and Record Layer](#documentary-and-record-layer)
+  - [Source Documents and Source Location](#source-documents-and-source-location)
+  - [Records, Identity, Revisions, and Text Fidelity](#records-identity-revisions-and-text-fidelity)
+  - [Record Field Classes and Assertions](#record-field-classes-and-assertions)
+  - [Attribution and Semantic Relations](#attribution-and-semantic-relations)
+  - [Lifecycle, Transformation, Segmentation, and Review](#lifecycle-transformation-segmentation-and-review)
 - [Publication, Storage, and Retrieval](#publication-storage-and-retrieval)
+  - [Publication and Corpus Interchange](#publication-and-corpus-interchange)
+  - [Storage and Derived Representations](#storage-and-derived-representations)
+  - [Evidence Acquisition](#evidence-acquisition)
+  - [Retrieval Profile](#retrieval-profile)
 - [Evidence, Claims, Traceability, and Reproducibility](#evidence-claims-traceability-and-reproducibility)
+  - [Evidence Profile](#evidence-profile)
+  - [Citation](#citation)
+  - [Generation, Claims, and Support Bindings](#generation-claims-and-support-bindings)
+  - [Advisory Research Memory](#advisory-research-memory)
+  - [Traceability Matrix](#traceability-matrix)
+  - [Reproducibility and Evaluation](#reproducibility-and-evaluation)
 - [Interfaces, Validation, and Governance](#interfaces-validation-and-governance)
+  - [Transport and API Contracts](#transport-and-api-contracts)
+  - [Validation](#validation)
+  - [Failure and Uncertainty](#failure-and-uncertainty)
+  - [Security, Access, and Disclosure](#security-access-and-disclosure)
+  - [Language and Translation](#language-and-translation)
+  - [Model Independence and Execution Locality](#model-independence-and-execution-locality)
+  - [Researcher-Controlled Execution Profile](#researcher-controlled-execution-profile)
 - [Interoperability, Portability, and External Standards](#interoperability-portability-and-external-standards)
+  - [Interoperability Architecture](#interoperability-architecture)
+  - [cELF PROV Mapping Profile](#celf-prov-mapping-profile)
+  - [cELF RO-Crate Profile](#celf-ro-crate-profile)
+  - [Claim-Level Publication and Nanopublication Compatibility](#claim-level-publication-and-nanopublication-compatibility)
+  - [Interoperability and the cELF Traceability Matrix](#interoperability-and-the-celf-traceability-matrix)
+  - [Interoperability Conformance and Validation](#interoperability-conformance-and-validation)
+  - [Relationship of cELF to External Standards](#relationship-of-celf-to-external-standards)
 - [Appendix A - Normative Entity Model and Object Glossary](#appendix-a---normative-entity-model-and-object-glossary)
+  - [Normative entity and cardinality model](#normative-entity-and-cardinality-model)
+  - [Normative Object Glossary](#normative-object-glossary)
 - [Appendix B - Extensibility and Conformance](#appendix-b---extensibility-and-conformance)
+  - [Extensions and Versioning](#extensions-and-versioning)
+  - [Conformance Profiles](#conformance-profiles)
+  - [Normative Conformance Requirement Catalog](#normative-conformance-requirement-catalog)
+  - [Profile-to-Requirement Matrix](#profile-to-requirement-matrix)
+  - [Required Invariants and Profile Applicability](#required-invariants-and-profile-applicability)
 - [Appendix C - Reference Interchange, Vocabularies, and Schemas](#appendix-c---reference-interchange-vocabularies-and-schemas)
+  - [Reference Interchange and Automated Conformance](#reference-interchange-and-automated-conformance)
+  - [Controlled Vocabulary Registries](#controlled-vocabulary-registries)
+  - [Canonical Conceptual Schemas](#canonical-conceptual-schemas)
 - [Appendix D - Relationship to External Standards](#appendix-d---relationship-to-external-standards)
 - [Appendix E - Reference Implementation](#appendix-e---reference-implementation)
 - [Appendix F - Rationale and Summary](#appendix-f---rationale-and-summary)
+  - [Specification Summary](#specification-summary)
+
+### Part II - Technical white paper (non-normative)
+
+- [White Paper - DerridAI as the Reference Implementation of cELF](#white-paper---derridai-as-the-reference-implementation-of-celf)
+- [Abstract](#abstract)
+- [1. The name: _capta_, enrichment, and lexical form](#1-the-name-capta-enrichment-and-lexical-form)
+- [2. Research problem](#2-research-problem)
+- [3. What cELF standardizes](#3-what-celf-standardizes)
+- [4. DerridAI as a reference implementation](#4-derridai-as-a-reference-implementation)
+- [5. Implementation architecture in DerridAI](#5-implementation-architecture-in-derridai)
+  - [5.1 Documentary identity and revision](#51-documentary-identity-and-revision)
+  - [5.2 FieldAssertion and project-defined metadata](#52-fieldassertion-and-project-defined-metadata)
+  - [5.3 Reviewed evidence as metadata precedent](#53-reviewed-evidence-as-metadata-precedent)
+  - [5.4 Evidence acquisition](#54-evidence-acquisition)
+  - [5.5 Claim/evidence binding](#55-claimevidence-binding)
+- [6. Deterministic code, language models, and validation](#6-deterministic-code-language-models-and-validation)
+- [7. Human review and authority](#7-human-review-and-authority)
+- [8. Local execution and reproducibility](#8-local-execution-and-reproducibility)
+- [9. Interoperability and conformance](#9-interoperability-and-conformance)
+- [10. Applicability beyond Derrida](#10-applicability-beyond-derrida)
+- [Conclusion](#conclusion)
+- [References](#references)
 
 ---
 
@@ -121,6 +189,8 @@ A **SourceDocument** represents a documentary source from which records derive. 
 When the original source bytes are available, an implementation SHOULD record a cryptographic content digest - a compact digital fingerprint computed from the file contents. The digest identifies a digital representation; it MUST NOT automatically be treated as the identity of the abstract intellectual work.
 
 A SourceDocument SHOULD support, where applicable: `source_document_id`, `source_hash`, `media_type`, `source_filename`, `source_uri`, `title`, `document_author`, `edition`, `translator`, `publisher`, `publication_place`, `publication_year`, `original_language`, `document_language`, `page_count`, and domain metadata.
+
+> **Reference implementation note - non-normative.** DerridAI Corpus Capture discovers possible documentary sources through provider catalogues, records discovery/reconciliation state for human review, and acquires only selected candidates. Capture IDs, provider-search diagnostics, candidate-selection state, and background-job state are acquisition bookkeeping rather than SourceDocument identity or scholarly Record content. A successful acquisition enters the same SourceDocument registration path as uploads and direct imports; one registered source may be associated with multiple captures without changing its `source_document_id`. Acquisition does not itself create Records or start a corpus build.
 
 #### Physical and scholarly location
 
@@ -302,6 +372,13 @@ A human-confirmed semantic value MUST NOT later be overwritten silently by a bac
 A **CorpusPublication** is an immutable snapshot intended for interchange, indexing, citation, analysis, or later retrieval. It MUST identify `publication_id`, `corpus_id`, publication version, applicable specification or schema version, creation time, and records or immutable references to them.
 
 Once declared final, a CorpusPublication MUST NOT be changed in place. Corrections MUST create a new publication or revision.
+
+A publication SHOULD provide a detached SHA-512 integrity artifact for the published
+serialization, including publications that are valid only for experimental or
+non-conformant use. The artifact SHOULD identify the exact published file and the
+hashing scope (for example, the compressed interchange artifact); the digest MAY
+also be recorded in the publication manifest. An integrity artifact MUST NOT be
+treated as evidence that the publication passed semantic or provenance validation.
 
 #### Publication validation
 
@@ -503,6 +580,8 @@ If prior material is promoted into current evidence or claim support, the implem
 
 Memory access SHOULD preserve applicable owner, visibility, and authorization constraints. Vector indexes, similarity projections, response caches, and exemplar-search indexes built over memory SHOULD remain rebuildable derived state rather than the sole authoritative copy of reviewed decisions or claim provenance.
 
+A reviewed metadata-precedent index is an example of advisory memory: the embedded evidence/field/value relationship can guide later enrichment, but it does not become documentary evidence for the later Record. The later assertion remains independently grounded in the later Record's own source material.
+
 ### Traceability Matrix
 
 A cELF **traceability matrix** is the logical set of relations connecting research output to the documentary and computational state on which it depends. It MAY be implemented as relational tables, graph edges, structured JSON, event records, or another representation; a literal table is not required.
@@ -641,7 +720,7 @@ Pipeline sovereignty is an architectural property, not a legal conclusion about 
 
 ### Researcher-Controlled Execution Profile
 
-An implementation claiming **cELF Researcher-Controlled Execution 1.0 Conformance** MUST permit essential research operations to run within infrastructure controlled by the researcher or research organization. Remote storage, embedding, model inference, authentication, and telemetry MAY be available, but none may be mandatory for the declared profile scope.
+An implementation claiming **cELF Researcher-Controlled Execution 1.0 Conformance** MUST permit essential research operations without mandatory remote storage, remote embedding, remote model inference, remote authentication, or remote telemetry.
 
 At minimum, the profile MUST permit within researcher-controlled infrastructure: document ingestion; source storage; Record construction; metadata and provenance storage; corpus publication; search or evidence acquisition; evidence selection; citation; AI inference; validation; and research-output storage.
 
@@ -838,9 +917,9 @@ A Project Snapshot Crate SHOULD identify which artifacts are authoritative and w
 
 An implementation MAY serialize a Research Run Crate conceptually as follows. File names are illustrative unless separately required by the applicable RO-Crate or cELF serialization profile.
 
-    derridai-run-2026-09-22/
+    celf-run-2026-09-22/
     |-- ro-crate-metadata.json
-    |-- derridai-manifest.json
+    |-- celf-manifest.json
     |-- corpus/
     |   |-- publication-manifest.json
     |   |-- metadata-schema.json
@@ -1390,6 +1469,8 @@ PROV does not by itself define cELF distinctions such as SourceSpan precision, R
 
 _This appendix is non-normative._
 
+This publication records a reference-implementation review of DerridAI `master` at commit `15380f308400e93fc63d6b352cf6b8c4739ffa63` on 26 September 2026. That audit is a historical implementation snapshot, not part of the normative contract. The repository may advance beyond it while remaining governed by the normative requirements above.
+
 The DerridAI application is the originating reference implementation. Its practical scholarly-provenance shorthand is:
 
 `SOURCE -> PASSAGE -> SPEAKER -> POSITION HOLDER -> STANCE -> PROPOSITION -> EXACT EVIDENCE -> CITATION -> CLAIM`
@@ -1402,6 +1483,7 @@ Implementation lessons incorporated into cELF 1.0 include:
 - **Packet integrity before generation.** Structural provenance checks are distinct from the semantic question of whether evidence truly supports a claim.
 - **Rendered citations are not SupportBindings.** Machine evidence-marker relations must survive independently of human-readable citation formatting.
 - **Advisory memory is not evidence.** Prior responses, claims, and reviewed decisions may guide later work, but current support requires re-resolution against current documentary state.
+- **Reviewed metadata precedent is a derived projection.** DerridAI can bind human-reviewed field values to exact evidence, project evidence-centered exemplars into a rebuildable vector index, and retrieve semantically similar precedents as field-scoped few-shot guidance for later enrichment without treating those precedents as authority for the new Record.
 
 Reference-implementation coverage MUST NOT be treated as a conformance score unless each applicable requirement ID has been tested and documented under the relevant conformance profile.
 
@@ -1432,3 +1514,146 @@ with revision and assertion provenance preserved when applicable. Evidence, gene
 For audit, the essential chain reverses from GeneratedClaim through SupportBinding and EvidenceRef to the exact RecordRevision or SourceSpan and ultimately to the SourceDocument.
 
 The scope rule follows directly: **cELF standardizes an object only when the object preserves a scholarly identity or distinction that must survive across implementations; generic infrastructure remains implementation-specific and is constrained only where it can damage that scholarly traceability.**
+
+---
+
+# White Paper - DerridAI as the Reference Implementation of cELF
+
+_Non-normative explanatory paper_
+
+## Abstract
+
+The **Capta-Enriched Lexical Format (cELF, pronounced “self”)** defines a portable information model for AI-assisted documentary research. It preserves source identity, record revision, attribution, evidence, uncertainty, assertion provenance, and research-run provenance as documents move through extraction, enrichment, retrieval, generation, review, and publication. DerridAI is the originating reference implementation.
+
+DerridAI began as a local research environment for a corpus of Jacques Derrida’s works. That corpus puts pressure on ordinary retrieval pipelines because interpretation often depends on quotation boundaries, reported positions, shifts in speaker, edition and translation, pagination, and rhetorical stance. The implementation has therefore been useful for testing whether the distinctions defined by cELF remain recoverable in a working system.
+
+> **Figure - cELF source-to-claim traceability.** `SourceDocument -> SourceSpan -> Record -> RecordRevision -> FieldAssertion -> Evidence Acquisition -> EvidenceRef -> EvidencePacket -> GenerationRun -> GeneratedClaim -> SupportBinding`.
+
+## 1. The name: _capta_, enrichment, and lexical form
+
+The word _capta_ is used here as a methodological reminder. In a widely cited digital-humanities formulation, Johanna Drucker distinguishes _capta_ - what is taken, selected, or constructed for analysis - from the idea that computational objects simply arrive as neutral givens (Drucker 2011). A research corpus is produced through choices about transcription, segmentation, page mapping, field definitions, classification, evidence selection, and review. cELF records enough of those choices to make the resulting objects auditable.
+
+The distinction is useful, but it should not be overstated. Matthew Lavin has argued that “situated data” can express much of the same point and that the history of the word _data_ does not support a simple philosophical opposition between given and taken (Lavin 2021). cELF therefore continues to use ordinary engineering terms such as _data_, _metadata_, and _database_. The word _capta_ identifies the methodological emphasis: selection and interpretation should remain visible when they affect a research claim.
+
+**Enriched** describes the relation between documentary text and the additional structure attached to it. A lexical passage may acquire source locators, revision identity, FieldAssertions, review authority, evidence references, retrieval provenance, and claim bindings. Those enrichments remain linked to the material from which they were derived.
+
+**Lexical** identifies text-bearing representation as the main interchange surface. It does not mean that cELF accepts only plain-text sources. PDF pages, images, audio, web documents, and other media can be represented with medium-appropriate SourceSpans while transcription or recognized text supplies the lexical material used for search, annotation, and model input.
+
+## 2. Research problem
+
+A conventional retrieval-augmented generation pipeline can be summarized as segmentation, indexing, retrieval, and generation. That is often sufficient when the task is to locate fact-like statements. Documentary research frequently requires additional distinctions: who is speaking, whose position is being reported, whether language is quoted or paraphrased, which revision is in use, what page system a citation refers to, and whether a later claim is actually supported by the cited passage.
+
+These distinctions are common in humanities corpora and also appear in legal research, historical archives, oral histories, religious studies, and other source-intensive fields. A passage can physically occur in one author’s book while presenting another person’s position. A quotation can be introduced in order to criticize it. Editorial or translator material can appear next to primary text. A segmented passage can lose the sentence that qualifies its meaning.
+
+cELF addresses this by making documentary identity, assertion state, evidence, and claim support explicit parts of the information model. Retrieval remains important, but a ranked result is treated as a candidate for research use rather than as proof of a claim.
+
+## 3. What cELF standardizes
+
+cELF defines semantic roles that need to survive implementation changes. Its core objects include SourceDocument, SourceSpan, Record, RecordRevision, FieldAssertion, EvidenceRef, EvidencePacket, GenerationRun, GeneratedClaim, SupportBinding, and ResearchRun. Publication and retrieval profiles add objects needed for those capabilities.
+
+The format does not prescribe a database, vector store, model provider, UI framework, or application topology. Those choices can change while the documentary and evidentiary relationships remain stable. Embeddings, rankings, caches, and other computational artifacts are treated as derived state when they can be rebuilt from retained research records.
+
+This boundary is important for interoperability. A system can export a cELF corpus or research run without reproducing the implementation that originally created it, provided the exported representation preserves the required identities, relations, and version information.
+
+## 4. DerridAI as a reference implementation
+
+DerridAI implements cELF in a corpus where attribution and discourse relations matter frequently. Its metadata model distinguishes, among other concepts, document author, textual speaker, quoted speaker, position holder, target, stance, discourse role, and proposition status. Those fields are project-specific; cELF does not require another domain to adopt the same vocabulary.
+
+What cELF does require is a way to preserve how such values were obtained and evaluated. A model proposal, a deterministic derivation, a human confirmation, a human override, an unresolved disagreement, and a confirmed absence are different states. DerridAI’s use of FieldAssertion provides one implementation of that distinction.
+
+A reference implementation is useful only if it remains separable from the specification. DerridAI contains UI components, caches, job state, vector collections, and other implementation details that are not cELF semantic objects. Conversely, a cELF requirement is normative because it appears in the specification, not because DerridAI happens to implement it.
+
+## 5. Implementation architecture in DerridAI
+
+DerridAI keeps canonical research records separate from derived representations used for retrieval and execution. Canonical state includes source identity, revisions, reviewed FieldAssertions, evidence bindings, corpus publications, and retained research runs. Derived state includes indexes, rankings, compact prompt payloads, and caches that can be rebuilt.
+
+> **Figure - DerridAI reference implementation.** Canonical source, Record, revision, reviewed assertion, evidence, publication, and research-run state remains authoritative; retrieval indexes, rankings, prompt payloads, exemplar projections, and caches are derived and rebuildable.
+
+### 5.1 Documentary identity and revision
+
+SourceDocument identifies the documentary source. SourceSpan records a location appropriate to that source, such as a page, character interval, image region, or time range. Record identifies a research unit; RecordRevision preserves publication-relevant changes to that unit.
+
+This distinction allows a correction to text or metadata to be represented as a revision of the same research object when its identity has not changed. Evidence and generated claims can therefore resolve to the revision that was actually used rather than silently following later edits.
+
+### 5.2 FieldAssertion and project-defined metadata
+
+FieldAssertion represents an assertion about a field and keeps derivation, evaluation, authority, value state, confidence, and evidence distinguishable. Stable field identity allows a metadata contract to evolve while retaining the history of compatible assertions.
+
+For example, if a model proposes `position_holder = Levinas` and a reviewer confirms it, the authority changes but the derivation history remains model-based. Likewise, `not_evaluated`, `no_supported_value`, `confirmed_absent`, and `evaluation_failed` remain separate states. They should not collapse into a generic “checked” flag.
+
+Projects can define metadata suited to their research method while retaining these common epistemic properties. This is how cELF supports different scholarly vocabularies without requiring a universal ontology.
+
+### 5.3 Reviewed evidence as metadata precedent
+
+DerridAI can derive a semantic exemplar from a reviewed FieldAssertion and its bound evidence. The embedded document is an evidence-centered text window; vector metadata records the field identity, reviewed value, assertion state, record/revision identity, schema identity, and evidence identifiers.
+
+```text
+embedded document = reviewed evidence span + bounded local context
+vector metadata = field identity + reviewed value + provenance identifiers
+```
+
+During later enrichment, the current record is embedded and the exemplar index is queried separately for relevant fields. Similarity thresholds, per-field limits, current-record exclusion, diversity selection, and a packet budget limit the examples supplied to the model.
+
+> **Figure - Reviewed metadata precedent retrieval.** Reviewed `FieldAssertion` + bound evidence -> evidence-centered derived exemplar index -> field-scoped similarity retrieval -> advisory precedents -> a new independently evidenced `FieldAssertion`.
+
+The retrieved examples are advisory precedents. A similar reviewed passage can help the model interpret a new passage, but the new value still requires its own FieldAssertion and evidence. Reviewed corrections can preserve a rejected model value as a negative precedent, and a reviewed evidence-bound absence can be represented separately from unresolved or failed evaluation.
+
+The vector collection is a derived index. The reviewed FieldAssertion and its evidence remain canonical. Rebuilding or deleting the vector collection therefore does not change the accepted research record.
+
+### 5.4 Evidence acquisition
+
+Evidence can enter a research run through vector search, lexical search, filtering, direct reference, model-assisted location, or explicit researcher selection. cELF normalizes these routes into EvidenceRefs that resolve to durable documentary identity.
+
+This separation lets retrieval and generation be evaluated independently. A researcher who already knows the relevant passages can select them directly. A retrieval experiment can retain its candidate set and selected evidence for later analysis.
+
+### 5.5 Claim/evidence binding
+
+DerridAI distinguishes citation rendering from the relation between a generated claim and the evidence used to support it. SupportBinding records that relation in machine-resolvable form. A citation style can then change without changing the underlying evidence assignment.
+
+This matters because proximity in a prompt or paragraph is ambiguous. Evidence appearing in model context does not establish which claim it supports. Explicit bindings make that relation inspectable and testable.
+
+## 6. Deterministic code, language models, and validation
+
+DerridAI assigns work according to the type of decision involved. Deterministic code handles operations that have exact or rule-governed answers: identifiers, schema checks, page-map resolution, citation rendering, record lookup, quotation verification, deduplication, embedding compatibility, and reference resolution.
+
+Language models are used for tasks that require semantic judgment, including difficult segmentation proposals, attribution, discourse interpretation, relevance assessment, metadata inference, and synthesis. Structured model output is still validated because schema-valid output can contain a wrong attribution or unsupported relation.
+
+The system can also use model escalation selectively. A smaller model can perform a first pass, validators can identify ambiguous or unsupported results, and a larger model can be reserved for those cases. This reduces cost and latency while keeping the validation criteria independent of model size.
+
+## 7. Human review and authority
+
+Human review is represented in the research state rather than stored only as a UI status. A reviewer can confirm, override, dispute, or reopen an assertion, and the prior derivation can remain available for audit.
+
+This allows model assistance to reduce repetitive annotation work while preserving responsibility for accepted scholarly state. Review events can also improve later enrichment through the metadata-precedent mechanism described above, while the precedent remains advisory for each new record.
+
+## 8. Local execution and reproducibility
+
+The cELF **Researcher-Controlled Execution** profile covers deployments in which the declared essential operations can run on infrastructure controlled by the researcher or research organization. Hosted services may still be available, but they are optional for this profile.
+
+DerridAI supports local corpus storage, local embedding, and local model execution. This makes provider, model, quantization, runtime, context size, and hardware explicit parts of the research configuration when they affect results. It also supports comparison of local models under retained retrieval and evaluation conditions.
+
+cELF distinguishes corpus reproducibility, process reproducibility, and output reproducibility. A retained run can record the corpus/publication state, query, retrieval configuration, evidence packet, prompt contract, model/provider, generation parameters, output, validation results, and warnings. Exact byte-for-byte regeneration may still be impossible when a model or runtime is stochastic or externally mutable; the retained state makes the research procedure inspectable even in those cases.
+
+## 9. Interoperability and conformance
+
+cELF defines mappings to W3C PROV and RO-Crate so that provenance and research packages can move into established standards ecosystems. These mappings supplement the native cELF model. Export should preserve cELF distinctions when a more general external relation would lose information about derivation, authority, evaluation, or claim support.
+
+Conformance is assessed by profile and requirement identifier. DerridAI’s status as the originating reference implementation does not confer automatic conformance on every release. The implementation should be tested against the same requirements available to any other cELF implementation.
+
+## 10. Applicability beyond Derrida
+
+cELF does not define a Derrida-specific ontology. A historian can define fields for testimony, provenance, and archival roles. A legal research system can distinguish holdings, party arguments, quoted authority, and later commentary. A literary project can model narrator, character voice, editor, translator, and critical apparatus.
+
+The shared requirement is structural: field identity, derivation, evaluation, authority, uncertainty, evidence, revision, and source location remain recoverable. Each project can define the domain vocabulary it needs on top of that common model.
+
+## Conclusion
+
+cELF defines a portable structure for documentary identity, assertions, evidence, generated claims, and research runs. DerridAI demonstrates one implementation of that structure across ingestion, corpus review, metadata enrichment, retrieval, generation, validation, and evaluation.
+
+The design gives language models a defined role in semantic interpretation while keeping source identity, provenance, review authority, and claim/evidence relations explicit. Reviewed evidence can be reused as metadata precedent through derived vector indexes, but each new assertion remains independently grounded in its own record and evidence.
+
+## References
+
+Drucker, Johanna. “Humanities Approaches to Graphical Display.” _Digital Humanities Quarterly_ 5, no. 1 (2011). https://digitalhumanities.org/dhq/vol/5/1/000091/000091.html
+
+Lavin, Matthew. “Why Digital Humanists Should Emphasize Situated Data over Capta.” _Digital Humanities Quarterly_ 15, no. 2 (2021). https://www.digitalhumanities.org/dhq/vol/15/2/000556/000556.html

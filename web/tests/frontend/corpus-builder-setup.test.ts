@@ -5,6 +5,7 @@ import CorpusExecutionSettings from "../../src/components/CorpusExecutionSetting
 import CorpusRecordSizingSettings from "../../src/components/CorpusRecordSizingSettings.vue";
 import CorpusWorkflowStepper from "../../src/components/CorpusWorkflowStepper.vue";
 import DocumentStructureConfigurator from "../../src/components/DocumentStructureConfigurator.vue";
+import PdfPageLabelEditor from "../../src/components/PdfPageLabelEditor.vue";
 
 function buttonByText(wrapper: any, text: string) {
   const button = wrapper.findAll("button").find((node: any) => node.text().includes(text));
@@ -268,5 +269,22 @@ describe("Corpus Builder setup and launch controls", () => {
     const plan = lastEmission(wrapper, "save")[0] as any;
     expect(plan.main_text_pdf_start).toBe(2);
     expect(plan.page_layout).toBe("single");
+  });
+
+  it("pages through printed labels and emits only edited mapping overrides", async () => {
+    const pages = Array.from({ length: 27 }, (_, index) => ({
+      pdf_page: index + 1,
+      printed_page_label: String(index + 1),
+      printed_page_label_source: "detected",
+    }));
+    const wrapper = mount(PdfPageLabelEditor, { props: { pages } });
+    expect(wrapper.get(".range").text()).toBe("1–25 / 27");
+    await wrapper.get("#pdf-label-1").setValue("i");
+    expect(wrapper.get("button").attributes("disabled")).toBeUndefined();
+    await buttonByText(wrapper, "Save 1 override").trigger("click");
+    expect(lastEmission(wrapper, "save")[0]).toEqual({ 1: "i" });
+    await buttonByText(wrapper, "Next").trigger("click");
+    expect(wrapper.get(".range").text()).toBe("26–27 / 27");
+    expect(wrapper.find("#pdf-label-26").exists()).toBe(true);
   });
 });

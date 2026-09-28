@@ -1,5 +1,5 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
-import { computed, ref, type Ref } from "vue";
+import { computed, ref, watch, type Ref } from "vue";
 import {
   corpusBuilderApi,
   type CorpusBuild,
@@ -10,7 +10,6 @@ import {
 import type { ProviderProfile } from "../../../api/system";
 import type { ReviewQueue } from "../../../types/corpus";
 import type { ReviewViewport } from "./useCorpusReviewWorkspace";
-import { reviewableMetadataFieldNames } from "../domain/recordMetadata";
 import { describeDecisionResult } from "../domain/metadataDecisions";
 import { isUsableMetadataSuggestion } from "../../../domain/metadataValues";
 import { allEvidenceBlockIds } from "../../../domain/metadataEvidence";
@@ -33,7 +32,8 @@ interface CorpusMetadataReviewOptions {
   currentBuild: Ref<CorpusBuild | null>;
   selectedRecord: Ref<CorpusRecord | null>;
   selectedRecordId: Ref<string>;
-  records: Ref<CorpusRecord[]>;
+  /** Patch the review queue's row (and cached Record) from an updated Record. */
+  applyRecordToQueue: (record: CorpusRecord) => void;
   busy: Ref<string>;
   selectedEvidenceField: Ref<string>;
   reviewInspectorTab: Ref<"metadata" | "evidence" | "source">;
@@ -93,6 +93,11 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
   const metadataHumanValues = ref<Record<string, Set<string>>>({});
   const metadataObservedValues = ref<Record<string, string[]>>({});
 
+  watch(options.selectedRecordId, () => {
+    metadataSavingField.value = "";
+    metadataSavedField.value = "";
+  });
+
   const metadataKnownValues = computed<Record<string, string[]>>(() => {
     const out: Record<string, Set<string>> = {};
     for (const [field, values] of Object.entries(metadataObservedValues.value)) {
@@ -101,20 +106,8 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
         (out[field] ??= new Set()).add(value.trim());
       }
     }
-    for (const row of options.records.value) {
-      const source = row as unknown as Record<string, unknown>;
-      const allowed = new Set(
-        reviewableMetadataFieldNames(source, options.currentBuild.value?.schema || null),
-      );
-      for (const field of allowed) {
-        const value = source[field];
-        const values = Array.isArray(value) ? value : [value];
-        for (const item of values) {
-          if (!isUsableMetadataSuggestion(item)) continue;
-          (out[field] ??= new Set()).add(item.trim());
-        }
-      }
-    }
+    // Build-wide observed values come from the server (metadata_facets), so suggestions no longer
+    // depend on which queue page happens to be loaded.
     for (const [field, values] of Object.entries(metadataHumanValues.value)) {
       for (const value of values) (out[field] ??= new Set()).add(value);
     }
@@ -147,8 +140,7 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
 
     options.selectedRecord.value = row;
     metadataDraft.value = JSON.stringify(options.recordMetadata(row), null, 2);
-    const index = options.records.value.findIndex((item) => item.record_id === recordId);
-    if (index >= 0) options.records.value.splice(index, 1, row);
+    options.applyRecordToQueue(row);
     metadataEditorDirty.value = false;
     try {
       localStorage.removeItem(options.metadataDraftKey(buildId, recordId));
@@ -205,8 +197,7 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
 
     options.selectedRecord.value = row;
     metadataDraft.value = JSON.stringify(options.recordMetadata(row), null, 2);
-    const index = options.records.value.findIndex((item) => item.record_id === recordId);
-    if (index >= 0) options.records.value.splice(index, 1, row);
+    options.applyRecordToQueue(row);
     await options.restoreReviewViewport(viewport);
     options.queueRecordRequest(recordId, [field], (rebase) =>
       corpusBuilderApi.patchEvidence(
@@ -344,10 +335,10 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
       metadataSavingField.value = "";
       return;
     }
-    // Optimistic: the value is already shown as decided, so release the field now and only report a failure.
-    metadataSavingField.value = "";
-    metadataSavedField.value = field;
     await options.restoreReviewViewport(viewport, { inspector: true });
+    // Restore can synchronously reselect the record and clear transient review state.
+    // Set the pending marker immediately before enqueueing so the optimistic value remains visible.
+    metadataSavingField.value = field;
     options.queueRecordRequest(
       context.recordId,
       [field],
@@ -363,11 +354,18 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
           humanSource,
         );
         options.applyAuthoritativeRecord(result.record, result.build);
+        if (options.selectedRecordId.value === context.recordId) {
+          metadataSavingField.value = "";
+          metadataSavedField.value = field;
+        }
         return result;
       },
       async () => {
         // Roll the optimistic value back to what the server holds.
-        if (options.selectedRecordId.value === context.recordId) metadataSavedField.value = "";
+        if (options.selectedRecordId.value === context.recordId) {
+          metadataSavingField.value = "";
+          metadataSavedField.value = "";
+        }
         await options.refreshRecords(false, context.recordId);
       },
     );
@@ -392,7 +390,6 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
       metadataSavingField.value = "";
       return;
     }
-    metadataSavingField.value = "";
     await options.restoreReviewViewport(viewport, { inspector: true });
     options.queueRecordRequest(
       context.recordId,
@@ -405,12 +402,17 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
           rebase ? undefined : context.expectedRevision,
         );
         options.applyAuthoritativeRecord(result.record, result.build);
+        if (options.selectedRecordId.value === context.recordId) {
+          metadataSavingField.value = "";
+          metadataSavedField.value = "__batch__";
+        }
         const summary = describeDecisionResult(result, options.tf);
         options.setMessage(summary.message, summary.tone);
         return result;
       },
       async () => {
         metadataSavingField.value = "";
+        metadataSavedField.value = "";
         await options.refreshRecords(false, context.recordId);
       },
     );
@@ -426,9 +428,6 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
       metadataSavingField.value = "";
       return;
     }
-    // Optimistic: the value is already shown as decided, so release the field now and only report a failure.
-    metadataSavingField.value = "";
-    metadataSavedField.value = field;
     await options.restoreReviewViewport(viewport, { inspector: true });
     options.queueRecordRequest(
       context.recordId,
@@ -443,11 +442,18 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
           true,
         );
         options.applyAuthoritativeRecord(result.record, result.build);
+        if (options.selectedRecordId.value === context.recordId) {
+          metadataSavingField.value = "";
+          metadataSavedField.value = field;
+        }
         return result;
       },
       async () => {
         // Roll the optimistic value back to what the server holds.
-        if (options.selectedRecordId.value === context.recordId) metadataSavedField.value = "";
+        if (options.selectedRecordId.value === context.recordId) {
+          metadataSavingField.value = "";
+          metadataSavedField.value = "";
+        }
         await options.refreshRecords(false, context.recordId);
       },
     );

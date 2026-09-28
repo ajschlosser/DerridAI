@@ -73,6 +73,9 @@ describe("reviewed precedents in Record Review", () => {
     const status = wrapper.findAll("[role=status]");
     expect(status).toHaveLength(1);
     expect(status[0].text()).toContain("2");
+    expect(wrapper.findAll("button").some((button) => button.text() === "Search again")).toBe(
+      false,
+    );
   });
 
   it("searches again on request instead of trusting the kept list", async () => {

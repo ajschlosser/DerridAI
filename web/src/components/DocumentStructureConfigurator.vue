@@ -25,6 +25,7 @@ const draft = ref<DocumentLayoutPlan>({
   page_layout: "single",
   reading_order: "left_to_right",
   thread_mode: "continuous",
+  unit_policy: { mode: "default" },
 });
 function normalized(plan?: DocumentLayoutPlan | null) {
   return {
@@ -37,6 +38,7 @@ function normalized(plan?: DocumentLayoutPlan | null) {
     bibliography_pdf_start: plan?.bibliography_pdf_start ?? null,
     thread_a_language: plan?.thread_a_language ?? "",
     thread_b_language: plan?.thread_b_language ?? "",
+    unit_policy: plan?.unit_policy ?? { mode: "default" },
   };
 }
 // A start page suggested from the document's own structure (only offered at 90% or more). It fills an empty
@@ -152,6 +154,7 @@ function save() {
           :page-width="pageInfo?.width || 0"
           :page-height="pageInfo?.height || 0"
           :blocks="blocks || []"
+          :max-width="640"
         />
         <div
           v-if="draft.page_layout === 'two_up'"
@@ -176,7 +179,11 @@ function save() {
             }}</small></span
           >
         </div>
-        <div class="current-page-actions">
+        <div
+          class="current-page-actions"
+          role="group"
+          :aria-label="i18n.t('pdf_corpus.page_mapping')"
+        >
           <button class="btn" type="button" @click="draft.main_text_pdf_start = current">
             {{ i18n.t("pdf_corpus.set_current_main_start") }}</button
           ><button class="btn" type="button" @click="draft.bibliography_pdf_start = current">
@@ -185,7 +192,7 @@ function save() {
         </div>
       </section>
       <section class="rules">
-        <fieldset>
+        <fieldset class="compact-fieldset">
           <legend>{{ i18n.t("pdf_corpus.page_layout") }}</legend>
           <label class="radio-row"
             ><input v-model="draft.page_layout" type="radio" value="single" />
@@ -205,7 +212,7 @@ function save() {
             </select></label
           >
         </fieldset>
-        <fieldset>
+        <fieldset class="compact-fieldset">
           <legend>{{ i18n.t("pdf_corpus.structural_anchors") }}</legend>
           <label
             ><span>{{ i18n.t("pdf_corpus.main_text_starts_pdf") }}</span>
@@ -267,7 +274,51 @@ function save() {
             </div></label
           >
         </fieldset>
-        <fieldset>
+        <fieldset class="compact-fieldset">
+          <legend>{{ i18n.t("pdf_corpus.evidence_structure", "Evidence source units") }}</legend>
+          <p class="field-help">
+            {{
+              i18n.t(
+                "pdf_corpus.evidence_structure_help",
+                "Choose the smallest source span reviewers can cite as evidence.",
+              )
+            }}
+          </p>
+          <label>
+            <span>{{ i18n.t("pdf_corpus.source_unit_mode", "Source-unit rule") }}</span>
+            <select v-model="draft.unit_policy!.mode" class="control">
+              <option value="default">
+                {{ i18n.t("pdf_corpus.source_unit_default", "Default extracted units") }}
+              </option>
+              <option value="sentence">
+                {{ i18n.t("pdf_corpus.source_unit_sentence", "Every sentence") }}
+              </option>
+              <option value="line">
+                {{ i18n.t("pdf_corpus.source_unit_line", "Every line") }}
+              </option>
+              <option value="paragraph">
+                {{ i18n.t("pdf_corpus.source_unit_paragraph", "Every paragraph") }}
+              </option>
+              <option value="chars">
+                {{ i18n.t("pdf_corpus.source_unit_chars", "Every N characters") }}
+              </option>
+            </select>
+          </label>
+          <label v-if="draft.unit_policy?.mode === 'chars'">
+            <span>{{
+              i18n.t("pdf_corpus.source_unit_chars_count", "Characters per source unit")
+            }}</span>
+            <input
+              v-model.number="draft.unit_policy.chars"
+              class="control"
+              type="number"
+              min="60"
+              max="20000"
+              step="10"
+            />
+          </label>
+        </fieldset>
+        <fieldset class="compact-fieldset">
           <legend>{{ i18n.t("pdf_corpus.page_threads") }}</legend>
           <label
             ><span>{{ i18n.t("pdf_corpus.thread_pattern") }}</span
@@ -305,7 +356,7 @@ function save() {
       </section>
     </div>
     <section class="mapping-summary">
-      <div>
+      <div aria-live="polite">
         <b>{{ i18n.t("pdf_corpus.generated_mapping") }}</b
         ><span>{{
           i18n.tf("pdf_corpus.mapping_summary", {
@@ -443,6 +494,10 @@ function save() {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--soft);
+}
+.compact-fieldset {
+  gap: 7px !important;
+  padding: 10px !important;
 }
 .browser {
   overflow: hidden;

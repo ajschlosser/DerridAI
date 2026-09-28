@@ -15,6 +15,7 @@ import CorpusRecordDecisionDock from "./corpus-builder/CorpusRecordDecisionDock.
 import CorpusReviewEvidencePanel from "./corpus-builder/CorpusReviewEvidencePanel.vue";
 import CorpusReviewSourcePanel from "./corpus-builder/CorpusReviewSourcePanel.vue";
 import RecordContextReader from "./corpus-builder/RecordContextReader.vue";
+import MovableRecordModal from "./corpus-builder/MovableRecordModal.vue";
 
 /**
  * Focus View: the review workspace without the queue and chrome. It is a layout, not a second implementation: the
@@ -166,6 +167,7 @@ const dialog = ref<HTMLElement | null>(null);
 const head = ref<InstanceType<typeof CorpusFocusHeader> | null>(null);
 const dock = ref<InstanceType<typeof CorpusRecordDecisionDock> | null>(null);
 const priorActive = ref<HTMLElement | null>(null);
+const recordPopoutOpen = ref(false);
 const tabOrder: InspectorTab[] = ["metadata", "evidence", "source"];
 const tab = computed(() => props.inspectorTab);
 
@@ -385,6 +387,14 @@ watch(
               @click="emit('markTextReviewed')"
             >
               {{ i18n.t("pdf_corpus.mark_text_reviewed") }}
+            </button>
+            <button
+              v-if="!editingText"
+              class="btn small"
+              type="button"
+              @click="recordPopoutOpen = true"
+            >
+              {{ i18n.t("pdf_corpus.reviewed_record_text") }}
             </button>
             <button
               class="btn small"
@@ -613,6 +623,13 @@ watch(
         </div>
       </aside>
     </main>
+
+    <MovableRecordModal
+      v-if="recordPopoutOpen"
+      :record-id="record.record_id"
+      :text="record.text"
+      @close="recordPopoutOpen = false"
+    />
 
     <CorpusRecordDecisionDock
       ref="dock"

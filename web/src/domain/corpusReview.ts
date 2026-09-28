@@ -23,7 +23,11 @@ export function recordIssueKinds(record: CorpusRecord) {
 }
 export function recordState(record: CorpusRecord) {
   const authoritative = String(record.review_state || "");
-  if (["ready", "metadata", "topology", "source", "accepted", "rejected"].includes(authoritative))
+  if (
+    ["preparing", "ready", "metadata", "topology", "source", "accepted", "rejected"].includes(
+      authoritative,
+    )
+  )
     return authoritative;
   if (record.accepted) return "accepted";
   if (record.rejected) return "rejected";

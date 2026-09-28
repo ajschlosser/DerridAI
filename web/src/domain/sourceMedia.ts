@@ -93,8 +93,6 @@ export function sourceMediaCapabilities(kind?: CorpusMediaKind): SourceMediaCapa
     normalized === "url" ||
     normalized === "gutenberg"
   ) {
-    // Text-medium sources have no PDF-only page/printed-pagination controls,
-    // but the extracted blocks are still reviewable as a transcript.
     return {
       pages: false,
       printedPagination: false,

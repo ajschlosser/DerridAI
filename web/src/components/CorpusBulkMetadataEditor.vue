@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
-import type { CorpusRecord } from "../api/pdfCorpus";
 import { useI18nStore } from "../stores/i18n";
 import { usableListOptions, usableOptions } from "../domain/metadataValues";
 import type { MetadataSchema } from "../api/metadataSchemas";
@@ -16,7 +15,6 @@ const props = withDefaults(
   defineProps<{
     selectedCount: number;
     totalCount: number;
-    records?: CorpusRecord[];
     knownValues?: Record<string, string[]>;
     regionTypes?: string[];
     discourseRoles?: string[];
@@ -24,7 +22,6 @@ const props = withDefaults(
     schema?: MetadataSchema | null;
   }>(),
   {
-    records: () => [],
     knownValues: () => ({}),
     regionTypes: () => [],
     discourseRoles: () => [],
@@ -173,11 +170,6 @@ const suggestions = computed(() => {
   for (const group of groups.value)
     for (const field of group.fields) {
       const seen: unknown[] = [];
-      for (const row of props.records || []) {
-        const value = (row as Record<string, unknown>)[field];
-        if (Array.isArray(value)) seen.push(...value);
-        else seen.push(value);
-      }
       seen.push(...(props.knownValues?.[field] || []));
       out[field] = (listFields.value.has(field) ? usableListOptions(seen) : usableOptions(seen))
         .sort((a, b) => a.localeCompare(b))

@@ -1,10 +1,13 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
-// Background jobs on the client: loading and polling the job list, cancelling, removing and clearing jobs, applying
-// finished upserts, submitting LLM jobs and the progress toasts and desktop notifications they raise. Moved verbatim from
-// the legacy runtime; the runtime's state object and helpers are passed in as dependencies.
+// Background jobs on the client: loading the job list, following it live over the realtime socket (with fallback
+// polling), cancelling, removing and clearing jobs, applying finished upserts, submitting LLM jobs and the progress
+// toasts and desktop notifications they raise. The runtime's state object and helpers are passed in as dependencies.
 import { icon } from "./html";
 import { isActiveJobStatus, jobIdsToPruneFromDock } from "./operationsDock";
+import { FALLBACK_POLL_MS, realtime as defaultRealtime } from "../realtime";
+import type { RealtimeClient } from "../realtime/client";
+import { TERMINAL_JOB_STATUSES, type JobEvent } from "../realtime/protocol";
 
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Parameters of these legacy functions were never typed; they keep the shape their callers give them. */
@@ -35,9 +38,13 @@ type Helper =
   | "trf"
   | "updateDbStatusElements"
   | "updateOperationStackCount";
-type Deps = { state: Loose } & Record<Helper, Fn>;
+type Deps = { state: Loose; realtime?: RealtimeClient } & Record<Helper, Fn>;
+
+/** Legacy interval, used only when realtime has not been started at all. */
+const LEGACY_POLL_MS = 4000;
 
 export function createJobsWorkspace(deps: Deps) {
+  const realtime = deps.realtime ?? defaultRealtime;
   const {
     state,
     announceOperationDock,
@@ -65,47 +72,62 @@ export function createJobsWorkspace(deps: Deps) {
   // Which finished jobs already raised a notification, and the timers that hide their completion toasts.
   const jobCompletionNotified: Record<string, boolean> = {};
   const completedJobToastTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+  /**
+   * The single reconciliation path for job state. REST snapshots (bootstrap, resync, fallback polling,
+   * explicit refresh) and realtime job events both end here, so toasts, desktop notifications,
+   * upsert receipts and the Operations panel behave identically whichever transport delivered the change.
+   */
+  async function reconcileJobs(nextJobs: Any[], { rerender = false, fromSnapshot = false } = {}) {
+    const previousJobs = [...state.jobs];
+    const previous = new Map(previousJobs.map((job) => [job.id, job.status]));
+    state.jobs = nextJobs;
+    if (fromSnapshot) state.jobsLastFetched = Date.now();
+    const knownJobIds = new Set(state.jobs.map((job: Any) => job.id));
+    const disappearedRagIds = previousJobs
+      .filter((job) => job.type === "rag" && !knownJobIds.has(job.id))
+      .map((job) => job.id);
+    if (disappearedRagIds.length && Array.isArray(state.ragConfig.run_history)) {
+      const removed = new Set(disappearedRagIds);
+      state.ragConfig.run_history = state.ragConfig.run_history.filter(
+        (item: Any) => !removed.has(item.job_id),
+      );
+      for (const id of disappearedRagIds) pruneClientJobState(id, { removeHistory: false });
+      persistPrefs();
+    }
+    for (const id of Object.keys(state.jobApplied || {}))
+      if (!knownJobIds.has(id)) delete state.jobApplied[id];
+    for (const id of Object.keys(state.upsertJobApplied || {}))
+      if (!knownJobIds.has(id)) delete state.upsertJobApplied[id];
+    for (const job of state.jobs) await syncUpsertJobReceipts(job);
+    syncJobProgressToasts(previous);
+    const operationsButton = document.querySelector("#operationsBtn");
+    if (operationsButton) {
+      const active = state.jobs.filter((job: Any) =>
+        ["queued", "running", "cancelling"].includes(job.status),
+      ).length;
+      operationsButton.classList.toggle("soft", active > 0);
+      operationsButton.innerHTML = `${icon("history")}Operations <span class="button-count">${active}</span>`;
+    }
+    notifyOperationsChanged();
+    if (rerender && state.view === "home") refreshCorpusBuildsHomeCardOnly();
+    if (state.view === "rag") refreshRagProgressPanel();
+    return state.jobs;
+  }
   async function refreshJobs({ rerender = false } = {}) {
     try {
       const payload = await api("/api/jobs");
-      const previousJobs = [...state.jobs];
-      const previous = new Map(previousJobs.map((job) => [job.id, job.status]));
-      state.jobs = payload.jobs || [];
-      state.jobsLastFetched = Date.now();
-      const knownJobIds = new Set(state.jobs.map((job: Any) => job.id));
-      const disappearedRagIds = previousJobs
-        .filter((job) => job.type === "rag" && !knownJobIds.has(job.id))
-        .map((job) => job.id);
-      if (disappearedRagIds.length && Array.isArray(state.ragConfig.run_history)) {
-        const removed = new Set(disappearedRagIds);
-        state.ragConfig.run_history = state.ragConfig.run_history.filter(
-          (item: Any) => !removed.has(item.job_id),
-        );
-        for (const id of disappearedRagIds) pruneClientJobState(id, { removeHistory: false });
-        persistPrefs();
-      }
-      for (const id of Object.keys(state.jobApplied || {}))
-        if (!knownJobIds.has(id)) delete state.jobApplied[id];
-      for (const id of Object.keys(state.upsertJobApplied || {}))
-        if (!knownJobIds.has(id)) delete state.upsertJobApplied[id];
-      for (const job of state.jobs) await syncUpsertJobReceipts(job);
-      syncJobProgressToasts(previous);
-      const operationsButton = document.querySelector("#operationsBtn");
-      if (operationsButton) {
-        const active = state.jobs.filter((job: Any) =>
-          ["queued", "running", "cancelling"].includes(job.status),
-        ).length;
-        operationsButton.classList.toggle("soft", active > 0);
-        operationsButton.innerHTML = `${icon("history")}Operations <span class="button-count">${active}</span>`;
-      }
-      notifyOperationsChanged();
-      if (rerender && state.view === "home") refreshCorpusBuildsHomeCardOnly();
-      if (state.view === "rag") refreshRagProgressPanel();
-      return state.jobs;
+      return await reconcileJobs(payload.jobs || [], { rerender, fromSnapshot: true });
     } catch (error) {
       console.warn("Could not refresh background jobs", error);
       return state.jobs;
     }
+  }
+  /** How long until the next REST poll, or null when no server-state polling should run. */
+  function pollDelay(): number | null {
+    if (realtime.live) return null; // healthy socket: events replace polling
+    if (realtime.fallbackActive) return FALLBACK_POLL_MS; // socket repeatedly unavailable
+    if (realtime.status === "idle") return LEGACY_POLL_MS; // realtime never started
+    return null; // briefly reconnecting: wait; a status change re-arms polling
   }
   function startJobPolling() {
     if (state.jobsPollTimer) return;
@@ -113,23 +135,79 @@ export function createJobsWorkspace(deps: Deps) {
     // restored server jobs; thereafter only known active jobs schedule polling.
     if (!state.jobs.some((job: Any) => ["queued", "running", "cancelling"].includes(job.status)))
       return;
+    const delay = pollDelay();
+    if (delay === null) return;
     const poll = async () => {
       state.jobsPollTimer = null;
       if (!state.jobs.some((job: Any) => ["queued", "running", "cancelling"].includes(job.status)))
         return;
+      if (pollDelay() === null) return;
       await refreshJobs({ rerender: state.view === "home" });
       const active = state.jobs.some((job: Any) =>
         ["queued", "running", "cancelling"].includes(job.status),
       );
-      if (active) state.jobsPollTimer = setTimeout(poll, 4000);
+      const next = pollDelay();
+      if (active && next !== null) state.jobsPollTimer = setTimeout(poll, next);
     };
-    state.jobsPollTimer = setTimeout(poll, 4000);
+    state.jobsPollTimer = setTimeout(poll, delay);
   }
-  function pauseRuntime() {
+  function stopJobPolling() {
     if (state.jobsPollTimer) {
       clearTimeout(state.jobsPollTimer);
       state.jobsPollTimer = null;
     }
+  }
+  // ---- realtime ---------------------------------------------------------------------------------
+  let realtimeBound = false;
+  let resyncTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Coalesce bursts (terminal events, reconnects) into one authoritative REST snapshot. */
+  function scheduleJobsResync(delay = 250) {
+    if (resyncTimer) return;
+    resyncTimer = setTimeout(async () => {
+      resyncTimer = null;
+      await refreshJobs({ rerender: state.view === "home" });
+      startJobPolling();
+    }, delay);
+  }
+  async function applyJobEvent(event: JobEvent) {
+    const summary = event.payload.job;
+    const known = state.jobs.some((job: Any) => job.id === summary.id);
+    if (event.type === "job.removed" || !known) {
+      // Removal or a job this page has not loaded yet: fetch the owner-scoped REST snapshot.
+      scheduleJobsResync();
+      return;
+    }
+    const next = state.jobs.map((job: Any) =>
+      job.id === summary.id ? { ...job, ...summary } : job,
+    );
+    await reconcileJobs(next, { rerender: state.view === "home" });
+    // Terminal events carry only a summary; results, errors and pending proposals come from REST.
+    if (summary.status && TERMINAL_JOB_STATUSES.has(summary.status)) scheduleJobsResync();
+  }
+  /** Connect the realtime socket (after authentication) and follow the job feed. */
+  function startRealtime() {
+    if (!realtimeBound) {
+      realtimeBound = true;
+      realtime.subscribe("jobs", (event) => {
+        if (event.resource_type === "job") void applyJobEvent(event as JobEvent);
+      });
+      realtime.onResync(() => scheduleJobsResync(0));
+      realtime.onStatus((status) => {
+        if (status === "idle") return; // paused (logout/expiry): nothing may re-arm polling
+        if (realtime.live) stopJobPolling();
+        else startJobPolling();
+      });
+    }
+    realtime.start();
+  }
+  function pauseRuntime() {
+    stopJobPolling();
+    if (resyncTimer) {
+      clearTimeout(resyncTimer);
+      resyncTimer = null;
+    }
+    // Logout, session expiry and account switches all pause the runtime: close the socket too.
+    realtime.stop();
   }
   function pruneClientJobState(jobId: Any, { removeHistory = true } = {}) {
     state.jobs = state.jobs.filter((job: Any) => job.id !== jobId);
@@ -395,6 +473,9 @@ export function createJobsWorkspace(deps: Deps) {
   }
   return {
     refreshJobs,
+    reconcileJobs,
+    applyJobEvent,
+    startRealtime,
     startJobPolling,
     pauseRuntime,
     pruneClientJobState,
