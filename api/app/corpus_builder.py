@@ -1798,7 +1798,9 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         Rebuilding on read keeps structural edits and human metadata corrections from
         leaving a stale visualization.  The graph remains a derived projection.
         """
-        records = self.repo.load_records(build_id)
+        records = [json.loads(json.dumps(row)) for row in self.repo.load_records(build_id)]
+        for row in records:
+            _present_for_reviewer(row)
         analysis = self.document_intelligence(build_id)
         graph = build_semantic_content_graph(
             records,
