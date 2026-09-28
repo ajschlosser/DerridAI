@@ -1,6 +1,8 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 from __future__ import annotations
 
+import numpy as np
+
 from app.source_embeddings import (
     SourceEmbeddingProjection,
     embedding_identity,
@@ -92,3 +94,31 @@ def test_complete_snapshot_prunes_removed_source_units():
 
     assert result["deleted"] == 1
     assert set(projection.embeddings_for("doc-1", ["b1", "b2"], provider="ollama", model="m")) == {"b1"}
+
+
+class FakeChromaCollection:
+    """Mimics real chromadb: `.get(include=["embeddings"])` returns a numpy array,
+    whose truth value is ambiguous under `or []` for more than one row."""
+
+    def __init__(self, rows: list[dict[str, object]]) -> None:
+        self._rows = rows
+
+    def get(self, *, where, include):
+        return {
+            "ids": [row["id"] for row in self._rows],
+            "metadatas": [row["metadata"] for row in self._rows],
+            "embeddings": np.array([row["embedding"] for row in self._rows]),
+        }
+
+
+def test_embeddings_for_handles_numpy_embeddings_array_from_real_chroma():
+    store = FakeStore()
+    projection = SourceEmbeddingProjection(store)
+    projection._collection = lambda provider, model: FakeChromaCollection([
+        {"id": "e1", "metadata": {"source_unit_id": "b1"}, "embedding": [1.0, 2.0]},
+        {"id": "e2", "metadata": {"source_unit_id": "b2"}, "embedding": [3.0, 4.0]},
+    ])
+
+    vectors = projection.embeddings_for("doc-1", ["b1", "b2"], provider="ollama", model="m")
+
+    assert vectors == {"b1": [1.0, 2.0], "b2": [3.0, 4.0]}
