@@ -165,7 +165,6 @@ export function useCorpusSourceConfiguration(
     } finally {
       busy.value = "";
     }
-
   }
 
   async function saveSourceMetadata(
