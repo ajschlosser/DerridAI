@@ -43,6 +43,7 @@ from .corpus_reviewer_helpers import (
     _scrub_sealed_field,
 )
 from .corpus_segmentation import _apply_manifest_metadata
+from .document_intelligence import prompt_hints as document_intelligence_prompt_hints
 from .enrichment_ledger import (
     AUTOFILLED,
     CALL,
@@ -61,7 +62,6 @@ from .field_assertions import (
 from .metadata_adjudication_cache import suggestions as adjudication_suggestions
 from .metadata_precedents_cache import CACHE_KEY as PRECEDENTS_CACHE_KEY
 from .metadata_precedents_cache import build_precedents_cache
-from .document_intelligence import prompt_hints as document_intelligence_prompt_hints
 from .metadata_schema import (
     CORE_FIELDS,
     CORE_GROUP,
