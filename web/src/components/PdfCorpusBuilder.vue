@@ -427,7 +427,6 @@ const {
   metadataRetryRunning,
   awaitingManifestReview,
   hasRecordTopology,
-  showBuildConfiguration: lifecycleShowBuildConfiguration,
   finishPhase,
   showReviewWorkspace: lifecycleShowReviewWorkspace,
 } = useCorpusBuildLifecycle(currentBuild, recordTotal, reviewQueue, reviewRequested);
@@ -705,6 +704,7 @@ function returnToReadiness() {
   reviewRequested.value = false;
   reviewQueue.value = "all";
   recordQuery.value = "";
+  void switchWorkspace("build");
 }
 
 /** The reviewer answers from their own knowledge: the decision records them, not a source span, as the source. */
@@ -1726,6 +1726,14 @@ async function chooseBuild(build: CorpusBuild) {
   hydratedMetadataCount.value = 0;
   reviewQueue.value = "all";
   reviewRequested.value = false;
+  await router.replace({
+    query: {
+      ...route.query,
+      build: build.build_id,
+      record: undefined,
+      queue: undefined,
+    },
+  });
   await refreshBuild();
   await nextTick();
   await refreshRecords(true);
@@ -1849,6 +1857,17 @@ watch([reviewQueue, recordQuery], () => {
   editingText.value = false;
   void refreshRecords(true);
 });
+watch([reviewRequested, reviewQueue], ([requested, queue], [wasRequested, wasQueue]) => {
+  if (!hasRecordTopology.value || workspaceMode.value === "review") return;
+  const explicitReviewNavigation = (requested && !wasRequested) || (queue !== "all" && queue !== wasQueue);
+  if (explicitReviewNavigation) void switchWorkspace("review");
+});
+watch(
+  () => selectedAsset.value?.media_kind,
+  (mediaKind) => {
+    if (mediaKind && mediaKind !== "pdf") llmAssessTextNoise.value = false;
+  },
+);
 watch(selectedEvidenceField, (field) => {
   if (!field || !selectedRecord.value) return;
   const ids = allEvidenceBlockIds(selectedRecord.value.metadata_evidence?.[field]);
