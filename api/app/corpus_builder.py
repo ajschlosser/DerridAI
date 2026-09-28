@@ -274,11 +274,7 @@ from .metadata_schema import (
 from .metadata_schema_store import SchemaStore
 from .models import WorkMetadataRequest, WorkMetadataSeed
 from .nlp_annotations import annotate_record
-from .operation_events import (
-    note_corpus_build,
-    note_corpus_generation_delta,
-    note_corpus_generation_finished,
-), note_record_metadata
+from .operation_events import note_corpus_build, note_record_metadata
 from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
 from .rag import _citation_strings, chat_complete
 from .run_guidance import find_guidance_matches
@@ -2294,7 +2290,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                             cancelled=(lambda: self._cancelled(build_id)) if build_id else None,
                             timeout_seconds=float(_stage_timeouts(request).get(timeout_key, 240)),
                             on_delta=(
-                                (lambda piece: note_corpus_generation_delta(build_id, call_id, piece))
+                                (lambda piece: self._note_llm_call_delta(build_id, call_token, piece))
                                 if build_id
                                 else None
                             ),
@@ -2309,8 +2305,6 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                             )
                         raise
                     finally:
-                        if build_id:
-                            note_corpus_generation_finished(build_id, call_id)
                         self._note_llm_call_end(build_id, call_token)
                 except InterruptedError:
                     raise
