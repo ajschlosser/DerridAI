@@ -41,6 +41,8 @@ import CorpusBoundarySliceDialog from "./CorpusBoundarySliceDialog.vue";
 import CorpusEvidenceBrowserDialog from "./corpus-builder/CorpusEvidenceBrowserDialog.vue";
 import MetadataEnrichmentDialog from "./MetadataEnrichmentDialog.vue";
 import CorpusModelActivity from "./CorpusModelActivity.vue";
+import CorpusDocumentIntelligenceStatus from "./CorpusDocumentIntelligenceStatus.vue";
+import CorpusLlmActivityInspector from "./CorpusLlmActivityInspector.vue";
 import CorpusHandsFreeSettings from "./CorpusHandsFreeSettings.vue";
 import MetadataSchemaEditor from "./MetadataSchemaEditor.vue";
 import {
@@ -425,10 +427,47 @@ const {
   metadataRetryRunning,
   awaitingManifestReview,
   hasRecordTopology,
-  showBuildConfiguration,
+  showBuildConfiguration: lifecycleShowBuildConfiguration,
   finishPhase,
-  showReviewWorkspace,
+  showReviewWorkspace: lifecycleShowReviewWorkspace,
 } = useCorpusBuildLifecycle(currentBuild, recordTotal, reviewQueue, reviewRequested);
+
+type CorpusWorkspaceMode = "setup" | "build" | "review";
+const requestedWorkspace = computed<CorpusWorkspaceMode | "">(() => {
+  const value = String(route.query.workspace || "");
+  return value === "setup" || value === "build" || value === "review" ? value : "";
+});
+const defaultWorkspace = computed<CorpusWorkspaceMode>(() => {
+  if (!currentBuild.value) return "setup";
+  return hasRecordTopology.value && lifecycleShowReviewWorkspace.value ? "review" : "build";
+});
+const workspaceMode = computed<CorpusWorkspaceMode>(() => {
+  const requested = requestedWorkspace.value;
+  if (requested === "setup") return "setup";
+  if (requested === "build" && currentBuild.value) return "build";
+  if (requested === "review" && hasRecordTopology.value) return "review";
+  return defaultWorkspace.value;
+});
+const showBuildConfiguration = computed(() => workspaceMode.value === "setup");
+const showReviewWorkspace = computed(
+  () =>
+    workspaceMode.value === "review" &&
+    hasRecordTopology.value &&
+    !awaitingManifestReview.value,
+);
+async function switchWorkspace(workspace: CorpusWorkspaceMode) {
+  if (workspace === "build" && !currentBuild.value) return;
+  if (workspace === "review" && !hasRecordTopology.value) return;
+  await router.replace({
+    query: {
+      ...route.query,
+      workspace,
+      build: currentBuild.value?.build_id || route.query.build,
+      record: workspace === "review" ? route.query.record : undefined,
+      queue: workspace === "review" ? route.query.queue : undefined,
+    },
+  });
+}
 const {
   registerBuildOperation,
   syncBuildInRail,
@@ -436,7 +475,7 @@ const {
   refreshBuild,
   startPolling,
   stopPolling,
-  startBuild,
+  startBuild: startBuildOperation,
   resumeBuild,
   retryIncompleteMetadata,
   confirmManifest,
@@ -476,6 +515,11 @@ const {
   t: (key, fallback) => i18n.t(key, fallback),
   tf: (key, values) => i18n.tf(key, values),
 });
+async function startBuild() {
+  await startBuildOperation();
+  if (currentBuild.value) await switchWorkspace("build");
+}
+
 
 const { jsonlPreviewOpen, jsonlPreview, openJsonlPreview, publish } = useCorpusPublication({
   currentBuild,
@@ -1744,7 +1788,13 @@ function startNewBuildSetup() {
   sourceBlocks.value = [];
   bulkMetadataOpen.value = false;
   void router.replace({
-    query: { ...route.query, build: undefined, record: undefined, queue: undefined },
+    query: {
+      ...route.query,
+      workspace: "setup",
+      build: undefined,
+      record: undefined,
+      queue: undefined,
+    },
   });
 }
 function reviewShortcut(event: KeyboardEvent) {
@@ -2018,7 +2068,11 @@ defineExpose({
       :status="currentBuild?.status || ''"
       :record-count="currentBuild?.record_count || 0"
       :accepted-count="currentBuild?.accepted_count || 0"
+      :workspace="workspaceMode"
+      :can-build="Boolean(currentBuild)"
+      :can-review="hasRecordTopology"
       :sticky="!showReviewWorkspace"
+      @workspace="switchWorkspace"
     >
       <template #actions>
         <CorpusBuildHistoryMenu
@@ -2264,6 +2318,7 @@ defineExpose({
         :document-intelligence-profile="documentIntelligenceProfile"
         :document-nlp-provider="documentNlpProvider"
         :document-nlp-include-events="documentNlpIncludeEvents"
+        :media-kind="selectedAsset?.media_kind || ''"
         :auto-clean-text="autoCleanText"
         :llm-touchup-during-enrichment="llmTouchupDuringEnrichment"
         :noise-unusable-threshold="noiseUnusableThreshold"
