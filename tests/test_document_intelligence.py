@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 
 from app import document_intelligence as di
+from app.corpus_publication import serialize_public_record
 
 
 def test_document_text_offsets_and_projection_are_bound_to_record_text():
