@@ -238,6 +238,11 @@ from .corpus_segmentation import (
 )
 from .corpus_segmentation_execution import BuildSegmentationExecutionMixin
 from .derridai_ledger import write_jsonl_zst
+from .document_intelligence import (
+    analyze_document,
+    document_text_for_records,
+    project_annotations_to_records,
+)
 from .enrichment_cycles import (
     GlobalLearningStore,
 )
@@ -268,17 +273,12 @@ from .metadata_schema import (
 )
 from .metadata_schema_store import SchemaStore
 from .models import WorkMetadataRequest, WorkMetadataSeed
-from .document_intelligence import (
-    analyze_document,
-    document_text_for_records,
-    project_annotations_to_records,
-)
 from .nlp_annotations import annotate_record
-from .semantic_content_graph import build_semantic_content_graph
 from .operation_events import note_corpus_build
 from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
 from .rag import _citation_strings, chat_complete
 from .run_guidance import find_guidance_matches
+from .semantic_content_graph import build_semantic_content_graph
 from .sentence_boundaries import snap_boundaries_to_sentences
 from .source_embeddings import SourceEmbeddingProjection
 from .source_quality import assess_extracted_source, page_source_quality_report
