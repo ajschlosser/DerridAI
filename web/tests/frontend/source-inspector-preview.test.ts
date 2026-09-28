@@ -21,7 +21,7 @@ const block = (block_id: string, text: string) => ({
   block_id,
   text,
   page: 1,
-  bbox: null,
+  bbox: [0, 0, 1, 1],
   type: "paragraph",
   extraction_method: "test",
   confidence: 1,
