@@ -335,10 +335,12 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
       metadataSavingField.value = "";
       return;
     }
+    // The value is already applied optimistically. Release the editor before the
+    // first await so a slow/stalled persistence request cannot leave Record Review
+    // frozen in "Saving…". The mutation queue still serializes canonical writes.
+    metadataSavingField.value = "";
+    metadataSavedField.value = field;
     await options.restoreReviewViewport(viewport, { inspector: true });
-    // Restore can synchronously reselect the record and clear transient review state.
-    // Set the pending marker immediately before enqueueing so the optimistic value remains visible.
-    metadataSavingField.value = field;
     options.queueRecordRequest(
       context.recordId,
       [field],
@@ -354,16 +356,15 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
           humanSource,
         );
         options.applyAuthoritativeRecord(result.record, result.build);
-        if (options.selectedRecordId.value === context.recordId) {
-          metadataSavingField.value = "";
-          metadataSavedField.value = field;
-        }
         return result;
       },
       async () => {
-        // Roll the optimistic value back to what the server holds.
-        if (options.selectedRecordId.value === context.recordId) {
-          metadataSavingField.value = "";
+        // Roll the optimistic value back to what the server holds. Do not clear a
+        // newer field's success marker when rapid saves are queued for one record.
+        if (
+          options.selectedRecordId.value === context.recordId &&
+          metadataSavedField.value === field
+        ) {
           metadataSavedField.value = "";
         }
         await options.refreshRecords(false, context.recordId);
@@ -390,6 +391,9 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
       metadataSavingField.value = "";
       return;
     }
+    // Batch decisions are optimistic too: do not hold the entire metadata panel
+    // in a Saving state while the serialized request is in flight.
+    metadataSavingField.value = "";
     await options.restoreReviewViewport(viewport, { inspector: true });
     options.queueRecordRequest(
       context.recordId,
@@ -402,17 +406,11 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
           rebase ? undefined : context.expectedRevision,
         );
         options.applyAuthoritativeRecord(result.record, result.build);
-        if (options.selectedRecordId.value === context.recordId) {
-          metadataSavingField.value = "";
-          metadataSavedField.value = "__batch__";
-        }
         const summary = describeDecisionResult(result, options.tf);
         options.setMessage(summary.message, summary.tone);
         return result;
       },
       async () => {
-        metadataSavingField.value = "";
-        metadataSavedField.value = "";
         await options.refreshRecords(false, context.recordId);
       },
     );
@@ -428,6 +426,8 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
       metadataSavingField.value = "";
       return;
     }
+    metadataSavingField.value = "";
+    metadataSavedField.value = field;
     await options.restoreReviewViewport(viewport, { inspector: true });
     options.queueRecordRequest(
       context.recordId,
@@ -442,16 +442,15 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
           true,
         );
         options.applyAuthoritativeRecord(result.record, result.build);
-        if (options.selectedRecordId.value === context.recordId) {
-          metadataSavingField.value = "";
-          metadataSavedField.value = field;
-        }
         return result;
       },
       async () => {
-        // Roll the optimistic value back to what the server holds.
-        if (options.selectedRecordId.value === context.recordId) {
-          metadataSavingField.value = "";
+        // Roll the optimistic value back to what the server holds without
+        // clobbering feedback from a newer queued decision.
+        if (
+          options.selectedRecordId.value === context.recordId &&
+          metadataSavedField.value === field
+        ) {
           metadataSavedField.value = "";
         }
         await options.refreshRecords(false, context.recordId);
