@@ -67,7 +67,17 @@ BOOKNLP_COREF_MODEL
 BOOKNLP_QUOTE_MODEL
 ```
 
-Optional:
+Optional integrity pins:
+
+```text
+BOOKNLP_ENTITY_SHA256
+BOOKNLP_COREF_SHA256
+BOOKNLP_QUOTE_SHA256
+```
+
+When an expected SHA-256 is supplied, the worker verifies that artifact before loading the BookNLP pipeline; a mismatch makes the worker unready and the provider unavailable. The computed digests are always returned in model provenance even when no expected digest is configured.
+
+Other optional settings:
 
 ```text
 BOOKNLP_SPACY_MODEL=en_core_web_sm
