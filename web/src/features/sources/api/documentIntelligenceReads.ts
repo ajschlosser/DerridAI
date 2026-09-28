@@ -36,7 +36,11 @@ export async function sourceDocumentDetail(
     catalog_metadata: (source.catalog_metadata || {}) as Record<string, unknown>,
     initial_metadata: (source.initial_metadata || {}) as Record<string, string | number | null>,
     derived_from_asset_id: source.derived_from_source_document_id,
-    captures: source.captures,
+    captures: source.captures.map((capture) => ({
+      ...capture,
+      discovery_method: capture.discovery_method || "",
+      acquired_at: capture.acquired_at || "",
+    })),
     builds: source.builds,
   };
 }
