@@ -13,8 +13,9 @@ import math
 import re
 import unicodedata
 from collections import Counter
+from collections.abc import Callable
 from difflib import SequenceMatcher
-from typing import Any, Callable
+from typing import Any
 
 METHOD = "deterministic-lexical-v1"
 EVIDENCE_MODES = ("with_value", "backfill")

@@ -48,7 +48,11 @@ from .enrichment_ledger import (
     CALL,
     PROPOSED,
 )
-from .evidence_suggestions import evidence_cascade_llm_enabled, evidence_mode, suggest_evidence_cascade
+from .evidence_suggestions import (
+    evidence_cascade_llm_enabled,
+    evidence_mode,
+    suggest_evidence_cascade,
+)
 from .field_assertions import (
     current_assertion_by_name,
     migrate_record_assertions,
