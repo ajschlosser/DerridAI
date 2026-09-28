@@ -235,6 +235,24 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
     }
   }
 
+  /** Re-read one full Record after a durable realtime completion hint. */
+  async function refreshRecord(recordId: string): Promise<void> {
+    if (!options.selectedBuildId.value || !recordId) return;
+    try {
+      clearGraphQLReadCache();
+      const [record] = await corpusReviewReads.records(options.selectedBuildId.value, [recordId]);
+      if (!record) return;
+      const index = queueRows.value.findIndex((row) => row.record_id === record.record_id);
+      if (index >= 0) queueRows.value.splice(index, 1, queueRowFromRecord(record));
+      // Do not replace an optimistic/local edit while it is still open.
+      if (record.record_id === options.selectedRecordId.value && options.hasActiveDraft()) return;
+      cache.set(record.record_id, record);
+      if (record.record_id === options.selectedRecordId.value) options.activateRecord(record);
+    } catch (exc) {
+      if (!isAbortError(exc)) options.onError(messageOf(exc));
+    }
+  }
+
   /** Re-read specific rows in place (a realtime event, a neighbour patch) without re-paging. */
   async function refreshRows(
     recordIds: readonly string[] = queueRows.value.map((row) => row.record_id),
@@ -305,6 +323,7 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
     selectRecordById,
     remember,
     refreshRows,
+    refreshRecord,
     visiblePageTexts,
     applyRecord,
     clear,
