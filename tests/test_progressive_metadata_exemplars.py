@@ -1027,3 +1027,53 @@ def test_editorial_memory_zero_precedent_limit_disables_field_examples():
     memory = Memory()._editorial_memory("build-1", current, exclude_record_id="r2")
 
     assert "position_holder" not in memory["examples"]
+
+
+def test_candidate_rows_normalizes_chroma_embeddings_without_numpy_ambiguity():
+    """Chroma can return `embeddings` as a list containing an ndarray-like batch,
+    not a top-level ndarray. `_candidate_rows` must never let a numpy-like value
+    reach a boolean context (`if`/`or`), which raises "The truth value of an array
+    with more than one element is ambiguous" and previously surfaced to reviewers
+    as a broken "Suggest spans" / precedent-fallback error."""
+    from app.metadata_exemplar_retrieval import _candidate_rows
+
+    class FakeNdArray:
+        """Minimal stand-in for numpy.ndarray: has .tolist() and an ambiguous __bool__."""
+
+        def __init__(self, data):
+            self._data = data
+
+        def tolist(self):
+            return [item.tolist() if hasattr(item, "tolist") else item for item in self._data]
+
+        def __len__(self):
+            return len(self._data)
+
+        def __getitem__(self, index):
+            return self._data[index]
+
+        def __bool__(self):
+            if len(self._data) > 1:
+                raise ValueError(
+                    "The truth value of an array with more than one element is ambiguous. "
+                    "Use a.any() or a.all()"
+                )
+            return bool(self._data)
+
+    # A plain python list (no .tolist()) containing one ndarray-like batch, mirroring
+    # the shape Chroma can return for a single query's embeddings.
+    payload = {
+        "ids": [["ex-1", "ex-2"]],
+        "distances": [[0.1, 0.2]],
+        "metadatas": [[{"field_name": "position_holder"}, {"field_name": "position_holder"}]],
+        "embeddings": [FakeNdArray([FakeNdArray([0.1, 0.2, 0.3]), FakeNdArray([0.4, 0.5, 0.6])])],
+    }
+
+    rows = _candidate_rows(payload)
+
+    assert [row["id"] for row in rows] == ["ex-1", "ex-2"]
+    assert rows[0]["embedding"] == [0.1, 0.2, 0.3]
+    assert rows[1]["embedding"] == [0.4, 0.5, 0.6]
+    # Every embedding must be a real list, not a numpy-like object, so downstream
+    # boolean checks (e.g. MMR diversity ranking) cannot raise on truthiness.
+    assert all(isinstance(row["embedding"], list) for row in rows)

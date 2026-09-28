@@ -189,13 +189,26 @@ def match_tier(
     return "differs", compared
 
 
+def _to_native(value: Any) -> Any:
+    """Recursively convert any numpy array/scalar to plain Python lists/floats.
+
+    Chroma may return ``embeddings`` as a top-level ndarray, a list containing
+    ndarrays, or plain nested lists depending on version and backend; any numpy
+    value left in the tree can raise "truth value of an array is ambiguous"
+    the moment calling code puts it in a boolean context (``if``, ``or``).
+    """
+    if hasattr(value, "tolist"):
+        return value.tolist()
+    if isinstance(value, (list, tuple)):
+        return [_to_native(item) for item in value]
+    return value
+
+
 def _candidate_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     ids = (payload.get("ids") or [[]])[0]
     distances = (payload.get("distances") or [[]])[0]
     metadatas = (payload.get("metadatas") or [[]])[0]
-    embeddings = payload.get("embeddings")
-    if hasattr(embeddings, "tolist"):
-        embeddings = embeddings.tolist()
+    embeddings = _to_native(payload.get("embeddings"))
     embeddings = (embeddings or [[]])[0]
 
     rows: list[dict[str, Any]] = []
