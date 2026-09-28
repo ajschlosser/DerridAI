@@ -125,9 +125,7 @@ export function useCorpusSourceConfiguration(
     }
     const connection = Object.fromEntries(
       Object.entries(configured)
-        .filter(
-          ([key, value]) => ["provider", "model", "base_url", "api_key"].includes(key) && value,
-        )
+        .filter(([key, value]) => ["provider", "model", "base_url", "api_key"].includes(key) && value)
         .map(([key, value]) => [key, String(value)]),
     );
     try {
@@ -167,10 +165,7 @@ export function useCorpusSourceConfiguration(
     }
   }
 
-  async function saveSourceMetadata(
-    metadata: Record<string, unknown>,
-    skipFields: string[] = [],
-  ) {
+  async function saveSourceMetadata(metadata: Record<string, unknown>, skipFields: string[] = []) {
     if (!selectedAssetId.value) return;
     busy.value = "metadata";
     try {
