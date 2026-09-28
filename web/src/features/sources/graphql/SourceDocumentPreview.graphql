@@ -1,0 +1,12 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
+query SourceDocumentPreview($source_document_id: String!, $limit: Int! = 8) {
+  source_document(source_document_id: $source_document_id) {
+    source_units(limit: $limit) {
+      items {
+        source_unit_id
+        text
+      }
+      total
+    }
+  }
+}
