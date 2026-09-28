@@ -332,7 +332,7 @@ type Query {
   """
   One canonical cELF SourceDocument with its extraction, structure, provenance, capture links, and downstream build references.
   """
-  source_document(source_document_id: String!): SourceDocumentIntelligence!
+  source_document(source_document_id: String!): SourceDocumentView!
 
   """A vector store by name (REST: GET /api/stores/{name})."""
   vector_store(name: String!): VectorStore!
@@ -467,7 +467,7 @@ type SourceCaptureReference {
 """
 Read projection around one canonical cELF SourceDocument: identity, extraction provenance, document structure, and links to downstream Corpus Builder builds.
 """
-type SourceDocumentIntelligence {
+type SourceDocumentView {
   source_document_id: String!
   sha256: String!
   filename: String!
