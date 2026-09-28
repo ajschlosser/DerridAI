@@ -107,3 +107,63 @@ def test_fiction_profile_turns_person_clusters_into_characters_and_maps_dialogue
     assert dialogue["relation_kind"] == "observational"
     labels = {node["label"] for node in graph["nodes"] if node["type"] == "character"}
     assert labels == {"Elizabeth", "Darcy"}
+
+
+def test_aggregate_relation_authority_is_conservative():
+    base = {
+        "text": "Heidegger questions presence.",
+        "position_holder": "Martin Heidegger",
+        "target": "presence",
+        "stance": "questions",
+    }
+    confirmed = {
+        **base,
+        "record_id": "r1",
+        "record_revision": 1,
+        "metadata_field_status": {
+            "position_holder": {"status": "human_confirmed"},
+            "target": {"status": "human_confirmed"},
+            "stance": {"status": "human_confirmed"},
+        },
+    }
+    unreviewed = {
+        **base,
+        "record_id": "r2",
+        "record_revision": 1,
+        "metadata_field_status": {
+            "position_holder": {"status": "unresolved"},
+            "target": {"status": "unresolved"},
+            "stance": {"status": "unresolved"},
+        },
+    }
+    graph = build_semantic_content_graph([confirmed, unreviewed], {"profile": "scholarly"})
+    assert _edge(graph, "questions")["authority_status"] == "unreviewed"
+
+
+def test_target_reuses_existing_person_entity_before_falling_back_to_concept():
+    analysis = {
+        "profile": "scholarly",
+        "provider": "booknlp",
+        "entity_clusters": [
+            {
+                "cluster_id": "d",
+                "canonical": "Jacques Derrida",
+                "aliases": ["Derrida"],
+                "entity_type": "PERSON",
+            }
+        ],
+        "entities": [],
+        "record_spans": [],
+    }
+    record = {
+        "record_id": "r1",
+        "record_revision": 1,
+        "text": "Heidegger addresses Derrida.",
+        "position_holder": "Martin Heidegger",
+        "target": "Derrida",
+    }
+    graph = build_semantic_content_graph([record], analysis)
+    edge = _edge(graph, "addresses")
+    target = next(node for node in graph["nodes"] if node["id"] == edge["target"])
+    assert target["type"] == "person"
+    assert target["label"] == "Jacques Derrida"
