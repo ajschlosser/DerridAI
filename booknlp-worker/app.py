@@ -36,9 +36,10 @@ class AnalyzeRequest(BaseModel):
     include_events: bool = False
 
 
-def _paths(_include_events: bool = False) -> dict[str, str]:
+def _paths(include_events: bool = False) -> dict[str, str]:
     # BookNLP's event head is part of the entity tagger model; it does not use a
     # separate event-model artifact. Keep one artifact contract for both modes.
+    _ = include_events
     return {
         "entity_model_path": os.environ.get("BOOKNLP_ENTITY_MODEL", ""),
         "coref_model_path": os.environ.get("BOOKNLP_COREF_MODEL", ""),
