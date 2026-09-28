@@ -33,6 +33,9 @@ function mountWorkspace(overrides: Record<string, unknown> = {}) {
       selectedProfileModel: "gemma4:e2b",
       enrichmentMode: "fast",
       semanticIndexing: true,
+      documentIntelligenceProfile: "scholarly",
+      documentNlpProvider: "auto",
+      documentNlpIncludeEvents: false,
       autoCleanText: true,
       llmTouchupDuringEnrichment: false,
       noiseUnusableThreshold: 45,
@@ -62,6 +65,16 @@ describe("Corpus Builder enrichment configuration", () => {
     await wrapper.get('input[type="radio"][value="deep"]').setValue();
 
     expect(wrapper.emitted("update:enrichmentMode")?.at(-1)).toEqual(["deep"]);
+  });
+
+  it("emits document-intelligence profile and provider changes", async () => {
+    const wrapper = mountWorkspace();
+
+    await wrapper.get("#pdf-corpus-document-intelligence-profile").setValue("fiction");
+    await wrapper.get("#pdf-corpus-document-nlp-provider").setValue("booknlp");
+
+    expect(wrapper.emitted("update:documentIntelligenceProfile")?.at(-1)).toEqual(["fiction"]);
+    expect(wrapper.emitted("update:documentNlpProvider")?.at(-1)).toEqual(["booknlp"]);
   });
 
   it("emits the escalation provider selection", async () => {
