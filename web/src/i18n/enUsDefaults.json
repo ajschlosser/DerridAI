@@ -6321,6 +6321,7 @@
   "pdf_corpus.evidence_browser_later": "Later units",
   "pdf_corpus.evidence_browser_this_record": "This record",
   "pdf_corpus.evidence_browser_chosen": "{count} selected",
+  "pdf_corpus.evidence_external_count": "+ {count} from other records",
   "pdf_corpus.evidence_browser_confirm": "Confirm value with these units",
   "pdf_corpus.fix_this_issue": "Fix this",
   "pdf_corpus.validation_show_fewer": "Show fewer",
