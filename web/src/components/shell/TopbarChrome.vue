@@ -42,7 +42,8 @@ const helpOpen = ref(false);
 const operationsDocked = ref(localStorage.getItem("derridai.operations-dock-mode") === "docked");
 const operationsVisible = ref(false);
 const operationsSummary = ref("");
-let operationsModeHandler: ((event: MouseEvent) => void) | null = null;
+const operationsDropdownOpen = ref(false);
+let operationsModeHandler: (() => void) | null = null;
 let operationsSummaryHandler: ((event: Event) => void) | null = null;
 
 interface OperationSummaryDetail {
@@ -51,20 +52,27 @@ interface OperationSummaryDetail {
   summary: string;
   percent: number | null;
   tone: string;
+  expanded?: boolean;
 }
 
 function syncOperations(detail?: OperationSummaryDetail) {
   if (detail) {
     operationsVisible.value = detail.visible;
     operationsSummary.value = [detail.title, detail.summary].filter(Boolean).join(" · ");
+    operationsDropdownOpen.value = Boolean(detail.expanded);
+    document.documentElement.dataset.operationsDockOpen = operationsDropdownOpen.value
+      ? "true"
+      : "false";
     return;
   }
   const stack = document.querySelector<HTMLElement>("#operationProgressStack");
   operationsVisible.value = Boolean(stack);
   if (!stack) {
     operationsSummary.value = "";
+    operationsDropdownOpen.value = false;
     return;
   }
+  operationsDropdownOpen.value = !stack.classList.contains("minimized");
   const title =
     stack
       .querySelector<HTMLElement>(".operation-stack-items .operation-progress b")
@@ -79,12 +87,21 @@ function syncOperations(detail?: OperationSummaryDetail) {
   operationsSummary.value = [title, percent || count].filter(Boolean).join(" · ");
 }
 function toggleOperations() {
-  document.querySelector<HTMLButtonElement>("#operationStackToggle")?.click();
+  const stack = document.querySelector<HTMLElement>("#operationProgressStack");
+  if (!stack) return;
+  const nextOpen = !operationsDropdownOpen.value;
+  operationsDropdownOpen.value = nextOpen;
+  document.documentElement.dataset.operationsDockOpen = nextOpen ? "true" : "false";
+  if (nextOpen !== !stack.classList.contains("minimized")) {
+    stack.querySelector<HTMLButtonElement>("#operationStackToggle")?.click();
+  }
 }
 function setOperationsMode(mode: "floating" | "docked") {
   operationsDocked.value = mode === "docked";
   localStorage.setItem("derridai.operations-dock-mode", mode);
   document.documentElement.dataset.operationsDockMode = mode;
+  operationsDropdownOpen.value = false;
+  document.documentElement.dataset.operationsDockOpen = "false";
 }
 function toggleOperationsMode() {
   setOperationsMode(operationsDocked.value ? "floating" : "docked");
@@ -93,18 +110,16 @@ onMounted(() => {
   document.documentElement.dataset.operationsDockMode = operationsDocked.value
     ? "docked"
     : "floating";
-  operationsModeHandler = (event: MouseEvent) => {
-    if ((event.target as HTMLElement | null)?.closest("#operationProgressStack"))
-      toggleOperationsMode();
-  };
-  document.addEventListener("dblclick", operationsModeHandler);
+  operationsModeHandler = toggleOperationsMode;
+  globalThis.addEventListener("derridai:operation-mode-toggle", operationsModeHandler);
   operationsSummaryHandler = (event) =>
     syncOperations((event as CustomEvent<OperationSummaryDetail>).detail);
   globalThis.addEventListener("derridai:operation-summary", operationsSummaryHandler);
   syncOperations();
 });
 onBeforeUnmount(() => {
-  if (operationsModeHandler) document.removeEventListener("dblclick", operationsModeHandler);
+  if (operationsModeHandler)
+    globalThis.removeEventListener("derridai:operation-mode-toggle", operationsModeHandler);
   if (operationsSummaryHandler)
     globalThis.removeEventListener("derridai:operation-summary", operationsSummaryHandler);
 });
@@ -116,6 +131,8 @@ onBeforeUnmount(() => {
       type="button"
       class="operations-docked-summary"
       :aria-label="i18n.t('operations.expand')"
+      aria-controls="operationProgressStack"
+      :aria-expanded="operationsDropdownOpen"
       @click="toggleOperations"
     >
       <span class="operation-dock-dot" aria-hidden="true"></span>
@@ -185,7 +202,7 @@ onBeforeUnmount(() => {
   border-radius: 50%;
   background: var(--tone-info-fg);
 }
-:global(html[data-operations-dock-mode="docked"] #operationProgressStack) {
+:global(html[data-operations-dock-mode="docked"]:not([data-operations-dock-open="true"]) #operationProgressStack) {
   display: none !important;
 }
 </style>

@@ -1578,7 +1578,7 @@
   "operations.clear_failed": "Could not clear jobs: {message}",
   "operations.collapse": "Hide operations",
   "operations.completed_help": "Completed · open the result or dismiss",
-  "operations.drag_help": "Drag anywhere · double-click to recenter",
+  "operations.drag_help": "Drag to move · double-click or press Enter to switch between floating and top-bar modes",
   "operations.expand": "Show operations",
   "operations.failed_help": "Failed · {detail}",
   "operations.live_cancelled": "{label} cancelled",

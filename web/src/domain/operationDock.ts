@@ -260,11 +260,14 @@ export function createOperationDock(deps: Deps) {
     });
     handle.addEventListener("dblclick", (event: Any) => {
       if (event.target.closest("button")) return;
-      state.operationStackPosition = null;
-      persistPrefs();
-      applyOperationStackPosition(stack);
+      globalThis.dispatchEvent(new CustomEvent("derridai:operation-mode-toggle"));
     });
     handle.addEventListener("keydown", (event: Any) => {
+      if ((event.key === "Enter" || event.key === " ") && !event.target.closest("button")) {
+        event.preventDefault();
+        globalThis.dispatchEvent(new CustomEvent("derridai:operation-mode-toggle"));
+        return;
+      }
       if (event.key === "Escape") {
         if (!state.operationToastsMinimized) {
           event.preventDefault();
@@ -343,7 +346,14 @@ export function createOperationDock(deps: Deps) {
     if (!stack) {
       globalThis.dispatchEvent(
         new CustomEvent("derridai:operation-summary", {
-          detail: { visible: false, title: "", summary: "", percent: null, tone: "neutral" },
+          detail: {
+            visible: false,
+            title: "",
+            summary: "",
+            percent: null,
+            tone: "neutral",
+            expanded: false,
+          },
         }),
       );
       return;
@@ -353,7 +363,14 @@ export function createOperationDock(deps: Deps) {
       stack.remove();
       globalThis.dispatchEvent(
         new CustomEvent("derridai:operation-summary", {
-          detail: { visible: false, title: "", summary: "", percent: null, tone: "neutral" },
+          detail: {
+            visible: false,
+            title: "",
+            summary: "",
+            percent: null,
+            tone: "neutral",
+            expanded: false,
+          },
         }),
       );
       return;
@@ -401,6 +418,7 @@ export function createOperationDock(deps: Deps) {
           summary: label?.textContent?.trim() || "",
           percent: summary.percent,
           tone: summary.tone,
+          expanded: !state.operationToastsMinimized,
         },
       }),
     );
