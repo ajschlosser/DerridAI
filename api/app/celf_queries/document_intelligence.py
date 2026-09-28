@@ -34,18 +34,26 @@ def _compact_catalog(value: Any) -> dict[str, Any]:
     return catalog
 
 
-def source_document(access: AccessContext, source_document_id: str) -> dict[str, Any]:
+def source_document(
+    access: AccessContext,
+    source_document_id: str,
+    *,
+    repository: Any = None,
+    capture_links: Any = None,
+) -> dict[str, Any]:
     """Return one administrator-visible SourceDocument intelligence projection."""
     access.require_admin()
+    repository = repository or pdf_corpus_repository
+    capture_links = capture_links or capture_store
     source_id = str(source_document_id or "").strip()
     if not source_id:
         raise InvalidQuery("source_document_id is required")
     try:
-        asset = pdf_corpus_repository.get_asset(source_id)
+        asset = repository.get_asset(source_id)
     except KeyError as exc:
         raise NotFound("Source document not found.") from exc
 
-    builds = pdf_corpus_repository.list_builds(offset=0, limit=100000, asset_id=source_id)["items"]
+    builds = repository.list_builds(offset=0, limit=100000, asset_id=source_id)["items"]
     initial = dict(asset.get("initial_metadata") or {}) if isinstance(asset.get("initial_metadata"), dict) else {}
     return {
         "source_document_id": str(asset.get("asset_id") or source_id),
@@ -72,7 +80,7 @@ def source_document(access: AccessContext, source_document_id: str) -> dict[str,
         "document_layout": dict(asset.get("document_layout") or {}),
         "unit_policy": dict(asset.get("unit_policy") or {}),
         "pages": list(asset.get("pages") or []),
-        "captures": capture_store.links_for_sources([source_id]).get(source_id, []),
+        "captures": capture_links.links_for_sources([source_id]).get(source_id, []),
         "builds": [
             {
                 "build_id": build.get("build_id"),
@@ -85,9 +93,20 @@ def source_document(access: AccessContext, source_document_id: str) -> dict[str,
     }
 
 
-def source_detail_payload(access: AccessContext, source_document_id: str) -> dict[str, Any]:
+def source_detail_payload(
+    access: AccessContext,
+    source_document_id: str,
+    *,
+    repository: Any = None,
+    capture_links: Any = None,
+) -> dict[str, Any]:
     """Compatibility projection for the existing source-detail REST endpoint."""
-    payload = source_document(access, source_document_id)
+    payload = source_document(
+        access,
+        source_document_id,
+        repository=repository,
+        capture_links=capture_links,
+    )
     initial = dict(payload.get("initial_metadata") or {})
     initial.pop("field_provenance", None)
     initial = {
@@ -125,9 +144,11 @@ def source_units_page(
     limit: int = 200,
     ids: list[str] | None = None,
     around: str | None = None,
+    repository: Any = None,
 ) -> dict[str, Any]:
     """Return a bounded page of persisted extraction/source units."""
     access.require_admin()
+    repository = repository or pdf_corpus_repository
     source_id = str(source_document_id or "").strip()
     if not source_id:
         raise InvalidQuery("source_document_id is required")
@@ -138,7 +159,7 @@ def source_units_page(
         raise InvalidQuery(f"At most {MAX_SOURCE_UNIT_IDS} source-unit ids may be requested.")
 
     try:
-        blocks = pdf_corpus_repository.load_blocks(source_id)
+        blocks = repository.load_blocks(source_id)
     except KeyError as exc:
         raise NotFound("Source document not found.") from exc
 
@@ -182,9 +203,16 @@ def document_pages(
     *,
     offset: int = 0,
     limit: int = 100,
+    repository: Any = None,
+    capture_links: Any = None,
 ) -> dict[str, Any]:
     """Return a bounded page of medium-specific page/layout projections."""
-    payload = source_document(access, source_document_id)
+    payload = source_document(
+        access,
+        source_document_id,
+        repository=repository,
+        capture_links=capture_links,
+    )
     pages = list(payload.get("pages") or [])
     offset = max(0, int(offset))
     limit = max(1, min(MAX_DOCUMENT_PAGE_PAGE, int(limit)))
