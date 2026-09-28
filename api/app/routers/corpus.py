@@ -634,6 +634,16 @@ def get_pdf_corpus_build(build_id: str) -> dict[str, Any]:
     return build
 
 
+@router.get("/api/pdf/corpus-builds/{build_id}/llm-trace")
+def get_pdf_corpus_llm_trace(build_id: str, request: Request) -> dict[str, Any]:
+    """Rendered prompts and validated/raw outputs for administrator build inspection."""
+    require_admin(request)
+    try:
+        return pdf_corpus_builds.llm_trace(build_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+
+
 @router.get("/api/pdf/corpus-builds/{build_id}/document-intelligence")
 def get_pdf_corpus_document_intelligence(build_id: str, request: Request) -> dict[str, Any]:
     """Retained derived linguistic-analysis run for inspection and reproducibility."""
