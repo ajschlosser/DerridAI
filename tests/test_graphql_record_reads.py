@@ -245,6 +245,15 @@ def test_reviewer_projection_retains_metadata_evidence_source_unit_bindings(buil
     repo, build_id = build
     records = repo.load_records(build_id)
     target = next(record for record in records if record["record_id"] == "r3")
+    target["field_assertions"] = {}
+    target["current_field_assertions"] = {}
+    target["metadata_field_status"]["speaker"] = {
+        "status": "unresolved",
+        "method": "llm",
+        "confidence": None,
+        "proposed_value": target["speaker"],
+        "verification_status": "pending_review",
+    }
     target["source_unit_ids"] = ["u-1"]
     target["metadata_evidence"] = {
         "speaker": {
