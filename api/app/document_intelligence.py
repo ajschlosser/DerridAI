@@ -18,9 +18,9 @@ import os
 import re
 import urllib.error
 import urllib.request
-from urllib.parse import urlparse
 from collections import Counter, defaultdict
 from typing import Any
+from urllib.parse import urlparse
 
 from .nlp_annotations import language_code, load_pipeline
 
