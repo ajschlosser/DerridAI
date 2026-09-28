@@ -92,6 +92,25 @@ function relationLabel(edge: SemanticContentGraphEdge) {
   return String(edge.predicate || "").replaceAll("_", " ");
 }
 
+function featureText(values?: Array<{ label: string; count?: number }>) {
+  return (values || [])
+    .slice(0, 8)
+    .map((item) => (Number(item.count || 0) > 1 ? `${item.label} ×${item.count}` : item.label))
+    .join(" · ");
+}
+
+function observationVerbs(edge: SemanticContentGraphEdge) {
+  return Array.from(
+    new Set(
+      (edge.observations || [])
+        .map((item) => String(item.verb || "").trim())
+        .filter(Boolean),
+    ),
+  )
+    .slice(0, 8)
+    .join(" · ");
+}
+
 async function load() {
   if (!props.buildId || loading.value) return;
   loading.value = true;
@@ -276,6 +295,32 @@ watch(
                 })
               }}
             </p>
+            <div
+              v-if="selectedNode.character_profile"
+              class="character-profile"
+              :aria-label="i18n.t('pdf_corpus.semantic_graph_character_profile')"
+            >
+              <h5>{{ i18n.t("pdf_corpus.semantic_graph_character_profile") }}</h5>
+              <dl>
+                <template v-if="selectedNode.character_profile.actions_as_agent?.length">
+                  <dt>{{ i18n.t("pdf_corpus.semantic_graph_actions_agent") }}</dt>
+                  <dd>{{ featureText(selectedNode.character_profile.actions_as_agent) }}</dd>
+                </template>
+                <template v-if="selectedNode.character_profile.actions_as_patient?.length">
+                  <dt>{{ i18n.t("pdf_corpus.semantic_graph_actions_patient") }}</dt>
+                  <dd>{{ featureText(selectedNode.character_profile.actions_as_patient) }}</dd>
+                </template>
+                <template v-if="selectedNode.character_profile.possessions?.length">
+                  <dt>{{ i18n.t("pdf_corpus.semantic_graph_possessions") }}</dt>
+                  <dd>{{ featureText(selectedNode.character_profile.possessions) }}</dd>
+                </template>
+                <template v-if="selectedNode.character_profile.modifiers?.length">
+                  <dt>{{ i18n.t("pdf_corpus.semantic_graph_modifiers") }}</dt>
+                  <dd>{{ featureText(selectedNode.character_profile.modifiers) }}</dd>
+                </template>
+              </dl>
+              <small>{{ i18n.t("pdf_corpus.semantic_graph_character_profile_note") }}</small>
+            </div>
             <ul v-if="selectedRelations.length" class="relation-list">
               <li v-for="edge in selectedRelations" :key="edge.id">
                 <b>{{ relationLabel(edge) }}</b>
@@ -292,6 +337,13 @@ watch(
                     ? i18n.t("pdf_corpus.semantic_graph_semantic")
                     : i18n.t("pdf_corpus.semantic_graph_observational")
                 }}</small>
+                <small v-if="observationVerbs(edge)" class="relation-observation">
+                  {{
+                    i18n.tf("pdf_corpus.semantic_graph_observed_verbs", {
+                      verbs: observationVerbs(edge),
+                    })
+                  }}
+                </small>
               </li>
             </ul>
           </template>
@@ -486,6 +538,34 @@ watch(
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: var(--fs-xs);
+  color: var(--muted);
+}
+.character-profile {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+.character-profile h5,
+.character-profile dl,
+.character-profile dd {
+  margin: 0;
+}
+.character-profile dl {
+  display: grid;
+  gap: var(--space-2);
+}
+.character-profile dt {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--muted);
+}
+.character-profile dd {
+  overflow-wrap: anywhere;
+}
+.character-profile small,
+.relation-observation {
   color: var(--muted);
 }
 .relation-list {
