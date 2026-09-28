@@ -45,7 +45,7 @@ from .field_assertions import (
     project_record_assertions,
     reset_fields_for_evaluation,
 )
-from .operation_events import note_model_activity
+from .operation_events import note_corpus_generation_progress, note_model_activity
 from .reviewer_context import current_reviewer
 
 
@@ -534,21 +534,96 @@ class BuildLifecycleMixin:
                     "provider": provider,
                     "model": model,
                     "base_url": base_url,
+                    "draft": "",
+                    "draft_seq": 0,
+                    "draft_gap": False,
                 }
                 calls = list(self._llm_inflight[build_id].values())
             note_model_activity(build_id, calls)
         return token
 
 
+    def _note_llm_call_delta(self, build_id: str, token: int, piece: str) -> None:
+        """Retain a bounded live draft for authenticated inspection and emit text-free progress."""
+        if not build_id or not piece:
+            return
+        call_id = f"{build_id}:{token}"
+        seq = 0
+        chars = 0
+        gap = False
+        with self._lock:
+            calls = self._llm_inflight.get(build_id)
+            call = calls.get(token) if calls else None
+            if call is None:
+                return
+            current = str(call.get("draft") or "")
+            room = max(0, 64_000 - len(current))
+            addition = piece if len(piece) <= room else piece[:room]
+            call["draft"] = current + addition
+            call["draft_gap"] = bool(call.get("draft_gap")) or len(addition) < len(piece)
+            call["draft_seq"] = int(call.get("draft_seq") or 0) + 1
+            seq = int(call["draft_seq"])
+            chars = len(str(call.get("draft") or ""))
+            gap = bool(call.get("draft_gap"))
+        note_corpus_generation_progress(
+            build_id,
+            call_id,
+            seq=seq,
+            chars=chars,
+            gap=gap,
+        )
+
+
+    def llm_live_output(self, build_id: str) -> dict[str, Any]:
+        """Current unvalidated drafts for the administrator Model activity inspector.
+
+        This is intentionally a REST-only read. The ordinary model-activity and
+        WebSocket summaries remain text-free so source-derived model output never
+        leaks through the global operations/realtime plane.
+        """
+        self.repo.get_build(build_id)
+        with self._lock:
+            calls = [
+                {
+                    "call_id": f"{build_id}:{token}",
+                    "task": call.get("task"),
+                    "provider": call.get("provider"),
+                    "model": call.get("model"),
+                    "seq": int(call.get("draft_seq") or 0),
+                    "text": str(call.get("draft") or ""),
+                    "gap": bool(call.get("draft_gap")),
+                }
+                for token, call in (self._llm_inflight.get(build_id) or {}).items()
+            ]
+        return {"items": calls, "total": len(calls)}
+
     def _note_llm_call_end(self, build_id: str, token: int) -> None:
         if build_id:
+            final_progress: tuple[int, int, bool] | None = None
             with self._lock:
                 calls = self._llm_inflight.get(build_id)
                 if calls is not None:
+                    call = calls.get(token)
+                    if call is not None:
+                        final_progress = (
+                            int(call.get("draft_seq") or 0) + 1,
+                            len(str(call.get("draft") or "")),
+                            bool(call.get("draft_gap")),
+                        )
                     calls.pop(token, None)
                     if not calls:
                         self._llm_inflight.pop(build_id, None)
                 remaining = list((self._llm_inflight.get(build_id) or {}).values())
+            if final_progress is not None:
+                seq, chars, gap = final_progress
+                note_corpus_generation_progress(
+                    build_id,
+                    f"{build_id}:{token}",
+                    seq=seq,
+                    chars=chars,
+                    gap=gap,
+                    final=True,
+                )
             note_model_activity(build_id, remaining)
 
 
