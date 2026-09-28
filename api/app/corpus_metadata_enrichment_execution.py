@@ -34,7 +34,7 @@ from .corpus_metadata import (
     _normalize_semantic_value,
     apply_metadata_constraints,
 )
-from .corpus_models import CORPUS_PROFILES, PROFILE_VERSION
+from .corpus_models import CORPUS_PROFILES, PROFILE_VERSION, EvidenceChoiceModel
 from .corpus_record_quality import _metadata_source_quality_gate, iso_now
 from .corpus_review_state import _sync_record_metadata_state
 from .corpus_reviewer_helpers import (
@@ -48,7 +48,7 @@ from .enrichment_ledger import (
     CALL,
     PROPOSED,
 )
-from .evidence_suggestions import backfill_field_evidence, evidence_mode
+from .evidence_suggestions import evidence_cascade_llm_enabled, evidence_mode, suggest_evidence_cascade
 from .field_assertions import (
     current_assertion_by_name,
     migrate_record_assertions,
@@ -68,6 +68,7 @@ from .metadata_schema import (
 from .nlp_annotations import prompt_hints
 from .rag import _citation_strings
 from .run_guidance import find_guidance_matches, format_group_guidance
+from .source_embeddings import SourceEmbeddingProjection
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,7 @@ class MetadataEnrichmentExecutionMixin:
     if TYPE_CHECKING:
         repo: Any
         _ledger: Any
+        _progressive_metadata_index: Any
 
         def _adaptive_family_should_skip(self, build_id: str | None, family: str, request: dict[str, Any]) -> tuple[bool, str]: ...
         def _append_warning(self, build_id: str, message: str) -> None: ...
@@ -964,8 +966,26 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             if reason:
                 model_review_reasons.append(reason)
 
-        backfill = evidence_mode(request) == "backfill"
-        source_blocks = self._evidence_source_blocks(build_id, record, source_ids) if backfill else []
+        source_blocks = self._evidence_source_blocks(build_id, record, source_ids)
+        try:
+            build_asset_id = self.repo.get_build(build_id).get("asset_id") if build_id else ""
+        except Exception:  # noqa: BLE001 - evidence context is advisory, never fatal
+            build_asset_id = ""
+        source_document_id = str(
+            record.get("source_document_id") or record.get("source_asset_id") or build_asset_id or ""
+        )
+        progressive_index = self._progressive_metadata_index
+        evidence_projection = (
+            SourceEmbeddingProjection(progressive_index.store) if progressive_index is not None else None
+        )
+
+        def _evidence_llm_choice(prompt: str) -> dict[str, Any]:
+            return self._chat_json(
+                request, prompt, response_model=EvidenceChoiceModel, max_tokens=800,
+                schema_name="evidence_choice", attempts=2, build_id=build_id,
+            )
+
+        evidence_llm_choice = _evidence_llm_choice if evidence_cascade_llm_enabled(request) else None
         for field in sorted(evidence_required_fields):
             value = record.get(field)
             if value in (None, "", []):
@@ -973,8 +993,25 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             existing_assertion = current_assertion_by_name(record, field)
             if existing_assertion is not None and existing_assertion.derivation_method == "deterministic":
                 continue
-            if backfill and not (clean_evidence.get(field) or {}).get("block_ids"):
-                attached = backfill_field_evidence(value, source_blocks)
+            if not (clean_evidence.get(field) or {}).get("block_ids"):
+                field_spec = schema.by_name().get(field)
+                if field_spec is not None:
+                    field_metadata: Any = field_spec.model_dump(mode="json")
+                    field_metadata["group_label"] = schema.group(field_spec.group).label
+                else:
+                    field_group = next(
+                        (group for group, names in schema.family_fields().items() if field in names), "",
+                    )
+                    field_metadata = {
+                        "name": field,
+                        "group_label": schema.group(field_group).label if field_group else "",
+                        "instruction": schema.group(field_group).intro if field_group else "",
+                    }
+                attached = suggest_evidence_cascade(
+                    value, source_blocks, field=field, field_metadata=field_metadata,
+                    source_document_id=source_document_id, projection=evidence_projection,
+                    llm_choice=evidence_llm_choice,
+                )
                 if attached:
                     clean_evidence[field] = attached
             info = clean_evidence.get(field)
