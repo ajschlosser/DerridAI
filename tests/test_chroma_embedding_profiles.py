@@ -1,6 +1,8 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 from app import chroma_store
 from app.chroma_store import Embeddings
@@ -118,3 +120,49 @@ def test_ollama_embedding_404_reports_modern_and_legacy_endpoint_failure(monkeyp
         "http://ollama.example:11434/api/embed",
         "http://ollama.example:11434/api/embeddings",
     ]
+
+
+def test_ollama_embedding_batches_large_inputs_and_reports_error_detail(monkeypatch):
+    batches: list[int] = []
+
+    class Response:
+        def __init__(self, count, status_code=200, text=""):
+            self.status_code = status_code
+            self.text = text
+            self._count = count
+
+        def json(self):
+            return {"embeddings": [[0.5] for _ in range(self._count)]}
+
+    fail = {"on": False}
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def post(self, url, json=None, **kwargs):
+            batches.append(len(json["input"]))
+            if fail["on"]:
+                return Response(0, 400, '{"error":"cannot assign requested address"}')
+            return Response(len(json["input"]))
+
+    monkeypatch.setattr(chroma_store.httpx, "Client", FakeClient)
+    monkeypatch.setattr(chroma_store, "settings", replace(chroma_store.settings, ollama_embed_batch_size=4))
+    embeddings = Embeddings()
+
+    vectors = embeddings._ollama([f"unit {i}" for i in range(10)], model="bge-m3")
+
+    assert len(vectors) == 10
+    assert batches == [4, 4, 2]
+
+    fail["on"] = True
+    with pytest.raises(RuntimeError) as exc:
+        embeddings._ollama(["unit"], model="bge-m3")
+    assert "HTTP 400" in str(exc.value)
+    assert "cannot assign requested address" in str(exc.value)
