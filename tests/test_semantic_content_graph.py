@@ -167,3 +167,119 @@ def test_target_reuses_existing_person_entity_before_falling_back_to_concept():
     target = next(node for node in graph["nodes"] if node["id"] == edge["target"])
     assert target["type"] == "person"
     assert target["label"] == "Jacques Derrida"
+
+
+def test_document_mentions_are_not_double_counted_when_metadata_reuses_entity():
+    analysis = {
+        "profile": "scholarly",
+        "provider": "booknlp",
+        "record_spans": [{"record_id": "r1", "start": 0, "end": 17}],
+        "entity_clusters": [
+            {
+                "cluster_id": "e",
+                "canonical": "Emmanuel Levinas",
+                "aliases": ["Levinas"],
+                "entity_type": "PERSON",
+            }
+        ],
+        "entities": [
+            {
+                "cluster_id": "e",
+                "start_char": 0,
+                "end_char": 7,
+                "text": "Levinas",
+                "entity_type": "PERSON",
+            }
+        ],
+    }
+    records = [
+        {
+            "record_id": "r1",
+            "record_revision": 1,
+            "text": "Levinas appears.",
+            "persons": ["Levinas"],
+            "document_intelligence": {
+                "status": "ok",
+                "entities": [{"entity_id": "e", "label": "Emmanuel Levinas"}],
+                "quotations": [],
+            },
+        }
+    ]
+    graph = build_semantic_content_graph(records, analysis)
+    node = next(node for node in graph["nodes"] if node["label"] == "Emmanuel Levinas")
+    assert node["mention_count"] == 1
+    assert node["record_ids"] == ["r1"]
+
+
+def test_fiction_agent_patient_observation_is_directed_and_keeps_verb():
+    analysis = {
+        "profile": "fiction",
+        "provider": "booknlp",
+        "record_spans": [{"record_id": "r1", "start": 0, "end": 22}],
+        "entity_clusters": [
+            {
+                "cluster_id": "a",
+                "canonical": "Alice",
+                "aliases": ["Alice"],
+                "entity_type": "PERSON",
+            },
+            {
+                "cluster_id": "b",
+                "canonical": "Bob",
+                "aliases": ["Bob"],
+                "entity_type": "PERSON",
+            },
+        ],
+        "entities": [],
+        "characters": [
+            {
+                "cluster_id": "a",
+                "actions_as_agent": [
+                    {
+                        "text": "helped",
+                        "lemma": "help",
+                        "token_id": 1,
+                        "start_char": 6,
+                        "end_char": 12,
+                    }
+                ],
+                "actions_as_patient": [],
+                "possessions": [],
+                "modifiers": [],
+            },
+            {
+                "cluster_id": "b",
+                "actions_as_agent": [],
+                "actions_as_patient": [
+                    {
+                        "text": "helped",
+                        "lemma": "help",
+                        "token_id": 1,
+                        "start_char": 6,
+                        "end_char": 12,
+                    }
+                ],
+                "possessions": [],
+                "modifiers": [],
+            },
+        ],
+    }
+    records = [
+        {
+            "record_id": "r1",
+            "record_revision": 1,
+            "text": "Alice helped Bob.",
+            "document_intelligence": {"status": "ok", "entities": [], "quotations": []},
+        }
+    ]
+    graph = build_semantic_content_graph(records, analysis)
+    edge = _edge(graph, "acts_on")
+    source = next(node for node in graph["nodes"] if node["id"] == edge["source"])
+    target = next(node for node in graph["nodes"] if node["id"] == edge["target"])
+    assert source["label"] == "Alice"
+    assert target["label"] == "Bob"
+    assert edge["relation_kind"] == "observational"
+    assert edge["observations"][0]["verb"] == "help"
+    assert edge["record_ids"] == ["r1"]
+    alice = source
+    assert alice["character_profile"]["actions_as_agent"][0]["label"] == "help"
