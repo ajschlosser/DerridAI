@@ -134,7 +134,6 @@ services:
       BOOKNLP_ENTITY_MODEL: ${BOOKNLP_ENTITY_MODEL:-}
       BOOKNLP_COREF_MODEL: ${BOOKNLP_COREF_MODEL:-}
       BOOKNLP_QUOTE_MODEL: ${BOOKNLP_QUOTE_MODEL:-}
-      BOOKNLP_EVENT_MODEL: ${BOOKNLP_EVENT_MODEL:-}
       BOOKNLP_SPACY_MODEL: ${BOOKNLP_SPACY_MODEL:-en_core_web_sm}
     volumes:
       - ./data/models/booknlp:/models/booknlp:ro
