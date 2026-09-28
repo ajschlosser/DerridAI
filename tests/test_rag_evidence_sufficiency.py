@@ -12,8 +12,8 @@ sys.modules.setdefault("chromadb", types.SimpleNamespace())
 
 from app.rag import (
     evidence_sufficiency_issues,
-    partition_sufficient_records,
     extract_evidence_ids,
+    partition_sufficient_records,
     strip_evidence_markers,
 )
 
