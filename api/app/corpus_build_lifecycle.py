@@ -433,6 +433,93 @@ class BuildLifecycleMixin:
         raise RuntimeError("unreachable")  # pragma: no cover
 
 
+    def _llm_trace_start(
+        self,
+        build_id: str,
+        *,
+        call_id: str,
+        schema_name: str,
+        role: str,
+        attempt: int,
+        provider: str,
+        model: str,
+        prompt: str,
+        response_schema: dict[str, Any],
+        generation: Any,
+        max_tokens: int,
+    ) -> None:
+        """Persist the exact rendered prompt for an administrator-inspectable model call.
+
+        Credentials and connection details are deliberately excluded. The trace is
+        build-local provenance, not canonical scholarly evidence.
+        """
+        if not build_id or not call_id:
+            return
+        generation_payload = (
+            generation.model_dump(mode="json")
+            if hasattr(generation, "model_dump")
+            else {}
+        )
+        entry = {
+            "call_id": call_id,
+            "schema_name": schema_name,
+            "role": role,
+            "attempt": attempt,
+            "provider": provider,
+            "model": model,
+            "prompt": prompt,
+            "response_schema": response_schema,
+            "generation": generation_payload,
+            "max_tokens": max_tokens,
+            "started_at": iso_now(),
+            "status": "running",
+        }
+        with self._lock:
+            trace = self.repo.load_checkpoint(build_id, "llm_trace", [])
+            if not isinstance(trace, list):
+                trace = []
+            trace.append(entry)
+            # Keep enough history for book-scale builds without allowing an
+            # accidentally unbounded diagnostic checkpoint.
+            self.repo.save_checkpoint(build_id, "llm_trace", trace[-250:])
+
+
+    def _llm_trace_finish(
+        self,
+        build_id: str,
+        call_id: str,
+        *,
+        raw_response: str | None = None,
+        validated_response: dict[str, Any] | None = None,
+        error: str | None = None,
+    ) -> None:
+        if not build_id or not call_id:
+            return
+        with self._lock:
+            trace = self.repo.load_checkpoint(build_id, "llm_trace", [])
+            if not isinstance(trace, list):
+                return
+            for entry in reversed(trace):
+                if isinstance(entry, dict) and entry.get("call_id") == call_id:
+                    if raw_response is not None:
+                        entry["raw_response"] = raw_response
+                    if validated_response is not None:
+                        entry["validated_response"] = validated_response
+                    entry["error"] = error
+                    entry["status"] = "failed" if error else "complete"
+                    entry["finished_at"] = iso_now()
+                    break
+            self.repo.save_checkpoint(build_id, "llm_trace", trace)
+
+
+    def llm_trace(self, build_id: str) -> dict[str, Any]:
+        """Return build-local prompt/output provenance for the administrator UI."""
+        self.repo.get_build(build_id)
+        trace = self.repo.load_checkpoint(build_id, "llm_trace", [])
+        items = trace if isinstance(trace, list) else []
+        return {"items": items, "total": len(items)}
+
+
     def _note_llm_call_start(self, build_id: str, task: str, provider: str, model: str, base_url: str) -> int:
         token = time.monotonic_ns()
         if build_id:
