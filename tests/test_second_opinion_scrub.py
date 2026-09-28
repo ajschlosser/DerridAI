@@ -234,7 +234,10 @@ BUILD_LEVEL = {
     ("GET", "/api/pdf/corpus-builds"),
     ("GET", "/api/pdf/corpus-builds/{build_id}"),
     # Provider annotations derive only from source text; no reviewer decisions are embedded.
-    # Administrator-only model diagnostics contain model-call provenance, not reviewer-owned blind labels.\n    ("GET", "/api/pdf/corpus-builds/{build_id}/llm-live-output"),\n    ("GET", "/api/pdf/corpus-builds/{build_id}/llm-trace"),\n    ("GET", "/api/pdf/corpus-builds/{build_id}/document-intelligence"),
+    # Administrator-only model diagnostics contain model-call provenance, not reviewer-owned blind labels.
+    ("GET", "/api/pdf/corpus-builds/{build_id}/llm-live-output"),
+    ("GET", "/api/pdf/corpus-builds/{build_id}/llm-trace"),
+    ("GET", "/api/pdf/corpus-builds/{build_id}/document-intelligence"),
     ("PATCH", "/api/pdf/corpus-builds/{build_id}/provider-profile"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/manifest/regenerate"),
     ("PATCH", "/api/pdf/corpus-builds/{build_id}/manifest"),
