@@ -193,11 +193,27 @@ class GutenbergOfflineService:
             db.row_factory = sqlite3.Row
             catalogue = dict(db.execute("SELECT * FROM gutenberg_catalogue WHERE id=1").fetchone())
             archive = dict(db.execute("SELECT * FROM gutenberg_archive WHERE id=1").fetchone())
-        archive["ready"] = archive["status"] == "ready" and Path(archive["path"]).is_file()
+        archive_path = Path(archive["path"])
+        archive_size = archive_path.stat().st_size if archive_path.is_file() else 0
+        # A process restart or an operator restoring only the SQLite file can
+        # leave bookkeeping ahead of the files it describes. Never advertise a
+        # stale downloaded/ready state, and let the next start reconcile it.
+        if archive["status"] == "ready" and not archive_path.is_file():
+            archive["ready"] = False
+        else:
+            archive["ready"] = archive["status"] == "ready" and (
+                not archive.get("total_bytes") or archive_size == int(archive["total_bytes"])
+            )
         # Catalogue search and local text availability are deliberately separate:
         # users can discover titles as soon as metadata indexing finishes, while
         # import remains gated until the full collection has downloaded/unpacked.
-        search_ready = catalogue["status"] == "ready"
+        with sqlite3.connect(self.db_path) as db:
+            catalogue_rows = int(db.execute("SELECT COUNT(*) FROM gutenberg_catalogue_books").fetchone()[0])
+        search_ready = (
+            catalogue["status"] == "ready"
+            and int(catalogue.get("item_count") or 0) > 0
+            and catalogue_rows == int(catalogue["item_count"])
+        )
         return {
             "catalogue": catalogue,
             "archive": archive,
@@ -661,35 +677,44 @@ class GutenbergOfflineService:
         # un-ranged initial GET can otherwise stream the entire multi-gigabyte
         # archive into the API process before the size guard gets a chance to run.
         headers = {"Range": f"bytes={offset}-{offset + requested - 1}"}
-        response = httpx.get(
-            ARCHIVE_URL,
-            headers=headers,
-            timeout=60.0,
-            follow_redirects=True,
-        )
-        if response.status_code == 416 and offset:
-            return self._finish_or_explain_unsatisfiable_range(response, offset)
-        response.raise_for_status()
-        if response.status_code != 206:
-            raise ValueError("Gutenberg server did not honor the bounded range request.")
-        if len(response.content) > requested:
-            raise ValueError("Gutenberg archive response exceeded the bounded chunk size.")
-        # Pause/refetch may have been requested while the HTTP call was in flight.
-        # Do not let a stale chunk resurrect "downloading" or recreate a refetched file.
-        if self._stop.is_set() or self.status()["archive"]["status"] != "downloading":
+        try:
+            response = httpx.get(
+                ARCHIVE_URL,
+                headers=headers,
+                timeout=60.0,
+                follow_redirects=True,
+            )
+            if response.status_code == 416 and offset:
+                return self._finish_or_explain_unsatisfiable_range(response, offset)
+            response.raise_for_status()
+            if response.status_code != 206:
+                raise ValueError("Gutenberg server did not honor the bounded range request.")
+            if len(response.content) > requested:
+                raise ValueError("Gutenberg archive response exceeded the bounded chunk size.")
+            # Pause/refetch may have been requested while the HTTP call was in flight.
+            # Do not let a stale chunk resurrect "downloading" or recreate a refetched file.
+            if self._stop.is_set() or self.status()["archive"]["status"] != "downloading":
+                return self.status()
+            self.archive_path.parent.mkdir(parents=True, exist_ok=True)
+            with self.archive_path.open("ab" if offset else "wb") as handle:
+                handle.write(response.content)
+            content_range = response.headers.get("content-range", "")
+            total_text = content_range.rsplit("/", 1)[-1] if "/" in content_range else response.headers.get("content-length", "0")
+            total = int(total_text or 0)
+            done = self._bytes_done()
+            status = "downloaded" if total and done >= total else "downloading"
+            with sqlite3.connect(self.db_path) as db:
+                db.execute("UPDATE gutenberg_archive SET status=?,bytes_done=?,total_bytes=?,error=NULL,updated_at=? WHERE id=1", (status,done,total or None,_now()))
+            self._changed()
             return self.status()
-        self.archive_path.parent.mkdir(parents=True, exist_ok=True)
-        with self.archive_path.open("ab" if offset else "wb") as handle:
-            handle.write(response.content)
-        content_range = response.headers.get("content-range", "")
-        total_text = content_range.rsplit("/", 1)[-1] if "/" in content_range else response.headers.get("content-length", "0")
-        total = int(total_text or 0)
-        done = self._bytes_done()
-        status = "downloaded" if total and done >= total else "downloading"
-        with sqlite3.connect(self.db_path) as db:
-            db.execute("UPDATE gutenberg_archive SET status=?,bytes_done=?,total_bytes=?,updated_at=? WHERE id=1", (status,done,total or None,_now()))
-        self._changed()
-        return self.status()
+        except (httpx.HTTPError, OSError, ValueError) as exc:
+            with sqlite3.connect(self.db_path) as db:
+                db.execute(
+                    "UPDATE gutenberg_archive SET status='error',error=?,bytes_done=?,updated_at=? WHERE id=1",
+                    (str(exc) or exc.__class__.__name__, self._bytes_done(), _now()),
+                )
+            self._changed()
+            raise
 
 
 gutenberg_offline = GutenbergOfflineService()

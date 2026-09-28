@@ -192,7 +192,10 @@ class CorpusCaptureService:
         except CaptureError as exc:
             if exc.code != CaptureErrorCode.CANCELLED:
                 raise
-            return self._resummarize(capture_id, status="cancelled", phase="cancelled", provider_snapshots=snapshots)
+            result = self._resummarize(capture_id, status="cancelled", phase="cancelled", provider_snapshots=snapshots)
+            if progress:
+                progress("cancelled", {"done": len(options.providers), "total": len(options.providers)})
+            return result
         rows = self._candidate_rows(found)
         discovered_at = now_iso()
         diff = self.store.merge_candidates(capture_id, rows, discovered_at=discovered_at)
@@ -212,7 +215,10 @@ class CorpusCaptureService:
                 "new": len(diff["new"]), "changed": len(diff["changed"]), "unchanged": diff["unchanged"], "missing": len(diff["missing"]),
                 "new_ids": diff["new"], "changed_ids": diff["changed"], "missing_ids": diff["missing"],
             }
-        return self._resummarize(capture_id, **fields)
+        result = self._resummarize(capture_id, **fields)
+        if progress:
+            progress("awaiting_review", {"done": len(options.providers), "total": len(options.providers)})
+        return result
 
     @staticmethod
     def _candidate_rows(found: list[SourceCandidate]) -> list[dict[str, Any]]:
@@ -304,7 +310,15 @@ class CorpusCaptureService:
         rows = self.store.candidates(capture_id)
         failed = sum(1 for r in rows if r["acquisition_status"] == "failed")
         status = "cancelled" if was_cancelled else ("partial" if failed else "complete")
-        return self._resummarize(capture_id, status=status, phase=status, progress={})
+        result = self._resummarize(
+            capture_id,
+            status=status,
+            phase=status,
+            progress={"done": len(queue), "total": len(queue)},
+        )
+        if progress:
+            progress(status, {"done": len(queue), "total": len(queue)})
+        return result
 
     def _acquire_one(self, row: dict[str, Any], provider: SourceProvider, hashes: dict[str, str], cancelled: Cancelled) -> None:
         candidate = SourceCandidate.from_dict(row)

@@ -6,6 +6,8 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
+import httpx
+
 from app.gutenberg_catalogue import GutenbergOfflineService
 
 
@@ -226,3 +228,39 @@ def test_a_file_larger_than_the_archive_is_reported_with_the_way_out(tmp_path: P
             assert "Redownload" in str(exc)
         else:
             raise AssertionError("expected an explanation")
+
+
+def test_archive_timeout_is_persisted_as_terminal_error(tmp_path: Path):
+    service = GutenbergOfflineService(
+        tmp_path / "state.sqlite", tmp_path / "archive.zip", start_worker=False
+    )
+    service.set_archive_status("start")
+    with patch(
+        "app.gutenberg_catalogue.httpx.get",
+        side_effect=httpx.ReadTimeout("slow"),
+    ):
+        try:
+            service.download_chunk(chunk_size=4)
+        except httpx.ReadTimeout:
+            pass
+        else:
+            raise AssertionError("timeout unexpectedly succeeded")
+    state = service.status()["archive"]
+    assert state["status"] == "error"
+    assert "slow" in state["error"]
+
+
+def test_stale_ready_archive_and_catalogue_are_not_reported_ready(tmp_path: Path):
+    service = GutenbergOfflineService(
+        tmp_path / "state.sqlite", tmp_path / "archive.zip", start_worker=False
+    )
+    with sqlite3.connect(service.db_path) as db:
+        db.execute(
+            "UPDATE gutenberg_archive SET status='ready',total_bytes=8,bytes_done=8"
+        )
+        db.execute(
+            "UPDATE gutenberg_catalogue SET status='ready',item_count=1"
+        )
+    state = service.status()
+    assert state["ready"] is False
+    assert state["search_ready"] is False

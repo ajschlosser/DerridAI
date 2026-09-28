@@ -158,6 +158,9 @@ def test_capture_jobs_discover_then_acquire_in_the_background(tmp_path):
     job = jobs.wait(jobs.start(capture_id, "acquire")["id"])
     assert job["status"] == "completed"
     assert store.get_capture(capture_id)["summary"]["acquisition"] == {"registered": 2}
+    assert job["result"]["summary"]["acquisition"] == {"registered": 2}
+    assert job["result"]["progress"] == {"done": 2, "total": 2}
+    assert (job["completed"], job["total"]) == (2, 2)
     assert jobs.active_for(capture_id) is None
     with pytest.raises(ValueError):
         jobs.start(capture_id, "delete-everything")
