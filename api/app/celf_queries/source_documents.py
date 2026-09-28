@@ -1,5 +1,5 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
-"""Transport-independent SourceDocument intelligence reads.
+"""Transport-independent SourceDocument read projections.
 
 The SourceDocument remains the canonical cELF object. Extraction units, layout
 facts, page-detection results, and processing metadata are implementation

@@ -5,7 +5,7 @@ import strawberry
 from starlette.concurrency import run_in_threadpool
 from strawberry.types import Info
 
-from ...celf_queries import document_intelligence as document_queries
+from ...celf_queries import source_documents as document_queries
 from ..errors import translate
 from ..permissions import classify, require_admin
 from ..types.documents import SourceDocumentIntelligence

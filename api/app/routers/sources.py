@@ -12,7 +12,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from ..capture_models import CaptureCreate, CaptureSelectionPatch, SourceBulkDelete
-from ..celf_queries import document_intelligence as document_queries
+from ..celf_queries import source_documents as document_queries
 from ..celf_queries.access import AccessContext, NotFound
 from ..corpus_builder import pdf_corpus_builds, pdf_corpus_repository
 from ..http_auth import request_user, require_admin

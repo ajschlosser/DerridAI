@@ -204,6 +204,97 @@ export interface LlmActivity {
   seconds: number;
   calls_in_flight: number;
 }
+export interface DocumentIntelligenceRun {
+  version?: number;
+  status: "ok" | "skipped" | "unavailable" | "queued" | string;
+  profile?: "none" | "general" | "fiction" | "scholarly" | string;
+  provider?: string;
+  provider_version?: string;
+  model?: string;
+  capabilities?: string[];
+  model_artifacts?: Array<{
+    role?: string;
+    name?: string;
+    sha256?: string;
+  }>;
+  configuration?: Record<string, unknown>;
+  text_sha256?: string;
+  current_text_sha256?: string;
+  stale?: boolean;
+  warnings?: string[];
+  entity_clusters?: Array<{
+    cluster_id: string;
+    canonical: string;
+    aliases?: string[];
+    entity_type?: string;
+  }>;
+  entities?: Array<Record<string, unknown>>;
+  quotations?: Array<Record<string, unknown>>;
+  characters?: Array<Record<string, unknown>>;
+  events?: Array<Record<string, unknown>>;
+}
+
+export interface SemanticContentGraphFeature {
+  label: string;
+  count?: number;
+  record_ids?: string[];
+}
+
+export interface SemanticContentGraphNode {
+  id: string;
+  type: string;
+  label: string;
+  aliases?: string[];
+  record_ids?: string[];
+  mention_count?: number;
+  derivation_method?: string;
+  character_profile?: {
+    actions_as_agent?: SemanticContentGraphFeature[];
+    actions_as_patient?: SemanticContentGraphFeature[];
+    possessions?: SemanticContentGraphFeature[];
+    modifiers?: SemanticContentGraphFeature[];
+  };
+}
+
+export interface SemanticContentGraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  predicate: string;
+  relation_kind: "semantic" | "observational" | string;
+  derivation_method?: string;
+  authority_status?: string;
+  record_ids?: string[];
+  evidence_refs?: Array<Record<string, unknown>>;
+  supporting_fields?: string[];
+  observations?: Array<{
+    verb?: string;
+    token_id?: number;
+    record_id?: string;
+    [key: string]: unknown;
+  }>;
+  count?: number;
+}
+
+export interface SemanticContentGraph {
+  version: number;
+  kind: "semantic_content_graph" | string;
+  profile?: string;
+  nodes: SemanticContentGraphNode[];
+  edges: SemanticContentGraphEdge[];
+  summary?: {
+    nodes?: number;
+    edges?: number;
+    semantic_edges?: number;
+    observational_edges?: number;
+    characters?: number;
+    persons?: number;
+    concepts?: number;
+    works?: number;
+  };
+  epistemic_note?: string;
+}
+
 export interface AutonomousPolicy {
   enabled: boolean;
   passes: number;
@@ -230,6 +321,27 @@ export interface CorpusBuild {
   schema?: MetadataSchema | null;
   schema_id?: string;
   schema_name?: string;
+  document_intelligence?: {
+    status?: string;
+    profile?: string;
+    provider?: string;
+    provider_version?: string;
+    model?: string;
+    capabilities?: string[];
+    entity_clusters?: number;
+    characters?: number;
+    entity_mentions?: number;
+    quotations?: number;
+    events?: number;
+    model_artifacts?: Array<{
+      role?: string;
+      name?: string;
+      sha256?: string;
+    }>;
+    warnings?: string[];
+    text_sha256?: string;
+  };
+  semantic_content_graph?: SemanticContentGraph["summary"];
   /** What the last hands-free run settled and left. */
   autonomous_report?: AutonomousReport | null;
   /** A live reading of the oldest model call in flight; not stored with the build. */

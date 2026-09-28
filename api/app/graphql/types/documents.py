@@ -14,7 +14,7 @@ from starlette.concurrency import run_in_threadpool
 from strawberry.scalars import JSON
 from strawberry.types import Info
 
-from ...celf_queries import document_intelligence as document_queries
+from ...celf_queries import source_documents as document_queries
 from ..errors import translate
 from .common import opt_float, opt_int, opt_str, str_list
 

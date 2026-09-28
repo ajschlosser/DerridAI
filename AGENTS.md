@@ -82,6 +82,14 @@ Backend tests stub `chromadb` and put `api/` on `sys.path`; they do not need Doc
   - Enforce bounded bytes, decompression/expansion, image pixels, audio duration, probe/transcription time, nesting/depth, and supported-format/codec limits before expensive processing.
   - Preserve immutable extracted source plus extractor/tool/version provenance. Human cleanup/transcription revisions are reviewable revisions, not silent rewrites of extraction history.
   - Model evidence coordinates according to the source medium. PDFs may use physical/printed pages; audio uses time ranges/speakers; text, image, URL, and Gutenberg sources must not inherit meaningless PDF-only controls or page semantics.
+- **Document Intelligence and semantic content graphs:**
+  - Whole-document NLP (spaCy, BookNLP, or future providers) is derived/rebuildable annotation state. It may guide prompts and navigation but never constitutes documentary evidence, confirms a FieldAssertion, or establishes proposition ownership.
+  - Keep provider-native details behind `document_intelligence.py`; Records and metadata contracts must not become BookNLP-shaped. The optional BookNLP worker is isolated from the API environment, uses explicit approved model artifacts, and must not download weights at runtime.
+  - Bind document/Record annotation projections to exact text digests. Reviewed-text changes invalidate text-bound projections; stale annotations must not feed the current semantic graph or metadata prompts.
+  - The Semantic Content Graph is distinct from the cELF Research Object Graph. Observational edges such as co-occurrence/dialogue proximity are weaker computational observations; do not present them as semantic relationships. Semantic edges projected from metadata must preserve assertion authority and evidence references.
+  - Aggregate graph authority conservatively: an unreviewed occurrence prevents a repeated relation from appearing wholly confirmed, and any disputed occurrence keeps the aggregate disputed.
+  - Keep `nlp_candidates` and `document_intelligence` out of canonical publication JSONL. Derived graph/index exports, when added, remain separate artifacts.
+  - Apply the same blind second-opinion projection rules before building reviewer-visible graphs; a graph must not become a side channel for sealed values.
 - **Metadata memory and progressive retrieval:**
   - Canonical reviewed records/RecordRevisions, field assertions, review decisions, and bound evidence are authoritative. Metadata exemplars and their Chroma/embedding projection are derived and rebuildable.
   - Never promote unresolved or unreviewed model output into trusted precedent. Corrections may preserve a rejected model value as negative evidence; reviewer-confirmed absence is reusable only when explicit reviewed source evidence is bound to the no-value decision.

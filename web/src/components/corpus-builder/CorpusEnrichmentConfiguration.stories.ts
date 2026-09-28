@@ -1,3 +1,4 @@
+/* Copyright 2026 Aaron John Schlosser, PhD. */
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import CorpusEnrichmentConfiguration from "./CorpusEnrichmentConfiguration.vue";
 
@@ -33,6 +34,9 @@ const meta = {
     selectedProfileModel: "gemma4:e2b",
     enrichmentMode: "fast",
     semanticIndexing: true,
+    documentIntelligenceProfile: "scholarly",
+    documentNlpProvider: "auto",
+    documentNlpIncludeEvents: false,
     autoCleanText: true,
     llmTouchupDuringEnrichment: false,
     noiseUnusableThreshold: 45,
@@ -54,6 +58,13 @@ export const Deep: Story = {
   args: {
     enrichmentMode: "deep",
     selectedReviewProviderId: "remote",
+  },
+};
+
+export const FictionDocumentIntelligence: Story = {
+  args: {
+    documentIntelligenceProfile: "fiction",
+    documentNlpProvider: "booknlp",
   },
 };
 

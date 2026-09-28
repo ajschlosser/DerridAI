@@ -104,6 +104,8 @@ services:
       RAG_AUTO_GRADE_RETRY_DELAY_SECONDS: ${RAG_AUTO_GRADE_RETRY_DELAY_SECONDS:-1.5}
       RAG_CROSS_ENCODER_MODEL: ${RAG_CROSS_ENCODER_MODEL:-cross-encoder/ms-marco-MiniLM-L-6-v2}
       RAG_MODEL_CACHE: ${RAG_MODEL_CACHE:-/data/models}
+      DOCUMENT_NLP_BASE_URL: ${DOCUMENT_NLP_BASE_URL:-}
+      DOCUMENT_NLP_TIMEOUT_SECONDS: ${DOCUMENT_NLP_TIMEOUT_SECONDS:-900}
     volumes:
       - ./data:/data
     healthcheck:
@@ -118,6 +120,38 @@ services:
       timeout: 5s
       retries: 12
       start_period: 20s
+    restart: unless-stopped
+
+  # Optional whole-document BookNLP analyzer.  Model artifacts are mounted
+  # read-only and must be supplied explicitly; the worker never downloads weights
+  # at runtime. Enable with --profile document-nlp and set
+  # DOCUMENT_NLP_BASE_URL=http://document-nlp:8090 on the API process.
+  document-nlp:
+    build:
+      context: ./booknlp-worker
+    profiles: ["document-nlp"]
+    environment:
+      BOOKNLP_ENTITY_MODEL: ${BOOKNLP_ENTITY_MODEL:-}
+      BOOKNLP_COREF_MODEL: ${BOOKNLP_COREF_MODEL:-}
+      BOOKNLP_QUOTE_MODEL: ${BOOKNLP_QUOTE_MODEL:-}
+      BOOKNLP_ENTITY_SHA256: ${BOOKNLP_ENTITY_SHA256:-}
+      BOOKNLP_COREF_SHA256: ${BOOKNLP_COREF_SHA256:-}
+      BOOKNLP_QUOTE_SHA256: ${BOOKNLP_QUOTE_SHA256:-}
+      BOOKNLP_SPACY_MODEL: ${BOOKNLP_SPACY_MODEL:-en_core_web_sm}
+    volumes:
+      - ./data/models/booknlp:/models/booknlp:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import json,urllib.request; d=json.load(urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=3)); raise SystemExit(0 if d.get('ready') else 1)",
+        ]
+      interval: 20s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
     restart: unless-stopped
 
   ollama:

@@ -1,6 +1,6 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { apiRequest } from "../http";
-import type { CorpusBuild } from "./types";
+import type { CorpusBuild, DocumentIntelligenceRun, SemanticContentGraph } from "./types";
 import { LEGACY_CORPUS_BASE, legacyCorpusUrl } from "./compatibility";
 
 export const corpusBuildsApi = {
@@ -12,6 +12,22 @@ export const corpusBuildsApi = {
     ),
   build: (buildId: string) =>
     apiRequest<CorpusBuild>(`${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}`),
+  documentIntelligence: (buildId: string) =>
+    apiRequest<DocumentIntelligenceRun>(
+      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/document-intelligence`,
+    ),
+  semanticContentGraph: (buildId: string) =>
+    apiRequest<SemanticContentGraph>(
+      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/semantic-content-graph`,
+    ),
+  rerunDocumentIntelligence: (buildId: string) =>
+    apiRequest<{
+      document_intelligence: DocumentIntelligenceRun;
+      semantic_content_graph: SemanticContentGraph;
+    }>(
+      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/document-intelligence/rerun`,
+      { method: "POST" },
+    ),
   runAutonomous: (buildId: string, payload: Record<string, unknown>) =>
     apiRequest<CorpusBuild>(
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/autonomous/run`,

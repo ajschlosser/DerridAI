@@ -749,6 +749,12 @@ class PdfCorpusBuildCreate(BaseModel):
     text_cleanup_rules: list[TextCleanupRule] = Field(default_factory=_default_text_cleanup_rules)
     enrichment_mode: Literal["fast", "deep"] = "fast"
     semantic_indexing: bool = False
+    # Whole-document linguistic analysis is a derived enrichment layer. "auto"
+    # prefers BookNLP for English when an isolated provider is configured and
+    # otherwise falls back to the installed local spaCy pipeline.
+    document_intelligence_profile: Literal["none", "general", "fiction", "scholarly"] = "scholarly"
+    document_nlp_provider: Literal["auto", "spacy", "booknlp"] = "auto"
+    document_nlp_include_events: bool = False
     # Values for schema fields flagged "applies to the work as a whole", supplied before segmentation.
     work_metadata: dict[str, Any] = Field(default_factory=dict, max_length=60)
 

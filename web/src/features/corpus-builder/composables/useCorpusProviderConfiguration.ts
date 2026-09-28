@@ -55,6 +55,11 @@ export function useCorpusProviderConfiguration(currentBuild: Ref<CorpusBuild | n
   });
   const enrichmentMode = ref<"fast" | "deep">("fast");
   const semanticIndexing = ref(true);
+  const documentIntelligenceProfile = ref<"none" | "general" | "fiction" | "scholarly">(
+    "scholarly",
+  );
+  const documentNlpProvider = ref<"auto" | "spacy" | "booknlp">("auto");
+  const documentNlpIncludeEvents = ref(false);
   const autoCleanText = ref(true);
   const llmTouchupDuringEnrichment = ref(false);
   const noiseUnusableThreshold = ref(45);
@@ -145,6 +150,9 @@ export function useCorpusProviderConfiguration(currentBuild: Ref<CorpusBuild | n
       payload.record_sizing = { ...recordSizing.value };
       payload.enrichment_mode = enrichmentMode.value;
       payload.semantic_indexing = semanticIndexing.value;
+      payload.document_intelligence_profile = documentIntelligenceProfile.value;
+      payload.document_nlp_provider = documentNlpProvider.value;
+      payload.document_nlp_include_events = documentNlpIncludeEvents.value;
       payload.auto_clean_text = autoCleanText.value;
       payload.llm_touchup_during_enrichment = llmTouchupDuringEnrichment.value;
       payload.noise_unusable_threshold = noiseUnusableThreshold.value;
@@ -180,6 +188,9 @@ export function useCorpusProviderConfiguration(currentBuild: Ref<CorpusBuild | n
       record_sizing: { ...recordSizing.value },
       enrichment_mode: enrichmentMode.value,
       semantic_indexing: semanticIndexing.value,
+      document_intelligence_profile: documentIntelligenceProfile.value,
+      document_nlp_provider: documentNlpProvider.value,
+      document_nlp_include_events: documentNlpIncludeEvents.value,
       auto_clean_text: autoCleanText.value,
       llm_touchup_during_enrichment: llmTouchupDuringEnrichment.value,
       noise_unusable_threshold: noiseUnusableThreshold.value,
@@ -347,6 +358,28 @@ export function useCorpusProviderConfiguration(currentBuild: Ref<CorpusBuild | n
         Math.min(16, Number(request.max_concurrent_requests)),
       );
     }
+    if (request.enrichment_mode === "fast" || request.enrichment_mode === "deep")
+      enrichmentMode.value = request.enrichment_mode;
+    if (typeof request.semantic_indexing === "boolean")
+      semanticIndexing.value = request.semantic_indexing;
+    if (
+      request.document_intelligence_profile === "none" ||
+      request.document_intelligence_profile === "general" ||
+      request.document_intelligence_profile === "fiction" ||
+      request.document_intelligence_profile === "scholarly"
+    )
+      documentIntelligenceProfile.value = request.document_intelligence_profile;
+    if (
+      request.document_nlp_provider === "auto" ||
+      request.document_nlp_provider === "spacy" ||
+      request.document_nlp_provider === "booknlp"
+    )
+      documentNlpProvider.value = request.document_nlp_provider;
+    if (typeof request.document_nlp_include_events === "boolean")
+      documentNlpIncludeEvents.value = request.document_nlp_include_events;
+    if (typeof request.auto_clean_text === "boolean") autoCleanText.value = request.auto_clean_text;
+    if (typeof request.llm_touchup_during_enrichment === "boolean")
+      llmTouchupDuringEnrichment.value = request.llm_touchup_during_enrichment;
   }
 
   return {
@@ -368,6 +401,9 @@ export function useCorpusProviderConfiguration(currentBuild: Ref<CorpusBuild | n
     recordSizing,
     enrichmentMode,
     semanticIndexing,
+    documentIntelligenceProfile,
+    documentNlpProvider,
+    documentNlpIncludeEvents,
     autoCleanText,
     llmTouchupDuringEnrichment,
     noiseUnusableThreshold,

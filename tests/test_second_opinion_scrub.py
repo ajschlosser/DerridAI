@@ -182,6 +182,9 @@ def test_the_ledger_export_does_not_carry_sealed_values(tmp_path):
 # hides a pending second opinion in any record it finds, and the channels tested above cover what it cannot see.
 CARRIES_RECORDS = {
     ("GET", "/api/pdf/corpus-builds/{build_id}/records"),
+    # Semantic graph nodes/edges may project reviewer-visible metadata values.
+    ("GET", "/api/pdf/corpus-builds/{build_id}/semantic-content-graph"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/document-intelligence/rerun"),
     ("PATCH", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/metadata"),
     ("PATCH", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/text"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/metadata-decision"),
@@ -230,6 +233,8 @@ BUILD_LEVEL = {
     ("DELETE", "/api/pdf/corpus-builds/{build_id}"),
     ("GET", "/api/pdf/corpus-builds"),
     ("GET", "/api/pdf/corpus-builds/{build_id}"),
+    # Provider annotations derive only from source text; no reviewer decisions are embedded.
+    ("GET", "/api/pdf/corpus-builds/{build_id}/document-intelligence"),
     ("PATCH", "/api/pdf/corpus-builds/{build_id}/provider-profile"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/manifest/regenerate"),
     ("PATCH", "/api/pdf/corpus-builds/{build_id}/manifest"),

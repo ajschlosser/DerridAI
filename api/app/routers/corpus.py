@@ -19,7 +19,7 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, JSONResponse
 
-from ..celf_queries import document_intelligence as document_queries
+from ..celf_queries import source_documents as document_queries
 from ..celf_queries.access import AccessContext, InvalidQuery, NotFound
 from ..claim_memory import validated_claims_citing
 from ..config import settings
@@ -631,6 +631,38 @@ def get_pdf_corpus_build(build_id: str) -> dict[str, Any]:
     # Not stored: it is a live reading of what the build is waiting for right now.
     build["llm_activity"] = pdf_corpus_builds.llm_activity(build_id)
     return build
+
+
+@router.get("/api/pdf/corpus-builds/{build_id}/document-intelligence")
+def get_pdf_corpus_document_intelligence(build_id: str) -> dict[str, Any]:
+    """Retained derived linguistic-analysis run for inspection and reproducibility."""
+    try:
+        value = pdf_corpus_builds.document_intelligence(build_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    if not value:
+        raise HTTPException(status_code=404, detail="Document intelligence has not run for this build.")
+    return value
+
+
+@router.get("/api/pdf/corpus-builds/{build_id}/semantic-content-graph")
+def get_pdf_corpus_semantic_content_graph(build_id: str) -> dict[str, Any]:
+    """Current reviewer-safe semantic graph rebuilt from the latest Record revisions."""
+    try:
+        return pdf_corpus_builds.semantic_content_graph(build_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+
+
+@router.post("/api/pdf/corpus-builds/{build_id}/document-intelligence/rerun")
+def rerun_pdf_corpus_document_intelligence(build_id: str) -> dict[str, Any]:
+    """Refresh derived document NLP after text/topology review changes."""
+    try:
+        return pdf_corpus_builds.rerun_document_intelligence(build_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.patch("/api/pdf/corpus-builds/{build_id}/provider-profile")
