@@ -1,4 +1,4 @@
-# cELF 1.0 - Capta-Enhanced Lexical Format
+# cELF 1.0 - Capta-Enriched Lexical Format
 
 **Author:** Dr. Aaron John Schlosser  
 **Specification Version:** 1.0  
@@ -7,9 +7,9 @@
 **Short name:** cELF (pronounced "self")  
 **Reference implementation:** DerridAI
 
-> **Publication note - non-normative.** This edition uses **Capta-Enhanced Lexical Format (cELF, pronounced "self")** as the specification name. The tracked conformance requirement identifiers are unchanged. The accompanying DerridAI white paper is explanatory and does not add, remove, or modify conformance requirements.
+> **Publication note - non-normative.** This edition uses **Capta-Enriched Lexical Format (cELF, pronounced "self")** as the specification name. The tracked conformance requirement identifiers are unchanged. The accompanying DerridAI white paper is explanatory and does not add, remove, or modify conformance requirements.
 
-The **Capta-Enhanced Lexical Format** (**cELF**, pronounced "self") defines a normalized, traceable, and reproducible information architecture for AI-assisted documentary research. **Retrieval** is used in both a broad research sense - the recovery of relevant documentary information for active use - and a narrower technical sense that includes vector, lexical, hybrid, filtered, and other computational search methods. Vector search is one retrieval mechanism, not the meaning of the specification as a whole.
+The **Capta-Enriched Lexical Format** (**cELF**, pronounced "self") defines a normalized, traceable, and reproducible information architecture for AI-assisted documentary research. **Retrieval** is used in both a broad research sense - the recovery of relevant documentary information for active use - and a narrower technical sense that includes vector, lexical, hybrid, filtered, and other computational search methods. Vector search is one retrieval mechanism, not the meaning of the specification as a whole.
 
 ## Contents
 
@@ -75,7 +75,7 @@ The **Capta-Enhanced Lexical Format** (**cELF**, pronounced "self") defines a no
 
 - [White Paper - DerridAI as the Reference Implementation of cELF](#white-paper---derridai-as-the-reference-implementation-of-celf)
 - [Abstract](#abstract)
-- [1. The name: _capta_, enhancement, and lexical form](#1-the-name-capta-enhancement-and-lexical-form)
+- [1. The name: _capta_, enrichment, and lexical form](#1-the-name-capta-enrichment-and-lexical-form)
 - [2. Research problem](#2-research-problem)
 - [3. What cELF standardizes](#3-what-celf-standardizes)
 - [4. DerridAI as a reference implementation](#4-derridai-as-a-reference-implementation)
@@ -109,7 +109,7 @@ The specification deliberately uses technical object names such as **SourceSpan*
 
 #### Status and purpose
 
-The **Capta-Enhanced Lexical Format** defines an information model and interoperability requirements for transforming documents into records that can be extracted, enriched, reviewed, stored, located, selected as evidence, supplied to artificial-intelligence systems, and traced back to authoritative sources.
+The **Capta-Enriched Lexical Format** defines an information model and interoperability requirements for transforming documents into records that can be extracted, enriched, reviewed, stored, located, selected as evidence, supplied to artificial-intelligence systems, and traced back to authoritative sources.
 
 The specification is intended for systems in which document provenance, attribution, evidentiary support, source identity, record identity, normalization, traceability, information quality, and reproducibility materially affect the credibility of AI-assisted research.
 
@@ -119,7 +119,7 @@ A conforming implementation MAY use local or remote databases, files, object sto
 
 The DerridAI application is the originating reference implementation.
 
-> **Terminology note - non-normative.** The name **cELF** expands to **Capta-Enhanced Lexical Format**. _Capta_ emphasizes that research objects are selected, delimited, transcribed, categorized, or interpreted through explicit procedures rather than treated as context-free givens. **Lexical** identifies text-bearing documentary representation as the primary interchange substrate; it does not limit source media to plain text. **Enhanced** refers to the assertions, provenance, authority, evidence, and run metadata associated with that representation. Source locators remain appropriate to the original medium, including pages, character ranges, image regions, and audio time spans.
+> **Terminology note - non-normative.** The name **cELF** expands to **Capta-Enriched Lexical Format**. _Capta_ emphasizes that research objects are selected, delimited, transcribed, categorized, or interpreted through explicit procedures rather than treated as context-free givens. **Lexical** identifies text-bearing documentary representation as the primary interchange substrate; it does not limit source media to plain text. **Enriched** refers to the assertions, provenance, authority, evidence, and run metadata associated with that representation. Source locators remain appropriate to the original medium, including pages, character ranges, image regions, and audio time spans.
 
 #### Normative terms
 
@@ -1523,19 +1523,19 @@ _Non-normative explanatory paper_
 
 ## Abstract
 
-The **Capta-Enhanced Lexical Format (cELF, pronounced “self”)** defines a portable information model for AI-assisted documentary research. It preserves source identity, record revision, attribution, evidence, uncertainty, assertion provenance, and research-run provenance as documents move through extraction, enrichment, retrieval, generation, review, and publication. DerridAI is the originating reference implementation.
+The **Capta-Enriched Lexical Format (cELF, pronounced “self”)** defines a portable information model for AI-assisted documentary research. It preserves source identity, record revision, attribution, evidence, uncertainty, assertion provenance, and research-run provenance as documents move through extraction, enrichment, retrieval, generation, review, and publication. DerridAI is the originating reference implementation.
 
 DerridAI began as a local research environment for a corpus of Jacques Derrida’s works. That corpus puts pressure on ordinary retrieval pipelines because interpretation often depends on quotation boundaries, reported positions, shifts in speaker, edition and translation, pagination, and rhetorical stance. The implementation has therefore been useful for testing whether the distinctions defined by cELF remain recoverable in a working system.
 
 > **Figure - cELF source-to-claim traceability.** `SourceDocument -> SourceSpan -> Record -> RecordRevision -> FieldAssertion -> Evidence Acquisition -> EvidenceRef -> EvidencePacket -> GenerationRun -> GeneratedClaim -> SupportBinding`.
 
-## 1. The name: _capta_, enhancement, and lexical form
+## 1. The name: _capta_, enrichment, and lexical form
 
 The word _capta_ is used here as a methodological reminder. In a widely cited digital-humanities formulation, Johanna Drucker distinguishes _capta_ - what is taken, selected, or constructed for analysis - from the idea that computational objects simply arrive as neutral givens (Drucker 2011). A research corpus is produced through choices about transcription, segmentation, page mapping, field definitions, classification, evidence selection, and review. cELF records enough of those choices to make the resulting objects auditable.
 
 The distinction is useful, but it should not be overstated. Matthew Lavin has argued that “situated data” can express much of the same point and that the history of the word _data_ does not support a simple philosophical opposition between given and taken (Lavin 2021). cELF therefore continues to use ordinary engineering terms such as _data_, _metadata_, and _database_. The word _capta_ identifies the methodological emphasis: selection and interpretation should remain visible when they affect a research claim.
 
-**Enhanced** describes the relation between documentary text and the additional structure attached to it. A lexical passage may acquire source locators, revision identity, FieldAssertions, review authority, evidence references, retrieval provenance, and claim bindings. Those enhancements remain linked to the material from which they were derived.
+**Enriched** describes the relation between documentary text and the additional structure attached to it. A lexical passage may acquire source locators, revision identity, FieldAssertions, review authority, evidence references, retrieval provenance, and claim bindings. Those enrichments remain linked to the material from which they were derived.
 
 **Lexical** identifies text-bearing representation as the main interchange surface. It does not mean that cELF accepts only plain-text sources. PDF pages, images, audio, web documents, and other media can be represented with medium-appropriate SourceSpans while transcription or recognized text supplies the lexical material used for search, annotation, and model input.
 
