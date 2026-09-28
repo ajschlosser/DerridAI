@@ -457,7 +457,7 @@ const showReviewWorkspace = computed(
 async function switchWorkspace(workspace: CorpusWorkspaceMode) {
   if (workspace === "build" && !currentBuild.value) return;
   if (workspace === "review" && !hasRecordTopology.value) return;
-  await router.replace({
+  await router.push({
     query: {
       ...route.query,
       workspace,
@@ -2162,6 +2162,7 @@ defineExpose({
     </div>
 
     <CorpusWorkflowStepper
+      v-if="workspaceMode !== 'setup' || !currentBuild"
       :stage="currentBuild?.stage || ''"
       :status="currentBuild?.status || ''"
       :published="Boolean(currentBuild?.publication)"
@@ -2173,11 +2174,11 @@ defineExpose({
       :can-publish="Boolean(currentBuild?.publication_readiness?.can_publish)"
     />
     <CorpusModelActivity
-      v-if="currentBuild && buildRunning"
+      v-if="currentBuild && buildRunning && workspaceMode !== 'setup'"
       :activity="currentBuild.llm_activity"
     />
     <CorpusInitializationDialog
-      v-if="currentBuild && buildRunning && !hasRecordTopology"
+      v-if="workspaceMode === 'build' && currentBuild && buildRunning && !hasRecordTopology"
       :build="currentBuild"
       :disabled="busy !== ''"
       @cancel="cancelBuild"
@@ -2481,7 +2482,7 @@ defineExpose({
     </details>
 
     <div
-      v-if="currentBuild || !showBuildConfiguration"
+      v-if="currentBuild && !showBuildConfiguration"
       class="builder-workspace"
       :class="{ 'review-mode': showReviewWorkspace }"
     >
