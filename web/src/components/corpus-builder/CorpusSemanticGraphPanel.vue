@@ -24,6 +24,7 @@ const loading = ref(false);
 const rerunning = ref(false);
 const error = ref("");
 const selectedType = ref("all");
+const entityQuery = ref("");
 const selectedNodeId = ref("");
 
 const nodeTypes = computed(() => {
@@ -31,12 +32,17 @@ const nodeTypes = computed(() => {
   return Array.from(values).sort();
 });
 
-const visibleNodes = computed(() => {
-  const nodes = (graph.value?.nodes || []).filter(
-    (node) => selectedType.value === "all" || node.type === selectedType.value,
-  );
-  return nodes.slice(0, 36);
+const filteredNodes = computed(() => {
+  const query = entityQuery.value.trim().toLocaleLowerCase();
+  return (graph.value?.nodes || []).filter((node) => {
+    if (selectedType.value !== "all" && node.type !== selectedType.value) return false;
+    if (!query) return true;
+    return [node.label, ...(node.aliases || [])].some((value) =>
+      String(value || "").toLocaleLowerCase().includes(query),
+    );
+  });
 });
+const visibleNodes = computed(() => filteredNodes.value.slice(0, 36));
 
 const visibleNodeIds = computed(() => new Set(visibleNodes.value.map((node) => node.id)));
 const visibleEdges = computed(() =>
@@ -141,6 +147,7 @@ watch(
     intelligence.value = null;
     selectedNodeId.value = "";
     selectedType.value = "all";
+    entityQuery.value = "";
   },
 );
 </script>
@@ -165,6 +172,16 @@ watch(
           <p>{{ i18n.t("pdf_corpus.semantic_graph_help") }}</p>
         </div>
         <div class="semantic-graph-actions">
+          <label for="semantic-graph-search">
+            <span>{{ i18n.t("pdf_corpus.semantic_graph_search") }}</span>
+            <input
+              id="semantic-graph-search"
+              v-model="entityQuery"
+              class="control"
+              type="search"
+              :placeholder="i18n.t('pdf_corpus.semantic_graph_search_placeholder')"
+            />
+          </label>
           <label for="semantic-graph-type-filter">
             <span>{{ i18n.t("pdf_corpus.semantic_graph_filter") }}</span>
             <select id="semantic-graph-type-filter" v-model="selectedType" class="control">
@@ -282,6 +299,57 @@ watch(
           <p v-else>{{ i18n.t("pdf_corpus.semantic_graph_select_node") }}</p>
         </aside>
       </div>
+
+      <section
+        v-if="graph?.nodes.length"
+        class="entity-index"
+        aria-labelledby="semantic-graph-entity-index-title"
+      >
+        <div class="entity-index-heading">
+          <div>
+            <h4 id="semantic-graph-entity-index-title">
+              {{ i18n.t("pdf_corpus.semantic_graph_entity_index") }}
+            </h4>
+            <p>
+              {{
+                i18n.tf("pdf_corpus.semantic_graph_entity_index_count", {
+                  shown: filteredNodes.length,
+                  total: graph.nodes.length,
+                })
+              }}
+            </p>
+          </div>
+        </div>
+        <div class="entity-index-table-wrap">
+          <table class="entity-index-table">
+            <thead>
+              <tr>
+                <th scope="col">{{ i18n.t("pdf_corpus.semantic_graph_entity") }}</th>
+                <th scope="col">{{ i18n.t("pdf_corpus.semantic_graph_type") }}</th>
+                <th scope="col">{{ i18n.t("pdf_corpus.semantic_graph_mentions_short") }}</th>
+                <th scope="col">{{ i18n.t("pdf_corpus.semantic_graph_records_short") }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="node in filteredNodes" :key="node.id">
+                <td>
+                  <button
+                    type="button"
+                    class="entity-link"
+                    @click="selectedNodeId = node.id"
+                  >
+                    {{ node.label }}
+                  </button>
+                  <small v-if="node.aliases?.length">{{ node.aliases.join(" · ") }}</small>
+                </td>
+                <td>{{ node.type }}</td>
+                <td>{{ node.mention_count || 0 }}</td>
+                <td>{{ node.record_ids?.length || 0 }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       <p v-if="graph?.epistemic_note" class="graph-epistemic-note">
         {{ graph.epistemic_note }}
@@ -440,6 +508,66 @@ watch(
 }
 .relation-list small {
   color: var(--muted);
+}
+.entity-index {
+  display: grid;
+  gap: var(--space-2);
+}
+.entity-index-heading h4,
+.entity-index-heading p {
+  margin: 0;
+}
+.entity-index-heading p {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+.entity-index-table-wrap {
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+.entity-index-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-xs);
+}
+.entity-index-table th,
+.entity-index-table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--line);
+  text-align: start;
+  vertical-align: top;
+}
+.entity-index-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-raised);
+  font-weight: var(--fw-semibold);
+}
+.entity-index-table td:first-child {
+  min-width: 220px;
+}
+.entity-index-table td:first-child small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+}
+.entity-link {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: var(--fw-semibold);
+  text-align: start;
+  cursor: pointer;
+}
+.entity-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .graph-epistemic-note {
   margin: 0;
