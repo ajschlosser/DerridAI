@@ -1,6 +1,6 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { corpusBuildsApi } from "../api/corpus/builds";
 import type { CorpusLlmTraceEntry } from "../api/corpus";
 import { realtime } from "../realtime";
@@ -112,8 +112,12 @@ function subscribe() {
 function toggle(event: Event) {
   open.value = (event.currentTarget as HTMLDetailsElement).open;
   if (open.value) {
+    subscribe();
     void load();
     void loadLive();
+  } else {
+    unsubscribe?.();
+    unsubscribe = null;
   }
 }
 
@@ -122,11 +126,13 @@ watch(
   () => {
     items.value = [];
     drafts.value = {};
-    subscribe();
-    if (open.value) void load();
+    if (open.value) {
+      subscribe();
+      void load();
+      void loadLive();
+    }
   },
 );
-onMounted(subscribe);
 onBeforeUnmount(() => {
   unsubscribe?.();
   if (liveTimer !== null) window.clearTimeout(liveTimer);
