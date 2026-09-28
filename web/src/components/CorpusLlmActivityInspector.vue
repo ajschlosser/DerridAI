@@ -175,9 +175,9 @@ onBeforeUnmount(() => {
         >
           <b>{{ i18n.t("pdf_corpus.llm_inspector.streaming") }}</b>
           <pre>{{ drafts[call.call_id].text }}</pre>
-          <small v-if="drafts[call.call_id].gap">
-            {{ i18n.t("pdf_corpus.llm_inspector.stream_gap") }}
-          </small>
+          <small v-if="drafts[call.call_id].gap">{{
+            i18n.t("pdf_corpus.llm_inspector.stream_gap")
+          }}</small>
         </div>
         <details>
           <summary>{{ i18n.t("pdf_corpus.llm_inspector.prompt") }}</summary>
