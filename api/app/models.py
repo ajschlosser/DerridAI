@@ -217,7 +217,9 @@ class UpsertJobCreate(BaseModel):
     items: list[UpsertJobItem] = Field(min_length=1, max_length=50000)
     document_field: str = "text"
     embedding_field: str = "embedding"
-    batch_size: int = Field(default=500, ge=1, le=1000)
+    # Keep individual embedding/upsert calls bounded so a slow local model or
+    # Chroma server reports progress instead of appearing to hang for one huge batch.
+    batch_size: int = Field(default=128, ge=1, le=1000)
     mirror_languages: bool = True
     include_updates: bool = False
     source_kind: Literal["browser_workspace", "database", "subset", "manual"] = "browser_workspace"
@@ -471,7 +473,7 @@ class RAGRunRequest(BaseModel):
 
 
 class PdfLlmRequest(BaseModel):
-    mode: Literal["clean_text", "draft_record", "link_record"]
+    mode: Literal["clean_text", "draft_record", "link_record", "detect_language"]
     raw_text: str = ""
     pdf_file: str | None = None
     pdf_title: str | None = None
@@ -488,6 +490,24 @@ class PdfLlmRequest(BaseModel):
 
 class PdfPageLabelsPatch(BaseModel):
     labels: dict[int, str | None] = Field(default_factory=dict)
+
+
+class PdfAssetLanguagePatch(BaseModel):
+    """One explicit reviewer decision for an unresolved source language."""
+
+    language: str | None = Field(default=None, max_length=35)
+    skip_language: bool = False
+
+    @model_validator(mode="after")
+    def require_one_decision(self) -> PdfAssetLanguagePatch:
+        if self.skip_language == (self.language is not None):
+            raise ValueError("Provide one language or set skip_language=true.")
+        if self.language is not None:
+            value = self.language.strip().replace("_", "-").lower()
+            if not re.fullmatch(r"[a-z]{2,3}(?:-[a-z0-9]{2,8})?", value):
+                raise ValueError("language must be a BCP-47-style language code.")
+            self.language = value
+        return self
 
 
 class PdfSourceUnitPolicy(BaseModel):

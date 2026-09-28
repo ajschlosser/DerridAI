@@ -37,8 +37,6 @@ const chromaApi = vi.hoisted(() => ({
   collections: vi.fn(),
   probe: vi.fn(),
   setConnection: vi.fn(),
-  works: vi.fn(),
-  records: vi.fn(),
   search: vi.fn(),
   setLanguages: vi.fn(),
   setEmbedding: vi.fn(),
@@ -47,6 +45,11 @@ const chromaApi = vi.hoisted(() => ({
   deriveLanguages: vi.fn(),
 }));
 vi.mock("../../src/api/chroma", () => ({ chromaApi }));
+
+const vectorBrowseReads = vi.hoisted(() => ({
+  browse: vi.fn(),
+}));
+vi.mock("../../src/features/vector-stores/api/browseReads", () => ({ vectorBrowseReads }));
 
 const systemApi = vi.hoisted(() => ({
   researcherProviders: vi.fn(),
@@ -108,6 +111,7 @@ describe("VectorStoresView", () => {
     chromaApi.health.mockResolvedValue(readyHealth);
     chromaApi.collections.mockResolvedValue([]);
     systemApi.researcherProviders.mockResolvedValue({ profiles: [] });
+    vectorBrowseReads.browse.mockResolvedValue({ works: [], page: null });
   });
 
   it("sends researchers to Search with database scope", async () => {
@@ -123,6 +127,49 @@ describe("VectorStoresView", () => {
     expect(wrapper.get(".accessible-empty-state h2").text()).toContain("first corpus collection");
     await wrapper.get(".accessible-empty-state button").trigger("click");
     expect(runtime.openCollectionCreationWizard).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+  });
+
+  it("browses records through the GraphQL projection instead of full REST Records", async () => {
+    chromaApi.collections.mockResolvedValue([{ name: "derrida", count: 2, status: "ready" }]);
+    vectorBrowseReads.browse.mockResolvedValue({
+      works: [{ work: "Of Grammatology", count: 2 }],
+      page: null,
+    });
+    const { wrapper } = await mountView("admin");
+
+    await wrapper.get("#vector-section-tab-data").trigger("click");
+    await flushPromises();
+
+    vectorBrowseReads.browse.mockResolvedValue({
+      works: [{ work: "Of Grammatology", count: 2 }],
+      page: {
+        rows: [
+          {
+            chroma_id: "chroma-1",
+            record_id: "record-1",
+            work: "Of Grammatology",
+            page_start: "12",
+            page_end: "13",
+            text_summarized: false,
+            text_preview: "There is nothing outside the text…",
+          },
+        ],
+        total: 1,
+        offset: 0,
+        limit: 50,
+        hasNextPage: false,
+      },
+    });
+    await wrapper.get("#vector-browse-tab-records").trigger("click");
+    await flushPromises();
+
+    expect(vectorBrowseReads.browse).toHaveBeenLastCalledWith(
+      "derrida",
+      expect.objectContaining({ includeRecords: true, offset: 0, limit: 50 }),
+    );
+    expect(wrapper.get(".store-table").text()).toContain("There is nothing outside the text…");
+    expect(wrapper.get(".store-table").text()).toContain("record-1");
     wrapper.unmount();
   });
 

@@ -38,7 +38,6 @@ function setup() {
   const currentBuild = ref<any | null>({ build_id: "b1" });
   const selectedRecord = ref<any | null>(row());
   const selectedRecordId = ref("r1");
-  const records = ref<any[]>([selectedRecord.value]);
   const busy = ref("");
   const selectedEvidenceField = ref("");
   const reviewInspectorTab = ref<"metadata" | "evidence" | "source">("metadata");
@@ -63,6 +62,7 @@ function setup() {
     selectedRecord.value = record;
     if (build) currentBuild.value = build;
   });
+  const applyRecordToQueue = vi.fn();
   const restoreReviewViewport = vi.fn(async () => undefined);
   const setMessage = vi.fn();
 
@@ -70,7 +70,7 @@ function setup() {
     currentBuild,
     selectedRecord,
     selectedRecordId,
-    records,
+    applyRecordToQueue,
     busy,
     selectedEvidenceField,
     reviewInspectorTab,
@@ -122,7 +122,6 @@ function setup() {
     review,
     currentBuild,
     selectedRecord,
-    records,
     selectedEvidenceField,
     reviewInspectorTab,
     selectedPdfPage,
@@ -146,9 +145,9 @@ describe("Corpus Builder metadata review", () => {
 
     await state.review.resolveMetadataField("target", "Kant");
 
-    // Released before the request is even sent: no saving state, shown as saved.
-    expect(state.review.metadataSavingField.value).toBe("");
-    expect(state.review.metadataSavedField.value).toBe("target");
+    // The accepted value stays visibly pending until the queued request confirms it.
+    expect(state.review.metadataSavingField.value).toBe("target");
+    expect(state.review.metadataSavedField.value).toBe("");
     expect(state.selectedRecord.value?.target).toBe("Kant");
     expect(state.selectedRecord.value?.record_revision).toBe(2);
     expect(state.review.metadataKnownValues.value.target).toContain("Kant");
@@ -244,8 +243,8 @@ describe("Corpus Builder metadata review", () => {
       target: "hospitality",
     });
 
-    // Optimistic: the panel is released as soon as the value is applied locally.
-    expect(state.review.metadataSavingField.value).toBe("");
+    // The batch remains visibly pending until the queued request confirms it.
+    expect(state.review.metadataSavingField.value).toBe("__batch__");
     expect(state.selectedRecord.value?.target).toBe("hospitality");
     expect(state.queued).toHaveLength(1);
 

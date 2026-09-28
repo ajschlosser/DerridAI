@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import threading
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -281,6 +282,7 @@ class UpsertJobManager(PersistentJobStateMixin):
                         "detail": f"Batch {start + 1}-{start + len(batch_items)}: {first_id or ''} … {last_id or ''}",
                     })
 
+                batch_started = time.perf_counter()
                 result = self._store.upsert_with_language_sync(
                     body.store_name,
                     records,
@@ -291,6 +293,7 @@ class UpsertJobManager(PersistentJobStateMixin):
                     audit_entries_by_id=audit_entries_by_id,
                     replace_updates_by_id=replace_updates_by_id,
                 )
+                batch_seconds = time.perf_counter() - batch_started
                 routes = result.get("language_sync", {}).get("record_routes", {})
                 mirrored = result.get("language_sync", {}).get("mirrored", {})
 
@@ -316,7 +319,10 @@ class UpsertJobManager(PersistentJobStateMixin):
                     job["events"].append({
                         "timestamp": completed_at,
                         "stage": "batch_complete",
-                        "detail": f"Committed {job['completed']} of {job['total']} records",
+                        "detail": (
+                            f"Committed {job['completed']} of {job['total']} records "
+                            f"({len(batch_items)} in {batch_seconds:.1f}s)"
+                        ),
                     })
 
             with self._lock:
@@ -351,6 +357,11 @@ class UpsertJobManager(PersistentJobStateMixin):
                 job["status"] = "failed"
                 job["failed"] += 1
                 _ = store_job_error(job, exc)
+                stage = str(job.get("events", [{}])[-1].get("stage") or "unknown")
+                job["stage_detail"] = (
+                    f"{str(exc)} (failed during {stage}; "
+                    f"last update {job.get('current_record_id') or 'none'})"
+                )
                 job["finished_at"] = iso_now()
             try:
                 self._store.fail_sync(body.store_name, str(exc))
@@ -366,7 +377,7 @@ class UpsertJobManager(PersistentJobStateMixin):
                 job["events"].append({
                     "timestamp": job["finished_at"],
                     "stage": "failed",
-                    "detail": str(exc),
+                    "detail": job["stage_detail"],
                 })
         finally:
             self._persist_job(job_id)
@@ -485,4 +496,3 @@ class UpsertJobManager(PersistentJobStateMixin):
         elif "events" in out:
             out["events"] = list(out.get("events") or [])[-12:]
         return out
-

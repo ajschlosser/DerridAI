@@ -156,6 +156,7 @@ class AuthorCandidate:
     birth_year: int | None = None
     death_year: int | None = None
     wikisource_sitelinks: dict[str, str] = field(default_factory=dict)  # project language → author page title
+    languages: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -172,6 +173,7 @@ class ResolvedAuthor:
     description: str = ""
     birth_year: int | None = None
     death_year: int | None = None
+    languages: list[str] = field(default_factory=list)
     external_ids: dict[str, str] = field(default_factory=dict)
     wikisource_sitelinks: dict[str, str] = field(default_factory=dict)
 
@@ -193,6 +195,7 @@ class CaptureOptions:
     # Roles included by default: works by the person (sole or co-author) and their editions/translations.
     roles: list[str] = field(default_factory=lambda: [ContributionRole.AUTHOR, ContributionRole.COAUTHOR])
     include_translations: bool = True
+    include_originals: bool = True
     languages: list[str] | None = None  # None = all available languages
     max_candidates_per_provider: int = 2000
 

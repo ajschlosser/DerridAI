@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import type { CorpusRecord } from "../../api/corpus";
+import { queueRowFromRecord } from "../../features/corpus-builder/domain/queueRows";
 import CorpusReviewRecordQueue from "./CorpusReviewRecordQueue.vue";
 
 function record(
@@ -19,21 +20,21 @@ function record(
   };
 }
 
-const records = [
+const rows = [
   record("record-ready", "ready", { metadata_enrichment_finished: true }),
   record("record-metadata", "metadata", {
     review_issue_codes: ["metadata", "source"],
   }),
   record("record-accepted", "accepted", { accepted: true }),
   record("record-rejected", "rejected", { rejected: true }),
-];
+].map(queueRowFromRecord);
 
 const meta = {
   title: "Corpus Builder/Review/Record Queue",
   component: CorpusReviewRecordQueue,
   args: {
-    records,
-    recordTotal: records.length,
+    rows,
+    recordTotal: rows.length,
     selectedRecordId: "record-metadata",
     selectedReviewIds: new Set(["record-metadata"]),
     allVisibleSelected: false,
@@ -50,10 +51,12 @@ export const MixedStates: Story = {};
 
 export const SourceWarning: Story = {
   args: {
-    records: [
-      record("record-source", "source", {
-        source_quality_issues: [{ code: "ocr_noise", severity: "warning" }],
-      }),
+    rows: [
+      queueRowFromRecord(
+        record("record-source", "source", {
+          source_quality_issues: [{ code: "ocr_noise", severity: "warning" }],
+        }),
+      ),
     ],
     recordTotal: 1,
     selectedRecordId: "record-source",
@@ -62,7 +65,7 @@ export const SourceWarning: Story = {
 
 export const Empty: Story = {
   args: {
-    records: [],
+    rows: [],
     recordTotal: 0,
     selectedRecordId: "",
     selectedReviewIds: new Set(),
@@ -71,7 +74,7 @@ export const Empty: Story = {
 
 export const Loading: Story = {
   args: {
-    records: [],
+    rows: [],
     recordTotal: 0,
     selectedRecordId: "",
     selectedReviewIds: new Set(),

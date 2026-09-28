@@ -77,10 +77,13 @@ const optionsValid = computed(
   () =>
     providers.value.length > 0 &&
     (includes.value.authored ||
+      includes.value.translations ||
       includes.value.translator ||
       includes.value.editor ||
       includes.value.other) &&
-    (languages.value === null || languages.value.length > 0),
+    (includes.value.translations
+      ? languages.value === null || Boolean(languages.value.length)
+      : Boolean(languages.value?.length === 1)),
 );
 const toAcquire = computed(() => acquirableCount(candidates.value));
 const running = computed(() => Boolean(capture.value?.active_job));
@@ -133,9 +136,13 @@ async function start() {
   busy.value = true;
   error.value = "";
   try {
+    const selectedLanguages =
+      !includes.value.translations && languages.value === null
+        ? (author.value.languages || []).slice(0, 1)
+        : languages.value;
     const created = await corpusCaptureApi.createCapture(
       author.value.wikidata_qid,
-      optionsFromIncludes(providers.value, includes.value, languages.value),
+      optionsFromIncludes(providers.value, includes.value, selectedLanguages),
       (i18n.locale || "en").split("-")[0].toLowerCase(),
     );
     step.value = "discovering";
@@ -253,6 +260,7 @@ onMounted(() => {
       v-model:providers="providers"
       v-model:includes="includes"
       v-model:languages="languages"
+      :author="author"
       :provider-info="providerInfo"
     />
     <template v-else-if="capture && (step === 'discovering' || step === 'acquiring')">

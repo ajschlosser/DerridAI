@@ -437,6 +437,8 @@ class GutenbergProvider:
                 continue
             if not options.include_translations and candidate.relationship_to_work == WorkRelationship.TRANSLATION:
                 continue
+            if not options.include_originals and candidate.relationship_to_work != WorkRelationship.TRANSLATION:
+                continue
             if options.languages and not set(candidate.document_languages) & set(options.languages):
                 continue
             if report.result_count >= options.max_candidates_per_provider:

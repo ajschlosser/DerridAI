@@ -138,6 +138,25 @@ export const corpusSourcesApi = {
         body: JSON.stringify(plan),
       },
     ),
+  updateAssetLanguage: (assetId: string, language: string | null) =>
+    apiRequest<PdfAsset>(`${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/language`, {
+      method: "PATCH",
+      body: JSON.stringify(language ? { language } : { skip_language: true }),
+    }),
+  suggestAssetLanguage: (
+    assetId: string,
+    connection: { provider?: string; model?: string; base_url?: string; api_key?: string } = {},
+  ) =>
+    apiRequest<{
+      mode: "detect_language";
+      language: string | null;
+      confidence?: number;
+      reason?: string;
+      source?: string;
+    }>(`${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/language-suggestion`, {
+      method: "POST",
+      body: JSON.stringify({ mode: "detect_language", ...connection }),
+    }),
   blocks: (assetId: string, offset = 0, limit = 200, ids: string[] = []) =>
     apiRequest<{ items: SourceBlock[]; total: number }>(
       `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/blocks?offset=${offset}&limit=${limit}${

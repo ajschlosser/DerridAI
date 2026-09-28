@@ -25,6 +25,7 @@ from ..corpus_builder import CORPUS_PROFILES, pdf_corpus_builds, pdf_corpus_repo
 from ..corpus_review_state import _queue_counts
 from ..http_auth import require_admin
 from ..llm import TouchupFailure
+from ..llm_tools import run_pdf_llm
 from ..metadata_adjudication_cache import clear as clear_adjudication_cache
 from ..metadata_adjudication_cache import suggestions as adjudication_suggestions
 from ..metadata_schema import MetadataSchema, SchemaImportError
@@ -58,7 +59,9 @@ from ..models import (
     PdfCorpusTextTouchupProposalStatus,
     PdfCorpusTextTouchupRequest,
     PdfDocumentLayoutPatch,
+    PdfLlmRequest,
     PdfPageLabelsPatch,
+    PdfAssetLanguagePatch,
     PdfSourceUnitPolicy,
     PdfSourceUrlImport,
 )
@@ -338,6 +341,39 @@ def patch_pdf_asset_page_labels(asset_id: str, body: PdfPageLabelsPatch) -> dict
         raise HTTPException(status_code=404, detail="PDF asset not found") from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.patch("/api/pdf/assets/{asset_id}/language")
+def patch_pdf_asset_language(asset_id: str, body: PdfAssetLanguagePatch) -> dict[str, Any]:
+    try:
+        return pdf_corpus_repository.update_asset_language(
+            asset_id,
+            language=body.language,
+            skipped=body.skip_language,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="PDF asset not found") from exc
+
+
+@router.post("/api/pdf/assets/{asset_id}/language-suggestion")
+def suggest_pdf_asset_language(asset_id: str, body: PdfLlmRequest) -> dict[str, Any]:
+    if body.mode != "detect_language":
+        raise HTTPException(status_code=422, detail="Language suggestions require detect_language mode.")
+    try:
+        asset = pdf_corpus_repository.get_asset(asset_id)
+        initial = asset.get("initial_metadata") if isinstance(asset.get("initial_metadata"), dict) else {}
+        if initial.get("language"):
+            return {"mode": "detect_language", "language": initial["language"], "source": "existing"}
+        source = "\n\n".join(str(block.get("text") or "") for block in pdf_corpus_repository.load_blocks(asset_id))
+        body.raw_text = source[:12000]
+        return run_pdf_llm(body)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="PDF asset not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Source language suggestion failed")
+        raise HTTPException(status_code=502, detail=f"Source language could not be suggested: {exc}") from exc
 
 
 @router.patch("/api/pdf/assets/{asset_id}/document-layout")
@@ -1201,3 +1237,12 @@ def download_pdf_corpus_publication(publication_id: str) -> FileResponse:
     if path.name.endswith(".jsonl.zst"):
         return FileResponse(path, media_type="application/zstd", filename=f"{publication_id}.jsonl.zst")
     return FileResponse(path, media_type="application/x-ndjson", filename=f"{publication_id}.jsonl")
+
+
+@router.get("/api/pdf/publications/{publication_id}/integrity")
+def download_pdf_corpus_publication_integrity(publication_id: str) -> FileResponse:
+    path = pdf_corpus_repository.publication_path(publication_id)
+    integrity = pdf_corpus_repository.publication_integrity_path(publication_id)
+    if not path.exists() or not integrity.exists():
+        raise HTTPException(status_code=404, detail="Publication integrity file not found")
+    return FileResponse(integrity, media_type="text/plain", filename=f"{publication_id}.sha512")

@@ -22,6 +22,7 @@ from .source_identity import (
     ContributionRole,
     ResolvedAuthor,
     SourceCandidate,
+    WorkRelationship,
 )
 from .source_provider import (
     AcquiredSource,
@@ -182,6 +183,12 @@ class CorpusCaptureService:
             if duplicates:
                 warnings.append(f"exact_provider_duplicates_removed:{duplicates}")
             warnings.extend(self.identity_enricher(found, author, cancelled))
+            if not options.include_originals:
+                found = [
+                    candidate
+                    for candidate in found
+                    if candidate.relationship_to_work == WorkRelationship.TRANSLATION
+                ]
         except CaptureError as exc:
             if exc.code != CaptureErrorCode.CANCELLED:
                 raise

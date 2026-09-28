@@ -1,10 +1,11 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, useId } from "vue";
-import type { SourceProviderId, SourceProviderInfo } from "../../api/corpus";
+import { computed, ref, useId } from "vue";
+import type { AuthorCandidate, SourceProviderId, SourceProviderInfo } from "../../api/corpus";
 import { useI18nStore } from "../../stores/i18n";
 import { languageName, sortLanguageCodes } from "../../domain/languages";
 import type { CaptureIncludes } from "../../domain/captureReview";
+import UiCombobox from "../ui/UiCombobox.vue";
 
 /**
  * Libraries, contribution roles and languages for a capture. Languages default to "all"; the
@@ -13,6 +14,7 @@ import type { CaptureIncludes } from "../../domain/captureReview";
 const props = defineProps<{
   providers: SourceProviderId[];
   includes: CaptureIncludes;
+  author?: AuthorCandidate | null;
   /** null = every language. */
   languages: string[] | null;
   providerInfo: SourceProviderInfo[];
@@ -37,6 +39,14 @@ const projectCodes = computed(() =>
     i18n.locale,
   ),
 );
+const languageChoices = computed(() =>
+  sortLanguageCodes([...(props.author?.languages || []), ...projectCodes.value], i18n.locale),
+);
+const originalLanguage = computed(
+  () => props.author?.languages?.[0] || languageChoices.value[0] || "",
+);
+const languageDraft = ref("");
+const languageDisabled = computed(() => !props.includes.translations);
 const INCLUDES: Array<keyof CaptureIncludes> = [
   "authored",
   "translations",
@@ -47,6 +57,7 @@ const INCLUDES: Array<keyof CaptureIncludes> = [
 const noRole = computed(
   () =>
     !props.includes.authored &&
+    !props.includes.translations &&
     !props.includes.translator &&
     !props.includes.editor &&
     !props.includes.other,
@@ -63,12 +74,27 @@ function toggleProvider(provider: SourceProviderId, on: boolean) {
 }
 function toggleInclude(key: keyof CaptureIncludes, on: boolean) {
   emit("update:includes", { ...props.includes, [key]: on });
+  if (key === "translations" && !on) {
+    emit("update:languages", originalLanguage.value ? [originalLanguage.value] : []);
+  }
 }
 function toggleLanguage(code: string, on: boolean) {
   const next = new Set(props.languages || []);
   if (on) next.add(code);
   else next.delete(code);
   emit("update:languages", [...next]);
+}
+function addLanguage() {
+  const code = languageDraft.value.trim().toLowerCase().replaceAll("_", "-");
+  if (!code) return;
+  const next = new Set(props.languages || []);
+  next.add(code);
+  languageDraft.value = "";
+  emit("update:languages", [...next]);
+}
+function addLanguageValue(value: string) {
+  languageDraft.value = value;
+  addLanguage();
 }
 </script>
 
@@ -106,7 +132,6 @@ function toggleLanguage(code: string, on: boolean) {
         <input
           type="checkbox"
           :checked="includes[key]"
-          :disabled="key === 'translations' && !includes.authored"
           :data-include="key"
           @change="toggleInclude(key, ($event.target as HTMLInputElement).checked)"
         />
@@ -127,6 +152,7 @@ function toggleLanguage(code: string, on: boolean) {
           type="radio"
           :name="`${id}-languages`"
           :checked="languages === null"
+          :disabled="languageDisabled"
           data-languages="all"
           @change="emit('update:languages', null)"
         />
@@ -139,6 +165,7 @@ function toggleLanguage(code: string, on: boolean) {
           type="radio"
           :name="`${id}-languages`"
           :checked="languages !== null"
+          :disabled="languageDisabled"
           data-languages="some"
           @change="emit('update:languages', [])"
         />
@@ -152,17 +179,43 @@ function toggleLanguage(code: string, on: boolean) {
         role="group"
         :aria-label="i18n.t('capture.options.languages_some')"
       >
-        <label v-for="code in projectCodes" :key="code">
+        <label v-for="code in languageChoices" :key="code">
           <input
             type="checkbox"
             :checked="languages.includes(code)"
+            :disabled="languageDisabled"
             :data-language="code"
             @change="toggleLanguage(code, ($event.target as HTMLInputElement).checked)"
           />
           <span>{{ languageName(code, i18n.locale) }}</span>
         </label>
+        <div class="co-language-add">
+          <UiCombobox
+            v-model="languageDraft"
+            :options="languageChoices"
+            :label="i18n.t('capture.options.languages')"
+            :placeholder="i18n.t('capture.options.languages_some')"
+            :disabled="languageDisabled"
+            @change="addLanguageValue"
+          />
+          <button
+            type="button"
+            class="btn small"
+            :disabled="languageDisabled || !languageDraft.trim()"
+            @click="addLanguage"
+          >
+            {{ i18n.t("ui.add") }}
+          </button>
+        </div>
       </div>
-      <p v-if="languages !== null && !languages.length" class="co-invalid" role="alert">
+      <p v-if="languageDisabled && originalLanguage" class="co-help">
+        {{ languageName(originalLanguage, i18n.locale) }}
+      </p>
+      <p
+        v-if="languages !== null && !languages.length && !languageDisabled"
+        class="co-invalid"
+        role="alert"
+      >
         {{ i18n.t("capture.options.need_language") }}
       </p>
       <small class="co-help">{{ i18n.t("capture.options.languages_help") }}</small>
@@ -219,6 +272,16 @@ fieldset small,
   display: flex;
   gap: 6px;
   align-items: center;
+}
+.co-language-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  grid-column: 1 / -1;
+}
+.co-language-add input {
+  min-width: 10rem;
+  flex: 1 1 12rem;
 }
 .co-invalid {
   margin: 0;

@@ -654,6 +654,12 @@ onBeforeUnmount(() => {
 .st-search input {
   width: 100%;
 }
+.st-search :deep(svg) {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 1rem;
+  display: block;
+}
 .st-filter {
   display: grid;
   gap: 2px;

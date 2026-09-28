@@ -25,7 +25,6 @@ function setup() {
     text: "Original text",
     text_length: 13,
   });
-  const records = ref<any[]>([selectedRecord.value]);
   const busy = ref("");
   const sourceTranscriptionOpen = ref(true);
   const llmActionProviderId = ref("");
@@ -43,16 +42,15 @@ function setup() {
   const restoreReviewViewport = vi.fn(async () => undefined);
   const applyAuthoritativeRecord = vi.fn((record: any) => {
     selectedRecord.value = record;
-    const index = records.value.findIndex((item) => item.record_id === record.record_id);
-    if (index >= 0) records.value.splice(index, 1, record);
   });
+  const applyRecordToQueue = vi.fn();
   const setMessage = vi.fn();
 
   const review = useCorpusTextReview({
     currentBuild,
     selectedBuildId,
     selectedRecord,
-    records,
+    applyRecordToQueue,
     busy,
     sourceTranscriptionOpen,
     llmActionProviderId,

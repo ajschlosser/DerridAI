@@ -146,6 +146,8 @@ def test_translations_and_languages_follow_the_options(catalogue):
     provider = sg.GutenbergProvider(http_for(lambda r: httpx.Response(500), "gutenberg"), catalogue=catalogue)
     no_translations, _ = _enumerate(provider, CaptureOptions(include_translations=False))
     assert "1999" not in no_translations and "1998" in no_translations
+    translations_only, _ = _enumerate(provider, CaptureOptions(include_originals=False))
+    assert "1999" in translations_only and "1998" not in translations_only
     english, _ = _enumerate(provider, CaptureOptions(languages=["en"]))
     assert set(english) == {"1999", "2000"}
 

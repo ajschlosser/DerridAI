@@ -23,6 +23,7 @@ class CaptureOptionsBody(BaseModel):
     providers: list[ProviderId] = Field(default_factory=_default_providers, min_length=1, max_length=2)
     roles: list[RoleId] = Field(default_factory=_default_roles, min_length=1, max_length=6)
     include_translations: bool = True
+    include_originals: bool = True
     # None/empty = every available language.
     languages: list[str] | None = Field(default=None, max_length=100)
 

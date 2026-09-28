@@ -1,9 +1,9 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { hasPages, timeLabel } from "../domain/sourceMedia";
 import PdfEvidenceViewer from "./PdfEvidenceViewer.vue";
 import { useI18nStore } from "../stores/i18n";
 import type { SourceBlock } from "../api/pdfCorpus";
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- SA-13: preserve legacy setup binding until its owning workflow is extracted.
 const props = withDefaults(
   defineProps<{
     mediaKind?: string;
@@ -36,6 +36,19 @@ const props = withDefaults(
 );
 const emit = defineEmits<{ openViewer: []; openPdfExplorer: []; previous: []; next: [] }>();
 const i18n = useI18nStore();
+const audioClipUrl = computed(() => {
+  if (!props.audioUrl || props.mediaKind !== "audio") return props.audioUrl || "";
+  const starts = props.blocks
+    .map((block) => block.start)
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  const ends = props.blocks
+    .map((block) => block.end)
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  if (!starts.length || !ends.length) return props.audioUrl;
+  const start = Math.max(0, Math.min(...starts));
+  const end = Math.max(start, Math.max(...ends));
+  return `${props.audioUrl}#t=${start},${end}`;
+});
 </script>
 <template>
   <section
@@ -87,7 +100,7 @@ const i18n = useI18nStore();
         v-if="audioUrl"
         controls
         preload="metadata"
-        :src="audioUrl"
+        :src="audioClipUrl"
         :aria-label="i18n.t('pdf_corpus.media_kind.audio')"
       />
       <article v-for="block in blocks" :key="block.block_id">
@@ -117,6 +130,12 @@ const i18n = useI18nStore();
 img,
 audio {
   max-inline-size: 100%;
+}
+img {
+  display: block;
+  max-block-size: 42vh;
+  margin-inline: auto;
+  object-fit: contain;
 }
 .source-summary {
   min-width: 0;

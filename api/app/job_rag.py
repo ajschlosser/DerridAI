@@ -8,6 +8,7 @@ import time
 import uuid
 from typing import Any
 
+from . import operation_events
 from .chroma_store import ChromaStore
 from .config import settings
 from .job_state import (
@@ -493,14 +494,22 @@ class RAGJobManager(PersistentJobStateMixin):
                 with self._lock:
                     return bool(self._jobs[job_id]["cancel_requested"])
 
+            job_owner = str(self._jobs[job_id].get("owner") or "") or None
+
+            def generation_delta(text: str) -> None:
+                # Live draft only: never stored on the job, never persisted token by token.
+                operation_events.note_generation_delta(job_id, text, owner=job_owner)
+
             try:
                 result = run_rag_pipeline(
                     body,
                     self._store,
                     progress=progress,
                     cancelled=cancelled,
-                    owner=str(self._jobs[job_id].get("owner") or "") or None,
+                    owner=job_owner,
+                    on_generation_delta=generation_delta,
                 )
+                operation_events.note_generation_finished(job_id, owner=job_owner)
                 cache_info = None
                 cache_error = None
                 if not cancelled():
@@ -759,14 +768,18 @@ class RAGJobManager(PersistentJobStateMixin):
                     job["status"] = "failed"
                     job["failed"] = 1
                     details = store_job_error(job, exc)
-                    job["stage_detail"] = details["message"]
+                    stage = str(job.get("stage") or "unknown")
+                    job["stage_detail"] = (
+                        f"{details['message']} (failed during {stage}; "
+                        f"last update {job.get('stage_detail') or 'none'})"
+                    )
                     job["finished_at"] = iso_now()
                     job["events"].append({
                         "timestamp": job["finished_at"],
                         "stage": "failed",
                         "current": job["completed"],
                         "total": job["total"],
-                        "detail": str(exc),
+                        "detail": job["stage_detail"],
                     })
         finally:
             if ollama_slot:

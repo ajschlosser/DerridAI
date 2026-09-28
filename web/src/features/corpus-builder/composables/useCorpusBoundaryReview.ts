@@ -6,6 +6,7 @@ import {
   type CorpusRecord,
   type SourceBlock,
 } from "../../../api/corpus";
+import type { CorpusQueueRow } from "../api/reviewReads";
 import type { ReviewViewport } from "./useCorpusReviewWorkspace";
 
 type MessageTone = "error" | "notice";
@@ -14,7 +15,7 @@ interface CorpusBoundaryReviewOptions {
   currentBuild: Ref<CorpusBuild | null>;
   selectedRecord: Ref<CorpusRecord | null>;
   selectedRecordId: Ref<string>;
-  records: Ref<CorpusRecord[]>;
+  queueRows: Ref<CorpusQueueRow[]>;
   recordTotal: Ref<number>;
   recordOffset: Ref<number>;
   selectedRecordIndex: ComputedRef<number>;
@@ -131,8 +132,8 @@ export function useCorpusBoundaryReview(options: CorpusBoundaryReviewOptions) {
 
   function neighborId(direction: "previous" | "next"): string | undefined {
     const id = options.selectedRecord.value?.record_id;
-    const index = options.records.value.findIndex((row) => row.record_id === id);
-    return options.records.value[direction === "previous" ? index - 1 : index + 1]?.record_id;
+    const index = options.queueRows.value.findIndex((row) => row.record_id === id);
+    return options.queueRows.value[direction === "previous" ? index - 1 : index + 1]?.record_id;
   }
 
   async function merge(direction: "previous" | "next") {

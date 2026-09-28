@@ -74,7 +74,13 @@ function next() {
         ><span role="columnheader">{{ i18n.t("pdf_corpus.printed_label") }}</span
         ><span role="columnheader">{{ i18n.t("pdf_corpus.label_source") }}</span>
       </div>
-      <div v-for="page in visible" :key="page.pdf_page" class="page-row" role="row">
+      <div
+        v-for="page in visible"
+        :key="page.pdf_page"
+        class="page-row"
+        :class="{ dirty: dirty.has(page.pdf_page) }"
+        role="row"
+      >
         <span role="cell">{{ page.pdf_page }}</span>
         <span role="cell">
           <label :for="`pdf-label-${page.pdf_page}`" class="sr-only">{{
@@ -136,7 +142,8 @@ function next() {
 .page-table {
   border: 1px solid var(--line);
   border-radius: 9px;
-  overflow: hidden;
+  max-height: min(46vh, 430px);
+  overflow: auto;
 }
 .page-row {
   display: grid;
@@ -151,8 +158,17 @@ function next() {
   border-bottom: 0;
 }
 .page-head {
+  position: sticky;
+  z-index: 1;
+  top: 0;
   background: var(--soft);
   font-weight: 800;
+}
+.page-row:not(.page-head):has(input:focus-within) {
+  background: color-mix(in srgb, var(--accent) 8%, var(--card));
+}
+.page-row.dirty input {
+  border-color: var(--accent);
 }
 .compact {
   min-height: 30px;

@@ -2,11 +2,13 @@
 """Explicit authenticated access context for cELF read services."""
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
 from ..auth import role_has_capability
-from ..reviewer_context import reviewer_id
+from ..reviewer_context import current_reviewer, reviewer_id
 
 
 class AccessDenied(Exception):
@@ -65,3 +67,17 @@ class AccessContext:
     def require(self, capability: str) -> None:
         if not self.can(capability):
             raise AccessDenied(f"Missing capability: {capability}")
+
+
+@contextmanager
+def reviewer_scope(access: AccessContext) -> Iterator[None]:
+    """Present Records as this caller's blind-review identity sees them.
+
+    Services set it explicitly rather than trusting whichever context variable
+    the transport happened to leave behind (thread pools, tests, future jobs).
+    """
+    token = current_reviewer.set(access.reviewer or current_reviewer.get())
+    try:
+        yield
+    finally:
+        current_reviewer.reset(token)

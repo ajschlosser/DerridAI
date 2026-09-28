@@ -7,7 +7,9 @@ import {
   type PdfAsset,
 } from "../../../api/corpus";
 import * as runtime from "../../../runtime/runtime.js";
+import { realtime } from "../../../realtime";
 import { followResource } from "../../../realtime/follow";
+import type { CorpusRecordEvent } from "../../../realtime/protocol";
 
 type MessageTone = "error" | "notice";
 
@@ -33,6 +35,8 @@ interface CorpusBuildLifecycleControllerOptions {
   setMessage: (message: string, tone?: MessageTone) => void;
   resetReviewForBuildStart: () => void;
   refreshRecords: (reset?: boolean, preferredId?: string) => Promise<void>;
+  /** Patch one review-queue row in place from the server (see useCorpusReviewRecords). */
+  refreshRows: (recordIds: string[]) => Promise<void>;
   t: (key: string, fallback?: string) => string;
   tf: (key: string, values: Record<string, string | number>) => string;
 }
@@ -137,7 +141,7 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
     const buildId = options.selectedBuildId.value;
     if (!buildId) return;
     let finished = false;
-    stopFollowing = followResource({
+    const stopFollowingBuild = followResource({
       topic: `corpus-build:${buildId}`,
       minIntervalMs: 700,
       // Model loading (llm_activity) changes without a build save; reconcile slowly while live.
@@ -160,6 +164,17 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
         }
       },
     });
+    // A finished record's row (its state icon and "LLM processed" marker) updates as soon as
+    // enrichment completes, without waiting for the next throttled build refresh.
+    const stopRecordEvents = realtime.subscribe(`corpus-build:${buildId}`, (event) => {
+      if (event.type !== "corpus.record_completed") return;
+      const recordId = String((event as CorpusRecordEvent).payload.metadata.record_id || "");
+      if (recordId) void options.refreshRows([recordId]);
+    });
+    stopFollowing = () => {
+      stopFollowingBuild();
+      stopRecordEvents();
+    };
   }
 
   async function startBuild() {

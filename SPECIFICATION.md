@@ -373,6 +373,13 @@ A **CorpusPublication** is an immutable snapshot intended for interchange, index
 
 Once declared final, a CorpusPublication MUST NOT be changed in place. Corrections MUST create a new publication or revision.
 
+A publication SHOULD provide a detached SHA-512 integrity artifact for the published
+serialization, including publications that are valid only for experimental or
+non-conformant use. The artifact SHOULD identify the exact published file and the
+hashing scope (for example, the compressed interchange artifact); the digest MAY
+also be recorded in the publication manifest. An integrity artifact MUST NOT be
+treated as evidence that the publication passed semantic or provenance validation.
+
 #### Publication validation
 
 Before publication, every published Record MUST pass structural validation. At minimum, `record_id`, `source_document_id`, non-empty `text`, and `source_spans` MUST be present; typed values MUST match declared types; and controlled fields MUST satisfy applicable vocabularies.

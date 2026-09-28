@@ -14,6 +14,16 @@ import { useI18nStore } from "../../../stores/i18n";
 
 type MessageTone = "error" | "notice";
 
+export interface SourceLanguagePrompt {
+  assetId: string;
+  filename: string;
+  suggestion: string | null;
+  confidence: number | null;
+  reason: string;
+  loading: boolean;
+  error: string;
+}
+
 export function useCorpusSourceConfiguration(
   busy: Ref<string>,
   setMessage: (message: string, tone?: MessageTone) => void,
@@ -64,6 +74,8 @@ export function useCorpusSourceConfiguration(
   let searchTicket = 0;
   const gutenbergStatus = ref<GutenbergStatus | null>(null);
   const lastIngestedAsset = ref<PdfAsset | null>(null);
+  const languagePrompt = ref<SourceLanguagePrompt | null>(null);
+  let languageTicket = 0;
 
   const selectedAsset = computed(
     () => assets.value.find((item) => item.asset_id === selectedAssetId.value) || null,
@@ -83,6 +95,65 @@ export function useCorpusSourceConfiguration(
     if (!assets.value.some((item) => item.asset_id === asset.asset_id)) assets.value.push(asset);
     selectedAssetId.value = asset.asset_id;
     if (ingested) lastIngestedAsset.value = asset;
+    if (ingested) void suggestLanguage(asset);
+  }
+
+  async function suggestLanguage(asset: PdfAsset) {
+    const initial = asset.initial_metadata || {};
+    if (initial.language || initial.language_status === "confirmed_absent") return;
+    const ticket = ++languageTicket;
+    languagePrompt.value = {
+      assetId: asset.asset_id,
+      filename: asset.filename,
+      suggestion: null,
+      confidence: null,
+      reason: "",
+      loading: true,
+      error: "",
+    };
+    const configured = providerConnection(providerProfileId()) || {};
+    const connection = Object.fromEntries(
+      Object.entries(configured)
+        .filter(
+          ([key, value]) => ["provider", "model", "base_url", "api_key"].includes(key) && value,
+        )
+        .map(([key, value]) => [key, String(value)]),
+    );
+    try {
+      const result = await corpusBuilderApi.suggestAssetLanguage(asset.asset_id, connection);
+      if (ticket !== languageTicket || !languagePrompt.value) return;
+      languagePrompt.value = {
+        ...languagePrompt.value,
+        suggestion: result.language,
+        confidence: typeof result.confidence === "number" ? result.confidence : null,
+        reason: result.reason || "",
+        loading: false,
+        error: result.language ? "" : i18n.t("pdf_corpus.language_prompt_no_suggestion"),
+      };
+    } catch (cause) {
+      if (ticket !== languageTicket || !languagePrompt.value) return;
+      languagePrompt.value = {
+        ...languagePrompt.value,
+        loading: false,
+        error: cause instanceof Error ? cause.message : String(cause),
+      };
+    }
+  }
+
+  async function saveSourceLanguage(language: string | null) {
+    const prompt = languagePrompt.value;
+    if (!prompt) return;
+    busy.value = "language";
+    try {
+      const asset = await corpusBuilderApi.updateAssetLanguage(prompt.assetId, language);
+      rememberAsset(asset);
+      languagePrompt.value = null;
+      setMessage(i18n.t("pdf_corpus.language_saved"));
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : String(cause), "error");
+    } finally {
+      busy.value = "";
+    }
   }
 
   async function upload(file?: File | null) {
@@ -344,6 +415,8 @@ export function useCorpusSourceConfiguration(
     importLibraryUrl,
     gutenbergStatus,
     lastIngestedAsset,
+    languagePrompt,
+    saveSourceLanguage,
     refreshAssets,
     upload,
     applyUnitPolicy,

@@ -49,6 +49,11 @@ RESOURCE_EVENT_TYPES = frozenset({
     "corpus.progress",
     "corpus.metadata_progress",
     "corpus.review_queue_changed",
+    "corpus.record_started",
+    "corpus.field_checked",
+    "corpus.record_completed",
+    "llm.token",
+    "activity.changed",
 })
 
 SERVER_EVENT_TYPES = CONTROL_EVENT_TYPES | RESOURCE_EVENT_TYPES
@@ -62,13 +67,25 @@ COALESCABLE_EVENT_TYPES = frozenset({
     "corpus.progress",
     "corpus.metadata_progress",
     "corpus.review_queue_changed",
+    "activity.changed",
+})
+
+# Hints that are never replayed after a reconnect and are the first to go under
+# backpressure. Each is a discrete fact rather than a latest-value snapshot, so
+# it cannot be coalesced; clients treat a gap as "reconcile from REST/GraphQL"
+# (generation: wait for the final answer; per-record progress: re-read counts).
+EPHEMERAL_EVENT_TYPES = frozenset({
+    "llm.token",
+    "corpus.record_started",
+    "corpus.field_checked",
+    "corpus.record_completed",
 })
 
 CLIENT_MESSAGE_TYPES = frozenset({"subscribe", "unsubscribe", "resync", "ping"})
 
 MAX_TOPICS_PER_CONNECTION = 64
 _TOPIC_ID = r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}"
-_TOPIC_RE = re.compile(rf"^(jobs|corpus-builds|job:{_TOPIC_ID}|corpus-build:{_TOPIC_ID})$")
+_TOPIC_RE = re.compile(rf"^(jobs|corpus-builds|job:{_TOPIC_ID}|corpus-build:{_TOPIC_ID}|activity:{_TOPIC_ID})$")
 
 
 class ProtocolError(Exception):
@@ -102,6 +119,15 @@ class Event:
     @property
     def coalescable(self) -> bool:
         return self.type in COALESCABLE_EVENT_TYPES
+
+    @property
+    def ephemeral(self) -> bool:
+        return self.type in EPHEMERAL_EVENT_TYPES
+
+    @property
+    def droppable(self) -> bool:
+        """Safe to discard under backpressure without forcing a resync."""
+        return self.coalescable or self.ephemeral
 
     @property
     def coalesce_key(self) -> tuple[str, str, str]:

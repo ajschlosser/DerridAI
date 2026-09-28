@@ -58,6 +58,8 @@ class LedgerWriteResult:
     record_count: int
     content_sha256: str
     archive_sha256: str
+    content_sha512: str
+    archive_sha512: str
     uncompressed_bytes: int
     compressed_bytes: int
 
@@ -456,6 +458,17 @@ def _sha256_file(path: Path, *, chunk_size: int = 1024 * 1024) -> str:
     return digest.hexdigest()
 
 
+def _sha512_file(path: Path, *, chunk_size: int = 1024 * 1024) -> str:
+    digest = hashlib.sha512()
+    with path.open("rb") as handle:
+        while True:
+            chunk = handle.read(chunk_size)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def write_jsonl_zst(
     path: str | Path,
     records: Iterable[dict[str, Any]],
@@ -473,6 +486,7 @@ def write_jsonl_zst(
     target.parent.mkdir(parents=True, exist_ok=True)
 
     content_hasher = hashlib.sha256()
+    content_sha512_hasher = hashlib.sha512()
     uncompressed_bytes = 0
     record_count = 0
 
@@ -503,6 +517,7 @@ def write_jsonl_zst(
                         + "\n"
                     ).encode("utf-8")
                     content_hasher.update(line)
+                    content_sha512_hasher.update(line)
                     uncompressed_bytes += len(line)
                     compressed.write(line)
                     record_count += 1
@@ -519,6 +534,8 @@ def write_jsonl_zst(
         record_count=record_count,
         content_sha256=content_hasher.hexdigest(),
         archive_sha256=_sha256_file(target),
+        content_sha512=content_sha512_hasher.hexdigest(),
+        archive_sha512=_sha512_file(target),
         uncompressed_bytes=uncompressed_bytes,
         compressed_bytes=target.stat().st_size,
     )

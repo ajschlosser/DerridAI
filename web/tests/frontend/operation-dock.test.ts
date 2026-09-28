@@ -26,6 +26,20 @@ describe("operation dock summary", () => {
     dock.updateOperationStackCount();
     expect(document.querySelector("#operationStackCount")?.textContent).toBe("2 failed");
   });
+
+  it("publishes an explicit summary event for the docked top bar", () => {
+    const listener = vi.fn();
+    globalThis.addEventListener("derridai:operation-summary", listener);
+    const dock = setup('<div class="operation-progress"></div>');
+    dock.updateOperationStackCount();
+    globalThis.removeEventListener("derridai:operation-summary", listener);
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "derridai:operation-summary",
+        detail: expect.objectContaining({ visible: true }),
+      }),
+    );
+  });
 });
 
 describe("operation dock placement", () => {

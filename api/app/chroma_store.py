@@ -230,7 +230,13 @@ class Embeddings:
         root = str(base_url or settings.ollama_base_url).rstrip("/")
         modern_endpoint = f"{root}/api/embed"
         legacy_endpoint = f"{root}/api/embeddings"
-        with httpx.Client(timeout=180.0) as client:
+        timeout = httpx.Timeout(
+            connect=settings.ollama_connect_timeout_seconds,
+            read=settings.ollama_timeout_seconds,
+            write=settings.ollama_timeout_seconds,
+            pool=settings.ollama_connect_timeout_seconds,
+        )
+        with httpx.Client(timeout=timeout) as client:
             response = client.post(
                 modern_endpoint,
                 json={"model": model, "input": texts},
@@ -293,7 +299,13 @@ class Embeddings:
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
         endpoint = f"{base_url.rstrip('/')}/embeddings"
-        with httpx.Client(timeout=180.0) as client:
+        timeout = httpx.Timeout(
+            connect=settings.openai_connect_timeout_seconds,
+            read=settings.openai_timeout_seconds,
+            write=settings.openai_timeout_seconds,
+            pool=settings.openai_connect_timeout_seconds,
+        )
+        with httpx.Client(timeout=timeout) as client:
             response = client.post(
                 endpoint,
                 headers=headers,

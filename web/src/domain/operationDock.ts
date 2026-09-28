@@ -340,10 +340,22 @@ export function createOperationDock(deps: Deps) {
   }
   function updateOperationStackCount() {
     const stack = document.querySelector("#operationProgressStack");
-    if (!stack) return;
+    if (!stack) {
+      globalThis.dispatchEvent(
+        new CustomEvent("derridai:operation-summary", {
+          detail: { visible: false, title: "", summary: "", percent: null, tone: "neutral" },
+        }),
+      );
+      return;
+    }
     const count = stack.querySelectorAll(".operation-progress").length;
     if (!shouldMountOperationDock(count)) {
       stack.remove();
+      globalThis.dispatchEvent(
+        new CustomEvent("derridai:operation-summary", {
+          detail: { visible: false, title: "", summary: "", percent: null, tone: "neutral" },
+        }),
+      );
       return;
     }
     if (stack.dataset.fittedCount !== String(count)) {
@@ -381,6 +393,17 @@ export function createOperationDock(deps: Deps) {
         state.operationToastsMinimized ? tr("operations.expand") : tr("operations.collapse"),
       );
     }
+    globalThis.dispatchEvent(
+      new CustomEvent("derridai:operation-summary", {
+        detail: {
+          visible: true,
+          title: stack.querySelector(".operation-dock-title")?.textContent?.trim() || "",
+          summary: label?.textContent?.trim() || "",
+          percent: summary.percent,
+          tone: summary.tone,
+        },
+      }),
+    );
   }
   function showOperationProgress(title: Any, total: Any) {
     const id = uid();
@@ -405,6 +428,7 @@ export function createOperationDock(deps: Deps) {
     if (bar) bar.style.width = `${pct}%`;
     if (detailEl) detailEl.textContent = detail;
     state.operationProgress[id] = { ...(state.operationProgress[id] || {}), done, total, detail };
+    updateOperationStackCount();
   }
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept for call-site compatibility
   function hideOperationProgress(id: Any, delay = 200) {

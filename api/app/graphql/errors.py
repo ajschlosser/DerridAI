@@ -8,9 +8,17 @@ from ..celf_queries.access import AccessDenied, InvalidQuery, NotFound
 
 
 class PublicError(Exception):
-    """An error whose message is safe to show to the caller."""
+    """An error whose message is safe to show to the caller.
+
+    ``code`` is surfaced as ``extensions.code`` so clients branch on a stable
+    value instead of parsing (localizable) messages.
+    """
 
     code = "BAD_REQUEST"
+
+    def __init__(self, message: str = "") -> None:
+        super().__init__(message)
+        self.extensions = {"code": self.code}
 
 
 class Forbidden(PublicError):

@@ -100,6 +100,8 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
       headers,
     });
   } catch (cause) {
+    // A deliberately cancelled request is not a failure worth recording.
+    if (init.signal?.aborted) throw cause;
     const detail = cause instanceof Error ? cause.message : String(cause);
     const message = `Network error · ${detail}`;
     storeHttpError({

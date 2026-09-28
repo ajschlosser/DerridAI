@@ -51,13 +51,12 @@ describe("RecordContextReader", () => {
     expect(corpusBuilderApi.recordContext).toHaveBeenCalledWith("b1", "r3");
   });
 
-  it("fades neighbours with distance and keeps the focus at full strength", async () => {
+  it("uses deterministic neighbour previews and keeps the focus at full strength", async () => {
     const wrapper = mountReader();
     await flushPromises();
     const [far, near] = wrapper.findAll(".ctx-item");
-    expect(Number(near.attributes("style")?.match(/opacity: ([\d.]+)/)?.[1])).toBeGreaterThan(
-      Number(far.attributes("style")?.match(/opacity: ([\d.]+)/)?.[1]),
-    );
+    expect(far.attributes("style")).toBeUndefined();
+    expect(near.attributes("style")).toBeUndefined();
     expect(wrapper.get(".ctx-focus").attributes("style")).toBeUndefined();
   });
 

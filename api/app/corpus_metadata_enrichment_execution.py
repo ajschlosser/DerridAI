@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
-from . import experiment
+from . import experiment, operation_events
 from .autofill import decide as decide_autofill
 from .autofill import in_audit_sample
 from .config import APP_VERSION
@@ -301,8 +301,12 @@ class MetadataEnrichmentExecutionMixin:
             schema=schema,
             labelled_blocks=self._labelled_source_blocks(build_id, record, request),
         )
+        record_id = str(record.get("record_id") or "")
+        operation_events.note_record_metadata(build_id, record_id, "record_started", precedents_used=example_count)
         stage_results = self._execute_metadata_tasks(record, request, tasks, build_id, stage_callback)
-        return self._reconcile_metadata_results(record, profile, source_ids, stage_results, obvious_apparatus, request=request, build_id=build_id, schema=schema)
+        reconciled = self._reconcile_metadata_results(record, profile, source_ids, stage_results, obvious_apparatus, request=request, build_id=build_id, schema=schema)
+        operation_events.note_record_metadata(build_id, record_id, "record_completed")
+        return reconciled
 
 
     def _prepare_metadata_tasks(
@@ -482,6 +486,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
         stage_callback: Callable[[dict[str, Any], str, str, str | None], None] | None,
     ) -> list[tuple[str, dict[str, Any] | None, Exception | None]]:
         """Run unsettled families with live ownership checks and durable stage callbacks."""
+        stage_callback = self._with_progress_notes(build_id, stage_callback)
         requested_families = request.get("families")
         stage_results: list[tuple[str, dict[str, Any] | None, Exception | None]] = []
         persisted_stage_results = record.setdefault("metadata_stage_results", {})
@@ -630,6 +635,33 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
 
         return stage_results
 
+
+    def _with_progress_notes(
+        self,
+        build_id: str,
+        stage_callback: Callable[[dict[str, Any], str, str, str | None], None] | None,
+    ) -> Callable[[dict[str, Any], str, str, str | None], None]:
+        """Wrap the durable stage callback with a transport-neutral per-family progress note.
+
+        The note names the record, family, terminal state and the family's field
+        identifiers; it never carries values, evidence or model output.
+        """
+
+        def callback(record: dict[str, Any], family: str, state: str, error: str | None) -> None:
+            if stage_callback is not None:
+                stage_callback(record, family, state, error)
+            if not build_id or state not in operation_events.METADATA_FAMILY_STATES:
+                return
+            try:
+                field_ids = sorted(self._schema_for(build_id).family_fields().get(family, set()))
+            except Exception:
+                field_ids = []
+            operation_events.note_record_metadata(
+                build_id, str(record.get("record_id") or ""), "field_checked",
+                family=family, state=state, field_ids=field_ids,
+            )
+
+        return callback
 
     def _labelled_source_blocks(self, build_id: str, record: dict[str, Any], request: dict[str, Any]) -> str:
         """The record's source blocks, each under its ID, so the model can cite the block that supports a value.

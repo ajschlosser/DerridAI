@@ -37,7 +37,7 @@ function setup() {
   });
   const selectedRecord = ref<any | null>(record());
   const selectedRecordId = ref("r1");
-  const records = ref<any[]>([selectedRecord.value]);
+  const queueRows = ref<any[]>([selectedRecord.value]);
   const recordTotal = ref(1);
   const reviewQueue = ref<any>("all");
   const recordQuery = ref("");
@@ -91,7 +91,7 @@ function setup() {
     currentBuild,
     selectedRecord,
     selectedRecordId,
-    records,
+    queueRows,
     recordTotal,
     reviewQueue,
     recordQuery,
@@ -125,7 +125,7 @@ function setup() {
     currentBuild,
     selectedRecord,
     selectedRecordId,
-    records,
+    queueRows,
     recordTotal,
     reviewQueue,
     focusView,
@@ -208,7 +208,7 @@ describe("Corpus Builder review decisions", () => {
   it("advances to the next local record immediately after Accept & next", async () => {
     const state = setup();
     const second = record({ record_id: "r2", record_revision: 1 });
-    state.records.value = [state.selectedRecord.value, second];
+    state.queueRows.value = [state.selectedRecord.value, second];
     state.recordTotal.value = 2;
     corpusBuilderApi.reviewDecision.mockResolvedValue({
       blocked: false,

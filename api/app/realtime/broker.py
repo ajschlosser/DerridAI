@@ -74,7 +74,11 @@ class EventBroker:
         self._event_ids = itertools.count(1)
         self._last_event_id = 0
         self._revisions: dict[tuple[str, str], int] = {}
-        self._replay: deque[Event] = deque(maxlen=max(1, int(replay_events or settings.realtime_replay_events)))
+        self._replay_capacity = max(1, int(replay_events or settings.realtime_replay_events))
+        self._replay: deque[Event] = deque(maxlen=self._replay_capacity)
+        # Event IDs skipped by ephemeral hints are still covered. This advances
+        # only when a replayable event is evicted from the bounded ring.
+        self._replay_coverage_start = 0
         self._subscribers: dict[str, Subscriber] = {}
         self.publish_failures = 0
 
@@ -126,7 +130,15 @@ class EventBroker:
                     topics=topics,
                     audience=audience,
                 )
-                self._replay.append(event)
+                if not event.ephemeral:
+                    # Ephemeral hints are never replayed: after a reconnect the
+                    # client reconciles from REST/GraphQL instead.
+                    if len(self._replay) == self._replay_capacity:
+                        self._replay_coverage_start = max(
+                            self._replay_coverage_start,
+                            self._replay[0].event_id + 1,
+                        )
+                    self._replay.append(event)
                 targets = [sub for sub in self._subscribers.values() if sub.may_receive(event)]
             for subscriber in targets:
                 subscriber.queue.put(event)
@@ -149,8 +161,7 @@ class EventBroker:
     def _replay_locked(self, subscriber: Subscriber, last_event_id: int) -> list[Event] | None:
         if last_event_id >= self._last_event_id:
             return []
-        oldest = self._replay[0].event_id if self._replay else self._last_event_id + 1
-        if last_event_id + 1 < oldest:
+        if last_event_id + 1 < self._replay_coverage_start:
             return None
         return [event for event in self._replay if event.event_id > last_event_id and subscriber.may_receive(event)]
 
