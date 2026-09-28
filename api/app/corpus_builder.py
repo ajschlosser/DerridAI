@@ -1824,8 +1824,11 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                 "model": analysis.get("model"),
                 "capabilities": analysis.get("capabilities") or [],
                 "entity_clusters": len(analysis.get("entity_clusters") or []),
+                "characters": len(analysis.get("characters") or []),
                 "entity_mentions": projection_counts.get("entity_mentions", 0),
                 "quotations": projection_counts.get("quotations", 0),
+                "events": projection_counts.get("events", 0),
+                "model_artifacts": analysis.get("model_artifacts") or [],
                 "warnings": analysis.get("warnings") or [],
                 "text_sha256": analysis.get("text_sha256"),
             }
