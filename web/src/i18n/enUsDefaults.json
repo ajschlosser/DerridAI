@@ -6599,5 +6599,12 @@
   "pdf_corpus.document_intelligence_rerunning": "Reanalysing…",
   "pdf_corpus.document_intelligence_stale": "The reviewed text or record topology changed after document analysis. Reanalyse before relying on entity or quotation projections.",
   "pdf_corpus.stage.document_intelligence": "document intelligence",
-  "pdf_corpus.stage_help.document_intelligence": "Analysing the complete reviewed document for derived entity, coreference, and quotation structure. These annotations guide later enrichment but are not evidence or authority."
+  "pdf_corpus.stage_help.document_intelligence": "Analysing the complete reviewed document for derived entity, coreference, and quotation structure. These annotations guide later enrichment but are not evidence or authority.",
+  "pdf_corpus.semantic_graph_character_profile": "Character observations",
+  "pdf_corpus.semantic_graph_actions_agent": "Actions performed",
+  "pdf_corpus.semantic_graph_actions_patient": "Actions received",
+  "pdf_corpus.semantic_graph_possessions": "Possessions / associated objects",
+  "pdf_corpus.semantic_graph_modifiers": "Descriptive modifiers",
+  "pdf_corpus.semantic_graph_character_profile_note": "These are BookNLP-derived syntactic observations, not reviewed literary claims.",
+  "pdf_corpus.semantic_graph_observed_verbs": "Observed verbs: {verbs}"
 }
