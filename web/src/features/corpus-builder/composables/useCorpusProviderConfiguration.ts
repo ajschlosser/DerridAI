@@ -377,8 +377,7 @@ export function useCorpusProviderConfiguration(currentBuild: Ref<CorpusBuild | n
       documentNlpProvider.value = request.document_nlp_provider;
     if (typeof request.document_nlp_include_events === "boolean")
       documentNlpIncludeEvents.value = request.document_nlp_include_events;
-    if (typeof request.auto_clean_text === "boolean")
-      autoCleanText.value = request.auto_clean_text;
+    if (typeof request.auto_clean_text === "boolean") autoCleanText.value = request.auto_clean_text;
     if (typeof request.llm_touchup_during_enrichment === "boolean")
       llmTouchupDuringEnrichment.value = request.llm_touchup_during_enrichment;
   }
