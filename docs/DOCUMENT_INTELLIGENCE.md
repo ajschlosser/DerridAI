@@ -118,15 +118,44 @@ The retained `document_intelligence` checkpoint contains provider/model/version 
 
 Record-local `document_intelligence` data contains only the compact projection intersecting that Record. It is a prompt/navigation aid and is excluded from canonical publication JSONL. `nlp_candidates` is likewise excluded from publication.
 
-The REST inspection endpoints are:
+The primary application read interface is GraphQL:
+
+```graphql
+source_document(source_document_id: ID) {
+  extraction_provenance
+  pages
+  source_units
+}
+
+corpus_build(build_id: ID) {
+  document_intelligence
+}
+```
+
+`source_document` exposes source identity, extraction provenance, structure, and
+bounded extraction-unit reads. `corpus_build.document_intelligence` exposes the
+retained whole-document analysis and reports whether current Record text has
+made it stale.
+
+The REST read endpoints remain compatibility surfaces and call the same
+transport-independent read services:
 
 ```text
-GET  /api/pdf/corpus-builds/{build_id}/document-intelligence
-GET  /api/pdf/corpus-builds/{build_id}/semantic-content-graph
+GET /api/corpus/sources/{source_document_id}
+GET /api/pdf/assets/{source_document_id}/blocks
+GET /api/pdf/corpus-builds/{build_id}/document-intelligence
+```
+
+Commands remain REST. Rerunning Document Intelligence changes persisted derived
+state and therefore is deliberately not a GraphQL mutation:
+
+```text
 POST /api/pdf/corpus-builds/{build_id}/document-intelligence/rerun
 ```
 
-The first response reports whether the retained analysis is stale against current Record text. The graph endpoint rebuilds against current reviewer-presented Records so blind-review sealing is preserved.
+The Semantic Content Graph remains a separate derived read surface at
+`GET /api/pdf/corpus-builds/{build_id}/semantic-content-graph`. It rebuilds
+against current reviewer-presented Records so blind-review sealing is preserved.
 
 ## Metadata enrichment
 
