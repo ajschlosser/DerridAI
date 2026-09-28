@@ -184,6 +184,7 @@ CARRIES_RECORDS = {
     ("GET", "/api/pdf/corpus-builds/{build_id}/records"),
     # Semantic graph nodes/edges may project reviewer-visible metadata values.
     ("GET", "/api/pdf/corpus-builds/{build_id}/semantic-content-graph"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/document-intelligence/rerun"),
     ("PATCH", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/metadata"),
     ("PATCH", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/text"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/metadata-decision"),
