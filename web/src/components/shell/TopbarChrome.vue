@@ -202,7 +202,4 @@ onBeforeUnmount(() => {
   border-radius: 50%;
   background: var(--tone-info-fg);
 }
-:global(html[data-operations-dock-mode="docked"]:not([data-operations-dock-open="true"]) #operationProgressStack) {
-  display: none !important;
-}
 </style>
