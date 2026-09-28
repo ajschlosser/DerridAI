@@ -184,6 +184,8 @@ def test_a_custom_field_is_proposed_cited_and_reviewed_like_any_other(tmp_path):
     result = answer(mood="calm"); result["field_evidence"] = {}
     out2 = m._reconcile_metadata_results(bare, m._profile_for(bid), ["b1"], [("discourse", result, None)], False, request={"model": "q"}, build_id=bid, schema=m._schema_for(bid))
     assert out2["metadata_field_status"]["mood"]["status"] == "unresolved"
+    # No real source blocks exist in this fixture, so the evidence cascade legitimately finds nothing.
+    assert "mood" not in out2["metadata_evidence"]
 
 
 def _no_evidence_answer(**metadata):
@@ -210,7 +212,24 @@ def test_backfill_mode_attaches_untrusted_evidence_the_model_did_not_cite(tmp_pa
     assert not out["metadata_field_status"]["mood"].get("autofilled")
 
 
-def test_with_value_mode_never_backfills(tmp_path):
+def test_the_evidence_cascade_runs_regardless_of_evidence_mode(tmp_path):
+    """The cascade is a universal safety net now: the same result no longer depends on ``evidence_mode``."""
+    m, bid = manager(tmp_path, notes_schema())
+    m._evidence_source_blocks = lambda *a, **k: [
+        {"block_id": "b1", "text": "The mood of the passage is calm and unhurried."},
+        {"block_id": "b2", "text": "Unrelated footnote."},
+    ]
+    record = {"record_id": "r", "text": "t", "metadata_field_status": {}}
+    out = m._reconcile_metadata_results(
+        record, m._profile_for(bid), ["b1", "b2"], [("discourse", _no_evidence_answer(mood="calm"), None)], False,
+        request={"model": "q"}, build_id=bid, schema=m._schema_for(bid),  # default "with_value" mode, unset
+    )
+    evidence = out["metadata_evidence"]["mood"]
+    assert evidence["block_ids"] == ["b1"] and evidence["backfilled"] is True and evidence["confidence"] is None
+    assert out["metadata_field_status"]["mood"]["status"] != "autofilled"
+
+
+def test_with_value_mode_still_runs_the_evidence_cascade_when_the_model_cites_nothing(tmp_path):
     m, bid = manager(tmp_path, notes_schema())
     m._evidence_source_blocks = lambda *a, **k: [{"block_id": "b1", "text": "calm calm calm"}]
     record = {"record_id": "r", "text": "t", "metadata_field_status": {}}
@@ -218,8 +237,48 @@ def test_with_value_mode_never_backfills(tmp_path):
         record, m._profile_for(bid), ["b1"], [("discourse", _no_evidence_answer(mood="calm"), None)], False,
         request={"model": "q"}, build_id=bid, schema=m._schema_for(bid),
     )
-    assert "mood" not in out["metadata_evidence"] or not out["metadata_evidence"]["mood"].get("block_ids")
+    evidence = out["metadata_evidence"]["mood"]
+    # Bound by the cascade's deterministic stage (verbatim match), but still untrusted and unconfirmed.
+    assert evidence["block_ids"] == ["b1"] and evidence["backfilled"] is True and evidence["confidence"] is None
     assert out["metadata_field_status"]["mood"]["status"] == "unresolved"
+    assert not out["metadata_field_status"]["mood"].get("autofilled")
+
+
+def test_evidence_cascade_llm_stage_only_runs_when_enabled(tmp_path):
+    """The cascade's LLM stage is wired end-to-end, but stays off unless explicitly enabled.
+
+    ``discourse_role="assertion"`` has no lexical or local-semantic match in these fake blocks
+    (chromadb is stubbed in this test environment, so the semantic stages fail open), so it is
+    exactly the case that would reach the cascade's LLM stage. ``_chat_json`` is stubbed so this
+    never touches a real provider.
+    """
+    m, bid = manager(tmp_path, notes_schema())
+    m._evidence_source_blocks = lambda *a, **k: [{"block_id": "b1", "text": "Unrelated text."}]
+    calls: list[str] = []
+
+    def fake_chat_json(request, prompt, **kwargs):
+        calls.append(prompt)
+        return {"block_ids": ["b1"], "reason": "The model's own last-resort choice."}
+
+    m._chat_json = fake_chat_json
+    record = {"record_id": "r", "text": "t", "metadata_field_status": {}}
+
+    out_disabled = m._reconcile_metadata_results(
+        record, m._profile_for(bid), ["b1"], [("discourse", _no_evidence_answer(mood="calm"), None)], False,
+        request={"model": "q"}, build_id=bid, schema=m._schema_for(bid),
+    )
+    assert not calls
+    assert out_disabled["metadata_evidence"].get("discourse_role") is None
+
+    record2 = {"record_id": "r2", "text": "t", "metadata_field_status": {}}
+    out_enabled = m._reconcile_metadata_results(
+        record2, m._profile_for(bid), ["b1"], [("discourse", _no_evidence_answer(mood="calm"), None)], False,
+        request={"model": "q", "evidence_cascade_llm_enabled": True}, build_id=bid, schema=m._schema_for(bid),
+    )
+    assert calls
+    evidence = out_enabled["metadata_evidence"]["discourse_role"]
+    assert evidence["block_ids"] == ["b1"] and evidence["backfilled"] is True and evidence["confidence"] is None
+    assert evidence["method"] == "llm-evidence-choice-v1"
 
 
 def test_evidence_mode_defaults_to_with_value_and_rejects_unknown_values(monkeypatch):

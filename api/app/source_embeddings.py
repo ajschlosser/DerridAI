@@ -351,8 +351,14 @@ class SourceEmbeddingProjection:
             where={"source_document_id": _normalise(source_document_id)},
             include=["metadatas", "embeddings"],
         )
+        # Chroma may return `embeddings` as a numpy array, whose truth value with more than
+        # one row is ambiguous; convert to a list before any `or` fallback.
+        raw_embeddings = payload.get("embeddings")
+        embeddings = (
+            raw_embeddings.tolist() if hasattr(raw_embeddings, "tolist") else raw_embeddings
+        ) or []
         vectors: dict[str, list[float]] = {}
-        for metadata, vector in zip(payload.get("metadatas") or [], payload.get("embeddings") or []):
+        for metadata, vector in zip(payload.get("metadatas") or [], embeddings):
             if not isinstance(metadata, dict):
                 continue
             unit_id = _normalise(metadata.get("source_unit_id"))

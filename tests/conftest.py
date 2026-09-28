@@ -34,6 +34,12 @@ for _name, _value in _storage.items():
     else:
         os.environ.setdefault(_name, _value)
 
+# The evidence-suggestion cascade's last-resort stage makes a real provider call from inside
+# metadata reconciliation. A test that does not stub that provider call must never reach the
+# network by default; a test exercising the LLM stage stubs `_chat_json` and opts back in via
+# the request's own `evidence_cascade_llm_enabled` flag.
+os.environ.setdefault("METADATA_EVIDENCE_CASCADE_LLM_ENABLED", "false")
+
 def pytest_report_header() -> str:
     """Expose the isolated storage root in verbose local runs."""
     return f"DerridAI test storage: {Path(_root).name}"
