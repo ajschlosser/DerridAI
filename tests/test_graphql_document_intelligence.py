@@ -19,6 +19,8 @@ from app.auth import auth_store  # noqa: E402
 from app.celf_queries import document_intelligence as document_queries  # noqa: E402
 from app.celf_queries.access import AccessContext, AccessDenied  # noqa: E402
 from app.corpus_builder import PdfCorpusRepository  # noqa: E402
+from app.routers import corpus as corpus_routes  # noqa: E402
+from app.routers import sources as source_routes  # noqa: E402
 
 USERS = {
     "admin-cookie": SimpleNamespace(id=1, username="root", role="admin", active=True),
@@ -93,8 +95,12 @@ def source_repo(tmp_path, monkeypatch):
             "document_author": "Jacques Derrida",
         },
     )
+    links = CaptureLinks(asset["asset_id"])
     monkeypatch.setattr(document_queries, "pdf_corpus_repository", repo)
-    monkeypatch.setattr(document_queries, "capture_store", CaptureLinks(asset["asset_id"]))
+    monkeypatch.setattr(document_queries, "capture_store", links)
+    monkeypatch.setattr(source_routes, "pdf_corpus_repository", repo)
+    monkeypatch.setattr(source_routes, "capture_store", links)
+    monkeypatch.setattr(corpus_routes, "pdf_corpus_repository", repo)
     return repo, asset
 
 
