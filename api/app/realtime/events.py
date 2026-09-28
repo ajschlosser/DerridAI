@@ -154,7 +154,6 @@ class RealtimeObserver:
         self._activity: dict[str, dict[str, Any]] = {}
         self._background: dict[str, dict[str, Any]] = {}
         self._generation_seq: dict[str, int] = {}
-        self._corpus_generation_seq: dict[tuple[str, str], int] = {}
         self.metadata_notes_dropped = 0
         self._primed = False
         self._stop = threading.Event()
@@ -214,9 +213,8 @@ class RealtimeObserver:
             self._publish_metadata_note(note)
         for job_id, buffer in notes.generation.items():
             self._publish_generation(job_id, buffer)
-        for build_id, calls in notes.corpus_generation.items():
-            for call_id, buffer in calls.items():
-                self._publish_corpus_generation(build_id, call_id, buffer)
+        for note in notes.corpus_generation:
+            self._publish_corpus_generation(note)
         for kind, summary in notes.activity.items():
             self._publish_background_activity(kind, summary)
 
@@ -306,44 +304,28 @@ class RealtimeObserver:
             audience=Audience(admin_only=True),
         )
 
-    def _publish_corpus_generation(
-        self,
-        build_id: str,
-        call_id: str,
-        buffer: operation_events.GenerationBuffer,
-    ) -> None:
-        """Forward one Corpus Builder structured-output draft on its build topic only."""
-        text = "".join(buffer.chunks)
-        pieces = [
-            text[index:index + MAX_TOKEN_EVENT_CHARS]
-            for index in range(0, len(text), MAX_TOKEN_EVENT_CHARS)
-        ]
-        if buffer.finished and not pieces:
-            pieces = [""]
-        key = (build_id, call_id)
-        for index, piece in enumerate(pieces):
-            seq = self._corpus_generation_seq.get(key, 0) + 1
-            self._corpus_generation_seq[key] = seq
-            last = index == len(pieces) - 1
-            self.broker.publish(
-                "corpus.llm_delta",
-                resource_type="corpus_build",
-                resource_id=build_id,
-                payload={
-                    "generation": {
-                        "call_id": call_id,
-                        "seq": seq,
-                        "delta": piece,
-                        "gap": bool(buffer.gap and index == 0),
-                        "final": bool(buffer.finished and last),
-                    },
+    def _publish_corpus_generation(self, note: dict[str, Any]) -> None:
+        """Publish text-free model progress; raw Corpus Builder output never crosses WebSocket."""
+        build_id = str(note.get("build_id") or "")
+        call_id = str(note.get("call_id") or "")
+        if not build_id or not call_id:
+            return
+        self.broker.publish(
+            "corpus.llm_progress",
+            resource_type="corpus_build",
+            resource_id=build_id,
+            payload={
+                "generation": {
+                    "call_id": call_id,
+                    "seq": int(note.get("seq") or 0),
+                    "chars": int(note.get("chars") or 0),
+                    "gap": bool(note.get("gap")),
+                    "final": bool(note.get("final")),
                 },
-                topics=(f"corpus-build:{build_id}",),
-                audience=Audience(admin_only=True),
-            )
-        if buffer.finished:
-            self._corpus_generation_seq.pop(key, None)
-
+            },
+            topics=(f"corpus-build:{build_id}",),
+            audience=Audience(admin_only=True),
+        )
 
     def _publish_generation(self, job_id: str, buffer: operation_events.GenerationBuffer) -> None:
         """Forward streamed Research draft text on ``job:<id>`` only, to whoever may read that job."""
