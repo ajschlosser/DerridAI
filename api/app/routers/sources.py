@@ -278,7 +278,12 @@ def get_source_detail(source_id: str, request: Request) -> dict[str, Any]:
     """Identity, language, provider, provenance and processing facts — never the source text."""
     access = AccessContext.for_user(require_admin(request))
     try:
-        return document_queries.source_detail_payload(access, source_id)
+        return document_queries.source_detail_payload(
+            access,
+            source_id,
+            repository=pdf_corpus_repository,
+            capture_links=capture_store,
+        )
     except NotFound as exc:
         raise _not_found("Source") from exc
 
