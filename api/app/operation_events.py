@@ -23,6 +23,9 @@ from typing import Any
 # Per-job generation text waiting for the next observer tick. A client that
 # cannot keep up sees a sequence gap and waits for the final answer instead.
 MAX_PENDING_GENERATION_CHARS = 32_000
+# Corpus Builder structured-output drafts use the same bounded delivery model,
+# but are keyed by build + call so concurrent metadata families never interleave.
+MAX_PENDING_CORPUS_GENERATION_CHARS = 32_000
 # Discrete per-record metadata notes kept between observer ticks.
 MAX_METADATA_NOTES = 512
 # Field identifiers carried by one metadata note (a family rarely has more).
@@ -38,6 +41,7 @@ _activity: dict[str, dict[str, Any]] = {}
 _metadata_notes: deque[dict[str, Any]] = deque(maxlen=MAX_METADATA_NOTES)
 _metadata_dropped = 0
 _generation: dict[str, GenerationBuffer] = {}
+_corpus_generation: dict[str, dict[str, GenerationBuffer]] = {}
 
 
 @dataclass
@@ -59,6 +63,7 @@ class Drained:
     metadata: list[dict[str, Any]]
     metadata_dropped: int
     generation: dict[str, GenerationBuffer]
+    corpus_generation: dict[str, dict[str, GenerationBuffer]]
 
 
 def note_corpus_build(summary: dict[str, Any]) -> None:
@@ -158,6 +163,43 @@ def note_generation_delta(job_id: str, text: str, *, owner: str | None) -> None:
         pass
 
 
+def note_corpus_generation_delta(build_id: str, call_id: str, text: str) -> None:
+    """Append one unvalidated Corpus Builder model delta for an administrator watching the build."""
+    if not build_id or not call_id or not text:
+        return
+    try:
+        with _lock:
+            calls = _corpus_generation.setdefault(str(build_id), {})
+            buffer = calls.get(str(call_id))
+            if buffer is None:
+                buffer = calls[str(call_id)] = GenerationBuffer(owner=None)
+            room = MAX_PENDING_CORPUS_GENERATION_CHARS - buffer.chars
+            if room <= 0:
+                buffer.gap = True
+                return
+            piece = text if len(text) <= room else text[:room]
+            buffer.gap = buffer.gap or len(piece) < len(text)
+            buffer.chunks.append(piece)
+            buffer.chars += len(piece)
+    except Exception:  # noqa: BLE001, S110 - live drafts must never break corpus generation
+        pass
+
+
+def note_corpus_generation_finished(build_id: str, call_id: str) -> None:
+    """Mark one Corpus Builder model-call draft complete; validated output is read over REST."""
+    if not build_id or not call_id:
+        return
+    try:
+        with _lock:
+            calls = _corpus_generation.setdefault(str(build_id), {})
+            buffer = calls.get(str(call_id))
+            if buffer is None:
+                buffer = calls[str(call_id)] = GenerationBuffer(owner=None)
+            buffer.finished = True
+    except Exception:  # noqa: BLE001, S110
+        pass
+
+
 def note_generation_finished(job_id: str, *, owner: str | None) -> None:
     """The draft stream ended (the final answer is then read over REST/GraphQL)."""
     if not job_id:
@@ -183,6 +225,9 @@ def drain() -> Drained:
             metadata=list(_metadata_notes),
             metadata_dropped=_metadata_dropped,
             generation=dict(_generation),
+            corpus_generation={
+                build_id: dict(calls) for build_id, calls in _corpus_generation.items()
+            },
         )
         _corpus_builds.clear()
         _model_activity.clear()
@@ -190,4 +235,5 @@ def drain() -> Drained:
         _metadata_notes.clear()
         _metadata_dropped = 0
         _generation.clear()
+        _corpus_generation.clear()
     return drained
