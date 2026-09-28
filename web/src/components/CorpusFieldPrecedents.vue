@@ -48,10 +48,16 @@ const error = ref("");
 const fetched = ref<MetadataPrecedents | null>(null);
 const usedKey = ref("");
 const result = computed(() => fetched.value ?? props.preloaded ?? null);
+// A closed disclosure whose known result (kept or fetched) has no precedents offers nothing; an open one keeps
+// showing the reviewer's empty result instead of vanishing under them.
+const isEmpty = computed(
+  () => !open.value && Boolean(result.value && !result.value.items.length && !error.value),
+);
 const canRefresh = computed(() => result.value?.source !== "enrichment");
 
 watch(
-  () => [props.buildId, props.recordId, props.field],
+  // A primitive key so a poll re-rendering the same record does not discard loaded precedents.
+  () => `${props.buildId}\u0000${props.recordId}\u0000${props.field}`,
   () => {
     fetched.value = null;
     error.value = "";
@@ -145,7 +151,7 @@ function useValue(item: MetadataPrecedent) {
 </script>
 
 <template>
-  <section class="field-precedents">
+  <section v-if="!isEmpty" class="field-precedents">
     <button
       type="button"
       class="field-precedents-toggle"

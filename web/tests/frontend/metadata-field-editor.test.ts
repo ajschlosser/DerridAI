@@ -129,7 +129,8 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
         },
       },
     });
-    expect((wrapper.get("input").element as HTMLInputElement).value).toBe("");
+    // List values wrap in a growing text box rather than clipping in a one-line input.
+    expect((wrapper.get("textarea[role=combobox]").element as HTMLTextAreaElement).value).toBe("");
     wrapper.unmount();
   });
 
@@ -165,11 +166,11 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
         status: { status: "model_inferred", method: "llm", confidence: 0.72, auto_populated: true },
       },
     });
-    const input = wrapper.get("input");
+    const input = wrapper.get("textarea");
     await input.setValue("cities of refuge, hospitality");
     await input.trigger("change");
     await nextTick();
-    expect((wrapper.get("input").element as HTMLInputElement).value).toBe(
+    expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe(
       "cities of refuge, hospitality",
     );
     wrapper.unmount();

@@ -78,6 +78,33 @@ describe("reviewed precedents in Record Review", () => {
     );
   });
 
+  it("is not offered when enrichment kept no precedents for the field", () => {
+    const wrapper = mount(CorpusFieldPrecedents, {
+      props: {
+        buildId: "b1",
+        recordId: "r1",
+        field: "mood",
+        fieldLabel: "Mood",
+        load: vi.fn(),
+        preloaded: { ...precedents, source: "enrichment", items: [] },
+      },
+    });
+    expect(wrapper.find(".field-precedents").exists()).toBe(false);
+  });
+
+  it("keeps loaded precedents when a poll re-renders the same record", async () => {
+    const load = vi.fn().mockResolvedValue(precedents);
+    const wrapper = mount(CorpusFieldPrecedents, {
+      props: { buildId: "b1", recordId: "r1", field: "mood", fieldLabel: "Mood", load },
+    });
+    await wrapper.get("button").trigger("click");
+    await flushPromises();
+    await wrapper.setProps({ sourceBlockIds: ["b-1"], fieldLabel: "Mood" });
+    await flushPromises();
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(wrapper.text()).toContain("Measured tone.");
+  });
+
   it("searches again on request instead of trusting the kept list", async () => {
     const load = vi.fn().mockResolvedValue({ ...precedents, source: "live", items: [] });
     const wrapper = mount(CorpusFieldPrecedents, {
