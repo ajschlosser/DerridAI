@@ -7,8 +7,8 @@ How: `_install_publishable` creates a build with one accepted, complete record
 ready to publish; individual tests modify it.
 """
 
-import json
 import hashlib
+import json
 import sys
 import types
 from pathlib import Path
