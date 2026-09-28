@@ -12,10 +12,6 @@ export const corpusBuildsApi = {
     ),
   build: (buildId: string) =>
     apiRequest<CorpusBuild>(`${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}`),
-  documentIntelligence: (buildId: string) =>
-    apiRequest<DocumentIntelligenceRun>(
-      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/document-intelligence`,
-    ),
   semanticContentGraph: (buildId: string) =>
     apiRequest<SemanticContentGraph>(
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/semantic-content-graph`,
