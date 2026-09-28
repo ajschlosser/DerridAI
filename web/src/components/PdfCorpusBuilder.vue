@@ -2630,14 +2630,18 @@ defineExpose({
             @retry="retryIncompleteMetadata"
             @review="reviewMetadataRecord"
           />
-          <CorpusBuildTimeline
-            v-if="!awaitingManifestReview && !showReviewWorkspace"
-            :build="currentBuild"
-          />
-          <details v-if="!showReviewWorkspace" class="technical-details">
-            <summary>
-              {{ i18n.t("pdf_corpus.technical_details") }}
-            </summary>
+          <section
+            v-if="!showReviewWorkspace"
+            class="build-monitor"
+            :aria-label="i18n.t('pdf_corpus.build_monitor')"
+          >
+            <div class="build-monitor-heading">
+              <div>
+                <span class="eyebrow">{{ i18n.t("pdf_corpus.build_monitor") }}</span>
+                <h3>{{ i18n.t("pdf_corpus.build_monitor_title") }}</h3>
+              </div>
+              <small>{{ i18n.t("pdf_corpus.build_monitor_help") }}</small>
+            </div>
             <CorpusBuildProgress
               :status="currentBuild.publication ? 'published' : currentBuild.status"
               :stage="currentBuild.publication ? 'published' : currentBuild.stage"
@@ -2651,6 +2655,14 @@ defineExpose({
               :validation="currentBuild.validation || null"
               :llm-metrics="currentBuild.llm_metrics || null"
               :metadata-operation="currentBuild.metadata_operation || null"
+              :metadata-active-tasks="currentBuild.metadata_active_tasks || []"
+              :metadata-tasks-total="currentBuild.metadata_tasks_total || 0"
+              :metadata-tasks-completed="currentBuild.metadata_tasks_completed || 0"
+              :metadata-tasks-failed="currentBuild.metadata_tasks_failed || 0"
+              :metadata-tasks-skipped="currentBuild.metadata_tasks_skipped || 0"
+              :metadata-tasks-running="currentBuild.metadata_tasks_running || 0"
+              :metadata-tasks-queued="currentBuild.metadata_tasks_queued || 0"
+              :boundary-candidates-completed="currentBuild.boundary_candidates_completed || 0"
               :unresolved-count="
                 currentBuild.boundary_review_count ||
                 currentBuild.segmentation_unresolved_regions?.length ||
@@ -2672,7 +2684,14 @@ defineExpose({
                 reviewCount: currentBuild.boundary_review_count || 0,
               }"
             />
-          </details>
+            <CorpusDocumentIntelligenceStatus
+              v-if="currentBuild.document_intelligence"
+              :run="currentBuild.document_intelligence"
+              :requested-provider="String(currentBuild.request?.document_nlp_provider || 'auto')"
+            />
+            <CorpusLlmActivityInspector :build-id="currentBuild.build_id" />
+            <CorpusBuildTimeline v-if="!awaitingManifestReview" :build="currentBuild" />
+          </section>
           <section
             v-if="awaitingManifestReview"
             class="manifest-gate"
