@@ -128,10 +128,24 @@
   --border: var(--line);
   --surface: var(--card);
   --accent-border: var(--ui-accent-border, #c9ddd4);
+
+  /* Categorical data-visualization hues (entity types in graphs). Each is at least 3:1 on --card. */
+  --viz-cat-1: #2f6f9f;
+  --viz-cat-2: #b25b1e;
+  --viz-cat-3: #3c8452;
+  --viz-cat-4: #8a4fa8;
+  --viz-cat-5: #a8426a;
+  --viz-cat-6: #6b6f24;
 }
 
 html[data-color-scheme="dark"] {
   color-scheme: dark;
+  --viz-cat-1: #7fb3e0;
+  --viz-cat-2: #e9a36c;
+  --viz-cat-3: #7cc793;
+  --viz-cat-4: #c49be0;
+  --viz-cat-5: #e58bb0;
+  --viz-cat-6: #c2c46e;
   background-color: var(--bg);
   --tone-info-fg: #bcd3f0;
   --tone-info-bg: #1b2a3b;

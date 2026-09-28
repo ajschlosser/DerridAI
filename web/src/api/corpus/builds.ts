@@ -1,6 +1,12 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { apiRequest } from "../http";
-import type { CorpusBuild, DocumentIntelligenceRun, SemanticContentGraph } from "./types";
+import type {
+  CorpusBuild,
+  DocumentIntelligenceRun,
+  SemanticContentGraph,
+  SemanticContentGraphView,
+  SemanticGraphViewParams,
+} from "./types";
 import { LEGACY_CORPUS_BASE, legacyCorpusUrl } from "./compatibility";
 
 export const corpusBuildsApi = {
@@ -16,6 +22,23 @@ export const corpusBuildsApi = {
     apiRequest<SemanticContentGraph>(
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/semantic-content-graph`,
     ),
+  semanticContentGraphView: (
+    buildId: string,
+    params: SemanticGraphViewParams = {},
+    init: { signal?: AbortSignal } = {},
+  ) => {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (value === undefined || value === "" || value === null) continue;
+      if (Array.isArray(value)) value.forEach((item) => query.append(key, String(item)));
+      else query.set(key, String(value));
+    }
+    const suffix = query.toString() ? `?${query}` : "";
+    return apiRequest<SemanticContentGraphView>(
+      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/semantic-content-graph/view${suffix}`,
+      init,
+    );
+  },
   rerunDocumentIntelligence: (buildId: string) =>
     apiRequest<{
       document_intelligence: DocumentIntelligenceRun;
