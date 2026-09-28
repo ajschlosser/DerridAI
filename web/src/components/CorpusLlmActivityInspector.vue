@@ -13,7 +13,9 @@ const items = ref<CorpusLlmTraceEntry[]>([]);
 const loading = ref(false);
 const error = ref("");
 const open = ref(false);
-const drafts = ref<Record<string, { text: string; gap: boolean; final: boolean; lastSeq: number }>>({});
+const drafts = ref<
+  Record<string, { text: string; gap: boolean; final: boolean; lastSeq: number }>
+>({});
 let unsubscribe: (() => void) | null = null;
 let liveTimer: number | null = null;
 
@@ -173,9 +175,9 @@ onBeforeUnmount(() => {
         >
           <b>{{ i18n.t("pdf_corpus.llm_inspector.streaming") }}</b>
           <pre>{{ drafts[call.call_id].text }}</pre>
-          <small v-if="drafts[call.call_id].gap">{{
-            i18n.t("pdf_corpus.llm_inspector.stream_gap")
-          }}</small>
+          <small v-if="drafts[call.call_id].gap">
+            {{ i18n.t("pdf_corpus.llm_inspector.stream_gap") }}
+          </small>
         </div>
         <details>
           <summary>{{ i18n.t("pdf_corpus.llm_inspector.prompt") }}</summary>
