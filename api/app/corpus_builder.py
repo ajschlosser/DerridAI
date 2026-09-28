@@ -1787,10 +1787,18 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         self._recover_metadata_exemplar_projections()
 
     def document_intelligence(self, build_id: str) -> dict[str, Any]:
-        """Return the retained whole-document annotation run for audit/inspection."""
+        """Return the retained annotation run and whether current text has made it stale."""
         self.repo.get_build(build_id)
         value = self.repo.load_checkpoint(build_id, "document_intelligence", {})
-        return value if isinstance(value, dict) else {}
+        if not isinstance(value, dict):
+            return {}
+        current_text, _ = document_text_for_records(self.repo.load_records(build_id))
+        current_sha256 = hashlib.sha256(current_text.encode("utf-8")).hexdigest()
+        return {
+            **value,
+            "stale": bool(value.get("text_sha256") and value.get("text_sha256") != current_sha256),
+            "current_text_sha256": current_sha256,
+        }
 
     def semantic_content_graph(self, build_id: str) -> dict[str, Any]:
         """Rebuild the semantic-content graph against the current Record revisions.
@@ -1802,9 +1810,14 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         for row in records:
             _present_for_reviewer(row)
         analysis = self.document_intelligence(build_id)
+        graph_analysis = (
+            {"profile": analysis.get("profile"), "status": "stale"}
+            if analysis.get("stale")
+            else analysis
+        )
         graph = build_semantic_content_graph(
             records,
-            analysis,
+            graph_analysis,
             schema=self._schema_for(build_id),
         )
         self.repo.save_checkpoint(build_id, "semantic_content_graph", graph)
