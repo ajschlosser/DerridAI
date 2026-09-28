@@ -17,13 +17,13 @@ from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+from .config import settings
+from .cross_encoder import predict_scores
 from .metadata_exemplars import (
     DEFAULT_PROMPT_TOKEN_BUDGET,
     PROMPT_CHARS_PER_TOKEN,
     prompt_example,
 )
-from .config import settings
-from .cross_encoder import predict_scores
 
 COLLECTION_NAME = "derridai_metadata_exemplars"
 COLLECTION_ROLE = "general"
@@ -382,7 +382,7 @@ def _rerank_candidates(
     top_k: int,
     model_name: str,
     timeout_seconds: float,
-) -> dict[str, Any]:
+) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
     """Rerank a small field-balanced candidate set, preserving all other rows."""
 
     selected: list[dict[str, Any]] = []
@@ -906,10 +906,10 @@ class ChromaMetadataExemplarIndex:
                         for field in ordered_fields
                     ]
                     for future in futures:
-                        field, selected, field_considered = future.result()
+                        field, field_candidates, field_considered = future.result()
                         considered += field_considered
-                        if selected:
-                            raw[field] = selected
+                        if field_candidates:
+                            raw[field] = field_candidates
             search_ms = _elapsed_ms(search_started)
 
             rerank_started = time.monotonic()
