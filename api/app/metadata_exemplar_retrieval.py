@@ -187,7 +187,7 @@ def _fallback_candidates(
             "hybrid_score": score,
             "fallback": True,
         })
-    for field, rows in ranked.items():
+    for _field, rows in ranked.items():
         rows.sort(
             key=lambda row: (
                 -float(row["lexical_score"]),
