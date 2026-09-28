@@ -239,9 +239,7 @@ describe("useCorpusReviewRecords", () => {
     const state = setup();
     corpusReviewReads.queuePage.mockResolvedValue(page([row("r1"), row("r2")]));
     corpusReviewReads.records.mockResolvedValueOnce([record("r1")]);
-    corpusReviewReads.rows.mockResolvedValueOnce([
-      row("r1", 1, { metadata_llm_processed: true }),
-    ]);
+    corpusReviewReads.rows.mockResolvedValueOnce([row("r1", 1, { metadata_llm_processed: true })]);
 
     await state.reviewRecords.refreshRecords(true);
     expect(state.selectedRecord.value?.record_id).toBe("r1");
