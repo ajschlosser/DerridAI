@@ -7,7 +7,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import httpx
-
 from app.gutenberg_catalogue import GutenbergOfflineService
 
 
