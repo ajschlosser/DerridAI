@@ -16,7 +16,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "api"))
 import httpx  # noqa: E402
 from app import main  # noqa: E402
 from app.auth import auth_store  # noqa: E402
-from app.celf_queries import document_intelligence_reads, source_documents as document_queries  # noqa: E402
+from app.celf_queries import document_intelligence_reads  # noqa: E402
+from app.celf_queries import source_documents as document_queries
 from app.celf_queries.access import AccessContext, AccessDenied  # noqa: E402
 from app.corpus_builder import PdfCorpusRepository  # noqa: E402
 from app.routers import corpus as corpus_routes  # noqa: E402
