@@ -26,7 +26,7 @@ GraphQL and WebSockets are choices of the DerridAI reference implementation. The
 
 | Path                                         | Role                                                                                                                                                                                           |
 | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `api/app/celf_queries/`                      | Transport-independent read services shared with REST: `AccessContext`, owner scoping, blind-review scrubbing, support-binding joins, corpus queue/vector/research-run/metadata-exemplar reads. |
+| `api/app/celf_queries/`                      | Transport-independent read services shared with REST: `AccessContext`, owner scoping, blind-review scrubbing, support-binding joins, SourceDocument intelligence, corpus queue/vector/research-run/metadata-exemplar reads. |
 | `api/app/graphql/schema.py`                  | Query root assembly, limits, masking, introspection rule, default-deny self-check.                                                                                                             |
 | `api/app/graphql/queries/`                   | Root fields grouped by area (`celf`, `records`, `research`, `corpus`, `vector`, `metadata`). Each declares its policy with `classify()`.                                                       |
 | `api/app/graphql/types/`                     | Typed cELF objects (`SourceSpan`, `FieldAssertion`, `EvidenceRef`, `GeneratedClaim`, `SupportBinding`, graph nodes/edges, model, corpus review, vector, research run, metadata exemplar).      |
@@ -50,6 +50,7 @@ Resolvers are thin: they authorize, call a `celf_queries` function through `run_
 | `record_graph(record, include_assertion_history)` | —                                                                                                                                | `POST /api/derridai/graph/record`                                                                       | administrator            |
 | `generated_claim(claim_id)`                       | `support_bindings`, `similar_validated_claims(limit)`                                                                            | `GET /api/derridai/claims/{id}/similar`                                                                 | administrator            |
 | `corpus_build(build_id)`                          | `review_queue(filter, offset, limit)`, `rows(record_ids)`, `record(record_id)`, `records(record_ids)`, `metadata_facets(fields)` | `GET /api/pdf/corpus-builds/{id}/records`                                                               | administrator            |
+| `source_document(source_document_id)`             | `pages(offset, limit)`, `source_units(offset, limit, ids, around)`                                                              | `GET /api/corpus/sources/{id}`, `GET /api/pdf/assets/{id}/blocks`                                       | administrator            |
 | `vector_store(name)`                              | `records(offset, limit, work)`, `record(chroma_id)`, `works`                                                                     | `GET /api/stores/{name}/records`, `GET /api/stores/{name}/records/{id}`, `GET /api/stores/{name}/works` | `corpus.read` capability |
 | `research_run(run_id)`                            | `generated_claims` (administrator-only field)                                                                                    | `GET /api/jobs/{id}` (RAG jobs)                                                                         | owner or administrator   |
 | `metadata_exemplars(filter, offset, limit)`       | —                                                                                                                                | `GET /api/system/data/metadata-exemplars`                                                               | administrator            |
@@ -57,6 +58,22 @@ Resolvers are thin: they authorize, call a `celf_queries` function through `run_
 `record_graph`, `generated_claim` and `corpus_build` stay administrator-only because their REST equivalents are administrator-only and their fields carry assertion values or full Record text. `vector_store` is reachable by any account with the `corpus.read` capability (including Researchers) because `VectorRecordRow`/`VectorRecord` apply the same researcher-text policy as REST (`text_summarized` reports when a Record's text was shortened for that reason); hidden/system collections and `_response_cache` read as `NotFound` for non-administrators, matching REST. `research_run` is owner-scoped like `GET /api/jobs/{id}`; only `generated_claims` is further restricted to administrators. The underlying services are owner/capability-scoped regardless of root policy, so opening a root further is a change in `classify()`, not a new query path. Researcher text protection (`RESEARCHER_TEXT_MAX_CHARS`) must be designed into any root before it is opened to non-administrators.
 
 `POST /api/graphql` itself is reachable by non-administrators with `corpus.read` (route policy), so a researcher can read `celf_model` and `vector_store` and nothing else.
+
+### `SourceDocumentIntelligence`: document reads, not commands
+
+`source_document(source_document_id)` is the typed read surface for document intelligence. It keeps the cELF
+`SourceDocument` as the identity and exposes extraction provenance, provider/catalog metadata, inferred
+document metadata, page/layout projections, capture provenance, downstream build references, and bounded
+`source_units` reads. Extraction units are explicitly implementation projections; they are not presented as an
+additional normative cELF semantic object class.
+
+Uploads, imports, OCR/transcription choices, page-label/layout/language edits, source-unit derivation,
+re-analysis, build creation, retry/cancel/resume, review decisions, and publication remain REST commands.
+Realtime progress remains on the WebSocket event plane.
+
+The REST source-detail and source-block endpoints call the same transport-independent
+`celf_queries.document_intelligence` functions as GraphQL so pagination, visibility, and source identity cannot
+drift between transports.
 
 ### `CorpusBuildReview`: rows vs. Records
 
@@ -88,6 +105,13 @@ GraphQL operation and fragment documents live next to the feature that uses them
 3. Application code imports the generated document and calls `execute(document, variables, { signal })` from `web/src/api/graphql/client.ts`. There are no raw query strings or a name-based `runOperation` dispatcher.
 
 `python scripts/export_graphql_schema.py --check` and `npm run codegen:check` fail CI when either generated artifact is stale relative to the schema/documents; both files are excluded from Prettier (`.prettierignore`) because their exact bytes are checked by their own generators, not reformatted.
+
+## Document intelligence transport rule
+
+Document intelligence is a domain/application capability, not a GraphQL-specific implementation. New
+read-only document facts SHOULD be added first to `app/celf_queries/document_intelligence.py`, then projected
+through GraphQL (and REST where compatibility requires it). Operations that create or mutate source state stay
+on REST; live progress stays on WebSocket.
 
 ## Adding a field or root
 
