@@ -18,6 +18,7 @@ import os
 import re
 import urllib.error
 import urllib.request
+from urllib.parse import urlparse
 from collections import Counter, defaultdict
 from typing import Any
 
@@ -106,6 +107,9 @@ def _call_booknlp(
     include_events: bool,
     base_url: str,
 ) -> dict[str, Any]:
+    parsed_base = urlparse(base_url)
+    if parsed_base.scheme not in {"http", "https"} or not parsed_base.hostname:
+        raise ValueError("Document NLP provider URL must use http or https.")
     url = base_url.rstrip("/") + "/analyze"
     payload = json.dumps(
         {
@@ -117,7 +121,7 @@ def _call_booknlp(
         },
         ensure_ascii=False,
     ).encode("utf-8")
-    request = urllib.request.Request(
+    request = urllib.request.Request(  # noqa: S310 - URL scheme/host validated above
         url,
         data=payload,
         headers={"Content-Type": "application/json"},
@@ -130,7 +134,7 @@ def _call_booknlp(
             int(os.environ.get("DOCUMENT_NLP_TIMEOUT_SECONDS") or BOOKNLP_TIMEOUT_SECONDS),
         ),
     )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
+    with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310 - validated HTTP(S) provider
         body = response.read(MAX_DOCUMENT_CHARS * 12 + 5_000_000)
     parsed = json.loads(body.decode("utf-8"))
     if not isinstance(parsed, dict):
@@ -337,11 +341,9 @@ def analyze_document(
         return run
 
     code = language_code(language)
-    booknlp_url = str(
-        request.get("document_nlp_base_url")
-        or os.environ.get("DOCUMENT_NLP_BASE_URL")
-        or ""
-    ).strip()
+    # Provider endpoints are administrator/runtime configuration, not build-request
+    # input. This avoids turning corpus requests into arbitrary server-side fetches.
+    booknlp_url = str(os.environ.get("DOCUMENT_NLP_BASE_URL") or "").strip()
     should_try_booknlp = (
         selected_provider in {"auto", "booknlp"}
         and code == "en"
