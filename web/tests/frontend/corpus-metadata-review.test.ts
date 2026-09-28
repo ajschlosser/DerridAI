@@ -151,9 +151,10 @@ describe("Corpus Builder metadata review", () => {
 
     await state.review.resolveMetadataField("target", "Kant");
 
-    // The accepted value stays visibly pending until the queued request confirms it.
-    expect(state.review.metadataSavingField.value).toBe("target");
-    expect(state.review.metadataSavedField.value).toBe("");
+    // The optimistic value releases the editor before the request runs. A slow
+    // persistence round trip must not leave the field in "Saving…".
+    expect(state.review.metadataSavingField.value).toBe("");
+    expect(state.review.metadataSavedField.value).toBe("target");
     expect(state.selectedRecord.value?.target).toBe("Kant");
     expect(state.selectedRecord.value?.record_revision).toBe(2);
     expect(state.review.metadataKnownValues.value.target).toContain("Kant");
@@ -200,18 +201,46 @@ describe("Corpus Builder metadata review", () => {
     expect(corpusBuilderApi.patchEvidence).not.toHaveBeenCalled();
   });
 
-  it("keeps the optimistic confirmation pending and refreshes only after failure", async () => {
+  it("releases the editor immediately and rolls optimistic feedback back after failure", async () => {
     const state = setup();
     await state.review.resolveMetadataField("target", "Kant");
 
     expect(state.selectedRecord.value?.target).toBe("Kant");
-    expect(state.review.metadataSavingField.value).toBe("target");
+    expect(state.review.metadataSavingField.value).toBe("");
+    expect(state.review.metadataSavedField.value).toBe("target");
     expect(state.failures).toHaveLength(1);
 
     await state.failures[0]();
 
     expect(state.review.metadataSavingField.value).toBe("");
     expect(state.review.metadataSavedField.value).toBe("");
+  });
+
+  it("does not let an older failed save clear feedback from a newer queued decision", async () => {
+    const state = setup();
+
+    await state.review.resolveMetadataField("target", "Kant");
+    await state.review.resolveMetadataField("speaker", "Jacques Derrida");
+
+    expect(state.review.metadataSavingField.value).toBe("");
+    expect(state.review.metadataSavedField.value).toBe("speaker");
+    expect(state.failures).toHaveLength(2);
+
+    await state.failures[0]();
+
+    expect(state.review.metadataSavingField.value).toBe("");
+    expect(state.review.metadataSavedField.value).toBe("speaker");
+  });
+
+  it("releases a confirmed-no-value decision before persistence completes", async () => {
+    const state = setup();
+
+    await state.review.resolveMetadataNoValue("target");
+
+    expect(state.review.metadataSavingField.value).toBe("");
+    expect(state.review.metadataSavedField.value).toBe("target");
+    expect(state.selectedRecord.value?.target).toBeNull();
+    expect(state.queued).toHaveLength(1);
   });
 
   it("adds evidence through the shared metadata evidence path", async () => {
@@ -263,8 +292,8 @@ describe("Corpus Builder metadata review", () => {
       target: "hospitality",
     });
 
-    // The batch remains visibly pending until the queued request confirms it.
-    expect(state.review.metadataSavingField.value).toBe("__batch__");
+    // The optimistic batch does not lock the panel while persistence runs.
+    expect(state.review.metadataSavingField.value).toBe("");
     expect(state.selectedRecord.value?.target).toBe("hospitality");
     expect(state.queued).toHaveLength(1);
 
