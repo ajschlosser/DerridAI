@@ -6,12 +6,11 @@ from __future__ import annotations
 import json
 
 import pytest
-from pydantic import ValidationError
-
 from app import llm_tools
 from app.models import PdfAssetLanguagePatch, PdfLlmRequest
 from app.source_identity import CaptureError, CaptureOptions, ResolvedAuthor
 from app.source_text import infer_initial_metadata
+from pydantic import ValidationError
 
 
 def test_ambiguous_source_language_remains_explicitly_unresolved():
