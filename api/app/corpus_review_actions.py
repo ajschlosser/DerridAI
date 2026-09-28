@@ -627,6 +627,11 @@ class ReviewActionsMixin:
         target["text_revision_history"] = history[-20:]
         target["text"] = cleaned
         target["text_length"] = len(cleaned)
+        # Both projections are bound to the old text hash. Remove the local copy
+        # immediately; the retained document-level run remains available for audit
+        # and reports itself stale until Document Intelligence is rerun.
+        target.pop("nlp_candidates", None)
+        target.pop("document_intelligence", None)
         target["text_review_status"] = "human_corrected"
         target["text_reviewed_at"] = iso_now()
         target["text_review_source"] = "human"

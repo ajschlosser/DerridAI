@@ -132,6 +132,9 @@ def serialize_public_record(record: dict[str, Any]) -> dict[str, Any]:
         "metadata_disputes",
         # Review aid: references to other records' reviewed precedents, not scholarly metadata.
         "metadata_precedents_cache",
+        # Rebuildable linguistic projections stay outside canonical publication JSONL.
+        "nlp_candidates",
+        "document_intelligence",
         "record_revision",
         "review_state",
         "can_accept",

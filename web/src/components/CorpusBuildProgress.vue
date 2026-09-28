@@ -90,6 +90,8 @@ const stageExplanation = computed(() => {
       "Generating plausible boundary candidates deterministically and asking the LLM only a budgeted set of small local split/keep questions.",
     constructing_records:
       "Constructing reviewable records from the conserved source topology. Advisory suspicious-boundary checks no longer block this step.",
+    document_intelligence:
+      "Analysing the complete reviewed document for derived entity, coreference, and quotation structure before record-level metadata enrichment.",
     reconciling: "Finalizing topology for a build created by an older pipeline.",
     enriching:
       "Enriching each constructed record with discourse, quotation, and indexing metadata. Source text and boundaries are already preserved.",
@@ -107,6 +109,7 @@ const nextStage = computed(() => {
     "structure",
     "segmenting",
     "constructing_records",
+    "document_intelligence",
     "enriching",
     "review",
     "ready",

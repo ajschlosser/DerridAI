@@ -238,6 +238,11 @@ from .corpus_segmentation import (
 )
 from .corpus_segmentation_execution import BuildSegmentationExecutionMixin
 from .derridai_ledger import write_jsonl_zst
+from .document_intelligence import (
+    analyze_document,
+    document_text_for_records,
+    project_annotations_to_records,
+)
 from .enrichment_cycles import (
     GlobalLearningStore,
 )
@@ -273,6 +278,7 @@ from .operation_events import note_corpus_build
 from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
 from .rag import _citation_strings, chat_complete
 from .run_guidance import find_guidance_matches
+from .semantic_content_graph import build_semantic_content_graph
 from .sentence_boundaries import snap_boundaries_to_sentences
 from .source_embeddings import SourceEmbeddingProjection
 from .source_quality import assess_extracted_source, page_source_quality_report
@@ -1786,6 +1792,121 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         self._mark_interrupted()
         self._recover_metadata_exemplar_projections()
 
+    def _run_document_intelligence(
+        self,
+        build_id: str,
+        records: list[dict[str, Any]],
+        manifest: dict[str, Any],
+        request: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Refresh all text-bound linguistic projections without changing scholarly authority."""
+        schema = self._schema_for(build_id)
+        language = str(manifest.get("language") or "")
+        for record in records:
+            annotate_record(record, schema, language=language)
+        try:
+            analysis = analyze_document(
+                records,
+                source_document_id=str(self.repo.get_build(build_id).get("asset_id") or build_id),
+                language=language,
+                request=request,
+            )
+            projection_counts = project_annotations_to_records(records, analysis)
+            self.repo.save_checkpoint(build_id, "document_intelligence", analysis)
+            semantic_graph = build_semantic_content_graph(records, analysis, schema=schema)
+            self.repo.save_checkpoint(build_id, "semantic_content_graph", semantic_graph)
+            build = self.repo.get_build(build_id)
+            build["document_intelligence"] = {
+                "status": analysis.get("status"),
+                "profile": analysis.get("profile"),
+                "provider": analysis.get("provider"),
+                "provider_version": analysis.get("provider_version"),
+                "model": analysis.get("model"),
+                "capabilities": analysis.get("capabilities") or [],
+                "entity_clusters": len(analysis.get("entity_clusters") or []),
+                "characters": len(analysis.get("characters") or []),
+                "entity_mentions": projection_counts.get("entity_mentions", 0),
+                "quotations": projection_counts.get("quotations", 0),
+                "events": projection_counts.get("events", 0),
+                "model_artifacts": analysis.get("model_artifacts") or [],
+                "warnings": analysis.get("warnings") or [],
+                "text_sha256": analysis.get("text_sha256"),
+            }
+            build["semantic_content_graph"] = semantic_graph.get("summary") or {}
+            self.repo.save_build(build)
+            for warning in analysis.get("warnings") or []:
+                self._append_warning(build_id, str(warning))
+            return analysis
+        except Exception as exc:  # noqa: BLE001 - optional derived analysis must not fail corpus work
+            for record in records:
+                record.pop("document_intelligence", None)
+            self._append_warning(
+                build_id,
+                f"Document intelligence was unavailable; corpus work continued without it ({exc}).",
+            )
+            build = self.repo.get_build(build_id)
+            build["document_intelligence"] = {
+                "status": "unavailable",
+                "profile": str(request.get("document_intelligence_profile") or "scholarly"),
+                "reason": str(exc),
+            }
+            self.repo.save_build(build)
+            return dict(build["document_intelligence"])
+
+    def rerun_document_intelligence(self, build_id: str) -> dict[str, Any]:
+        """Recompute text-bound annotations and the graph after review/text changes."""
+        build = self.repo.get_build(build_id)
+        records = self.repo.load_records(build_id)
+        manifest = build.get("manifest") if isinstance(build.get("manifest"), dict) else {}
+        request = build.get("request") if isinstance(build.get("request"), dict) else {}
+        self._run_document_intelligence(build_id, records, manifest, request)
+        self.repo.save_records(build_id, records)
+        graph = self.semantic_content_graph(build_id)
+        return {
+            "document_intelligence": self.document_intelligence(build_id),
+            "semantic_content_graph": graph,
+        }
+
+    def document_intelligence(self, build_id: str) -> dict[str, Any]:
+        """Return the retained annotation run and whether current text has made it stale."""
+        self.repo.get_build(build_id)
+        value = self.repo.load_checkpoint(build_id, "document_intelligence", {})
+        if not isinstance(value, dict):
+            return {}
+        current_text, _ = document_text_for_records(self.repo.load_records(build_id))
+        current_sha256 = hashlib.sha256(current_text.encode("utf-8")).hexdigest()
+        return {
+            **value,
+            "stale": bool(value.get("text_sha256") and value.get("text_sha256") != current_sha256),
+            "current_text_sha256": current_sha256,
+        }
+
+    def semantic_content_graph(self, build_id: str) -> dict[str, Any]:
+        """Rebuild the semantic-content graph against the current Record revisions.
+
+        Rebuilding on read keeps structural edits and human metadata corrections from
+        leaving a stale visualization.  The graph remains a derived projection.
+        """
+        records = [json.loads(json.dumps(row)) for row in self.repo.load_records(build_id)]
+        for row in records:
+            _present_for_reviewer(row)
+        analysis = self.document_intelligence(build_id)
+        graph_analysis = (
+            {"profile": analysis.get("profile"), "status": "stale"}
+            if analysis.get("stale")
+            else analysis
+        )
+        graph = build_semantic_content_graph(
+            records,
+            graph_analysis,
+            schema=self._schema_for(build_id),
+        )
+        self.repo.save_checkpoint(build_id, "semantic_content_graph", graph)
+        build = self.repo.get_build(build_id)
+        build["semantic_content_graph"] = graph.get("summary") or {}
+        self.repo.save_build(build)
+        return graph
+
     def _project_metadata_exemplars(
         self,
         build_id: str,
@@ -2739,8 +2860,6 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 inline, full = _citation_strings(record)
                 record["inline_citation"] = inline
                 record["full_citation"] = full
-                # Deterministic POS/NER candidates: hints for the metadata prompt, never values.
-                annotate_record(record, nlp_schema, language=str(manifest.get("language") or ""))
             # Source-unit embeddings are a shared, rebuildable projection. Build
             # them after the active source-unit topology is known and before any
             # consumer (metadata memory or local evidence retrieval) asks for vectors.
@@ -2847,6 +2966,17 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 record["metadata_guidance_matches"] = matches
             else:
                 record.pop("metadata_guidance_matches", None)
+
+        # Whole-document intelligence runs only after deterministic text cleanup, so
+        # its offsets and record-local projections are bound to the exact text that
+        # metadata enrichment will see. It is optional and never authoritative.
+        self._update(
+            build_id,
+            stage="document_intelligence",
+            progress=max(float(self.repo.get_build(build_id).get("progress") or 0), 0.40),
+        )
+        self._run_document_intelligence(build_id, records, manifest, request)
+
         self.repo.save_records(build_id, records)
         trash_quality = self._apply_source_illegibility(
             build_id, records, request, source_quality, asset.get("pages") or [],
