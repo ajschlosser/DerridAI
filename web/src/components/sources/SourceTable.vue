@@ -655,8 +655,12 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 .st-search :deep(svg) {
+  inline-size: 1rem;
+  block-size: 1rem;
   width: 1rem;
   height: 1rem;
+  max-inline-size: 1rem;
+  max-block-size: 1rem;
   flex: 0 0 1rem;
   display: block;
 }
