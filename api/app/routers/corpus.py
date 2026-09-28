@@ -19,6 +19,7 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, JSONResponse
 
+from ..celf_queries import document_intelligence_reads as intelligence_reads
 from ..celf_queries import source_documents as document_queries
 from ..celf_queries.access import AccessContext, InvalidQuery, NotFound
 from ..claim_memory import validated_claims_citing
@@ -634,14 +635,22 @@ def get_pdf_corpus_build(build_id: str) -> dict[str, Any]:
 
 
 @router.get("/api/pdf/corpus-builds/{build_id}/document-intelligence")
-def get_pdf_corpus_document_intelligence(build_id: str) -> dict[str, Any]:
+def get_pdf_corpus_document_intelligence(build_id: str, request: Request) -> dict[str, Any]:
     """Retained derived linguistic-analysis run for inspection and reproducibility."""
+    access = AccessContext.for_user(require_admin(request))
     try:
-        value = pdf_corpus_builds.document_intelligence(build_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
-    if not value:
-        raise HTTPException(status_code=404, detail="Document intelligence has not run for this build.")
+        value = intelligence_reads.build_document_intelligence(
+            access,
+            build_id,
+            builds_service=pdf_corpus_builds,
+        )
+    except NotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if value is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Document intelligence has not run for this build.",
+        )
     return value
 
 
