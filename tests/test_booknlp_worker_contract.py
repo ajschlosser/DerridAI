@@ -1,6 +1,7 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -128,8 +129,6 @@ def test_booknlp_model_digest_mismatch_is_reported(monkeypatch, tmp_path):
         artifact.write_bytes(env_name.encode("utf-8"))
         monkeypatch.setenv(env_name, str(artifact))
         artifacts[env_name] = artifact
-
-    import hashlib
 
     entity_digest = hashlib.sha256(artifacts["BOOKNLP_ENTITY_MODEL"].read_bytes()).hexdigest()
     monkeypatch.setenv("BOOKNLP_ENTITY_SHA256", entity_digest)
