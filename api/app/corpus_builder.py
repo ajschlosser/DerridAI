@@ -1786,6 +1786,31 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         self._mark_interrupted()
         self._recover_metadata_exemplar_projections()
 
+    def document_intelligence(self, build_id: str) -> dict[str, Any]:
+        """Return the retained whole-document annotation run for audit/inspection."""
+        self.repo.get_build(build_id)
+        value = self.repo.load_checkpoint(build_id, "document_intelligence", {})
+        return value if isinstance(value, dict) else {}
+
+    def semantic_content_graph(self, build_id: str) -> dict[str, Any]:
+        """Rebuild the semantic-content graph against the current Record revisions.
+
+        Rebuilding on read keeps structural edits and human metadata corrections from
+        leaving a stale visualization.  The graph remains a derived projection.
+        """
+        records = self.repo.load_records(build_id)
+        analysis = self.document_intelligence(build_id)
+        graph = build_semantic_content_graph(
+            records,
+            analysis,
+            schema=self._schema_for(build_id),
+        )
+        self.repo.save_checkpoint(build_id, "semantic_content_graph", graph)
+        build = self.repo.get_build(build_id)
+        build["semantic_content_graph"] = graph.get("summary") or {}
+        self.repo.save_build(build)
+        return graph
+
     def _project_metadata_exemplars(
         self,
         build_id: str,
@@ -2739,8 +2764,6 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 inline, full = _citation_strings(record)
                 record["inline_citation"] = inline
                 record["full_citation"] = full
-                # Deterministic POS/NER candidates: hints for the metadata prompt, never values.
-                annotate_record(record, nlp_schema, language=str(manifest.get("language") or ""))
             # Source-unit embeddings are a shared, rebuildable projection. Build
             # them after the active source-unit topology is known and before any
             # consumer (metadata memory or local evidence retrieval) asks for vectors.
@@ -2847,6 +2870,66 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 record["metadata_guidance_matches"] = matches
             else:
                 record.pop("metadata_guidance_matches", None)
+
+        # Whole-document intelligence runs only after deterministic text cleanup, so
+        # its offsets and record-local projections are bound to the exact text that
+        # metadata enrichment will see.  The older record-local spaCy hints are
+        # recomputed here for the same reason.
+        self._update(
+            build_id,
+            stage="document_intelligence",
+            progress=max(float(self.repo.get_build(build_id).get("progress") or 0), 0.40),
+        )
+        for record in records:
+            annotate_record(record, nlp_schema, language=str(manifest.get("language") or ""))
+        try:
+            document_intelligence = analyze_document(
+                records,
+                source_document_id=str(asset.get("asset_id") or build_id),
+                language=str(manifest.get("language") or ""),
+                request=request,
+            )
+            projection_counts = project_annotations_to_records(records, document_intelligence)
+            self.repo.save_checkpoint(build_id, "document_intelligence", document_intelligence)
+            semantic_graph = build_semantic_content_graph(
+                records,
+                document_intelligence,
+                schema=nlp_schema,
+            )
+            self.repo.save_checkpoint(build_id, "semantic_content_graph", semantic_graph)
+            current_build = self.repo.get_build(build_id)
+            current_build["document_intelligence"] = {
+                "status": document_intelligence.get("status"),
+                "profile": document_intelligence.get("profile"),
+                "provider": document_intelligence.get("provider"),
+                "provider_version": document_intelligence.get("provider_version"),
+                "model": document_intelligence.get("model"),
+                "capabilities": document_intelligence.get("capabilities") or [],
+                "entity_clusters": len(document_intelligence.get("entity_clusters") or []),
+                "entity_mentions": projection_counts.get("entity_mentions", 0),
+                "quotations": projection_counts.get("quotations", 0),
+                "warnings": document_intelligence.get("warnings") or [],
+                "text_sha256": document_intelligence.get("text_sha256"),
+            }
+            current_build["semantic_content_graph"] = semantic_graph.get("summary") or {}
+            self.repo.save_build(current_build)
+            for warning in document_intelligence.get("warnings") or []:
+                self._append_warning(build_id, str(warning))
+        except Exception as exc:  # noqa: BLE001 - optional derived analysis must not fail the build
+            for record in records:
+                record.pop("document_intelligence", None)
+            self._append_warning(
+                build_id,
+                f"Document intelligence was unavailable; metadata enrichment continued without it ({exc}).",
+            )
+            current_build = self.repo.get_build(build_id)
+            current_build["document_intelligence"] = {
+                "status": "unavailable",
+                "profile": str(request.get("document_intelligence_profile") or "scholarly"),
+                "reason": str(exc),
+            }
+            self.repo.save_build(current_build)
+
         self.repo.save_records(build_id, records)
         trash_quality = self._apply_source_illegibility(
             build_id, records, request, source_quality, asset.get("pages") or [],
