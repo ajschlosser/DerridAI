@@ -279,11 +279,11 @@ from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
 from .rag import _citation_strings, chat_complete
 from .run_guidance import find_guidance_matches
 from .semantic_content_graph import (
-    build_semantic_content_graph,
-    semantic_content_graph_view,
+    _records_digest as _semantic_records_digest,
 )
 from .semantic_content_graph import (
-    _records_digest as _semantic_records_digest,
+    build_semantic_content_graph,
+    semantic_content_graph_view,
 )
 from .sentence_boundaries import snap_boundaries_to_sentences
 from .source_embeddings import SourceEmbeddingProjection
