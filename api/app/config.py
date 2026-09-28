@@ -212,6 +212,18 @@ class Settings:
         "cross-encoder/ms-marco-MiniLM-L-6-v2",
     )
     rag_model_cache: str = os.getenv("RAG_MODEL_CACHE", "/data/models")
+    metadata_cross_encoder_enabled: bool = _bool_env(
+        "METADATA_CROSS_ENCODER_ENABLED",
+        True,
+    )
+    metadata_cross_encoder_top_k: int = min(
+        32,
+        _int_env("METADATA_CROSS_ENCODER_TOP_K", 8),
+    )
+    metadata_cross_encoder_timeout_seconds: float = _float_env(
+        "METADATA_CROSS_ENCODER_TIMEOUT_SECONDS",
+        15.0,
+    )
 
 
 settings = Settings()

@@ -17,6 +17,8 @@ from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+from .config import settings
+from .cross_encoder import predict_scores
 from .metadata_exemplars import (
     DEFAULT_PROMPT_TOKEN_BUDGET,
     PROMPT_CHARS_PER_TOKEN,
@@ -371,6 +373,97 @@ def _bounded_packet(
     return kept, used
 
 
+def _rerank_candidates(
+    by_field: dict[str, list[dict[str, Any]]],
+    *,
+    canonical: dict[str, dict[str, Any]],
+    query_text: str,
+    enabled: bool,
+    top_k: int,
+    model_name: str,
+    timeout_seconds: float,
+) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
+    """Rerank a small field-balanced candidate set, preserving all other rows."""
+
+    selected: list[dict[str, Any]] = []
+    queues = {
+        field: sorted(
+            by_field[field],
+            key=lambda item: (
+                -float(item.get("hybrid_score") or 0.0),
+                str(item.get("id") or ""),
+            ),
+        )
+        for field in by_field
+    }
+    while queues and len(selected) < max(0, int(top_k)):
+        progressed = False
+        for field in list(queues):
+            if queues[field] and len(selected) < max(0, int(top_k)):
+                selected.append(queues[field].pop(0))
+                progressed = True
+            if not queues[field]:
+                queues.pop(field, None)
+        if not progressed:
+            break
+    telemetry: dict[str, Any] = {
+        "mode": "hybrid",
+        "provider": "sentence-transformers",
+        "model": model_name,
+        "candidate_count": len(selected),
+        "reranked_count": 0,
+        "timing_ms": 0,
+    }
+    if not enabled:
+        telemetry["mode"] = "disabled"
+        telemetry["fallback_reason"] = "cross_encoder_disabled"
+        return by_field, telemetry
+    if not selected:
+        telemetry["mode"] = "not_needed"
+        telemetry["fallback_reason"] = "no_candidates"
+        return by_field, telemetry
+    scores, result = predict_scores(
+        [
+            (
+                query_text,
+                str(
+                    row.get("document")
+                    or (row.get("metadata") or {}).get("context_text")
+                    or canonical.get(str(row.get("id") or ""), {}).get("context_text")
+                    or canonical.get(str(row.get("id") or ""), {}).get("evidence_text")
+                    or "",
+                ),
+            )
+            for row in selected
+        ],
+        model_name=model_name,
+        timeout_seconds=timeout_seconds,
+    )
+    telemetry.update(result)
+    if scores is None:
+        telemetry["mode"] = "hybrid"
+        return by_field, telemetry
+    reranked_ids = {str(row.get("id") or "") for row in selected}
+    score_by_id = {
+        str(row.get("id") or ""): score
+        for row, score in zip(selected, scores)
+    }
+    updated: dict[str, list[dict[str, Any]]] = {}
+    for field, rows in by_field.items():
+        field_rows = []
+        for row in rows:
+            copy = dict(row)
+            row_id = str(row.get("id") or "")
+            if row_id in reranked_ids:
+                copy["hybrid_score"] = score_by_id[row_id]
+                copy["rerank_score"] = score_by_id[row_id]
+                copy["reranked"] = True
+            field_rows.append(copy)
+        updated[field] = field_rows
+    telemetry["mode"] = "cross_encoder"
+    return updated, telemetry
+
+
 class ChromaMetadataExemplarIndex:
     """Best-effort Chroma projection with one query embedding per record.
 
@@ -684,6 +777,10 @@ class ChromaMetadataExemplarIndex:
         packet_char_budget: int = DEFAULT_PACKET_CHAR_BUDGET,
         fetch_k: int = DEFAULT_FETCH_K,
         exclude_record_id: str = "",
+        cross_encoder_enabled: bool | None = None,
+        cross_encoder_top_k: int | None = None,
+        cross_encoder_model: str | None = None,
+        cross_encoder_timeout_seconds: float | None = None,
     ) -> dict[str, Any]:
         """Sync canonical exemplars, retrieve per field, and return a bounded packet."""
 
@@ -794,23 +891,7 @@ class ChromaMetadataExemplarIndex:
                         "lexical_score": lexical_similarity,
                         "hybrid_score": (semantic_similarity * 0.8) + (lexical_similarity * 0.2),
                     })
-                # Positives (including reviewed absence) and corrections have separate
-                # quotas; within each, precedents that satisfy the declared conditions
-                # come before ones that could not be compared.
-                selected: list[dict[str, Any]] = []
-                for is_correction, quota in ((False, limit), (True, correction_limit)):
-                    pool = [
-                        row for row in candidates
-                        if (str(canonical[row["id"]].get("kind") or "positive") == "correction") == is_correction
-                    ]
-                    for tier in MATCH_TIERS:
-                        remaining = quota - sum(
-                            1 for row in selected
-                            if (str(canonical[row["id"]].get("kind") or "positive") == "correction") == is_correction
-                        )
-                        if remaining > 0:
-                            selected.extend(_mmr([row for row in pool if row["match_tier"] == tier], remaining))
-                return field, selected, len(candidates)
+                return field, candidates, len(candidates)
 
             if ordered_fields and count:
                 # One query embedding is shared by a small bounded worker pool.
@@ -825,15 +906,74 @@ class ChromaMetadataExemplarIndex:
                         for field in ordered_fields
                     ]
                     for future in futures:
-                        field, selected, field_considered = future.result()
+                        field, field_candidates, field_considered = future.result()
                         considered += field_considered
-                        if selected:
-                            raw[field] = selected
+                        if field_candidates:
+                            raw[field] = field_candidates
             search_ms = _elapsed_ms(search_started)
+
+            rerank_started = time.monotonic()
+            raw, rerank_telemetry = _rerank_candidates(
+                raw,
+                canonical=canonical,
+                query_text=str(query_text),
+                enabled=(
+                    settings.metadata_cross_encoder_enabled
+                    if cross_encoder_enabled is None
+                    else bool(cross_encoder_enabled)
+                ),
+                top_k=min(
+                    32,
+                    max(
+                        1,
+                        int(
+                            settings.metadata_cross_encoder_top_k
+                            if cross_encoder_top_k is None
+                            else cross_encoder_top_k
+                        ),
+                    ),
+                ),
+                model_name=str(
+                    cross_encoder_model or settings.rag_cross_encoder_model
+                ),
+                timeout_seconds=float(
+                    settings.metadata_cross_encoder_timeout_seconds
+                    if cross_encoder_timeout_seconds is None
+                    else cross_encoder_timeout_seconds
+                ),
+            )
+            rerank_telemetry["selection_ms"] = _elapsed_ms(rerank_started)
+
+            # Positives and corrections retain separate quotas, and MMR remains the
+            # final diversity step after optional reranking.
+            selected_raw: dict[str, list[dict[str, Any]]] = {}
+            for field in ordered_fields:
+                limit = max(0, int((field_limits or {}).get(field, DEFAULT_FIELD_LIMIT)))
+                correction_limit = (
+                    max(0, int((field_correction_limits or {}).get(field, DEFAULT_CORRECTION_LIMIT)))
+                    if bool((field_include_corrections or {}).get(field, True))
+                    else 0
+                )
+                selected: list[dict[str, Any]] = []
+                rows = raw.get(field, [])
+                for is_correction, quota in ((False, limit), (True, correction_limit)):
+                    pool = [
+                        row for row in rows
+                        if (str(canonical[row["id"]].get("kind") or "positive") == "correction") == is_correction
+                    ]
+                    for tier in MATCH_TIERS:
+                        remaining = quota - sum(
+                            1 for row in selected
+                            if (str(canonical[row["id"]].get("kind") or "positive") == "correction") == is_correction
+                        )
+                        if remaining > 0:
+                            selected.extend(_mmr([row for row in pool if row["match_tier"] == tier], remaining))
+                if selected:
+                    selected_raw[field] = selected
 
             select_started = time.monotonic()
             rendered: dict[str, list[dict[str, Any]]] = {}
-            for field, rows in raw.items():
+            for field, rows in selected_raw.items():
                 for row in rows:
                     exemplar = canonical.get(row["id"])
                     if exemplar is None:
@@ -863,6 +1003,8 @@ class ChromaMetadataExemplarIndex:
                     "embedding_provider": provider,
                     "embedding_model": model,
                     "search_ms": search_ms,
+                    "rerank_ms": rerank_telemetry.get("selection_ms", 0),
+                    "reranking": rerank_telemetry,
                     "select_ms": select_ms,
                     "examples_considered": considered,
                     "examples_used": used,

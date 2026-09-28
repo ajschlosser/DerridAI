@@ -255,6 +255,85 @@ def test_retrieval_packet_budget_is_global_not_per_field():
     assert result["telemetry"]["packet_chars"] <= 350
 
 
+def test_cross_encoder_reranking_is_bounded_and_preserves_field_quotas(monkeypatch):
+    import app.metadata_exemplar_retrieval as retrieval
+
+    calls = []
+
+    def fake_predict(pairs, *, model_name, timeout_seconds):
+        calls.append((pairs, model_name, timeout_seconds))
+        return [0.2, 0.9], {
+            "mode": "cross_encoder",
+            "provider": "sentence-transformers",
+            "model": model_name,
+            "candidate_count": len(pairs),
+            "reranked_count": len(pairs),
+            "timing_ms": 3,
+        }
+
+    monkeypatch.setattr(retrieval, "predict_scores", fake_predict)
+    store = FakeStore()
+    index = ChromaMetadataExemplarIndex(store, collection_name="test_metadata_exemplars")
+    canonical = [
+        exemplar("mex-one", "position_holder", "One", "One responsibility."),
+        exemplar("mex-two", "position_holder", "Two", "Two responsibility."),
+        exemplar("mex-three", "speaker", "Three", "Three responsibility."),
+    ]
+
+    result = index.retrieve(
+        scope_id="build-1",
+        query_text="responsibility",
+        exemplars=canonical,
+        fields=["position_holder", "speaker"],
+        schema_id="schema",
+        schema_version="v1",
+        field_limits={"position_holder": 1, "speaker": 1},
+        cross_encoder_enabled=True,
+        cross_encoder_top_k=2,
+        cross_encoder_model="test-cross-encoder",
+    )
+
+    assert len(calls) == 1
+    assert len(calls[0][0]) == 2
+    assert result["telemetry"]["reranking"]["mode"] == "cross_encoder"
+    assert result["telemetry"]["reranking"]["candidate_count"] == 2
+    assert result["telemetry"]["reranking"]["reranked_count"] == 2
+    assert sum(len(items) for items in result["examples"].values()) == 2
+
+
+def test_cross_encoder_failure_falls_back_with_visible_telemetry(monkeypatch):
+    import app.metadata_exemplar_retrieval as retrieval
+
+    def failed_predict(pairs, *, model_name, timeout_seconds):
+        return None, {
+            "mode": "hybrid",
+            "provider": "sentence-transformers",
+            "model": model_name,
+            "candidate_count": len(pairs),
+            "reranked_count": 0,
+            "fallback_reason": "inference_timeout",
+            "timing_ms": 11,
+        }
+
+    monkeypatch.setattr(retrieval, "predict_scores", failed_predict)
+    store = FakeStore()
+    index = ChromaMetadataExemplarIndex(store, collection_name="test_metadata_exemplars")
+    result = index.retrieve(
+        scope_id="build-1",
+        query_text="Derrida",
+        exemplars=[exemplar("mex-one", "speaker", "Derrida", "Derrida speaks.")],
+        fields=["speaker"],
+        schema_id="schema",
+        schema_version="v1",
+        cross_encoder_enabled=True,
+    )
+
+    assert result["ok"] is True
+    assert result["examples"]["speaker"][0]["value"] == "Derrida"
+    assert result["telemetry"]["reranking"]["mode"] == "hybrid"
+    assert result["telemetry"]["reranking"]["fallback_reason"] == "inference_timeout"
+
+
 def test_backend_failure_disables_repeated_semantic_attempts_but_returns_fallback_reason():
     class BrokenClient:
         def get_collection(self, *, name):
