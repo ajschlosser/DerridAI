@@ -8,7 +8,7 @@ from strawberry.types import Info
 from ...celf_queries import source_documents as document_queries
 from ..errors import translate
 from ..permissions import classify, require_admin
-from ..types.documents import SourceDocumentIntelligence
+from ..types.documents import SourceDocumentView
 
 # SourceDocument intelligence currently carries full extracted text through
 # source_units, matching the administrator-only REST source/asset endpoints.
@@ -27,7 +27,7 @@ class DocumentQueries:
         self,
         info: Info,
         source_document_id: str,
-    ) -> SourceDocumentIntelligence:
+    ) -> SourceDocumentView:
         context = require_admin(info)
         try:
             payload = await run_in_threadpool(
@@ -37,4 +37,4 @@ class DocumentQueries:
             )
         except Exception as exc:
             raise translate(exc) from exc
-        return SourceDocumentIntelligence.from_payload(payload)
+        return SourceDocumentView.from_payload(payload)
