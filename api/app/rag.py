@@ -7,7 +7,6 @@ import math
 import re
 import time
 from collections.abc import Callable, Mapping, Sequence
-from pathlib import Path
 from typing import Any
 
 import httpx
@@ -15,6 +14,7 @@ import httpx
 from .chroma_store import ChromaStore
 from .claim_memory import ClaimMemoryIndex
 from .config import settings
+from .cross_encoder import predict_scores
 from .models import OllamaTouchupOptions, RAGPromptMetadataPolicy, RAGRunRequest
 from .record_types import EvidenceItem, QueryDecomposition, RetrievalCandidate
 from .research_memory import ResponseMemoryIndex, memory_guidance
@@ -47,9 +47,6 @@ Rules:
 - response_language should be "fr" only when the user clearly requests a French answer or writes primarily in French; otherwise "en".
 - Return JSON only.
 """.strip()
-
-_CROSS_ENCODER_CACHE: dict[str, Any] = {}
-
 
 FOCUSED_PROMPT = """
 You are DerridAI, an evidence-grounded scholarly research assistant.
@@ -142,9 +139,24 @@ def chat_complete(
     max_tokens: int | None = None,
     cancelled: Callable[[], bool] | None = None,
     timeout_seconds: float | None = None,
+    on_delta: Callable[[str], None] | None = None,
 ) -> str:
+    """One chat completion. ``on_delta`` receives streamed text pieces as they arrive.
+
+    Deltas are an untrusted, unvalidated draft for live display only; the return
+    value is the complete answer every caller must validate. A failing callback
+    never interrupts generation.
+    """
     tuning = options or OllamaTouchupOptions()
     provider = provider.strip().lower()
+
+    def emit(piece: str) -> None:
+        if on_delta is None or not piece:
+            return
+        try:
+            on_delta(piece)
+        except Exception:
+            logger.debug("Generation delta callback failed; continuing", exc_info=True)
 
     if provider == "openai":
         url = (base_url or settings.openai_compat_base_url).rstrip("/")
@@ -222,6 +234,7 @@ def chat_complete(
                                 )
                             if piece:
                                 chunks.append(str(piece))
+                                emit(str(piece))
                 return 200, "".join(chunks).strip(), ""
 
             status, content, detail = stream_once(body)
@@ -374,6 +387,7 @@ def chat_complete(
                         piece = ((payload_line.get("message") or {}).get("content") or "")
                         if piece:
                             chunks.append(str(piece))
+                            emit(str(piece))
                         if payload_line.get("done"):
                             break
             return 200, "".join(chunks).strip(), ""
@@ -589,6 +603,11 @@ def evidence_sufficiency_issues(evidence: Sequence[Mapping[str, Any]]) -> list[d
 
 
 _EVIDENCE_TAG_GROUP = r"((?:E\d+)(?:\s*[,;]\s*E\d+)*)"
+# Memory-guidance prompt tags are internal grounding context, never citation syntax.
+# If a model echoes one, strip it before the answer reaches the reader.
+_STRAY_MEMORY_TAG_PATTERN = re.compile(
+    r"\[{1,2}\s*(?:prior-claim|prior-response):[^\[\]]+\]{1,2}"
+)
 EVIDENCE_MARKER_PATTERNS = (
     rf"\[\[\s*{_EVIDENCE_TAG_GROUP}\s*\]\]",
     rf"\(\(\s*{_EVIDENCE_TAG_GROUP}\s*\)\)",
@@ -639,7 +658,7 @@ def _bind_sources(answer: str, evidence: list[EvidenceItem], include_works_cited
     used_ids = set(extract_evidence_ids(answer))
     # Generators do not always obey one citation wrapper exactly. Keep rendering
     # and durable claim/support persistence on the same accepted marker syntax.
-    bound = answer
+    bound = _STRAY_MEMORY_TAG_PATTERN.sub("", answer)
     for pattern in EVIDENCE_MARKER_PATTERNS:
         bound = re.sub(pattern, replace_group, bound)
 
@@ -766,42 +785,26 @@ def _cross_encoder_rerank(
     top_n: int,
     model_name: str,
 ) -> tuple[list[dict[str, Any]], str | None]:
-    try:
-        from sentence_transformers import CrossEncoder
-    except Exception as exc:
-        return _lexical_rerank(query, docs, top_n), (
-            f"Cross-encoder unavailable ({exc}); used lexical/vector fallback."
-        )
-
-    cache_dir = Path(settings.rag_model_cache)
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    try:
-        model = _CROSS_ENCODER_CACHE.get(model_name)
-        if model is None:
-            model = CrossEncoder(
-                model_name,
-                cache_dir=str(cache_dir),
-            )
-            _CROSS_ENCODER_CACHE[model_name] = model
-        pairs = [
-            [query, str(item["record"].get("text") or "")]
+    scores, telemetry = predict_scores(
+        [
+            (query, str(item["record"].get("text") or ""))
             for item in docs
-        ]
-        scores = model.predict(pairs)
-        ranked = []
-        for item, score in zip(docs, scores):
-            row = dict(item)
-            row["rerank_score"] = float(score)
-            ranked.append(row)
-        ranked.sort(
-            key=lambda item: item["rerank_score"],
-            reverse=True,
-        )
-        return ranked[:top_n], None
-    except Exception as exc:
+        ],
+        model_name=model_name,
+        timeout_seconds=settings.ollama_timeout_seconds,
+    )
+    if scores is None:
         return _lexical_rerank(query, docs, top_n), (
-            f"Cross-encoder failed ({exc}); used lexical/vector fallback."
+            f"Cross-encoder fallback ({telemetry.get('fallback_reason')}); "
+            "used lexical/vector fallback."
         )
+    ranked = []
+    for item, score in zip(docs, scores):
+        row = dict(item)
+        row["rerank_score"] = score
+        ranked.append(row)
+    ranked.sort(key=lambda item: item["rerank_score"], reverse=True)
+    return ranked[:top_n], None
 
 
 def _resolve_search_collections(
@@ -926,6 +929,7 @@ def run_rag_pipeline(
     progress: Callable[[str, int, int, str], None] | None = None,
     cancelled: Callable[[], bool] | None = None,
     owner: str | None = None,
+    on_generation_delta: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     stages: list[dict[str, Any]] = []
@@ -1343,6 +1347,7 @@ def run_rag_pipeline(
             else 8192
         ),
         cancelled=cancelled,
+        on_delta=on_generation_delta,
     )
     stages.append({
         "name": "generation",
@@ -1365,7 +1370,7 @@ def run_rag_pipeline(
             request.include_works_cited,
         )
         if request.bind_citations
-        else raw_answer
+        else _STRAY_MEMORY_TAG_PATTERN.sub("", raw_answer)
     )
     stages.append({
         "name": "bind_sources",

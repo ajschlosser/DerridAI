@@ -1,0 +1,13 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
+# The server builds the graph from the stored projection, so the Record is never
+# downloaded only to be uploaded again (compare RecordGraph, used when there is no store).
+query StoredRecordTrace($store: String!, $chroma_id: String!) {
+  vector_store(name: $store) {
+    record(chroma_id: $chroma_id) {
+      document
+      graph {
+        ...ResearchObjectGraphFields
+      }
+    }
+  }
+}

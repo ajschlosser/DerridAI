@@ -7,6 +7,7 @@ How: `_install_publishable` creates a build with one accepted, complete record
 ready to publish; individual tests modify it.
 """
 
+import hashlib
 import json
 import sys
 import types
@@ -44,7 +45,11 @@ def test_publication_emits_clean_scholarly_records_and_finishes_progress(tmp_pat
     build=_install_publishable(repo)
     publication=manager.publish(build["build_id"])
     path = repo.publication_path(publication["publication_id"])
+    integrity = repo.publication_integrity_path(publication["publication_id"])
     assert path.name.endswith(".jsonl.zst")
+    assert integrity.read_text(encoding="ascii") == f"{publication['archive_sha512']}  {path.name}\n"
+    assert publication["sha512"] == hashlib.sha512(path.read_bytes()).hexdigest()
+    assert len(publication["content_sha512"]) == 128
     row = next(iter_jsonl_zst(path, rehydrate_evidence=False))
     assert row["record_id"]=="r1"
     assert row["text"]=="Record text"

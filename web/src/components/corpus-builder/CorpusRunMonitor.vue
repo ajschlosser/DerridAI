@@ -25,6 +25,7 @@ const emit = defineEmits<{
   switchProfile: [profileId: string, model: string];
   settle: [];
   cancel: [];
+  resume: [];
   runAnother: [];
   openRecord: [recordId: string];
   inspectEditorialMemory: [];
@@ -34,6 +35,12 @@ const emit = defineEmits<{
 const i18n = useI18nStore();
 const expanded = ref(false);
 const running = computed(() => ["queued", "running"].includes(String(props.build.status || "")));
+const canResume = computed(
+  () =>
+    Boolean(props.build.resumable) &&
+    !running.value &&
+    ["failed", "interrupted", "cancelled", "blocked"].includes(String(props.build.status || "")),
+);
 const progress = computed(() =>
   Math.max(0, Math.min(100, Math.round(Number(props.build.progress || 0) * 100))),
 );
@@ -75,6 +82,13 @@ const contribution = computed(() => props.build.llm_contribution || {});
         <strong>{{ progress }}%</strong>
         <span v-if="running">{{ i18n.t("pdf_corpus.running", "Running") }}</span>
         <span v-else>{{ i18n.t(`pdf_corpus.status.${build.status}`, build.status) }}</span>
+        <UiButton
+          v-if="canResume"
+          size="small"
+          :label="i18n.t('pdf_corpus.resume')"
+          :disabled="disabled"
+          @click="emit('resume')"
+        />
         <UiButton
           size="small"
           :expanded="expanded"

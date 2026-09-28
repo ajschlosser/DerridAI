@@ -13,6 +13,7 @@ import {
   type OperationView,
   type OperationsBridge,
 } from "../domain/operationsPanel";
+import { FALLBACK_POLL_MS, realtimeFallback, realtimeStatus } from "../realtime";
 
 const props = withDefaults(
   defineProps<{ bridge: OperationsBridge; undoMs?: number; historyLimit?: number }>(),
@@ -20,6 +21,18 @@ const props = withDefaults(
 );
 const i18n = useI18nStore();
 const locale = computed(() => i18n.locale || "en-US");
+
+// A quiet connection line, not an alert: transient reconnects must not interrupt anyone.
+const liveState = computed(() =>
+  realtimeFallback.value && realtimeStatus.value !== "connected" ? "offline" : realtimeStatus.value,
+);
+const liveLabel = computed(() => {
+  const state = liveState.value;
+  if (state === "idle") return "";
+  if (state === "offline")
+    return i18n.tf("operations.realtime.offline", { seconds: Math.round(FALLBACK_POLL_MS / 1000) });
+  return i18n.t(`operations.realtime.${state}`);
+});
 
 const views = ref<OperationView[]>(props.bridge.snapshot());
 const now = ref(Date.now());
@@ -233,6 +246,9 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
         <p class="ops-lede">
           {{ i18n.t("operations.shared_queue") }}
         </p>
+        <p v-if="liveLabel" class="ops-live" :data-state="liveState" data-testid="realtime-status">
+          <span class="ops-live-dot" aria-hidden="true"></span>{{ liveLabel }}
+        </p>
       </div>
       <div class="ops-head-actions">
         <button type="button" class="ops-btn" id="refreshJobs" @click="refresh">
@@ -424,6 +440,29 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
   font-size: 0.875rem;
   line-height: 1.45;
   max-width: 60ch;
+}
+.ops-live {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 0;
+  color: var(--ops-muted);
+  font-size: 0.75rem;
+}
+.ops-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ops-muted);
+  flex: none;
+}
+.ops-live[data-state="connected"] .ops-live-dot {
+  background: var(--tone-ok-edge);
+}
+.ops-live[data-state="degraded"] .ops-live-dot,
+.ops-live[data-state="reconnecting"] .ops-live-dot,
+.ops-live[data-state="offline"] .ops-live-dot {
+  background: var(--tone-warn-edge);
 }
 .ops-head-actions {
   display: flex;

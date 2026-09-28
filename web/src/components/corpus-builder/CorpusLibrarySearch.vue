@@ -1,7 +1,15 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import type { GutenbergHit, GutenbergStatus, WikisourceHit } from "../../api/corpus";
+import {
+  corpusCaptureApi,
+  type GutenbergHit,
+  type GutenbergStatus,
+  type WikisourceHit,
+  type WikisourceProject,
+} from "../../api/corpus";
+import { sortLanguageCodes } from "../../domain/languages";
+import { followResource } from "../../realtime/follow";
 import { useI18nStore } from "../../stores/i18n";
 import AppIcon from "../AppIcon.vue";
 
@@ -54,25 +62,30 @@ const emit = defineEmits<{
 }>();
 const i18n = useI18nStore();
 
-/** Wikisource editions offered; mirrors WIKISOURCE_LANGUAGES on the API. Names come from the browser's locale data. */
-const LANGUAGES = [
-  "en",
-  "fr",
-  "de",
-  "it",
-  "es",
-  "pt",
-  "la",
-  "el",
-  "ru",
-  "pl",
-  "nl",
-  "sv",
-  "he",
-  "ar",
-  "zh",
-  "ja",
-];
+/**
+ * Wikisource projects offered, as Wikimedia's project list reports them through the API (never a list
+ * fixed in the browser). Names come from the browser's locale data.
+ */
+const projects = ref<WikisourceProject[]>([]);
+const projectsAuthoritative = ref(true);
+async function loadProjects() {
+  try {
+    const info = (await corpusCaptureApi.sourceProviders()).items.find(
+      (item) => item.provider === "wikisource",
+    );
+    if (info && "projects" in info) {
+      projects.value = info.projects;
+      projectsAuthoritative.value = info.projects_authoritative;
+    }
+  } catch {
+    projectsAuthoritative.value = false;
+  }
+}
+const LANGUAGES = computed(() => {
+  const codes = projects.value.map((project) => project.code);
+  if (!codes.includes(props.language)) codes.push(props.language);
+  return sortLanguageCodes(codes, i18n.locale);
+});
 const EXAMPLES: Record<Library, string[]> = {
   gutenberg: ["Rousseau", "Plato", "Nietzsche", "Hegel"],
   wikisource: ["Rousseau", "Descartes", "Pascal", "Montaigne"],
@@ -84,7 +97,7 @@ const input = ref<HTMLInputElement | null>(null);
 const results = ref<HTMLElement | null>(null);
 const library = ref<Library>("gutenberg");
 let debounce: number | undefined;
-let poll: number | undefined;
+let stopFollowingGutenberg: (() => void) | undefined;
 
 const languageNames = computed(() => {
   try {
@@ -93,7 +106,10 @@ const languageNames = computed(() => {
     return null;
   }
 });
-const languageName = (code: string) => languageNames.value?.of(code) || code;
+const languageName = (code: string) =>
+  code === "mul"
+    ? projects.value.find((project) => project.code === code)?.name || code
+    : languageNames.value?.of(code) || code;
 const host = computed(() => `${props.language}.wikisource.org`);
 
 const catalogueReady = computed(() => Boolean(props.gutenbergStatus?.search_ready));
@@ -300,19 +316,16 @@ watch(
     if (count > (before ?? 0)) close();
   },
 );
-// The collection status is polled only while something is changing (a download, an unpack, a catalogue refresh).
-watch(
-  () => [archiveStatus.value, catalogueRefreshing.value] as const,
-  ([archive, refreshing]) => {
-    window.clearInterval(poll);
-    poll = undefined;
-    if (refreshing || ["downloading", "downloaded", "unpacking"].includes(archive))
-      poll = window.setInterval(() => emit("refreshGutenbergStatus"), 2000);
-  },
-  { immediate: true },
-);
 onMounted(() => {
   emit("refreshGutenbergStatus");
+  // The offline collection is background work, not a tracked job: follow its realtime
+  // activity topic instead of polling on a timer (falls back to a slow poll only while
+  // the socket is unavailable).
+  stopFollowingGutenberg = followResource({
+    topic: "activity:gutenberg",
+    refresh: () => emit("refreshGutenbergStatus"),
+  });
+  void loadProjects();
   const element = dialog.value;
   if (element && !element.open) {
     if (typeof element.showModal === "function") element.showModal();
@@ -322,7 +335,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   window.clearTimeout(debounce);
-  window.clearInterval(poll);
+  stopFollowingGutenberg?.();
 });
 </script>
 
@@ -417,7 +430,11 @@ onBeforeUnmount(() => {
               : i18n.t("pdf_corpus.library.catalogue_needed")
             : i18n.tf("pdf_corpus.library.hint_wikisource", { host })
         }}
+        <template v-if="library === 'wikisource' && !projectsAuthoritative">
+          {{ i18n.t("pdf_corpus.library.projects_fallback") }}</template
+        >
       </p>
+      <p class="ls-hint">{{ i18n.t("pdf_corpus.library.capture_hint") }}</p>
     </div>
 
     <div
@@ -430,7 +447,7 @@ onBeforeUnmount(() => {
         <AppIcon name="warning" /><span>{{ error }}</span>
       </p>
 
-      <!-- Project Gutenberg imports come from the local collection; say so once, with the way to get it. -->
+      <!-- Search needs the catalogue. Imports download one verified text; the local text collection is optional. -->
       <section
         v-if="library === 'gutenberg' && (!catalogueReady || !collectionReady)"
         class="ls-collection"
@@ -525,7 +542,7 @@ onBeforeUnmount(() => {
               type="button"
               class="btn small primary"
               data-result-primary
-              :disabled="disabled || importingAny || !collectionReady"
+              :disabled="disabled || importingAny"
               :aria-label="i18n.tf('pdf_corpus.library.import_label', { title: hit.title })"
               :aria-busy="importing === `gutenberg:${hit.etext_id}`"
               :title="

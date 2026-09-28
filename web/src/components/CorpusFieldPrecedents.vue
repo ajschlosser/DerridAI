@@ -48,6 +48,7 @@ const error = ref("");
 const fetched = ref<MetadataPrecedents | null>(null);
 const usedKey = ref("");
 const result = computed(() => fetched.value ?? props.preloaded ?? null);
+const canRefresh = computed(() => result.value?.source !== "enrichment");
 
 watch(
   () => [props.buildId, props.recordId, props.field],
@@ -198,7 +199,13 @@ function useValue(item: MetadataPrecedent) {
             </template>
             {{ statusParts.join(" · ") }}
           </p>
-          <button type="button" class="btn tiny" :disabled="loading" @click="fetchPrecedents(true)">
+          <button
+            v-if="canRefresh"
+            type="button"
+            class="btn tiny"
+            :disabled="loading"
+            @click="fetchPrecedents(true)"
+          >
             {{ i18n.t("pdf_corpus.precedents_refresh") }}
           </button>
         </div>

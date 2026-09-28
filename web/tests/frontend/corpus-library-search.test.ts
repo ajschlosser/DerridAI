@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { nextTick } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CorpusLibrarySearch from "../../src/components/corpus-builder/CorpusLibrarySearch.vue";
+import { corpusCaptureApi } from "../../src/api/corpus";
 
 const ready = {
   ready: true,
@@ -11,6 +12,31 @@ const ready = {
   catalogue: { status: "ready", item_count: 70000 },
   archive: { status: "ready", bytes_done: 1, total_bytes: 1 },
 };
+const providerInfo = {
+  items: [
+    {
+      provider: "gutenberg",
+      catalogue_ready: true,
+      catalogue_refreshed_at: "2026-09-27T00:00:00Z",
+      local_collection_ready: true,
+    },
+    {
+      provider: "wikisource",
+      projects: [
+        { code: "en", name: "English" },
+        { code: "fr", name: "French" },
+      ],
+      projects_authoritative: true,
+    },
+  ],
+};
+
+beforeEach(() => {
+  vi.spyOn(corpusCaptureApi, "sourceProviders").mockResolvedValue(providerInfo as never);
+});
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 const hit = (title: string, url: string, words = 500) => ({
   source: "wikisource" as const,
   language: "fr",
@@ -153,6 +179,8 @@ describe("the digital-library search", () => {
   it("searches the chosen Wikisource language edition", async () => {
     const wrapper = mountSearch({ query: "Rousseau", language: "en" });
     await wikisource(wrapper);
+    await Promise.resolve();
+    await nextTick();
     await wrapper.get(".ls-language").setValue("fr");
     expect(wrapper.emitted("update:language")).toEqual([["fr"]]);
     await wrapper.setProps({ language: "fr" });

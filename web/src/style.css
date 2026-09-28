@@ -17045,6 +17045,17 @@ button {
 .operation-progress-stack.minimized .operation-dock-clear {
   display: none;
 }
+[data-operations-dock-mode="docked"][data-operations-dock-open="false"] #operationProgressStack {
+  display: none !important;
+}
+html[data-operations-dock-mode="docked"][data-operations-dock-open="true"] #operationProgressStack {
+  top: 58px;
+  right: 18px;
+  bottom: auto;
+  left: auto;
+  translate: none;
+  width: min(410px, calc(100vw - 36px));
+}
 .operation-progress-stack .operation-progress {
   position: relative;
   right: auto;
@@ -17695,4 +17706,14 @@ html[data-color-scheme="dark"][data-contrast="more"] {
   .work-overview-card .work-overview-actions {
     grid-column: 1/-1;
   }
+}
+
+/*
+ * Icon SVGs use a zero-specificity default size so they cannot fall back to the
+ * browser's large replaced-element dimensions. Context-specific component rules
+ * remain free to size icons smaller without DOM width/height attributes.
+ */
+:where(svg[viewBox="0 0 24 24"][stroke-width="1.8"][aria-hidden="true"]) {
+  width: 24px;
+  height: 24px;
 }

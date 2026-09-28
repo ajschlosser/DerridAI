@@ -59,6 +59,30 @@ Retrieval is field-aware and bounded:
 
 A precedent is advisory context. It does not copy a value into a new record as truth and it does not weaken source-evidence requirements.
 
+### Query quality and latency
+
+Only the transient query sent to the embedding provider removes a small,
+locale-aware set of high-frequency function words. Stored evidence, canonical
+exemplars, and citations are never normalized this way. The active collection
+must match the configured embedding contract; the default local contract is
+Ollama `bge-m3:latest`, and retrieval telemetry records the provider and model
+used for each query.
+
+Candidate ordering uses semantic distance with a bounded lexical-overlap
+signal. When enabled and available, the existing RAG CrossEncoder capability
+can rerank a small, field-balanced top-K candidate set in one batch. The
+metadata-memory path never loads a second model implementation: it uses the
+shared provider/model cache and inference boundary used by RAG. The configured
+top-K is hard-capped, and the existing positive/correction quotas and MMR
+diversity selection still run after reranking.
+
+CrossEncoder use is advisory and fails open. Missing dependencies, model-load
+failures, inference timeouts, malformed/non-finite scores, and disabled
+configuration preserve the semantic-plus-lexical ranking. Retrieval telemetry
+records the configured provider/model, candidate and reranked counts, mode,
+fallback reason when applicable, and timing. The deterministic hybrid fallback
+remains the supported behavior for fixed inputs and existing deployments.
+
 ## Separation from other memory
 
 Do not conflate these systems:
@@ -66,6 +90,8 @@ Do not conflate these systems:
 - **metadata exemplars / metadata memory** guide metadata enrichment;
 - **Research response/claim memory** stores prior Research outputs, generated claims, and support bindings;
 - **metadata adjudication cache** supports exact/same-context deterministic review assistance;
+- **source-unit embeddings** are a reusable derived projection of source-block text; metadata prefill
+  reuses those vectors and never owns their lifecycle;
 - **Response Library/cache** is operational Research cache/history;
 - **ordinary corpus vector collections** support Search/Research over scholarly records.
 

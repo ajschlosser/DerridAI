@@ -1,0 +1,78 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
+# Shared shape for every walkable cELF instance graph (record_graph, vector_store record graphs).
+fragment ResearchObjectGraphFields on ResearchObjectGraph {
+  specification_version
+  root_id
+  hidden_assertion_count
+  record_state_origin
+  nodes {
+    id
+    object_type
+    object_id
+    label
+    summary
+    materialization
+    status
+    details
+    field_assertion {
+      assertion_id
+      field_id
+      field_name
+      value
+      derivation_method
+      evaluation_status
+      authority_status
+      value_status
+      confidence
+      reason
+      method
+      actor
+      model
+      run_id
+      record_revision
+      evidence
+      created_at
+      supersedes_assertion_id
+      is_current
+    }
+    source_span {
+      source_document_id
+      source_span_id
+      source_unit_ids
+      locator_kind
+      physical_page_start
+      physical_page_end
+      printed_page_start
+      printed_page_end
+      character_start
+      character_end
+      time_start
+      time_end
+      speaker
+    }
+    evidence_ref {
+      evidence_ref_id
+      locator_kind
+      record_id
+      record_revision
+      source_document_id
+    }
+    generated_claim {
+      claim_id
+      claim_text
+      validation_status
+    }
+  }
+  edges {
+    id
+    source
+    target
+    relation
+    inverse_relation
+    normative
+    source_cardinality
+    target_cardinality
+    profile
+    status
+  }
+}

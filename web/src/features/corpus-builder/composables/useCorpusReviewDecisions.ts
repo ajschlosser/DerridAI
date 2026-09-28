@@ -2,6 +2,9 @@
 import { nextTick, type ComputedRef, type Ref } from "vue";
 import { corpusBuilderApi, type CorpusBuild, type CorpusRecord } from "../../../api/corpus";
 import type { ReviewQueue } from "../../../types/corpus";
+import type { CorpusQueueRow } from "../api/reviewReads";
+import { queueRowFromRecord } from "../domain/queueRows";
+import type { ReviewTarget } from "./useCorpusReviewRecords";
 import type { ReviewViewport } from "./useCorpusReviewWorkspace";
 
 type MessageTone = "error" | "notice";
@@ -10,7 +13,7 @@ interface CorpusReviewDecisionsOptions {
   currentBuild: Ref<CorpusBuild | null>;
   selectedRecord: Ref<CorpusRecord | null>;
   selectedRecordId: Ref<string>;
-  records: Ref<CorpusRecord[]>;
+  queueRows: Ref<CorpusQueueRow[]>;
   recordTotal: Ref<number>;
   reviewQueue: Ref<ReviewQueue>;
   recordQuery: Ref<string>;
@@ -38,7 +41,7 @@ interface CorpusReviewDecisionsOptions {
   ) => void;
   applyAuthoritativeRecord: (record: CorpusRecord, build?: CorpusBuild | null) => void;
   syncBuildInRail: (build: CorpusBuild) => void;
-  selectRecord: (record: CorpusRecord) => void;
+  selectRecord: (target: ReviewTarget) => Promise<void> | void;
   advanceFrom: (recordId: string) => Promise<void>;
   refreshBuild: () => Promise<void>;
   refreshRecords: (reset?: boolean, preferredId?: string) => Promise<void>;
@@ -71,13 +74,13 @@ export function useCorpusReviewDecisions(options: CorpusReviewDecisionsOptions) 
         needs_review: disposition === "pending",
         record_revision: expectedRevision + 1,
       } as CorpusRecord;
-      const index = options.records.value.findIndex((item) => item.record_id === id);
+      const index = options.queueRows.value.findIndex((item) => item.record_id === id);
 
       if (options.reviewQueue.value !== "all" && disposition === "rejected") {
-        if (index >= 0) options.records.value.splice(index, 1);
+        if (index >= 0) options.queueRows.value.splice(index, 1);
         options.recordTotal.value = Math.max(0, options.recordTotal.value - 1);
       } else if (index >= 0) {
-        options.records.value.splice(index, 1, row);
+        options.queueRows.value.splice(index, 1, queueRowFromRecord(row));
       }
 
       options.selectedRecord.value = row;
@@ -109,7 +112,7 @@ export function useCorpusReviewDecisions(options: CorpusReviewDecisionsOptions) 
     }
 
     const buildId = options.currentBuild.value.build_id;
-    const beforeRecords = options.records.value.slice();
+    const beforeRows = options.queueRows.value.slice();
     const beforeTotal = options.recordTotal.value;
     const beforeSelected = options.selectedRecord.value;
     const beforeSelectedId = options.selectedRecordId.value;
@@ -123,22 +126,23 @@ export function useCorpusReviewDecisions(options: CorpusReviewDecisionsOptions) 
       review_reason: "",
       record_revision: expectedRevision + 1,
     };
-    const optimisticIndex = options.records.value.findIndex((row) => row.record_id === id);
+    const optimisticIndex = options.queueRows.value.findIndex((row) => row.record_id === id);
 
     const currentRemainsVisible =
       options.reviewQueue.value === "all" || options.reviewQueue.value === disposition;
     if (currentRemainsVisible) {
-      if (optimisticIndex >= 0) options.records.value.splice(optimisticIndex, 1, optimistic);
+      if (optimisticIndex >= 0)
+        options.queueRows.value.splice(optimisticIndex, 1, queueRowFromRecord(optimistic));
     } else if (optimisticIndex >= 0) {
-      options.records.value.splice(optimisticIndex, 1);
+      options.queueRows.value.splice(optimisticIndex, 1);
       options.recordTotal.value = Math.max(0, options.recordTotal.value - 1);
     }
 
     options.selectedRecord.value = optimistic;
     const nextLocal = currentRemainsVisible
-      ? options.records.value[optimisticIndex + 1] || options.records.value[optimisticIndex - 1]
-      : options.records.value[optimisticIndex] || options.records.value[optimisticIndex - 1];
-    if (nextLocal && nextLocal.record_id !== id) options.selectRecord(nextLocal);
+      ? options.queueRows.value[optimisticIndex + 1] || options.queueRows.value[optimisticIndex - 1]
+      : options.queueRows.value[optimisticIndex] || options.queueRows.value[optimisticIndex - 1];
+    if (nextLocal && nextLocal.record_id !== id) void options.selectRecord(nextLocal);
     await options.restoreReviewViewport(viewport, { record: true, inspector: true });
 
     options.queueRecordRequest(
@@ -157,12 +161,12 @@ export function useCorpusReviewDecisions(options: CorpusReviewDecisionsOptions) 
         options.syncBuildInRail(result.build);
 
         if (result.blocked) {
-          options.records.value = beforeRecords;
+          options.queueRows.value = beforeRows;
           options.recordTotal.value = beforeTotal;
           options.selectedRecord.value = result.record;
           options.selectedRecordId.value = id;
-          const idx = options.records.value.findIndex((row) => row.record_id === id);
-          if (idx >= 0) options.records.value.splice(idx, 1, result.record);
+          const idx = options.queueRows.value.findIndex((row) => row.record_id === id);
+          if (idx >= 0) options.queueRows.value.splice(idx, 1, queueRowFromRecord(result.record));
 
           if (result.blocker === "source_problem") {
             options.reviewInspectorTab.value = "source";
@@ -178,15 +182,13 @@ export function useCorpusReviewDecisions(options: CorpusReviewDecisionsOptions) 
             options.focusFirstMetadataBlocker();
           }
         } else {
-          const idx = options.records.value.findIndex((row) => row.record_id === id);
+          const idx = options.queueRows.value.findIndex((row) => row.record_id === id);
           if (options.reviewQueue.value === "all" || options.reviewQueue.value === disposition) {
-            if (idx >= 0) options.records.value.splice(idx, 1, result.record);
+            if (idx >= 0) options.queueRows.value.splice(idx, 1, queueRowFromRecord(result.record));
           }
           if (result.next_record) {
-            const existing = options.records.value.find(
-              (row) => row.record_id === result.next_record?.record_id,
-            );
-            options.selectRecord(existing || result.next_record);
+            // The server returns the next Record in full: open it without another read.
+            await options.selectRecord(result.next_record);
           } else if (options.selectedRecordId.value === id) {
             await options.advanceFrom(id);
           }
@@ -201,7 +203,7 @@ export function useCorpusReviewDecisions(options: CorpusReviewDecisionsOptions) 
         await options.restoreReviewViewport(viewport, { record: true, inspector: true });
       },
       async () => {
-        options.records.value = beforeRecords;
+        options.queueRows.value = beforeRows;
         options.recordTotal.value = beforeTotal;
         options.selectedRecord.value = beforeSelected;
         options.selectedRecordId.value = beforeSelectedId;

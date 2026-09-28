@@ -11,6 +11,9 @@ The backend is intentionally split by responsibility:
 - `app/main.py` — minimal ASGI entrypoint.
 - `app/application.py` — constructs FastAPI, middleware, exception handling, and router composition.
 - `app/routers/` — HTTP transport grouped by domain. Keep ordinary route handlers here rather than growing `main.py`.
+- `app/celf_queries/` — transport-independent cELF read services used by both REST routes and GraphQL resolvers.
+- `app/graphql/` — read-only GraphQL façade at `POST /api/graphql` ([docs/GRAPHQL.md](../docs/GRAPHQL.md)).
+- `app/realtime/` — WebSocket realtime plane at `WS /api/ws/events` ([docs/REALTIME.md](../docs/REALTIME.md)); domain code reports changes through `app/operation_events.py`, never the socket.
 - `app/services.py` — shared service construction.
 - `app/config.py` — environment-backed runtime configuration and build/version identity.
 

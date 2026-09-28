@@ -26,6 +26,7 @@ from collections import defaultdict
 from typing import Any
 
 from .field_assertions import create_memory_assertion, current_assertion_by_name
+from .source_embeddings import SourceEmbeddingProjection
 
 logger = logging.getLogger(__name__)
 
@@ -124,18 +125,29 @@ def prefill_records(
     started = time.monotonic()
     summary: dict[str, Any] = {"status": "ok", "spans": 0, "prefilled": 0, "hinted": 0, "truncated": False, "error": ""}
     try:
-        text_by_block = {str(b.get("block_id")): str(b.get("text") or "").strip() for b in blocks}
+        text_by_block = {
+            str(b.get("block_id") or b.get("source_unit_id")): str(b.get("text") or "").strip()
+            for b in blocks
+        }
         fields = [name for name in schema.field_names() if (p := _profile(schema, name)) is not None and p.enabled]
         if not fields or not records:
             summary["status"] = "skipped"
             return summary
         # Unique span texts across the build, in first-seen order.
-        wanted: dict[str, list[tuple[int, str]]] = defaultdict(list)  # text -> [(record index, block id)]
+        wanted: dict[str, list[tuple[int, str, str]]] = defaultdict(list)
+        block_documents: dict[str, str] = {}
         for i, record in enumerate(records):
-            for block_id in record.get("source_block_ids") or []:
-                text = text_by_block.get(str(block_id), "")
+            document_id = str(
+                record.get("source_document_id")
+                or record.get("source_asset_id")
+                or build_id
+            )
+            for block_id in record.get("source_unit_ids") or record.get("source_block_ids") or []:
+                normalized_block_id = str(block_id)
+                text = text_by_block.get(normalized_block_id, "")
                 if len(text) >= MIN_SPAN_CHARS:
-                    wanted[text].append((i, str(block_id)))
+                    block_documents.setdefault(normalized_block_id, document_id)
+                    wanted[text].append((i, normalized_block_id, document_id))
         texts = list(wanted)
         if len(texts) > MAX_SPANS:
             texts, summary["truncated"] = texts[:MAX_SPANS], True
@@ -148,6 +160,44 @@ def prefill_records(
             summary["status"] = "empty"
             return summary
         provider, model = index.store._embedding_spec(collection)
+        source_projection = SourceEmbeddingProjection(index.store)
+        source_blocks_by_document: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for block in blocks:
+            block_id = str(block.get("block_id") or block.get("source_unit_id") or "")
+            document_id = block_documents.get(block_id)
+            text = str(block.get("text") or "").strip()
+            if document_id and block_id and len(text) >= MIN_SPAN_CHARS:
+                source_blocks_by_document[document_id].append({
+                    **block,
+                    "block_id": block_id,
+                    "source_unit_id": block_id,
+                    "text": text,
+                })
+        vectors_by_document: dict[str, dict[str, list[float]]] = {}
+        for document_id, source_blocks in source_blocks_by_document.items():
+            source_projection.sync(
+                document_id,
+                source_blocks,
+                provider=provider,
+                model=model,
+                prune=False,
+            )
+            vectors_by_document[document_id] = source_projection.embeddings_for(
+                document_id,
+                [str(block.get("block_id") or "") for block in source_blocks],
+                provider=provider,
+                model=model,
+            )
+        query_vectors: dict[str, list[float]] = {}
+        for text in texts:
+            references = wanted[text]
+            for _, block_id, document_id in references:
+                vector = vectors_by_document.get(document_id, {}).get(block_id)
+                if vector is not None:
+                    query_vectors[text] = vector
+                    break
+        if len(query_vectors) != len(texts):
+            raise RuntimeError("Source embedding projection did not return every requested source span.")
         where = {"$and": [
             {"field_name": {"$in": fields}}, {"kind": {"$in": ["positive", "absence"]}},
             {"scope_id": {"$ne": build_id}},
@@ -159,12 +209,20 @@ def prefill_records(
                 summary["truncated"] = True
                 break
             batch = texts[start:start + BATCH]
-            vectors = index.store.embeddings.embed(batch, [{}] * len(batch), "embedding", provider=provider, model=model)
+            vectors = [query_vectors[text] for text in batch]
             payload = collection.query(
                 query_embeddings=vectors, n_results=FETCH_K, where=where, include=["metadatas", "distances"],
             )
+            # Chroma may return numpy arrays; evaluating them with `or []`
+            # raises "truth value of an array is ambiguous".
+            payload_ids = payload.get("ids")
+            payload_metas = payload.get("metadatas")
+            payload_distances = payload.get("distances")
             for text, ids, metas, distances in zip(
-                batch, payload.get("ids") or [], payload.get("metadatas") or [], payload.get("distances") or [],
+                batch,
+                payload_ids if payload_ids is not None else [],
+                payload_metas if payload_metas is not None else [],
+                payload_distances if payload_distances is not None else [],
             ):
                 for exemplar_id, meta, distance in zip(ids, metas, distances):
                     if not isinstance(meta, dict):
@@ -179,7 +237,7 @@ def prefill_records(
                     if field not in fields or (not absence and not _allowed(schema, field, value)):
                         continue
                     source = (str(meta.get("scope_id") or ""), str(meta.get("record_id") or ""))
-                    for record_index, block_id in wanted[text]:
+                    for record_index, block_id, _ in wanted[text]:
                         group = found[record_index][field].setdefault(
                             "__absent__" if absence else _key(value),
                             {"value": value, "absence": absence, "sims": [], "sources": set(), "best": 0.0,

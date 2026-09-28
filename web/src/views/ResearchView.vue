@@ -7,6 +7,7 @@ import ResearchResultPresentation from "../components/research/ResearchResultPre
 import ResearchSettingsDrawer from "../components/research/ResearchSettingsDrawer.vue";
 import ResearchRunsDrawer from "../components/research/ResearchRunsDrawer.vue";
 import ResearchPipelineBar from "../components/research/ResearchPipelineBar.vue";
+import { useResearchDraft } from "../features/research/useResearchDraft";
 import { useAuthStore } from "../stores/auth";
 import { useI18nStore } from "../stores/i18n";
 import type {
@@ -66,6 +67,7 @@ const settingsDrawer = ref<{
   open: (section?: "retrieval" | "evidence" | "generation", focusPromptMetadata?: boolean) => void;
 } | null>(null);
 const runsDrawer = ref<{ open: () => void; close: () => void } | null>(null);
+const researchDraft = useResearchDraft();
 let pollTimer: number | undefined;
 let draftTimer: number | undefined;
 
@@ -530,6 +532,19 @@ function applySettings(payload: {
 
 watch(prompt, persistDraft);
 watch(instructions, persistDraft);
+// Follow the running job's streamed answer only while it has no authoritative result yet;
+// any other state (finished, failed, cancelled, or nothing selected) drops the draft.
+watch(
+  activeJob,
+  (job) => {
+    const live = Boolean(
+      job && !job.result && ["queued", "running", "cancelling"].includes(job.status),
+    );
+    if (live && job && researchDraft.draft.value?.jobId !== job.id) researchDraft.follow(job.id);
+    else if (!live) researchDraft.clear();
+  },
+  { immediate: true },
+);
 watch(
   () => [route.name, route.query.job],
   ([name]) => {
@@ -543,6 +558,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.clearTimeout(pollTimer);
   window.clearTimeout(draftTimer);
+  researchDraft.clear();
 });
 </script>
 
@@ -635,6 +651,7 @@ onBeforeUnmount(() => {
       <ResearchResultPresentation
         :job="activeJob"
         :result="activeResult"
+        :draft="researchDraft.draft.value"
         :selected-evidence="selectedEvidence"
         :active-evidence-index="activeEvidenceIndex"
         :busy="starting"

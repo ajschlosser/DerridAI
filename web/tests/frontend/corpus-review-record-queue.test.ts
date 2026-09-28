@@ -2,6 +2,7 @@
 import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import type { CorpusRecord } from "../../src/api/corpus";
+import { queueRowFromRecord } from "../../src/features/corpus-builder/domain/queueRows";
 import CorpusReviewRecordQueue from "../../src/components/corpus-builder/CorpusReviewRecordQueue.vue";
 
 function record(overrides: Partial<CorpusRecord> = {}): CorpusRecord {
@@ -17,10 +18,14 @@ function record(overrides: Partial<CorpusRecord> = {}): CorpusRecord {
   };
 }
 
+function row(overrides: Partial<CorpusRecord> = {}) {
+  return queueRowFromRecord(record(overrides));
+}
+
 function mountQueue(overrides: Record<string, unknown> = {}) {
   return mount(CorpusReviewRecordQueue, {
     props: {
-      records: [record()],
+      rows: [row()],
       recordTotal: 1,
       selectedRecordId: "record-1",
       selectedReviewIds: new Set<string>(),
@@ -62,8 +67,8 @@ describe("Corpus Builder review record queue", () => {
 
   it("renders non-colour state cues and the LLM-processed marker", () => {
     const wrapper = mountQueue({
-      records: [
-        record({
+      rows: [
+        row({
           review_state: "ready",
           metadata_enrichment_finished: true,
         }),
@@ -75,10 +80,10 @@ describe("Corpus Builder review record queue", () => {
   });
 
   it("surfaces source warnings as a dedicated action", async () => {
-    const warned = record({
+    const warned = row({
       source_quality_issues: [{ code: "ocr_noise", severity: "warning" }],
     });
-    const wrapper = mountQueue({ records: [warned] });
+    const wrapper = mountQueue({ rows: [warned] });
 
     await wrapper.get(".record-source-warn").trigger("click");
 
@@ -88,10 +93,10 @@ describe("Corpus Builder review record queue", () => {
   });
 
   it("shows loading and empty recovery states", async () => {
-    const loading = mountQueue({ records: [], recordTotal: 0, loading: true, hydrated: false });
+    const loading = mountQueue({ rows: [], recordTotal: 0, loading: true, hydrated: false });
     expect(loading.text()).toContain("Loading");
 
-    const empty = mountQueue({ records: [], recordTotal: 0, loading: false, hydrated: true });
+    const empty = mountQueue({ rows: [], recordTotal: 0, loading: false, hydrated: true });
     await empty.get(".rail-empty button").trigger("click");
     expect(empty.emitted("showAll")).toHaveLength(1);
   });

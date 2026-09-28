@@ -91,6 +91,7 @@ function baseSnapshot() {
 const runtime = vi.hoisted(() => ({
   state: { view: "home" },
   getRecordsListSnapshot: vi.fn(),
+  ensureCorpusWorkspaceLoaded: vi.fn(async () => undefined),
   getShellSnapshot: vi.fn(() => ({ files: [] })),
   setRecordsListQuery: vi.fn(),
   recordsListCommand: vi.fn(async () => undefined),

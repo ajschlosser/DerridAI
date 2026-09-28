@@ -27,6 +27,7 @@ async function openLibrary(page: Page) {
     .first()
     .click();
   await page.getByRole("button", { name: /search digital libraries/i }).click();
+  await page.locator('[data-action="open-library"]').click();
   return page.getByRole("dialog", { name: /search digital libraries/i });
 }
 

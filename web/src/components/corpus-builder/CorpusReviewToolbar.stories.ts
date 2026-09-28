@@ -1,16 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
-import type { CorpusRecord } from "../../api/corpus";
 import CorpusReviewToolbar from "./CorpusReviewToolbar.vue";
-
-const records: CorpusRecord[] = [
-  {
-    record_id: "record-1",
-    text: "A representative record under review.",
-    text_length: 37,
-    source_block_ids: [],
-    source_spans: [],
-  },
-];
 
 const meta = {
   title: "Corpus Builder/Review/Toolbar",
@@ -35,7 +24,6 @@ const meta = {
     bulkActionFeedback: "",
     bulkMetadataOpen: false,
     schema: null,
-    records,
     knownValues: {},
     regionTypes: ["argument", "quotation"],
     discourseRoles: ["claim", "attribution"],

@@ -5,7 +5,10 @@ import json
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
+from pydantic import BaseModel, Field
 
+from ..celf_queries import vector_records as vector_queries
+from ..celf_queries.access import AccessContext, InvalidQuery
 from ..chroma_store import StoreAlreadyExistsError
 from ..config import settings
 from ..content_filter import enforce_researcher_text
@@ -24,10 +27,15 @@ from ..models import (
     StoreLanguageUpdate,
     StoreProtectionUpdate,
 )
-from ..researcher_view import sanitize_records_payload, summarize_record
+from ..researcher_view import sanitize_records_payload
 from ..services import store
 
 router = APIRouter(tags=["stores"])
+
+
+class SyncSuppressionRequest(BaseModel):
+    record_id: str = Field(min_length=1, max_length=500)
+    fingerprint: str = Field(min_length=1, max_length=500)
 
 
 def _stamp_record_activity(record: dict[str, Any], username: str) -> dict[str, Any]:
@@ -56,6 +64,23 @@ def list_stores() -> dict[str, Any]:
         return {"stores": store.list_stores()}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.get("/api/stores/{store_name}/sync-suppressions")
+def get_sync_suppressions(store_name: str, request: Request) -> dict[str, Any]:
+    require_admin(request)
+    from ..system_store import system_store
+
+    return {"store": store_name, "suppressions": system_store.vector_sync_suppressions(store_name)}
+
+
+@router.post("/api/stores/{store_name}/sync-suppressions")
+def set_sync_suppression(store_name: str, body: SyncSuppressionRequest, request: Request) -> dict[str, Any]:
+    require_admin(request)
+    from ..system_store import system_store
+
+    suppressions = system_store.set_vector_sync_suppression(store_name, body.record_id, body.fingerprint)
+    return {"store": store_name, "suppressions": suppressions}
 
 
 @router.post("/api/stores")
@@ -200,50 +225,40 @@ def get_records(
     offset: int = Query(default=0, ge=0),
     work: str | None = Query(default=None),
     sort_field: str | None = Query(default=None),
-    sort_dir: str = Query(default="asc"),
+    sort_dir: str = Query(default="asc", pattern="^(asc|desc)$"),
     filters: str | None = Query(default=None),
     include_updates: bool = Query(default=False),
 ) -> dict[str, Any]:
+    access = AccessContext.for_user(request_user(request))
     try:
-        user = request_user(request)
         parsed_filters: dict[str, str] = {}
         if filters:
             candidate = json.loads(filters)
             if not isinstance(candidate, dict):
                 raise ValueError("filters must encode a JSON object")
-            parsed_filters = {
-                str(key): str(value)
-                for key, value in candidate.items()
-            }
-        if user.role != "admin":
-            enforce_researcher_text({"work": work, "filters": parsed_filters})
-        allow_updates = include_updates and user.role == "admin"
-        result = store.get_records(
-            store_name,
-            limit=limit,
-            offset=offset,
-            work=work,
-            sort_field=sort_field,
-            sort_dir=sort_dir,
-            filters=parsed_filters,
-            include_updates=allow_updates,
+            parsed_filters = {str(key): str(value) for key, value in candidate.items()}
+        if include_updates and access.is_admin:
+            # Audit history is an administrator-only, history-specific read.
+            return store.get_records(
+                store_name, limit=limit, offset=offset, work=work, sort_field=sort_field,
+                sort_dir=sort_dir, filters=parsed_filters, include_updates=True,
+            )
+        return vector_queries.records_page(
+            access, store_name, limit=limit, offset=offset, work=work,
+            sort_field=sort_field, sort_dir=sort_dir, filters=parsed_filters,
         )
-        if user.role != "admin":
-            return sanitize_records_payload(result, max_chars=settings.researcher_text_max_chars)
-        return result
-    except ValueError as exc:
+    except (ValueError, InvalidQuery) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/api/stores/{store_name}/works")
-def list_store_works(store_name: str) -> dict[str, Any]:
+def list_store_works(store_name: str, request: Request) -> dict[str, Any]:
+    access = AccessContext.for_user(request_user(request))
     try:
-        return {
-            "works": store.list_works(store_name),
-            "stats": store.work_stats(store_name),
-        }
+        stats = vector_queries.works(access, store_name)
+        return {"works": [item["work"] for item in stats], "stats": stats}
     except Exception as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -289,21 +304,16 @@ def get_record(
     request: Request,
     include_updates: bool = Query(default=False),
 ) -> dict[str, Any]:
+    access = AccessContext.for_user(request_user(request))
     try:
-        user = request_user(request)
         # Researcher responses never expose raw audit history. Admin clients can
         # request it explicitly for a history-specific operation.
-        allow_updates = include_updates and user.role == "admin"
-        record = store.get_record(store_name, chroma_id, include_updates=allow_updates)
-        if record is None:
-            raise HTTPException(status_code=404, detail="Record not found.")
-        if user.role != "admin":
-            return summarize_record(record, max_chars=settings.researcher_text_max_chars)
-        return record
-    except HTTPException:
-        raise
+        record = vector_queries.record(access, store_name, chroma_id, include_updates=include_updates)
     except Exception as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if record is None:
+        raise HTTPException(status_code=404, detail="Record not found.")
+    return record
 
 
 @router.post("/api/stores/{store_name}/records")
@@ -439,4 +449,3 @@ def search(store_name: str, body: SearchRequest, request: Request) -> dict[str, 
         return result
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-

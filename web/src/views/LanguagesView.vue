@@ -10,6 +10,7 @@ import {
 import { jobsApi, type JobSummary } from "../api/jobs";
 import { useI18nStore } from "../stores/i18n";
 import * as runtime from "../runtime/runtime.js";
+import { followResource } from "../realtime/follow";
 import LanguageFlag from "../components/LanguageFlag.vue";
 import ProviderProfileSelect from "../components/ProviderProfileSelect.vue";
 import CountryFlagPicker from "../components/CountryFlagPicker.vue";
@@ -58,8 +59,8 @@ const newPolicyTerm = ref("");
 const savingPolicy = ref(false);
 const resumeJobId = ref("");
 const translationRiskAcknowledged = ref(false);
-let installPollTimer = 0;
-let policyPollTimer = 0;
+let stopInstallFollow: (() => void) | undefined;
+let stopPolicyFollow: (() => void) | undefined;
 
 const selectedProvider = computed(
   () =>
@@ -340,8 +341,8 @@ async function loadContentPolicy(code = selectedCode.value) {
     contentPolicy.value = { code, status: "missing", blocked_terms: [], contextual_terms: [] };
   }
 }
-async function monitorPolicy(jobId: string) {
-  window.clearTimeout(policyPollTimer);
+/** Read the content-policy job once; true when it has settled. */
+async function checkPolicyJob(jobId: string): Promise<boolean> {
   try {
     const job = await jobsApi.get(jobId);
     policyJob.value = job;
@@ -353,12 +354,25 @@ async function monitorPolicy(jobId: string) {
       } else if (job.status === "failed") {
         error.value = job.stage_detail || i18n.t("language.content_policy_missing_help");
       }
-      return;
+      return true;
     }
-    policyPollTimer = window.setTimeout(() => void monitorPolicy(jobId), 1200);
   } catch {
-    policyPollTimer = window.setTimeout(() => void monitorPolicy(jobId), 2000);
+    // Transient read failure: the next event or fallback poll retries.
   }
+  return false;
+}
+function monitorPolicy(jobId: string) {
+  stopPolicyFollow?.();
+  let done = false;
+  // Realtime job events drive refreshes; REST polling only while the socket is unavailable.
+  stopPolicyFollow = followResource({
+    topic: `job:${jobId}`,
+    immediate: true,
+    isDone: () => done,
+    refresh: async () => {
+      done = await checkPolicyJob(jobId);
+    },
+  });
 }
 async function generateContentPolicy() {
   const profile = selectedProvider.value;
@@ -389,7 +403,7 @@ async function generateContentPolicy() {
     policyJob.value = created;
     runtime.registerExternalJob?.(created);
     runtime.notifyToast?.(i18n.t("language.content_policy_generating"), { tone: "info" });
-    void monitorPolicy(created.id);
+    monitorPolicy(created.id);
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);
   }
@@ -594,8 +608,8 @@ function providerGeneration(profile: ProviderProfile) {
     keep_alive: value("keep_alive") || undefined,
   };
 }
-async function monitorInstall(jobId: string) {
-  window.clearTimeout(installPollTimer);
+/** Read the translation job once; true when it has settled. */
+async function checkInstallJob(jobId: string): Promise<boolean> {
   try {
     const job = await jobsApi.get(jobId);
     installJob.value = job;
@@ -629,12 +643,25 @@ async function monitorInstall(jobId: string) {
       } else if (job.result?.resumable) {
         runtime.notifyToast?.(i18n.t("language.partial_translation_restored"), { tone: "info" });
       }
-      return;
+      return true;
     }
-    installPollTimer = window.setTimeout(() => void monitorInstall(jobId), 1200);
   } catch {
-    installPollTimer = window.setTimeout(() => void monitorInstall(jobId), 2000);
+    // Transient read failure: the next event or fallback poll retries.
   }
+  return false;
+}
+function monitorInstall(jobId: string) {
+  stopInstallFollow?.();
+  let done = false;
+  // Realtime job events drive refreshes; REST polling only while the socket is unavailable.
+  stopInstallFollow = followResource({
+    topic: `job:${jobId}`,
+    immediate: true,
+    isDone: () => done,
+    refresh: async () => {
+      done = await checkInstallJob(jobId);
+    },
+  });
 }
 
 function openInstallDialog() {
@@ -709,7 +736,7 @@ async function restoreLanguageTranslationJob() {
     if (policySummary) {
       const job = await jobsApi.get(policySummary.id);
       policyJob.value = job;
-      if (!["failed", "cancelled", "completed"].includes(job.status)) void monitorPolicy(job.id);
+      if (!["failed", "cancelled", "completed"].includes(job.status)) monitorPolicy(job.id);
     }
     if (!summary) return;
     const job = await jobsApi.get(summary.id);
@@ -724,7 +751,7 @@ async function restoreLanguageTranslationJob() {
     )
       return;
     installJob.value = job;
-    if (!["failed", "cancelled", "completed"].includes(job.status)) void monitorInstall(job.id);
+    if (!["failed", "cancelled", "completed"].includes(job.status)) monitorInstall(job.id);
   } catch {
     // Job recovery is a convenience; a transient Operations failure must not block the page.
   }
@@ -788,7 +815,7 @@ async function installLanguage() {
       { tone: "success" },
     );
     resumeJobId.value = "";
-    void monitorInstall(created.id);
+    monitorInstall(created.id);
     install.value = { code: "", name: "", flag: "🌐" };
     installAutoName.value = "";
     installFlagTouched.value = false;
@@ -923,8 +950,8 @@ onMounted(async () => {
   }
 });
 onUnmounted(() => {
-  window.clearTimeout(installPollTimer);
-  window.clearTimeout(policyPollTimer);
+  stopInstallFollow?.();
+  stopPolicyFollow?.();
 });
 </script>
 

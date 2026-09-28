@@ -1,0 +1,25 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
+# Same payload as GET /api/derridai/model.
+query CelfModel {
+  celf_model {
+    specification_version
+    nodes {
+      type
+      profile
+      persistence
+      label
+      normative
+    }
+    edges {
+      id
+      source_type
+      target_type
+      relation
+      inverse_relation
+      source_cardinality
+      target_cardinality
+      profile
+      normative
+    }
+  }
+}

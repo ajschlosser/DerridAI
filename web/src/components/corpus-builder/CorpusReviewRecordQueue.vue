@@ -1,14 +1,14 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from "vue";
-import type { CorpusRecord } from "../../api/corpus";
-import { recordIssueKinds, recordState } from "../../domain/corpusReview";
-import { recordHasSourceWarning } from "../../domain/sourceQuality";
+import type { CorpusQueueRow } from "../../features/corpus-builder/api/reviewReads";
+import { rowHasSourceWarning } from "../../features/corpus-builder/domain/queueRows";
 import { useI18nStore } from "../../stores/i18n";
 import AppIcon from "../AppIcon.vue";
 
 const props = defineProps<{
-  records: CorpusRecord[];
+  /** Lightweight queue rows (never full Records). */
+  rows: CorpusQueueRow[];
   recordTotal: number;
   selectedRecordId: string;
   selectedReviewIds: Set<string>;
@@ -23,8 +23,8 @@ const emit = defineEmits<{
   collapse: [];
   toggleVisible: [selected: boolean];
   toggleRecord: [recordId: string, selected: boolean];
-  selectRecord: [record: CorpusRecord];
-  sourceWarning: [record: CorpusRecord];
+  selectRecord: [row: CorpusQueueRow];
+  sourceWarning: [row: CorpusQueueRow];
   showAll: [];
 }>();
 
@@ -42,21 +42,15 @@ onBeforeUnmount(() => emit("rootChange", null));
  * What tells one row from the next. A citation is the same for every record of a work, so the row leads with where
  * the record sits (its pages) and the opening of its own text.
  */
-function locator(record: CorpusRecord) {
+function locator(record: CorpusQueueRow) {
   const start = record.page_start,
     end = record.page_end;
   if (start == null || start === "") return "";
   const pages = end != null && end !== "" && end !== start ? `${start}–${end}` : String(start);
   return `${i18n.t("pdf_corpus.page_abbrev")} ${pages}`;
 }
-function snippet(record: CorpusRecord) {
-  const text = String(record.text || "")
-    .replace(/\s+/g, " ")
-    .trim();
-  return text.length > 90 ? `${text.slice(0, 90).trimEnd()}…` : text;
-}
-function recordStateLabel(record: CorpusRecord) {
-  const state = recordState(record);
+function recordStateLabel(record: CorpusQueueRow) {
+  const state = record.review_state || "ready";
   return i18n.t(
     `pdf_corpus.record_state.${state}`,
     state === "ready" ? "Ready" : state.replace(/_/g, " "),
@@ -64,8 +58,8 @@ function recordStateLabel(record: CorpusRecord) {
 }
 
 // A shape as well as a colour, so state never depends on colour alone (WCAG 1.4.1).
-function recordStateIcon(record: CorpusRecord) {
-  const state = recordState(record);
+function recordStateIcon(record: CorpusQueueRow) {
+  const state = record.review_state;
   return state === "accepted"
     ? "check"
     : state === "rejected"
@@ -77,17 +71,8 @@ function recordStateIcon(record: CorpusRecord) {
           : "";
 }
 
-function extraIssueKinds(record: CorpusRecord) {
-  const state = recordState(record);
-  return recordIssueKinds(record).filter((kind: string) => kind !== state);
-}
-
-function recordLlmProcessed(record: CorpusRecord) {
-  if (record.metadata_enrichment_finished) return true;
-  if (String(record.metadata_enrichment_state || "") === "complete") return true;
-  return Object.values(record.metadata_stage_status || {}).some((value) =>
-    ["complete", "needs_review"].includes(String(value || "")),
-  );
+function extraIssueKinds(record: CorpusQueueRow) {
+  return record.review_issue_codes.filter((kind: string) => kind !== record.review_state);
 }
 
 function visibleSelectionChanged(event: Event) {
@@ -110,7 +95,7 @@ function recordSelectionChanged(recordId: string, event: Event) {
         <input
           type="checkbox"
           :checked="props.allVisibleSelected"
-          :disabled="!props.records.length || props.disabled"
+          :disabled="!props.rows.length || props.disabled"
           @change="visibleSelectionChanged"
         />
         <span>{{ i18n.t("pdf_corpus.select_visible") }}</span>
@@ -118,7 +103,7 @@ function recordSelectionChanged(recordId: string, event: Event) {
       <span>{{ props.recordTotal }}</span>
     </div>
 
-    <div v-for="record in props.records" :key="record.record_id" class="record-row-wrap">
+    <div v-for="record in props.rows" :key="record.record_id" class="record-row-wrap">
       <label class="record-select">
         <input
           type="checkbox"
@@ -144,7 +129,7 @@ function recordSelectionChanged(recordId: string, event: Event) {
         :aria-current="record.record_id === props.selectedRecordId ? 'true' : undefined"
         @click="emit('selectRecord', record)"
       >
-        <span class="record-state-icon" :data-state="recordState(record)" aria-hidden="true">
+        <span class="record-state-icon" :data-state="record.review_state" aria-hidden="true">
           <AppIcon v-if="recordStateIcon(record)" :name="recordStateIcon(record)" />
         </span>
         <span class="record-row-main">
@@ -153,12 +138,14 @@ function recordSelectionChanged(recordId: string, event: Event) {
             <template v-if="locator(record)">{{ locator(record) }} · </template
             >{{ record.text_length.toLocaleString() }} {{ i18n.t("pdf_corpus.characters") }}
           </small>
-          <span v-if="snippet(record)" class="record-row-snippet">{{ snippet(record) }}</span>
-          <span class="record-row-status" :data-state="recordState(record)">
+          <span v-if="record.text_preview" class="record-row-snippet">{{
+            record.text_preview
+          }}</span>
+          <span class="record-row-status" :data-state="record.review_state">
             {{ recordStateLabel(record) }}
           </span>
           <span
-            v-if="recordState(record) === 'ready' && recordLlmProcessed(record)"
+            v-if="record.review_state === 'ready' && record.metadata_llm_processed"
             class="record-llm-processed"
             :title="llmProcessedHelp"
           >
@@ -176,7 +163,7 @@ function recordSelectionChanged(recordId: string, event: Event) {
       </button>
 
       <button
-        v-if="recordHasSourceWarning(record)"
+        v-if="rowHasSourceWarning(record)"
         type="button"
         class="record-source-warn"
         :aria-label="i18n.t('pdf_corpus.source_warning_icon')"
@@ -189,7 +176,7 @@ function recordSelectionChanged(recordId: string, event: Event) {
     <div v-if="props.loading && !props.hydrated" class="rail-empty" role="status">
       {{ i18n.t("pdf_corpus.loading_records") }}
     </div>
-    <div v-else-if="!props.records.length" class="rail-empty">
+    <div v-else-if="!props.rows.length" class="rail-empty">
       {{ i18n.t("pdf_corpus.no_records_filter") }}
       <button type="button" class="btn small" @click="emit('showAll')">
         {{ i18n.t("pdf_corpus.show_all_records") }}

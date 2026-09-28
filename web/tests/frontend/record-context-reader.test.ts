@@ -51,14 +51,21 @@ describe("RecordContextReader", () => {
     expect(corpusBuilderApi.recordContext).toHaveBeenCalledWith("b1", "r3");
   });
 
-  it("fades neighbours with distance and keeps the focus at full strength", async () => {
+  it("uses deterministic neighbour previews and keeps the focus at full strength", async () => {
+    const longText = `  ${"A".repeat(150)}  ${"B".repeat(20)}\nwith spacing`;
+    corpusBuilderApi.recordContext.mockResolvedValueOnce({
+      record_id: "r3",
+      before: [item("r1", longText)],
+      after: [],
+      truncated: false,
+    });
     const wrapper = mountReader();
     await flushPromises();
-    const [far, near] = wrapper.findAll(".ctx-item");
-    expect(Number(near.attributes("style")?.match(/opacity: ([\d.]+)/)?.[1])).toBeGreaterThan(
-      Number(far.attributes("style")?.match(/opacity: ([\d.]+)/)?.[1]),
-    );
-    expect(wrapper.get(".ctx-focus").attributes("style")).toBeUndefined();
+    const preview = wrapper.get(".ctx-item p");
+    expect(preview.element.firstChild?.textContent?.trimEnd()).toBe(`${longText.slice(0, 150)}…`);
+    await preview.get(".ctx-expand").trigger("click");
+    expect(preview.element.firstChild?.textContent?.trim()).toBe(longText.trim());
+    expect(preview.get(".ctx-expand").attributes("aria-expanded")).toBe("true");
   });
 
   it("jumps to a neighbouring record", async () => {

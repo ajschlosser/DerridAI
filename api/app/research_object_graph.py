@@ -117,6 +117,10 @@ def _first_present(*values: Any) -> Any:
     return None
 
 
+def _is_time_span(span: dict[str, Any]) -> bool:
+    return str(span.get("locator_kind") or "") == "time" or span.get("time_start") is not None
+
+
 def _span_locator(span: dict[str, Any], source_document_id: str) -> dict[str, Any]:
     unit_ids = list(span.get("source_unit_ids") or [])
     for key in ("source_unit_id", "block_id"):
@@ -124,6 +128,19 @@ def _span_locator(span: dict[str, Any], source_document_id: str) -> dict[str, An
         if value:
             unit_ids.append(value)
     normalized_unit_ids = sorted(dict.fromkeys(str(value).strip() for value in unit_ids if str(value).strip()))
+    if _is_time_span(span):
+        # Audio evidence is located by time range and speaker. Its legacy
+        # navigation ``page`` index and ``start``/``end`` seconds must not be
+        # presented as PDF pages or character offsets.
+        return {
+            "source_document_id": str(span.get("source_document_id") or source_document_id),
+            "source_span_id": span.get("source_span_id"),
+            "source_unit_ids": normalized_unit_ids,
+            "locator_kind": "time",
+            "time_start": _first_present(span.get("time_start"), span.get("start")),
+            "time_end": _first_present(span.get("time_end"), span.get("end")),
+            "speaker": span.get("speaker"),
+        }
     return {
         "source_document_id": str(span.get("source_document_id") or source_document_id),
         "source_span_id": span.get("source_span_id"),
@@ -160,7 +177,12 @@ def _add_span(
     locator = _span_locator(span, source_document_id)
     span_id = _span_identity(locator)
     pages = locator.get("printed_page_start") or locator.get("physical_page_start")
-    summary = f"Page {pages}" if pages not in (None, "") else "Documentary source region"
+    if locator.get("locator_kind") == "time" and locator.get("time_start") not in (None, ""):
+        summary = f"Time {locator.get('time_start')}–{locator.get('time_end')} s"
+    elif pages not in (None, ""):
+        summary = f"Page {pages}"
+    else:
+        summary = "Documentary source region"
     return graph.add_node(
         "SourceSpan",
         span_id,
@@ -273,21 +295,30 @@ def build_record_graph(
                     summary=_present(value),
                     status=str(assertion.get("authority_status") or assertion.get("evaluation_status") or "") or None,
                     details={
-                        key: assertion.get(key)
-                        for key in (
-                            "field_id",
-                            "field_name",
-                            "derivation_method",
-                            "evaluation_status",
-                            "authority_status",
-                            "value_status",
-                            "confidence",
-                            "method",
-                            "model",
-                            "run_id",
-                            "supersedes_assertion_id",
-                        )
-                        if key in assertion
+                        **{
+                            key: assertion.get(key)
+                            for key in (
+                                "field_id",
+                                "field_name",
+                                "value",
+                                "derivation_method",
+                                "evaluation_status",
+                                "authority_status",
+                                "value_status",
+                                "confidence",
+                                "reason",
+                                "method",
+                                "actor",
+                                "model",
+                                "run_id",
+                                "record_revision",
+                                "evidence",
+                                "created_at",
+                                "supersedes_assertion_id",
+                            )
+                            if key in assertion
+                        },
+                        "is_current": assertion_id in current_ids,
                     },
                 )
                 assertion_by_id[assertion_id] = node

@@ -369,7 +369,7 @@ class EditorialMemoryMixin:
             )
             if isinstance(semantic, dict):
                 retrieval_telemetry = dict(semantic.get("telemetry") or {})
-                if semantic.get("ok") and isinstance(semantic.get("examples"), dict):
+                if isinstance(semantic.get("examples"), dict):
                     # Semantic evidence-bound precedents supersede lexical ordering
                     # only for fields where the vector index found valid current
                     # canonical exemplars. Other fields retain the deterministic fallback.
@@ -380,7 +380,7 @@ class EditorialMemoryMixin:
                         examples,
                         field_limits=field_limits or None,
                     )
-                elif retrieval_telemetry.get("fallback_reason"):
+                if retrieval_telemetry.get("fallback_reason"):
                     warned: set[str] = getattr(
                         self,
                         "_progressive_metadata_warning_builds",

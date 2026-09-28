@@ -217,7 +217,9 @@ class UpsertJobCreate(BaseModel):
     items: list[UpsertJobItem] = Field(min_length=1, max_length=50000)
     document_field: str = "text"
     embedding_field: str = "embedding"
-    batch_size: int = Field(default=500, ge=1, le=1000)
+    # Keep individual embedding/upsert calls bounded so a slow local model or
+    # Chroma server reports progress instead of appearing to hang for one huge batch.
+    batch_size: int = Field(default=128, ge=1, le=1000)
     mirror_languages: bool = True
     include_updates: bool = False
     source_kind: Literal["browser_workspace", "database", "subset", "manual"] = "browser_workspace"
@@ -471,7 +473,7 @@ class RAGRunRequest(BaseModel):
 
 
 class PdfLlmRequest(BaseModel):
-    mode: Literal["clean_text", "draft_record", "link_record"]
+    mode: Literal["clean_text", "draft_record", "link_record", "detect_language"]
     raw_text: str = ""
     pdf_file: str | None = None
     pdf_title: str | None = None
@@ -488,6 +490,57 @@ class PdfLlmRequest(BaseModel):
 
 class PdfPageLabelsPatch(BaseModel):
     labels: dict[int, str | None] = Field(default_factory=dict)
+
+
+class PdfAssetLanguagePatch(BaseModel):
+    """One explicit reviewer decision for an unresolved source language."""
+
+    language: str | None = Field(default=None, max_length=35)
+    skip_language: bool = False
+
+    @model_validator(mode="after")
+    def require_one_decision(self) -> PdfAssetLanguagePatch:
+        if self.skip_language == (self.language is not None):
+            raise ValueError("Provide one language or set skip_language=true.")
+        if self.language is not None:
+            value = self.language.strip().replace("_", "-").lower()
+            if not re.fullmatch(r"[a-z]{2,3}(?:-[a-z0-9]{2,8})?", value):
+                raise ValueError("language must be a BCP-47-style language code.")
+            self.language = value
+        return self
+
+
+class PdfAssetMetadataPatch(BaseModel):
+    """Explicit source-level metadata decisions made before corpus enrichment."""
+
+    metadata: dict[str, Any] = Field(default_factory=dict, max_length=30)
+    skip_fields: list[str] = Field(default_factory=list, max_length=30)
+
+    @model_validator(mode="after")
+    def validate_decisions(self) -> PdfAssetMetadataPatch:
+        from .source_text import MANIFEST_FIELDS
+
+        allowed = set(MANIFEST_FIELDS) | {"original_language", "document_is_translation"}
+        unknown = (set(self.metadata) | set(self.skip_fields)) - allowed
+        if unknown:
+            raise ValueError("Unsupported source metadata field(s): " + ", ".join(sorted(unknown)))
+        overlap = set(self.metadata) & set(self.skip_fields)
+        if overlap:
+            raise ValueError("A source metadata field cannot be entered and skipped together.")
+        cleaned: dict[str, Any] = {}
+        for field, value in self.metadata.items():
+            if value in (None, "", []):
+                raise ValueError(f"Metadata field '{field}' needs a value or must be skipped.")
+            if isinstance(value, str):
+                value = value.strip()
+                if not value:
+                    raise ValueError(f"Metadata field '{field}' needs a value or must be skipped.")
+            cleaned[field] = value
+        self.metadata = cleaned
+        self.skip_fields = sorted(set(self.skip_fields))
+        if not self.metadata and not self.skip_fields:
+            raise ValueError("Provide at least one metadata value or skipped field.")
+        return self
 
 
 class PdfSourceUnitPolicy(BaseModel):
@@ -536,6 +589,7 @@ class PdfDocumentLayoutPatch(BaseModel):
     thread_mode: Literal["continuous", "odd_even", "even_odd", "left_right", "right_left"] = "continuous"
     thread_a_language: str | None = None
     thread_b_language: str | None = None
+    unit_policy: dict[str, Any] | None = None
 
 
 class PdfCorpusProviderConfig(BaseModel):

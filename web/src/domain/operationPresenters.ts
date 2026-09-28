@@ -60,6 +60,10 @@ export function createOperationPresenters(deps: Deps) {
     if (job.type === "rag") return tr("operations.job.rag");
     if (job.type === "upsert") return tr("operations.job.upsert");
     if (job.type === "pdf_corpus") return tr("pdf_corpus.operation_label");
+    if (job.type === "corpus_capture")
+      return job.label
+        ? trf("capture.operation_label_named", { author: job.label })
+        : tr("capture.operation_label");
     if (job.type === "llm_tool") {
       const known: Record<string, string> = {
         pdf_clean_text: tr("operations.job.pdf_clean_text"),
@@ -102,6 +106,7 @@ export function createOperationPresenters(deps: Deps) {
   }
   function operationIcon(job: Loose) {
     if (job.type === "pdf_corpus") return "pdf";
+    if (job.type === "corpus_capture") return "books";
     if (job.type === "upsert") return "database";
     if (job.type === "rag") return "spark";
     if (job.type === "llm_tool") {
@@ -129,6 +134,19 @@ export function createOperationPresenters(deps: Deps) {
       return `${job.store_name || tr("operations.sub.collection")} · ${job.completed}/${job.total} ${tr("operations.sub.committed")}${Object.keys(job.mirrored || {}).length ? ` · ${tr("operations.sub.mirrors_active")}` : ""}`;
     if (job.type === "pdf_corpus")
       return `${job.source_filename || tr("pdf_corpus.source_pdf")} · ${job.stage_detail || job.stage || job.raw_status || tr("operations.sub.queued")}${job.unresolved_regions ? ` · ${Number(job.unresolved_regions).toLocaleString()} ${tr("pdf_corpus.unresolved_regions")}` : ""}`;
+    if (job.type === "corpus_capture") {
+      const stage = String(job.stage || job.mode || "");
+      const parts = [stage ? tr(`capture.phase.${stage}`, stage.replaceAll("_", " ")) : ""];
+      if (job.stage_detail) parts.push(String(job.stage_detail));
+      if (Number(job.total || 0) > 0)
+        parts.push(
+          trf("capture.progress_count", {
+            done: Number(job.completed || 0).toLocaleString(),
+            total: Number(job.total).toLocaleString(),
+          }),
+        );
+      return parts.filter(Boolean).join(" · ") || tr("operations.sub.queued");
+    }
     // Provider and model appear in the facts, and the label is the row title: say only what is new.
     if (job.type === "llm_tool") {
       const detail = String(job.stage_detail || "");

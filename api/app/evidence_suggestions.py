@@ -21,6 +21,8 @@ EVIDENCE_MODES = ("with_value", "backfill")
 DEFAULT_EVIDENCE_MODE = "with_value"
 BACKFILL_MIN_SCORE = 0.5
 BACKFILL_MAX_BLOCKS = 2
+SEMANTIC_METHOD = "local-semantic-v1"
+SEMANTIC_MIN_SCORE = 0.35
 
 
 def evidence_mode(request: dict[str, Any] | None = None) -> str:
@@ -123,6 +125,156 @@ def suggest_evidence_blocks(
     return scored[: max(1, limit)]
 
 
+def semantic_query(field_metadata: Any, value: Any) -> str:
+    """Build a field-aware embedding query without assigning meaning to field names."""
+    if isinstance(field_metadata, dict):
+        metadata = field_metadata
+    elif hasattr(field_metadata, "model_dump"):
+        metadata = field_metadata.model_dump(mode="json")
+    else:
+        metadata = {}
+    values = metadata.get("values")
+    allowed = []
+    if isinstance(values, list):
+        allowed = [
+            str(item.get("value") if isinstance(item, dict) else item).strip()
+            for item in values
+        ]
+        allowed = [item for item in allowed if item]
+    instruction = str(metadata.get("instruction") or "").strip()
+    if allowed:
+        instruction = instruction.replace("{values}", ", ".join(allowed))
+    parts = [
+        f"Field: {str(metadata.get('label') or metadata.get('name') or '').strip()}",
+        f"Type: {str(metadata.get('type') or '').strip()}",
+        f"Instruction: {instruction}",
+        f"Group context: {str(metadata.get('group_label') or '').strip()}",
+        f"Proposed value: {'; '.join(_flatten(value))}",
+    ]
+    if allowed:
+        parts.append("Allowed values: " + ", ".join(allowed))
+    return "\n".join(part for part in parts if part.split(":", 1)[-1].strip())[:4000]
+
+
+def _signal(
+    score: float | None,
+    method: str,
+    reason: str,
+    *,
+    status: str = "available",
+) -> dict[str, Any]:
+    return {
+        "score": round(max(0.0, min(1.0, score)), 4) if score is not None else None,
+        "method": method,
+        "reason": reason,
+        "status": status,
+    }
+
+
+def suggest_evidence_blocks_semantic(
+    value: Any,
+    blocks: list[dict[str, Any]],
+    *,
+    field_metadata: Any,
+    source_document_id: str,
+    projection: Any,
+    limit: int = 5,
+    provider: str | None = None,
+    model: str | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Combine deterministic lexical and local source-unit semantic signals.
+
+    The projection is derived state only. Any projection/provider failure returns
+    lexical results and a visible fallback status; it can never suppress or
+    override lexical suggestions.
+    """
+    lexical = suggest_evidence_blocks(value, blocks, limit=len(blocks), min_score=0.2)
+    lexical_by_id = {item["block_id"]: item for item in lexical}
+    status = {"semantic": "available", "reason": ""}
+    semantic_by_id: dict[str, dict[str, Any]] = {}
+    try:
+        if not blocks or not _flatten(value):
+            raise ValueError("No proposed value or source blocks are available.")
+        query = semantic_query(field_metadata, value)
+        projection.sync(
+            source_document_id,
+            blocks,
+            provider=provider,
+            model=model,
+            prune=False,
+        )
+        unit_ids = [str(block.get("source_unit_id") or block.get("block_id") or "") for block in blocks]
+        vectors = projection.embeddings_for(
+            source_document_id,
+            unit_ids,
+            provider=provider,
+            model=model,
+        )
+        query_vector = projection.embed_query(query, provider=provider, model=model)
+        for block in blocks:
+            block_id = str(block.get("block_id") or "")
+            unit_id = str(block.get("source_unit_id") or block_id)
+            vector = vectors.get(unit_id)
+            score = _cosine(query_vector, vector or [])
+            if block_id and vector and score >= SEMANTIC_MIN_SCORE:
+                semantic_by_id[block_id] = {
+                    "score": score,
+                    "reason": "Semantically resembles the proposed value for this field.",
+                    "method": SEMANTIC_METHOD,
+                }
+    except Exception as exc:  # noqa: BLE001 - semantic advice must never block lexical advice
+        status = {
+            "semantic": "fallback",
+            "reason": f"Local semantic retrieval failed; lexical suggestions remain available: {exc}",
+        }
+    candidate_ids = set(lexical_by_id) | set(semantic_by_id)
+    rows: list[dict[str, Any]] = []
+    for block in blocks:
+        block_id = str(block.get("block_id") or "")
+        if block_id not in candidate_ids:
+            continue
+        lexical_item = lexical_by_id.get(block_id)
+        semantic_item = semantic_by_id.get(block_id)
+        lexical_signal = _signal(
+            lexical_item["score"] if lexical_item else None,
+            lexical_item["method"] if lexical_item else METHOD,
+            lexical_item["reason"] if lexical_item else "No deterministic text overlap found.",
+            status="available" if lexical_item else "no_match",
+        )
+        semantic_signal = _signal(
+            semantic_item["score"] if semantic_item else None,
+            semantic_item["method"] if semantic_item else SEMANTIC_METHOD,
+            semantic_item["reason"] if semantic_item else status["reason"] or "No local semantic match reached the suggestion threshold.",
+            status="available" if semantic_item else ("fallback" if status["semantic"] == "fallback" else "no_match"),
+        )
+        combined_score = max(lexical_signal["score"] or 0.0, semantic_signal["score"] or 0.0)
+        primary = semantic_item if semantic_item and (not lexical_item or semantic_item["score"] > lexical_item["score"]) else lexical_item
+        row = {
+            "block_id": block_id,
+            **(
+                {"source_unit_id": str(block.get("source_unit_id"))}
+                if block.get("source_unit_id")
+                else {}
+            ),
+            # Existing consumers use these top-level fields; keep them as the
+            # strongest signal while exposing both signals independently below.
+            "score": round(combined_score, 4),
+            "method": primary["method"] if primary else METHOD,
+            "reason": primary["reason"] if primary else "",
+            "lexical_score": lexical_signal["score"],
+            "lexical_method": lexical_signal["method"],
+            "lexical_reason": lexical_signal["reason"],
+            "semantic_score": semantic_signal["score"],
+            "semantic_method": semantic_signal["method"],
+            "semantic_reason": semantic_signal["reason"],
+            "semantic_status": semantic_signal["status"],
+            "signals": {"lexical": lexical_signal, "semantic": semantic_signal},
+        }
+        rows.append(row)
+    rows.sort(key=lambda item: (-item["score"], item["block_id"]))
+    return rows[: max(1, limit)], status
+
+
 PRECEDENT_SEMANTIC_METHOD = "precedent-semantic-v1"
 PRECEDENT_LEXICAL_METHOD = "precedent-lexical-v1"
 _SPAN_LOCATION_KEYS = ("source_unit_id", "page", "pdf_page", "printed_page_label", "start", "end", "speaker")
@@ -131,7 +283,8 @@ _SPAN_LOCATION_KEYS = ("source_unit_id", "page", "pdf_page", "printed_page_label
 def record_source_blocks(record: dict[str, Any], blocks_by_id: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
     """This record's own source blocks, in record order, with only the location keys its medium has.
 
-    Membership comes from ``source_block_ids``; a block that is not listed there is never a candidate,
+    Membership comes from ``source_unit_ids`` (falling back to ``source_block_ids``);
+    a unit that is not listed there is never a candidate,
     so nothing ranked here can bind evidence outside the record under review.
     """
     spans = {
@@ -140,7 +293,8 @@ def record_source_blocks(record: dict[str, Any], blocks_by_id: dict[str, dict[st
         if isinstance(span, dict) and span.get("block_id")
     }
     out: list[dict[str, Any]] = []
-    for block_id in dict.fromkeys(map(str, record.get("source_block_ids") or [])):
+    unit_ids = record.get("source_unit_ids") or record.get("source_block_ids") or []
+    for block_id in dict.fromkeys(map(str, unit_ids)):
         block = blocks_by_id.get(block_id)
         text = str((block or {}).get("text") or "")
         if not text.strip():

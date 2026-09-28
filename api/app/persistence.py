@@ -904,6 +904,58 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
         value = _json_loads(row["payload_json"], {}) if row is not None else {}
         return value if isinstance(value, dict) and value else None
 
+    def get_generated_claims(
+        self,
+        claim_ids: list[str],
+        *,
+        owner: str | None = None,
+    ) -> dict[str, dict[str, Any]]:
+        """Batch form of ``get_generated_claim`` with the same owner visibility rule."""
+        ids = sorted({str(value) for value in claim_ids if str(value or "").strip()})
+        if not ids:
+            return {}
+        owner_filter = str(owner) if owner is not None else None
+        # Only "?" placeholders are interpolated; every value is bound.
+        placeholders = ",".join("?" for _ in ids)
+        sql = f"SELECT claim_id, payload_json FROM generated_claims WHERE claim_id IN ({placeholders}) AND (? IS NULL OR owner IS NULL OR owner=?)"  # noqa: S608
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                sql,
+                (*ids, owner_filter, owner_filter),
+            ).fetchall()
+        found: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            value = _json_loads(row["payload_json"], {})
+            if isinstance(value, dict) and value:
+                found[str(row["claim_id"])] = value
+        return found
+
+    def list_claim_support_bindings_for_claims(
+        self,
+        claim_ids: list[str],
+        *,
+        owner: str | None = None,
+    ) -> dict[str, list[dict[str, Any]]]:
+        """Batch form of ``list_claim_support_bindings`` keyed by claim id."""
+        ids = sorted({str(value) for value in claim_ids if str(value or "").strip()})
+        grouped: dict[str, list[dict[str, Any]]] = {claim_id: [] for claim_id in ids}
+        if not ids:
+            return grouped
+        owner_filter = str(owner) if owner is not None else None
+        # Only "?" placeholders are interpolated; every value is bound.
+        placeholders = ",".join("?" for _ in ids)
+        sql = f"SELECT claim_id, payload_json FROM claim_support_bindings WHERE claim_id IN ({placeholders}) AND (? IS NULL OR owner IS NULL OR owner=?) ORDER BY created_at"  # noqa: S608
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                sql,
+                (*ids, owner_filter, owner_filter),
+            ).fetchall()
+        for row in rows:
+            value = _json_loads(row["payload_json"], {})
+            if isinstance(value, dict):
+                grouped.setdefault(str(row["claim_id"]), []).append(value)
+        return grouped
+
     def list_languages(self) -> dict[str, dict[str, Any]]:
         with self._lock, self._connect() as conn:
             rows = conn.execute(
