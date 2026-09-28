@@ -212,6 +212,12 @@ export interface DocumentIntelligenceRun {
   provider_version?: string;
   model?: string;
   capabilities?: string[];
+  model_artifacts?: Array<{
+    role?: string;
+    name?: string;
+    sha256?: string;
+  }>;
+  configuration?: Record<string, unknown>;
   text_sha256?: string;
   current_text_sha256?: string;
   stale?: boolean;
@@ -224,6 +230,8 @@ export interface DocumentIntelligenceRun {
   }>;
   entities?: Array<Record<string, unknown>>;
   quotations?: Array<Record<string, unknown>>;
+  characters?: Array<Record<string, unknown>>;
+  events?: Array<Record<string, unknown>>;
 }
 
 export interface SemanticContentGraphFeature {
@@ -321,8 +329,15 @@ export interface CorpusBuild {
     model?: string;
     capabilities?: string[];
     entity_clusters?: number;
+    characters?: number;
     entity_mentions?: number;
     quotations?: number;
+    events?: number;
+    model_artifacts?: Array<{
+      role?: string;
+      name?: string;
+      sha256?: string;
+    }>;
     warnings?: string[];
     text_sha256?: string;
   };
