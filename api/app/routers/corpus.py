@@ -433,6 +433,7 @@ def get_pdf_asset_blocks(
             limit=limit,
             ids=[value.strip() for value in ids.split(",") if value.strip()],
             around=around or None,
+            repository=pdf_corpus_repository,
         )
     except NotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
