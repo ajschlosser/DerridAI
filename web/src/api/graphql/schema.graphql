@@ -36,6 +36,11 @@ type CorpusBuildReview {
   build_id: String!
 
   """
+  Retained derived whole-document linguistic analysis. Advisory only: it is not source evidence and does not confer FieldAssertion authority.
+  """
+  document_intelligence: DocumentIntelligenceRun
+
+  """
   The paged, filtered review queue (REST: GET /api/pdf/corpus-builds/{id}/records).
   """
   review_queue(offset: Int! = 0, limit: Int! = 50, needs_review: Boolean = null, disposition: String = null, metadata_incomplete: Boolean = null, source_problem: Boolean = null, review_queue: String = null, query: String! = ""): CorpusReviewQueuePage!
@@ -112,6 +117,80 @@ type CorpusReviewQueuePage {
   offset: Int!
   limit: Int!
   queue_counts: CorpusQueueCounts!
+}
+
+"""One normalized entity/coreference cluster from Document Intelligence."""
+type DocumentEntityCluster {
+  cluster_id: String!
+  canonical: String!
+  aliases: [String!]!
+  entity_type: String
+}
+
+"""One normalized entity mention in conserved whole-document offsets."""
+type DocumentEntityMention {
+  cluster_id: String!
+  start_char: Int
+  end_char: Int
+  text: String!
+  mention_type: String
+  entity_type: String
+}
+
+"""One model artifact used by a Document Intelligence provider."""
+type DocumentIntelligenceArtifact {
+  role: String
+  name: String
+  sha256: String
+}
+
+"""
+One Record's offset range in the conserved whole-document analysis text.
+"""
+type DocumentIntelligenceRecordSpan {
+  record_id: String!
+  record_revision: Int
+  start: Int
+  end: Int
+  text_sha256: String
+  source_unit_ids: [String!]!
+}
+
+"""
+Retained, derived whole-document linguistic analysis. Advisory only: it is not evidence and does not make any FieldAssertion authoritative.
+"""
+type DocumentIntelligenceRun {
+  version: Int
+  status: String!
+  profile: String
+  selected_provider: String
+  provider: String
+  provider_version: String
+  model: String
+  capabilities: [String!]!
+  model_artifacts: [DocumentIntelligenceArtifact!]!
+  configuration: JSON!
+  text_sha256: String
+  current_text_sha256: String
+  text_length: Int
+  stale: Boolean!
+  reason: String
+  warnings: [String!]!
+  record_spans: [DocumentIntelligenceRecordSpan!]!
+  entity_clusters: [DocumentEntityCluster!]!
+  entities: [DocumentEntityMention!]!
+  quotations: [DocumentQuotation!]!
+  characters: JSON!
+  events: JSON!
+}
+
+"""One normalized quotation and its candidate speaker attribution."""
+type DocumentQuotation {
+  start_char: Int
+  end_char: Int
+  text: String!
+  speaker_cluster_id: String
+  speaker_text: String
 }
 
 """A revision-bound evidence locator."""
