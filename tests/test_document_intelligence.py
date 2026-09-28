@@ -122,3 +122,17 @@ def test_none_profile_is_explicitly_skipped():
     )
     assert analysis["status"] == "skipped"
     assert analysis["profile"] == "none"
+
+
+def test_document_intelligence_stays_out_of_canonical_publication_records():
+    record = {
+        "record_id": "r1",
+        "record_revision": 1,
+        "source_document_id": "doc",
+        "text": "Text.",
+        "nlp_candidates": {"status": "ok"},
+        "document_intelligence": {"status": "ok", "entities": [{"label": "X"}]},
+    }
+    public = serialize_public_record(record)
+    assert "document_intelligence" not in public
+    assert "nlp_candidates" not in public
