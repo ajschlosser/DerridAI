@@ -37,6 +37,9 @@ class WorkRelationship(StrEnum):
 
 
 class CaptureErrorCode(StrEnum):
+    AUDIO_PROVIDER_NOT_CONFIGURED = "audio_provider_not_configured"
+    AUDIO_PROVIDER_UNAVAILABLE = "audio_provider_unavailable"
+    AUDIO_TRANSCRIPTION_FAILED = "audio_transcription_failed"
     PROVIDER_UNAVAILABLE = "provider_unavailable"
     RATE_LIMITED = "rate_limited"
     AUTHOR_NOT_FOUND = "author_not_found"
@@ -48,6 +51,7 @@ class CaptureErrorCode(StrEnum):
     SOURCE_TOO_LARGE = "source_too_large"
     NETWORK_TIMEOUT = "network_timeout"
     IDENTITY_MISMATCH = "identity_mismatch"
+    INVALID_OPTIONS = "invalid_options"
     ACQUISITION_FAILED = "acquisition_failed"
     REGISTRATION_FAILED = "registration_failed"
     CANCELLED = "cancelled"
@@ -59,7 +63,7 @@ TRANSIENT_ERRORS = frozenset(
 )
 
 
-class CaptureError(Exception):
+class CaptureError(ValueError):
     """A classified, user-presentable failure. ``detail`` is diagnostic only."""
 
     def __init__(self, code: CaptureErrorCode, message: str, *, detail: str = "") -> None:
@@ -156,6 +160,11 @@ class AuthorCandidate:
     birth_year: int | None = None
     death_year: int | None = None
     wikisource_sitelinks: dict[str, str] = field(default_factory=dict)  # project language → author page title
+    # Only authoritative work-level evidence belongs here. Spoken languages and
+    # Wikisource project languages remain in ``languages`` and must not be used
+    # as an original-language default.
+    original_languages: list[str] = field(default_factory=list)
+    languages: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -172,8 +181,10 @@ class ResolvedAuthor:
     description: str = ""
     birth_year: int | None = None
     death_year: int | None = None
+    languages: list[str] = field(default_factory=list)
     external_ids: dict[str, str] = field(default_factory=dict)
     wikisource_sitelinks: dict[str, str] = field(default_factory=dict)
+    original_languages: list[str] = field(default_factory=list)
 
     def names(self) -> list[str]:
         return list(dict.fromkeys([self.canonical_name, *self.aliases]))
@@ -193,6 +204,7 @@ class CaptureOptions:
     # Roles included by default: works by the person (sole or co-author) and their editions/translations.
     roles: list[str] = field(default_factory=lambda: [ContributionRole.AUTHOR, ContributionRole.COAUTHOR])
     include_translations: bool = True
+    include_originals: bool = True
     languages: list[str] | None = None  # None = all available languages
     max_candidates_per_provider: int = 2000
 
@@ -203,6 +215,27 @@ class CaptureOptions:
     def from_dict(cls, data: dict[str, Any]) -> CaptureOptions:
         allowed = set(cls.__dataclass_fields__)
         return cls(**{key: value for key, value in data.items() if key in allowed})
+
+    def validate_for_author(self, author: ResolvedAuthor) -> None:
+        """Require an explicit single language when originals are not known.
+
+        ``ResolvedAuthor.languages`` contains discovery signals (spoken and
+        project languages), not an authoritative language of the author's
+        works.  Only an explicitly supplied language or exactly one
+        authoritative original-language signal may satisfy this constraint.
+        """
+        if self.include_translations:
+            return
+        known = list(dict.fromkeys(author.original_languages))
+        requested = list(dict.fromkeys(self.languages or []))
+        if not requested and len(known) == 1:
+            self.languages = known
+            return
+        if len(requested) != 1:
+            raise CaptureError(
+                CaptureErrorCode.INVALID_OPTIONS,
+                "Choose exactly one original language when translations are excluded.",
+            )
 
 
 @dataclass

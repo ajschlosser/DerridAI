@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import dataclasses
 import sys
-import threading
 import types
 from pathlib import Path
 
@@ -388,32 +387,27 @@ def test_reconnect_never_replays_corpus_record_notes():
 
 
 def test_droppable_ephemeral_events_are_evicted_before_non_droppable_ones():
-    # OutgoingQueue floors max_events at 4 (a defensive minimum against a misconfigured
-    # settings.realtime_max_queue_events), so the queue below is a 4-slot one, not a 3-slot one.
-    queue = OutgoingQueue(max_events=4)
+    queue = OutgoingQueue(max_events=3)
     queue.put(_event(1, "llm.token", "j1"))  # ephemeral -> droppable
     queue.put(_event(2, "job.warning", "j1"))  # not droppable
     queue.put(_event(3, "job.completed", "j1"))  # not droppable
-    queue.put(_event(4, "job.failed", "j1"))  # not droppable; queue is now full
-    queue.put(_event(5, "corpus.record_started", "c1"))  # ephemeral -> droppable; queue is full
+    queue.put(_event(4, "corpus.record_started", "c1"))  # ephemeral -> droppable; queue is full
 
     events, overflowed = queue.drain()
 
     assert not overflowed
-    assert [event.event_id for event in events] == [2, 3, 4, 5]  # event 1 (llm.token) was dropped first
+    assert [event.event_id for event in events] == [2, 3, 4]  # event 1 (llm.token) was dropped first
 
 
 def test_a_queue_of_only_non_droppable_events_overflows_instead_of_dropping_them():
-    queue = OutgoingQueue(max_events=4)  # floored at 4; see note above
+    queue = OutgoingQueue(max_events=2)
     queue.put(_event(1, "job.warning", "j1"))
     queue.put(_event(2, "job.completed", "j1"))
-    queue.put(_event(3, "job.failed", "j1"))
-    queue.put(_event(4, "job.warning", "j1"))
-    queue.put(_event(5, "job.completed", "j1"))  # nothing droppable to evict
+    queue.put(_event(3, "job.failed", "j1"))  # nothing droppable to evict
 
     events, overflowed = queue.drain()
     assert overflowed
-    assert [event.event_id for event in events] == [5]
+    assert [event.event_id for event in events] == [3]
 
 
 # -- realtime/subscriptions.py: activity:gutenberg gating ---------------------------------------
@@ -447,34 +441,21 @@ class _StubStore:
 
 
 class _ImmediateThread:
-    """Runs the RAG worker's target synchronously; everything else the manager starts a
-    thread for (notably the persistence-checkpoint loop from PersistentJobStateMixin, an
-    unconditional `while True` loop) still needs a real background thread, or the
-    checkpoint loop runs inline on the calling thread and never returns."""
-
-    _real_thread_class = threading.Thread
+    """Runs its target synchronously instead of on a background thread."""
 
     def __init__(self, target, args=(), kwargs=None, daemon=None, name=None):
         self._target = target
         self._args = args
         self._kwargs = kwargs or {}
-        self._real = (
-            None
-            if getattr(target, "__name__", "") == "_run"
-            else self._real_thread_class(target=target, args=args, kwargs=kwargs or {}, daemon=daemon, name=name)
-        )
 
     def start(self) -> None:
-        if self._real is not None:
-            self._real.start()
-        else:
-            self._target(*self._args, **self._kwargs)
+        self._target(*self._args, **self._kwargs)
 
     def join(self, timeout=None) -> None:
-        return self._real.join(timeout) if self._real is not None else None
+        return None
 
     def is_alive(self) -> bool:
-        return self._real.is_alive() if self._real is not None else False
+        return False
 
 
 def test_rag_job_generation_deltas_are_noted_with_the_jobs_owner(monkeypatch):

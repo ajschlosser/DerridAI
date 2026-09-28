@@ -1,5 +1,5 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
-import { computed, ref, type Ref } from "vue";
+import { computed, ref, watch, type Ref } from "vue";
 import {
   corpusBuilderApi,
   type CorpusBuild,
@@ -92,6 +92,11 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
   const metadataRerunFamily = ref("all");
   const metadataHumanValues = ref<Record<string, Set<string>>>({});
   const metadataObservedValues = ref<Record<string, string[]>>({});
+
+  watch(options.selectedRecordId, () => {
+    metadataSavingField.value = "";
+    metadataSavedField.value = "";
+  });
 
   const metadataKnownValues = computed<Record<string, string[]>>(() => {
     const out: Record<string, Set<string>> = {};
@@ -330,10 +335,10 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
       metadataSavingField.value = "";
       return;
     }
-    // Optimistic: the value is already shown as decided, so release the field now and only report a failure.
-    metadataSavingField.value = "";
-    metadataSavedField.value = field;
     await options.restoreReviewViewport(viewport, { inspector: true });
+    // Restore can synchronously reselect the record and clear transient review state.
+    // Set the pending marker immediately before enqueueing so the optimistic value remains visible.
+    metadataSavingField.value = field;
     options.queueRecordRequest(
       context.recordId,
       [field],
@@ -349,11 +354,18 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
           humanSource,
         );
         options.applyAuthoritativeRecord(result.record, result.build);
+        if (options.selectedRecordId.value === context.recordId) {
+          metadataSavingField.value = "";
+          metadataSavedField.value = field;
+        }
         return result;
       },
       async () => {
         // Roll the optimistic value back to what the server holds.
-        if (options.selectedRecordId.value === context.recordId) metadataSavedField.value = "";
+        if (options.selectedRecordId.value === context.recordId) {
+          metadataSavingField.value = "";
+          metadataSavedField.value = "";
+        }
         await options.refreshRecords(false, context.recordId);
       },
     );
@@ -378,7 +390,6 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
       metadataSavingField.value = "";
       return;
     }
-    metadataSavingField.value = "";
     await options.restoreReviewViewport(viewport, { inspector: true });
     options.queueRecordRequest(
       context.recordId,
@@ -391,12 +402,17 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
           rebase ? undefined : context.expectedRevision,
         );
         options.applyAuthoritativeRecord(result.record, result.build);
+        if (options.selectedRecordId.value === context.recordId) {
+          metadataSavingField.value = "";
+          metadataSavedField.value = "__batch__";
+        }
         const summary = describeDecisionResult(result, options.tf);
         options.setMessage(summary.message, summary.tone);
         return result;
       },
       async () => {
         metadataSavingField.value = "";
+        metadataSavedField.value = "";
         await options.refreshRecords(false, context.recordId);
       },
     );
@@ -412,9 +428,6 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
       metadataSavingField.value = "";
       return;
     }
-    // Optimistic: the value is already shown as decided, so release the field now and only report a failure.
-    metadataSavingField.value = "";
-    metadataSavedField.value = field;
     await options.restoreReviewViewport(viewport, { inspector: true });
     options.queueRecordRequest(
       context.recordId,
@@ -429,11 +442,18 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
           true,
         );
         options.applyAuthoritativeRecord(result.record, result.build);
+        if (options.selectedRecordId.value === context.recordId) {
+          metadataSavingField.value = "";
+          metadataSavedField.value = field;
+        }
         return result;
       },
       async () => {
         // Roll the optimistic value back to what the server holds.
-        if (options.selectedRecordId.value === context.recordId) metadataSavedField.value = "";
+        if (options.selectedRecordId.value === context.recordId) {
+          metadataSavingField.value = "";
+          metadataSavedField.value = "";
+        }
         await options.refreshRecords(false, context.recordId);
       },
     );

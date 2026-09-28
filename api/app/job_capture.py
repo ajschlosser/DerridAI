@@ -104,6 +104,14 @@ class CaptureJobManager(PersistentJobStateMixin):
                 result = self.service.acquire(capture_id, retry_failed_only=kind == "retry", cancelled=cancelled, progress=progress)
             if result.get("status") == "cancelled":
                 status = "cancelled"
+            with self._lock:
+                job = self._jobs[job_id]
+                job["result"] = {
+                    "capture_id": capture_id,
+                    "status": result.get("status"),
+                    "summary": copy.deepcopy(result.get("summary") or {}),
+                    "progress": copy.deepcopy(result.get("progress") or {}),
+                }
         except CaptureError as exc:
             status, error = "failed", exc.message
             self.service.store.update_capture(capture_id, status="failed", phase="failed", errors=[exc.to_dict()])

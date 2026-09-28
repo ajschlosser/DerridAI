@@ -50,6 +50,39 @@ def run_pdf_llm(
         f"PDF page: {body.pdf_page or ''}\n"
     )
 
+    if body.mode == "detect_language":
+        if not body.raw_text.strip():
+            raise ValueError("No extractable source text is available for language detection.")
+        prompt = f"""Identify the primary language of this source excerpt.
+
+{source}
+
+SOURCE EXCERPT:
+{body.raw_text[:12000]}
+
+Return exactly one JSON object with:
+{{"language":"ISO 639-1 or 639-3 code, optionally with a region","confidence":0.0,"reason":"brief source-grounded reason"}}
+
+Use only a language code. If the excerpt is too short or mixed to identify reliably,
+return an empty language and confidence 0. Do not translate or summarize the source."""
+        raw = chat_complete(
+            provider=body.provider, model=model, base_url=body.base_url,
+            api_key=body.api_key, prompt=prompt, options=body.generation,
+            json_mode=True, max_tokens=256, cancelled=cancelled,
+        )
+        result = _extract_json(raw)
+        language = str(result.get("language") or "").strip().replace("_", "-").lower()
+        if language and not re.fullmatch(r"[a-z]{2,3}(?:-[a-z0-9]{2,8})?", language):
+            raise ValueError("The language detector returned an invalid language code.")
+        confidence = max(0.0, min(1.0, float(result.get("confidence") or 0)))
+        return {
+            "mode": body.mode,
+            "language": language or None,
+            "confidence": confidence,
+            "reason": str(result.get("reason") or "").strip()[:500],
+            "model": model,
+        }
+
     if body.mode == "clean_text":
         if not body.raw_text.strip():
             raise ValueError("No extractable PDF text is available to clean.")

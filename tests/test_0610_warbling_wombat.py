@@ -137,6 +137,18 @@ def test_whisper_spans_use_whisperx_speakers_after_full_transcript():
     assert "speaker" not in meta
 
 
+def test_initial_metadata_uses_deterministic_language_detection_when_missing():
+    text = "the cat and the dog went to the market with a friend of the family " * 5
+    meta = sm.infer_initial_metadata(text, blocks=[])
+    assert meta["language"] == "en"
+    assert meta["field_provenance"]["language"] == {
+        "method": "nlp:stopword_frequency",
+        "confidence": 0.68,
+        "derivation": "nlp_derived",
+        "reason": "Deterministic language signal from bounded function-word frequency.",
+    }
+
+
 def test_high_confidence_ingest_metadata_overrides_blank_manifest_fields():
     result = sm.apply_deterministic_ingest_metadata(
         {"title": None, "document_author": "Catalog Guess"},

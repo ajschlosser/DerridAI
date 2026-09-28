@@ -136,6 +136,16 @@ def test_cancel_mid_acquire_keeps_completed_sources(tmp_path):
     assert [row["provider_item_id"] for row in service.acquisition_queue(capture_id)] == ["2", "3"]
 
 
+def test_terminal_acquisition_progress_matches_queue_and_summary(tmp_path):
+    items = [candidate("1", "A"), candidate("2", "B")]
+    store, service, capture_id = _discovered(tmp_path, FakeProvider("gutenberg", items))
+    progress = []
+    capture = service.acquire(capture_id, progress=lambda phase, detail: progress.append((phase, detail)))
+    assert capture["status"] == "complete"
+    assert capture["progress"] == {"done": 2, "total": 2}
+    assert progress[-1] == ("complete", {"done": 2, "total": 2})
+
+
 def test_refresh_reports_new_changed_and_missing_without_redownloading(tmp_path):
     gutenberg = FakeProvider("gutenberg", [candidate("1", "Kept"), candidate("2", "Renamed"), candidate("3", "Withdrawn")])
     store, service, capture_id = _discovered(tmp_path, gutenberg)

@@ -22,6 +22,8 @@ const dirty = ref(new Set<number>());
 const visible = computed(() => props.pages.slice(offset.value, offset.value + pageSize));
 const pageNumber = computed(() => Math.floor(offset.value / pageSize) + 1);
 const pageCount = computed(() => Math.max(1, Math.ceil(props.pages.length / pageSize)));
+const rangeStart = computed(() => (props.pages.length ? offset.value + 1 : 0));
+const rangeEnd = computed(() => Math.min(offset.value + pageSize, props.pages.length));
 watch(
   () => props.pages,
   () => {
@@ -54,10 +56,13 @@ function next() {
 
 <template>
   <section class="page-label-editor" :aria-label="i18n.t('pdf_corpus.page_mapping')">
-    <header>
+    <header class="editor-head">
       <div>
         <b>{{ i18n.t("pdf_corpus.page_mapping") }}</b>
         <p>{{ i18n.t("pdf_corpus.page_mapping_help") }}</p>
+        <span class="range" aria-live="polite"
+          >{{ rangeStart }}–{{ rangeEnd }} / {{ props.pages.length }}</span
+        >
       </div>
       <button
         type="button"
@@ -68,13 +73,25 @@ function next() {
         {{ i18n.tf("pdf_corpus.save_page_overrides", { count: dirty.size }) }}
       </button>
     </header>
-    <div class="page-table" role="table" :aria-label="i18n.t('pdf_corpus.page_mapping')">
+    <div
+      class="page-table"
+      role="table"
+      :aria-label="i18n.t('pdf_corpus.page_mapping')"
+      :aria-rowcount="props.pages.length + 1"
+    >
       <div class="page-row page-head" role="row">
         <span role="columnheader">{{ i18n.t("pdf_corpus.physical_pdf_page") }}</span
         ><span role="columnheader">{{ i18n.t("pdf_corpus.printed_label") }}</span
         ><span role="columnheader">{{ i18n.t("pdf_corpus.label_source") }}</span>
       </div>
-      <div v-for="page in visible" :key="page.pdf_page" class="page-row" role="row">
+      <div
+        v-for="page in visible"
+        :key="page.pdf_page"
+        class="page-row"
+        :class="{ dirty: dirty.has(page.pdf_page) }"
+        role="row"
+        :aria-selected="dirty.has(page.pdf_page) ? 'true' : undefined"
+      >
         <span role="cell">{{ page.pdf_page }}</span>
         <span role="cell">
           <label :for="`pdf-label-${page.pdf_page}`" class="sr-only">{{
@@ -83,8 +100,12 @@ function next() {
           <input
             :id="`pdf-label-${page.pdf_page}`"
             class="control compact"
+            type="text"
+            autocomplete="off"
+            maxlength="32"
             :value="draft[page.pdf_page] || ''"
             :disabled="disabled"
+            :aria-label="i18n.tf('pdf_corpus.printed_page_value', { page: page.pdf_page })"
             @input="update(page.pdf_page, ($event.target as HTMLInputElement).value)"
           />
         </span>
@@ -117,6 +138,15 @@ function next() {
   gap: 9px;
   padding: 10px 0;
 }
+.editor-head {
+  align-items: center;
+}
+.range {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
 .page-label-editor > header {
   display: flex;
   align-items: flex-start;
@@ -136,14 +166,15 @@ function next() {
 .page-table {
   border: 1px solid var(--line);
   border-radius: 9px;
-  overflow: hidden;
+  max-height: min(46vh, 430px);
+  overflow: auto;
 }
 .page-row {
   display: grid;
   grid-template-columns: 140px minmax(120px, 1fr) minmax(120px, 1fr);
   gap: 10px;
   align-items: center;
-  padding: 6px 9px;
+  padding: 5px 8px;
   border-bottom: 1px solid var(--line);
   font-size: 0.8125rem;
 }
@@ -151,8 +182,17 @@ function next() {
   border-bottom: 0;
 }
 .page-head {
+  position: sticky;
+  z-index: 1;
+  top: 0;
   background: var(--soft);
   font-weight: 800;
+}
+.page-row:not(.page-head):has(input:focus-within) {
+  background: color-mix(in srgb, var(--accent) 8%, var(--card));
+}
+.page-row.dirty input {
+  border-color: var(--accent);
 }
 .compact {
   min-height: 30px;

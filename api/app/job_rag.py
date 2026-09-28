@@ -768,14 +768,18 @@ class RAGJobManager(PersistentJobStateMixin):
                     job["status"] = "failed"
                     job["failed"] = 1
                     details = store_job_error(job, exc)
-                    job["stage_detail"] = details["message"]
+                    stage = str(job.get("stage") or "unknown")
+                    job["stage_detail"] = (
+                        f"{details['message']} (failed during {stage}; "
+                        f"last update {job.get('stage_detail') or 'none'})"
+                    )
                     job["finished_at"] = iso_now()
                     job["events"].append({
                         "timestamp": job["finished_at"],
                         "stage": "failed",
                         "current": job["completed"],
                         "total": job["total"],
-                        "detail": str(exc),
+                        "detail": job["stage_detail"],
                     })
         finally:
             if ollama_slot:

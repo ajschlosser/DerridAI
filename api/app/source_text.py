@@ -430,7 +430,22 @@ def infer_initial_metadata(
         values["gutenberg_id"] = int(catalog["gutenberg_id"])
 
     # Front-matter pre-fill: exact patterns ("computed") and a statistical tagger ("nlp_derived").
-    from .document_prefill import extract
+    from .document_prefill import extract, guess_language
+
+    # Use the bounded deterministic detector only when stronger source/catalogue
+    # metadata did not provide a language.  This remains an assertion for review,
+    # not a claim that the text's language has been authoritatively established.
+    if not values.get("language"):
+        detected_language = guess_language(text)
+        if detected_language:
+            put(
+                "language",
+                detected_language,
+                "nlp:stopword_frequency",
+                0.68,
+                derivation="nlp_derived",
+                reason="Deterministic language signal from bounded function-word frequency.",
+            )
 
     for candidate in sorted(extract(text, language=str(values.get("language") or "")), key=lambda c: -c.confidence):
         put(
@@ -438,6 +453,20 @@ def infer_initial_metadata(
             derivation=candidate.derivation, reason=candidate.reason, span=candidate.span,
         )
 
+    if values.get("language"):
+        values.setdefault("language_status", "deterministic")
+    else:
+        values["language_status"] = "unresolved"
+        provenance.setdefault(
+            "language",
+            {
+                "method": "deterministic_ingest",
+                "confidence": 0.0,
+                "derivation": "deterministic",
+                "status": "unresolved",
+                "reason": "No bounded language signal was strong enough to propose a language.",
+            },
+        )
     if "speakers" not in values and speakers:
         values["speakers"] = speakers
     values["field_provenance"] = provenance
@@ -713,4 +742,3 @@ def png_text_metadata(data: bytes) -> dict[str, str]:
     if found.get("author"):
         mapped["author"] = found["author"]
     return mapped
-

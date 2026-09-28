@@ -3,13 +3,19 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import type { GutenbergHit, PdfAsset, WikisourceHit, GutenbergStatus } from "../api/corpus";
+import type { SourceLanguagePrompt } from "../features/corpus-builder/composables/useCorpusSourceConfiguration";
 
 import { hasPages } from "../domain/sourceMedia";
+import { languageName, sortLanguageCodes } from "../domain/languages";
 import AppIcon from "./AppIcon.vue";
 import CorpusLibrarySearch from "./corpus-builder/CorpusLibrarySearch.vue";
+import CorpusImportShell from "./corpus-builder/CorpusImportShell.vue";
 import CorpusCaptureDialog from "./capture/CorpusCaptureDialog.vue";
 import SourceTable from "./sources/SourceTable.vue";
 import SourceInspector from "./sources/SourceInspector.vue";
+import UiButton from "./ui/UiButton.vue";
+import UiCombobox from "./ui/UiCombobox.vue";
+import UiDialog from "./ui/UiDialog.vue";
 import type { CorpusCapture } from "../api/corpus";
 const formats: Record<string, string> = {
   pdf: ".pdf",
@@ -43,6 +49,7 @@ const props = withDefaults(
     busy?: string;
     /** Source ids handed over from the Sources page or a capture (`/pdf?sources=…`). */
     queuedSourceIds?: string[];
+    languagePrompt?: SourceLanguagePrompt | null;
   }>(),
   {
     assets: () => [],
@@ -65,6 +72,7 @@ const props = withDefaults(
     sourceSelectionDisabled: false,
     busy: "",
     queuedSourceIds: () => [],
+    languagePrompt: null,
   },
 );
 
@@ -93,13 +101,30 @@ const emit = defineEmits<{
   /** A capture registered new sources; the asset list should be reloaded. */
   sourcesChanged: [];
   viewCaptureSources: [captureId: string];
+  "save-language": [language: string | null];
 }>();
 
 const i18n = useI18nStore();
 const uploadInput = ref<HTMLInputElement | null>(null);
 const searchOpen = ref(false);
+const importShellOpen = ref(false);
+const importShellMode = ref<"library" | "author">("library");
 /** The source whose inline "delete?" confirmation is showing. */
 const confirmingDelete = ref("");
+const languageDraft = ref("");
+const languageOptions = computed(() =>
+  sortLanguageCodes(
+    ["en", "fr", "de", "es", "it", "pt", "nl", "la", "grc", "ar", "he", "ru", "ja", "zh"],
+    i18n.locale,
+  ),
+);
+watch(
+  () => props.languagePrompt,
+  (prompt) => {
+    languageDraft.value = prompt?.suggestion || "";
+  },
+  { immediate: true },
+);
 function confirmDelete(assetId: string) {
   confirmingDelete.value = "";
   emit("deleteAsset", assetId);
@@ -166,7 +191,21 @@ function onFile(event: Event) {
 }
 
 function openSearch() {
-  searchOpen.value = true;
+  importShellMode.value = "library";
+  importShellOpen.value = true;
+}
+function openAuthorCapture() {
+  importShellMode.value = "author";
+  importShellOpen.value = true;
+}
+function selectImportMode(mode: "library" | "author") {
+  importShellOpen.value = false;
+  // Close the chooser before mounting the selected dialog so focus restoration
+  // cannot race the next modal's focus setup.
+  void nextTick(() => {
+    if (mode === "library") searchOpen.value = true;
+    else captureOpen.value = true;
+  });
 }
 
 // --- Drop zone -------------------------------------------------------------
@@ -409,7 +448,7 @@ onBeforeUnmount(() => {
             type="button"
             class="path-card path-capture"
             :disabled="disabled"
-            @click="captureOpen = true"
+            @click="openAuthorCapture"
           >
             <span class="path-icon" aria-hidden="true"><AppIcon name="users" /></span>
             <span class="path-copy">
@@ -625,6 +664,14 @@ onBeforeUnmount(() => {
       @view-sources="emit('viewCaptureSources', $event)"
     />
 
+    <CorpusImportShell
+      :open="importShellOpen"
+      :default-mode="importShellMode"
+      :disabled="disabled"
+      @close="importShellOpen = false"
+      @choose="selectImportMode"
+    />
+
     <CorpusLibrarySearch
       v-if="searchOpen"
       :query="gutenbergQuery"
@@ -650,12 +697,87 @@ onBeforeUnmount(() => {
       @update-gutenberg-archive="emit('updateGutenbergArchive', $event)"
       @close="searchOpen = false"
     />
+    <UiDialog
+      v-if="languagePrompt"
+      :open="true"
+      :title="i18n.t('pdf_corpus.language_prompt_title')"
+      :description="
+        i18n.tf('pdf_corpus.language_prompt_help', { filename: languagePrompt.filename })
+      "
+      :dismissible="false"
+      size="medium"
+    >
+      <div class="language-prompt">
+        <p v-if="languagePrompt.loading" class="language-prompt-status" role="status">
+          {{ i18n.t("pdf_corpus.language_prompt_checking") }}
+        </p>
+        <p v-else-if="languagePrompt.error" class="language-prompt-status" role="alert">
+          {{ languagePrompt.error }}
+        </p>
+        <label class="language-prompt-field">
+          <span>{{ i18n.t("pdf_corpus.language_prompt_label") }}</span>
+          <UiCombobox
+            v-model="languageDraft"
+            :options="languageOptions"
+            :recommended="languagePrompt.suggestion ? [languagePrompt.suggestion] : []"
+            :recommended-label="i18n.t('pdf_corpus.language_prompt_suggested')"
+            :label="i18n.t('pdf_corpus.language_prompt_label')"
+            :placeholder="i18n.t('pdf_corpus.language_prompt_placeholder')"
+            :disabled="languagePrompt.loading"
+            allow-custom
+          />
+        </label>
+        <p v-if="languagePrompt.suggestion" class="language-prompt-suggestion">
+          {{
+            i18n.tf("pdf_corpus.language_prompt_proposal", {
+              language: languageName(languagePrompt.suggestion, i18n.locale),
+              confidence:
+                languagePrompt.confidence == null
+                  ? "—"
+                  : `${Math.round(languagePrompt.confidence * 100)}%`,
+            })
+          }}
+        </p>
+      </div>
+      <template #footer>
+        <UiButton
+          variant="ghost"
+          :label="i18n.t('pdf_corpus.language_prompt_skip')"
+          :disabled="languagePrompt.loading"
+          @click="emit('save-language', null)"
+        />
+        <UiButton
+          variant="primary"
+          :label="i18n.t('pdf_corpus.language_prompt_save')"
+          :disabled="languagePrompt.loading || !languageDraft.trim()"
+          @click="emit('save-language', languageDraft.trim().toLowerCase().replaceAll('_', '-'))"
+        />
+      </template>
+    </UiDialog>
   </div>
 </template>
 <style scoped>
 .source-ingest {
   display: grid;
   gap: var(--space-5, 20px);
+}
+
+.language-prompt {
+  display: grid;
+  gap: var(--space-4, 16px);
+}
+
+.language-prompt-field {
+  display: grid;
+  gap: var(--space-2, 8px);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.language-prompt-status,
+.language-prompt-suggestion {
+  margin: 0;
+  color: var(--text-secondary);
 }
 
 /* Two-stage layout: add a source, then see what you are working with. */

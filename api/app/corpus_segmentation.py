@@ -620,7 +620,7 @@ def _construct_records(asset: dict[str, Any], blocks: list[dict[str, Any]], boun
         uniform_speaker = speakers[0] if speakers and len(set(speakers)) == 1 and (not audio or len(speakers) == len(group)) else None
         source_spans = []
         for block in group:
-            span = {"source_document_id": asset["asset_id"], "source_unit_id": block["block_id"], "block_id": block["block_id"], "page": block["page"], "printed_page_label": block.get("printed_page_label"), "bbox": block.get("bbox"), "extraction_method": block.get("extraction_method"), "confidence": block.get("confidence")}
+            span = {"source_document_id": asset["asset_id"], "source_unit_id": block["block_id"], "block_id": block["block_id"], "page": block.get("page"), "printed_page_label": block.get("printed_page_label"), "bbox": block.get("bbox"), "extraction_method": block.get("extraction_method"), "confidence": block.get("confidence")}
             if block.get("speaker"):
                 span["speaker"] = block.get("speaker")
             if block.get("start") is not None:

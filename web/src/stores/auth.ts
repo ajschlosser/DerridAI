@@ -1,6 +1,7 @@
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
 import { authApi, type AuthUser } from "../api/auth";
+import { clearGraphQLReadCache } from "../api/graphql/client";
 import { localizedAuthError } from "../domain/authErrors";
 import { useI18nStore } from "./i18n";
 
@@ -51,6 +52,7 @@ export const useAuthStore = defineStore("auth", () => {
   }
 
   function expireSession(message = "") {
+    clearGraphQLReadCache();
     user.value = null;
     initialized.value = true;
     if (message) error.value = message;

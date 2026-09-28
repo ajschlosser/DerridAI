@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { effectScope, nextTick, ref } from "vue";
 import {
+  clearGraphQLReadCache,
   GraphQLRequestError,
   execute,
   isAbortError,
@@ -24,7 +25,10 @@ function lastBody(fetchMock: ReturnType<typeof vi.fn>) {
 }
 
 describe("graphql client", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    clearGraphQLReadCache();
+    vi.unstubAllGlobals();
+  });
 
   it("posts a generated document with its operation name and returns typed data", async () => {
     const fetchMock = respond({ data: { celf_model: { specification_version: "1.0" } } });
@@ -85,7 +89,10 @@ describe("graphql client", () => {
 });
 
 describe("useQuery", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    clearGraphQLReadCache();
+    vi.unstubAllGlobals();
+  });
 
   const page = (rows: string[]) => ({
     corpus_build: {
@@ -155,5 +162,52 @@ describe("useQuery", () => {
     await vi.waitFor(() => expect(query.error.value).toBeInstanceOf(GraphQLRequestError));
     expect(query.data.value).toBeNull();
     scope.stop();
+  });
+
+  it("deduplicates in-flight reads and isolates cached results from callers", async () => {
+    const fetchMock = respond({ data: { celf_model: { specification_version: "1.0" } } });
+    vi.stubGlobal("fetch", fetchMock);
+    const [first] = await Promise.all([
+      execute(CelfModelDocument, {}),
+      execute(CelfModelDocument, {}),
+    ]);
+    first.celf_model.specification_version = "mutated";
+    const cached = await execute(CelfModelDocument, {});
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(cached.celf_model.specification_version).toBe("1.0");
+  });
+
+  it("does not reuse an invalidated in-flight read", async () => {
+    const resolvers: Array<(value: Response) => void> = [];
+    const fetchMock = vi.fn(
+      () =>
+        new Promise<Response>((done) => {
+          resolvers.push(done);
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const first = execute(CelfModelDocument, {});
+    clearGraphQLReadCache();
+    const second = execute(CelfModelDocument, {});
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    resolvers[0](
+      new Response(JSON.stringify({ data: { celf_model: { specification_version: "stale" } } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    resolvers[1](
+      new Response(JSON.stringify({ data: { celf_model: { specification_version: "fresh" } } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    await expect(first).resolves.toMatchObject({
+      celf_model: { specification_version: "stale" },
+    });
+    await expect(second).resolves.toMatchObject({
+      celf_model: { specification_version: "fresh" },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

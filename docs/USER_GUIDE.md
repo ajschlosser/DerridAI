@@ -515,12 +515,16 @@ when the source was added. The table is server-paginated and server-sorted, with
 filters for provider, language, capture, build state, relationship, and role.
 Inspecting a row shows provenance without loading the source text into the table.
 
-**Capture an author** is available from Sources and Corpus Builder. It resolves a
+**Import an author** is available from Sources and Corpus Builder. It resolves a
 person through Wikidata, then lets the researcher choose Project Gutenberg and/or
-Wikisource, contribution roles, translations, and language scope. Discovery
-records provider coverage and groups candidate editions by canonical work and
-language for review, but each edition remains its own selectable candidate.
-Nothing is downloaded merely because discovery found it.
+Wikisource, contribution roles, original works or translations, and language
+scope. Available languages discovered from the author are offered as
+autocomplete suggestions, but a researcher may enter another language. When
+translations are disabled, language scope is locked to the detected original
+language; if no original language is available, one language must be entered.
+Discovery records provider coverage and groups candidate editions by canonical
+work and language for review, but each edition remains its own selectable
+candidate. Nothing is downloaded merely because discovery found it.
 
 After review, **Capture selected** acquires only the selected candidates and
 registers successful acquisitions as sources. Acquisition does not start a corpus
@@ -533,6 +537,24 @@ registered sources remain distinct from capture/job bookkeeping.
 When **let a model help find page numbers** is on, an import uses the selected
 provider profile the same way a build does; a profile the server cannot resolve
 fails the import with that reason rather than being ignored.
+
+On source load, Corpus Builder first attempts a bounded deterministic language
+signal from the extracted text when embedded or catalogue language metadata is
+absent. The resulting value remains a reviewable assertion. If no reliable
+language is available, the configured language model may propose one from a
+bounded excerpt. The researcher must explicitly save that language or skip the
+field; skipping is retained as a confirmed absence rather than silently
+re-running the prompt.
+
+The same source-load checkpoint exposes deterministic front-matter and NLP
+metadata candidates (title, author, publisher, edition, ISBN, translator, and
+publication location/year) before record enrichment. Candidates retain their
+method, confidence, and source span. Researchers can submit explicit
+source-level metadata decisions or mark unresolved fields absent; those choices
+are stored as human provenance and are not overwritten by later enrichment.
+Reviewed metadata exemplars remain advisory guidance, never replacement source
+evidence. Audio sources use time and speaker locators only and do not acquire
+synthetic PDF page semantics.
 
 ### Corpus Builder review saves
 

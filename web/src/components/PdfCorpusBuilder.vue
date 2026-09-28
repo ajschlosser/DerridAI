@@ -90,6 +90,7 @@ import CorpusRecordSizeAdvice from "./CorpusRecordSizeAdvice.vue";
 import CorpusUnitPolicy from "./CorpusUnitPolicy.vue";
 import CorpusReviewSourcePanel from "./corpus-builder/CorpusReviewSourcePanel.vue";
 import RecordContextReader from "./corpus-builder/RecordContextReader.vue";
+import MovableRecordModal from "./corpus-builder/MovableRecordModal.vue";
 import CorpusEnrichmentConfiguration from "./corpus-builder/CorpusEnrichmentConfiguration.vue";
 import CorpusMetadataConfiguration from "./corpus-builder/CorpusMetadataConfiguration.vue";
 import CorpusAdvancedConfiguration from "./corpus-builder/CorpusAdvancedConfiguration.vue";
@@ -149,6 +150,7 @@ const recordOffset = ref(0);
 const pageSize = 50;
 const selectedRecordId = ref("");
 const selectedRecord = ref<CorpusRecord | null>(null);
+const recordPopout = ref<{ recordId: string; text: string } | null>(null);
 const justProcessedRecordId = ref("");
 const sourceBlocks = ref<SourceBlock[]>([]);
 const selectedEvidenceField = ref("");
@@ -318,6 +320,8 @@ const {
   importLibraryUrl,
   gutenbergStatus,
   lastIngestedAsset,
+  languagePrompt,
+  saveSourceLanguage,
   refreshAssets,
   upload,
   applyUnitPolicy,
@@ -1505,6 +1509,13 @@ async function refreshAll() {
 }
 // Reading the record in context is a per-browser preference.
 const showRecordContext = ref(true);
+function openRecordPopout() {
+  if (!selectedRecord.value) return;
+  recordPopout.value = {
+    recordId: selectedRecord.value.record_id,
+    text: selectedRecord.value.text,
+  };
+}
 try {
   showRecordContext.value = localStorage.getItem("derridai-review-context") !== "off";
 } catch {
@@ -2123,6 +2134,7 @@ defineExpose({
           :library-imported="libraryImported"
           :gutenberg-status="gutenbergStatus"
           :selected-asset="selectedAsset"
+          :language-prompt="languagePrompt"
           :disabled="busy === 'upload'"
           :source-selection-disabled="buildRunning"
           :busy="busy"
@@ -2138,6 +2150,7 @@ defineExpose({
           @import-wikisource="importLibraryUrl"
           @delete-asset="deleteAsset"
           @continue="configurationSection = 'structure'"
+          @save-language="saveSourceLanguage"
           :queued-source-ids="queuedSourceIds"
           @queue-sources="queueSources"
           @sources-changed="refreshAssets"
@@ -2917,6 +2930,14 @@ defineExpose({
                           {{ i18n.t("pdf_corpus.context_show") }}
                         </label>
                         <button
+                          v-if="!editingText"
+                          type="button"
+                          class="btn small"
+                          @click="openRecordPopout"
+                        >
+                          {{ i18n.t("pdf_corpus.reviewed_record_text") }}
+                        </button>
+                        <button
                           v-if="editingText"
                           type="button"
                           class="btn small"
@@ -3007,6 +3028,12 @@ defineExpose({
                       >
                     </div>
                   </section>
+                  <MovableRecordModal
+                    v-if="recordPopout"
+                    :record-id="recordPopout.recordId"
+                    :text="recordPopout.text"
+                    @close="recordPopout = null"
+                  />
                 </template>
                 <div v-else class="inspector-empty">
                   {{ i18n.t("pdf_corpus.select_record") }}

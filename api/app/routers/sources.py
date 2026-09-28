@@ -27,9 +27,13 @@ _STATUS = {
     CaptureErrorCode.SOURCE_NOT_FOUND: 404,
     CaptureErrorCode.IDENTITY_MISMATCH: 422,
     CaptureErrorCode.AMBIGUOUS_AUTHOR: 422,
+    CaptureErrorCode.INVALID_OPTIONS: 422,
     CaptureErrorCode.UNSUPPORTED_SOURCE: 422,
     CaptureErrorCode.RATE_LIMITED: 429,
     CaptureErrorCode.NETWORK_TIMEOUT: 504,
+    CaptureErrorCode.AUDIO_PROVIDER_NOT_CONFIGURED: 400,
+    CaptureErrorCode.AUDIO_PROVIDER_UNAVAILABLE: 503,
+    CaptureErrorCode.AUDIO_TRANSCRIPTION_FAILED: 502,
 }
 
 
@@ -103,7 +107,9 @@ def create_capture(body: CaptureCreate, request: Request) -> dict[str, Any]:
     try:
         # The person is resolved server-side from the chosen QID; the browser never supplies identity data.
         author = resolve_author(ProviderHttp("wikimedia"), body.wikidata_qid, language=body.ui_language)
-        capture = capture_service.create(author, CaptureOptions.from_dict(body.options.model_dump()))
+        options = CaptureOptions.from_dict(body.options.model_dump())
+        options.validate_for_author(author)
+        capture = capture_service.create(author, options)
     except CaptureError as exc:
         raise _capture_error(exc) from exc
     if body.start_discovery:

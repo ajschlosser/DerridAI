@@ -260,11 +260,14 @@ export function createOperationDock(deps: Deps) {
     });
     handle.addEventListener("dblclick", (event: Any) => {
       if (event.target.closest("button")) return;
-      state.operationStackPosition = null;
-      persistPrefs();
-      applyOperationStackPosition(stack);
+      globalThis.dispatchEvent(new CustomEvent("derridai:operation-mode-toggle"));
     });
     handle.addEventListener("keydown", (event: Any) => {
+      if ((event.key === "Enter" || event.key === " ") && !event.target.closest("button")) {
+        event.preventDefault();
+        globalThis.dispatchEvent(new CustomEvent("derridai:operation-mode-toggle"));
+        return;
+      }
       if (event.key === "Escape") {
         if (!state.operationToastsMinimized) {
           event.preventDefault();
@@ -340,10 +343,36 @@ export function createOperationDock(deps: Deps) {
   }
   function updateOperationStackCount() {
     const stack = document.querySelector("#operationProgressStack");
-    if (!stack) return;
+    if (!stack) {
+      globalThis.dispatchEvent(
+        new CustomEvent("derridai:operation-summary", {
+          detail: {
+            visible: false,
+            title: "",
+            summary: "",
+            percent: null,
+            tone: "neutral",
+            expanded: false,
+          },
+        }),
+      );
+      return;
+    }
     const count = stack.querySelectorAll(".operation-progress").length;
     if (!shouldMountOperationDock(count)) {
       stack.remove();
+      globalThis.dispatchEvent(
+        new CustomEvent("derridai:operation-summary", {
+          detail: {
+            visible: false,
+            title: "",
+            summary: "",
+            percent: null,
+            tone: "neutral",
+            expanded: false,
+          },
+        }),
+      );
       return;
     }
     if (stack.dataset.fittedCount !== String(count)) {
@@ -381,6 +410,18 @@ export function createOperationDock(deps: Deps) {
         state.operationToastsMinimized ? tr("operations.expand") : tr("operations.collapse"),
       );
     }
+    globalThis.dispatchEvent(
+      new CustomEvent("derridai:operation-summary", {
+        detail: {
+          visible: true,
+          title: stack.querySelector(".operation-dock-title")?.textContent?.trim() || "",
+          summary: label?.textContent?.trim() || "",
+          percent: summary.percent,
+          tone: summary.tone,
+          expanded: !state.operationToastsMinimized,
+        },
+      }),
+    );
   }
   function showOperationProgress(title: Any, total: Any) {
     const id = uid();
@@ -405,6 +446,7 @@ export function createOperationDock(deps: Deps) {
     if (bar) bar.style.width = `${pct}%`;
     if (detailEl) detailEl.textContent = detail;
     state.operationProgress[id] = { ...(state.operationProgress[id] || {}), done, total, detail };
+    updateOperationStackCount();
   }
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept for call-site compatibility
   function hideOperationProgress(id: Any, delay = 200) {

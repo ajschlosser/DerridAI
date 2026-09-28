@@ -102,6 +102,29 @@ describe("Corpus Capture review domain", () => {
       providers: ["gutenberg", "wikisource"],
       roles: ["author", "coauthor", "translator"],
       include_translations: true,
+      include_originals: true,
+      languages: ["fr"],
+    });
+  });
+
+  it("can request translations without original-language editions", () => {
+    expect(
+      optionsFromIncludes(
+        ["gutenberg"],
+        {
+          authored: false,
+          translations: true,
+          translator: false,
+          editor: false,
+          other: false,
+        },
+        ["fr"],
+      ),
+    ).toEqual({
+      providers: ["gutenberg"],
+      roles: ["author", "coauthor"],
+      include_translations: true,
+      include_originals: false,
       languages: ["fr"],
     });
   });

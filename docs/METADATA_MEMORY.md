@@ -59,6 +59,33 @@ Retrieval is field-aware and bounded:
 
 A precedent is advisory context. It does not copy a value into a new record as truth and it does not weaken source-evidence requirements.
 
+### Query quality and latency
+
+Only the transient query sent to the embedding provider removes a small,
+locale-aware set of high-frequency function words. Stored evidence, canonical
+exemplars, and citations are never normalized this way. The active collection
+must match the configured embedding contract; the default local contract is
+Ollama `bge-m3:latest`, and retrieval telemetry records the provider and model
+used for each query.
+
+Candidate ordering uses semantic distance with a bounded lexical-overlap
+signal, then the existing diversity selection. This improves resilience when a
+generic phrase is semantically close but lacks the field-specific terms in the
+record. It is intentionally not a cross-encoder: adding one would require
+another model request per candidate and can add material latency on local
+hardware. Query embedding, Chroma search, and selection times are reported
+separately so a deployment can measure that trade-off before enabling a
+cross-encoder.
+
+This is the supported reranking fallback, not a hidden approximation of a
+cross-encoder. Its contract is deterministic for a fixed candidate set:
+semantic similarity supplies the primary score, lexical overlap contributes a
+bounded secondary score, field/match quotas are applied, and MMR limits
+near-duplicate evidence within the packet budget. Retrieval telemetry exposes
+the selected mode and fallback reason, so evaluations can compare latency and
+selection quality before introducing a separately versioned provider-backed
+reranker.
+
 ## Separation from other memory
 
 Do not conflate these systems:

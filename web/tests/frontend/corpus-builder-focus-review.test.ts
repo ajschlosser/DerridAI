@@ -122,6 +122,28 @@ describe("Corpus Builder focus review interactions", () => {
     wrapper.unmount();
   });
 
+  it("opens the full record in the movable pop-out", async () => {
+    const wrapper = mount(CorpusRecordFocusReview, {
+      attachTo: document.body,
+      props: { record },
+      global: { stubs },
+    });
+
+    await buttonByText(wrapper, "Reviewed record text").trigger("click");
+    expect(wrapper.get(".record-popout").attributes("role")).toBe("dialog");
+    expect(wrapper.get("[data-record-text]").text()).toBe(record.text);
+    await wrapper.get(".record-popout-head").trigger("pointerdown", { button: 0, pointerId: 1 });
+    await wrapper.get(".record-popout-head").trigger("pointermove", {
+      pointerId: 1,
+      clientX: 40,
+      clientY: 30,
+    });
+    expect(wrapper.get(".record-popout").attributes("style")).toContain("translate(40px, 30px)");
+    await wrapper.get(".record-popout button").trigger("click");
+    expect(wrapper.find(".record-popout").exists()).toBe(false);
+    wrapper.unmount();
+  });
+
   it("saves the value with the selected text as evidence and stays on the metadata tab", async () => {
     const wrapper = mount(CorpusRecordFocusReview, {
       props: { record, sourceBlocks: [] },

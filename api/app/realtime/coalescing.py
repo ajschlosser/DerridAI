@@ -22,7 +22,7 @@ class OutgoingQueue:
     """
 
     def __init__(self, max_events: int) -> None:
-        self.max_events = max(4, int(max_events))
+        self.max_events = max(1, int(max_events))
         self._items: deque[Event] = deque()
         self._lock = threading.Lock()
         self.overflowed = False

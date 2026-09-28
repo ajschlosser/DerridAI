@@ -5,6 +5,7 @@ import json
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
+from pydantic import BaseModel, Field
 
 from ..celf_queries import vector_records as vector_queries
 from ..celf_queries.access import AccessContext, InvalidQuery
@@ -30,6 +31,11 @@ from ..researcher_view import sanitize_records_payload
 from ..services import store
 
 router = APIRouter(tags=["stores"])
+
+
+class SyncSuppressionRequest(BaseModel):
+    record_id: str = Field(min_length=1, max_length=500)
+    fingerprint: str = Field(min_length=1, max_length=500)
 
 
 def _stamp_record_activity(record: dict[str, Any], username: str) -> dict[str, Any]:
@@ -58,6 +64,23 @@ def list_stores() -> dict[str, Any]:
         return {"stores": store.list_stores()}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.get("/api/stores/{store_name}/sync-suppressions")
+def get_sync_suppressions(store_name: str, request: Request) -> dict[str, Any]:
+    require_admin(request)
+    from ..system_store import system_store
+
+    return {"store": store_name, "suppressions": system_store.vector_sync_suppressions(store_name)}
+
+
+@router.post("/api/stores/{store_name}/sync-suppressions")
+def set_sync_suppression(store_name: str, body: SyncSuppressionRequest, request: Request) -> dict[str, Any]:
+    require_admin(request)
+    from ..system_store import system_store
+
+    suppressions = system_store.set_vector_sync_suppression(store_name, body.record_id, body.fingerprint)
+    return {"store": store_name, "suppressions": suppressions}
 
 
 @router.post("/api/stores")
@@ -426,4 +449,3 @@ def search(store_name: str, body: SearchRequest, request: Request) -> dict[str, 
         return result
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-

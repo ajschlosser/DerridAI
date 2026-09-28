@@ -77,10 +77,13 @@ const optionsValid = computed(
   () =>
     providers.value.length > 0 &&
     (includes.value.authored ||
+      includes.value.translations ||
       includes.value.translator ||
       includes.value.editor ||
       includes.value.other) &&
-    (languages.value === null || languages.value.length > 0),
+    (includes.value.translations
+      ? languages.value === null || Boolean(languages.value.length)
+      : Boolean(languages.value?.length === 1)),
 );
 const toAcquire = computed(() => acquirableCount(candidates.value));
 const running = computed(() => Boolean(capture.value?.active_job));
@@ -253,6 +256,7 @@ onMounted(() => {
       v-model:providers="providers"
       v-model:includes="includes"
       v-model:languages="languages"
+      :author="author"
       :provider-info="providerInfo"
     />
     <template v-else-if="capture && (step === 'discovering' || step === 'acquiring')">

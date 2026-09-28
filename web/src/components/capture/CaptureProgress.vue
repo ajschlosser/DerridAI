@@ -16,6 +16,14 @@ const job = computed(() => props.capture.active_job);
 const phase = computed(() => job.value?.stage || props.capture.phase);
 const done = computed(() => Number(job.value?.completed ?? props.capture.progress?.done ?? 0));
 const total = computed(() => Number(job.value?.total ?? props.capture.progress?.total ?? 0));
+const finished = computed(() =>
+  ["complete", "completed", "partial", "failed", "cancelled", "canceled"].includes(
+    String(props.capture.status || ""),
+  ),
+);
+const progressValue = computed(() =>
+  total.value ? Math.min(total.value, Math.max(0, done.value)) : finished.value ? 1 : undefined,
+);
 const detail = computed(
   () =>
     job.value?.stage_detail ||
@@ -65,8 +73,8 @@ const tone = { done: "success", running: "info", waiting: "neutral", failed: "da
     </p>
     <progress
       class="cp-bar"
-      :value="total ? done : undefined"
-      :max="total || undefined"
+      :value="progressValue"
+      :max="total || 1"
       :aria-label="i18n.t('capture.progress_label')"
     />
     <ul v-if="mode === 'discovering'" class="cp-providers">

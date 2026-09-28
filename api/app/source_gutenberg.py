@@ -413,6 +413,7 @@ class GutenbergProvider:
         progress("discovering_gutenberg", {"done": 0, "total": 1})
         status = self.catalogue.status()
         if status.get("search_ready"):
+            progress("discovering_gutenberg", {"done": 0, "total": 1, "current": "local_catalogue"})
             rows = self.catalogue.sources_for_author(author.names(), birth_year=author.birth_year, death_year=author.death_year)
             report.catalog_version = "pg_catalog.csv"
             report.catalog_refreshed_at = (status.get("catalogue") or {}).get("refreshed_at")
@@ -420,6 +421,7 @@ class GutenbergProvider:
         else:
             report.warnings = [*(report.warnings or []), "gutenberg_catalogue_not_indexed_used_gutendex"]
             report.endpoint = "https://gutendex.com/books"
+            progress("discovering_gutenberg", {"done": 0, "total": 1, "current": "gutendex"})
             rows, complete = gutendex_rows_for_author(self.http, author)
             report.pagination_complete = complete
         report.projects_searched.append("gutenberg")
@@ -436,6 +438,8 @@ class GutenbergProvider:
             if role not in wanted:
                 continue
             if not options.include_translations and candidate.relationship_to_work == WorkRelationship.TRANSLATION:
+                continue
+            if not options.include_originals and candidate.relationship_to_work != WorkRelationship.TRANSLATION:
                 continue
             if options.languages and not set(candidate.document_languages) & set(options.languages):
                 continue

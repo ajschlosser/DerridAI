@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import time
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
@@ -34,6 +35,19 @@ DEFAULT_FETCH_K = 16
 DEFAULT_MMR_LAMBDA = 0.72
 DEFAULT_PACKET_CHAR_BUDGET = DEFAULT_PROMPT_TOKEN_BUDGET * PROMPT_CHARS_PER_TOKEN
 MAX_QUERY_CHARS = 12000
+MAX_FALLBACK_CANDIDATES = 256
+_STOP_WORDS = {
+    "en": {
+        "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "has",
+        "in", "is", "it", "of", "on", "or", "that", "the", "their", "this",
+        "to", "was", "were", "with",
+    },
+    "fr": {
+        "au", "aux", "avec", "ce", "ces", "dans", "de", "des", "du", "elle",
+        "en", "est", "et", "les", "leur", "mais", "ne", "ou", "par", "pour",
+        "que", "qui", "sur", "un", "une",
+    },
+}
 
 
 def _elapsed_ms(started: float) -> int:
@@ -91,6 +105,98 @@ def _bounded_query_text(text: str, *, max_chars: int = MAX_QUERY_CHARS) -> str:
     )
 
 
+def _retrieval_query_text(text: str, language: str = "") -> str:
+    """Remove only high-frequency function words from the embedding query.
+
+    The authoritative evidence and stored exemplar text are never changed. If
+    filtering would erase the query, the original bounded text is retained.
+    """
+
+    value = _bounded_query_text(text)
+    words = str(language or "").casefold().split("-")
+    stop_words = _STOP_WORDS.get(words[0], set())
+    if not stop_words:
+        return value
+    filtered = " ".join(
+        token for token in value.split()
+        if token.casefold().strip(".,;:!?()[]{}\"'") not in stop_words
+    )
+    return filtered.strip() or value
+
+
+def _lexical_overlap(query: str, text: str, language: str = "") -> float:
+    stop_words = _STOP_WORDS.get(str(language or "").casefold().split("-")[0], set())
+
+    def terms(value: str) -> set[str]:
+        return {
+            token
+            for token in re.findall(r"[\wÀ-ÿ'-]+", value.casefold())
+            if token not in stop_words
+        }
+
+    query_terms = terms(_retrieval_query_text(query, language))
+    text_terms = terms(str(text or ""))
+    if not query_terms:
+        return 0.0
+    return len(query_terms & text_terms) / len(query_terms)
+
+
+def _fallback_text(exemplar: dict[str, Any]) -> str:
+    return " ".join(
+        str(exemplar.get(key) or "")
+        for key in ("field_name", "field_value", "rejected_value", "evidence_text", "context_text")
+    )
+
+
+def _fallback_candidates(
+    *,
+    canonical: dict[str, dict[str, Any]],
+    query_text: str,
+    fields: list[str],
+    language: str,
+    current_values: dict[str, str],
+    field_match_fields: dict[str, list[str]],
+    exclude_record_id: str,
+) -> dict[str, list[dict[str, Any]]]:
+    """Return conservative lexical matches when semantic retrieval is unavailable."""
+
+    ranked: dict[str, list[dict[str, Any]]] = {}
+    for exemplar in list(canonical.values())[:MAX_FALLBACK_CANDIDATES]:
+        field = str(exemplar.get("field_name") or "")
+        if field not in fields:
+            continue
+        if exclude_record_id and str(exemplar.get("record_id") or "") == str(exclude_record_id):
+            continue
+        tier, compared = match_tier(
+            exemplar,
+            current_values,
+            list(field_match_fields.get(field) or []),
+        )
+        if tier == "differs":
+            continue
+        score = _lexical_overlap(query_text, _fallback_text(exemplar), language)
+        if score <= 0.0:
+            continue
+        ranked.setdefault(field, []).append({
+            "id": str(exemplar.get("metadata_exemplar_id") or ""),
+            "distance": None,
+            "embedding": None,
+            "match_tier": tier,
+            "match_compared": compared,
+            "lexical_score": score,
+            "hybrid_score": score,
+            "fallback": True,
+        })
+    for _field, rows in ranked.items():
+        rows.sort(
+            key=lambda row: (
+                -float(row["lexical_score"]),
+                str(canonical[row["id"]].get("metadata_exemplar_id") or ""),
+            )
+        )
+    return ranked
+
+
 def _cosine(a: Any, b: Any) -> float:
     if a is None or b is None:
         return 0.0
@@ -132,7 +238,7 @@ def _mmr(
                 numeric_distance = max(0.0, float(distance))
             except (TypeError, ValueError):
                 numeric_distance = 1.0
-            relevance = 1.0 / (1.0 + numeric_distance)
+            relevance = float(candidate.get("hybrid_score") or (1.0 / (1.0 + numeric_distance)))
             diversity = max(
                 (
                     _cosine(candidate.get("embedding"), chosen.get("embedding"))
@@ -189,26 +295,47 @@ def match_tier(
     return "differs", compared
 
 
+def _as_sequence(value: Any) -> list[Any]:
+    """Convert Chroma/numpy response values without evaluating array truthiness."""
+    if value is None:
+        return []
+    converted = value.tolist() if hasattr(value, "tolist") else value
+    if converted is not value:
+        value = converted
+    if isinstance(value, (list, tuple)):
+        return list(value)
+    try:
+        return list(value)
+    except TypeError:
+        return []
+
+
+def _first_query_row(value: Any) -> list[Any]:
+    rows = _as_sequence(value)
+    if not rows:
+        return []
+    return _as_sequence(rows[0])
+
+
 def _candidate_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    ids = (payload.get("ids") or [[]])[0]
-    distances = (payload.get("distances") or [[]])[0]
-    metadatas = (payload.get("metadatas") or [[]])[0]
-    embeddings = payload.get("embeddings")
-    if hasattr(embeddings, "tolist"):
-        embeddings = embeddings.tolist()
-    embeddings = (embeddings or [[]])[0]
+    ids = _first_query_row(payload.get("ids"))
+    distances = _first_query_row(payload.get("distances"))
+    metadatas = _first_query_row(payload.get("metadatas"))
+    documents = _first_query_row(payload.get("documents"))
+    embeddings = _first_query_row(payload.get("embeddings"))
 
     rows: list[dict[str, Any]] = []
     for index, exemplar_id in enumerate(ids):
         metadata = metadatas[index] if index < len(metadatas) else {}
-        rows.append(
-            {
-                "id": str(exemplar_id),
-                "metadata": metadata if isinstance(metadata, dict) else {},
-                "distance": distances[index] if index < len(distances) else None,
-                "embedding": embeddings[index] if index < len(embeddings) else None,
-            }
-        )
+        row: dict[str, Any] = {
+            "id": str(exemplar_id),
+            "metadata": metadata if isinstance(metadata, dict) else {},
+            "distance": distances[index] if index < len(distances) else None,
+            "embedding": embeddings[index] if index < len(embeddings) else None,
+        }
+        if index < len(documents):
+            row["document"] = documents[index]
+        rows.append(row)
     return rows
 
 
@@ -459,6 +586,85 @@ class ChromaMetadataExemplarIndex:
             "deleted": len(existing),
         }
 
+    def _lexical_fallback_result(
+        self,
+        *,
+        started_total: float,
+        canonical: dict[str, dict[str, Any]],
+        query_text: str,
+        ordered_fields: list[str],
+        language: str,
+        field_limits: dict[str, int] | None,
+        field_include_corrections: dict[str, bool] | None,
+        field_correction_limits: dict[str, int] | None,
+        field_match_fields: dict[str, list[str]] | None,
+        current_values: dict[str, str] | None,
+        packet_char_budget: int,
+        exclude_record_id: str,
+        reason: str,
+    ) -> dict[str, Any]:
+        raw = _fallback_candidates(
+            canonical=canonical,
+            query_text=query_text,
+            fields=ordered_fields,
+            language=language,
+            current_values=current_values or {},
+            field_match_fields=field_match_fields or {},
+            exclude_record_id=exclude_record_id,
+        )
+        selected: dict[str, list[dict[str, Any]]] = {}
+        considered = 0
+        for field in ordered_fields:
+            limit = max(0, int((field_limits or {}).get(field, DEFAULT_FIELD_LIMIT)))
+            correction_limit = (
+                max(0, int((field_correction_limits or {}).get(field, DEFAULT_CORRECTION_LIMIT)))
+                if bool((field_include_corrections or {}).get(field, True))
+                else 0
+            )
+            rows = raw.get(field, [])
+            considered += len(rows)
+            field_selected: list[dict[str, Any]] = []
+            for is_correction, quota in ((False, limit), (True, correction_limit)):
+                pool = [
+                    row for row in rows
+                    if (str(canonical[row["id"]].get("kind") or "positive") == "correction") == is_correction
+                ]
+                field_selected.extend(pool[:quota])
+            if field_selected:
+                selected[field] = field_selected
+
+        rendered: dict[str, list[dict[str, Any]]] = {}
+        for field, rows in selected.items():
+            for row in rows:
+                exemplar = canonical.get(row["id"])
+                if exemplar is None:
+                    continue
+                example = prompt_example(exemplar, similarity=None)
+                if row.get("match_compared"):
+                    example["match"] = {"tier": row["match_tier"], "fields": row["match_compared"]}
+                rendered.setdefault(field, []).append(example)
+        packet, packet_chars = _bounded_packet(
+            rendered,
+            ordered_fields,
+            char_budget=packet_char_budget,
+        )
+        used = sum(len(items) for items in packet.values())
+        return {
+            "ok": False,
+            "examples": packet,
+            "telemetry": {
+                "fallback_reason": reason,
+                "fallback_mode": "lexical",
+                "ranking": "lexical_overlap",
+                "candidates_considered": min(len(canonical), MAX_FALLBACK_CANDIDATES),
+                "examples_considered": considered,
+                "examples_used": used,
+                "packet_chars": packet_chars,
+                "fields_served": sorted(packet),
+                "total_ms": _elapsed_ms(started_total),
+            },
+        }
+
     def retrieve(
         self,
         *,
@@ -481,13 +687,6 @@ class ChromaMetadataExemplarIndex:
     ) -> dict[str, Any]:
         """Sync canonical exemplars, retrieve per field, and return a bounded packet."""
 
-        if self._disabled_reason:
-            return {
-                "ok": False,
-                "examples": {},
-                "telemetry": {"fallback_reason": self._disabled_reason},
-            }
-
         started_total = time.monotonic()
         canonical = {
             str(item.get("metadata_exemplar_id") or ""): item
@@ -495,6 +694,22 @@ class ChromaMetadataExemplarIndex:
             if str(item.get("metadata_exemplar_id") or "")
         }
         ordered_fields = list(dict.fromkeys(str(field) for field in fields if str(field)))
+        if self._disabled_reason:
+            return self._lexical_fallback_result(
+                started_total=started_total,
+                canonical=canonical,
+                query_text=str(query_text or ""),
+                ordered_fields=ordered_fields,
+                language=language,
+                field_limits=field_limits,
+                field_include_corrections=field_include_corrections,
+                field_correction_limits=field_correction_limits,
+                field_match_fields=field_match_fields,
+                current_values=current_values,
+                packet_char_budget=packet_char_budget,
+                exclude_record_id=exclude_record_id,
+                reason=self._disabled_reason,
+            )
         if not canonical or not str(query_text or "").strip() or not ordered_fields:
             return {
                 "ok": True,
@@ -520,7 +735,7 @@ class ChromaMetadataExemplarIndex:
             query_started = time.monotonic()
             provider, model = self.store._embedding_spec(collection)
             query_vector = self.store.embeddings.embed_query(
-                _bounded_query_text(str(query_text)),
+                _retrieval_query_text(str(query_text), language),
                 provider=provider,
                 model=model,
             )
@@ -550,7 +765,7 @@ class ChromaMetadataExemplarIndex:
                         schema_version,
                         language,
                     ),
-                    include=["metadatas", "distances", "embeddings"],
+                    include=["documents", "metadatas", "distances", "embeddings"],
                 )
                 floor = max(0.0, min(1.0, float((field_min_similarity or {}).get(field, 0.0))))
                 match_fields = list((field_match_fields or {}).get(field) or [])
@@ -566,7 +781,19 @@ class ChromaMetadataExemplarIndex:
                     tier, compared = match_tier(exemplar, current_values or {}, match_fields)
                     if tier == "differs":
                         continue  # declared analogy conditions contradict this precedent
-                    candidates.append({**row, "match_tier": tier, "match_compared": compared})
+                    semantic_similarity = _distance_similarity(row.get("distance"))
+                    lexical_similarity = _lexical_overlap(
+                        query_text,
+                        str(row.get("document") or (row.get("metadata") or {}).get("context_text") or ""),
+                        language,
+                    )
+                    candidates.append({
+                        **row,
+                        "match_tier": tier,
+                        "match_compared": compared,
+                        "lexical_score": lexical_similarity,
+                        "hybrid_score": (semantic_similarity * 0.8) + (lexical_similarity * 0.2),
+                    })
                 # Positives (including reviewed absence) and corrections have separate
                 # quotas; within each, precedents that satisfy the declared conditions
                 # come before ones that could not be compared.
@@ -633,6 +860,8 @@ class ChromaMetadataExemplarIndex:
                 "telemetry": {
                     "sync_ms": sync_ms,
                     "query_ms": query_ms,
+                    "embedding_provider": provider,
+                    "embedding_model": model,
                     "search_ms": search_ms,
                     "select_ms": select_ms,
                     "examples_considered": considered,
@@ -645,11 +874,18 @@ class ChromaMetadataExemplarIndex:
             }
         except Exception as exc:  # noqa: BLE001 - progressive RAG is advisory
             self._disabled_reason = f"{exc.__class__.__name__}: {str(exc)[:300]}"
-            return {
-                "ok": False,
-                "examples": {},
-                "telemetry": {
-                    "fallback_reason": self._disabled_reason,
-                    "total_ms": _elapsed_ms(started_total),
-                },
-            }
+            return self._lexical_fallback_result(
+                started_total=started_total,
+                canonical=canonical,
+                query_text=str(query_text or ""),
+                ordered_fields=ordered_fields,
+                language=language,
+                field_limits=field_limits,
+                field_include_corrections=field_include_corrections,
+                field_correction_limits=field_correction_limits,
+                field_match_fields=field_match_fields,
+                current_values=current_values,
+                packet_char_budget=packet_char_budget,
+                exclude_record_id=exclude_record_id,
+                reason=self._disabled_reason,
+            )

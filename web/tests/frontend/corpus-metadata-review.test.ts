@@ -51,12 +51,17 @@ function setup() {
   const selectedProviderId = ref("local");
   const providerProfiles = ref<any[]>([{ id: "local", model: "qwen" }]);
   const queued: Array<(rebase: boolean) => Promise<unknown>> = [];
+  const failures: Array<() => void | Promise<void>> = [];
   const queueRecordRequest = vi.fn(
     (
       _recordId: string | readonly string[],
       _fields: string[],
       request: (rebase: boolean) => Promise<unknown>,
-    ) => queued.push(request),
+      onFailure?: () => void | Promise<void>,
+    ) => {
+      queued.push(request);
+      if (onFailure) failures.push(onFailure);
+    },
   );
   const applyAuthoritativeRecord = vi.fn((record: any, build?: any) => {
     selectedRecord.value = record;
@@ -126,6 +131,7 @@ function setup() {
     reviewInspectorTab,
     selectedPdfPage,
     queued,
+    failures,
     applyAuthoritativeRecord,
   };
 }
@@ -145,9 +151,9 @@ describe("Corpus Builder metadata review", () => {
 
     await state.review.resolveMetadataField("target", "Kant");
 
-    // Released before the request is even sent: no saving state, shown as saved.
-    expect(state.review.metadataSavingField.value).toBe("");
-    expect(state.review.metadataSavedField.value).toBe("target");
+    // The accepted value stays visibly pending until the queued request confirms it.
+    expect(state.review.metadataSavingField.value).toBe("target");
+    expect(state.review.metadataSavedField.value).toBe("");
     expect(state.selectedRecord.value?.target).toBe("Kant");
     expect(state.selectedRecord.value?.record_revision).toBe(2);
     expect(state.review.metadataKnownValues.value.target).toContain("Kant");
@@ -192,6 +198,20 @@ describe("Corpus Builder metadata review", () => {
     );
     // No separate evidence round trip.
     expect(corpusBuilderApi.patchEvidence).not.toHaveBeenCalled();
+  });
+
+  it("keeps the optimistic confirmation pending and refreshes only after failure", async () => {
+    const state = setup();
+    await state.review.resolveMetadataField("target", "Kant");
+
+    expect(state.selectedRecord.value?.target).toBe("Kant");
+    expect(state.review.metadataSavingField.value).toBe("target");
+    expect(state.failures).toHaveLength(1);
+
+    await state.failures[0]();
+
+    expect(state.review.metadataSavingField.value).toBe("");
+    expect(state.review.metadataSavedField.value).toBe("");
   });
 
   it("adds evidence through the shared metadata evidence path", async () => {
@@ -243,8 +263,8 @@ describe("Corpus Builder metadata review", () => {
       target: "hospitality",
     });
 
-    // Optimistic: the panel is released as soon as the value is applied locally.
-    expect(state.review.metadataSavingField.value).toBe("");
+    // The batch remains visibly pending until the queued request confirms it.
+    expect(state.review.metadataSavingField.value).toBe("__batch__");
     expect(state.selectedRecord.value?.target).toBe("hospitality");
     expect(state.queued).toHaveLength(1);
 

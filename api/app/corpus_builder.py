@@ -1052,6 +1052,88 @@ class PdfCorpusRepository:
             _json_write(self.asset_meta_path(asset_id), asset)
             return asset
 
+    def update_asset_language(self, asset_id: str, *, language: str | None, skipped: bool = False) -> dict[str, Any]:
+        """Persist an explicit language decision without rewriting extracted source data."""
+        with self._lock:
+            asset = self.get_asset(asset_id)
+            initial = dict(asset.get("initial_metadata") or {})
+            provenance = dict(initial.get("field_provenance") or {})
+            if skipped:
+                initial.pop("language", None)
+                initial["language_status"] = "confirmed_absent"
+                provenance["language"] = {
+                    "method": "human_review",
+                    "confidence": 1.0,
+                    "derivation": "human",
+                    "status": "confirmed_absent",
+                }
+            else:
+                assert language
+                initial["language"] = language
+                initial["language_status"] = "human_confirmed"
+                provenance["language"] = {
+                    "method": "human_review",
+                    "confidence": 1.0,
+                    "derivation": "human",
+                    "status": "human_confirmed",
+                }
+            initial["field_provenance"] = provenance
+            asset["initial_metadata"] = initial
+            asset["metadata_revision"] = int(asset.get("metadata_revision") or 0) + 1
+            asset["metadata_updated_at"] = iso_now()
+            _json_write(self.asset_meta_path(asset_id), asset)
+            return asset
+
+    def update_asset_metadata(
+        self,
+        asset_id: str,
+        *,
+        metadata: dict[str, Any],
+        skip_fields: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Persist explicit source metadata decisions without changing extracted source text."""
+        from .source_text import MANIFEST_FIELDS
+
+        allowed = set(MANIFEST_FIELDS) | {"original_language", "document_is_translation"}
+        unknown = (set(metadata) | set(skip_fields or [])) - allowed
+        if unknown:
+            raise ValueError("Unsupported source metadata field(s): " + ", ".join(sorted(unknown)))
+        skipped = set(skip_fields or [])
+        if skipped & set(metadata):
+            raise ValueError("A source metadata field cannot be entered and skipped together.")
+        with self._lock:
+            asset = self.get_asset(asset_id)
+            initial = dict(asset.get("initial_metadata") or {})
+            provenance = dict(initial.get("field_provenance") or {})
+            for field, value in metadata.items():
+                if value in (None, "", []):
+                    raise ValueError(f"Metadata field '{field}' needs a value or must be skipped.")
+                if isinstance(value, str):
+                    value = value.strip()
+                    if not value:
+                        raise ValueError(f"Metadata field '{field}' needs a value or must be skipped.")
+                initial[field] = value
+                provenance[field] = {
+                    "method": "human_review",
+                    "confidence": 1.0,
+                    "derivation": "human",
+                    "status": "human_confirmed",
+                }
+            for field in skipped:
+                initial.pop(field, None)
+                provenance[field] = {
+                    "method": "human_review",
+                    "confidence": 1.0,
+                    "derivation": "human",
+                    "status": "confirmed_absent",
+                }
+            initial["field_provenance"] = provenance
+            asset["initial_metadata"] = initial
+            asset["metadata_revision"] = int(asset.get("metadata_revision") or 0) + 1
+            asset["metadata_updated_at"] = iso_now()
+            _json_write(self.asset_meta_path(asset_id), asset)
+            return asset
+
     def update_document_layout(self, asset_id: str, plan: dict[str, Any]) -> dict[str, Any]:
         """Persist reviewer-owned document structure and derive page metadata deterministically.
 
@@ -1060,6 +1142,8 @@ class PdfCorpusRepository:
         and alternating thread hints. These reviewer-owned facts outrank later LLM guesses.
         """
         with self._lock:
+            from .unit_policy import normalize_policy
+
             asset = self.get_asset(asset_id)
             if asset.get("media_kind", "pdf") not in {"pdf", "image"}:
                 raise ValueError("Page layout is unavailable for this source format.")
@@ -1086,6 +1170,7 @@ class PdfCorpusRepository:
             valid_thread_modes = {"continuous", "odd_even", "even_odd", "left_right", "right_left"}
             if thread_mode not in valid_thread_modes:
                 raise ValueError("Unsupported thread_mode")
+            unit_policy = normalize_policy(plan.get("unit_policy"))
             clean_plan = {
                 "page_layout": layout, "reading_order": order,
                 "main_text_pdf_start": main_pdf, "main_text_printed_start": main_printed,
@@ -1093,6 +1178,7 @@ class PdfCorpusRepository:
                 "bibliography_pdf_start": bib_pdf, "thread_mode": thread_mode,
                 "thread_a_language": str(plan.get("thread_a_language") or "").strip() or None,
                 "thread_b_language": str(plan.get("thread_b_language") or "").strip() or None,
+                "unit_policy": unit_policy,
                 "confirmed_by": "human", "updated_at": iso_now(),
             }
             pages = asset.get("pages") or []
@@ -1189,6 +1275,7 @@ class PdfCorpusRepository:
                     handle.write(json.dumps(block, ensure_ascii=False) + "\n")
             os.replace(tmp, self.asset_blocks_path(asset_id))
             asset["pages"] = pages
+            asset["unit_policy"] = unit_policy
             asset["document_layout"] = clean_plan
             asset["document_layout_revision"] = int(asset.get("document_layout_revision") or 0) + 1
             _json_write(self.asset_meta_path(asset_id), asset)
@@ -1661,6 +1748,11 @@ class PdfCorpusRepository:
             return compressed
         return legacy
 
+    def publication_integrity_path(self, publication_id: str) -> Path:
+        """Return the SHA-512 sidecar path for a publication artifact."""
+        return self.publication_path(publication_id).with_name(
+            f"{self.publication_path(publication_id).name}.sha512"
+        )
 
 
 
@@ -2723,9 +2815,14 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                     f"{issue} ({count} records)" if count > 1 else issue
                     for issue, count in counts.items()
                 ]
+                detail = ", ".join(issues or ["unknown topology error"])
+                if "topology.over_absolute_limit" in raw_issues:
+                    detail += (
+                        ". One or more source units exceed the absolute character ceiling; "
+                        "choose a finer evidence-unit rule or split the affected unit during review."
+                    )
                 raise RuntimeError(
-                    "Deterministic topology sanity check failed before metadata enrichment: "
-                    + ", ".join(issues or ["unknown topology error"])
+                    "Deterministic topology sanity check failed before metadata enrichment: " + detail
                 )
             # Optionally clean obvious extraction/layout noise before metadata
             # enrichment. The immutable extracted text remains bound in
@@ -3514,6 +3611,17 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             validate_record=validate_publication_record,
             compression_level=10,
         )
+        integrity_path = self.repo.publication_integrity_path(publication_id)
+        integrity_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_integrity = integrity_path.with_name(f".{integrity_path.name}.{uuid.uuid4().hex}.tmp")
+        try:
+            temporary_integrity.write_text(
+                f"{result.archive_sha512}  {path.name}\n",
+                encoding="ascii",
+            )
+            os.replace(temporary_integrity, integrity_path)
+        finally:
+            temporary_integrity.unlink(missing_ok=True)
         publication = {
             "publication_id": publication_id,
             "filename": f"{Path(build.get('source_filename') or 'corpus').stem}.jsonl.zst",
@@ -3522,6 +3630,10 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             # the exact compressed artifact.
             "sha256": result.content_sha256,
             "archive_sha256": result.archive_sha256,
+            "sha512": result.archive_sha512,
+            "content_sha512": result.content_sha512,
+            "archive_sha512": result.archive_sha512,
+            "integrity_filename": integrity_path.name,
             "compression": "zstd",
             "media_type": "application/zstd",
             "record_count": result.record_count,

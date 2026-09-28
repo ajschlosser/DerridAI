@@ -68,12 +68,14 @@ def probe_audio(path: Path) -> float:
 
 def transcribe_entire_file(path: Path) -> dict[str, Any]:
     """Send the whole audio file to OpenAI Whisper before any span splitting."""
+    from .source_identity import CaptureError, CaptureErrorCode
     from .system_store import system_store
 
     config = system_store.audio_transcription_settings(include_key=True)
     api_key = str(config.get("api_key") or "").strip()
     if not api_key:
-        raise ValueError(
+        raise CaptureError(
+            CaptureErrorCode.AUDIO_PROVIDER_NOT_CONFIGURED,
             "Audio transcription needs an API key. Add one under Settings → Providers → "
             "Audio transcription (or set OPENAI_API_KEY on the server)."
         )
@@ -96,10 +98,34 @@ def transcribe_entire_file(path: Path) -> dict[str, Any]:
             )
         response.raise_for_status()
         payload = response.json()
+    except httpx.HTTPStatusError as exc:
+        code = (
+            CaptureErrorCode.AUDIO_PROVIDER_UNAVAILABLE
+            if exc.response.status_code >= 500
+            else CaptureErrorCode.AUDIO_TRANSCRIPTION_FAILED
+        )
+        raise CaptureError(
+            code,
+            "Audio transcription provider rejected the request.",
+            detail=f"HTTP {exc.response.status_code}",
+        ) from exc
+    except (httpx.HTTPError, OSError) as exc:
+        raise CaptureError(
+            CaptureErrorCode.AUDIO_PROVIDER_UNAVAILABLE,
+            "Audio transcription failed because the provider could not be reached.",
+            detail=str(exc),
+        ) from exc
     except Exception as exc:
-        raise ValueError(f"OpenAI Whisper transcription failed: {exc}") from exc
+        raise CaptureError(
+            CaptureErrorCode.AUDIO_TRANSCRIPTION_FAILED,
+            "Audio transcription failed.",
+            detail=str(exc),
+        ) from exc
     if not isinstance(payload, dict) or not str(payload.get("text") or "").strip():
-        raise ValueError("OpenAI Whisper returned an empty transcript.")
+        raise CaptureError(
+            CaptureErrorCode.AUDIO_TRANSCRIPTION_FAILED,
+            "Audio transcription returned no text.",
+        )
     return payload
 
 
@@ -215,8 +241,6 @@ def spans_from_transcript(
         blocks.append(
             {
                 "block_id": f"p{index:05d}-b0001",
-                # Legacy navigation index only; never exported as an evidence page.
-                "page": index,
                 "locator_kind": "time",
                 "bbox": [0, 0, 0, 0],
                 "type": "paragraph",
@@ -281,20 +305,6 @@ def extract_audio(
         for block in blocks:
             if not block.get("speaker"):
                 block.pop("speaker", None)
-        pages = []
-        for block in blocks:
-            pages.append(
-                {
-                    "pdf_page": block["page"],
-                    "locator_kind": "time",
-                    "start": block["start"],
-                    "end": block["end"],
-                    "width": 0,
-                    "height": 0,
-                    "block_ids": [block["block_id"]],
-                    "extraction_method": "whisper",
-                }
-            )
         embedded = (
             {"language": transcript.get("language")}
             if transcript.get("language")
@@ -303,9 +313,11 @@ def extract_audio(
         full_text = "\n\n".join(block["text"] for block in blocks)
         return {
             "filename": Path(filename).name,
-            "page_count": len(pages),
+            # Audio has time locators, not PDF pages. Keep page semantics absent
+            # so downstream citations cannot accidentally render fake pages.
+            "page_count": 0,
             "metadata": embedded,
-            "pages": pages,
+            "pages": [],
             "blocks": blocks,
             "block_count": len(blocks),
             "included_block_count": len(blocks),

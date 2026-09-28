@@ -6,6 +6,7 @@ import re
 import threading
 import time
 from datetime import UTC, datetime
+from threading import Thread
 from typing import Any
 
 from .persistence import job_repository
@@ -154,7 +155,7 @@ class PersistentJobStateMixin:
                 if job.get("id")
             }
 
-        thread = threading.Thread(
+        thread = Thread(
             target=self._persistence_loop,
             daemon=True,
             name=f"derridai-{self.JOB_TYPE}-sqlite-checkpoint",

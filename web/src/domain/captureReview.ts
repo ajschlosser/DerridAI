@@ -49,14 +49,15 @@ export function optionsFromIncludes(
   languages: string[] | null,
 ): CaptureOptions {
   const roles: CaptureOptions["roles"] = [];
-  if (includes.authored) roles.push("author", "coauthor");
+  if (includes.authored || includes.translations) roles.push("author", "coauthor");
   if (includes.translator) roles.push("translator");
   if (includes.editor) roles.push("editor");
   if (includes.other) roles.push("contributor");
   return {
     providers,
     roles,
-    include_translations: includes.authored && includes.translations,
+    include_translations: includes.translations,
+    include_originals: includes.authored,
     languages: languages && languages.length ? languages : null,
   };
 }

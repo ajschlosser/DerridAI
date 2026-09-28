@@ -108,6 +108,61 @@ describe("TopbarChrome", () => {
     ).not.toContain("Workspace");
     wrapper.unmount();
   });
+
+  it("opens and closes the docked operations dropdown from the top bar", async () => {
+    stubViewport(false);
+    localStorage.setItem("derridai.operations-dock-mode", "docked");
+    document.body.innerHTML = `
+      <aside id="operationProgressStack" class="operation-progress-stack minimized">
+        <button id="operationStackToggle" aria-expanded="false"></button>
+      </aside>
+    `;
+    document.querySelector("#operationStackToggle")?.addEventListener("click", () => {
+      document.querySelector("#operationProgressStack")?.classList.toggle("minimized");
+    });
+    const wrapper = mount(TopbarChrome, {
+      props: { username: "aaron", role: "admin", languages, locale: "en-US" },
+      attachTo: document.body,
+    });
+    globalThis.dispatchEvent(
+      new CustomEvent("derridai:operation-summary", {
+        detail: {
+          visible: true,
+          title: "Operations",
+          summary: "1 running",
+          percent: 20,
+          tone: "info",
+          expanded: false,
+        },
+      }),
+    );
+    await flushPromises();
+    await wrapper.get(".operations-docked-summary").trigger("click");
+    expect(document.documentElement.dataset.operationsDockOpen).toBe("true");
+    expect(document.querySelector("#operationProgressStack")?.classList.contains("minimized")).toBe(
+      false,
+    );
+    await wrapper.get(".operations-docked-summary").trigger("click");
+    expect(document.documentElement.dataset.operationsDockOpen).toBe("false");
+    expect(document.querySelector("#operationProgressStack")?.classList.contains("minimized")).toBe(
+      true,
+    );
+    wrapper.unmount();
+  });
+
+  it("switches mode from the dock's double-click event", async () => {
+    stubViewport(false);
+    localStorage.setItem("derridai.operations-dock-mode", "floating");
+    const wrapper = mount(TopbarChrome, {
+      props: { username: "aaron", role: "admin", languages, locale: "en-US" },
+      attachTo: document.body,
+    });
+    globalThis.dispatchEvent(new CustomEvent("derridai:operation-mode-toggle"));
+    await flushPromises();
+    expect(localStorage.getItem("derridai.operations-dock-mode")).toBe("docked");
+    expect(document.documentElement.dataset.operationsDockMode).toBe("docked");
+    wrapper.unmount();
+  });
 });
 
 describe("TopbarHelp", () => {

@@ -28,6 +28,7 @@ EXTERNAL_IDS = {"P1938": "gutenberg_author", "P214": "viaf", "P244": "loc", "P22
 P_INSTANCE, P_AUTHOR, P_LANGUAGE, P_TRANSLATOR, P_EDITION_OF, P_PUBLISHED, P_PUBLISHER = (
     "P31", "P50", "P407", "P655", "P629", "P577", "P123",
 )
+P_SPOKEN_LANGUAGE = "P1412"
 P_GUTENBERG_EBOOK = "P2034"
 
 
@@ -84,7 +85,11 @@ def wikisource_sitelinks(entity: dict[str, Any]) -> dict[str, str]:
     return out
 
 
-def author_candidate(entity: dict[str, Any], languages: list[str]) -> AuthorCandidate:
+def author_candidate(
+    entity: dict[str, Any],
+    languages: list[str],
+    language_item_codes: dict[str, str] | None = None,
+) -> AuthorCandidate:
     aliases: list[str] = []
     for code in [*languages, "en", "de", "fr"]:
         for alias in (entity.get("aliases") or {}).get(code) or []:
@@ -95,6 +100,12 @@ def author_candidate(entity: dict[str, Any], languages: list[str]) -> AuthorCand
         if value and value not in aliases:
             aliases.append(value)
     label = _label(entity, languages)
+    available_languages = [
+        str(language_item_codes.get(item))
+        for item in _claim_values(entity, P_SPOKEN_LANGUAGE)
+        if language_item_codes and language_item_codes.get(item)
+    ]
+    available_languages.extend(code for code in wikisource_sitelinks(entity) if code != "mul")
     return AuthorCandidate(
         wikidata_qid=str(entity.get("id")),
         label=label,
@@ -103,6 +114,7 @@ def author_candidate(entity: dict[str, Any], languages: list[str]) -> AuthorCand
         birth_year=_year(next(iter(_claim_values(entity, "P569")), None)),
         death_year=_year(next(iter(_claim_values(entity, "P570")), None)),
         wikisource_sitelinks=wikisource_sitelinks(entity),
+        languages=list(dict.fromkeys(available_languages)),
     )
 
 
@@ -132,7 +144,17 @@ def search_authors(http: ProviderHttp, query: str, *, language: str = "en", limi
     payload = http.get_json(API, {"action": "wbsearchentities", "search": text, "language": ui, "uselang": ui, "type": "item", "limit": max(1, min(20, limit * 2)), "format": "json", "formatversion": 2})
     ids = [str(item.get("id")) for item in payload.get("search") or [] if isinstance(item, dict)]
     entities = get_entities(http, ids, props="labels|descriptions|aliases|claims|sitelinks", languages=[ui])
-    people = [author_candidate(entities[qid], [ui]) for qid in ids if qid in entities and HUMAN in _claim_values(entities[qid], P_INSTANCE)]
+    language_items = {
+        item
+        for entity in entities.values()
+        for item in _claim_values(entity, P_SPOKEN_LANGUAGE)
+    }
+    language_item_codes = language_codes(http, sorted(language_items)) if language_items else {}
+    people = [
+        author_candidate(entities[qid], [ui], language_item_codes)
+        for qid in ids
+        if qid in entities and HUMAN in _claim_values(entities[qid], P_INSTANCE)
+    ]
     return people[:limit]
 
 
@@ -145,7 +167,9 @@ def resolve_author(http: ProviderHttp, qid: str, *, language: str = "en") -> Res
         raise CaptureError(CaptureErrorCode.AUTHOR_NOT_FOUND, "Wikidata has no such person.")
     if HUMAN not in _claim_values(entity, P_INSTANCE):
         raise CaptureError(CaptureErrorCode.IDENTITY_MISMATCH, "The chosen Wikidata item is not a person.")
-    candidate = author_candidate(entity, [ui])
+    language_items = _claim_values(entity, P_SPOKEN_LANGUAGE)
+    language_item_codes = language_codes(http, sorted(language_items)) if language_items else {}
+    candidate = author_candidate(entity, [ui], language_item_codes)
     external = {name: str(values[0]) for prop, name in EXTERNAL_IDS.items() if (values := _claim_values(entity, prop))}
     return ResolvedAuthor(
         identity_id=f"wikidata:{qid}",
@@ -155,6 +179,7 @@ def resolve_author(http: ProviderHttp, qid: str, *, language: str = "en") -> Res
         description=candidate.description,
         birth_year=candidate.birth_year,
         death_year=candidate.death_year,
+        languages=candidate.languages,
         external_ids=external,
         wikisource_sitelinks=candidate.wikisource_sitelinks,
     )

@@ -1,6 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { ref } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as graphqlClient from "../../src/api/graphql/client";
 
 const corpusReviewReads = vi.hoisted(() => ({
   queuePage: vi.fn(),
@@ -121,6 +122,7 @@ function setup(overrides: Record<string, unknown> = {}) {
 describe("useCorpusReviewRecords", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(graphqlClient, "clearGraphQLReadCache").mockImplementation(() => undefined);
     corpusReviewReads.metadataFacets.mockResolvedValue({});
     corpusReviewReads.records.mockResolvedValue([]);
     corpusReviewReads.rows.mockResolvedValue([]);
@@ -201,5 +203,24 @@ describe("useCorpusReviewRecords", () => {
 
     expect(state.selectedRecord.value?.record_id).toBe("r2");
     expect(state.reviewRecords.loadingRecordId.value).toBe("");
+  });
+
+  it("invalidates read projections before a mutation-triggered queue reset", async () => {
+    const state = setup();
+    corpusReviewReads.queuePage.mockResolvedValue(page([row("r1")]));
+
+    await state.reviewRecords.refreshRecords(true);
+
+    expect(graphqlClient.clearGraphQLReadCache).toHaveBeenCalledTimes(1);
+    expect(corpusReviewReads.queuePage).toHaveBeenCalledTimes(1);
+  });
+
+  it("invalidates read projections when applying an authoritative record", () => {
+    const state = setup();
+    const updated = record("r1", 2, { review_disposition: "rejected" });
+
+    state.reviewRecords.applyRecord(updated);
+
+    expect(graphqlClient.clearGraphQLReadCache).toHaveBeenCalledTimes(1);
   });
 });

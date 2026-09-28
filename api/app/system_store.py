@@ -61,6 +61,7 @@ class SystemStore:
             "settings": {},
             "annotations": [],
             "languages": {code: dict(language) for code, language in BUILT_IN_LANGUAGES.items()},
+            "vector_sync_suppressions": {},
         }
 
     def _ensure(self) -> None:
@@ -81,6 +82,21 @@ class SystemStore:
 
     def storage_info(self) -> dict[str, Any]:
         return self.repository.describe()
+
+    def vector_sync_suppressions(self, store_name: str) -> dict[str, str]:
+        with self._lock:
+            data = self._read()
+            values = data.get("vector_sync_suppressions", {}).get(store_name, {})
+            return dict(values) if isinstance(values, dict) else {}
+
+    def set_vector_sync_suppression(self, store_name: str, record_id: str, fingerprint: str) -> dict[str, str]:
+        with self._lock:
+            data = self._read()
+            all_values = data.setdefault("vector_sync_suppressions", {})
+            store_values = all_values.setdefault(store_name, {})
+            store_values[str(record_id)] = str(fingerprint)
+            self._write(data)
+            return dict(store_values)
 
     @staticmethod
     def _public_profile(profile: dict[str, Any]) -> dict[str, Any]:

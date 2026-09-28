@@ -55,19 +55,54 @@ export function isAbortError(error: unknown): boolean {
     : (error as { name?: string } | null)?.name === "AbortError";
 }
 
-export async function execute<TResult, TVariables>(
+const READ_CACHE_TTL_MS = 1500;
+const readCache = new Map<string, { expiresAt: number; value: unknown }>();
+const pendingReads = new Map<string, Promise<unknown>>();
+let cacheEpoch = 0;
+
+function clone<T>(value: T): T {
+  if (typeof structuredClone === "function") return structuredClone(value);
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+/** Invalidate read projections after a realtime event or an authenticated mutation. */
+export function clearGraphQLReadCache(): void {
+  cacheEpoch += 1;
+  readCache.clear();
+  pendingReads.clear();
+}
+
+export function execute<TResult, TVariables>(
   document: TypedDocumentString<TResult, TVariables>,
   variables: TVariables,
   options: ExecuteOptions = {},
 ): Promise<TResult> {
   const query = document.toString();
   const operationName = operationNameOf(query);
-  const response = await apiRequest<GraphQLResponse<TResult>>(GRAPHQL_ENDPOINT, {
+  const key = `${operationName}:${JSON.stringify(variables)}`;
+  const cached = readCache.get(key);
+  if (cached && cached.expiresAt > Date.now())
+    return Promise.resolve(clone(cached.value) as TResult);
+  const pending = pendingReads.get(key);
+  if (pending) return pending.then((value) => clone(value) as TResult);
+
+  const requestEpoch = cacheEpoch;
+  const request = apiRequest<GraphQLResponse<TResult>>(GRAPHQL_ENDPOINT, {
     method: "POST",
     body: JSON.stringify({ query, variables, operationName }),
     signal: options.signal,
-  });
-  if (response.errors?.length) throw new GraphQLRequestError(operationName, response.errors);
-  if (response.data == null) throw new GraphQLRequestError(operationName, []);
-  return response.data;
+  })
+    .then((response) => {
+      if (response.errors?.length) throw new GraphQLRequestError(operationName, response.errors);
+      if (response.data == null) throw new GraphQLRequestError(operationName, []);
+      const value = response.data;
+      if (requestEpoch === cacheEpoch)
+        readCache.set(key, { expiresAt: Date.now() + READ_CACHE_TTL_MS, value: clone(value) });
+      return value;
+    })
+    .finally(() => {
+      if (pendingReads.get(key) === request) pendingReads.delete(key);
+    });
+  pendingReads.set(key, request);
+  return request.then((value) => clone(value));
 }
