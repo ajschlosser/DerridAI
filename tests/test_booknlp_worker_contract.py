@@ -118,3 +118,26 @@ def test_event_pipeline_does_not_require_a_separate_event_model(monkeypatch, tmp
         "coref_model_path",
         "quote_attribution_model_path",
     }
+
+
+def test_booknlp_model_digest_mismatch_is_reported(monkeypatch, tmp_path):
+    worker = _worker_module()
+    artifacts = {}
+    for env_name in ("BOOKNLP_ENTITY_MODEL", "BOOKNLP_COREF_MODEL", "BOOKNLP_QUOTE_MODEL"):
+        artifact = tmp_path / f"{env_name.lower()}.model"
+        artifact.write_bytes(env_name.encode("utf-8"))
+        monkeypatch.setenv(env_name, str(artifact))
+        artifacts[env_name] = artifact
+
+    import hashlib
+
+    entity_digest = hashlib.sha256(artifacts["BOOKNLP_ENTITY_MODEL"].read_bytes()).hexdigest()
+    monkeypatch.setenv("BOOKNLP_ENTITY_SHA256", entity_digest)
+    monkeypatch.setenv("BOOKNLP_COREF_SHA256", "0" * 64)
+    monkeypatch.delenv("BOOKNLP_QUOTE_SHA256", raising=False)
+
+    manifest = {item["role"]: item for item in worker._artifact_manifest()}
+    assert manifest["entity_model_path"]["verified"] is True
+    assert manifest["coref_model_path"]["verified"] is False
+    assert manifest["quote_attribution_model_path"]["expected_sha256"] is None
+    assert worker._digest_mismatches() == ["coref_model_path"]
