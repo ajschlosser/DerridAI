@@ -24,7 +24,8 @@ interface CorpusTextReviewOptions {
   currentBuild: Ref<CorpusBuild | null>;
   selectedBuildId: Ref<string>;
   selectedRecord: Ref<CorpusRecord | null>;
-  records: Ref<CorpusRecord[]>;
+  /** Patch the review queue's row (and cached Record) from an updated Record. */
+  applyRecordToQueue: (record: CorpusRecord) => void;
   busy: Ref<string>;
   sourceTranscriptionOpen: Ref<boolean>;
   llmActionProviderId: Ref<string>;
@@ -107,8 +108,7 @@ export function useCorpusTextReview(options: CorpusTextReviewOptions) {
     } as CorpusRecord;
 
     options.selectedRecord.value = row;
-    const index = options.records.value.findIndex((item) => item.record_id === recordId);
-    if (index >= 0) options.records.value.splice(index, 1, row);
+    options.applyRecordToQueue(row);
     editingText.value = false;
     resolveSourceOnTextSave.value = false;
     try {
@@ -259,8 +259,7 @@ export function useCorpusTextReview(options: CorpusTextReviewOptions) {
         "dismissed",
       );
       options.selectedRecord.value = updated;
-      const index = options.records.value.findIndex((row) => row.record_id === updated.record_id);
-      if (index >= 0) options.records.value.splice(index, 1, updated);
+      options.applyRecordToQueue(updated);
       llmTouchupOpen.value = false;
     } catch (exc) {
       options.setMessage(exc instanceof Error ? exc.message : String(exc), "error");

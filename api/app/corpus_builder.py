@@ -181,10 +181,15 @@ from .corpus_record_quality import (
     iso_now,
 )
 from .corpus_review_actions import ReviewActionsMixin, _serialize_record_mutation
+from .corpus_review_queue import (
+    QueueFilter,
+    empty_page,
+    observed_metadata_values,
+    select_queue,
+)
 from .corpus_review_state import (
     _decorate_review_state,
     _enforce_review_invariants,
-    _matches_review_queue,
     _metadata_enrichment_finished,
     _queue_counts,
     _sync_record_metadata_state,
@@ -262,7 +267,6 @@ from .metadata_schema import (
     MetadataSchema,
 )
 from .metadata_schema_store import SchemaStore
-from .metadata_values import is_placeholder
 from .models import WorkMetadataRequest, WorkMetadataSeed
 from .nlp_annotations import annotate_record
 from .operation_events import note_corpus_build
@@ -1620,88 +1624,34 @@ class PdfCorpusRepository:
         return records
 
     def page_records(self, build_id: str, *, offset: int = 0, limit: int = 50, needs_review: bool | None = None, disposition: str | None = None, metadata_incomplete: bool | None = None, source_problem: bool | None = None, review_queue: str | None = None, query: str = "") -> dict[str, Any]:
-        # Read the transactional index so review pagination sees interactive
-        # updates immediately. Structural edits intentionally use load_records().
-        self.get_build(build_id)
-        if not self.build_records_path(build_id).exists() and not self.build_records_db_path(build_id).exists():
-            return {
-                "items": [],
-                "total": 0,
-                "offset": offset,
-                "limit": limit,
-                "queue_counts": _queue_counts([]),
-                "metadata_values": {},
-            }
-        q = query.casefold().strip()
-        items: list[dict[str, Any]] = []
-        queue_records: list[dict[str, Any]] = []
-        metadata_values: dict[str, set[str]] = {field: set() for field in ALLOWED_METADATA_FIELDS}
-        total = 0
-        topology_count = 0
-        for record in self.load_records(build_id):
-            for field, value in record.items():
-                if field not in metadata_values and not isinstance(value, (str, list, tuple)):
-                    continue
-                metadata_values.setdefault(field, set())
-                value = record.get(field)
-                values = value if isinstance(value, list) else [value]
-                for item in values:
-                    if isinstance(item, str) and item.strip() and not is_placeholder(item):
-                        metadata_values[field].add(item.strip())
-            deterministic_ingest = record.get("deterministic_ingest")
-            if isinstance(deterministic_ingest, dict):
-                speakers = deterministic_ingest.get("speakers")
-                if isinstance(speakers, (list, tuple)):
-                    for speaker in speakers:
-                        if isinstance(speaker, str) and speaker.strip() and not is_placeholder(speaker):
-                            metadata_values.setdefault("speaker", set()).add(speaker.strip())
-            field_status = record.get("metadata_field_status")
-            if isinstance(field_status, dict):
-                for field, status in field_status.items():
-                    if not isinstance(status, dict):
-                        continue
-                    for candidate_key in ("proposed_value", "llm_value"):
-                        candidate = status.get(candidate_key)
-                        candidates = candidate if isinstance(candidate, (list, tuple)) else [candidate]
-                        for item in candidates:
-                            if isinstance(item, str) and item.strip() and not is_placeholder(item):
-                                metadata_values.setdefault(field, set()).add(item.strip())
-            topology_index = topology_count
-            topology_count += 1
-            if needs_review is not None and bool(record.get("needs_review")) is not needs_review:
-                continue
-            record_disposition = str(record.get("review_disposition") or ("accepted" if record.get("accepted") else "rejected" if record.get("rejected") else "pending"))
-            if disposition is not None and record_disposition != disposition:
-                continue
-            if metadata_incomplete is not None and (not bool(record.get("metadata_complete"))) is not metadata_incomplete:
-                continue
-            if source_problem is not None and bool(record.get("source_quality_issues")) is not source_problem:
-                continue
-            if q and q not in json.dumps(record, ensure_ascii=False).casefold():
-                continue
-            queue_records.append(record)
-            if review_queue and not _matches_review_queue(record, review_queue):
-                continue
-            if total >= offset and len(items) < limit:
-                record["topology_index"] = topology_index
-                _decorate_review_state(record)
-                _present_for_reviewer(record)
-                items.append(record)
-            total += 1
-        for record in items:
-            record["topology_count"] = topology_count
+        """REST's composite review page: full presented Records, queue counts and observed values.
+
+        Reads the transactional index so review pagination sees interactive
+        updates immediately. Structural edits intentionally use load_records().
+        """
+        filters = QueueFilter(
+            needs_review=needs_review, disposition=disposition, metadata_incomplete=metadata_incomplete,
+            source_problem=source_problem, review_queue=review_queue, query=query,
+        )
+        records = self.review_records(build_id)
+        if records is None:
+            return empty_page(offset, limit)
+        selection = select_queue(records, filters, offset=offset, limit=limit)
         return {
-            "items": items,
-            "total": total,
+            "items": selection.items,
+            "total": selection.total,
             "offset": offset,
             "limit": limit,
-            "queue_counts": _queue_counts(queue_records),
-            "metadata_values": {
-                field: sorted(values, key=str.casefold)
-                for field, values in metadata_values.items()
-                if values
-            },
+            "queue_counts": selection.queue_counts,
+            "metadata_values": observed_metadata_values(records),
         }
+
+    def review_records(self, build_id: str) -> list[dict[str, Any]] | None:
+        """Every Record of a build in topology order, or ``None`` before segmentation stored any."""
+        self.get_build(build_id)
+        if not self.build_records_path(build_id).exists() and not self.build_records_db_path(build_id).exists():
+            return None
+        return self.load_records(build_id)
 
     def publication_path(self, publication_id: str) -> Path:
         """Return the immutable publication path, preserving legacy JSONL snapshots."""

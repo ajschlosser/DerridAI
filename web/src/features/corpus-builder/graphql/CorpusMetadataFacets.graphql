@@ -1,0 +1,9 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
+# Build-wide observed metadata values (REST: GET /api/system/data/metadata-exemplars, narrowed to
+# this build). Independent of the review-queue page so suggestions do not depend on which page of
+# the queue happens to be loaded.
+query CorpusMetadataFacets($build_id: String!, $fields: [String!]) {
+  corpus_build(build_id: $build_id) {
+    metadata_facets(fields: $fields)
+  }
+}

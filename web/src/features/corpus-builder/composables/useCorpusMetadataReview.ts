@@ -10,7 +10,6 @@ import {
 import type { ProviderProfile } from "../../../api/system";
 import type { ReviewQueue } from "../../../types/corpus";
 import type { ReviewViewport } from "./useCorpusReviewWorkspace";
-import { reviewableMetadataFieldNames } from "../domain/recordMetadata";
 import { describeDecisionResult } from "../domain/metadataDecisions";
 import { isUsableMetadataSuggestion } from "../../../domain/metadataValues";
 import { allEvidenceBlockIds } from "../../../domain/metadataEvidence";
@@ -33,7 +32,8 @@ interface CorpusMetadataReviewOptions {
   currentBuild: Ref<CorpusBuild | null>;
   selectedRecord: Ref<CorpusRecord | null>;
   selectedRecordId: Ref<string>;
-  records: Ref<CorpusRecord[]>;
+  /** Patch the review queue's row (and cached Record) from an updated Record. */
+  applyRecordToQueue: (record: CorpusRecord) => void;
   busy: Ref<string>;
   selectedEvidenceField: Ref<string>;
   reviewInspectorTab: Ref<"metadata" | "evidence" | "source">;
@@ -101,20 +101,8 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
         (out[field] ??= new Set()).add(value.trim());
       }
     }
-    for (const row of options.records.value) {
-      const source = row as unknown as Record<string, unknown>;
-      const allowed = new Set(
-        reviewableMetadataFieldNames(source, options.currentBuild.value?.schema || null),
-      );
-      for (const field of allowed) {
-        const value = source[field];
-        const values = Array.isArray(value) ? value : [value];
-        for (const item of values) {
-          if (!isUsableMetadataSuggestion(item)) continue;
-          (out[field] ??= new Set()).add(item.trim());
-        }
-      }
-    }
+    // Build-wide observed values come from the server (metadata_facets), so suggestions no longer
+    // depend on which queue page happens to be loaded.
     for (const [field, values] of Object.entries(metadataHumanValues.value)) {
       for (const value of values) (out[field] ??= new Set()).add(value);
     }
@@ -147,8 +135,7 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
 
     options.selectedRecord.value = row;
     metadataDraft.value = JSON.stringify(options.recordMetadata(row), null, 2);
-    const index = options.records.value.findIndex((item) => item.record_id === recordId);
-    if (index >= 0) options.records.value.splice(index, 1, row);
+    options.applyRecordToQueue(row);
     metadataEditorDirty.value = false;
     try {
       localStorage.removeItem(options.metadataDraftKey(buildId, recordId));
@@ -205,8 +192,7 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
 
     options.selectedRecord.value = row;
     metadataDraft.value = JSON.stringify(options.recordMetadata(row), null, 2);
-    const index = options.records.value.findIndex((item) => item.record_id === recordId);
-    if (index >= 0) options.records.value.splice(index, 1, row);
+    options.applyRecordToQueue(row);
     await options.restoreReviewViewport(viewport);
     options.queueRecordRequest(recordId, [field], (rebase) =>
       corpusBuilderApi.patchEvidence(

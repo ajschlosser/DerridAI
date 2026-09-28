@@ -4166,6 +4166,8 @@ EN_US: dict[str, str] = {'common.apply': 'Apply',
  'research.answer_waiting': 'Your research answer will appear here',
  'research.answer_waiting_help': 'Ask a question above. The answer stays in the workspace with its evidence rather '
                                  'than opening in a modal.',
+ 'research.draft_heading': 'Drafting the answer…',
+ 'research.draft_help': 'This preview streams live and citations are not yet bound. It will be replaced by the verified answer when the run finishes.',
  'research.claim_review_kicker': 'Claim audit',
  'research.claim_review_title': 'Review generated claims',
  'research.claim_review_help': 'Validate or reject citation-bound claims while the answer and evidence are still in view. Validated claims become eligible for cached provenance; DerridAI will not validate a claim with no usable support binding.',

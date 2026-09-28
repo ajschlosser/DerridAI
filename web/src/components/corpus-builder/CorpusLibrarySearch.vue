@@ -9,6 +9,7 @@ import {
   type WikisourceProject,
 } from "../../api/corpus";
 import { sortLanguageCodes } from "../../domain/languages";
+import { followResource } from "../../realtime/follow";
 import { useI18nStore } from "../../stores/i18n";
 import AppIcon from "../AppIcon.vue";
 
@@ -96,7 +97,7 @@ const input = ref<HTMLInputElement | null>(null);
 const results = ref<HTMLElement | null>(null);
 const library = ref<Library>("gutenberg");
 let debounce: number | undefined;
-let poll: number | undefined;
+let stopFollowingGutenberg: (() => void) | undefined;
 
 const languageNames = computed(() => {
   try {
@@ -315,19 +316,15 @@ watch(
     if (count > (before ?? 0)) close();
   },
 );
-// The collection status is polled only while something is changing (a download, an unpack, a catalogue refresh).
-watch(
-  () => [archiveStatus.value, catalogueRefreshing.value] as const,
-  ([archive, refreshing]) => {
-    window.clearInterval(poll);
-    poll = undefined;
-    if (refreshing || ["downloading", "downloaded", "unpacking"].includes(archive))
-      poll = window.setInterval(() => emit("refreshGutenbergStatus"), 2000);
-  },
-  { immediate: true },
-);
 onMounted(() => {
   emit("refreshGutenbergStatus");
+  // The offline collection is background work, not a tracked job: follow its realtime
+  // activity topic instead of polling on a timer (falls back to a slow poll only while
+  // the socket is unavailable).
+  stopFollowingGutenberg = followResource({
+    topic: "activity:gutenberg",
+    refresh: () => emit("refreshGutenbergStatus"),
+  });
   void loadProjects();
   const element = dialog.value;
   if (element && !element.open) {
@@ -338,7 +335,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   window.clearTimeout(debounce);
-  window.clearInterval(poll);
+  stopFollowingGutenberg?.();
 });
 </script>
 

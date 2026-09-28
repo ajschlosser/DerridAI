@@ -1,0 +1,13 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
+# Full reviewer-presented Records, read one at a time when a queue row is opened. `review_document`
+# is the transitional escape hatch: the review panels still consume the full presented Record as
+# JSON (docs/GRAPHQL.md); the typed fields alongside it are for a future migration, not read here.
+query CorpusReviewRecords($build_id: String!, $record_ids: [String!]!) {
+  corpus_build(build_id: $build_id) {
+    records(record_ids: $record_ids) {
+      record_id
+      record_revision
+      review_document
+    }
+  }
+}

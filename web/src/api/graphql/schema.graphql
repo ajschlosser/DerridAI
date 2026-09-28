@@ -1,0 +1,485 @@
+"""
+The normative cELF 1.0 type graph (same payload as GET /api/derridai/model).
+"""
+type CelfModel {
+  specification_version: String!
+  nodes: [CelfObjectType!]!
+  edges: [CelfRelationship!]!
+}
+
+"""A normative cELF object type."""
+type CelfObjectType {
+  type: String!
+  profile: String!
+  persistence: String!
+  label: String!
+  normative: Boolean!
+}
+
+"""A normative, walkable relationship between cELF object types."""
+type CelfRelationship {
+  id: String!
+  source_type: String!
+  target_type: String!
+  relation: String!
+  inverse_relation: String!
+  source_cardinality: String!
+  target_cardinality: String!
+  profile: String!
+  normative: Boolean!
+}
+
+"""
+One PDF Corpus Builder build's reviewable Records (REST: /api/pdf/corpus-builds/{id}).
+"""
+type CorpusBuildReview {
+  build_id: String!
+
+  """
+  The paged, filtered review queue (REST: GET /api/pdf/corpus-builds/{id}/records).
+  """
+  review_queue(offset: Int! = 0, limit: Int! = 50, needs_review: Boolean = null, disposition: String = null, metadata_incomplete: Boolean = null, source_problem: Boolean = null, review_queue: String = null, query: String! = ""): CorpusReviewQueuePage!
+
+  """Queue-row projections for specific Records, in the order requested."""
+  rows(record_ids: [String!]!): [CorpusQueueRow]!
+
+  """
+  One reviewer-presented Record (REST: full Record from the review page).
+  """
+  record(record_id: String!): CorpusRecord!
+
+  """
+  Reviewer-presented Records, in the order requested (missing ids come back null).
+  """
+  records(record_ids: [String!]!): [CorpusRecord]!
+
+  """
+  Build-wide observed metadata values, optionally narrowed to specific fields.
+  """
+  metadata_facets(fields: [String!] = null): JSON!
+}
+
+"""Build-wide review-queue counts by state."""
+type CorpusQueueCounts {
+  all: Int!
+  ready: Int!
+  preparing: Int!
+  issues: Int!
+  metadata: Int!
+  topology: Int!
+  source: Int!
+  accepted: Int!
+  rejected: Int!
+  pending: Int!
+}
+
+"""
+One review-queue row: identifiers, page labels, review state and a short preview. Never the full text or metadata (REST: GET /api/pdf/corpus-builds/{id}/records, each `items` entry).
+"""
+type CorpusQueueRow {
+  record_id: String!
+  record_revision: Int
+  page_start: String
+  page_end: String
+  text_length: Int!
+  text_preview: String!
+  review_state: String
+  review_disposition: String
+  review_issue_codes: [String!]!
+  metadata_llm_processed: Boolean!
+  needs_review: Boolean!
+  source_quality_issues: Boolean!
+  metadata_complete: Boolean!
+}
+
+"""
+A reviewer-presented Corpus Builder Record. `review_document` is transitional: the review panels still consume the full presented Record as JSON; prefer the typed fields above where they exist.
+"""
+type CorpusRecord {
+  record_id: String!
+  record_revision: Int
+  work: String
+  text: String!
+  review_state: String
+  review_disposition: String
+  review_document: JSON!
+}
+
+"""One page of the review queue: rows, total, and build-wide counts."""
+type CorpusReviewQueuePage {
+  items: [CorpusQueueRow!]!
+  total: Int!
+  offset: Int!
+  limit: Int!
+  queue_counts: CorpusQueueCounts!
+}
+
+"""A revision-bound evidence locator."""
+type EvidenceRef {
+  evidence_ref_id: String!
+  locator_kind: String
+  record_id: String
+  record_revision: Int
+  source_document_id: String
+}
+
+"""
+One field value with independent derivation, evaluation and authority. A value is never exposed without the provenance dimensions that qualify it.
+"""
+type FieldAssertion {
+  assertion_id: String!
+  field_id: String
+  field_name: String
+
+  """Schema-defined value; arbitrary by design."""
+  value: JSON
+  derivation_method: String
+  evaluation_status: String
+  authority_status: String
+  value_status: String
+  confidence: Float
+  reason: String
+  method: String
+  actor: String
+  model: String
+  run_id: String
+  record_revision: Int
+  evidence: JSON
+  created_at: String
+  supersedes_assertion_id: String
+
+  """Whether this is the field's selected current assertion."""
+  is_current: Boolean!
+}
+
+"""A claim produced by a research run, owner-scoped."""
+type GeneratedClaim {
+  claim_id: String!
+  claim_text: String!
+  run_id: String
+  response_record_id: String
+  answer_start: Int
+  answer_end: Int
+  validation_status: String!
+  validated_by: String
+  validated_at: String
+  created_at: String
+
+  """Durable support bindings for this claim (batched per request)."""
+  support_bindings: [SupportBinding!]!
+
+  """
+  Advisory validated-claim precedents (REST: GET /api/derridai/claims/{id}/similar).
+  """
+  similar_validated_claims(limit: Int! = 5): [SimilarValidatedClaim!]!
+}
+
+"""
+The `JSON` scalar type represents JSON values as specified by [ECMA-404](https://ecma-international.org/wp-content/uploads/ECMA-404_2nd_edition_december_2017.pdf).
+"""
+scalar JSON @specifiedBy(url: "https://ecma-international.org/wp-content/uploads/ECMA-404_2nd_edition_december_2017.pdf")
+
+"""
+One reviewed metadata exemplar (REST: GET /api/system/data/metadata-exemplars rows).
+"""
+type MetadataExemplar {
+  exemplar_id: String!
+  scope_id: String
+  record_id: String
+  record_revision: Int
+  source_document_id: String
+  field_name: String
+  field_value: JSON
+  kind: String!
+  assertion_status: String
+  schema_id: String
+  schema_version: String
+  language: String
+  region_type: String
+  evidence_hash: String
+  evidence_block_ids: JSON!
+  context_text: String!
+}
+
+"""
+Distinct values observed across the current exemplar collection, for filter UIs.
+"""
+type MetadataExemplarFacets {
+  fields: [String!]!
+  kinds: [String!]!
+  languages: [String!]!
+  scopes: [String!]!
+  schemas: [String!]!
+}
+
+"""
+A page of metadata exemplars. `exists=false` means the projection has not run yet.
+"""
+type MetadataExemplarPage {
+  exists: Boolean!
+  count: Int!
+  offset: Int!
+  limit: Int!
+  rows: [MetadataExemplar!]!
+  facets: MetadataExemplarFacets!
+
+  """
+  Unprojected reviewed-metadata work, with the most recent failure per build.
+  """
+  projection_backlog: JSON!
+}
+
+"""Read-only cELF queries. Commands are REST; live events are WebSocket."""
+type Query {
+  """The normative cELF type graph (REST: GET /api/derridai/model)."""
+  celf_model: CelfModel!
+
+  """
+  Walkable instance graph around one Record (REST: POST /api/derridai/graph/record). `record` is the caller's local Record snapshot; claims and support are joined server-side.
+  """
+  record_graph(record: JSON!, include_assertion_history: Boolean! = false): ResearchObjectGraph!
+
+  """One owner-scoped generated claim."""
+  generated_claim(claim_id: String!): GeneratedClaim!
+
+  """One Research run with its answer and cited evidence."""
+  research_run(run_id: String!): ResearchRun!
+
+  """
+  A PDF Corpus Builder build by id (REST: GET /api/pdf/corpus-builds/{id}).
+  """
+  corpus_build(build_id: String!): CorpusBuildReview!
+
+  """A vector store by name (REST: GET /api/stores/{name})."""
+  vector_store(name: String!): VectorStore!
+
+  """
+  Progressive metadata exemplars (REST: GET /api/system/data/metadata-exemplars).
+  """
+  metadata_exemplars(offset: Int! = 0, limit: Int! = 50, field: String! = "", kind: String! = "", language: String! = "", scope_id: String! = "", schema_id: String! = "", record_id: String! = ""): MetadataExemplarPage!
+}
+
+"""
+An edge of the instance graph, annotated from the normative relationship registry.
+"""
+type ResearchObjectEdge {
+  id: String!
+  source: String!
+  target: String!
+  relation: String!
+  inverse_relation: String!
+  normative: Boolean!
+  source_cardinality: String
+  target_cardinality: String
+  profile: String
+  status: String
+}
+
+"""A finite, re-centerable cELF instance graph around one Record."""
+type ResearchObjectGraph {
+  specification_version: String!
+  root_id: String!
+  hidden_assertion_count: Int!
+
+  """
+  client_snapshot: Record state came from the caller; claims/support are server-owned.
+  """
+  record_state_origin: String!
+  nodes: [ResearchObjectNode!]!
+  edges: [ResearchObjectEdge!]!
+}
+
+"""
+A node of the instance graph. Typed projections resolve for their object_type only.
+"""
+type ResearchObjectNode {
+  id: String!
+  object_type: String!
+  object_id: String!
+  label: String!
+  summary: String!
+
+  """
+  materialized | embedded | reference | derived_view. Derived views are never canonical.
+  """
+  materialization: String!
+  status: String
+  details: JSON!
+  source_span: SourceSpan
+  field_assertion: FieldAssertion
+  evidence_ref: EvidenceRef
+
+  """The owner-scoped durable claim behind a GeneratedClaim node (batched)."""
+  generated_claim: GeneratedClaim
+}
+
+"""
+A Research (RAG) run: its answer and cited evidence (REST: GET /api/jobs/{id}).
+"""
+type ResearchRun {
+  run_id: String!
+  status: String!
+  stage: String
+  owner: String
+  prompt: String
+  provider: String
+  model: String
+  created_at: String
+  started_at: String
+  finished_at: String
+  answer: String
+  warnings: [String!]!
+
+  """
+  Cited evidence entries. Researcher-owned runs already have record text summarized.
+  """
+  evidence: JSON!
+
+  """Generated claims produced by this run (administrator-only)."""
+  generated_claims: [GeneratedClaim!]!
+}
+
+"""Record support carried by an advisory validated-claim precedent."""
+type SimilarClaimSupport {
+  record_id: String!
+  record_revision: Int
+  relation: String
+
+  """Checked attribution snapshot (speaker, position_holder, …)."""
+  semantic: JSON!
+}
+
+"""Advisory precedent only: similarity never asserts evidentiary support."""
+type SimilarValidatedClaim {
+  claim_id: String!
+  claim_text: String!
+  similarity: Float!
+  validated_by: String
+  validated_at: String
+  advisory: Boolean!
+  support: [SimilarClaimSupport!]!
+}
+
+"""
+A medium-aware documentary locator. Audio spans use time and speaker, never PDF pages.
+"""
+type SourceSpan {
+  source_document_id: String
+  source_span_id: String
+  source_unit_ids: [String!]!
+  locator_kind: String
+  physical_page_start: Int
+  physical_page_end: Int
+  printed_page_start: String
+  printed_page_end: String
+  character_start: Int
+  character_end: Int
+  time_start: Float
+  time_end: Float
+  speaker: String
+}
+
+"""
+A durable support relation between a generated claim and Record evidence.
+"""
+type SupportBinding {
+  support_binding_id: String!
+  claim_id: String!
+  record_id: String!
+  record_revision: Int
+  source_document_id: String
+  relation: String!
+
+  """
+  unvalidated | validated | stale | rejected | unresolved. Stale/unresolved stay visible.
+  """
+  validation_status: String!
+
+  """Deterministic citation rendered when bound."""
+  citation: JSON
+  created_at: String
+
+  """Medium-aware source spans bound as evidence."""
+  source_spans: [SourceSpan!]!
+}
+
+"""
+A full vector-store Record projection. Derived, never canonical: `graph` builds a walkable cELF graph from this stored record's own fields, which is weaker provenance than a `record_graph` built from the canonical corpus Record (materialization: vector_projection).
+"""
+type VectorRecord {
+  chroma_id: String!
+  record_id: String
+  work: String
+  text: String!
+
+  """
+  True when text was shortened by the researcher-text policy (REST: summarize_record).
+  """
+  text_summarized: Boolean!
+  materialization: String!
+
+  """
+  The full stored record, already access-scoped (researcher-text-summarized when applicable).
+  """
+  document: JSON!
+
+  """
+  record_graph built from this stored record's own fields (record_state_origin: vector_projection).
+  """
+  graph: ResearchObjectGraph!
+}
+
+"""
+A page of vector-store table rows (REST: GET /api/stores/{name}/records).
+"""
+type VectorRecordPage {
+  items: [VectorRecordRow!]!
+  count: Int!
+  offset: Int!
+  limit: Int!
+  work: String
+}
+
+"""
+One vector-store table row: identifiers, work, pages and a short preview. Never the full text (materialization: vector_projection).
+"""
+type VectorRecordRow {
+  chroma_id: String!
+  record_id: String
+  work: String
+  page_start: String
+  page_end: String
+  text_preview: String!
+  materialization: String!
+}
+
+"""
+A Chroma-backed vector store: derived corpus projection, never canonical.
+"""
+type VectorStore {
+  name: String!
+
+  """A page of vector-store records (REST: GET /api/stores/{name}/records)."""
+  records(offset: Int! = 0, limit: Int! = 100, work: String = null): VectorRecordPage!
+
+  """
+  One vector-store record by chroma_id (REST: GET /api/stores/{name}/records/{id}).
+  """
+  record(chroma_id: String!): VectorRecord
+
+  """Per-work aggregate stats (REST: GET /api/stores/{name}/works)."""
+  works: [VectorWorkStat!]!
+}
+
+"""
+Aggregate stats for one work across the store (REST: GET /api/stores/{name}/works).
+"""
+type VectorWorkStat {
+  work: String!
+  count: Int!
+  total_words: Int!
+  average_record_length: Int!
+
+  """Other fields observed for the work (mixed values, edition, …)."""
+  details: JSON!
+}

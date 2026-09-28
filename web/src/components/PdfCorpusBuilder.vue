@@ -59,6 +59,12 @@ import { useCorpusSourceConfiguration } from "../features/corpus-builder/composa
 import { useCorpusProviderConfiguration } from "../features/corpus-builder/composables/useCorpusProviderConfiguration";
 import { useCorpusBuildLifecycleController } from "../features/corpus-builder/composables/useCorpusBuildLifecycleController";
 import { useCorpusReviewNavigation } from "../features/corpus-builder/composables/useCorpusReviewNavigation";
+import {
+  useCorpusReviewRecords,
+  type ReviewTarget,
+} from "../features/corpus-builder/composables/useCorpusReviewRecords";
+import type { CorpusQueueRow } from "../features/corpus-builder/api/reviewReads";
+import { rowHasSourceWarning } from "../features/corpus-builder/domain/queueRows";
 import { useCorpusReviewDecisions } from "../features/corpus-builder/composables/useCorpusReviewDecisions";
 import { useCorpusTextReview } from "../features/corpus-builder/composables/useCorpusTextReview";
 import { useCorpusMetadataReview } from "../features/corpus-builder/composables/useCorpusMetadataReview";
@@ -91,11 +97,7 @@ import { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
 import CorpusRecordDecisionDock from "./corpus-builder/CorpusRecordDecisionDock.vue";
 import { recordIssueKinds } from "../domain/corpusReview";
 import { RecordMutationQueue } from "../domain/recordMutationQueue";
-import {
-  firstRecordWithSourceWarning,
-  hideSourceWarnings,
-  sourceWarningsHidden,
-} from "../domain/sourceQuality";
+import { hideSourceWarnings, sourceWarningsHidden } from "../domain/sourceQuality";
 import { recurringShortLines } from "../domain/textCleanup";
 import { allEvidenceBlockIds } from "../domain/metadataEvidence";
 import * as runtime from "../runtime/runtime.js";
@@ -143,8 +145,6 @@ const {
   refreshProviders,
   applyBuildRequest,
 } = useCorpusProviderConfiguration(currentBuild);
-const records = ref<CorpusRecord[]>([]);
-const recordTotal = ref(0);
 const recordOffset = ref(0);
 const pageSize = 50;
 const selectedRecordId = ref("");
@@ -180,6 +180,45 @@ const {
 function setRecordListElement(element: HTMLElement | null) {
   recordListEl.value = element;
 }
+// The queue list holds lightweight rows; full Records are read one at a time when opened.
+const reviewRecords = useCorpusReviewRecords({
+  selectedBuildId,
+  currentBuild,
+  recordOffset,
+  pageSize,
+  reviewQueue,
+  recordQuery,
+  selectedRecordId,
+  selectedRecord,
+  hasActiveDraft: () => editingText.value || metadataEditorDirty.value,
+  activateRecord,
+  onSelectionCleared: () => {
+    sourceBlocks.value = [];
+  },
+  onPageLoaded: offerFirstSourceProblem,
+  onFacets: (values) => {
+    metadataObservedValues.value = values;
+  },
+  onError: (message) => setMessage(message, "error"),
+});
+const {
+  queueRows,
+  recordTotal,
+  recordsLoading,
+  reviewHydrated,
+  hydratedTopologyCount,
+  loadingRecordId,
+  refreshRecords,
+  applyRecord: applyRecordToQueue,
+} = reviewRecords;
+function selectRecord(target: ReviewTarget) {
+  return reviewRecords.selectRecord(target);
+}
+// Optimistic edits replace selectedRecord; keep the cached copy in step so returning to this Record
+// shows what the reviewer last saw rather than the version read before the edit.
+watch(selectedRecord, (record) => {
+  if (record) reviewRecords.remember(record);
+});
 // Hands-free mode: nobody reviews, a stated policy decides (see the server's autonomous.py). Off unless turned on.
 const handsFree = ref<AutonomousPolicy>({
   enabled: false,
@@ -258,11 +297,7 @@ function openHandsFreeException(recordId: string) {
   reviewQueue.value = "all";
   recordQuery.value = recordId;
 }
-const recordsLoading = ref(false);
-const reviewHydrated = ref(false);
-const hydratedTopologyCount = ref(0);
 const hydratedMetadataCount = ref(0);
-let recordRequestSerial = 0;
 const busy = ref("");
 const {
   assets,
@@ -347,7 +382,7 @@ const {
   currentBuild,
   selectedBuildId,
   selectedRecord,
-  records,
+  applyRecordToQueue: applyRecordToQueue,
   busy,
   sourceTranscriptionOpen,
   llmActionProviderId,
@@ -422,15 +457,13 @@ const {
   applyBuildRequest,
   setMessage,
   resetReviewForBuildStart: () => {
-    reviewHydrated.value = false;
-    hydratedTopologyCount.value = 0;
     hydratedMetadataCount.value = 0;
-    records.value = [];
-    recordTotal.value = 0;
+    reviewRecords.clear();
     selectedRecord.value = null;
     sourceBlocks.value = [];
   },
   refreshRecords,
+  refreshRows: reviewRecords.refreshRows,
   t: (key, fallback) => i18n.t(key, fallback),
   tf: (key, values) => i18n.tf(key, values),
 });
@@ -477,7 +510,7 @@ const {
   currentBuild,
   selectedRecord,
   selectedRecordId,
-  records,
+  applyRecordToQueue: applyRecordToQueue,
   busy,
   selectedEvidenceField,
   reviewInspectorTab,
@@ -744,8 +777,8 @@ watch(lastIngestedAsset, (asset) => {
   if (asset) maybeOpenIngestWarning(asset);
 });
 
-function openRecordSourceWarning(record: CorpusRecord) {
-  selectRecord(record);
+function openRecordSourceWarning(target: ReviewTarget) {
+  void selectRecord(target);
   recordSourceWarningOpen.value = true;
 }
 function acknowledgeRecordSourceWarning(dontShowAgain = false) {
@@ -776,12 +809,19 @@ const visibleBlocks = computed(() => {
   const ids = new Set(selectedRecord.value?.source_block_ids || []);
   return sourceBlocks.value.filter((block) => ids.has(block.block_id));
 });
-const recurringCleanupLines = computed(() =>
-  recurringShortLines(
-    records.value.map((row) => String(row.text || "")),
-    3,
-  ),
-);
+// Repeated short lines (running heads) are found across the visible page's text, read only when
+// the clean-up dialog opens: queue rows never carry full text.
+const cleanupPageTexts = ref<string[]>([]);
+watch(textCleanupOpen, async (open) => {
+  cleanupPageTexts.value = [];
+  if (!open) return;
+  try {
+    cleanupPageTexts.value = await reviewRecords.visiblePageTexts();
+  } catch {
+    // The dialog still cleans with its other rules.
+  }
+});
+const recurringCleanupLines = computed(() => recurringShortLines(cleanupPageTexts.value, 3));
 const cleanupDocumentTerms = computed(() =>
   [
     currentBuild.value?.manifest?.title,
@@ -801,7 +841,7 @@ const metadataComplete = computed(
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- SA-13: preserve legacy setup binding until its owning workflow is extracted.
 const canPublish = computed(() => Boolean(currentBuild.value?.publication_readiness?.can_publish));
 const selectedRecordIndex = computed(() =>
-  records.value.findIndex((row) => row.record_id === selectedRecordId.value),
+  queueRows.value.findIndex((row) => row.record_id === selectedRecordId.value),
 );
 const {
   boundarySliceOpen,
@@ -817,7 +857,7 @@ const {
   currentBuild,
   selectedRecord,
   selectedRecordId,
-  records,
+  queueRows,
   recordTotal,
   recordOffset,
   selectedRecordIndex,
@@ -858,7 +898,7 @@ const {
 } = useCorpusReviewNavigation({
   reviewRequested,
   currentBuild,
-  records,
+  queueRows,
   recordTotal,
   recordOffset,
   selectedRecord,
@@ -877,7 +917,7 @@ const {
 });
 const nextQueueRecordId = computed(() => {
   const index = selectedRecordIndex.value;
-  return index >= 0 ? records.value[index + 1]?.record_id || "" : "";
+  return index >= 0 ? queueRows.value[index + 1]?.record_id || "" : "";
 });
 // Review is the point of this screen, so the first time a build's records are ready, bring the workspace to the top.
 let reviewScrolledFor = "";
@@ -1126,7 +1166,7 @@ const {
   currentBuild,
   selectedRecord,
   selectedRecordId,
-  records,
+  queueRows,
   recordTotal,
   reviewQueue,
   recordQuery,
@@ -1300,8 +1340,7 @@ function applyAuthoritativeRecord(record: CorpusRecord, build?: CorpusBuild | nu
   // A later save is already queued and shown optimistically; this older response would briefly revert it.
   // The last response in the queue carries the authoritative state for all of them.
   if (!recordSaveQueue.hasQueuedBehind(id)) {
-    const index = records.value.findIndex((item) => item.record_id === id);
-    if (index >= 0) records.value.splice(index, 1, record);
+    applyRecordToQueue(record);
     if (selectedRecordId.value === id) {
       selectedRecord.value = record;
       metadataDraft.value = JSON.stringify(recordMetadata(record), null, 2);
@@ -1405,108 +1444,16 @@ async function refreshCorpusProfiles() {
     corpusProfiles.value = [];
   }
 }
-async function refreshRecords(reset = false, preferredId = "") {
-  if (reset) recordOffset.value = 0;
-  if (!selectedBuildId.value) {
-    records.value = [];
-    metadataObservedValues.value = {};
-    recordTotal.value = 0;
-    selectedRecord.value = null;
-    reviewHydrated.value = false;
-    hydratedTopologyCount.value = 0;
-    return;
-  }
-  const requestId = ++recordRequestSerial;
-  recordsLoading.value = true;
-  try {
-    const expected = Number(
-      currentBuild.value?.record_count || currentBuild.value?.metadata_total || 0,
-    );
-    let result: {
-      items: CorpusRecord[];
-      total: number;
-      offset: number;
-      limit: number;
-      queue_counts?: CorpusBuild["review_queue_counts"];
-      metadata_values?: Record<string, string[]>;
-    } = { items: [], total: 0, offset: recordOffset.value, limit: pageSize };
-    // Record persistence can become visible a fraction after build.json on a refresh.
-    // Hydrate independently of form interaction and retry the read while the build
-    // explicitly advertises topology that should already exist.
-    for (let attempt = 0; attempt < 5; attempt++) {
-      result = await corpusBuilderApi.records(
-        selectedBuildId.value,
-        recordOffset.value,
-        pageSize,
-        reviewQueue.value,
-        recordQuery.value,
-      );
-      if (
-        result.total > 0 ||
-        expected === 0 ||
-        reviewQueue.value !== "all" ||
-        Boolean(recordQuery.value)
-      )
-        break;
-      await new Promise((resolve) => window.setTimeout(resolve, 120 * (attempt + 1)));
-      if (requestId !== recordRequestSerial) return;
-    }
-    if (requestId !== recordRequestSerial) return;
-    if (result.queue_counts && currentBuild.value)
-      currentBuild.value = { ...currentBuild.value, review_queue_counts: result.queue_counts };
-    metadataObservedValues.value = result.metadata_values || {};
-    records.value = result.items;
-    recordTotal.value = result.total;
-    reviewHydrated.value = true;
-    const firstSourceProblem = firstRecordWithSourceWarning(result.items);
-    if (
-      firstSourceProblem &&
-      !sourceWarningsHidden() &&
-      sourceProblemDialogBuildId.value !== selectedBuildId.value &&
-      !recordSourceWarningOpen.value
-    ) {
-      sourceProblemDialogBuildId.value = selectedBuildId.value;
-      openRecordSourceWarning(firstSourceProblem);
-    }
-    const filteredRecordView = reviewQueue.value !== "all" || Boolean(recordQuery.value);
-    if (result.total > 0 || expected === 0 || filteredRecordView)
-      // A zero-row filtered queue is still a successful hydration. Track the
-      // build's advertised topology, not the filtered row count, or an empty
-      // "issues" queue will be fetched again on every build-status poll.
-      hydratedTopologyCount.value = Math.max(hydratedTopologyCount.value, expected, result.total);
-    const wanted = preferredId || selectedRecordId.value;
-    const match = wanted ? records.value.find((row) => row.record_id === wanted) : undefined;
-    const preserveDraft = Boolean(
-      selectedRecord.value &&
-        selectedRecordId.value === wanted &&
-        (editingText.value || metadataEditorDirty.value),
-    );
-    if (match && !preserveDraft) {
-      selectRecord(match);
-      return;
-    }
-    if (match && preserveDraft) {
-      return;
-    }
-    // Background queue growth/filter churn must never replace the record the
-    // reviewer is actively working on. Explicit queue/search navigation clears
-    // selectedRecordId before calling refreshRecords.
-    if (selectedRecord.value && selectedRecordId.value === wanted) {
-      return;
-    }
-    if (records.value[0] && !selectedRecordId.value) {
-      selectRecord(records.value[0]);
-      return;
-    }
-    if (!editingText.value && !metadataEditorDirty.value && !selectedRecordId.value) {
-      selectedRecord.value = null;
-      sourceBlocks.value = [];
-    }
-  } catch (exc) {
-    reviewHydrated.value = true;
-    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
-  } finally {
-    if (requestId === recordRequestSerial) recordsLoading.value = false;
+function offerFirstSourceProblem(rows: CorpusQueueRow[]) {
+  const first = rows.find(rowHasSourceWarning);
+  if (
+    first &&
+    !sourceWarningsHidden() &&
+    sourceProblemDialogBuildId.value !== selectedBuildId.value &&
+    !recordSourceWarningOpen.value
+  ) {
+    sourceProblemDialogBuildId.value = selectedBuildId.value;
+    openRecordSourceWarning(first);
   }
 }
 
@@ -1572,18 +1519,14 @@ watch(showRecordContext, (value) => {
 });
 /** Jump to a neighbouring record, even if the current queue does not contain it. */
 async function selectRecordById(recordId: string) {
-  const local = records.value.find((row) => row.record_id === recordId);
-  if (local) {
-    selectRecord(local);
-    return;
-  }
-  reviewRequested.value = true;
-  reviewQueue.value = "all";
-  recordQuery.value = recordId;
-  await refreshRecords(true, recordId);
+  await reviewRecords.selectRecordById(recordId, () => {
+    reviewRequested.value = true;
+    reviewQueue.value = "all";
+  });
 }
 
-function selectRecord(record: CorpusRecord) {
+/** Show a full Record in the review workspace (the queue resolves rows to Records first). */
+function activateRecord(record: CorpusRecord) {
   const viewport = captureReviewViewport();
   const sameRecord = selectedRecordId.value === record.record_id;
   const preserveActiveDraft = sameRecord && editingText.value;
@@ -1659,7 +1602,7 @@ function toggleReviewSelection(recordId: string, checked: boolean) {
 }
 function toggleVisibleSelection(checked: boolean) {
   const next = new Set(selectedReviewIds.value);
-  for (const record of records.value) {
+  for (const record of queueRows.value) {
     if (checked) next.add(record.record_id);
     else next.delete(record.record_id);
   }
@@ -1667,8 +1610,8 @@ function toggleVisibleSelection(checked: boolean) {
 }
 const allVisibleSelected = computed(
   () =>
-    records.value.length > 0 &&
-    records.value.every((record) => selectedReviewIds.value.has(record.record_id)),
+    queueRows.value.length > 0 &&
+    queueRows.value.every((record) => selectedReviewIds.value.has(record.record_id)),
 );
 
 function previousSourcePage() {
@@ -1701,8 +1644,7 @@ async function chooseBuild(build: CorpusBuild) {
   selectedRecordId.value = "";
   selectedRecord.value = null;
   sourceBlocks.value = [];
-  reviewHydrated.value = false;
-  hydratedTopologyCount.value = 0;
+  reviewRecords.clear();
   hydratedMetadataCount.value = 0;
   reviewQueue.value = "all";
   reviewRequested.value = false;
@@ -1762,12 +1704,10 @@ function startNewBuildSetup() {
   stopPolling();
   selectedBuildId.value = "";
   currentBuild.value = null;
-  records.value = [];
-  recordTotal.value = 0;
+  reviewRecords.clear();
   selectedRecordId.value = "";
   selectedRecord.value = null;
   sourceBlocks.value = [];
-  reviewHydrated.value = false;
   bulkMetadataOpen.value = false;
   void router.replace({
     query: { ...route.query, build: undefined, record: undefined, queue: undefined },
@@ -2026,7 +1966,7 @@ defineExpose({
   saveMetadata,
   setDisposition,
   selectedRecord,
-  records,
+  queueRows,
   error,
 });
 </script>
@@ -2819,7 +2759,6 @@ defineExpose({
               :bulk-action-feedback="bulkActionFeedback"
               :bulk-metadata-open="bulkMetadataOpen"
               :schema="currentBuild?.schema"
-              :records="records"
               :known-values="metadataKnownValues"
               :region-types="regionTypes"
               :discourse-roles="discourseRoles"
@@ -2857,9 +2796,9 @@ defineExpose({
               :aria-busy="recordsLoading"
             >
               <CorpusReviewRecordQueue
-                :records="records"
+                :rows="queueRows"
                 :record-total="recordTotal"
-                :selected-record-id="selectedRecordId"
+                :selected-record-id="loadingRecordId || selectedRecordId"
                 :selected-review-ids="selectedReviewIds"
                 :all-visible-selected="allVisibleSelected"
                 :loading="recordsLoading"
@@ -3653,7 +3592,7 @@ defineExpose({
         :can-previous-record="selectedRecordIndex > 0 || recordOffset > 0"
         :can-next-record="
           selectedRecordIndex >= 0 &&
-          (selectedRecordIndex < records.length - 1 || recordOffset + pageSize < recordTotal)
+          (selectedRecordIndex < queueRows.length - 1 || recordOffset + pageSize < recordTotal)
         "
         :editing-text="editingText"
         :text-draft="textDraft"

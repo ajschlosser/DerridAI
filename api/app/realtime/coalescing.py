@@ -14,7 +14,8 @@ class OutgoingQueue:
     * A newer coalescable event replaces its pending predecessor for the same
       resource and type. The replacement is appended at the tail, never swapped
       in place, so delivery order still follows ``event_id``.
-    * When full, the oldest coalescable event is dropped first.
+    * When full, the oldest droppable event (coalescable progress or an
+      ephemeral hint such as a generation delta) is dropped first.
     * If nothing can be dropped the queue overflows: pending events are
       discarded and the consumer must tell the client to resynchronize from
       REST. Terminal and warning events are therefore never silently lost.
@@ -43,7 +44,7 @@ class OutgoingQueue:
                         break
             if len(self._items) >= self.max_events:
                 for index, pending in enumerate(self._items):
-                    if pending.coalescable:
+                    if pending.droppable:
                         del self._items[index]
                         self.dropped += 1
                         break

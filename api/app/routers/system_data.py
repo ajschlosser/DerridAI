@@ -6,11 +6,12 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from ..auth import auth_store
+from ..celf_queries import metadata_exemplars as exemplar_queries
+from ..celf_queries.access import AccessContext
 from ..database_backend import SQLiteBackend
 from ..http_auth import require_admin
 from ..services import store
 from ..system_data import SystemDataService
-from ..system_metadata_exemplars import MetadataExemplarInspector
 from ..system_store import system_store
 
 router = APIRouter(tags=["system-data"])
@@ -21,7 +22,6 @@ system_data = SystemDataService(
         "auth": SQLiteBackend("auth", auth_store.path),
     }
 )
-metadata_exemplars = MetadataExemplarInspector(store)
 
 
 @router.delete("/api/system/data/response-cache-records")
@@ -70,22 +70,16 @@ def get_system_metadata_exemplars(
     record_id: str = Query(default="", max_length=300),
 ) -> dict[str, Any]:
     """Inspect progressive metadata exemplars as read-only System Data."""
-    require_admin(request)
+    access = AccessContext.for_user(require_admin(request))
     try:
-        from ..metadata_exemplar_projection import projection_backlog
-
-        payload = metadata_exemplars.rows(
-            limit=limit,
+        return exemplar_queries.exemplar_page(
+            access,
+            exemplar_queries.ExemplarFilter(
+                field=field, kind=kind, language=language, scope_id=scope_id, schema_id=schema_id, record_id=record_id,
+            ),
             offset=offset,
-            field=field,
-            kind=kind,
-            language=language,
-            scope_id=scope_id,
-            schema_id=schema_id,
-            record_id=record_id,
+            limit=limit,
         )
-        # Why the list may be empty: reviewed metadata waiting on a failing projection.
-        return {**payload, "projection_backlog": projection_backlog()}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 

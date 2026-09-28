@@ -1,6 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { apiRequest } from "./http";
-import { runOperation } from "./graphql/client";
+import { execute } from "./graphql/client";
+import { SimilarValidatedClaimsDocument } from "./graphql/generated";
 
 export type ClaimValidationStatus = "unvalidated" | "validated" | "rejected" | "unresolved";
 
@@ -48,12 +49,19 @@ export const claimsApi = {
     }),
   // Read through the GraphQL façade (GET /api/derridai/claims/{id}/similar remains for compatibility).
   similar: async (claimId: string, limit = 5): Promise<{ items: SimilarValidatedClaim[] }> => {
-    const { generated_claim } = await runOperation("SimilarValidatedClaims", {
+    const { generated_claim } = await execute(SimilarValidatedClaimsDocument, {
       claim_id: claimId,
       limit,
     });
     return {
-      items: generated_claim.similar_validated_claims.map((item) => ({ ...item, advisory: true })),
+      items: generated_claim.similar_validated_claims.map((item) => ({
+        ...item,
+        advisory: true,
+        support: item.support.map((support) => ({
+          ...support,
+          semantic: support.semantic as Record<string, { value: unknown; authority?: string }>,
+        })),
+      })),
     };
   },
 };

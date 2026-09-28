@@ -26,7 +26,9 @@
     "test:characterization": "npm run test:e2e:legacy",
     "test:accessibility": "npm run test:e2e:a11y",
     "format:repo": "prettier --write .. --config .prettierrc --ignore-path ../.prettierignore",
-    "format:repo:check": "prettier --check .. --config .prettierrc --ignore-path ../.prettierignore"
+    "format:repo:check": "prettier --check .. --config .prettierrc --ignore-path ../.prettierignore",
+    "codegen": "graphql-codegen --config codegen.ts",
+    "codegen:check": "graphql-codegen --config codegen.ts --check"
   },
   "dependencies": {
     "diff": "^7.0.0",
@@ -38,6 +40,11 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.10.2",
     "@eslint/js": "^9.39.5",
+    "@graphql-codegen/add": "^7.1.0",
+    "@graphql-codegen/cli": "^7.4.3",
+    "@graphql-codegen/typed-document-node": "^7.1.0",
+    "@graphql-codegen/typescript-operations": "^6.1.7",
+    "@graphql-typed-document-node/core": "^3.2.0",
     "@playwright/test": "^1.55.0",
     "@storybook/addon-a11y": "^10.0.0",
     "@storybook/vue3-vite": "^10.0.0",
@@ -46,6 +53,7 @@
     "eslint": "^9.39.5",
     "eslint-plugin-vue": "^10.11.0",
     "globals": "^16.5.0",
+    "graphql": "^17.0.2",
     "happy-dom": "^18.0.1",
     "prettier": "3.6.2",
     "storybook": "^10.0.0",

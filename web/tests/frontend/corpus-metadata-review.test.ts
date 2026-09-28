@@ -38,7 +38,6 @@ function setup() {
   const currentBuild = ref<any | null>({ build_id: "b1" });
   const selectedRecord = ref<any | null>(row());
   const selectedRecordId = ref("r1");
-  const records = ref<any[]>([selectedRecord.value]);
   const busy = ref("");
   const selectedEvidenceField = ref("");
   const reviewInspectorTab = ref<"metadata" | "evidence" | "source">("metadata");
@@ -63,6 +62,7 @@ function setup() {
     selectedRecord.value = record;
     if (build) currentBuild.value = build;
   });
+  const applyRecordToQueue = vi.fn();
   const restoreReviewViewport = vi.fn(async () => undefined);
   const setMessage = vi.fn();
 
@@ -70,7 +70,7 @@ function setup() {
     currentBuild,
     selectedRecord,
     selectedRecordId,
-    records,
+    applyRecordToQueue,
     busy,
     selectedEvidenceField,
     reviewInspectorTab,
@@ -122,7 +122,6 @@ function setup() {
     review,
     currentBuild,
     selectedRecord,
-    records,
     selectedEvidenceField,
     reviewInspectorTab,
     selectedPdfPage,

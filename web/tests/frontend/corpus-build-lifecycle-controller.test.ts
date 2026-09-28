@@ -46,6 +46,18 @@ vi.mock("../../src/realtime/follow", async () => {
 });
 
 import { useCorpusBuildLifecycleController } from "../../src/features/corpus-builder/composables/useCorpusBuildLifecycleController";
+import { realtime } from "../../src/realtime";
+
+function spyOnRealtimeSubscribe() {
+  return vi.spyOn(realtime, "subscribe");
+}
+
+/** The controller's own `corpus.record_completed` subscription: the real client's `subscribe`
+ * spied on, so `followResource`'s own subscription (mocked above) keeps working unmodified. */
+function lastRecordEventSubscription(spy: ReturnType<typeof spyOnRealtimeSubscribe>) {
+  const call = spy.mock.calls.at(-1);
+  return call ? { topic: call[0] as string, handler: call[1] as (event: any) => void } : undefined;
+}
 
 function build(id = "build-1") {
   return {
@@ -84,6 +96,7 @@ function setup(requestedBuildId = "") {
   const metadataIssueCount = computed(() => 0);
   const resetReviewForBuildStart = vi.fn();
   const refreshRecords = vi.fn(async () => undefined);
+  const refreshRows = vi.fn(async () => undefined);
   const applyBuildRequest = vi.fn();
   const setMessage = vi.fn();
 
@@ -109,6 +122,7 @@ function setup(requestedBuildId = "") {
     setMessage,
     resetReviewForBuildStart,
     refreshRecords,
+    refreshRows,
     t: (key) => key,
     tf: (key) => key,
   });
@@ -124,16 +138,20 @@ function setup(requestedBuildId = "") {
     applyBuildRequest,
     setMessage,
     refreshRecords,
+    refreshRows,
   };
 }
 
 describe("Corpus Builder lifecycle controller", () => {
+  let subscribeSpy: ReturnType<typeof spyOnRealtimeSubscribe>;
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
+    subscribeSpy = spyOnRealtimeSubscribe();
   });
 
   afterEach(() => {
+    subscribeSpy.mockRestore();
     vi.useRealTimers();
   });
 
@@ -225,6 +243,33 @@ describe("Corpus Builder lifecycle controller", () => {
     expect(state.currentBuild.value?.status).toBe("awaiting_review");
     expect(state.refreshRecords).toHaveBeenCalledTimes(1);
     expect(follow.calls.at(-1)?.isDone()).toBe(true);
+    state.controller.stopPolling();
+  });
+
+  it("refreshes just the finished record's row on corpus.record_completed", async () => {
+    const running = { ...build("build-1"), status: "running", stage: "enriching" };
+    const state = setup();
+    state.selectedBuildId.value = "build-1";
+    state.currentBuild.value = running;
+
+    state.controller.startPolling();
+    const subscription = lastRecordEventSubscription(subscribeSpy);
+    expect(subscription?.topic).toBe("corpus-build:build-1");
+
+    subscription?.handler({
+      type: "corpus.progress",
+      resource_id: "build-1",
+      payload: { build: {} },
+    });
+    expect(state.refreshRows).not.toHaveBeenCalled();
+
+    subscription?.handler({
+      type: "corpus.record_completed",
+      resource_id: "build-1",
+      payload: { metadata: { record_id: "r7" } },
+    });
+    expect(state.refreshRows).toHaveBeenCalledWith(["r7"]);
+
     state.controller.stopPolling();
   });
 });

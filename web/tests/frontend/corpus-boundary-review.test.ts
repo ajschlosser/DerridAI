@@ -36,14 +36,14 @@ function record(id: string, text: string, index: number) {
 }
 
 function setup() {
-  const records = ref<any[]>([record("r1", "First", 0), record("r2", "Second", 1)]);
+  const queueRows = ref<any[]>([record("r1", "First", 0), record("r2", "Second", 1)]);
   const currentBuild = ref<any | null>({ build_id: "b1" });
-  const selectedRecord = ref<any | null>(records.value[0]);
+  const selectedRecord = ref<any | null>(queueRows.value[0]);
   const selectedRecordId = ref("r1");
   const recordTotal = ref(2);
   const recordOffset = ref(0);
   const selectedRecordIndex = computed(() =>
-    records.value.findIndex((item) => item.record_id === selectedRecordId.value),
+    queueRows.value.findIndex((item) => item.record_id === selectedRecordId.value),
   );
   const visibleBlocks = computed<any[]>(() => [
     { block_id: "block-1", text: "First" },
@@ -78,7 +78,7 @@ function setup() {
     currentBuild,
     selectedRecord,
     selectedRecordId,
-    records,
+    queueRows,
     recordTotal,
     recordOffset,
     selectedRecordIndex,
@@ -111,7 +111,7 @@ function setup() {
 
   return {
     review,
-    records,
+    queueRows,
     recordTotal,
     selectedRecord,
     selectedRecordId,
@@ -135,7 +135,7 @@ describe("Corpus Builder boundary review", () => {
     expect(state.review.canMergeNext.value).toBe(true);
     expect(state.review.mergeUnavailable("previous")).toBe("pdf_corpus.reason.no_previous");
 
-    state.selectedRecord.value = state.records.value[1];
+    state.selectedRecord.value = state.queueRows.value[1];
     state.selectedRecordId.value = "r2";
     expect(state.review.canMergePrevious.value).toBe(true);
     expect(state.review.canMergeNext.value).toBe(false);
@@ -163,7 +163,7 @@ describe("Corpus Builder boundary review", () => {
     await state.review.merge("next");
 
     // New IDs are minted server-side, so the list is untouched until the reload.
-    expect(state.records.value).toHaveLength(2);
+    expect(state.queueRows.value).toHaveLength(2);
     expect(state.queued).toHaveLength(1);
     expect(state.queued[0].recordId).toEqual(["r1", "r2"]);
 
@@ -175,7 +175,7 @@ describe("Corpus Builder boundary review", () => {
 
   it("creates a record from a selection, joining the neighbours the reviewer chose", async () => {
     const state = setup();
-    state.selectedRecord.value = state.records.value[1];
+    state.selectedRecord.value = state.queueRows.value[1];
     state.selectedRecordId.value = "r2";
     corpusBuilderApi.createFromSelection.mockResolvedValue({
       record: record("r-sel", "mid", 1),

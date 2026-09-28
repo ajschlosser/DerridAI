@@ -61,6 +61,35 @@ export interface ModelActivitySummary {
   model: string | null;
 }
 
+/** One streamed Research draft delta (see rag.chat_complete(on_delta=)). */
+export interface GenerationDelta {
+  seq: number;
+  delta: string;
+  /** Text was dropped before this delta: stop appending and wait for the final answer. */
+  gap: boolean;
+  final: boolean;
+}
+
+/** Per-record metadata enrichment progress: identifiers and state only, never values or evidence. */
+export interface CorpusRecordMetadataNote {
+  record_id: string;
+  family?: string;
+  state?: "complete" | "failed" | "skipped" | "needs_review";
+  field_ids?: string[];
+  precedents_used?: number;
+}
+
+/** Bounded public state for `activity:gutenberg` (see gutenberg_catalogue.realtime_summary). */
+export interface GutenbergActivitySummary {
+  catalogue_status: string;
+  archive_status: string;
+  bytes_done: number;
+  total_bytes: number | null;
+  ready: boolean;
+  search_ready: boolean;
+  has_error: boolean;
+}
+
 interface Envelope<Type extends string, ResourceType extends string, Payload> {
   type: Type;
   event_id: number;
@@ -95,6 +124,14 @@ export type CorpusEventType =
 
 export type ModelActivityEventType = "llm.started" | "llm.progress" | "llm.completed";
 
+/** Ephemeral: never replayed after a reconnect, and the first dropped under backpressure. */
+export type GenerationEventType = "llm.token";
+export type CorpusRecordEventType =
+  | "corpus.record_started"
+  | "corpus.field_checked"
+  | "corpus.record_completed";
+export type ActivityEventType = "activity.changed";
+
 export type JobEvent = Envelope<
   JobEventType,
   "job",
@@ -110,8 +147,27 @@ export type ModelActivityEvent = Envelope<
   "corpus_build",
   { activity: ModelActivitySummary }
 >;
+/** Streamed Research draft text, delivered on `job:<id>` only (see llm.token). */
+export type GenerationEvent = Envelope<GenerationEventType, "job", { generation: GenerationDelta }>;
+export type CorpusRecordEvent = Envelope<
+  CorpusRecordEventType,
+  "corpus_build",
+  { metadata: CorpusRecordMetadataNote }
+>;
+/** Background work that is not a tracked job, delivered on `activity:<kind>` only. */
+export type ActivityEvent = Envelope<
+  ActivityEventType,
+  "activity",
+  { activity: GutenbergActivitySummary | Record<string, unknown> }
+>;
 
-export type RealtimeEvent = JobEvent | CorpusBuildEvent | ModelActivityEvent;
+export type RealtimeEvent =
+  | JobEvent
+  | CorpusBuildEvent
+  | ModelActivityEvent
+  | GenerationEvent
+  | CorpusRecordEvent
+  | ActivityEvent;
 
 export interface ReadyFrame {
   type: "connection.ready";
@@ -154,6 +210,15 @@ export function isResourceEvent(frame: ServerFrame): frame is RealtimeEvent {
 
 /** The subscription topics an event is delivered for (mirrors the server's topic model). */
 export function topicsForEvent(event: RealtimeEvent): string[] {
+  if (event.type === "llm.token") return [`job:${event.resource_id}`];
   if (event.resource_type === "job") return ["jobs", `job:${event.resource_id}`];
+  if (event.resource_type === "activity") return [`activity:${event.resource_id}`];
+  if (
+    event.type === "corpus.record_started" ||
+    event.type === "corpus.field_checked" ||
+    event.type === "corpus.record_completed"
+  ) {
+    return [`corpus-build:${event.resource_id}`];
+  }
   return ["corpus-builds", `corpus-build:${event.resource_id}`];
 }

@@ -2,12 +2,14 @@
 import { nextTick, type ComputedRef, type Ref } from "vue";
 import type { CorpusBuild, CorpusRecord } from "../../../api/corpus";
 import type { ReviewQueue } from "../../../types/corpus";
+import type { CorpusQueueRow } from "../api/reviewReads";
 import { firstValidationRecordId } from "../domain/publicationReadiness";
+import type { ReviewTarget } from "./useCorpusReviewRecords";
 
 interface CorpusReviewNavigationOptions {
   reviewRequested: Ref<boolean>;
   currentBuild: Ref<CorpusBuild | null>;
-  records: Ref<CorpusRecord[]>;
+  queueRows: Ref<CorpusQueueRow[]>;
   recordTotal: Ref<number>;
   recordOffset: Ref<number>;
   selectedRecord: Ref<CorpusRecord | null>;
@@ -22,7 +24,7 @@ interface CorpusReviewNavigationOptions {
   recordListEl: Ref<HTMLElement | null>;
   pageSize: number;
   refreshRecords: (reset?: boolean, preferredId?: string) => Promise<void>;
-  selectRecord: (record: CorpusRecord) => void;
+  selectRecord: (target: ReviewTarget) => Promise<void> | void;
 }
 
 export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions) {
@@ -55,10 +57,10 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
     const targetOffset = options.focusHistoryOffsets.value[next] ?? options.recordOffset.value;
     const local =
       targetOffset === options.recordOffset.value
-        ? options.records.value.find((row) => row.record_id === id)
+        ? options.queueRows.value.find((row) => row.record_id === id)
         : undefined;
     if (local) {
-      options.selectRecord(local);
+      await options.selectRecord(local);
       return;
     }
     options.recordOffset.value = targetOffset;
@@ -68,9 +70,9 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
   async function focusQueueMove(delta: number) {
     const index = options.selectedRecordIndex.value;
     if (index >= 0) {
-      const next = options.records.value[index + delta];
+      const next = options.queueRows.value[index + delta];
       if (next) {
-        options.selectRecord(next);
+        void options.selectRecord(next);
         pushFocusHistory(next.record_id);
         return;
       }
@@ -79,9 +81,9 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
     if (delta > 0 && options.recordOffset.value + options.pageSize < options.recordTotal.value) {
       options.recordOffset.value += options.pageSize;
       await options.refreshRecords(false);
-      const next = options.records.value[0];
+      const next = options.queueRows.value[0];
       if (next) {
-        options.selectRecord(next);
+        void options.selectRecord(next);
         pushFocusHistory(next.record_id);
       }
       return;
@@ -90,28 +92,28 @@ export function useCorpusReviewNavigation(options: CorpusReviewNavigationOptions
     if (delta < 0 && options.recordOffset.value > 0) {
       options.recordOffset.value = Math.max(0, options.recordOffset.value - options.pageSize);
       await options.refreshRecords(false);
-      const next = options.records.value[options.records.value.length - 1];
+      const next = options.queueRows.value[options.queueRows.value.length - 1];
       if (next) {
-        options.selectRecord(next);
+        void options.selectRecord(next);
         pushFocusHistory(next.record_id);
       }
     }
   }
 
   async function navigateToQueueRecord(recordId: string) {
-    const existing = options.records.value.find((row) => row.record_id === recordId);
+    const existing = options.queueRows.value.find((row) => row.record_id === recordId);
     if (existing) {
-      options.selectRecord(existing);
+      await options.selectRecord(existing);
       return;
     }
     await options.refreshRecords(true, recordId);
   }
 
   async function advanceFrom(recordId: string) {
-    const index = options.records.value.findIndex((row) => row.record_id === recordId);
-    const next = options.records.value[index + 1] || options.records.value[index - 1];
+    const index = options.queueRows.value.findIndex((row) => row.record_id === recordId);
+    const next = options.queueRows.value[index + 1] || options.queueRows.value[index - 1];
     if (next) {
-      options.selectRecord(next);
+      await options.selectRecord(next);
       return;
     }
     if (options.recordOffset.value + options.pageSize < options.recordTotal.value) {

@@ -1,0 +1,18 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
+# The lightweight review-queue row: identifiers, page labels, review state and a short preview.
+# Never the full text or metadata (that is CorpusRecord, read one at a time when a row is opened).
+fragment CorpusQueueRowFields on CorpusQueueRow {
+  record_id
+  record_revision
+  page_start
+  page_end
+  text_length
+  text_preview
+  review_state
+  review_disposition
+  review_issue_codes
+  metadata_llm_processed
+  needs_review
+  source_quality_issues
+  metadata_complete
+}
