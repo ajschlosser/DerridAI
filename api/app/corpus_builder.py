@@ -1786,6 +1786,78 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         self._mark_interrupted()
         self._recover_metadata_exemplar_projections()
 
+    def _run_document_intelligence(
+        self,
+        build_id: str,
+        records: list[dict[str, Any]],
+        manifest: dict[str, Any],
+        request: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Refresh all text-bound linguistic projections without changing scholarly authority."""
+        schema = self._schema_for(build_id)
+        language = str(manifest.get("language") or "")
+        for record in records:
+            annotate_record(record, schema, language=language)
+        try:
+            analysis = analyze_document(
+                records,
+                source_document_id=str(self.repo.get_build(build_id).get("asset_id") or build_id),
+                language=language,
+                request=request,
+            )
+            projection_counts = project_annotations_to_records(records, analysis)
+            self.repo.save_checkpoint(build_id, "document_intelligence", analysis)
+            semantic_graph = build_semantic_content_graph(records, analysis, schema=schema)
+            self.repo.save_checkpoint(build_id, "semantic_content_graph", semantic_graph)
+            build = self.repo.get_build(build_id)
+            build["document_intelligence"] = {
+                "status": analysis.get("status"),
+                "profile": analysis.get("profile"),
+                "provider": analysis.get("provider"),
+                "provider_version": analysis.get("provider_version"),
+                "model": analysis.get("model"),
+                "capabilities": analysis.get("capabilities") or [],
+                "entity_clusters": len(analysis.get("entity_clusters") or []),
+                "entity_mentions": projection_counts.get("entity_mentions", 0),
+                "quotations": projection_counts.get("quotations", 0),
+                "warnings": analysis.get("warnings") or [],
+                "text_sha256": analysis.get("text_sha256"),
+            }
+            build["semantic_content_graph"] = semantic_graph.get("summary") or {}
+            self.repo.save_build(build)
+            for warning in analysis.get("warnings") or []:
+                self._append_warning(build_id, str(warning))
+            return analysis
+        except Exception as exc:  # noqa: BLE001 - optional derived analysis must not fail corpus work
+            for record in records:
+                record.pop("document_intelligence", None)
+            self._append_warning(
+                build_id,
+                f"Document intelligence was unavailable; corpus work continued without it ({exc}).",
+            )
+            build = self.repo.get_build(build_id)
+            build["document_intelligence"] = {
+                "status": "unavailable",
+                "profile": str(request.get("document_intelligence_profile") or "scholarly"),
+                "reason": str(exc),
+            }
+            self.repo.save_build(build)
+            return dict(build["document_intelligence"])
+
+    def rerun_document_intelligence(self, build_id: str) -> dict[str, Any]:
+        """Recompute text-bound annotations and the graph after review/text changes."""
+        build = self.repo.get_build(build_id)
+        records = self.repo.load_records(build_id)
+        manifest = build.get("manifest") if isinstance(build.get("manifest"), dict) else {}
+        request = build.get("request") if isinstance(build.get("request"), dict) else {}
+        analysis = self._run_document_intelligence(build_id, records, manifest, request)
+        self.repo.save_records(build_id, records)
+        graph = self.semantic_content_graph(build_id)
+        return {
+            "document_intelligence": self.document_intelligence(build_id),
+            "semantic_content_graph": graph,
+        }
+
     def document_intelligence(self, build_id: str) -> dict[str, Any]:
         """Return the retained annotation run and whether current text has made it stale."""
         self.repo.get_build(build_id)
@@ -2888,62 +2960,13 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
 
         # Whole-document intelligence runs only after deterministic text cleanup, so
         # its offsets and record-local projections are bound to the exact text that
-        # metadata enrichment will see.  The older record-local spaCy hints are
-        # recomputed here for the same reason.
+        # metadata enrichment will see. It is optional and never authoritative.
         self._update(
             build_id,
             stage="document_intelligence",
             progress=max(float(self.repo.get_build(build_id).get("progress") or 0), 0.40),
         )
-        for record in records:
-            annotate_record(record, nlp_schema, language=str(manifest.get("language") or ""))
-        try:
-            document_intelligence = analyze_document(
-                records,
-                source_document_id=str(asset.get("asset_id") or build_id),
-                language=str(manifest.get("language") or ""),
-                request=request,
-            )
-            projection_counts = project_annotations_to_records(records, document_intelligence)
-            self.repo.save_checkpoint(build_id, "document_intelligence", document_intelligence)
-            semantic_graph = build_semantic_content_graph(
-                records,
-                document_intelligence,
-                schema=nlp_schema,
-            )
-            self.repo.save_checkpoint(build_id, "semantic_content_graph", semantic_graph)
-            current_build = self.repo.get_build(build_id)
-            current_build["document_intelligence"] = {
-                "status": document_intelligence.get("status"),
-                "profile": document_intelligence.get("profile"),
-                "provider": document_intelligence.get("provider"),
-                "provider_version": document_intelligence.get("provider_version"),
-                "model": document_intelligence.get("model"),
-                "capabilities": document_intelligence.get("capabilities") or [],
-                "entity_clusters": len(document_intelligence.get("entity_clusters") or []),
-                "entity_mentions": projection_counts.get("entity_mentions", 0),
-                "quotations": projection_counts.get("quotations", 0),
-                "warnings": document_intelligence.get("warnings") or [],
-                "text_sha256": document_intelligence.get("text_sha256"),
-            }
-            current_build["semantic_content_graph"] = semantic_graph.get("summary") or {}
-            self.repo.save_build(current_build)
-            for warning in document_intelligence.get("warnings") or []:
-                self._append_warning(build_id, str(warning))
-        except Exception as exc:  # noqa: BLE001 - optional derived analysis must not fail the build
-            for record in records:
-                record.pop("document_intelligence", None)
-            self._append_warning(
-                build_id,
-                f"Document intelligence was unavailable; metadata enrichment continued without it ({exc}).",
-            )
-            current_build = self.repo.get_build(build_id)
-            current_build["document_intelligence"] = {
-                "status": "unavailable",
-                "profile": str(request.get("document_intelligence_profile") or "scholarly"),
-                "reason": str(exc),
-            }
-            self.repo.save_build(current_build)
+        self._run_document_intelligence(build_id, records, manifest, request)
 
         self.repo.save_records(build_id, records)
         trash_quality = self._apply_source_illegibility(
