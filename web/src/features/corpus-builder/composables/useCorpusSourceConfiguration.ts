@@ -112,6 +112,17 @@ export function useCorpusSourceConfiguration(
       error: "",
     };
     const configured = providerConnection(providerProfileId()) || {};
+    const hasConfiguredFallback = ["provider", "model", "base_url", "api_key"].some(
+      (key) => Boolean(configured[key]),
+    );
+    if (!hasConfiguredFallback) {
+      languagePrompt.value = {
+        ...languagePrompt.value,
+        loading: false,
+        error: i18n.t("pdf_corpus.language_prompt_no_suggestion"),
+      };
+      return;
+    }
     const connection = Object.fromEntries(
       Object.entries(configured)
         .filter(
@@ -149,6 +160,28 @@ export function useCorpusSourceConfiguration(
       rememberAsset(asset);
       languagePrompt.value = null;
       setMessage(i18n.t("pdf_corpus.language_saved"));
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : String(cause), "error");
+    } finally {
+      busy.value = "";
+    }
+
+  }
+
+  async function saveSourceMetadata(
+    metadata: Record<string, unknown>,
+    skipFields: string[] = [],
+  ) {
+    if (!selectedAssetId.value) return;
+    busy.value = "metadata";
+    try {
+      const asset = await corpusBuilderApi.updateAssetMetadata(
+        selectedAssetId.value,
+        metadata,
+        skipFields,
+      );
+      rememberAsset(asset);
+      setMessage(i18n.t("pdf_corpus.metadata_saved"));
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : String(cause), "error");
     } finally {
@@ -417,6 +450,7 @@ export function useCorpusSourceConfiguration(
     lastIngestedAsset,
     languagePrompt,
     saveSourceLanguage,
+    saveSourceMetadata,
     refreshAssets,
     upload,
     applyUnitPolicy,

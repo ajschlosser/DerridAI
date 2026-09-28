@@ -1084,6 +1084,56 @@ class PdfCorpusRepository:
             _json_write(self.asset_meta_path(asset_id), asset)
             return asset
 
+    def update_asset_metadata(
+        self,
+        asset_id: str,
+        *,
+        metadata: dict[str, Any],
+        skip_fields: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Persist explicit source metadata decisions without changing extracted source text."""
+        from .source_text import MANIFEST_FIELDS
+
+        allowed = set(MANIFEST_FIELDS) | {"original_language", "document_is_translation"}
+        unknown = (set(metadata) | set(skip_fields or [])) - allowed
+        if unknown:
+            raise ValueError("Unsupported source metadata field(s): " + ", ".join(sorted(unknown)))
+        skipped = set(skip_fields or [])
+        if skipped & set(metadata):
+            raise ValueError("A source metadata field cannot be entered and skipped together.")
+        with self._lock:
+            asset = self.get_asset(asset_id)
+            initial = dict(asset.get("initial_metadata") or {})
+            provenance = dict(initial.get("field_provenance") or {})
+            for field, value in metadata.items():
+                if value in (None, "", []):
+                    raise ValueError(f"Metadata field '{field}' needs a value or must be skipped.")
+                if isinstance(value, str):
+                    value = value.strip()
+                    if not value:
+                        raise ValueError(f"Metadata field '{field}' needs a value or must be skipped.")
+                initial[field] = value
+                provenance[field] = {
+                    "method": "human_review",
+                    "confidence": 1.0,
+                    "derivation": "human",
+                    "status": "human_confirmed",
+                }
+            for field in skipped:
+                initial.pop(field, None)
+                provenance[field] = {
+                    "method": "human_review",
+                    "confidence": 1.0,
+                    "derivation": "human",
+                    "status": "confirmed_absent",
+                }
+            initial["field_provenance"] = provenance
+            asset["initial_metadata"] = initial
+            asset["metadata_revision"] = int(asset.get("metadata_revision") or 0) + 1
+            asset["metadata_updated_at"] = iso_now()
+            _json_write(self.asset_meta_path(asset_id), asset)
+            return asset
+
     def update_document_layout(self, asset_id: str, plan: dict[str, Any]) -> dict[str, Any]:
         """Persist reviewer-owned document structure and derive page metadata deterministically.
 

@@ -157,6 +157,15 @@ export const corpusSourcesApi = {
       method: "POST",
       body: JSON.stringify({ mode: "detect_language", ...connection }),
     }),
+  updateAssetMetadata: (
+    assetId: string,
+    metadata: Record<string, unknown>,
+    skipFields: string[] = [],
+  ) =>
+    apiRequest<PdfAsset>(`${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/metadata`, {
+      method: "PATCH",
+      body: JSON.stringify({ metadata, skip_fields: skipFields }),
+    }),
   blocks: (assetId: string, offset = 0, limit = 200, ids: string[] = []) =>
     apiRequest<{ items: SourceBlock[]; total: number }>(
       `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/blocks?offset=${offset}&limit=${limit}${

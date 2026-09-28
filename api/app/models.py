@@ -510,6 +510,39 @@ class PdfAssetLanguagePatch(BaseModel):
         return self
 
 
+class PdfAssetMetadataPatch(BaseModel):
+    """Explicit source-level metadata decisions made before corpus enrichment."""
+
+    metadata: dict[str, Any] = Field(default_factory=dict, max_length=30)
+    skip_fields: list[str] = Field(default_factory=list, max_length=30)
+
+    @model_validator(mode="after")
+    def validate_decisions(self) -> PdfAssetMetadataPatch:
+        from .source_text import MANIFEST_FIELDS
+
+        allowed = set(MANIFEST_FIELDS) | {"original_language", "document_is_translation"}
+        unknown = (set(self.metadata) | set(self.skip_fields)) - allowed
+        if unknown:
+            raise ValueError("Unsupported source metadata field(s): " + ", ".join(sorted(unknown)))
+        overlap = set(self.metadata) & set(self.skip_fields)
+        if overlap:
+            raise ValueError("A source metadata field cannot be entered and skipped together.")
+        cleaned: dict[str, Any] = {}
+        for field, value in self.metadata.items():
+            if value in (None, "", []):
+                raise ValueError(f"Metadata field '{field}' needs a value or must be skipped.")
+            if isinstance(value, str):
+                value = value.strip()
+                if not value:
+                    raise ValueError(f"Metadata field '{field}' needs a value or must be skipped.")
+            cleaned[field] = value
+        self.metadata = cleaned
+        self.skip_fields = sorted(set(self.skip_fields))
+        if not self.metadata and not self.skip_fields:
+            raise ValueError("Provide at least one metadata value or skipped field.")
+        return self
+
+
 class PdfSourceUnitPolicy(BaseModel):
     """How finely a source is divided into evidence units."""
     mode: Literal["default", "paragraph", "line", "sentence", "chars"] = "default"

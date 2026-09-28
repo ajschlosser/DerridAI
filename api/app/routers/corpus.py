@@ -62,6 +62,7 @@ from ..models import (
     PdfLlmRequest,
     PdfPageLabelsPatch,
     PdfAssetLanguagePatch,
+    PdfAssetMetadataPatch,
     PdfSourceUnitPolicy,
     PdfSourceUrlImport,
 )
@@ -353,6 +354,20 @@ def patch_pdf_asset_language(asset_id: str, body: PdfAssetLanguagePatch) -> dict
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="PDF asset not found") from exc
+
+
+@router.patch("/api/pdf/assets/{asset_id}/metadata")
+def patch_pdf_asset_metadata(asset_id: str, body: PdfAssetMetadataPatch) -> dict[str, Any]:
+    try:
+        return pdf_corpus_repository.update_asset_metadata(
+            asset_id,
+            metadata=body.metadata,
+            skip_fields=body.skip_fields,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="PDF asset not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/api/pdf/assets/{asset_id}/language-suggestion")

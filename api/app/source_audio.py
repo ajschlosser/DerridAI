@@ -241,8 +241,6 @@ def spans_from_transcript(
         blocks.append(
             {
                 "block_id": f"p{index:05d}-b0001",
-                # Legacy navigation index only; never exported as an evidence page.
-                "page": index,
                 "locator_kind": "time",
                 "bbox": [0, 0, 0, 0],
                 "type": "paragraph",
@@ -307,20 +305,6 @@ def extract_audio(
         for block in blocks:
             if not block.get("speaker"):
                 block.pop("speaker", None)
-        pages = []
-        for block in blocks:
-            pages.append(
-                {
-                    "pdf_page": block["page"],
-                    "locator_kind": "time",
-                    "start": block["start"],
-                    "end": block["end"],
-                    "width": 0,
-                    "height": 0,
-                    "block_ids": [block["block_id"]],
-                    "extraction_method": "whisper",
-                }
-            )
         embedded = (
             {"language": transcript.get("language")}
             if transcript.get("language")
@@ -329,9 +313,11 @@ def extract_audio(
         full_text = "\n\n".join(block["text"] for block in blocks)
         return {
             "filename": Path(filename).name,
-            "page_count": len(pages),
+            # Audio has time locators, not PDF pages. Keep page semantics absent
+            # so downstream citations cannot accidentally render fake pages.
+            "page_count": 0,
             "metadata": embedded,
-            "pages": pages,
+            "pages": [],
             "blocks": blocks,
             "block_count": len(blocks),
             "included_block_count": len(blocks),

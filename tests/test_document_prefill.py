@@ -114,3 +114,21 @@ def test_inherited_values_keep_their_origin_until_a_reviewer_changes_them():
     assert "Origin: NLP-derived" in place.reason and "70% confidence" in place.reason
     # The reviewer edited the publisher, so it no longer claims an automatic origin.
     assert "Origin" not in current_assertion_by_name(record, "publisher").reason
+
+
+def test_explicit_source_metadata_decisions_preserve_human_provenance(tmp_path):
+    from app import corpus_builder as cb
+
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    asset = repo.save_asset(("A title\n\n" + ("A paragraph. " * 20)).encode(), filename="source.txt")
+    updated = repo.update_asset_metadata(
+        asset["asset_id"],
+        metadata={"title": "Reviewed title", "publication_year": 1967},
+        skip_fields=["translator"],
+    )
+    initial = updated["initial_metadata"]
+    assert initial["title"] == "Reviewed title"
+    assert initial["publication_year"] == 1967
+    assert "translator" not in initial
+    assert initial["field_provenance"]["title"]["derivation"] == "human"
+    assert initial["field_provenance"]["translator"]["status"] == "confirmed_absent"

@@ -88,3 +88,17 @@ def test_capture_language_defaults_only_from_one_authoritative_original_language
     )
 
     assert options.languages == ["de"]
+
+
+def test_audio_spans_use_time_locators_without_page_semantics():
+    from app.source_audio import spans_from_transcript
+
+    blocks = spans_from_transcript(
+        {
+            "text": "Hello world.",
+            "segments": [{"start": 0, "end": 1.2, "text": "Hello world."}],
+        },
+        [],
+    )
+    assert blocks[0]["locator_kind"] == "time"
+    assert "page" not in blocks[0]
