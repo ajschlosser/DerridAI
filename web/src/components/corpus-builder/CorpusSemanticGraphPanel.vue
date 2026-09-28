@@ -8,6 +8,7 @@ import {
   type SemanticContentGraphEdge,
   type SemanticContentGraphNode,
 } from "../../api/corpus";
+import { readDocumentIntelligence } from "../../features/corpus-builder/api/documentIntelligenceReads";
 import { useI18nStore } from "../../stores/i18n";
 
 const props = defineProps<{
@@ -116,7 +117,7 @@ async function load() {
   try {
     const [nextGraph, nextIntelligence] = await Promise.all([
       corpusBuildsApi.semanticContentGraph(props.buildId),
-      corpusBuildsApi.documentIntelligence(props.buildId).catch(() => null),
+      readDocumentIntelligence(props.buildId).catch(() => null),
     ]);
     graph.value = nextGraph;
     intelligence.value = nextIntelligence;
