@@ -31,6 +31,9 @@ _STATUS = {
     CaptureErrorCode.UNSUPPORTED_SOURCE: 422,
     CaptureErrorCode.RATE_LIMITED: 429,
     CaptureErrorCode.NETWORK_TIMEOUT: 504,
+    CaptureErrorCode.AUDIO_PROVIDER_NOT_CONFIGURED: 400,
+    CaptureErrorCode.AUDIO_PROVIDER_UNAVAILABLE: 503,
+    CaptureErrorCode.AUDIO_TRANSCRIPTION_FAILED: 502,
 }
 
 

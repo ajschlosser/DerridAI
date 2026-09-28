@@ -6554,5 +6554,8 @@
   "capture.error.acquisition_failed": "Download failed",
   "capture.error.registration_failed": "Registration failed",
   "capture.error.cancelled": "Stopped",
+  "capture.error.audio_provider_not_configured": "Audio transcription is not configured",
+  "capture.error.audio_provider_unavailable": "Audio transcription provider unavailable",
+  "capture.error.audio_transcription_failed": "Audio transcription failed",
   "capture.error.unknown": "Error"
 }

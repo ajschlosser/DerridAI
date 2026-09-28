@@ -76,15 +76,14 @@ export function createDbPresenceUpsert(deps: Deps) {
     if (!store) return;
     void api(`/api/stores/${encodeURIComponent(store)}/sync-suppressions`)
       .then((payload: Any) => {
-        state.upsertIgnored[store] = {
-          ...(state.upsertIgnored[store] || {}),
-          ...Object.fromEntries(
-            Object.entries(payload?.suppressions || {}).map(([recordId, fingerprint]) => [
-              `${recordId}`,
-              fingerprint,
-            ]),
-          ),
-        };
+        const serverSuppressions = payload?.suppressions || {};
+        const mapped: Record<string, string> = {};
+        for (const row of allRows()) {
+          const recordId = String(row.record?.record_id || "");
+          if (!recordId || !(recordId in serverSuppressions)) continue;
+          mapped[localRecordKey(row.file, row.index)] = String(serverSuppressions[recordId]);
+        }
+        state.upsertIgnored[store] = { ...(state.upsertIgnored[store] || {}), ...mapped };
         pendingUpsertCache.key = "";
         persistPrefs();
       })
@@ -296,11 +295,16 @@ export function createDbPresenceUpsert(deps: Deps) {
     if (!store) return;
     if (!state.upsertIgnored[store]) state.upsertIgnored[store] = {};
     const fingerprint = recordFingerprint(row.record);
+    const recordId = String(row.record?.record_id || "");
+    if (!recordId) {
+      toast(tr("vector.sync_suppression_failed", "Could not save this queue decision; the item remains available."));
+      return;
+    }
     state.upsertIgnored[store][localRecordKey(row.file, row.index)] = fingerprint;
     void api(`/api/stores/${encodeURIComponent(store)}/sync-suppressions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ record_id: String(row.record.record_id || ""), fingerprint }),
+      body: JSON.stringify({ record_id: recordId, fingerprint }),
     }).then(() => {
       persistPrefs();
     }).catch(() => {
