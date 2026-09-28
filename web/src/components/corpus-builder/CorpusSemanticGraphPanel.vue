@@ -102,9 +102,7 @@ function featureText(values?: Array<{ label: string; count?: number }>) {
 function observationVerbs(edge: SemanticContentGraphEdge) {
   return Array.from(
     new Set(
-      (edge.observations || [])
-        .map((item) => String(item.verb || "").trim())
-        .filter(Boolean),
+      (edge.observations || []).map((item) => String(item.verb || "").trim()).filter(Boolean),
     ),
   )
     .slice(0, 8)
