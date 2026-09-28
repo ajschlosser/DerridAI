@@ -311,9 +311,16 @@ class MetadataEnrichmentExecutionMixin:
         record_id = str(record.get("record_id") or "")
         operation_events.note_record_metadata(build_id, record_id, "record_started", precedents_used=example_count)
         stage_results = self._execute_metadata_tasks(record, request, tasks, build_id, stage_callback)
-        reconciled = self._reconcile_metadata_results(record, profile, source_ids, stage_results, obvious_apparatus, request=request, build_id=build_id, schema=schema)
-        operation_events.note_record_metadata(build_id, record_id, "record_completed")
-        return reconciled
+        return self._reconcile_metadata_results(
+            record,
+            profile,
+            source_ids,
+            stage_results,
+            obvious_apparatus,
+            request=request,
+            build_id=build_id,
+            schema=schema,
+        )
 
 
     def _prepare_metadata_tasks(
