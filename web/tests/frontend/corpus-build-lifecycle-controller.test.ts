@@ -134,6 +134,7 @@ function setup(requestedBuildId = "") {
     builds,
     buildsTotal,
     selectedBuildId,
+    selectedRecordId,
     currentBuild,
     busy,
     resetReviewForBuildStart,
