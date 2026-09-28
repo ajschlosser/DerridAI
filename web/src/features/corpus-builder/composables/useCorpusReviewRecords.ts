@@ -7,7 +7,7 @@
 import { ref, type Ref } from "vue";
 import type { CorpusBuild, CorpusRecord } from "../../../api/corpus";
 import type { ReviewQueue } from "../../../types/corpus";
-import { isAbortError } from "../../../api/graphql/client";
+import { clearGraphQLReadCache, isAbortError } from "../../../api/graphql/client";
 import { createLatestRequest } from "../../../api/graphql/latestRequest";
 import { corpusReviewReads, type CorpusQueueRow } from "../api/reviewReads";
 import { isFullRecord, queueRowFromRecord, type ReviewTargetLike } from "../domain/queueRows";
@@ -191,7 +191,12 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
 
   async function refreshRecords(reset = false, preferredId = ""): Promise<void> {
     if (!options.selectedBuildId.value) return;
-    if (reset) options.recordOffset.value = 0;
+    if (reset) {
+      // Queue pages and record projections contain server-authoritative review state, including
+      // suppressions. Never let the short-lived GraphQL read cache hide a mutation-triggered reset.
+      clearGraphQLReadCache();
+      options.recordOffset.value = 0;
+    }
     const ticket = latestPage.start();
     recordsLoading.value = true;
     try {
@@ -236,6 +241,9 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
   ): Promise<void> {
     if (!options.selectedBuildId.value || !recordIds.length) return;
     try {
+      // A row refresh is normally caused by a realtime event or a completed mutation. It must
+      // observe the server's current revision and disposition rather than a cached projection.
+      clearGraphQLReadCache();
       const rows = await corpusReviewReads.rows(options.selectedBuildId.value, recordIds);
       if (!rows.length) return;
       const byId = new Map(rows.map((row) => [row.record_id, row]));
@@ -262,6 +270,9 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
 
   /** Patch the review queue's row (and cached Record) from an updated Record. */
   function applyRecord(record: CorpusRecord) {
+    // This record came from an authoritative REST response. Drop read projections before keeping
+    // the bounded local copy so a later queue refresh cannot resurrect an older disposition.
+    clearGraphQLReadCache();
     remember(record);
     const index = queueRows.value.findIndex((row) => row.record_id === record.record_id);
     if (index >= 0) queueRows.value.splice(index, 1, queueRowFromRecord(record));
@@ -270,6 +281,7 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
   function clear() {
     latestPage.cancel();
     latestSelection.cancel();
+    clearGraphQLReadCache();
     cache.clear();
     facetsLoadedForBuild = false;
     queueRows.value = [];
