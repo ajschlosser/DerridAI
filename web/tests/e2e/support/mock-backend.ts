@@ -605,7 +605,9 @@ function queueRow(record: LooseRecord): LooseRecord {
     review_disposition: record.review_disposition || (record.accepted ? "accepted" : "pending"),
     metadata_llm_processed: Boolean(record.metadata_enrichment_finished),
     needs_review: Boolean(record.needs_review),
-    source_quality_issues: Boolean(record.source_quality_issues && record.source_quality_issues.length),
+    source_quality_issues: Boolean(
+      record.source_quality_issues && record.source_quality_issues.length,
+    ),
     metadata_complete: Boolean(record.metadata_complete),
   };
 }
