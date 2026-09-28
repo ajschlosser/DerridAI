@@ -231,6 +231,30 @@ describe("useCorpusReviewRecords", () => {
     expect(state.selectedRecord.value?.record_id).toBe("r2");
   });
 
+  it("does not let an event for the old Record supersede a selection already in flight", async () => {
+    const state = setup();
+    corpusReviewReads.queuePage.mockResolvedValue(page([row("r1"), row("r2")]));
+    corpusReviewReads.records.mockResolvedValueOnce([record("r1")]);
+    corpusReviewReads.rows.mockResolvedValueOnce([row("r1", 1, { metadata_llm_processed: true })]);
+
+    await state.reviewRecords.refreshRecords(true);
+    expect(state.selectedRecord.value?.record_id).toBe("r1");
+
+    let resolveR2: (records: unknown[]) => void = () => undefined;
+    corpusReviewReads.records.mockImplementationOnce(
+      () => new Promise((resolve) => (resolveR2 = resolve)),
+    );
+    const selecting = state.reviewRecords.selectRecord(row("r2"));
+
+    expect(state.selectedRecord.value).toBeNull();
+    await state.reviewRecords.refreshRows(["r1"]);
+    expect(corpusReviewReads.records).toHaveBeenCalledTimes(2);
+
+    resolveR2([record("r2")]);
+    await selecting;
+    expect(state.selectedRecord.value?.record_id).toBe("r2");
+  });
+
   it("preserves an active draft across refreshRecords instead of re-reading the server", async () => {
     const state = setup();
     corpusReviewReads.queuePage.mockResolvedValue(page([row("r1")]));
