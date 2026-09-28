@@ -37,6 +37,9 @@ class WorkRelationship(StrEnum):
 
 
 class CaptureErrorCode(StrEnum):
+    AUDIO_PROVIDER_NOT_CONFIGURED = "audio_provider_not_configured"
+    AUDIO_PROVIDER_UNAVAILABLE = "audio_provider_unavailable"
+    AUDIO_TRANSCRIPTION_FAILED = "audio_transcription_failed"
     PROVIDER_UNAVAILABLE = "provider_unavailable"
     RATE_LIMITED = "rate_limited"
     AUTHOR_NOT_FOUND = "author_not_found"
@@ -60,7 +63,7 @@ TRANSIENT_ERRORS = frozenset(
 )
 
 
-class CaptureError(Exception):
+class CaptureError(ValueError):
     """A classified, user-presentable failure. ``detail`` is diagnostic only."""
 
     def __init__(self, code: CaptureErrorCode, message: str, *, detail: str = "") -> None:

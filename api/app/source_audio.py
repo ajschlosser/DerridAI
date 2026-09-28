@@ -69,11 +69,13 @@ def probe_audio(path: Path) -> float:
 def transcribe_entire_file(path: Path) -> dict[str, Any]:
     """Send the whole audio file to OpenAI Whisper before any span splitting."""
     from .system_store import system_store
+    from .source_identity import CaptureError, CaptureErrorCode
 
     config = system_store.audio_transcription_settings(include_key=True)
     api_key = str(config.get("api_key") or "").strip()
     if not api_key:
-        raise ValueError(
+        raise CaptureError(
+            CaptureErrorCode.AUDIO_PROVIDER_NOT_CONFIGURED,
             "Audio transcription needs an API key. Add one under Settings → Providers → "
             "Audio transcription (or set OPENAI_API_KEY on the server)."
         )
@@ -96,10 +98,34 @@ def transcribe_entire_file(path: Path) -> dict[str, Any]:
             )
         response.raise_for_status()
         payload = response.json()
+    except httpx.HTTPStatusError as exc:
+        code = (
+            CaptureErrorCode.AUDIO_PROVIDER_UNAVAILABLE
+            if exc.response.status_code >= 500
+            else CaptureErrorCode.AUDIO_TRANSCRIPTION_FAILED
+        )
+        raise CaptureError(
+            code,
+            "Audio transcription provider rejected the request.",
+            detail=f"HTTP {exc.response.status_code}",
+        ) from exc
+    except (httpx.HTTPError, OSError) as exc:
+        raise CaptureError(
+            CaptureErrorCode.AUDIO_PROVIDER_UNAVAILABLE,
+            "Audio transcription failed because the provider could not be reached.",
+            detail=str(exc),
+        ) from exc
     except Exception as exc:
-        raise ValueError(f"OpenAI Whisper transcription failed: {exc}") from exc
+        raise CaptureError(
+            CaptureErrorCode.AUDIO_TRANSCRIPTION_FAILED,
+            "Audio transcription failed.",
+            detail=str(exc),
+        ) from exc
     if not isinstance(payload, dict) or not str(payload.get("text") or "").strip():
-        raise ValueError("OpenAI Whisper returned an empty transcript.")
+        raise CaptureError(
+            CaptureErrorCode.AUDIO_TRANSCRIPTION_FAILED,
+            "Audio transcription returned no text.",
+        )
     return payload
 
 
