@@ -17,6 +17,7 @@ import os
 import tempfile
 import threading
 from bisect import bisect_right
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
 
@@ -72,6 +73,7 @@ def _file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+@lru_cache(maxsize=1)
 def _artifact_manifest() -> list[dict[str, Any]]:
     artifacts: list[dict[str, Any]] = []
     for role, value in _paths().items():
@@ -92,9 +94,11 @@ def _artifact_manifest() -> list[dict[str, Any]]:
     return artifacts
 
 
-def _digest_mismatches() -> list[str]:
+def _digest_mismatches(
+    artifacts: list[dict[str, Any]] | None = None,
+) -> list[str]:
     mismatches: list[str] = []
-    for artifact in _artifact_manifest():
+    for artifact in artifacts if artifacts is not None else _artifact_manifest():
         expected = str(artifact.get("expected_sha256") or "")
         if expected and not artifact.get("verified"):
             mismatches.append(str(artifact.get("role") or "model"))
@@ -309,8 +313,8 @@ def _book_character_data(
 @app.get("/health")
 def health() -> dict[str, Any]:
     missing = _missing_models(False)
-    mismatches = _digest_mismatches() if not missing else []
     artifacts = _artifact_manifest() if not missing else []
+    mismatches = _digest_mismatches(artifacts)
     return {
         "ready": not missing and not mismatches,
         "provider": "booknlp",
