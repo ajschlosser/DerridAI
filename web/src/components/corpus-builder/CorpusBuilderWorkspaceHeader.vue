@@ -204,7 +204,7 @@ const progressLabel = computed(() => {
 .workspace-mode-nav button.active {
   background: var(--surface-raised);
   color: var(--text-primary);
-  box-shadow: var(--shadow-xs);
+  box-shadow: var(--shadow-sm);
 }
 .workspace-mode-nav button:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent);
