@@ -61,6 +61,7 @@ from .field_assertions import (
 from .metadata_adjudication_cache import suggestions as adjudication_suggestions
 from .metadata_precedents_cache import CACHE_KEY as PRECEDENTS_CACHE_KEY
 from .metadata_precedents_cache import build_precedents_cache
+from .document_intelligence import prompt_hints as document_intelligence_prompt_hints
 from .metadata_schema import (
     CORE_FIELDS,
     CORE_GROUP,
