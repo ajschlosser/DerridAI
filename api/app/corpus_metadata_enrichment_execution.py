@@ -1388,12 +1388,21 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
 
 
 def _nlp_hint_line(record: dict[str, Any], group_fields: list[str]) -> str:
-    """Deterministic POS/NER surface forms for this family's fields (hints, not evidence)."""
+    """Bounded linguistic candidates for this family. They are prompt hints, never evidence."""
+    lines: list[str] = []
     hints = prompt_hints(record, group_fields)
-    if not hints:
-        return ""
-    return (
-        "Linguistic candidates found by a deterministic tagger in THIS text, per field (exact surface forms). "
-        "They are hints only: a name appearing here is not thereby the speaker, quoted speaker or position holder, "
-        f"and you must still justify each value from the text: {json.dumps(hints, ensure_ascii=False)}\n"
-    )
+    if hints:
+        lines.append(
+            "Record-local linguistic candidates found by the installed statistical tagger in THIS text "
+            "(exact surface forms). They are hints only: a name appearing here is not thereby the speaker, "
+            "quoted speaker or position holder, and you must still justify each value from the text: "
+            f"{json.dumps(hints, ensure_ascii=False)}"
+        )
+    document_hints = document_intelligence_prompt_hints(record, group_fields)
+    if document_hints:
+        lines.append(
+            "Whole-document linguistic candidates projected onto THIS record. These may include model-derived "
+            "coreference or quotation-speaker suggestions; they are advisory, not evidence or proposition ownership. "
+            f"Use them only when THIS record supports the same reading: {json.dumps(document_hints, ensure_ascii=False)}"
+        )
+    return "\n".join(lines) + ("\n" if lines else "")
