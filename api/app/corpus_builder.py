@@ -268,7 +268,13 @@ from .metadata_schema import (
 )
 from .metadata_schema_store import SchemaStore
 from .models import WorkMetadataRequest, WorkMetadataSeed
+from .document_intelligence import (
+    analyze_document,
+    document_text_for_records,
+    project_annotations_to_records,
+)
 from .nlp_annotations import annotate_record
+from .semantic_content_graph import build_semantic_content_graph
 from .operation_events import note_corpus_build
 from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
 from .rag import _citation_strings, chat_complete
@@ -1850,7 +1856,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         records = self.repo.load_records(build_id)
         manifest = build.get("manifest") if isinstance(build.get("manifest"), dict) else {}
         request = build.get("request") if isinstance(build.get("request"), dict) else {}
-        analysis = self._run_document_intelligence(build_id, records, manifest, request)
+        self._run_document_intelligence(build_id, records, manifest, request)
         self.repo.save_records(build_id, records)
         graph = self.semantic_content_graph(build_id)
         return {
