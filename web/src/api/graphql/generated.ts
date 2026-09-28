@@ -327,7 +327,7 @@ export type Query = {
   /** A PDF Corpus Builder build by id (REST: GET /api/pdf/corpus-builds/{id}). */
   corpus_build: CorpusBuildReview;
   /** One canonical cELF SourceDocument with its extraction, structure, provenance, capture links, and downstream build references. */
-  source_document: SourceDocumentIntelligence;
+  source_document: SourceDocumentView;
   /** One owner-scoped generated claim. */
   generated_claim: GeneratedClaim;
   /** Progressive metadata exemplars (REST: GET /api/system/data/metadata-exemplars). */
@@ -494,7 +494,7 @@ export type SourceCaptureReference = {
 };
 
 /** Read projection around one canonical cELF SourceDocument: identity, extraction provenance, document structure, and links to downstream Corpus Builder builds. */
-export type SourceDocumentIntelligence = {
+export type SourceDocumentView = {
   builds: Array<SourceBuildReference>;
   captures: Array<SourceCaptureReference>;
   catalog_metadata: Scalars['JSON']['output'];
@@ -528,14 +528,14 @@ export type SourceDocumentIntelligence = {
 
 
 /** Read projection around one canonical cELF SourceDocument: identity, extraction provenance, document structure, and links to downstream Corpus Builder builds. */
-export type SourceDocumentIntelligencePagesArgs = {
+export type SourceDocumentViewPagesArgs = {
   limit?: Scalars['Int']['input'];
   offset?: Scalars['Int']['input'];
 };
 
 
 /** Read projection around one canonical cELF SourceDocument: identity, extraction provenance, document structure, and links to downstream Corpus Builder builds. */
-export type SourceDocumentIntelligenceSource_UnitsArgs = {
+export type SourceDocumentViewSource_UnitsArgs = {
   around?: InputMaybe<Scalars['String']['input']>;
   ids?: InputMaybe<Array<Scalars['String']['input']>>;
   limit?: Scalars['Int']['input'];
