@@ -37,6 +37,12 @@ def test_retrieval_query_filters_function_words_without_erasing_short_queries():
     assert _retrieval_query_text("the", "en") == "the"
 
 
+def test_lexical_overlap_handles_punctuation_without_changing_source_text():
+    from app.metadata_exemplar_retrieval import _lexical_overlap
+
+    assert _lexical_overlap("responsibility", "Responsibility precedes freedom.") == 1.0
+
+
 class FakeEmbeddings:
     def __init__(self):
         self.calls = 0
@@ -282,6 +288,9 @@ def test_backend_failure_disables_repeated_semantic_attempts_but_returns_fallbac
 
     assert first["ok"] is False
     assert second["ok"] is False
+    assert first["examples"]["speaker"][0]["value"] == "Derrida"
+    assert first["telemetry"]["fallback_mode"] == "lexical"
+    assert second["examples"]["speaker"][0]["value"] == "Derrida"
     assert "vector backend unavailable" in second["telemetry"]["fallback_reason"]
 
 

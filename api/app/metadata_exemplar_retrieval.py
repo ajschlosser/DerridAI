@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import time
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
@@ -34,6 +35,7 @@ DEFAULT_FETCH_K = 16
 DEFAULT_MMR_LAMBDA = 0.72
 DEFAULT_PACKET_CHAR_BUDGET = DEFAULT_PROMPT_TOKEN_BUDGET * PROMPT_CHARS_PER_TOKEN
 MAX_QUERY_CHARS = 12000
+MAX_FALLBACK_CANDIDATES = 256
 _STOP_WORDS = {
     "en": {
         "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "has",
@@ -123,11 +125,76 @@ def _retrieval_query_text(text: str, language: str = "") -> str:
 
 
 def _lexical_overlap(query: str, text: str, language: str = "") -> float:
-    query_terms = set(_retrieval_query_text(query, language).casefold().split())
-    text_terms = set(str(text or "").casefold().split())
+    stop_words = _STOP_WORDS.get(str(language or "").casefold().split("-")[0], set())
+
+    def terms(value: str) -> set[str]:
+        return {
+            token
+            for token in re.findall(r"[\wÀ-ÿ'-]+", value.casefold())
+            if token not in stop_words
+        }
+
+    query_terms = terms(_retrieval_query_text(query, language))
+    text_terms = terms(str(text or ""))
     if not query_terms:
         return 0.0
     return len(query_terms & text_terms) / len(query_terms)
+
+
+def _fallback_text(exemplar: dict[str, Any]) -> str:
+    return " ".join(
+        str(exemplar.get(key) or "")
+        for key in ("field_name", "field_value", "rejected_value", "evidence_text", "context_text")
+    )
+
+
+def _fallback_candidates(
+    *,
+    canonical: dict[str, dict[str, Any]],
+    query_text: str,
+    fields: list[str],
+    language: str,
+    current_values: dict[str, str],
+    field_match_fields: dict[str, list[str]],
+    exclude_record_id: str,
+) -> dict[str, list[dict[str, Any]]]:
+    """Return conservative lexical matches when semantic retrieval is unavailable."""
+
+    ranked: dict[str, list[dict[str, Any]]] = {}
+    for exemplar in list(canonical.values())[:MAX_FALLBACK_CANDIDATES]:
+        field = str(exemplar.get("field_name") or "")
+        if field not in fields:
+            continue
+        if exclude_record_id and str(exemplar.get("record_id") or "") == str(exclude_record_id):
+            continue
+        tier, compared = match_tier(
+            exemplar,
+            current_values,
+            list(field_match_fields.get(field) or []),
+        )
+        if tier == "differs":
+            continue
+        score = _lexical_overlap(query_text, _fallback_text(exemplar), language)
+        if score <= 0.0:
+            continue
+        ranked.setdefault(field, []).append({
+            "id": str(exemplar.get("metadata_exemplar_id") or ""),
+            "distance": None,
+            "embedding": None,
+            "match_tier": tier,
+            "match_compared": compared,
+            "lexical_score": score,
+            "hybrid_score": score,
+            "fallback": True,
+        })
+    for field, rows in ranked.items():
+        rows.sort(
+            key=lambda row: (
+                -float(row["lexical_score"]),
+                str(canonical[row["id"]].get("metadata_exemplar_id") or ""),
+            )
+        )
+    return ranked
 
 
 def _cosine(a: Any, b: Any) -> float:
@@ -519,6 +586,85 @@ class ChromaMetadataExemplarIndex:
             "deleted": len(existing),
         }
 
+    def _lexical_fallback_result(
+        self,
+        *,
+        started_total: float,
+        canonical: dict[str, dict[str, Any]],
+        query_text: str,
+        ordered_fields: list[str],
+        language: str,
+        field_limits: dict[str, int] | None,
+        field_include_corrections: dict[str, bool] | None,
+        field_correction_limits: dict[str, int] | None,
+        field_match_fields: dict[str, list[str]] | None,
+        current_values: dict[str, str] | None,
+        packet_char_budget: int,
+        exclude_record_id: str,
+        reason: str,
+    ) -> dict[str, Any]:
+        raw = _fallback_candidates(
+            canonical=canonical,
+            query_text=query_text,
+            fields=ordered_fields,
+            language=language,
+            current_values=current_values or {},
+            field_match_fields=field_match_fields or {},
+            exclude_record_id=exclude_record_id,
+        )
+        selected: dict[str, list[dict[str, Any]]] = {}
+        considered = 0
+        for field in ordered_fields:
+            limit = max(0, int((field_limits or {}).get(field, DEFAULT_FIELD_LIMIT)))
+            correction_limit = (
+                max(0, int((field_correction_limits or {}).get(field, DEFAULT_CORRECTION_LIMIT)))
+                if bool((field_include_corrections or {}).get(field, True))
+                else 0
+            )
+            rows = raw.get(field, [])
+            considered += len(rows)
+            field_selected: list[dict[str, Any]] = []
+            for is_correction, quota in ((False, limit), (True, correction_limit)):
+                pool = [
+                    row for row in rows
+                    if (str(canonical[row["id"]].get("kind") or "positive") == "correction") == is_correction
+                ]
+                field_selected.extend(pool[:quota])
+            if field_selected:
+                selected[field] = field_selected
+
+        rendered: dict[str, list[dict[str, Any]]] = {}
+        for field, rows in selected.items():
+            for row in rows:
+                exemplar = canonical.get(row["id"])
+                if exemplar is None:
+                    continue
+                example = prompt_example(exemplar, similarity=None)
+                if row.get("match_compared"):
+                    example["match"] = {"tier": row["match_tier"], "fields": row["match_compared"]}
+                rendered.setdefault(field, []).append(example)
+        packet, packet_chars = _bounded_packet(
+            rendered,
+            ordered_fields,
+            char_budget=packet_char_budget,
+        )
+        used = sum(len(items) for items in packet.values())
+        return {
+            "ok": False,
+            "examples": packet,
+            "telemetry": {
+                "fallback_reason": reason,
+                "fallback_mode": "lexical",
+                "ranking": "lexical_overlap",
+                "candidates_considered": min(len(canonical), MAX_FALLBACK_CANDIDATES),
+                "examples_considered": considered,
+                "examples_used": used,
+                "packet_chars": packet_chars,
+                "fields_served": sorted(packet),
+                "total_ms": _elapsed_ms(started_total),
+            },
+        }
+
     def retrieve(
         self,
         *,
@@ -541,13 +687,6 @@ class ChromaMetadataExemplarIndex:
     ) -> dict[str, Any]:
         """Sync canonical exemplars, retrieve per field, and return a bounded packet."""
 
-        if self._disabled_reason:
-            return {
-                "ok": False,
-                "examples": {},
-                "telemetry": {"fallback_reason": self._disabled_reason},
-            }
-
         started_total = time.monotonic()
         canonical = {
             str(item.get("metadata_exemplar_id") or ""): item
@@ -555,6 +694,22 @@ class ChromaMetadataExemplarIndex:
             if str(item.get("metadata_exemplar_id") or "")
         }
         ordered_fields = list(dict.fromkeys(str(field) for field in fields if str(field)))
+        if self._disabled_reason:
+            return self._lexical_fallback_result(
+                started_total=started_total,
+                canonical=canonical,
+                query_text=str(query_text or ""),
+                ordered_fields=ordered_fields,
+                language=language,
+                field_limits=field_limits,
+                field_include_corrections=field_include_corrections,
+                field_correction_limits=field_correction_limits,
+                field_match_fields=field_match_fields,
+                current_values=current_values,
+                packet_char_budget=packet_char_budget,
+                exclude_record_id=exclude_record_id,
+                reason=self._disabled_reason,
+            )
         if not canonical or not str(query_text or "").strip() or not ordered_fields:
             return {
                 "ok": True,
@@ -719,11 +874,18 @@ class ChromaMetadataExemplarIndex:
             }
         except Exception as exc:  # noqa: BLE001 - progressive RAG is advisory
             self._disabled_reason = f"{exc.__class__.__name__}: {str(exc)[:300]}"
-            return {
-                "ok": False,
-                "examples": {},
-                "telemetry": {
-                    "fallback_reason": self._disabled_reason,
-                    "total_ms": _elapsed_ms(started_total),
-                },
-            }
+            return self._lexical_fallback_result(
+                started_total=started_total,
+                canonical=canonical,
+                query_text=str(query_text or ""),
+                ordered_fields=ordered_fields,
+                language=language,
+                field_limits=field_limits,
+                field_include_corrections=field_include_corrections,
+                field_correction_limits=field_correction_limits,
+                field_match_fields=field_match_fields,
+                current_values=current_values,
+                packet_char_budget=packet_char_budget,
+                exclude_record_id=exclude_record_id,
+                reason=self._disabled_reason,
+            )
