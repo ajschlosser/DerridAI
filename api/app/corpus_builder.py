@@ -274,7 +274,11 @@ from .metadata_schema import (
 from .metadata_schema_store import SchemaStore
 from .models import WorkMetadataRequest, WorkMetadataSeed
 from .nlp_annotations import annotate_record
-from .operation_events import note_corpus_build, note_record_metadata
+from .operation_events import (
+    note_corpus_build,
+    note_corpus_generation_delta,
+    note_corpus_generation_finished,
+), note_record_metadata
 from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
 from .rag import _citation_strings, chat_complete
 from .run_guidance import find_guidance_matches
@@ -1819,6 +1823,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             build["document_intelligence"] = {
                 "status": analysis.get("status"),
                 "profile": analysis.get("profile"),
+                "selected_provider": analysis.get("selected_provider"),
                 "provider": analysis.get("provider"),
                 "provider_version": analysis.get("provider_version"),
                 "model": analysis.get("model"),
@@ -1830,6 +1835,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                 "events": projection_counts.get("events", 0),
                 "model_artifacts": analysis.get("model_artifacts") or [],
                 "warnings": analysis.get("warnings") or [],
+                "reason": analysis.get("reason"),
                 "text_sha256": analysis.get("text_sha256"),
             }
             build["semantic_content_graph"] = semantic_graph.get("summary") or {}
@@ -1848,6 +1854,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             build["document_intelligence"] = {
                 "status": "unavailable",
                 "profile": str(request.get("document_intelligence_profile") or "scholarly"),
+                "selected_provider": str(request.get("document_nlp_provider") or "auto"),
                 "reason": str(exc),
             }
             self.repo.save_build(build)
@@ -2249,23 +2256,61 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                         "quotation" if "record_quotation" in schema_name else
                         "indexing" if "record_indexing" in schema_name else "indexing"
                     )
-                    call_token = self._note_llm_call_start(build_id, metric_stage_of(schema_name), provider, model, base_url)
+                    call_token = self._note_llm_call_start(
+                        build_id, metric_stage_of(schema_name), provider, model, base_url
+                    )
+                    call_id = f"{build_id}:{call_token}" if build_id else ""
+                    rendered_prompt = prompt + retry_note
+                    effective_max_tokens = min(8192, max_tokens + ((attempt - 1) * 1024))
+                    if build_id:
+                        self._llm_trace_start(
+                            build_id,
+                            call_id=call_id,
+                            schema_name=schema_name,
+                            role=role,
+                            attempt=attempt,
+                            provider=provider,
+                            model=model,
+                            prompt=rendered_prompt,
+                            response_schema=schema,
+                            generation=generation,
+                            max_tokens=effective_max_tokens,
+                        )
+                    raw = ""
                     try:
-                        raw = self._with_transport_retry(build_id, chat_complete, 
+                        raw = self._with_transport_retry(
+                            build_id,
+                            chat_complete,
                             provider=provider,
                             model=model,
                             base_url=base_url,
                             api_key=api_key,
-                            prompt=prompt + retry_note,
+                            prompt=rendered_prompt,
                             options=generation,
                             json_mode=True,
                             json_schema=schema,
                             schema_name=schema_name,
-                            max_tokens=min(8192, max_tokens + ((attempt - 1) * 1024)),
+                            max_tokens=effective_max_tokens,
                             cancelled=(lambda: self._cancelled(build_id)) if build_id else None,
                             timeout_seconds=float(_stage_timeouts(request).get(timeout_key, 240)),
+                            on_delta=(
+                                (lambda piece: note_corpus_generation_delta(build_id, call_id, piece))
+                                if build_id
+                                else None
+                            ),
                         )
+                    except Exception as exc:
+                        if build_id:
+                            self._llm_trace_finish(
+                                build_id,
+                                call_id,
+                                raw_response=raw or None,
+                                error=f"{type(exc).__name__}: {exc}",
+                            )
+                        raise
                     finally:
+                        if build_id:
+                            note_corpus_generation_finished(build_id, call_id)
                         self._note_llm_call_end(build_id, call_token)
                 except InterruptedError:
                     raise
@@ -2287,10 +2332,24 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                 try:
                     value = _parse_json_robust(raw)
                     parsed = response_model.model_validate(value)
-                    return parsed.model_dump(mode="json")
+                    validated = parsed.model_dump(mode="json")
+                    if build_id:
+                        self._llm_trace_finish(
+                            build_id,
+                            call_id,
+                            raw_response=str(raw or ""),
+                            validated_response=validated,
+                        )
+                    return validated
                 except (ValueError, ValidationError) as exc:
                     failure = exc
                     if build_id:
+                        self._llm_trace_finish(
+                            build_id,
+                            call_id,
+                            raw_response=str(raw or ""),
+                            error=f"{type(exc).__name__}: {exc}",
+                        )
                         self._increment_metric(build_id, "structured_output_failures")
             all_failures.append(f"{role} {provider}/{model}: {failure}")
         raise ValueError(
