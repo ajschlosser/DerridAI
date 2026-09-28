@@ -87,8 +87,7 @@ export function execute<TResult, TVariables>(
   if (pending) return pending.then((value) => clone(value) as TResult);
 
   const requestEpoch = cacheEpoch;
-  let request: Promise<TResult>;
-  request = apiRequest<GraphQLResponse<TResult>>(GRAPHQL_ENDPOINT, {
+  const request = apiRequest<GraphQLResponse<TResult>>(GRAPHQL_ENDPOINT, {
     method: "POST",
     body: JSON.stringify({ query, variables, operationName }),
     signal: options.signal,
