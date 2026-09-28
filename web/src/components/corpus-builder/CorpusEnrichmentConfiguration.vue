@@ -7,6 +7,8 @@ import CorpusTextNoiseSettings from "../CorpusTextNoiseSettings.vue";
 import ProviderProfileSelect from "../ProviderProfileSelect.vue";
 
 type EnrichmentMode = "fast" | "deep";
+type DocumentIntelligenceProfile = "none" | "general" | "fiction" | "scholarly";
+type DocumentNlpProvider = "auto" | "spacy" | "booknlp";
 type ManualProvider = "ollama" | "openai";
 
 const props = defineProps<{
@@ -24,6 +26,16 @@ const selectedReviewProviderId = defineModel<string>("selectedReviewProviderId",
 });
 const enrichmentMode = defineModel<EnrichmentMode>("enrichmentMode", { required: true });
 const semanticIndexing = defineModel<boolean>("semanticIndexing", { required: true });
+const documentIntelligenceProfile = defineModel<DocumentIntelligenceProfile>(
+  "documentIntelligenceProfile",
+  { required: true },
+);
+const documentNlpProvider = defineModel<DocumentNlpProvider>("documentNlpProvider", {
+  required: true,
+});
+const documentNlpIncludeEvents = defineModel<boolean>("documentNlpIncludeEvents", {
+  required: true,
+});
 const autoCleanText = defineModel<boolean>("autoCleanText", { required: true });
 const llmTouchupDuringEnrichment = defineModel<boolean>("llmTouchupDuringEnrichment", {
   required: true,
@@ -139,6 +151,70 @@ const advancedOpen = ref(false);
             ><small>{{ i18n.t("pdf_corpus.semantic_indexing_help") }}</small></span
           ></label
         >
+        <section
+          class="document-intelligence"
+          aria-labelledby="pdf-corpus-document-intelligence-title"
+        >
+          <div class="setup-card-heading">
+            <b id="pdf-corpus-document-intelligence-title">{{
+              i18n.t("pdf_corpus.document_intelligence")
+            }}</b>
+            <small>{{ i18n.t("pdf_corpus.document_intelligence_help") }}</small>
+          </div>
+          <div class="document-intelligence-grid">
+            <label for="pdf-corpus-document-intelligence-profile"
+              ><span>{{ i18n.t("pdf_corpus.document_intelligence_profile") }}</span
+              ><select
+                id="pdf-corpus-document-intelligence-profile"
+                v-model="documentIntelligenceProfile"
+                class="control"
+                :disabled="props.disabled"
+              >
+                <option value="scholarly">
+                  {{ i18n.t("pdf_corpus.document_intelligence_scholarly") }}
+                </option>
+                <option value="fiction">
+                  {{ i18n.t("pdf_corpus.document_intelligence_fiction") }}
+                </option>
+                <option value="general">
+                  {{ i18n.t("pdf_corpus.document_intelligence_general") }}
+                </option>
+                <option value="none">
+                  {{ i18n.t("pdf_corpus.document_intelligence_none") }}
+                </option>
+              </select></label
+            ><label for="pdf-corpus-document-nlp-provider"
+              ><span>{{ i18n.t("pdf_corpus.document_nlp_provider") }}</span
+              ><select
+                id="pdf-corpus-document-nlp-provider"
+                v-model="documentNlpProvider"
+                class="control"
+                :disabled="props.disabled || documentIntelligenceProfile === 'none'"
+              >
+                <option value="auto">{{ i18n.t("pdf_corpus.document_nlp_auto") }}</option>
+                <option value="spacy">{{ i18n.t("pdf_corpus.document_nlp_spacy") }}</option>
+                <option value="booknlp">{{ i18n.t("pdf_corpus.document_nlp_booknlp") }}</option>
+              </select></label
+            >
+          </div>
+          <label class="semantic-index-toggle compact-toggle"
+            ><input
+              v-model="documentNlpIncludeEvents"
+              type="checkbox"
+              :disabled="
+                props.disabled ||
+                documentIntelligenceProfile === 'none' ||
+                documentNlpProvider === 'spacy'
+              "
+            /><span
+              ><b>{{ i18n.t("pdf_corpus.document_nlp_events") }}</b
+              ><small>{{ i18n.t("pdf_corpus.document_nlp_events_help") }}</small></span
+            ></label
+          >
+          <p class="help document-intelligence-note">
+            {{ i18n.t("pdf_corpus.document_intelligence_epistemic_note") }}
+          </p>
+        </section>
         <label class="semantic-index-toggle"
           ><input v-model="autoCleanText" type="checkbox" /><span
             ><b>{{ i18n.t("pdf_corpus.auto_clean_all_records") }}</b
@@ -301,6 +377,33 @@ const advancedOpen = ref(false);
   gap: 12px;
   padding-top: 2px;
 }
+.document-intelligence {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--soft);
+}
+.document-intelligence-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.document-intelligence-grid label {
+  display: grid;
+  gap: 5px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.compact-toggle {
+  background: var(--card);
+}
+.document-intelligence-note {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
 .mode-options {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -366,7 +469,8 @@ const advancedOpen = ref(false);
   font-size: 0.8125rem;
 }
 @container (max-width: 760px) {
-  .mode-options {
+  .mode-options,
+  .document-intelligence-grid {
     grid-template-columns: 1fr;
   }
 }
