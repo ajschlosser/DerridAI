@@ -503,6 +503,7 @@ const {
   saveMetadata,
   toggleEvidenceBlock,
   setEvidenceBlocks,
+  setExternalEvidenceBlocks,
   requeueCurrentRecord,
   resolveMetadataField,
   resolveMetadataSuggestions,
@@ -669,15 +670,23 @@ async function resolveMetadataWithHumanSource(field: string, value: unknown, not
 }
 
 /** The value being cited from outside this record, while the browser dialog is open. */
-const evidenceBrowser = ref<{ field: string; value: unknown } | null>(null);
+// From a field editor the chosen spans are saved with the value; from the Evidence tab (`evidenceOnly`) they replace
+// the field's other-record spans and leave its value alone.
+const evidenceBrowser = ref<{ field: string; value?: unknown; evidenceOnly?: boolean } | null>(
+  null,
+);
 function openEvidenceBrowser(field: string, value: unknown) {
   evidenceBrowser.value = { field, value };
+}
+function openExternalEvidenceBrowser(field: string) {
+  if (field) evidenceBrowser.value = { field, evidenceOnly: true };
 }
 async function confirmExternalEvidence(blockIds: string[]) {
   const target = evidenceBrowser.value;
   evidenceBrowser.value = null;
   if (!target) return;
-  await resolveMetadataField(target.field, target.value, "", { externalBlockIds: blockIds });
+  if (target.evidenceOnly) await setExternalEvidenceBlocks(target.field, blockIds);
+  else await resolveMetadataField(target.field, target.value, "", { externalBlockIds: blockIds });
 }
 
 const metadataFamilyOptions = computed(
@@ -3333,6 +3342,7 @@ defineExpose({
                   @update:selected-field="selectedEvidenceField = $event"
                   @toggle-evidence="toggleEvidenceBlock"
                   @set-evidence="setEvidenceBlocks"
+                  @browse-external="openExternalEvidenceBrowser(selectedEvidenceField)"
                 />
                 <CorpusReviewSourcePanel
                   v-else-if="
@@ -3624,6 +3634,13 @@ defineExpose({
       :field-label="
         i18n.t(`record.${evidenceBrowser.field}`, evidenceBrowser.field.replaceAll('_', ' '))
       "
+      :initial-chosen="
+        evidenceBrowser.evidenceOnly
+          ? (
+              selectedRecord.metadata_evidence?.[evidenceBrowser.field]?.external_block_ids || []
+            ).map(String)
+          : []
+      "
       @close="evidenceBrowser = null"
       @confirm="confirmExternalEvidence"
     />
@@ -3729,6 +3746,7 @@ defineExpose({
         @select-evidence="selectedEvidenceField = $event"
         @toggle-evidence="toggleEvidenceBlock"
         @set-evidence="setEvidenceBlocks"
+        @browse-external-evidence="openExternalEvidenceBrowser"
         @navigate-record="navigateToQueueRecord"
     /></Teleport>
   </section>
