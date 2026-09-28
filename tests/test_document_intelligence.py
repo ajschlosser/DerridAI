@@ -45,7 +45,7 @@ def test_document_text_offsets_and_projection_are_bound_to_record_text():
         "quotations": [],
     }
     counts = di.project_annotations_to_records(records, analysis)
-    assert counts == {"entity_mentions": 1, "quotations": 0}
+    assert counts == {"entity_mentions": 1, "quotations": 0, "events": 0}
     projected = records[0]["document_intelligence"]
     assert projected["entities"][0]["label"] == "Emmanuel Levinas"
     assert projected["entities"][0]["start"] == records[0]["text"].index("Levinas")
