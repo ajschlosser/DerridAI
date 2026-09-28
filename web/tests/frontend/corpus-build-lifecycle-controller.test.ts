@@ -97,6 +97,7 @@ function setup(requestedBuildId = "") {
   const resetReviewForBuildStart = vi.fn();
   const refreshRecords = vi.fn(async () => undefined);
   const refreshRows = vi.fn(async () => undefined);
+  const refreshRecord = vi.fn(async () => undefined);
   const applyBuildRequest = vi.fn();
   const setMessage = vi.fn();
 
@@ -123,6 +124,7 @@ function setup(requestedBuildId = "") {
     resetReviewForBuildStart,
     refreshRecords,
     refreshRows,
+    refreshRecord,
     t: (key) => key,
     tf: (key) => key,
   });
@@ -132,6 +134,7 @@ function setup(requestedBuildId = "") {
     builds,
     buildsTotal,
     selectedBuildId,
+    selectedRecordId,
     currentBuild,
     busy,
     resetReviewForBuildStart,
@@ -139,6 +142,7 @@ function setup(requestedBuildId = "") {
     setMessage,
     refreshRecords,
     refreshRows,
+    refreshRecord,
   };
 }
 
@@ -269,6 +273,15 @@ describe("Corpus Builder lifecycle controller", () => {
       payload: { metadata: { record_id: "r7" } },
     });
     expect(state.refreshRows).toHaveBeenCalledWith(["r7"]);
+    expect(state.refreshRecord).not.toHaveBeenCalled();
+
+    state.selectedRecordId.value = "r7";
+    subscription?.handler({
+      type: "corpus.record_completed",
+      resource_id: "build-1",
+      payload: { metadata: { record_id: "r7" } },
+    });
+    expect(state.refreshRecord).toHaveBeenCalledWith("r7");
 
     state.controller.stopPolling();
   });

@@ -194,6 +194,58 @@ def _no_evidence_answer(**metadata):
     return result
 
 
+def test_evidence_uses_current_source_units_after_topology_changes(tmp_path):
+    m, bid = manager(tmp_path, notes_schema())
+    m._blocks_for = lambda _build_id: {
+        "unit-new": {
+            "block_id": "unit-new",
+            "source_unit_id": "unit-new",
+            "text": "The mood of the passage is calm and unhurried.",
+        }
+    }
+    record = {
+        "record_id": "r-unit",
+        "text": "The mood of the passage is calm and unhurried.",
+        "source_block_ids": ["retired-block"],
+        "source_unit_ids": ["unit-new"],
+        "metadata_field_status": {},
+    }
+
+    labelled = m._labelled_source_blocks(bid, record, {"evidence_mode": "with_value"})
+    assert "[unit-new]" in labelled
+    assert "retired-block" not in labelled
+
+    tasks, source_ids, _ = m._prepare_metadata_tasks(
+        record,
+        {},
+        {"enrichment_mode": "deep"},
+        m._profile_for(bid),
+        {},
+        {},
+        "",
+        "",
+        None,
+        schema=m._schema_for(bid),
+        labelled_blocks=labelled,
+    )
+    assert source_ids == ["unit-new"]
+    assert any("[unit-new]" in task[1] for task in tasks)
+
+    out = m._reconcile_metadata_results(
+        record,
+        m._profile_for(bid),
+        source_ids,
+        [("discourse", _no_evidence_answer(mood="calm"), None)],
+        False,
+        request={"model": "q"},
+        build_id=bid,
+        schema=m._schema_for(bid),
+    )
+    evidence = out["metadata_evidence"]["mood"]
+    assert evidence["block_ids"] == ["unit-new"]
+    assert evidence["backfilled"] is True
+
+
 def test_backfill_mode_attaches_untrusted_evidence_the_model_did_not_cite(tmp_path):
     m, bid = manager(tmp_path, notes_schema())
     m._evidence_source_blocks = lambda *a, **k: [

@@ -472,6 +472,7 @@ const {
   },
   refreshRecords,
   refreshRows: reviewRecords.refreshRows,
+  refreshRecord: reviewRecords.refreshRecord,
   t: (key, fallback) => i18n.t(key, fallback),
   tf: (key, values) => i18n.tf(key, values),
 });

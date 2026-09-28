@@ -274,7 +274,7 @@ from .metadata_schema import (
 from .metadata_schema_store import SchemaStore
 from .models import WorkMetadataRequest, WorkMetadataSeed
 from .nlp_annotations import annotate_record
-from .operation_events import note_corpus_build
+from .operation_events import note_corpus_build, note_record_metadata
 from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
 from .rag import _citation_strings, chat_complete
 from .run_guidance import find_guidance_matches
@@ -3180,6 +3180,9 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                             live_records[live_index] = _merge_enrichment_snapshot(live_records[live_index], records[index], self._allowed_fields(build_id))
                         records = live_records
                         self.repo.save_records(build_id, records)
+                    # The terminal realtime hint means a subsequent read can observe
+                    # the enriched Record. Emit it only after the durable merge/save.
+                    note_record_metadata(build_id, completed_id, "record_completed")
                     self._update(
                         build_id,
                         stage="enriching",
