@@ -126,7 +126,7 @@ export type ModelActivityEventType = "llm.started" | "llm.progress" | "llm.compl
 
 /** Ephemeral: never replayed after a reconnect, and the first dropped under backpressure. */
 export type GenerationEventType = "llm.token";
-export type CorpusGenerationEventType = "corpus.llm_delta";
+export type CorpusGenerationEventType = "corpus.llm_progress";
 export type CorpusRecordEventType =
   | "corpus.record_started"
   | "corpus.field_checked"
@@ -153,7 +153,7 @@ export type GenerationEvent = Envelope<GenerationEventType, "job", { generation:
 export type CorpusGenerationEvent = Envelope<
   CorpusGenerationEventType,
   "corpus_build",
-  { generation: GenerationDelta & { call_id: string } }
+  { generation: { call_id: string; seq: number; chars: number; gap: boolean; final: boolean } }
 >;
 export type CorpusRecordEvent = Envelope<
   CorpusRecordEventType,
@@ -218,7 +218,7 @@ export function isResourceEvent(frame: ServerFrame): frame is RealtimeEvent {
 /** The subscription topics an event is delivered for (mirrors the server's topic model). */
 export function topicsForEvent(event: RealtimeEvent): string[] {
   if (event.type === "llm.token") return [`job:${event.resource_id}`];
-  if (event.type === "corpus.llm_delta") return [`corpus-build:${event.resource_id}`];
+  if (event.type === "corpus.llm_progress") return [`corpus-build:${event.resource_id}`];
   if (event.resource_type === "job") return ["jobs", `job:${event.resource_id}`];
   if (event.resource_type === "activity") return [`activity:${event.resource_id}`];
   if (
