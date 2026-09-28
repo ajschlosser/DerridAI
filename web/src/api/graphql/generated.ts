@@ -49,6 +49,8 @@ export type CelfRelationship = {
 /** One PDF Corpus Builder build's reviewable Records (REST: /api/pdf/corpus-builds/{id}). */
 export type CorpusBuildReview = {
   build_id: Scalars['String']['output'];
+  /** Retained derived whole-document linguistic analysis. Advisory only: it is not source evidence and does not confer FieldAssertion authority. */
+  document_intelligence?: Maybe<DocumentIntelligenceRun>;
   /** Build-wide observed metadata values, optionally narrowed to specific fields. */
   metadata_facets: Scalars['JSON']['output'];
   /** One reviewer-presented Record (REST: full Record from the review page). */
@@ -147,6 +149,76 @@ export type CorpusReviewQueuePage = {
   offset: Scalars['Int']['output'];
   queue_counts: CorpusQueueCounts;
   total: Scalars['Int']['output'];
+};
+
+/** One normalized entity/coreference cluster from Document Intelligence. */
+export type DocumentEntityCluster = {
+  aliases: Array<Scalars['String']['output']>;
+  canonical: Scalars['String']['output'];
+  cluster_id: Scalars['String']['output'];
+  entity_type?: Maybe<Scalars['String']['output']>;
+};
+
+/** One normalized entity mention in conserved whole-document offsets. */
+export type DocumentEntityMention = {
+  cluster_id: Scalars['String']['output'];
+  end_char?: Maybe<Scalars['Int']['output']>;
+  entity_type?: Maybe<Scalars['String']['output']>;
+  mention_type?: Maybe<Scalars['String']['output']>;
+  start_char?: Maybe<Scalars['Int']['output']>;
+  text: Scalars['String']['output'];
+};
+
+/** One model artifact used by a Document Intelligence provider. */
+export type DocumentIntelligenceArtifact = {
+  name?: Maybe<Scalars['String']['output']>;
+  role?: Maybe<Scalars['String']['output']>;
+  sha256?: Maybe<Scalars['String']['output']>;
+};
+
+/** One Record's offset range in the conserved whole-document analysis text. */
+export type DocumentIntelligenceRecordSpan = {
+  end?: Maybe<Scalars['Int']['output']>;
+  record_id: Scalars['String']['output'];
+  record_revision?: Maybe<Scalars['Int']['output']>;
+  source_unit_ids: Array<Scalars['String']['output']>;
+  start?: Maybe<Scalars['Int']['output']>;
+  text_sha256?: Maybe<Scalars['String']['output']>;
+};
+
+/** Retained, derived whole-document linguistic analysis. Advisory only: it is not evidence and does not make any FieldAssertion authoritative. */
+export type DocumentIntelligenceRun = {
+  capabilities: Array<Scalars['String']['output']>;
+  characters: Scalars['JSON']['output'];
+  configuration: Scalars['JSON']['output'];
+  current_text_sha256?: Maybe<Scalars['String']['output']>;
+  entities: Array<DocumentEntityMention>;
+  entity_clusters: Array<DocumentEntityCluster>;
+  events: Scalars['JSON']['output'];
+  model?: Maybe<Scalars['String']['output']>;
+  model_artifacts: Array<DocumentIntelligenceArtifact>;
+  profile?: Maybe<Scalars['String']['output']>;
+  provider?: Maybe<Scalars['String']['output']>;
+  provider_version?: Maybe<Scalars['String']['output']>;
+  quotations: Array<DocumentQuotation>;
+  reason?: Maybe<Scalars['String']['output']>;
+  record_spans: Array<DocumentIntelligenceRecordSpan>;
+  selected_provider?: Maybe<Scalars['String']['output']>;
+  stale: Scalars['Boolean']['output'];
+  status: Scalars['String']['output'];
+  text_length?: Maybe<Scalars['Int']['output']>;
+  text_sha256?: Maybe<Scalars['String']['output']>;
+  version?: Maybe<Scalars['Int']['output']>;
+  warnings: Array<Scalars['String']['output']>;
+};
+
+/** One normalized quotation and its candidate speaker attribution. */
+export type DocumentQuotation = {
+  end_char?: Maybe<Scalars['Int']['output']>;
+  speaker_cluster_id?: Maybe<Scalars['String']['output']>;
+  speaker_text?: Maybe<Scalars['String']['output']>;
+  start_char?: Maybe<Scalars['Int']['output']>;
+  text: Scalars['String']['output'];
 };
 
 /** A revision-bound evidence locator. */
@@ -642,6 +714,13 @@ export type SimilarValidatedClaimsQueryVariables = Exact<{
 
 export type SimilarValidatedClaimsQuery = { generated_claim: { claim_id: string, similar_validated_claims: Array<{ claim_id: string, claim_text: string, similarity: number, validated_by: string | null, validated_at: string | null, advisory: boolean, support: Array<{ record_id: string, record_revision: number | null, relation: string | null, semantic: unknown }> }> } };
 
+export type CorpusDocumentIntelligenceQueryVariables = Exact<{
+  build_id: string;
+}>;
+
+
+export type CorpusDocumentIntelligenceQuery = { corpus_build: { document_intelligence: { version: number | null, status: string, profile: string | null, selected_provider: string | null, provider: string | null, provider_version: string | null, model: string | null, capabilities: Array<string>, configuration: unknown, text_sha256: string | null, current_text_sha256: string | null, text_length: number | null, stale: boolean, reason: string | null, warnings: Array<string>, characters: unknown, events: unknown, model_artifacts: Array<{ role: string | null, name: string | null, sha256: string | null }>, entity_clusters: Array<{ cluster_id: string, canonical: string, aliases: Array<string>, entity_type: string | null }>, entities: Array<{ cluster_id: string, start_char: number | null, end_char: number | null, text: string, mention_type: string | null, entity_type: string | null }>, quotations: Array<{ start_char: number | null, end_char: number | null, text: string, speaker_cluster_id: string | null, speaker_text: string | null }> } | null } };
+
 export type CorpusMetadataFacetsQueryVariables = Exact<{
   build_id: string;
   fields?: Array<string> | string | null | undefined;
@@ -983,6 +1062,57 @@ export const SimilarValidatedClaimsDocument = new TypedDocumentString(`
   }
 }
     `) as unknown as TypedDocumentString<SimilarValidatedClaimsQuery, SimilarValidatedClaimsQueryVariables>;
+export const CorpusDocumentIntelligenceDocument = new TypedDocumentString(`
+    query CorpusDocumentIntelligence($build_id: String!) {
+  corpus_build(build_id: $build_id) {
+    document_intelligence {
+      version
+      status
+      profile
+      selected_provider
+      provider
+      provider_version
+      model
+      capabilities
+      model_artifacts {
+        role
+        name
+        sha256
+      }
+      configuration
+      text_sha256
+      current_text_sha256
+      text_length
+      stale
+      reason
+      warnings
+      entity_clusters {
+        cluster_id
+        canonical
+        aliases
+        entity_type
+      }
+      entities {
+        cluster_id
+        start_char
+        end_char
+        text
+        mention_type
+        entity_type
+      }
+      quotations {
+        start_char
+        end_char
+        text
+        speaker_cluster_id
+        speaker_text
+      }
+      characters
+      events
+    }
+  }
+}
+    `) as unknown as TypedDocumentString<CorpusDocumentIntelligenceQuery, CorpusDocumentIntelligenceQueryVariables>;
 export const CorpusMetadataFacetsDocument = new TypedDocumentString(`
     query CorpusMetadataFacets($build_id: String!, $fields: [String!]) {
   corpus_build(build_id: $build_id) {
