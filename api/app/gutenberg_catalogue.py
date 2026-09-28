@@ -209,10 +209,14 @@ class GutenbergOfflineService:
         # import remains gated until the full collection has downloaded/unpacked.
         with sqlite3.connect(self.db_path) as db:
             catalogue_rows = int(db.execute("SELECT COUNT(*) FROM gutenberg_catalogue_books").fetchone()[0])
+        declared_count = int(catalogue.get("item_count") or 0)
+        # Older/local test catalogues may predate the persisted count. A
+        # non-empty indexed table is still authoritative in that case; once a
+        # non-zero count is declared it must match exactly.
         search_ready = (
             catalogue["status"] == "ready"
-            and int(catalogue.get("item_count") or 0) > 0
-            and catalogue_rows == int(catalogue["item_count"])
+            and catalogue_rows > 0
+            and (declared_count == 0 or catalogue_rows == declared_count)
         )
         return {
             "catalogue": catalogue,
