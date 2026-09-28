@@ -519,7 +519,6 @@ async function startBuild() {
   if (currentBuild.value) await switchWorkspace("build");
 }
 
-
 const { jsonlPreviewOpen, jsonlPreview, openJsonlPreview, publish } = useCorpusPublication({
   currentBuild,
   selectedRecord,
