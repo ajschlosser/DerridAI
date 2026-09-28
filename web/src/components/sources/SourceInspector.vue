@@ -1,7 +1,11 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { corpusSourcesApi, type SourceDetail } from "../../api/corpus";
+import type { SourceDetail } from "../../api/corpus";
+import {
+  sourceDocumentDetail,
+  sourceDocumentPreview,
+} from "../../features/sources/api/documentIntelligenceReads";
 import { useI18nStore } from "../../stores/i18n";
 import { languageList, languageName } from "../../domain/languages";
 import { enumLabel, enumTone } from "../../domain/sourceLabels";
@@ -10,9 +14,9 @@ import AppIcon from "../AppIcon.vue";
 import UiStatusBadge from "../ui/UiStatusBadge.vue";
 
 /**
- * Side panel describing one source from `GET /api/corpus/sources/{id}`: identity, language,
- * provider, provenance, processing and a bounded extracted-text preview. Source HTML is never
- * rendered; preview text comes from the persisted safe extraction blocks.
+ * Side panel describing one SourceDocument through the read-only GraphQL document-intelligence
+ * façade: identity, language, provider, provenance, processing and a bounded extracted-text
+ * preview. Source HTML is never rendered; preview text comes from persisted extraction units.
  */
 const props = withDefaults(
   defineProps<{
@@ -170,7 +174,7 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    loaded.value = await corpusSourcesApi.sourceDetail(props.sourceId);
+    loaded.value = await sourceDocumentDetail(props.sourceId);
     await loadPreview();
   } catch (cause) {
     loaded.value = null;
@@ -188,8 +192,7 @@ async function loadPreview() {
   previewLoading.value = true;
   previewError.value = "";
   try {
-    const response = await corpusSourcesApi.blocks(assetId, 0, 8);
-    previewBlocks.value = response.items;
+    previewBlocks.value = await sourceDocumentPreview(assetId, 8);
   } catch (cause) {
     previewBlocks.value = [];
     previewError.value = cause instanceof Error ? cause.message : String(cause);

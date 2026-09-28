@@ -54,6 +54,11 @@ type CorpusBuildReview {
   records(record_ids: [String!]!): [CorpusRecord]!
 
   """
+  Retained derived whole-document linguistic analysis. Advisory only: it is not source evidence and does not confer FieldAssertion authority.
+  """
+  document_intelligence: DocumentIntelligenceRun
+
+  """
   Build-wide observed metadata values, optionally narrowed to specific fields.
   """
   metadata_facets(fields: [String!] = null): JSON!
@@ -112,6 +117,80 @@ type CorpusReviewQueuePage {
   offset: Int!
   limit: Int!
   queue_counts: CorpusQueueCounts!
+}
+
+"""One normalized entity/coreference cluster from Document Intelligence."""
+type DocumentEntityCluster {
+  cluster_id: String!
+  canonical: String!
+  aliases: [String!]!
+  entity_type: String
+}
+
+"""One normalized entity mention in conserved whole-document offsets."""
+type DocumentEntityMention {
+  cluster_id: String!
+  start_char: Int
+  end_char: Int
+  text: String!
+  mention_type: String
+  entity_type: String
+}
+
+"""One model artifact used by a Document Intelligence provider."""
+type DocumentIntelligenceArtifact {
+  role: String
+  name: String
+  sha256: String
+}
+
+"""
+One Record's offset range in the conserved whole-document analysis text.
+"""
+type DocumentIntelligenceRecordSpan {
+  record_id: String!
+  record_revision: Int
+  start: Int
+  end: Int
+  text_sha256: String
+  source_unit_ids: [String!]!
+}
+
+"""
+Retained, derived whole-document linguistic analysis. Advisory only: it is not evidence and does not make any FieldAssertion authoritative.
+"""
+type DocumentIntelligenceRun {
+  version: Int
+  status: String!
+  profile: String
+  selected_provider: String
+  provider: String
+  provider_version: String
+  model: String
+  capabilities: [String!]!
+  model_artifacts: [DocumentIntelligenceArtifact!]!
+  configuration: JSON!
+  text_sha256: String
+  current_text_sha256: String
+  text_length: Int
+  stale: Boolean!
+  reason: String
+  warnings: [String!]!
+  record_spans: [DocumentIntelligenceRecordSpan!]!
+  entity_clusters: [DocumentEntityCluster!]!
+  entities: [DocumentEntityMention!]!
+  quotations: [DocumentQuotation!]!
+  characters: JSON!
+  events: JSON!
+}
+
+"""One normalized quotation and its candidate speaker attribution."""
+type DocumentQuotation {
+  start_char: Int
+  end_char: Int
+  text: String!
+  speaker_cluster_id: String
+  speaker_text: String
 }
 
 """A revision-bound evidence locator."""
@@ -250,6 +329,11 @@ type Query {
   """
   corpus_build(build_id: String!): CorpusBuildReview!
 
+  """
+  One canonical cELF SourceDocument with its extraction, structure, provenance, capture links, and downstream build references.
+  """
+  source_document(source_document_id: String!): SourceDocumentView!
+
   """A vector store by name (REST: GET /api/stores/{name})."""
   vector_store(name: String!): VectorStore!
 
@@ -360,6 +444,86 @@ type SimilarValidatedClaim {
   support: [SimilarClaimSupport!]!
 }
 
+"""One Corpus Builder build derived from a SourceDocument."""
+type SourceBuildReference {
+  build_id: String!
+  status: String!
+  created_at: String
+  record_count: Int
+}
+
+"""One Corpus Capture provenance link for a SourceDocument."""
+type SourceCaptureReference {
+  capture_id: String!
+  candidate_id: String!
+  provider: String!
+  provider_item_id: String!
+  discovery_method: String
+  discovered_at: String
+  acquired_at: String
+  author_name: String
+}
+
+"""One medium page/layout projection for a SourceDocument."""
+type SourceDocumentPage {
+  physical_page: Int!
+  printed_page_label: String
+  printed_page_label_source: String
+  width: Float
+  height: Float
+  block_ids: [String!]!
+  extraction_method: String
+  image_count: Int
+  deterministic_region_type: String
+  thread_ids: [String!]!
+  logical_pages: JSON!
+}
+
+"""A bounded page of SourceDocument page/layout projections."""
+type SourceDocumentPagePage {
+  items: [SourceDocumentPage!]!
+  total: Int!
+  offset: Int!
+  limit: Int!
+}
+
+"""
+Read projection around one canonical cELF SourceDocument: identity, extraction provenance, document structure, and links to downstream Corpus Builder builds.
+"""
+type SourceDocumentView {
+  source_document_id: String!
+  sha256: String!
+  filename: String!
+  created_at: String
+  media_type: String
+  media_kind: String
+  content_suffix: String
+  source_url: String
+  page_count: Int
+  source_unit_count: Int
+  ocr_pages: Int
+  derived_from_source_document_id: String
+  source_illegibility: Float
+  deterministic_checked_at: String
+  warnings: [String!]!
+  extraction_provenance: JSON!
+  catalog_metadata: JSON!
+  initial_metadata: JSON!
+  page_number_detection: JSON!
+  source_quality: JSON!
+  extraction_noise: JSON!
+  document_layout: JSON!
+  unit_policy: JSON!
+  captures: [SourceCaptureReference!]!
+  builds: [SourceBuildReference!]!
+
+  """A bounded page of implementation-level extraction/source units."""
+  source_units(offset: Int! = 0, limit: Int! = 100, ids: [String!] = null, around: String = null): SourceUnitProjectionPage!
+
+  """A bounded page of medium-specific page/layout projections."""
+  pages(offset: Int! = 0, limit: Int! = 100): SourceDocumentPagePage!
+}
+
 """
 A medium-aware documentary locator. Audio spans use time and speaker, never PDF pages.
 """
@@ -377,6 +541,32 @@ type SourceSpan {
   time_start: Float
   time_end: Float
   speaker: String
+}
+
+"""
+One persisted implementation-level extraction unit for a SourceDocument. This is not an additional normative cELF semantic object class.
+"""
+type SourceUnitProjection {
+  source_unit_id: String!
+  page: Int
+  printed_page_label: String
+  type: String
+  text: String!
+  extraction_method: String
+  confidence: Float
+  bbox: [Float!]!
+  start: Int
+  end: Int
+  locator_kind: String
+  speaker: String
+}
+
+"""A bounded page of persisted extraction units for one SourceDocument."""
+type SourceUnitProjectionPage {
+  items: [SourceUnitProjection!]!
+  total: Int!
+  offset: Int!
+  limit: Int!
 }
 
 """

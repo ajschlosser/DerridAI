@@ -9,10 +9,12 @@ from strawberry.scalars import JSON
 from strawberry.types import Info
 
 from ...celf_queries import corpus_records as corpus_queries
+from ...celf_queries import document_intelligence_reads
 from ...corpus_review_queue import QueueFilter
 from ..errors import translate
 from ..permissions import classify, require_admin
 from ..types.corpus import CorpusQueueRow, CorpusRecord, CorpusReviewQueuePage
+from ..types.documents import DocumentIntelligenceRun
 
 # Record graphs expose Record text-bearing assertion values and node details.
 # REST keeps /api/pdf/* administrator-only, so the GraphQL root does too until a
@@ -92,6 +94,24 @@ class CorpusBuildReview:
         except Exception as exc:
             raise translate(exc) from exc
         return [CorpusRecord.from_presented_record(item) if item is not None else None for item in presented]
+
+    @strawberry.field(
+        description=(
+            "Retained derived whole-document linguistic analysis. Advisory only: "
+            "it is not source evidence and does not confer FieldAssertion authority."
+        ),
+    )
+    async def document_intelligence(self, info: Info) -> DocumentIntelligenceRun | None:
+        context = require_admin(info)
+        try:
+            payload = await run_in_threadpool(
+                document_intelligence_reads.build_document_intelligence,
+                context.access,
+                self.build_id,
+            )
+        except Exception as exc:
+            raise translate(exc) from exc
+        return DocumentIntelligenceRun.from_payload(payload) if payload is not None else None
 
     @strawberry.field(
         description="Build-wide observed metadata values, optionally narrowed to specific fields.",

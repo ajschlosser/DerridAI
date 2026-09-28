@@ -19,6 +19,9 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, JSONResponse
 
+from ..celf_queries import document_intelligence_reads as intelligence_reads
+from ..celf_queries import source_documents as document_queries
+from ..celf_queries.access import AccessContext, InvalidQuery, NotFound
 from ..claim_memory import validated_claims_citing
 from ..config import settings
 from ..corpus_builder import CORPUS_PROFILES, pdf_corpus_builds, pdf_corpus_repository
@@ -416,27 +419,27 @@ def get_pdf_asset_content(asset_id: str) -> FileResponse:
 @router.get("/api/pdf/assets/{asset_id}/blocks")
 def get_pdf_asset_blocks(
     asset_id: str,
+    request: Request,
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=200, ge=1, le=1000),
     ids: str = Query(default="", max_length=20000),
     around: str = Query(default="", max_length=200),
 ) -> dict[str, Any]:
+    access = AccessContext.for_user(require_admin(request))
     try:
-        blocks = pdf_corpus_repository.load_blocks(asset_id)
-        if around.strip():
-            # A window that starts a little before this block, so a reviewer can browse its neighbours.
-            index = next((i for i, block in enumerate(blocks) if str(block.get("block_id") or "") == around.strip()), None)
-            if index is None:
-                raise HTTPException(status_code=404, detail="Source block not found")
-            start = max(0, index - limit // 4)
-            return {"items": blocks[start:start + limit], "total": len(blocks), "offset": start, "limit": limit}
-        if ids.strip():
-            requested = {value.strip() for value in ids.split(",") if value.strip()}
-            selected = [block for block in blocks if str(block.get("block_id") or "") in requested]
-            return {"items": selected, "total": len(selected), "offset": 0, "limit": len(selected)}
-        return {"items": blocks[offset:offset + limit], "total": len(blocks), "offset": offset, "limit": limit}
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="PDF asset not found") from exc
+        return document_queries.source_units_page(
+            access,
+            asset_id,
+            offset=offset,
+            limit=limit,
+            ids=[value.strip() for value in ids.split(",") if value.strip()],
+            around=around or None,
+            repository=pdf_corpus_repository,
+        )
+    except NotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except InvalidQuery as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/api/pdf/corpus-profiles")
@@ -632,14 +635,22 @@ def get_pdf_corpus_build(build_id: str) -> dict[str, Any]:
 
 
 @router.get("/api/pdf/corpus-builds/{build_id}/document-intelligence")
-def get_pdf_corpus_document_intelligence(build_id: str) -> dict[str, Any]:
+def get_pdf_corpus_document_intelligence(build_id: str, request: Request) -> dict[str, Any]:
     """Retained derived linguistic-analysis run for inspection and reproducibility."""
+    access = AccessContext.for_user(require_admin(request))
     try:
-        value = pdf_corpus_builds.document_intelligence(build_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
-    if not value:
-        raise HTTPException(status_code=404, detail="Document intelligence has not run for this build.")
+        value = intelligence_reads.build_document_intelligence(
+            access,
+            build_id,
+            builds_service=pdf_corpus_builds,
+        )
+    except NotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if value is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Document intelligence has not run for this build.",
+        )
     return value
 
 

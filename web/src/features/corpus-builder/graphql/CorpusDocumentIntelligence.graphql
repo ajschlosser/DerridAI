@@ -1,0 +1,50 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
+query CorpusDocumentIntelligence($build_id: String!) {
+  corpus_build(build_id: $build_id) {
+    document_intelligence {
+      version
+      status
+      profile
+      selected_provider
+      provider
+      provider_version
+      model
+      capabilities
+      model_artifacts {
+        role
+        name
+        sha256
+      }
+      configuration
+      text_sha256
+      current_text_sha256
+      text_length
+      stale
+      reason
+      warnings
+      entity_clusters {
+        cluster_id
+        canonical
+        aliases
+        entity_type
+      }
+      entities {
+        cluster_id
+        start_char
+        end_char
+        text
+        mention_type
+        entity_type
+      }
+      quotations {
+        start_char
+        end_char
+        text
+        speaker_cluster_id
+        speaker_text
+      }
+      characters
+      events
+    }
+  }
+}

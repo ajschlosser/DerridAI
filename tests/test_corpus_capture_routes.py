@@ -96,12 +96,15 @@ def test_sort_pagination_and_explicit_ids(workspace):
 
 
 def test_source_detail_reports_provenance_and_builds_without_text(workspace):
-    detail = routes.get_source_detail("pdf-a")
+    request = SimpleNamespace(
+        state=SimpleNamespace(user=SimpleNamespace(id=1, username="root", role="admin")),
+    )
+    detail = routes.get_source_detail("pdf-a", request)
     assert detail["sha256"] == "ab" * 32
     assert detail["builds"] == [{"build_id": "b1", "status": "completed", "created_at": "2026-09-04", "record_count": 12}]
     assert "text" not in detail and "blocks" not in detail
     with pytest.raises(HTTPException) as error:
-        routes.get_source_detail("pdf-missing")
+        routes.get_source_detail("pdf-missing", request)
     assert error.value.status_code == 404
 
 

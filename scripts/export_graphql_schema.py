@@ -9,6 +9,7 @@ regenerating the frontend contract.
 from __future__ import annotations
 
 import argparse
+import difflib
 import sys
 from pathlib import Path
 
@@ -42,6 +43,14 @@ def main() -> int:
     if args.check:
         if current != rendered:
             print(f"{_display(SCHEMA_PATH)} is stale. Run: python scripts/export_graphql_schema.py")
+            diff = difflib.unified_diff(
+                (current or "").splitlines(),
+                rendered.splitlines(),
+                fromfile=f"{_display(SCHEMA_PATH)} (checked in)",
+                tofile=f"{_display(SCHEMA_PATH)} (generated)",
+                lineterm="",
+            )
+            print("\n".join(diff))
             return 1
         return 0
 
