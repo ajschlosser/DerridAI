@@ -4,7 +4,8 @@ import { createPinia, setActivePinia } from "pinia";
 import { flushPromises } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import SourceInspector from "../../src/components/sources/SourceInspector.vue";
-import { corpusSourcesApi, type SourceDetail } from "../../src/api/corpus";
+import type { SourceDetail } from "../../src/api/corpus";
+import * as documentReads from "../../src/features/sources/api/documentIntelligenceReads";
 
 const detail: SourceDetail = {
   asset_id: "asset-1",
@@ -32,13 +33,10 @@ describe("SourceInspector extracted-text preview", () => {
   afterEach(() => vi.restoreAllMocks());
 
   it("shows persisted text blocks without rendering source markup", async () => {
-    vi.spyOn(corpusSourcesApi, "blocks").mockResolvedValue({
-      items: [
-        block("b1", "The first paragraph."),
-        block("b2", "<script>alert('not rendered')</script>"),
-      ],
-      total: 2,
-    });
+    vi.spyOn(documentReads, "sourceDocumentPreview").mockResolvedValue([
+      block("b1", "The first paragraph."),
+      block("b2", "<script>alert('not rendered')</script>"),
+    ]);
 
     const wrapper = mount(SourceInspector, { props: { sourceId: "source-1", detail } });
     await flushPromises();
@@ -51,16 +49,15 @@ describe("SourceInspector extracted-text preview", () => {
   it.each(["text", "rtf", "docx", "html"])(
     "loads a safe extracted preview for %s sources",
     async (media_kind) => {
-      vi.spyOn(corpusSourcesApi, "blocks").mockResolvedValue({
-        items: [block("b1", `Preview for ${media_kind}`)],
-        total: 1,
-      });
+      vi.spyOn(documentReads, "sourceDocumentPreview").mockResolvedValue([
+        block("b1", `Preview for ${media_kind}`),
+      ]);
       const wrapper = mount(SourceInspector, {
         props: { sourceId: "source-1", detail: { ...detail, media_kind } },
       });
       await flushPromises();
       expect(wrapper.get(".si-preview-text").text()).toContain(`Preview for ${media_kind}`);
-      expect(corpusSourcesApi.blocks).toHaveBeenCalledWith("asset-1", 0, 8);
+      expect(documentReads.sourceDocumentPreview).toHaveBeenCalledWith("asset-1", 8);
     },
   );
 });
