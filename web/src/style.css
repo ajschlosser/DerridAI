@@ -17045,8 +17045,10 @@ button {
 .operation-progress-stack.minimized .operation-dock-clear {
   display: none;
 }
-html[data-operations-dock-mode="docked"][data-operations-dock-open="true"]
-  #operationProgressStack {
+[data-operations-dock-mode="docked"][data-operations-dock-open="false"] #operationProgressStack {
+  display: none !important;
+}
+html[data-operations-dock-mode="docked"][data-operations-dock-open="true"] #operationProgressStack {
   top: 58px;
   right: 18px;
   bottom: auto;
