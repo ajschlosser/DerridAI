@@ -55,6 +55,52 @@ def _missing_models(include_events: bool = False) -> list[str]:
     ]
 
 
+def _expected_digest(role: str) -> str:
+    env_by_role = {
+        "entity_model_path": "BOOKNLP_ENTITY_SHA256",
+        "coref_model_path": "BOOKNLP_COREF_SHA256",
+        "quote_attribution_model_path": "BOOKNLP_QUOTE_SHA256",
+    }
+    return str(os.environ.get(env_by_role.get(role, ""), "") or "").strip().lower()
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _artifact_manifest() -> list[dict[str, Any]]:
+    artifacts: list[dict[str, Any]] = []
+    for role, value in _paths().items():
+        path = Path(value)
+        if not value or not path.is_file():
+            continue
+        actual = _file_sha256(path)
+        expected = _expected_digest(role)
+        artifacts.append(
+            {
+                "role": role,
+                "name": path.name,
+                "sha256": actual,
+                "expected_sha256": expected or None,
+                "verified": bool(expected and actual == expected),
+            }
+        )
+    return artifacts
+
+
+def _digest_mismatches() -> list[str]:
+    mismatches: list[str] = []
+    for artifact in _artifact_manifest():
+        expected = str(artifact.get("expected_sha256") or "")
+        if expected and not artifact.get("verified"):
+            mismatches.append(str(artifact.get("role") or "model"))
+    return mismatches
+
+
 def _pipeline(include_events: bool) -> Any:
     key = "entity,quote,coref,event" if include_events else "entity,quote,coref"
     if key in _models:
@@ -62,6 +108,11 @@ def _pipeline(include_events: bool) -> Any:
     missing = _missing_models(include_events)
     if missing:
         raise RuntimeError("Missing approved BookNLP model artifact(s): " + ", ".join(missing))
+    mismatches = _digest_mismatches()
+    if mismatches:
+        raise RuntimeError(
+            "BookNLP model digest verification failed for: " + ", ".join(mismatches)
+        )
     with _lock:
         if key in _models:
             return _models[key]
@@ -162,26 +213,6 @@ def _token_span(
     return start, max(start, end)
 
 
-def _artifact_manifest() -> list[dict[str, str]]:
-    artifacts: list[dict[str, str]] = []
-    for role, value in _paths().items():
-        path = Path(value)
-        if not value or not path.is_file():
-            continue
-        digest = hashlib.sha256()
-        with path.open("rb") as handle:
-            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-                digest.update(chunk)
-        artifacts.append(
-            {
-                "role": role,
-                "name": path.name,
-                "sha256": digest.hexdigest(),
-            }
-        )
-    return artifacts
-
-
 def _book_character_data(
     path: Path,
     token_rows: list[dict[str, str]],
@@ -278,11 +309,15 @@ def _book_character_data(
 @app.get("/health")
 def health() -> dict[str, Any]:
     missing = _missing_models(False)
+    mismatches = _digest_mismatches() if not missing else []
+    artifacts = _artifact_manifest() if not missing else []
     return {
-        "ready": not missing,
+        "ready": not missing and not mismatches,
         "provider": "booknlp",
         "version": importlib.metadata.version("booknlp"),
         "missing_model_artifacts": missing,
+        "digest_mismatches": mismatches,
+        "model_artifacts": artifacts,
         "runtime_downloads": False,
     }
 
