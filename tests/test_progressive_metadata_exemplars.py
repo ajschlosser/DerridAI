@@ -1027,3 +1027,55 @@ def test_editorial_memory_zero_precedent_limit_disables_field_examples():
     memory = Memory()._editorial_memory("build-1", current, exclude_record_id="r2")
 
     assert "position_holder" not in memory["examples"]
+
+def test_candidate_rows_normalizes_chroma_embeddings_without_numpy_ambiguity():
+    """Chroma may wrap an ndarray-like embedding batch in a Python list."""
+    from app.metadata_exemplar_retrieval import _candidate_rows
+
+    class FakeNdArray:
+        def __init__(self, data):
+            self._data = data
+
+        def tolist(self):
+            return [item.tolist() if hasattr(item, "tolist") else item for item in self._data]
+
+        def __len__(self):
+            return len(self._data)
+
+        def __getitem__(self, index):
+            return self._data[index]
+
+        def __bool__(self):
+            if len(self._data) > 1:
+                raise ValueError(
+                    "The truth value of an array with more than one element is ambiguous. "
+                    "Use a.any() or a.all()"
+                )
+            return bool(self._data)
+
+    rows = _candidate_rows(
+        {
+            "ids": [["ex-1", "ex-2"]],
+            "distances": [[0.1, 0.2]],
+            "metadatas": [
+                [
+                    {"field_name": "position_holder"},
+                    {"field_name": "position_holder"},
+                ]
+            ],
+            "embeddings": [
+                FakeNdArray(
+                    [
+                        FakeNdArray([0.1, 0.2, 0.3]),
+                        FakeNdArray([0.4, 0.5, 0.6]),
+                    ]
+                )
+            ],
+        }
+    )
+
+    assert [row["id"] for row in rows] == ["ex-1", "ex-2"]
+    assert rows[0]["embedding"] == [0.1, 0.2, 0.3]
+    assert rows[1]["embedding"] == [0.4, 0.5, 0.6]
+    assert all(isinstance(row["embedding"], list) for row in rows)
+
