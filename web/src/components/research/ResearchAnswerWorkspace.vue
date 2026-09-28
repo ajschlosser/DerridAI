@@ -189,7 +189,7 @@ const statusLabel = computed(() => {
               >
                 {{ segment.text }}</button
               ><strong v-else-if="segment.bold">{{ segment.text }}</strong
-                ><template v-else>{{ segment.text }}</template></template
+              ><template v-else>{{ segment.text }}</template></template
             >
           </p>
         </template>
