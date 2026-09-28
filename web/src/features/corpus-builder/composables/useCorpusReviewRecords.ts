@@ -195,9 +195,11 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
   async function refreshRecords(reset = false, preferredId = ""): Promise<void> {
     if (!options.selectedBuildId.value) return;
     if (reset) {
-      // Queue pages and record projections contain server-authoritative review state, including
-      // suppressions. Never let the short-lived GraphQL read cache hide a mutation-triggered reset.
+      // Queue pages and full Record projections contain server-authoritative review state,
+      // including enrichment proposals that may change without advancing RecordRevision.
+      // A reset is therefore an explicit invalidation boundary for both cache layers.
       clearGraphQLReadCache();
+      cache.clear();
       options.recordOffset.value = 0;
     }
     const ticket = latestPage.start();
@@ -230,11 +232,6 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
         return;
       }
       const row = page.rows.find((item) => item.record_id === targetId);
-      // Metadata enrichment can change reviewer-facing proposals without advancing the
-      // Record revision. A reset is an explicit invalidation boundary (build progress,
-      // mutation, filter change), so do not let the local LRU keep an older projection
-      // alive merely because the revision hint is unchanged.
-      if (reset) cache.delete(targetId);
       await resolveAndActivate(targetId, row?.record_revision ?? null);
     } catch (exc) {
       if (!isAbortError(exc)) options.onError(messageOf(exc));
@@ -262,7 +259,8 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
       // RecordRevision, so keeping a same-revision cached Record is stale by design.
       for (const row of rows) cache.delete(row.record_id);
       const selectedId = options.selectedRecordId.value;
-      if (selectedId && byId.has(selectedId) && !options.hasActiveDraft()) {
+      const selectedStillOpen = options.selectedRecord.value?.record_id === selectedId;
+      if (selectedId && selectedStillOpen && byId.has(selectedId) && !options.hasActiveDraft()) {
         const selectedRow = byId.get(selectedId);
         await resolveAndActivate(selectedId, selectedRow?.record_revision ?? null);
       }
