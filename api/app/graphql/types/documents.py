@@ -347,7 +347,7 @@ class SourceUnitProjectionPage:
         "document structure, and links to downstream Corpus Builder builds."
     ),
 )
-class SourceDocumentIntelligence:
+class SourceDocumentView:
     source_document_id: str
     sha256: str
     filename: str
@@ -375,7 +375,7 @@ class SourceDocumentIntelligence:
     builds: list[SourceBuildReference]
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> SourceDocumentIntelligence:
+    def from_payload(cls, payload: dict[str, Any]) -> SourceDocumentView:
         return cls(
             source_document_id=str(payload.get("source_document_id") or ""),
             sha256=str(payload.get("sha256") or ""),
