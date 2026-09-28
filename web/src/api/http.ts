@@ -87,9 +87,16 @@ function fullDetail(payload: unknown, text: string, statusText: string): string 
   return text.trim() || statusText || "Request failed";
 }
 
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = String(init.method || "GET").toUpperCase();
   let response: Response;
+  const hasOwnSignal = Boolean(init.signal);
+  const timeoutController = hasOwnSignal ? null : new AbortController();
+  const timeoutId = timeoutController
+    ? setTimeout(() => timeoutController.abort(), DEFAULT_REQUEST_TIMEOUT_MS)
+    : null;
   try {
     const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
     const headers = new Headers(init.headers || {});
@@ -98,11 +105,21 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
     response = await fetch(path, {
       ...init,
       headers,
+      signal: init.signal ?? timeoutController?.signal,
     });
   } catch (cause) {
     // A deliberately cancelled request is not a failure worth recording.
     if (init.signal?.aborted) throw cause;
-    const detail = cause instanceof Error ? cause.message : String(cause);
+    const timedOut =
+      !hasOwnSignal &&
+      Boolean(timeoutController?.signal.aborted) &&
+      cause instanceof DOMException &&
+      cause.name === "AbortError";
+    const detail = timedOut
+      ? `timed out after ${DEFAULT_REQUEST_TIMEOUT_MS / 1000}s`
+      : cause instanceof Error
+        ? cause.message
+        : String(cause);
     const message = `Network error · ${detail}`;
     storeHttpError({
       timestamp: new Date().toISOString(),
@@ -118,6 +135,8 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
       requestMethod: method,
       fullMessage: message,
     });
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
 
   const text = await response.text();

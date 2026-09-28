@@ -85,6 +85,27 @@ export function sourceMediaCapabilities(kind?: CorpusMediaKind): SourceMediaCapa
     };
   }
 
+  if (
+    normalized === "text" ||
+    normalized === "rtf" ||
+    normalized === "docx" ||
+    normalized === "html" ||
+    normalized === "url" ||
+    normalized === "gutenberg"
+  ) {
+    return {
+      pages: false,
+      printedPagination: false,
+      pdfViewer: false,
+      imageViewer: false,
+      imageRegions: false,
+      audioPlayer: false,
+      timeSpans: false,
+      transcription: true,
+      documentLayout: false,
+    };
+  }
+
   return {
     pages: false,
     printedPagination: false,

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 const runtime = vi.hoisted(() => ({
   getRecordsListSnapshot: vi.fn(() => ({ files: [], columns: [] })),
+  ensureCorpusWorkspaceLoaded: vi.fn(async () => undefined),
   state: { view: "" },
 }));
 vi.mock("../../src/runtime/runtime.js", () => ({ ...runtime }));
@@ -29,5 +30,11 @@ describe("useRecordsWorkspace refreshes when the loaded corpus changes", () => {
     await nextTick();
     expect(runtime.getRecordsListSnapshot).toHaveBeenCalledTimes(3);
     corpusState.activeFileId = null;
+  });
+
+  it("tries to auto-load the corpus from Chroma when activated with nothing loaded", async () => {
+    const records = useRecordsWorkspace();
+    await records.activate();
+    expect(runtime.ensureCorpusWorkspaceLoaded).toHaveBeenCalled();
   });
 });

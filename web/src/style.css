@@ -17707,3 +17707,13 @@ html[data-color-scheme="dark"][data-contrast="more"] {
     grid-column: 1/-1;
   }
 }
+
+/*
+ * Icon SVGs use a zero-specificity default size so they cannot fall back to the
+ * browser's large replaced-element dimensions. Context-specific component rules
+ * remain free to size icons smaller without DOM width/height attributes.
+ */
+:where(svg[viewBox="0 0 24 24"][stroke-width="1.8"][aria-hidden="true"]) {
+  width: 24px;
+  height: 24px;
+}

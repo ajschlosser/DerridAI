@@ -78,6 +78,7 @@ function adminSnapshot(overrides: Partial<WorksSnapshot> = {}): WorksSnapshot {
 const runtime = vi.hoisted(() => ({
   state: { view: "home" },
   getWorksWorkspaceSnapshot: vi.fn(),
+  ensureCorpusWorkspaceLoaded: vi.fn(async () => undefined),
   prepareWorksWorkspace: vi.fn(async () => ({ error: "" })),
   getShellSnapshot: vi.fn(() => ({
     files: [{ id: "f1", name: "glas.jsonl", count: 12, dirty: 0, active: true }],

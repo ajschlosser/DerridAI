@@ -31,6 +31,7 @@ export function useWorksWorkspace() {
 
   async function activate() {
     runtime.state.view = "works";
+    await runtime.ensureCorpusWorkspaceLoaded?.();
     await prepare();
   }
 

@@ -31,8 +31,10 @@ export function useRecordsWorkspace() {
     { flush: "post" },
   );
 
-  function activate() {
+  async function activate() {
     runtime.state.view = "list";
+    load();
+    await runtime.ensureCorpusWorkspaceLoaded?.();
     load();
   }
   function setQuery(value: string) {
