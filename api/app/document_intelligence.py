@@ -402,7 +402,8 @@ def project_annotations_to_records(
     }
     entities = [item for item in (analysis.get("entities") or []) if isinstance(item, dict)]
     quotations = [item for item in (analysis.get("quotations") or []) if isinstance(item, dict)]
-    entity_total = quote_total = 0
+    events = [item for item in (analysis.get("events") or []) if isinstance(item, dict)]
+    entity_total = quote_total = event_total = 0
 
     for record in records:
         record_id = str(record.get("record_id") or "")
@@ -448,8 +449,27 @@ def project_annotations_to_records(
                     "text": str(item.get("text") or ""),
                 }
             )
+        local_events: list[dict[str, Any]] = []
+        for item in events:
+            try:
+                item_start = int(item.get("start_char"))
+                item_end = int(item.get("end_char"))
+            except (TypeError, ValueError):
+                continue
+            if item_start < start or item_end > end:
+                continue
+            local_events.append(
+                {
+                    "start": item_start - start,
+                    "end": item_end - start,
+                    "text": str(item.get("text") or ""),
+                    "lemma": str(item.get("lemma") or ""),
+                    "token_id": item.get("token_id"),
+                }
+            )
         entity_total += len(local_entities)
         quote_total += len(local_quotes)
+        event_total += len(local_events)
         record["document_intelligence"] = {
             "version": DOCUMENT_INTELLIGENCE_VERSION,
             "document_sha256": analysis.get("text_sha256"),
@@ -461,8 +481,13 @@ def project_annotations_to_records(
             "status": analysis.get("status"),
             "entities": local_entities,
             "quotations": local_quotes,
+            "events": local_events,
         }
-    return {"entity_mentions": entity_total, "quotations": quote_total}
+    return {
+        "entity_mentions": entity_total,
+        "quotations": quote_total,
+        "events": event_total,
+    }
 
 
 def prompt_hints(record: dict[str, Any], field_names: list[str]) -> dict[str, Any]:
