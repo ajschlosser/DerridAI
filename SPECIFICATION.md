@@ -1,13 +1,13 @@
 # cELF Core Specification 1.0
 
-**Capta-Enriched Lexical Format**
+**Capta-Enhanced Lexical Format**
 
 **Author:** Dr. Aaron John Schlosser  
 **Specification Version:** 1.0  
 **Date:** September 2026  
 **Status:** Normative specification
 
-The **Capta-Enriched Lexical Format** (**cELF**, pronounced "self") defines a normalized, traceable, and reproducible information architecture for AI-assisted documentary research. **Retrieval** is used in both a broad research sense - the recovery of relevant documentary information for active use - and a narrower technical sense that includes vector, lexical, hybrid, filtered, and other computational search methods. Vector search is one retrieval mechanism, not the meaning of the specification as a whole.
+The **Capta-Enhanced Lexical Format** (**cELF**, pronounced "self") defines a normalized, traceable, and reproducible information architecture for AI-assisted documentary research. **Retrieval** is used in both a broad research sense - the recovery of relevant documentary information for active use - and a narrower technical sense that includes vector, lexical, hybrid, filtered, and other computational search methods. Vector search is one retrieval mechanism, not the meaning of the specification as a whole.
 
 ## Contents
 
@@ -41,7 +41,7 @@ The specification deliberately uses technical object names such as **SourceSpan*
 
 #### Status and purpose
 
-The **Capta-Enriched Lexical Format** defines an information model and interoperability requirements for transforming documents into records that can be extracted, enriched, reviewed, stored, located, selected as evidence, supplied to artificial-intelligence systems, and traced back to authoritative sources.
+The **Capta-Enhanced Lexical Format** defines an information model and interoperability requirements for transforming documents into records that can be extracted, enriched, reviewed, stored, located, selected as evidence, supplied to artificial-intelligence systems, and traced back to authoritative sources.
 
 The specification is intended for systems in which document provenance, attribution, evidentiary support, source identity, record identity, normalization, traceability, information quality, and reproducibility materially affect the credibility of AI-assisted research.
 
@@ -51,7 +51,7 @@ A conforming implementation MAY use local or remote databases, files, object sto
 
 The DerridAI application is the originating reference implementation.
 
-> **Terminology note - non-normative.** The name **cELF** expands to **Capta-Enriched Lexical Format**. _Capta_ emphasizes that research objects are selected, delimited, transcribed, categorized, or interpreted through explicit procedures rather than treated as context-free givens. **Lexical** identifies text-bearing documentary representation as the primary interchange substrate; it does not limit source media to plain text. **Enriched** refers to the assertions, provenance, authority, evidence, and run metadata associated with that representation. Source locators remain appropriate to the original medium, including pages, character ranges, image regions, and audio time spans.
+> **Terminology note - non-normative.** The name **cELF** expands to **Capta-Enhanced Lexical Format**. _Capta_ emphasizes that research objects are selected, delimited, transcribed, categorized, or interpreted through explicit procedures rather than treated as context-free givens. **Lexical** identifies text-bearing documentary representation as the primary interchange substrate; it does not limit source media to plain text. **Enhanced** refers to the assertions, provenance, authority, evidence, and run metadata associated with that representation. Source locators remain appropriate to the original medium, including pages, character ranges, image regions, and audio time spans.
 
 #### Normative terms
 
