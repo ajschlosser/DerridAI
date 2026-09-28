@@ -37,6 +37,14 @@ describe("media-specific review", () => {
     expect(wrapper.text()).not.toContain("PDF");
     expect(wrapper.text()).toContain("Hello.");
   });
+  it("shows image previews without introducing PDF controls", () => {
+    const wrapper = mount(CorpusSourceSummary, {
+      props: { mediaKind: "image", imageUrl: "/scan.png", page: 1, pageCount: 1, blocks: [] },
+    });
+    expect(wrapper.get("img").attributes("src")).toBe("/scan.png");
+    expect(wrapper.find(".source-page-nav").exists()).toBe(false);
+    expect(wrapper.find("audio").exists()).toBe(false);
+  });
   it("omits pagination and layout readiness for audio", () => {
     const wrapper = mount(CorpusBuildReadiness, {
       props: { mediaKind: "audio", sourceFilename: "clip.wav", pageCount: 4, blockCount: 4 },

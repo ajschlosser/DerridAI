@@ -40,4 +40,22 @@ describe("SourceInspector extracted-text preview", () => {
     expect(wrapper.find("script").exists()).toBe(false);
     expect(wrapper.get(".si-preview-text").text()).toContain("<script>");
   });
+
+  it.each(["text", "rtf", "docx", "html"])(
+    "loads a safe extracted preview for %s sources",
+    async (media_kind) => {
+      vi.spyOn(corpusSourcesApi, "blocks").mockResolvedValue({
+        items: [{ block_id: "b1", text: `Preview for ${media_kind}` }],
+        total: 1,
+        offset: 0,
+        limit: 8,
+      });
+      const wrapper = mount(SourceInspector, {
+        props: { sourceId: "source-1", detail: { ...detail, media_kind } },
+      });
+      await flushPromises();
+      expect(wrapper.get(".si-preview-text").text()).toContain(`Preview for ${media_kind}`);
+      expect(corpusSourcesApi.blocks).toHaveBeenCalledWith("asset-1", 0, 8);
+    },
+  );
 });
