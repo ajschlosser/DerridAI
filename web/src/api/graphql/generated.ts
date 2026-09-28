@@ -254,6 +254,8 @@ export type Query = {
   celf_model: CelfModel;
   /** A PDF Corpus Builder build by id (REST: GET /api/pdf/corpus-builds/{id}). */
   corpus_build: CorpusBuildReview;
+  /** One canonical cELF SourceDocument with its extraction, structure, provenance, capture links, and downstream build references. */
+  source_document: SourceDocumentIntelligence;
   /** One owner-scoped generated claim. */
   generated_claim: GeneratedClaim;
   /** Progressive metadata exemplars (REST: GET /api/system/data/metadata-exemplars). */
@@ -276,6 +278,12 @@ export type QueryCorpus_BuildArgs = {
 /** Read-only cELF queries. Commands are REST; live events are WebSocket. */
 export type QueryGenerated_ClaimArgs = {
   claim_id: Scalars['String']['input'];
+};
+
+
+/** Read-only cELF queries. Commands are REST; live events are WebSocket. */
+export type QuerySource_DocumentArgs = {
+  source_document_id: Scalars['String']['input'];
 };
 
 
@@ -393,6 +401,98 @@ export type SimilarValidatedClaim = {
   validated_by?: Maybe<Scalars['String']['output']>;
 };
 
+/** One Corpus Builder build derived from a SourceDocument. */
+export type SourceBuildReference = {
+  build_id: Scalars['String']['output'];
+  created_at?: Maybe<Scalars['String']['output']>;
+  record_count?: Maybe<Scalars['Int']['output']>;
+  status: Scalars['String']['output'];
+};
+
+/** One Corpus Capture provenance link for a SourceDocument. */
+export type SourceCaptureReference = {
+  acquired_at?: Maybe<Scalars['String']['output']>;
+  author_name?: Maybe<Scalars['String']['output']>;
+  candidate_id: Scalars['String']['output'];
+  capture_id: Scalars['String']['output'];
+  discovered_at?: Maybe<Scalars['String']['output']>;
+  discovery_method?: Maybe<Scalars['String']['output']>;
+  provider: Scalars['String']['output'];
+  provider_item_id: Scalars['String']['output'];
+};
+
+/** Read projection around one canonical cELF SourceDocument: identity, extraction provenance, document structure, and links to downstream Corpus Builder builds. */
+export type SourceDocumentIntelligence = {
+  builds: Array<SourceBuildReference>;
+  captures: Array<SourceCaptureReference>;
+  catalog_metadata: Scalars['JSON']['output'];
+  content_suffix?: Maybe<Scalars['String']['output']>;
+  created_at?: Maybe<Scalars['String']['output']>;
+  derived_from_source_document_id?: Maybe<Scalars['String']['output']>;
+  deterministic_checked_at?: Maybe<Scalars['String']['output']>;
+  document_layout: Scalars['JSON']['output'];
+  extraction_noise: Scalars['JSON']['output'];
+  extraction_provenance: Scalars['JSON']['output'];
+  filename: Scalars['String']['output'];
+  initial_metadata: Scalars['JSON']['output'];
+  media_kind?: Maybe<Scalars['String']['output']>;
+  media_type?: Maybe<Scalars['String']['output']>;
+  ocr_pages?: Maybe<Scalars['Int']['output']>;
+  page_count?: Maybe<Scalars['Int']['output']>;
+  page_number_detection: Scalars['JSON']['output'];
+  /** A bounded page of medium-specific page/layout projections. */
+  pages: SourceDocumentPagePage;
+  sha256: Scalars['String']['output'];
+  source_document_id: Scalars['String']['output'];
+  source_illegibility?: Maybe<Scalars['Float']['output']>;
+  source_quality: Scalars['JSON']['output'];
+  source_unit_count?: Maybe<Scalars['Int']['output']>;
+  /** A bounded page of implementation-level extraction/source units. */
+  source_units: SourceUnitProjectionPage;
+  source_url?: Maybe<Scalars['String']['output']>;
+  unit_policy: Scalars['JSON']['output'];
+  warnings: Array<Scalars['String']['output']>;
+};
+
+
+/** Read projection around one canonical cELF SourceDocument: identity, extraction provenance, document structure, and links to downstream Corpus Builder builds. */
+export type SourceDocumentIntelligencePagesArgs = {
+  limit?: Scalars['Int']['input'];
+  offset?: Scalars['Int']['input'];
+};
+
+
+/** Read projection around one canonical cELF SourceDocument: identity, extraction provenance, document structure, and links to downstream Corpus Builder builds. */
+export type SourceDocumentIntelligenceSource_UnitsArgs = {
+  around?: InputMaybe<Scalars['String']['input']>;
+  ids?: InputMaybe<Array<Scalars['String']['input']>>;
+  limit?: Scalars['Int']['input'];
+  offset?: Scalars['Int']['input'];
+};
+
+/** One medium page/layout projection for a SourceDocument. */
+export type SourceDocumentPage = {
+  block_ids: Array<Scalars['String']['output']>;
+  deterministic_region_type?: Maybe<Scalars['String']['output']>;
+  extraction_method?: Maybe<Scalars['String']['output']>;
+  height?: Maybe<Scalars['Float']['output']>;
+  image_count?: Maybe<Scalars['Int']['output']>;
+  logical_pages: Scalars['JSON']['output'];
+  physical_page: Scalars['Int']['output'];
+  printed_page_label?: Maybe<Scalars['String']['output']>;
+  printed_page_label_source?: Maybe<Scalars['String']['output']>;
+  thread_ids: Array<Scalars['String']['output']>;
+  width?: Maybe<Scalars['Float']['output']>;
+};
+
+/** A bounded page of SourceDocument page/layout projections. */
+export type SourceDocumentPagePage = {
+  items: Array<SourceDocumentPage>;
+  limit: Scalars['Int']['output'];
+  offset: Scalars['Int']['output'];
+  total: Scalars['Int']['output'];
+};
+
 /** A medium-aware documentary locator. Audio spans use time and speaker, never PDF pages. */
 export type SourceSpan = {
   character_end?: Maybe<Scalars['Int']['output']>;
@@ -408,6 +508,30 @@ export type SourceSpan = {
   speaker?: Maybe<Scalars['String']['output']>;
   time_end?: Maybe<Scalars['Float']['output']>;
   time_start?: Maybe<Scalars['Float']['output']>;
+};
+
+/** One persisted implementation-level extraction unit for a SourceDocument. This is not an additional normative cELF semantic object class. */
+export type SourceUnitProjection = {
+  bbox: Array<Scalars['Float']['output']>;
+  confidence?: Maybe<Scalars['Float']['output']>;
+  end?: Maybe<Scalars['Int']['output']>;
+  extraction_method?: Maybe<Scalars['String']['output']>;
+  locator_kind?: Maybe<Scalars['String']['output']>;
+  page?: Maybe<Scalars['Int']['output']>;
+  printed_page_label?: Maybe<Scalars['String']['output']>;
+  source_unit_id: Scalars['String']['output'];
+  speaker?: Maybe<Scalars['String']['output']>;
+  start?: Maybe<Scalars['Int']['output']>;
+  text: Scalars['String']['output'];
+  type?: Maybe<Scalars['String']['output']>;
+};
+
+/** A bounded page of persisted extraction units for one SourceDocument. */
+export type SourceUnitProjectionPage = {
+  items: Array<SourceUnitProjection>;
+  limit: Scalars['Int']['output'];
+  offset: Scalars['Int']['output'];
+  total: Scalars['Int']['output'];
 };
 
 /** A durable support relation between a generated claim and Record evidence. */
@@ -566,6 +690,21 @@ export type CorpusReviewRecordsQueryVariables = Exact<{
 
 
 export type CorpusReviewRecordsQuery = { corpus_build: { records: Array<{ record_id: string, record_revision: number | null, review_document: unknown } | null> } };
+
+export type SourceDocumentInspectorQueryVariables = Exact<{
+  source_document_id: string;
+}>;
+
+
+export type SourceDocumentInspectorQuery = { source_document: { source_document_id: string, sha256: string, filename: string, created_at: string | null, media_type: string | null, media_kind: string | null, content_suffix: string | null, source_url: string | null, page_count: number | null, source_unit_count: number | null, ocr_pages: number | null, derived_from_source_document_id: string | null, extraction_provenance: unknown, catalog_metadata: unknown, initial_metadata: unknown, captures: Array<{ capture_id: string, candidate_id: string, provider: string, provider_item_id: string, discovery_method: string | null, discovered_at: string | null, acquired_at: string | null, author_name: string | null }>, builds: Array<{ build_id: string, status: string, created_at: string | null, record_count: number | null }> } };
+
+export type SourceDocumentPreviewQueryVariables = Exact<{
+  source_document_id: string;
+  limit?: number | null | undefined;
+}>;
+
+
+export type SourceDocumentPreviewQuery = { source_document: { source_units: { total: number, items: Array<{ source_unit_id: string, text: string }> } } };
 
 export type StoredRecordTraceQueryVariables = Exact<{
   store: string;
@@ -944,6 +1083,56 @@ export const CorpusReviewRecordsDocument = new TypedDocumentString(`
   }
 }
     `) as unknown as TypedDocumentString<CorpusReviewRecordsQuery, CorpusReviewRecordsQueryVariables>;
+export const SourceDocumentInspectorDocument = new TypedDocumentString(`
+    query SourceDocumentInspector($source_document_id: String!) {
+  source_document(source_document_id: $source_document_id) {
+    source_document_id
+    sha256
+    filename
+    created_at
+    media_type
+    media_kind
+    content_suffix
+    source_url
+    page_count
+    source_unit_count
+    ocr_pages
+    derived_from_source_document_id
+    extraction_provenance
+    catalog_metadata
+    initial_metadata
+    captures {
+      capture_id
+      candidate_id
+      provider
+      provider_item_id
+      discovery_method
+      discovered_at
+      acquired_at
+      author_name
+    }
+    builds {
+      build_id
+      status
+      created_at
+      record_count
+    }
+  }
+}
+    `) as unknown as TypedDocumentString<SourceDocumentInspectorQuery, SourceDocumentInspectorQueryVariables>;
+export const SourceDocumentPreviewDocument = new TypedDocumentString(`
+    query SourceDocumentPreview($source_document_id: String!, $limit: Int! = 8) {
+  source_document(source_document_id: $source_document_id) {
+    source_units(limit: $limit) {
+      items {
+        source_unit_id
+        text
+      }
+      total
+    }
+  }
+}
+    `) as unknown as TypedDocumentString<SourceDocumentPreviewQuery, SourceDocumentPreviewQueryVariables>;
 export const StoredRecordTraceDocument = new TypedDocumentString(`
     query StoredRecordTrace($store: String!, $chroma_id: String!) {
   vector_store(name: $store) {
