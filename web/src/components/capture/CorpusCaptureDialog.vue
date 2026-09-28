@@ -136,13 +136,9 @@ async function start() {
   busy.value = true;
   error.value = "";
   try {
-    const selectedLanguages =
-      !includes.value.translations && languages.value === null
-        ? (author.value.languages || []).slice(0, 1)
-        : languages.value;
     const created = await corpusCaptureApi.createCapture(
       author.value.wikidata_qid,
-      optionsFromIncludes(providers.value, includes.value, selectedLanguages),
+      optionsFromIncludes(providers.value, includes.value, languages.value),
       (i18n.locale || "en").split("-")[0].toLowerCase(),
     );
     step.value = "discovering";

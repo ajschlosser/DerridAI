@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from app import llm_tools
 from app.models import PdfAssetLanguagePatch, PdfLlmRequest
+from app.source_identity import CaptureError, CaptureOptions, ResolvedAuthor
 from app.source_text import infer_initial_metadata
 
 
@@ -58,3 +59,32 @@ def test_language_detector_rejects_invalid_model_code(monkeypatch):
         llm_tools.run_pdf_llm(
             PdfLlmRequest(mode="detect_language", raw_text="Bonjour.", provider="ollama")
         )
+
+
+def _author(**kwargs) -> ResolvedAuthor:
+    return ResolvedAuthor(identity_id="wikidata:Q1", canonical_name="Author", **kwargs)
+
+
+def test_capture_language_does_not_use_spoken_language_as_original_default():
+    options = CaptureOptions(include_translations=False, languages=None)
+
+    with pytest.raises(CaptureError, match="exactly one original language"):
+        options.validate_for_author(_author(languages=["en", "fr"]))
+
+
+def test_capture_language_accepts_one_explicit_language_without_known_original():
+    options = CaptureOptions(include_translations=False, languages=["fr"])
+
+    options.validate_for_author(_author(languages=["en"]))
+
+    assert options.languages == ["fr"]
+
+
+def test_capture_language_defaults_only_from_one_authoritative_original_language():
+    options = CaptureOptions(include_translations=False, languages=None)
+
+    options.validate_for_author(
+        _author(languages=["en", "fr"], original_languages=["de"])
+    )
+
+    assert options.languages == ["de"]

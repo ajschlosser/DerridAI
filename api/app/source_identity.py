@@ -48,6 +48,7 @@ class CaptureErrorCode(StrEnum):
     SOURCE_TOO_LARGE = "source_too_large"
     NETWORK_TIMEOUT = "network_timeout"
     IDENTITY_MISMATCH = "identity_mismatch"
+    INVALID_OPTIONS = "invalid_options"
     ACQUISITION_FAILED = "acquisition_failed"
     REGISTRATION_FAILED = "registration_failed"
     CANCELLED = "cancelled"
@@ -156,6 +157,10 @@ class AuthorCandidate:
     birth_year: int | None = None
     death_year: int | None = None
     wikisource_sitelinks: dict[str, str] = field(default_factory=dict)  # project language → author page title
+    # Only authoritative work-level evidence belongs here. Spoken languages and
+    # Wikisource project languages remain in ``languages`` and must not be used
+    # as an original-language default.
+    original_languages: list[str] = field(default_factory=list)
     languages: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -176,6 +181,7 @@ class ResolvedAuthor:
     languages: list[str] = field(default_factory=list)
     external_ids: dict[str, str] = field(default_factory=dict)
     wikisource_sitelinks: dict[str, str] = field(default_factory=dict)
+    original_languages: list[str] = field(default_factory=list)
 
     def names(self) -> list[str]:
         return list(dict.fromkeys([self.canonical_name, *self.aliases]))
@@ -206,6 +212,27 @@ class CaptureOptions:
     def from_dict(cls, data: dict[str, Any]) -> CaptureOptions:
         allowed = set(cls.__dataclass_fields__)
         return cls(**{key: value for key, value in data.items() if key in allowed})
+
+    def validate_for_author(self, author: ResolvedAuthor) -> None:
+        """Require an explicit single language when originals are not known.
+
+        ``ResolvedAuthor.languages`` contains discovery signals (spoken and
+        project languages), not an authoritative language of the author's
+        works.  Only an explicitly supplied language or exactly one
+        authoritative original-language signal may satisfy this constraint.
+        """
+        if self.include_translations:
+            return
+        known = list(dict.fromkeys(author.original_languages))
+        requested = list(dict.fromkeys(self.languages or []))
+        if not requested and len(known) == 1:
+            self.languages = known
+            return
+        if len(requested) != 1:
+            raise CaptureError(
+                CaptureErrorCode.INVALID_OPTIONS,
+                "Choose exactly one original language when translations are excluded.",
+            )
 
 
 @dataclass

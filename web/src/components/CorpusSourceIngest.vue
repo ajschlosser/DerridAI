@@ -9,6 +9,7 @@ import { hasPages } from "../domain/sourceMedia";
 import { languageName, sortLanguageCodes } from "../domain/languages";
 import AppIcon from "./AppIcon.vue";
 import CorpusLibrarySearch from "./corpus-builder/CorpusLibrarySearch.vue";
+import CorpusImportShell from "./corpus-builder/CorpusImportShell.vue";
 import CorpusCaptureDialog from "./capture/CorpusCaptureDialog.vue";
 import SourceTable from "./sources/SourceTable.vue";
 import SourceInspector from "./sources/SourceInspector.vue";
@@ -106,6 +107,8 @@ const emit = defineEmits<{
 const i18n = useI18nStore();
 const uploadInput = ref<HTMLInputElement | null>(null);
 const searchOpen = ref(false);
+const importShellOpen = ref(false);
+const importShellMode = ref<"library" | "author">("library");
 /** The source whose inline "delete?" confirmation is showing. */
 const confirmingDelete = ref("");
 const languageDraft = ref("");
@@ -188,7 +191,21 @@ function onFile(event: Event) {
 }
 
 function openSearch() {
-  searchOpen.value = true;
+  importShellMode.value = "library";
+  importShellOpen.value = true;
+}
+function openAuthorCapture() {
+  importShellMode.value = "author";
+  importShellOpen.value = true;
+}
+function selectImportMode(mode: "library" | "author") {
+  importShellOpen.value = false;
+  // Close the chooser before mounting the selected dialog so focus restoration
+  // cannot race the next modal's focus setup.
+  void nextTick(() => {
+    if (mode === "library") searchOpen.value = true;
+    else captureOpen.value = true;
+  });
 }
 
 // --- Drop zone -------------------------------------------------------------
@@ -431,7 +448,7 @@ onBeforeUnmount(() => {
             type="button"
             class="path-card path-capture"
             :disabled="disabled"
-            @click="captureOpen = true"
+            @click="openAuthorCapture"
           >
             <span class="path-icon" aria-hidden="true"><AppIcon name="users" /></span>
             <span class="path-copy">
@@ -645,6 +662,14 @@ onBeforeUnmount(() => {
       @changed="onCaptureChanged"
       @use-in-builder="useCaptured"
       @view-sources="emit('viewCaptureSources', $event)"
+    />
+
+    <CorpusImportShell
+      :open="importShellOpen"
+      :default-mode="importShellMode"
+      :disabled="disabled"
+      @close="importShellOpen = false"
+      @choose="selectImportMode"
     />
 
     <CorpusLibrarySearch

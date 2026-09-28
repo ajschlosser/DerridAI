@@ -77,6 +77,15 @@ hardware. Query embedding, Chroma search, and selection times are reported
 separately so a deployment can measure that trade-off before enabling a
 cross-encoder.
 
+This is the supported reranking fallback, not a hidden approximation of a
+cross-encoder. Its contract is deterministic for a fixed candidate set:
+semantic similarity supplies the primary score, lexical overlap contributes a
+bounded secondary score, field/match quotas are applied, and MMR limits
+near-duplicate evidence within the packet budget. Retrieval telemetry exposes
+the selected mode and fallback reason, so evaluations can compare latency and
+selection quality before introducing a separately versioned provider-backed
+reranker.
+
 ## Separation from other memory
 
 Do not conflate these systems:

@@ -71,7 +71,12 @@ export interface PdfAsset {
     speaker?: string;
     speakers?: string[];
     language?: string;
-    language_status?: "deterministic" | "llm_proposed" | "human_confirmed" | "confirmed_absent" | "unresolved";
+    language_status?:
+      | "deterministic"
+      | "llm_proposed"
+      | "human_confirmed"
+      | "confirmed_absent"
+      | "unresolved";
     [key: string]: unknown;
   };
   document_layout?: DocumentLayoutPlan;
@@ -980,6 +985,8 @@ export interface AuthorCandidate {
   birth_year: number | null;
   death_year: number | null;
   wikisource_sitelinks: Record<string, string>;
+  /** Authoritative work-level original languages only; usually empty until known. */
+  original_languages?: string[];
   /** Ordered language signals from Wikidata and the author's source projects. */
   languages?: string[];
 }
@@ -1001,6 +1008,7 @@ export interface CaptureAuthor {
   description?: string;
   birth_year: number | null;
   death_year: number | null;
+  original_languages?: string[];
   languages?: string[];
 }
 

@@ -11,8 +11,8 @@ import UiStatusBadge from "../ui/UiStatusBadge.vue";
 
 /**
  * Side panel describing one source from `GET /api/corpus/sources/{id}`: identity, language,
- * provider, provenance and processing. It never loads the source text. Page facts are shown
- * only for paged media.
+ * provider, provenance, processing and a bounded extracted-text preview. Source HTML is never
+ * rendered; preview text comes from the persisted safe extraction blocks.
  */
 const props = withDefaults(
   defineProps<{
@@ -30,11 +30,25 @@ const loaded = ref<SourceDetail | null>(null);
 const loading = ref(false);
 const error = ref("");
 const copied = ref(false);
+const previewBlocks = ref<Array<{ block_id: string; text: string }>>([]);
+const previewLoading = ref(false);
+const previewError = ref("");
 
 const source = computed(() => props.detail || loaded.value);
 const catalog = computed<Record<string, unknown>>(() => source.value?.catalog_metadata || {});
 const initial = computed<Record<string, unknown>>(() => source.value?.initial_metadata || {});
 const paged = computed(() => hasPages(source.value?.media_kind || "pdf"));
+const textPreview = computed(() =>
+  previewBlocks.value
+    .map((block) => block.text.trim())
+    .filter(Boolean)
+    .join("\n\n")
+    .slice(0, 6000),
+);
+const supportsTextPreview = computed(() => {
+  const kind = source.value?.media_kind || "";
+  return Boolean(source.value?.asset_id && !["pdf", "image", "audio"].includes(kind));
+});
 
 function text(value: unknown): string {
   if (value === null || value === undefined || value === "") return "";
@@ -149,16 +163,38 @@ function buildState(status: string) {
 }
 
 async function load() {
-  if (props.detail || !props.sourceId) return;
+  if (props.detail || !props.sourceId) {
+    await loadPreview();
+    return;
+  }
   loading.value = true;
   error.value = "";
   try {
     loaded.value = await corpusSourcesApi.sourceDetail(props.sourceId);
+    await loadPreview();
   } catch (cause) {
     loaded.value = null;
     error.value = cause instanceof Error ? cause.message : String(cause);
   } finally {
     loading.value = false;
+  }
+}
+async function loadPreview() {
+  const assetId = source.value?.asset_id;
+  if (!assetId || !supportsTextPreview.value) {
+    previewBlocks.value = [];
+    return;
+  }
+  previewLoading.value = true;
+  previewError.value = "";
+  try {
+    const response = await corpusSourcesApi.blocks(assetId, 0, 8);
+    previewBlocks.value = response.items;
+  } catch (cause) {
+    previewBlocks.value = [];
+    previewError.value = cause instanceof Error ? cause.message : String(cause);
+  } finally {
+    previewLoading.value = false;
   }
 }
 async function copyHash() {
@@ -172,6 +208,7 @@ async function copyHash() {
   }
 }
 watch(() => props.sourceId, load, { immediate: true });
+watch(() => props.detail, loadPreview);
 </script>
 
 <template>
@@ -253,6 +290,21 @@ watch(() => props.sourceId, load, { immediate: true });
           </ul>
           <p v-else class="si-muted">{{ i18n.t("sources.inspector.no_builds") }}</p>
         </template>
+      </section>
+      <section v-if="supportsTextPreview" class="si-section si-preview">
+        <h4>{{ i18n.t("sources.inspector.preview_title") }}</h4>
+        <p v-if="previewLoading" role="status" class="si-muted">
+          {{ i18n.t("sources.inspector.preview_loading") }}
+        </p>
+        <p v-else-if="previewError" role="alert" class="si-error">
+          <AppIcon name="warning" />{{
+            i18n.tf("sources.inspector.preview_failed", { error: previewError })
+          }}
+        </p>
+        <p v-else-if="!textPreview" class="si-muted">
+          {{ i18n.t("sources.inspector.preview_empty") }}
+        </p>
+        <pre v-else class="si-preview-text">{{ textPreview }}</pre>
       </section>
     </template>
   </aside>
@@ -336,5 +388,19 @@ watch(() => props.sourceId, load, { immediate: true });
   display: flex;
   gap: 6px;
   color: var(--tone-danger-fg);
+}
+.si-preview-text {
+  max-block-size: 260px;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow: auto;
 }
 </style>

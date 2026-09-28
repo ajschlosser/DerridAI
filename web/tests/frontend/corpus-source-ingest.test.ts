@@ -1,7 +1,10 @@
-import { mount, shallowMount } from "@vue/test-utils";
+import { DOMWrapper, mount, shallowMount } from "@vue/test-utils";
+import { nextTick } from "vue";
 import { describe, expect, it } from "vitest";
 import CorpusSourceIngest from "../../src/components/CorpusSourceIngest.vue";
 import SourceTable from "../../src/components/sources/SourceTable.vue";
+
+const body = () => new DOMWrapper(document.body);
 
 describe("Corpus source ingest", () => {
   it("places the OCR strategy radios before choose source PDF", () => {
@@ -50,6 +53,9 @@ describe("Corpus source ingest", () => {
     await wrapper.get("form.url-source").trigger("submit");
     expect(wrapper.emitted("loadUrl")).toHaveLength(1);
     await wrapper.get("button.path-libraries").trigger("click");
+    await body().get('[data-action="open-library"]').trigger("click");
+    await nextTick();
+    await nextTick();
     const importButton = wrapper.get(".ls-results [data-result-primary]");
     expect(importButton.attributes("aria-label")).toContain("Pride and Prejudice");
     await importButton.trigger("click");
@@ -73,6 +79,9 @@ it("keeps Gutenberg imports available before the local collection is ready", asy
     },
   });
   await wrapper.get("button.path-libraries").trigger("click");
+  await body().get('[data-action="open-library"]').trigger("click");
+  await nextTick();
+  await nextTick();
   const row = wrapper.get(".ls-results .ls-row");
   expect(row.text()).toContain("Pride and Prejudice");
   // The full local archive is optional: one exact Gutenberg text can be fetched and verified directly.
@@ -92,6 +101,9 @@ it("keeps digital-library acquisition available while an existing build locks so
   expect(wrapper.get("button.source-choose").attributes("disabled")).toBeDefined();
   expect(wrapper.get("button.path-libraries").attributes("disabled")).toBeUndefined();
   await wrapper.get("button.path-libraries").trigger("click");
+  await body().get('[data-action="open-library"]').trigger("click");
+  await nextTick();
+  await nextTick();
   expect(wrapper.find("dialog.library-search").exists()).toBe(true);
 });
 
@@ -112,6 +124,9 @@ it("distinguishes Gutenberg editions in selection controls", async () => {
     },
   });
   await wrapper.get("button.path-libraries").trigger("click");
+  await body().get('[data-action="open-library"]').trigger("click");
+  await nextTick();
+  await nextTick();
   const rows = wrapper.findAll(".ls-results .ls-row");
   expect(rows[0].text()).toContain("#12");
   expect(rows[1].text()).toContain("#13");

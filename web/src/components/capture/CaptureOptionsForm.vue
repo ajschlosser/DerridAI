@@ -42,11 +42,14 @@ const projectCodes = computed(() =>
 const languageChoices = computed(() =>
   sortLanguageCodes([...(props.author?.languages || []), ...projectCodes.value], i18n.locale),
 );
-const originalLanguage = computed(
-  () => props.author?.languages?.[0] || languageChoices.value[0] || "",
+const originalLanguages = computed(() =>
+  sortLanguageCodes(props.author?.original_languages || [], i18n.locale),
+);
+const originalLanguage = computed(() =>
+  originalLanguages.value.length === 1 ? originalLanguages.value[0] : "",
 );
 const languageDraft = ref("");
-const languageDisabled = computed(() => !props.includes.translations);
+const languageDisabled = computed(() => false);
 const INCLUDES: Array<keyof CaptureIncludes> = [
   "authored",
   "translations",
@@ -208,11 +211,21 @@ function addLanguageValue(value: string) {
           </button>
         </div>
       </div>
-      <p v-if="languageDisabled && originalLanguage" class="co-help">
+      <p v-if="!includes.translations && originalLanguage" class="co-help">
         {{ languageName(originalLanguage, i18n.locale) }}
       </p>
+      <p v-if="!includes.translations && !originalLanguage" class="co-help">
+        {{ i18n.t("capture.options.original_language_required") }}
+      </p>
       <p
-        v-if="languages !== null && !languages.length && !languageDisabled"
+        v-if="!includes.translations && languages !== null && languages.length !== 1"
+        class="co-invalid"
+        role="alert"
+      >
+        {{ i18n.t("capture.options.need_exact_language") }}
+      </p>
+      <p
+        v-else-if="languages !== null && !languages.length && !languageDisabled"
         class="co-invalid"
         role="alert"
       >
