@@ -15,6 +15,7 @@ const error = ref("");
 const open = ref(false);
 const drafts = ref<Record<string, { text: string; gap: boolean; final: boolean; lastSeq: number }>>({});
 let unsubscribe: (() => void) | null = null;
+let liveTimer: number | null = null;
 
 const ordered = computed(() => [...items.value].reverse());
 
@@ -36,12 +37,47 @@ async function load() {
   }
 }
 
+async function loadLive() {
+  if (!props.buildId || !open.value) return;
+  try {
+    const result = await corpusBuildsApi.llmLiveOutput(props.buildId);
+    const next = { ...drafts.value };
+    for (const item of result.items || []) {
+      const current = next[item.call_id] || {
+        text: "",
+        gap: false,
+        final: false,
+        lastSeq: -1,
+      };
+      if (item.seq < current.lastSeq) continue;
+      next[item.call_id] = {
+        text: item.text || "",
+        gap: Boolean(item.gap),
+        final: false,
+        lastSeq: item.seq,
+      };
+    }
+    drafts.value = next;
+  } catch {
+    // Live drafts are advisory. The persisted trace remains available even if this read fails.
+  }
+}
+
+function scheduleLiveLoad() {
+  if (!open.value) return;
+  if (liveTimer !== null) window.clearTimeout(liveTimer);
+  liveTimer = window.setTimeout(() => {
+    liveTimer = null;
+    void loadLive();
+  }, 120);
+}
+
 function subscribe() {
   unsubscribe?.();
   unsubscribe = null;
   if (!props.buildId) return;
   unsubscribe = realtime.subscribe(`corpus-build:${props.buildId}`, (event) => {
-    if (event.type === "corpus.llm_delta") {
+    if (event.type === "corpus.llm_progress") {
       const generation = (event as CorpusGenerationEvent).payload.generation;
       const current = drafts.value[generation.call_id] || {
         text: "",
@@ -49,15 +85,22 @@ function subscribe() {
         final: false,
         lastSeq: -1,
       };
-      if (generation.seq <= current.lastSeq || current.gap || current.final) return;
-      const next = {
-        text: generation.gap ? current.text : current.text + generation.delta,
-        gap: current.gap || generation.gap,
-        final: Boolean(generation.final),
-        lastSeq: generation.seq,
+      if (generation.seq <= current.lastSeq) return;
+      drafts.value = {
+        ...drafts.value,
+        [generation.call_id]: {
+          ...current,
+          gap: current.gap || generation.gap,
+          final: Boolean(generation.final),
+          lastSeq: generation.seq,
+        },
       };
-      drafts.value = { ...drafts.value, [generation.call_id]: next };
-      if (generation.final) window.setTimeout(() => void load(), 500);
+      if (!items.value.some((item) => item.call_id === generation.call_id)) void load();
+      if (generation.final) {
+        window.setTimeout(() => void load(), 300);
+      } else {
+        scheduleLiveLoad();
+      }
       return;
     }
     if (open.value && ["llm.completed", "corpus.record_completed"].includes(event.type)) {
@@ -68,7 +111,10 @@ function subscribe() {
 
 function toggle(event: Event) {
   open.value = (event.currentTarget as HTMLDetailsElement).open;
-  if (open.value) void load();
+  if (open.value) {
+    void load();
+    void loadLive();
+  }
 }
 
 watch(
@@ -81,7 +127,10 @@ watch(
   },
 );
 onMounted(subscribe);
-onBeforeUnmount(() => unsubscribe?.());
+onBeforeUnmount(() => {
+  unsubscribe?.();
+  if (liveTimer !== null) window.clearTimeout(liveTimer);
+});
 </script>
 
 <template>
