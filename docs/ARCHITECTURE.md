@@ -10,8 +10,9 @@ This document describes the current `master` architecture. For user-visible beha
 - **api** — one FastAPI process. `api/app/main.py` is intentionally a minimal ASGI entrypoint; `application.py` constructs the app, registers middleware/exception handling, and composes domain routers from `api/app/routers/`. Shared services are constructed in `services.py`.
 - **LLM providers** — Ollama or OpenAI-compatible endpoints reached through named provider profiles.
 - **Chroma** — embedded `PersistentClient` by default or an HTTP Chroma server. Chroma stores derived search/vector projections and operational caches; it is not the canonical scholarly record store.
+- **document-nlp (optional)** — an isolated BookNLP adapter enabled through the `document-nlp` Compose profile. It receives bounded reviewed document text, returns derived linguistic annotations, has no corpus authority, and never downloads model weights at runtime. The API falls back gracefully when it is absent.
 
-Background work runs in the API process. There is no external worker/queue service.
+Background corpus/job orchestration runs in the API process. There is no external durable queue service. The optional Document Intelligence worker is a replaceable analysis provider, not a job coordinator or canonical store.
 
 ### Transports
 
@@ -32,6 +33,7 @@ The browser talks to the API over three deliberately separate transports, all se
 | Corpus orchestration                       | `corpus_builder.py` plus focused `corpus_*` modules for lifecycle, manifest workflow, segmentation, enrichment, review, quality, publication, and schema/profile behavior                              |
 | Source discovery / acquisition             | `source_capture.py`, `source_provider.py`, `source_identity.py`, `source_wikidata.py`, `source_gutenberg.py`, `source_wikisource.py`, `source_reconcile.py`, `source_registry.py`, `capture_store.py`  |
 | Source extraction                          | `corpus_extraction.py`, `source_media.py`, `source_text.py`, `source_audio.py`, `source_safety.py`, `source_quality.py`, `source_kinds.py`                                                             |
+| Document intelligence / content graph      | `document_intelligence.py`, optional `booknlp-worker/`, `semantic_content_graph.py`; derived whole-document annotations and content relationships, separate from cELF Research Object Graph             |
 | Metadata schemas and progressive precedent | `metadata_schema.py`, `metadata_schema_store.py`, `metadata_exemplars.py`, `metadata_exemplar_projection.py`, `metadata_exemplar_retrieval.py`, `metadata_memory.py`, `metadata_adjudication_cache.py` |
 | Durable provenance / Research memory       | `provenance_memory.py`, `system_store.py`, related Research/job persistence                                                                                                                            |
 | Search/vector storage                      | `chroma_store.py`, `chroma_connection.py`, `system_chroma_console.py`                                                                                                                                  |
@@ -84,6 +86,7 @@ All paths derive from `CHROMA_DATA_ROOT` (default `/data`).
 | Users, roles, sessions, login throttle                                                    | Auth SQLite                         | Authoritative auth state                                             |
 | Provider profiles, annotations, languages, job snapshots/history, provenance/memory state | System SQLite                       | Durable application state                                            |
 | Source assets, build/review checkpoints, publications                                     | Files under DerridAI data root      | Authoritative corpus/build artifacts; atomic writes where applicable |
+| Document Intelligence / Semantic Content Graph checkpoints                                | Files under DerridAI data root      | Derived/rebuildable build projections; never canonical publication state |
 | Corpus Capture state, candidates, source/capture links                                    | System SQLite                       | Durable acquisition/provenance bookkeeping; not corpus content       |
 | Vector/search collections                                                                 | Chroma embedded path or HTTP server | Derived/rebuildable from canonical data                              |
 | Metadata exemplar semantic projection                                                     | Internal Chroma/system projection   | Derived/rebuildable; hidden from ordinary research collections       |
@@ -92,6 +95,12 @@ All paths derive from `CHROMA_DATA_ROOT` (default `/data`).
 | Browser workspaces/preferences                                                            | IndexedDB/localStorage              | Per-origin/browser UI state                                          |
 
 Active job execution is process-local, but job snapshots/history are mirrored to SQLite. On restart, work left `queued`, `running`, or `cancelling` is marked failed/interrupted rather than automatically replayed; completed history remains inspectable. Job state is not coordinated across multiple API processes.
+
+## Document Intelligence
+
+Corpus Builder runs provider-neutral whole-document linguistic analysis after deterministic reviewed-text cleanup and before record-level metadata enrichment. The default implementation can use local spaCy or the optional isolated BookNLP worker. Entity/coreference/quotation output is hash-bound to the analyzed text, projected onto Records as advisory context, and excluded from canonical publication JSONL.
+
+The derived **Semantic Content Graph** is separate from the cELF **Research Object Graph**. The former models characters/people/concepts/works/topics and content relationships for navigation and analysis; the latter models scholarly object/provenance relationships. Observational content edges (for example co-occurrence) are explicitly weaker than evidence-aware semantic edges projected from current metadata assertions. See [DOCUMENT_INTELLIGENCE.md](DOCUMENT_INTELLIGENCE.md).
 
 ## Search and Research
 
