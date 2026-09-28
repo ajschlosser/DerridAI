@@ -652,6 +652,17 @@ def get_pdf_corpus_semantic_content_graph(build_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="Corpus build not found") from exc
 
 
+@router.post("/api/pdf/corpus-builds/{build_id}/document-intelligence/rerun")
+def rerun_pdf_corpus_document_intelligence(build_id: str) -> dict[str, Any]:
+    """Refresh derived document NLP after text/topology review changes."""
+    try:
+        return pdf_corpus_builds.rerun_document_intelligence(build_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.patch("/api/pdf/corpus-builds/{build_id}/provider-profile")
 def patch_pdf_corpus_provider_profile(build_id: str, body: PdfCorpusProviderSwitch) -> dict[str, Any]:
     try:
