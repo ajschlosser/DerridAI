@@ -68,8 +68,8 @@ def probe_audio(path: Path) -> float:
 
 def transcribe_entire_file(path: Path) -> dict[str, Any]:
     """Send the whole audio file to OpenAI Whisper before any span splitting."""
-    from .system_store import system_store
     from .source_identity import CaptureError, CaptureErrorCode
+    from .system_store import system_store
 
     config = system_store.audio_transcription_settings(include_key=True)
     api_key = str(config.get("api_key") or "").strip()
