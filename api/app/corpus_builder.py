@@ -2765,9 +2765,14 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                     f"{issue} ({count} records)" if count > 1 else issue
                     for issue, count in counts.items()
                 ]
+                detail = ", ".join(issues or ["unknown topology error"])
+                if "topology.over_absolute_limit" in raw_issues:
+                    detail += (
+                        ". One or more source units exceed the absolute character ceiling; "
+                        "choose a finer evidence-unit rule or split the affected unit during review."
+                    )
                 raise RuntimeError(
-                    "Deterministic topology sanity check failed before metadata enrichment: "
-                    + ", ".join(issues or ["unknown topology error"])
+                    "Deterministic topology sanity check failed before metadata enrichment: " + detail
                 )
             # Optionally clean obvious extraction/layout noise before metadata
             # enrichment. The immutable extracted text remains bound in
