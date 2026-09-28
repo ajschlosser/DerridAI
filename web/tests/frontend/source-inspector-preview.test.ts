@@ -17,6 +17,15 @@ const detail: SourceDetail = {
   captures: [],
   builds: [],
 };
+const block = (block_id: string, text: string) => ({
+  block_id,
+  text,
+  page: 1,
+  bbox: null,
+  type: "paragraph",
+  extraction_method: "test",
+  confidence: 1,
+});
 
 describe("SourceInspector extracted-text preview", () => {
   beforeEach(() => setActivePinia(createPinia()));
@@ -25,8 +34,8 @@ describe("SourceInspector extracted-text preview", () => {
   it("shows persisted text blocks without rendering source markup", async () => {
     vi.spyOn(corpusSourcesApi, "blocks").mockResolvedValue({
       items: [
-        { block_id: "b1", text: "The first paragraph." },
-        { block_id: "b2", text: "<script>alert('not rendered')</script>" },
+        block("b1", "The first paragraph."),
+        block("b2", "<script>alert('not rendered')</script>"),
       ],
       total: 2,
       offset: 0,
@@ -45,7 +54,7 @@ describe("SourceInspector extracted-text preview", () => {
     "loads a safe extracted preview for %s sources",
     async (media_kind) => {
       vi.spyOn(corpusSourcesApi, "blocks").mockResolvedValue({
-        items: [{ block_id: "b1", text: `Preview for ${media_kind}` }],
+        items: [block("b1", `Preview for ${media_kind}`)],
         total: 1,
         offset: 0,
         limit: 8,

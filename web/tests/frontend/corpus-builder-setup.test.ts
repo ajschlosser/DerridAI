@@ -285,6 +285,6 @@ describe("Corpus Builder setup and launch controls", () => {
     expect(lastEmission(wrapper, "save")[0]).toEqual({ 1: "i" });
     await buttonByText(wrapper, "Next").trigger("click");
     expect(wrapper.get(".range").text()).toBe("26–27 / 27");
-    expect(wrapper.get("#pdf-label-26").exists()).toBe(true);
+    expect(wrapper.find("#pdf-label-26").exists()).toBe(true);
   });
 });
