@@ -17,8 +17,8 @@ const statusLabel = computed(() =>
     status.value.replaceAll("_", " "),
   ),
 );
-const selectedProvider = computed(
-  () => String(props.run?.selected_provider || props.requestedProvider || "auto"),
+const selectedProvider = computed(() =>
+  String(props.run?.selected_provider || props.requestedProvider || "auto"),
 );
 const actualProvider = computed(() => String(props.run?.provider || ""));
 const usedFallback = computed(
@@ -72,7 +72,8 @@ const counts = computed(() =>
     </p>
     <div v-if="counts.length" class="result-counts">
       <span v-for="[kind, count] in counts" :key="String(kind)">
-        <b>{{ count }}</b> {{ i18n.t(`pdf_corpus.document_intelligence_count.${kind}`, String(kind)) }}
+        <b>{{ count }}</b>
+        {{ i18n.t(`pdf_corpus.document_intelligence_count.${kind}`, String(kind)) }}
       </span>
     </div>
     <details v-if="run.warnings?.length">
