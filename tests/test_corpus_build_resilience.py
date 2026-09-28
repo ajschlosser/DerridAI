@@ -33,6 +33,7 @@ rag_stub.run_rag_pipeline = lambda *args, **kwargs: {}
 sys.modules.setdefault("app.rag", rag_stub)
 from app import corpus_builder as cb
 from app import corpus_segmentation_execution as cse
+from app import operation_events
 
 
 def _blocks(count: int = 30):
@@ -103,6 +104,61 @@ def test_chat_json_retries_malformed_output_then_validates(monkeypatch, tmp_path
     assert len(calls) == 3
     assert "previous response could not be validated" in calls[1]["prompt"]
     assert calls[1]["max_tokens"] > calls[0]["max_tokens"]
+
+
+def test_chat_json_records_prompt_and_keeps_live_draft_off_realtime(monkeypatch, tmp_path: Path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    build = _build(repo)
+    operation_events.drain()
+
+    def fake_chat_complete(**kwargs):
+        on_delta = kwargs.get("on_delta")
+        assert callable(on_delta)
+        on_delta('{"boundaries":')
+        live = manager.llm_live_output(build["build_id"])
+        assert live["total"] == 1
+        assert live["items"][0]["text"] == '{"boundaries":'
+        on_delta("[]}")
+        return '{"boundaries": []}'
+
+    monkeypatch.setattr(cb, "chat_complete", fake_chat_complete)
+    result = manager._chat_json(
+        {
+            "provider": "ollama",
+            "model": "trace-test",
+            "base_url": "http://example.invalid",
+            "api_key": "SECRET-MUST-NOT-BE-PERSISTED",
+        },
+        "rendered source-bound prompt",
+        response_model=cb.SegmentationResponseModel,
+        schema_name="trace_schema",
+        build_id=build["build_id"],
+    )
+
+    assert result == {"boundaries": []}
+    assert manager.llm_live_output(build["build_id"]) == {"items": [], "total": 0}
+
+    trace = manager.llm_trace(build["build_id"])
+    assert trace["total"] == 1
+    entry = trace["items"][0]
+    assert entry["prompt"] == "rendered source-bound prompt"
+    assert entry["provider"] == "ollama"
+    assert entry["model"] == "trace-test"
+    assert entry["schema_name"] == "trace_schema"
+    assert entry["raw_response"] == '{"boundaries": []}'
+    assert entry["validated_response"] == {"boundaries": []}
+    assert entry["status"] == "complete"
+    serialized = json.dumps(entry)
+    assert "SECRET-MUST-NOT-BE-PERSISTED" not in serialized
+    assert "base_url" not in entry
+
+    progress = operation_events.drain().corpus_generation
+    assert progress and progress[-1]["final"] is True
+    # The realtime note is deliberately text-free; the draft is readable only
+    # through the administrator-authenticated live-output endpoint.
+    assert set(progress[-1]) == {"build_id", "call_id", "seq", "chars", "gap", "final"}
+    assert "rendered source-bound prompt" not in str(progress)
 
 
 def test_segment_blocks_instead_of_fabricating_record_when_every_llm_response_is_invalid(monkeypatch, tmp_path: Path):
