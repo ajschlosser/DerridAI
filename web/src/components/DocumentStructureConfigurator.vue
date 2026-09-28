@@ -25,6 +25,7 @@ const draft = ref<DocumentLayoutPlan>({
   page_layout: "single",
   reading_order: "left_to_right",
   thread_mode: "continuous",
+  unit_policy: { mode: "default" },
 });
 function normalized(plan?: DocumentLayoutPlan | null) {
   return {
@@ -37,6 +38,7 @@ function normalized(plan?: DocumentLayoutPlan | null) {
     bibliography_pdf_start: plan?.bibliography_pdf_start ?? null,
     thread_a_language: plan?.thread_a_language ?? "",
     thread_b_language: plan?.thread_b_language ?? "",
+    unit_policy: plan?.unit_policy ?? { mode: "default" },
   };
 }
 // A start page suggested from the document's own structure (only offered at 90% or more). It fills an empty
@@ -266,6 +268,33 @@ function save() {
               </button>
             </div></label
           >
+        </fieldset>
+        <fieldset>
+          <legend>{{ i18n.t("pdf_corpus.evidence_structure", "Evidence source units") }}</legend>
+          <p class="field-help">
+            {{ i18n.t("pdf_corpus.evidence_structure_help", "Choose the smallest source span reviewers can cite as evidence.") }}
+          </p>
+          <label>
+            <span>{{ i18n.t("pdf_corpus.source_unit_mode", "Source-unit rule") }}</span>
+            <select v-model="draft.unit_policy!.mode" class="control">
+              <option value="default">{{ i18n.t("pdf_corpus.source_unit_default", "Default extracted units") }}</option>
+              <option value="sentence">{{ i18n.t("pdf_corpus.source_unit_sentence", "Every sentence") }}</option>
+              <option value="line">{{ i18n.t("pdf_corpus.source_unit_line", "Every line") }}</option>
+              <option value="paragraph">{{ i18n.t("pdf_corpus.source_unit_paragraph", "Every paragraph") }}</option>
+              <option value="chars">{{ i18n.t("pdf_corpus.source_unit_chars", "Every N characters") }}</option>
+            </select>
+          </label>
+          <label v-if="draft.unit_policy?.mode === 'chars'">
+            <span>{{ i18n.t("pdf_corpus.source_unit_chars_count", "Characters per source unit") }}</span>
+            <input
+              v-model.number="draft.unit_policy.chars"
+              class="control"
+              type="number"
+              min="60"
+              max="20000"
+              step="10"
+            />
+          </label>
         </fieldset>
         <fieldset>
           <legend>{{ i18n.t("pdf_corpus.page_threads") }}</legend>

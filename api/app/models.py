@@ -556,6 +556,7 @@ class PdfDocumentLayoutPatch(BaseModel):
     thread_mode: Literal["continuous", "odd_even", "even_odd", "left_right", "right_left"] = "continuous"
     thread_a_language: str | None = None
     thread_b_language: str | None = None
+    unit_policy: dict[str, Any] | None = None
 
 
 class PdfCorpusProviderConfig(BaseModel):

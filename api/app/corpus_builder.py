@@ -1092,6 +1092,8 @@ class PdfCorpusRepository:
         and alternating thread hints. These reviewer-owned facts outrank later LLM guesses.
         """
         with self._lock:
+            from .unit_policy import normalize_policy
+
             asset = self.get_asset(asset_id)
             if asset.get("media_kind", "pdf") not in {"pdf", "image"}:
                 raise ValueError("Page layout is unavailable for this source format.")
@@ -1118,6 +1120,7 @@ class PdfCorpusRepository:
             valid_thread_modes = {"continuous", "odd_even", "even_odd", "left_right", "right_left"}
             if thread_mode not in valid_thread_modes:
                 raise ValueError("Unsupported thread_mode")
+            unit_policy = normalize_policy(plan.get("unit_policy"))
             clean_plan = {
                 "page_layout": layout, "reading_order": order,
                 "main_text_pdf_start": main_pdf, "main_text_printed_start": main_printed,
@@ -1125,6 +1128,7 @@ class PdfCorpusRepository:
                 "bibliography_pdf_start": bib_pdf, "thread_mode": thread_mode,
                 "thread_a_language": str(plan.get("thread_a_language") or "").strip() or None,
                 "thread_b_language": str(plan.get("thread_b_language") or "").strip() or None,
+                "unit_policy": unit_policy,
                 "confirmed_by": "human", "updated_at": iso_now(),
             }
             pages = asset.get("pages") or []
@@ -1221,6 +1225,7 @@ class PdfCorpusRepository:
                     handle.write(json.dumps(block, ensure_ascii=False) + "\n")
             os.replace(tmp, self.asset_blocks_path(asset_id))
             asset["pages"] = pages
+            asset["unit_policy"] = unit_policy
             asset["document_layout"] = clean_plan
             asset["document_layout_revision"] = int(asset.get("document_layout_revision") or 0) + 1
             _json_write(self.asset_meta_path(asset_id), asset)

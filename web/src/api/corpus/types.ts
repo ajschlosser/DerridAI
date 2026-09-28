@@ -193,6 +193,7 @@ export interface DocumentLayoutPlan {
   thread_mode: "continuous" | "odd_even" | "even_odd" | "left_right" | "right_left";
   thread_a_language?: string | null;
   thread_b_language?: string | null;
+  unit_policy?: SourceUnitPolicy;
 }
 
 export interface LlmActivity {
