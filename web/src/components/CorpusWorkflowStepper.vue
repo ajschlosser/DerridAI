@@ -29,6 +29,7 @@ const currentStep = computed(() => {
       "manifest",
       "segmenting",
       "constructing_records",
+      "document_intelligence",
       "reconciling",
     ].includes(stage) ||
     ["queued", "running", "awaiting_manifest_review"].includes(status)
