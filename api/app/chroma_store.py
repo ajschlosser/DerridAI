@@ -227,6 +227,24 @@ class Embeddings:
     ) -> list[list[float]]:
         if not model:
             raise ValueError("An Ollama embedding model is required.")
+        # Ollama tokenizes each input over its own loopback connection, so one
+        # request carrying thousands of source units exhausts ephemeral ports
+        # and fails with 400 ("cannot assign requested address"). Bound it.
+        batch_size = max(1, settings.ollama_embed_batch_size)
+        vectors: list[list[float]] = []
+        for start in range(0, len(texts), batch_size):
+            vectors.extend(
+                self._ollama_batch(texts[start : start + batch_size], model=model, base_url=base_url)
+            )
+        return vectors
+
+    def _ollama_batch(
+        self,
+        texts: list[str],
+        *,
+        model: str,
+        base_url: str | None = None,
+    ) -> list[list[float]]:
         root = str(base_url or settings.ollama_base_url).rstrip("/")
         modern_endpoint = f"{root}/api/embed"
         legacy_endpoint = f"{root}/api/embeddings"
@@ -273,7 +291,12 @@ class Embeddings:
                         raise RuntimeError("Ollama returned an unexpected legacy embedding response.")
                     vectors.append(list(map(float, embedding)))
                 return vectors
-            response.raise_for_status()
+            if response.status_code >= 400:
+                detail = response.text.strip()[:500]
+                raise RuntimeError(
+                    f"Ollama /api/embed returned HTTP {response.status_code} for model '{model}'"
+                    f"{f': {detail}' if detail else ''}."
+                )
             payload = response.json()
 
         vectors = payload.get("embeddings")

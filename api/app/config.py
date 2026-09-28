@@ -127,6 +127,7 @@ class Settings:
     ).rstrip("/")
     ollama_model: str = os.getenv("OLLAMA_MODEL", "gemma4:e2b")
     ollama_embed_model: str = os.getenv("OLLAMA_EMBED_MODEL", "bge-m3:latest")
+    ollama_embed_batch_size: int = int(os.getenv("OLLAMA_EMBED_BATCH_SIZE", "256"))
 
     openai_compat_base_url: str = os.getenv(
         "OPENAI_COMPAT_BASE_URL",

@@ -38,9 +38,6 @@ function createRecordCache() {
         store.delete(oldest);
       }
     },
-    delete(id: string) {
-      store.delete(id);
-    },
     clear() {
       store.clear();
     },
@@ -240,6 +237,28 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
     }
   }
 
+  /** Re-read one full Record after a durable realtime completion hint. */
+  async function refreshRecord(recordId: string): Promise<void> {
+    if (!options.selectedBuildId.value || !recordId) return;
+    try {
+      clearGraphQLReadCache();
+      const [record] = await corpusReviewReads.records(options.selectedBuildId.value, [recordId]);
+      if (!record) return;
+      const index = queueRows.value.findIndex((row) => row.record_id === record.record_id);
+      if (index >= 0) queueRows.value.splice(index, 1, queueRowFromRecord(record));
+      // Selection changes clear selectedRecord before the new Record arrives, while selectedRecordId
+      // can still point at the old Record. Do not let a late realtime refresh resurrect that old view.
+      const selectedStillOpen =
+        record.record_id === options.selectedRecordId.value &&
+        options.selectedRecord.value?.record_id === record.record_id;
+      if (selectedStillOpen && options.hasActiveDraft()) return;
+      cache.set(record.record_id, record);
+      if (selectedStillOpen) options.activateRecord(record);
+    } catch (exc) {
+      if (!isAbortError(exc)) options.onError(messageOf(exc));
+    }
+  }
+
   /** Re-read specific rows in place (a realtime event, a neighbour patch) without re-paging. */
   async function refreshRows(
     recordIds: readonly string[] = queueRows.value.map((row) => row.record_id),
@@ -253,17 +272,6 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
       if (!rows.length) return;
       const byId = new Map(rows.map((row) => [row.record_id, row]));
       queueRows.value = queueRows.value.map((row) => byId.get(row.record_id) ?? row);
-
-      // A record-completed event is also an invalidation signal for the full reviewer
-      // projection. Enrichment proposals/evidence are persisted independently of
-      // RecordRevision, so keeping a same-revision cached Record is stale by design.
-      for (const row of rows) cache.delete(row.record_id);
-      const selectedId = options.selectedRecordId.value;
-      const selectedStillOpen = options.selectedRecord.value?.record_id === selectedId;
-      if (selectedId && selectedStillOpen && byId.has(selectedId) && !options.hasActiveDraft()) {
-        const selectedRow = byId.get(selectedId);
-        await resolveAndActivate(selectedId, selectedRow?.record_revision ?? null);
-      }
     } catch (exc) {
       if (!isAbortError(exc)) options.onError(messageOf(exc));
     }
@@ -321,6 +329,7 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
     selectRecordById,
     remember,
     refreshRows,
+    refreshRecord,
     visiblePageTexts,
     applyRecord,
     clear,

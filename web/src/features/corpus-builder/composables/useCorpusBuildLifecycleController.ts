@@ -37,6 +37,8 @@ interface CorpusBuildLifecycleControllerOptions {
   refreshRecords: (reset?: boolean, preferredId?: string) => Promise<void>;
   /** Patch one review-queue row in place from the server (see useCorpusReviewRecords). */
   refreshRows: (recordIds: string[]) => Promise<void>;
+  /** Refresh the full selected Record after its enrichment result is durable. */
+  refreshRecord: (recordId: string) => Promise<void>;
   t: (key: string, fallback?: string) => string;
   tf: (key: string, values: Record<string, string | number>) => string;
 }
@@ -164,12 +166,14 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
         }
       },
     });
-    // A finished record's row (its state icon and "LLM processed" marker) updates as soon as
-    // enrichment completes, without waiting for the next throttled build refresh.
+    // A completion event is emitted only after the enriched Record is durable.
+    // Refresh the row and the open full Record so metadata/evidence appear immediately.
     const stopRecordEvents = realtime.subscribe(`corpus-build:${buildId}`, (event) => {
       if (event.type !== "corpus.record_completed") return;
       const recordId = String((event as CorpusRecordEvent).payload.metadata.record_id || "");
-      if (recordId) void options.refreshRows([recordId]);
+      if (!recordId) return;
+      void options.refreshRows([recordId]);
+      if (recordId === options.selectedRecordId.value) void options.refreshRecord(recordId);
     });
     stopFollowing = () => {
       stopFollowingBuild();
