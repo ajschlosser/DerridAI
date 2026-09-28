@@ -36,11 +36,6 @@ type CorpusBuildReview {
   build_id: String!
 
   """
-  Retained derived whole-document linguistic analysis. Advisory only: it is not source evidence and does not confer FieldAssertion authority.
-  """
-  document_intelligence: DocumentIntelligenceRun
-
-  """
   The paged, filtered review queue (REST: GET /api/pdf/corpus-builds/{id}/records).
   """
   review_queue(offset: Int! = 0, limit: Int! = 50, needs_review: Boolean = null, disposition: String = null, metadata_incomplete: Boolean = null, source_problem: Boolean = null, review_queue: String = null, query: String! = ""): CorpusReviewQueuePage!
@@ -57,6 +52,11 @@ type CorpusBuildReview {
   Reviewer-presented Records, in the order requested (missing ids come back null).
   """
   records(record_ids: [String!]!): [CorpusRecord]!
+
+  """
+  Retained derived whole-document linguistic analysis. Advisory only: it is not source evidence and does not confer FieldAssertion authority.
+  """
+  document_intelligence: DocumentIntelligenceRun
 
   """
   Build-wide observed metadata values, optionally narrowed to specific fields.
@@ -464,6 +464,29 @@ type SourceCaptureReference {
   author_name: String
 }
 
+"""One medium page/layout projection for a SourceDocument."""
+type SourceDocumentPage {
+  physical_page: Int!
+  printed_page_label: String
+  printed_page_label_source: String
+  width: Float
+  height: Float
+  block_ids: [String!]!
+  extraction_method: String
+  image_count: Int
+  deterministic_region_type: String
+  thread_ids: [String!]!
+  logical_pages: JSON!
+}
+
+"""A bounded page of SourceDocument page/layout projections."""
+type SourceDocumentPagePage {
+  items: [SourceDocumentPage!]!
+  total: Int!
+  offset: Int!
+  limit: Int!
+}
+
 """
 Read projection around one canonical cELF SourceDocument: identity, extraction provenance, document structure, and links to downstream Corpus Builder builds.
 """
@@ -499,29 +522,6 @@ type SourceDocumentView {
 
   """A bounded page of medium-specific page/layout projections."""
   pages(offset: Int! = 0, limit: Int! = 100): SourceDocumentPagePage!
-}
-
-"""One medium page/layout projection for a SourceDocument."""
-type SourceDocumentPage {
-  physical_page: Int!
-  printed_page_label: String
-  printed_page_label_source: String
-  width: Float
-  height: Float
-  block_ids: [String!]!
-  extraction_method: String
-  image_count: Int
-  deterministic_region_type: String
-  thread_ids: [String!]!
-  logical_pages: JSON!
-}
-
-"""A bounded page of SourceDocument page/layout projections."""
-type SourceDocumentPagePage {
-  items: [SourceDocumentPage!]!
-  total: Int!
-  offset: Int!
-  limit: Int!
 }
 
 """
