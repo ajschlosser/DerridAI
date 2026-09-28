@@ -92,6 +92,7 @@ import CorpusReviewSourcePanel from "./corpus-builder/CorpusReviewSourcePanel.vu
 import RecordContextReader from "./corpus-builder/RecordContextReader.vue";
 import MovableRecordModal from "./corpus-builder/MovableRecordModal.vue";
 import CorpusEnrichmentConfiguration from "./corpus-builder/CorpusEnrichmentConfiguration.vue";
+import CorpusSemanticGraphPanel from "./corpus-builder/CorpusSemanticGraphPanel.vue";
 import CorpusMetadataConfiguration from "./corpus-builder/CorpusMetadataConfiguration.vue";
 import CorpusAdvancedConfiguration from "./corpus-builder/CorpusAdvancedConfiguration.vue";
 import { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
@@ -2781,6 +2782,14 @@ defineExpose({
             :issues="issueCount"
             :focus-disabled="!selectedRecord"
             @focus="openFocusView"
+          />
+
+          <CorpusSemanticGraphPanel
+            v-if="currentBuild?.semantic_content_graph"
+            :build-id="currentBuild.build_id"
+            :summary="currentBuild.semantic_content_graph"
+            :disabled="busy !== '' || buildRunning"
+            @refreshed="refreshBuild"
           />
 
           <div ref="reviewFrameEl" class="review-frame">
