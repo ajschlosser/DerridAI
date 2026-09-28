@@ -450,9 +450,7 @@ const workspaceMode = computed<CorpusWorkspaceMode>(() => {
 const showBuildConfiguration = computed(() => workspaceMode.value === "setup");
 const showReviewWorkspace = computed(
   () =>
-    workspaceMode.value === "review" &&
-    hasRecordTopology.value &&
-    !awaitingManifestReview.value,
+    workspaceMode.value === "review" && hasRecordTopology.value && !awaitingManifestReview.value,
 );
 async function switchWorkspace(workspace: CorpusWorkspaceMode) {
   if (workspace === "build" && !currentBuild.value) return;
