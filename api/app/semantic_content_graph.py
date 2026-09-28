@@ -85,6 +85,50 @@ def _evidence(record: dict[str, Any], fields: list[str]) -> list[dict[str, Any]]
     return refs
 
 
+def _record_for_span(
+    record_spans: list[dict[str, Any]], start: int, end: int
+) -> str:
+    for span in record_spans:
+        try:
+            span_start = int(span.get("start") or 0)
+            span_end = int(span.get("end") or 0)
+        except (TypeError, ValueError):
+            continue
+        if span_start <= start and end <= span_end:
+            return str(span.get("record_id") or "")
+    return ""
+
+
+def _feature_summary(
+    values: Any, record_spans: list[dict[str, Any]], *, limit: int = 16
+) -> list[dict[str, Any]]:
+    buckets: dict[str, dict[str, Any]] = {}
+    for item in values if isinstance(values, list) else []:
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("lemma") or item.get("text") or "").strip()
+        if not label:
+            continue
+        key = label.casefold()
+        row = buckets.setdefault(
+            key,
+            {"label": label, "count": 0, "record_ids": []},
+        )
+        row["count"] = int(row.get("count") or 0) + 1
+        try:
+            start = int(item.get("start_char"))
+            end = int(item.get("end_char"))
+        except (TypeError, ValueError):
+            continue
+        record_id = _record_for_span(record_spans, start, end)
+        if record_id and record_id not in row["record_ids"]:
+            row["record_ids"].append(record_id)
+    return sorted(
+        buckets.values(),
+        key=lambda item: (-int(item.get("count") or 0), str(item.get("label") or "")),
+    )[:limit]
+
+
 def _records_digest(records: list[dict[str, Any]]) -> str:
     material = [
         {
@@ -154,7 +198,7 @@ class _Graph:
         row = self.nodes[node_id]
         if record_id and record_id not in row["record_ids"]:
             row["record_ids"].append(record_id)
-        row["mention_count"] = int(row.get("mention_count") or 0) + max(1, count)
+        row["mention_count"] = int(row.get("mention_count") or 0) + max(0, count)
 
     def edge(
         self,
@@ -168,12 +212,15 @@ class _Graph:
         authority_status: str = "unreviewed",
         evidence_refs: list[dict[str, Any]] | None = None,
         supporting_fields: list[str] | None = None,
+        symmetric: bool = False,
+        observation: dict[str, Any] | None = None,
     ) -> None:
         if not source or not target or source == target:
             return
-        # Observational relations are symmetric.  Canonicalize their endpoint
-        # order so repeated Records increment one edge rather than producing two.
-        if relation_kind == "observational" and source > target:
+        # Only explicitly symmetric observations (co-occurrence/dialogue
+        # proximity) canonicalize endpoint order. Agent→patient observations
+        # remain directed.
+        if symmetric and source > target:
             source, target = target, source
         key = (source, predicate, target, relation_kind)
         row = self.edges.setdefault(
@@ -189,6 +236,7 @@ class _Graph:
                 "record_ids": [],
                 "evidence_refs": [],
                 "supporting_fields": [],
+                "observations": [],
                 "count": 0,
             },
         )
@@ -202,6 +250,8 @@ class _Graph:
         row["supporting_fields"] = list(
             dict.fromkeys([*row["supporting_fields"], *(supporting_fields or [])])
         )
+        if observation and observation not in row["observations"] and len(row["observations"]) < 50:
+            row["observations"].append(observation)
         # An aggregate edge must never look more authoritative than all of
         # its supporting occurrences. One unreviewed occurrence therefore
         # downgrades a previously confirmed aggregate; any dispute dominates.
@@ -267,6 +317,29 @@ def build_semantic_content_graph(
     record_spans = [
         span for span in (analysis.get("record_spans") or []) if isinstance(span, dict)
     ]
+
+    # Attach BookNLP's character/action summaries to Fiction nodes as derived
+    # observations. Referential-gender estimates are intentionally not carried
+    # into the graph as character facts.
+    characters_by_cluster = {
+        str(item.get("cluster_id") or ""): item
+        for item in (analysis.get("characters") or [])
+        if isinstance(item, dict) and item.get("cluster_id")
+    }
+    for cluster_id, character in characters_by_cluster.items():
+        node_id = cluster_nodes.get(cluster_id)
+        if not node_id or graph.nodes[node_id].get("type") != "character":
+            continue
+        graph.nodes[node_id]["character_profile"] = {
+            "actions_as_agent": _feature_summary(
+                character.get("actions_as_agent"), record_spans
+            ),
+            "actions_as_patient": _feature_summary(
+                character.get("actions_as_patient"), record_spans
+            ),
+            "possessions": _feature_summary(character.get("possessions"), record_spans),
+            "modifiers": _feature_summary(character.get("modifiers"), record_spans),
+        }
     for mention in analysis.get("entities") or []:
         if not isinstance(mention, dict):
             continue
@@ -315,7 +388,11 @@ def build_semantic_content_graph(
             ids: list[str] = []
             for label in _values(record.get(field)):
                 node_id = metadata_node(kind, label)
-                graph.mention(node_id, record_id)
+                graph.mention(
+                    node_id,
+                    record_id,
+                    count=0 if node_id in cluster_nodes.values() else 1,
+                )
                 ids.append(node_id)
             field_nodes[field] = ids
 
@@ -339,7 +416,6 @@ def build_semantic_content_graph(
                     continue
                 node_id = cluster_nodes.get(str(mention.get("entity_id") or ""))
                 if node_id:
-                    graph.mention(node_id, record_id)
                     cooccurrence_nodes.append(node_id)
         for left, right in itertools.combinations(sorted(set(cooccurrence_nodes)), 2):
             graph.edge(
@@ -349,6 +425,7 @@ def build_semantic_content_graph(
                 relation_kind="observational",
                 record_id=record_id,
                 derivation_method="computed_cooccurrence",
+                symmetric=True,
             )
 
         # The existing scholarly attribution fields can project stronger directed
@@ -434,7 +511,69 @@ def build_semantic_content_graph(
                     relation_kind="observational",
                     record_id=record_id,
                     derivation_method="booknlp_quote_projection",
+                    symmetric=True,
                 )
+
+    # BookNLP's .book summaries identify characters that share a verb token
+    # as syntactic agent/patient. This is stronger than co-occurrence but still
+    # only a model-derived linguistic observation; it is never promoted to a
+    # literary relationship or evidence.
+    if profile == "fiction":
+        agents_by_token: defaultdict[int, list[tuple[str, dict[str, Any]]]] = defaultdict(list)
+        patients_by_token: defaultdict[int, list[tuple[str, dict[str, Any]]]] = defaultdict(list)
+        for cluster_id, character in characters_by_cluster.items():
+            node_id = cluster_nodes.get(cluster_id)
+            if not node_id:
+                continue
+            for item in character.get("actions_as_agent") or []:
+                if not isinstance(item, dict):
+                    continue
+                try:
+                    token_id = int(item.get("token_id"))
+                except (TypeError, ValueError):
+                    continue
+                agents_by_token[token_id].append((node_id, item))
+            for item in character.get("actions_as_patient") or []:
+                if not isinstance(item, dict):
+                    continue
+                try:
+                    token_id = int(item.get("token_id"))
+                except (TypeError, ValueError):
+                    continue
+                patients_by_token[token_id].append((node_id, item))
+
+        for token_id in sorted(set(agents_by_token) & set(patients_by_token)):
+            for source, agent_item in agents_by_token[token_id]:
+                for target, patient_item in patients_by_token[token_id]:
+                    if source == target:
+                        continue
+                    item = agent_item if agent_item.get("start_char") is not None else patient_item
+                    try:
+                        start = int(item.get("start_char"))
+                        end = int(item.get("end_char"))
+                    except (TypeError, ValueError):
+                        start = end = -1
+                    record_id = _record_for_span(record_spans, start, end) if start >= 0 else ""
+                    verb = str(
+                        agent_item.get("lemma")
+                        or agent_item.get("text")
+                        or patient_item.get("lemma")
+                        or patient_item.get("text")
+                        or ""
+                    ).strip()
+                    graph.edge(
+                        source,
+                        "acts_on",
+                        target,
+                        relation_kind="observational",
+                        record_id=record_id,
+                        derivation_method="booknlp_character_syntax",
+                        observation={
+                            "verb": verb,
+                            "token_id": token_id,
+                            "record_id": record_id,
+                        },
+                    )
 
     nodes = sorted(
         graph.nodes.values(),
@@ -466,7 +605,8 @@ def build_semantic_content_graph(
         },
         "epistemic_note": (
             "Observational edges report bounded computational patterns such as co-occurrence "
-            "or dialogue proximity. They do not assert a stronger scholarly relationship. "
+            "dialogue proximity, or syntactic agent/patient structure. They do not assert "
+            "a stronger scholarly or literary relationship. "
             "Semantic edges preserve the authority and evidence state of the metadata that produced them."
         ),
     }
