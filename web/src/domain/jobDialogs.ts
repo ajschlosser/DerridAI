@@ -176,6 +176,15 @@ export function createJobDialogs(deps: Deps) {
               language_mirrors: job.mirrored || {},
               receipt_count: (job.results || []).length,
             }
+          : job.type === "corpus_capture"
+            ? {
+                capture_id: job.capture_id || job.id,
+                mode: job.mode || null,
+                raw_status: job.status || null,
+                candidate_count: job.result?.candidate_count ?? job.candidate_count ?? null,
+                has_capture_state: Boolean(job.capture_id),
+                error_count: (job.errors || []).length,
+              }
           : job.type === "pdf_corpus"
             ? {
                 source_pdf: job.source_filename || null,
