@@ -11,11 +11,7 @@ export async function readDocumentIntelligence(
   buildId: string,
   options: ExecuteOptions = {},
 ): Promise<DocumentIntelligenceRun | null> {
-  const data = await execute(
-    CorpusDocumentIntelligenceDocument,
-    { build_id: buildId },
-    options,
-  );
+  const data = await execute(CorpusDocumentIntelligenceDocument, { build_id: buildId }, options);
   const value = data.corpus_build.document_intelligence;
   if (!value) return null;
   return value as DocumentIntelligenceRun;
