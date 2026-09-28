@@ -38,6 +38,9 @@ function createRecordCache() {
         store.delete(oldest);
       }
     },
+    delete(id: string) {
+      store.delete(id);
+    },
     clear() {
       store.clear();
     },
@@ -227,6 +230,11 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
         return;
       }
       const row = page.rows.find((item) => item.record_id === targetId);
+      // Metadata enrichment can change reviewer-facing proposals without advancing the
+      // Record revision. A reset is an explicit invalidation boundary (build progress,
+      // mutation, filter change), so do not let the local LRU keep an older projection
+      // alive merely because the revision hint is unchanged.
+      if (reset) cache.delete(targetId);
       await resolveAndActivate(targetId, row?.record_revision ?? null);
     } catch (exc) {
       if (!isAbortError(exc)) options.onError(messageOf(exc));
@@ -248,6 +256,16 @@ export function useCorpusReviewRecords(options: CorpusReviewRecordsOptions) {
       if (!rows.length) return;
       const byId = new Map(rows.map((row) => [row.record_id, row]));
       queueRows.value = queueRows.value.map((row) => byId.get(row.record_id) ?? row);
+
+      // A record-completed event is also an invalidation signal for the full reviewer
+      // projection. Enrichment proposals/evidence are persisted independently of
+      // RecordRevision, so keeping a same-revision cached Record is stale by design.
+      for (const row of rows) cache.delete(row.record_id);
+      const selectedId = options.selectedRecordId.value;
+      if (selectedId && byId.has(selectedId) && !options.hasActiveDraft()) {
+        const selectedRow = byId.get(selectedId);
+        await resolveAndActivate(selectedId, selectedRow?.record_revision ?? null);
+      }
     } catch (exc) {
       if (!isAbortError(exc)) options.onError(messageOf(exc));
     }
