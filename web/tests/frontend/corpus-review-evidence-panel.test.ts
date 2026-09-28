@@ -107,7 +107,7 @@ describe("Corpus Builder review evidence panel", () => {
     const buttons = wrapper.findAll(".assign-actions button");
     await buttons[0].trigger("click");
     expect(wrapper.emitted("update:selectedField")?.at(-1)).toEqual(["position_holder"]);
-    await buttons[1].trigger("click");
+    await buttons.find((button) => button.text() === "Done")!.trigger("click");
     expect(wrapper.emitted("update:selectedField")?.at(-1)).toEqual([""]);
   });
 
@@ -185,5 +185,20 @@ describe("Corpus Builder review evidence panel", () => {
     expect(wrapper.text()).not.toContain("Another record's words.");
     expect(wrapper.emitted("toggleEvidence")).toBeUndefined();
     spy.mockRestore();
+  });
+
+  it("cites spans from other records for the selected field and counts them apart", async () => {
+    const wrapper = mountPanel({
+      record: {
+        ...record,
+        metadata_evidence: {
+          speaker: { block_ids: ["block-1"], external_block_ids: ["other-1", "other-2"] },
+        },
+      },
+    });
+    expect(wrapper.get("[data-testid=external-evidence-count]").text()).toContain("2");
+    const browse = wrapper.findAll("button").find((b) => b.text() === "Cite other records…")!;
+    await browse.trigger("click");
+    expect(wrapper.emitted("browseExternal")).toHaveLength(1);
   });
 });

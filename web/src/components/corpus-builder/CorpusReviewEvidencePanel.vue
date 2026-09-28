@@ -37,6 +37,8 @@ const emit = defineEmits<{
   toggleEvidence: [blockId: string];
   /** Replace the field's cited spans with exactly these block ids (select all / clear). */
   setEvidence: [blockIds: string[]];
+  /** Open the source browser to cite (or un-cite) spans for the selected field from other records. */
+  browseExternal: [];
 }>();
 
 const i18n = useI18nStore();
@@ -140,6 +142,10 @@ const shown = computed(() => {
     )
     .sort((a, b) => rank(a.block_id) - rank(b.block_id));
 });
+// Spans cited from other records of the same source; kept apart from the record's own spans.
+const externalCount = computed(
+  () => props.record.metadata_evidence?.[props.selectedField]?.external_block_ids?.length || 0,
+);
 const selectedCount = computed(
   () => props.blocks.filter((block) => props.evidenceBlockIds.has(block.block_id)).length,
 );
@@ -208,6 +214,9 @@ function locator(block: SourceBlock) {
                 })
               : i18n.t("pdf_corpus.evidence_none_yet")
           }}</span>
+          <span v-if="externalCount" class="assign-count" data-testid="external-evidence-count">{{
+            i18n.tf("pdf_corpus.evidence_external_count", { count: externalCount })
+          }}</span>
         </div>
         <div class="assign-actions">
           <button
@@ -217,6 +226,15 @@ function locator(block: SourceBlock) {
             @click="emit('update:selectedField', nextMissing)"
           >
             {{ i18n.t("pdf_corpus.evidence_next_field") }}
+          </button>
+          <button
+            type="button"
+            class="btn small"
+            :disabled="props.disabled"
+            :title="i18n.t('pdf_corpus.browse_evidence_help')"
+            @click="emit('browseExternal')"
+          >
+            {{ i18n.t("pdf_corpus.browse_evidence") }}
           </button>
           <button type="button" class="btn small" @click="emit('update:selectedField', '')">
             {{ i18n.t("pdf_corpus.evidence_done") }}

@@ -17,6 +17,8 @@ const props = defineProps<{
   recordBlockIds: string[];
   fieldLabel: string;
   busy?: boolean;
+  /** Spans already cited from other records, ticked on open so confirming can also remove them. */
+  initialChosen?: string[];
 }>();
 const emit = defineEmits<{ close: []; confirm: [blockIds: string[]] }>();
 const i18n = useI18nStore();
@@ -27,7 +29,7 @@ const total = ref(0);
 const loading = ref(false);
 const error = ref("");
 const query = ref("");
-const chosen = ref<string[]>([]);
+const chosen = ref<string[]>([...(props.initialChosen || []).map(String)]);
 const own = computed(() => new Set(props.recordBlockIds.map(String)));
 
 const shown = computed(() => {
@@ -151,7 +153,7 @@ function locator(block: SourceBlock) {
       <button
         type="button"
         class="btn primary"
-        :disabled="!chosen.length || busy"
+        :disabled="(!chosen.length && !initialChosen?.length) || busy"
         @click="emit('confirm', chosen)"
       >
         {{ i18n.t("pdf_corpus.evidence_browser_confirm") }}

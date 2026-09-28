@@ -262,7 +262,64 @@ describe("Corpus Builder metadata review", () => {
       1,
       expect.any(String),
       1,
+      [],
     );
+  });
+
+  it("keeps spans cited from other records when the record's own evidence changes", async () => {
+    const state = setup();
+    state.selectedRecord.value = row({
+      metadata_evidence: {
+        speaker: { block_ids: ["block-1"], external_block_ids: ["other-9"], confidence: 1 },
+      },
+    });
+    state.selectedEvidenceField.value = "speaker";
+
+    await state.review.toggleEvidenceBlock("block-2");
+
+    expect(state.selectedRecord.value?.metadata_evidence?.speaker?.external_block_ids).toEqual([
+      "other-9",
+    ]);
+    await state.queued[0](false);
+    expect(corpusBuilderApi.patchEvidence).toHaveBeenLastCalledWith(
+      "b1",
+      "r1",
+      "speaker",
+      ["block-1", "block-2"],
+      1,
+      expect.any(String),
+      expect.any(Number),
+      ["other-9"],
+    );
+  });
+
+  it("replaces only a field's other-record spans from the Evidence tab", async () => {
+    const state = setup();
+    state.selectedRecord.value = row({
+      speaker: "Levinas",
+      metadata_evidence: {
+        speaker: { block_ids: ["block-1"], external_block_ids: ["other-9"], confidence: 1 },
+      },
+    });
+
+    await state.review.setExternalEvidenceBlocks("speaker", ["other-3", "other-4"]);
+
+    const evidence = state.selectedRecord.value?.metadata_evidence?.speaker;
+    expect(evidence?.block_ids).toEqual(["block-1"]);
+    expect(evidence?.external_block_ids).toEqual(["other-3", "other-4"]);
+    expect(state.selectedRecord.value?.speaker).toBe("Levinas");
+    await state.queued[0](false);
+    expect(corpusBuilderApi.patchEvidence).toHaveBeenLastCalledWith(
+      "b1",
+      "r1",
+      "speaker",
+      ["block-1"],
+      1,
+      expect.any(String),
+      expect.any(Number),
+      ["other-3", "other-4"],
+    );
+    expect(corpusBuilderApi.patchMetadata).not.toHaveBeenCalled();
   });
 
   it("opens the Evidence tab and the matching source page", () => {
