@@ -198,7 +198,7 @@ describe("useCorpusReviewRecords", () => {
     expect(speakerEvidence?.block_ids).toEqual(["b1"]);
   });
 
-  it("force-refreshes the selected Record on a reset even when its revision is unchanged", async () => {
+  it("force-refreshes a same-revision Record on reset", async () => {
     const state = setup();
     corpusReviewReads.queuePage.mockResolvedValue(page([row("r1", 1)]));
     corpusReviewReads.records
