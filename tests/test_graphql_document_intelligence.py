@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "api"))
 import httpx  # noqa: E402
 from app import main  # noqa: E402
 from app.auth import auth_store  # noqa: E402
-from app.celf_queries import source_documents as document_queries  # noqa: E402
+from app.celf_queries import document_intelligence_reads, source_documents as document_queries  # noqa: E402
 from app.celf_queries.access import AccessContext, AccessDenied  # noqa: E402
 from app.corpus_builder import PdfCorpusRepository  # noqa: E402
 from app.routers import corpus as corpus_routes  # noqa: E402
@@ -26,6 +26,64 @@ USERS = {
     "admin-cookie": SimpleNamespace(id=1, username="root", role="admin", active=True),
     "researcher-cookie": SimpleNamespace(id=2, username="reader", role="researcher", active=True),
 }
+
+
+class BuildIntelligence:
+    def document_intelligence(self, build_id: str):
+        if build_id == "build-empty":
+            return {}
+        if build_id != "build-1":
+            raise KeyError(build_id)
+        return {
+            "version": 1,
+            "status": "ok",
+            "profile": "scholarly",
+            "selected_provider": "auto",
+            "provider": "spacy",
+            "provider_version": "3.8",
+            "model": "en_core_web_sm",
+            "capabilities": ["entities"],
+            "model_artifacts": [
+                {"role": "ner", "name": "en_core_web_sm", "sha256": "ab" * 32}
+            ],
+            "configuration": {"include_events": False},
+            "text_sha256": "11" * 32,
+            "current_text_sha256": "11" * 32,
+            "text_length": 100,
+            "stale": False,
+            "warnings": [],
+            "record_spans": [
+                {
+                    "record_id": "r1",
+                    "record_revision": 2,
+                    "start": 0,
+                    "end": 100,
+                    "text_sha256": "22" * 32,
+                    "source_unit_ids": ["b1"],
+                }
+            ],
+            "entity_clusters": [
+                {
+                    "cluster_id": "person:derrida",
+                    "canonical": "Jacques Derrida",
+                    "aliases": ["Derrida"],
+                    "entity_type": "PERSON",
+                }
+            ],
+            "entities": [
+                {
+                    "cluster_id": "person:derrida",
+                    "start_char": 0,
+                    "end_char": 15,
+                    "text": "Jacques Derrida",
+                    "mention_type": "named",
+                    "entity_type": "PERSON",
+                }
+            ],
+            "quotations": [],
+            "characters": [],
+            "events": [],
+        }
 
 
 class CaptureLinks:
@@ -76,6 +134,14 @@ def gql(query: str, variables: dict | None = None, *, cookie: str = "admin-cooki
         cookie=cookie,
         json={"query": query, "variables": variables or {}},
     )
+
+
+@pytest.fixture()
+def build_intelligence(monkeypatch):
+    service = BuildIntelligence()
+    monkeypatch.setattr(document_intelligence_reads, "pdf_corpus_builds", service)
+    monkeypatch.setattr(corpus_routes, "pdf_corpus_builds", service)
+    return service
 
 
 @pytest.fixture()
@@ -239,3 +305,60 @@ def test_document_intelligence_is_admin_only(source_repo):
             AccessContext(username="reader", role="researcher", user_id=2),
             asset["asset_id"],
         )
+
+DOCUMENT_INTELLIGENCE_QUERY = """
+query BuildDocumentIntelligence($id: String!) {
+  corpus_build(build_id: $id) {
+    document_intelligence {
+      version
+      status
+      profile
+      selected_provider
+      provider
+      provider_version
+      model
+      capabilities
+      text_sha256
+      current_text_sha256
+      text_length
+      stale
+      warnings
+      model_artifacts { role name sha256 }
+      record_spans { record_id record_revision start end text_sha256 source_unit_ids }
+      entity_clusters { cluster_id canonical aliases entity_type }
+      entities { cluster_id start_char end_char text mention_type entity_type }
+      quotations { start_char end_char text speaker_cluster_id speaker_text }
+      characters
+      events
+    }
+  }
+}
+"""
+
+
+def test_build_document_intelligence_graphql_matches_rest_read(build_intelligence):
+    rest = _call("GET", "/api/pdf/corpus-builds/build-1/document-intelligence")
+    assert rest.status_code == 200
+
+    response = gql(DOCUMENT_INTELLIGENCE_QUERY, {"id": "build-1"})
+    assert response.status_code == 200
+    body = response.json()
+    assert "errors" not in body, body
+    value = body["data"]["corpus_build"]["document_intelligence"]
+
+    assert value["status"] == rest.json()["status"] == "ok"
+    assert value["profile"] == rest.json()["profile"] == "scholarly"
+    assert value["provider"] == rest.json()["provider"] == "spacy"
+    assert value["stale"] is False
+    assert value["entity_clusters"][0]["canonical"] == "Jacques Derrida"
+    assert value["record_spans"][0]["source_unit_ids"] == ["b1"]
+
+
+def test_build_document_intelligence_graphql_is_null_before_analysis(build_intelligence):
+    response = gql(DOCUMENT_INTELLIGENCE_QUERY, {"id": "build-empty"})
+    assert response.status_code == 200
+    body = response.json()
+    assert "errors" not in body, body
+    assert body["data"]["corpus_build"]["document_intelligence"] is None
+
+
