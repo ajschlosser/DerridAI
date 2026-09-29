@@ -1,4 +1,9 @@
-import type { PipelineAssignment, PipelineDefinition, PipelineRunTrace, PipelineStrategy } from "./pipelines";
+import type {
+  PipelineAssignment,
+  PipelineDefinition,
+  PipelineRunTrace,
+  PipelineStrategy,
+} from "./pipelines";
 
 export type ResearchStore = {
   name: string;
