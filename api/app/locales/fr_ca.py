@@ -7910,8 +7910,12 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
                                  'lorsqu’un problème précis survient.'),
  'pipelines.definitions_help': ('Chaque ligne représente une version immuable. Plusieurs lignes peuvent partager le même ID de '
                                  'pipeline parce que l’historique des versions est conservé au lieu d’être écrasé.'),
- 'pipelines.deterministic_help': ('Cette étape suit une logique de programme fixe plutôt que de demander à un modèle de langage '
-                                   'de décider du résultat. Les mêmes entrées et la même configuration devraient donner le même résultat.'),
+ 'pipelines.deterministic_help': ('Cette étape suit une logique de programme fixe plutôt que d’utiliser un modèle appris pour noter '
+                                   'ou générer un résultat. Les mêmes entrées et la même configuration devraient donner le même résultat.'),
+ 'pipelines.learned_model': 'Modèle appris',
+ 'pipelines.learned_model_help': ('Cette étape utilise un modèle statistique ou d’apprentissage automatique, par exemple un modèle '
+                                  'd’embeddings ou un encodeur croisé, mais il ne s’agit pas d’une étape de génération par LLM. '
+                                  'Le résultat dépend donc d’un modèle plutôt que de règles entièrement fixes.'),
  'pipelines.enabled_help': ('Lorsqu’elle est désactivée, l’étape demeure dans la définition enregistrée à titre de référence, '
                              'mais ne fait pas partie du graphe exécutable.'),
  'pipelines.entry_stage_help': ('Une étape d’entrée est le point de départ de l’exécution. La plupart des pipelines de recherche '
@@ -7923,8 +7927,9 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
                                       'des paramètres, ainsi que les autres règles vérifiables avant l’exécution.'),
  'pipelines.how_to_read_chain': 'Comment lire cette chaîne',
  'pipelines.how_to_read_chain_help': ('Lisez depuis l’étape d’entrée en suivant chaque connexion « puis ». Une étiquette de repli '
-                                       'indique un parcours d’exception. Les étapes déterministes utilisent une logique fixe; '
-                                       'les étapes LLM appellent un modèle de langage et peuvent varier d’une exécution à l’autre.'),
+                                       'indique un parcours d’exception. Les étapes déterministes utilisent des règles fixes, les étapes '
+                                       '« modèle appris » utilisent un modèle d’apprentissage automatique non génératif, et les étapes '
+                                       'LLM appellent un modèle de langage génératif.'),
  'pipelines.invokes_llm_help': ('Cette étape appelle un modèle de langage configuré. Sa sortie peut varier entre les exécutions; '
                                  'DerridAI enregistre donc le modèle et la trace d’exécution pour l’audit.'),
  'pipelines.name_help': ('Titre lisible pour les administrateurs et les chercheurs. Modifier ce nom ne change pas l’ID technique '
