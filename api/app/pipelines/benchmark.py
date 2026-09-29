@@ -208,8 +208,34 @@ def benchmark_corpus_snapshot(
         _collection_snapshot(selected[name])
         for name in sorted(selected, key=str.casefold)
     ]
+    # The drift fingerprint intentionally excludes timestamps, status labels,
+    # source display labels, and app version: those can change without changing
+    # the retrievable corpus/index. They remain in the retained manifest for
+    # audit context, while the fingerprint binds content/build/embedding identity.
+    fingerprint_fields = (
+        "name",
+        "storage_name",
+        "count",
+        "manifest_version",
+        "embedding_provider",
+        "embedding_model",
+        "embedding_dimension",
+        "embedding_revision",
+        "distance_metric",
+        "retrieval_mode",
+        "build_id",
+        "source_record_count",
+        "source_snapshot_hash",
+    )
     canonical = json.dumps(
-        [row.model_dump(mode="json") for row in snapshots],
+        [
+            {
+                key: getattr(row, key)
+                for key in fingerprint_fields
+                if getattr(row, key) is not None
+            }
+            for row in snapshots
+        ],
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
