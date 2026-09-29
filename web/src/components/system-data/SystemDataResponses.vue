@@ -1,7 +1,7 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
+import { computed, onMounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import AppIcon from "../AppIcon.vue";
 import { systemApi, type SystemResponseCachePage } from "../../api/system";
 import * as runtime from "../../runtime/runtimeBridge";
@@ -9,6 +9,7 @@ import { useI18nStore } from "../../stores/i18n";
 
 type DataRow = Record<string, unknown>;
 
+const route = useRoute();
 const router = useRouter();
 const i18n = useI18nStore();
 const page = ref<SystemResponseCachePage>({
@@ -16,11 +17,11 @@ const page = ref<SystemResponseCachePage>({
   records: [],
   total: 0,
   limit: 25,
-  offset: 0,
+  offset: Math.max(0, Number(route.query.offset) || 0),
 });
 const loading = ref(false);
 const error = ref("");
-const query = ref("");
+const query = ref(String(route.query.q || ""));
 const resultCount = computed(() =>
   page.value.query?.trim() ? Number(page.value.count ?? 0) : Number(page.value.total || 0),
 );
@@ -59,7 +60,21 @@ function grade(record: DataRow) {
   return value ? String(value) : t("runtime.system_not_graded", "Not graded");
 }
 
-async function load(offset = 0) {
+function syncRoute(offset: number, push = false) {
+  const target = {
+    name: "system-data-responses",
+    query: {
+      ...route.query,
+      q: query.value.trim() || undefined,
+      offset: offset > 0 ? String(offset) : undefined,
+    },
+  };
+  if (push) void router.push(target);
+  else void router.replace(target);
+}
+
+async function load(offset = 0, updateRoute = true, push = false) {
+  if (updateRoute) syncRoute(offset, push);
   loading.value = true;
   error.value = "";
   try {
@@ -117,7 +132,18 @@ async function clearAll() {
   }
 }
 
-onMounted(() => void load(0));
+watch(
+  () => [route.query.q, route.query.offset],
+  ([nextQuery, nextOffset]) => {
+    const q = String(nextQuery || "");
+    const offset = Math.max(0, Number(nextOffset) || 0);
+    if (q === query.value && offset === page.value.offset) return;
+    query.value = q;
+    void load(offset, false);
+  },
+);
+
+onMounted(() => void load(Math.max(0, Number(route.query.offset) || 0), false));
 </script>
 
 <template>
@@ -250,7 +276,7 @@ onMounted(() => void load(0));
           class="btn tiny"
           type="button"
           :disabled="loading || page.offset <= 0"
-          @click="load(Math.max(0, page.offset - page.limit))"
+          @click="load(Math.max(0, page.offset - page.limit), true, true)"
         >
           {{ t("common.previous", "Previous") }}
         </button>
@@ -258,7 +284,7 @@ onMounted(() => void load(0));
           class="btn tiny"
           type="button"
           :disabled="loading || page.offset + page.records.length >= resultCount"
-          @click="load(page.offset + page.limit)"
+          @click="load(page.offset + page.limit, true, true)"
         >
           {{ t("common.next", "Next") }}
         </button>
