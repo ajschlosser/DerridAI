@@ -12,6 +12,7 @@ from ..models import RAGRunRequest
 from ..pipelines.access import resolve_research_pipeline
 from ..pipelines.benchmark import (
     BenchmarkCorpusDriftError,
+    ResearchPipelineBenchmarkCase,
     ResearchPipelineBenchmarkCaseCreate,
     ResearchPipelineBenchmarkRequest,
     assert_benchmark_corpus_unchanged,
@@ -283,24 +284,58 @@ def compare_research_pipelines(
     return compare_research_dry_runs(left, right)
 
 
+def _same_benchmark_fixture(
+    case: ResearchPipelineBenchmarkCase,
+    body: ResearchPipelineBenchmarkCaseCreate,
+    *,
+    corpus_fingerprint: str,
+) -> bool:
+    """Treat identical case creation as idempotent without permitting mutation."""
+
+    existing = case.model_dump(mode="json")
+    requested = body.model_dump(mode="json")
+    return (
+        all(existing.get(key) == value for key, value in requested.items())
+        and case.corpus_snapshot.fingerprint == corpus_fingerprint
+    )
+
+
 @router.post("/benchmarks/research/cases")
 def create_research_pipeline_benchmark_case(
     body: ResearchPipelineBenchmarkCaseCreate,
     request: Request,
 ) -> dict[str, Any]:
-    """Create one immutable retrieval-only benchmark fixture."""
+    """Create one immutable retrieval-only benchmark fixture.
+
+    Re-submitting the exact same fixed input and corpus/index fingerprint is
+    idempotent so the case can be reused for multiple pipeline comparisons.
+    Any change requires a new case version.
+    """
 
     user = require_admin(request)
     try:
-        case = build_research_benchmark_case(
+        candidate = build_research_benchmark_case(
             body,
             store=store,
             created_by=user.username,
         )
-        pipeline_store.put_benchmark_case(case)
+        existing = pipeline_store.get_benchmark_case(body.case_id, body.version)
+        if existing is not None:
+            if not _same_benchmark_fixture(
+                existing,
+                body,
+                corpus_fingerprint=candidate.corpus_snapshot.fingerprint,
+            ):
+                raise ValueError(
+                    f"Benchmark case {body.case_id}@{body.version} already exists "
+                    "with different fixed inputs or corpus/index identity. Create "
+                    "a new case version."
+                )
+            return {"case": existing.model_dump(mode="json"), "created": False}
+        case = pipeline_store.put_benchmark_case(candidate)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return {"case": case.model_dump(mode="json")}
+    return {"case": case.model_dump(mode="json"), "created": True}
 
 
 @router.get("/benchmarks/research/cases")
