@@ -28,6 +28,18 @@ Before continuing substantial work, sync this branch with current `master` and r
 
 All work described below is already committed to the remote branch. No uncommitted local work is required for the handoff.
 
+
+### Progress update — 2026-09-29
+
+The branch has now been synchronized with `master` at `db0eeb9daae3d8847fd119299b7c7a7d535ceb20` by merge commit `8ac4be754d4b97576fe004b4691e94b7315d58d1`. The first post-handoff implementation pass has also started:
+
+- `UiTooltip` now supports a compact content-trigger mode so status chips can expose help without adding a second information icon.
+- `UiStatusBadge` no longer uses native `title` for its `help` text.
+- `UiHealthChip` no longer uses native `title` for its `detail` text.
+- Focused Vitest coverage now checks keyboard focus, Escape, click/touch-style toggling, accessible descriptions, and the absence of native-title help on these primitives.
+
+The next priority remains the repository-wide native-title / disabled-reason audit, followed by Corpus Builder and Record Review.
+
 ## Files currently changed on the branch
 
 The current branch differs from `master` in these files:
