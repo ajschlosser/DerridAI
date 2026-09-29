@@ -52,3 +52,5 @@ jobs:
           git add src/App.vue src/components/shell/NavigationCommandPalette.vue src/components/shell/SidebarUtilityNav.vue src/domain/navigation.ts src/runtime/runtime.js tests/frontend/sidebar-startup.test.ts
           git commit -m "Format navigation files"
           git push origin HEAD:feature/navigation-ia
+
+# trigger formatter after workflow registration
