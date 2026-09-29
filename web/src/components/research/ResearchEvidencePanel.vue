@@ -178,34 +178,30 @@ function selectedRows(item: ResearchEvidenceSelection) {
     </header>
 
     <template v-if="showingResult">
-      <div
-        class="research-evidence-index"
-        role="list"
-        :aria-label="i18n.t('research.evidence_list')"
-      >
-        <button
-          v-for="(item, index) in resultEvidence"
-          :key="item.evidence_id || index"
-          type="button"
-          role="listitem"
-          :class="{ active: index === activeIndex }"
-          @click="emit('select', index)"
-        >
-          <span class="research-evidence-tag">{{ item.evidence_id || `E${index}` }}</span>
-          <span
-            ><b>{{
-              display(item.record?.work) ||
-              display(item.record?.record_id) ||
-              i18n.t("research.evidence")
-            }}</b
-            ><small
-              ><template v-if="pageLabel(item.record || {})"
-                >pp. {{ pageLabel(item.record || {}) }} · </template
-              >{{ item.inline_citation || item.collection || "" }}</small
-            ></span
+      <ul class="research-evidence-index" :aria-label="i18n.t('research.evidence_list')">
+        <li v-for="(item, index) in resultEvidence" :key="item.evidence_id || index">
+          <button
+            type="button"
+            :class="{ active: index === activeIndex }"
+            :aria-current="index === activeIndex ? 'true' : undefined"
+            @click="emit('select', index)"
           >
-        </button>
-      </div>
+            <span class="research-evidence-tag">{{ item.evidence_id || `E${index}` }}</span>
+            <span
+              ><b>{{
+                display(item.record?.work) ||
+                display(item.record?.record_id) ||
+                i18n.t("research.evidence")
+              }}</b
+              ><small
+                ><template v-if="pageLabel(item.record || {})"
+                  >pp. {{ pageLabel(item.record || {}) }} · </template
+                >{{ item.inline_citation || item.collection || "" }}</small
+              ></span
+            >
+          </button>
+        </li>
+      </ul>
       <section v-if="active" class="research-evidence-inspector" aria-live="polite">
         <div class="research-evidence-inspector-head">
           <span class="research-evidence-tag large">{{
