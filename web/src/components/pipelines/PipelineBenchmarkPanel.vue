@@ -401,7 +401,9 @@ function seconds(value: number | null | undefined) {
               <code>{{ benchmark.benchmark_run_id }}</code>
             </div>
             <div>
-              <span>{{\n                t("pipelines.benchmark_corpus_fingerprint", "Corpus/index fingerprint")\n              }}</span>
+              <span>{{
+                t("pipelines.benchmark_corpus_fingerprint", "Corpus/index fingerprint")
+              }}</span>
               <code>{{ benchmark.corpus.fingerprint }}</code>
             </div>
           </div>
