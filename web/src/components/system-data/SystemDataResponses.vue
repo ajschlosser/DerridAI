@@ -22,6 +22,7 @@ const page = ref<SystemResponseCachePage>({
 const loading = ref(false);
 const error = ref("");
 const query = ref(String(route.query.q || ""));
+const requestedOffset = ref(Math.max(0, Number(route.query.offset) || 0));
 const resultCount = computed(() =>
   page.value.query?.trim() ? Number(page.value.count ?? 0) : Number(page.value.total || 0),
 );
@@ -74,6 +75,7 @@ function syncRoute(offset: number, push = false) {
 }
 
 async function load(offset = 0, updateRoute = true, push = false) {
+  requestedOffset.value = offset;
   if (updateRoute) syncRoute(offset, push);
   loading.value = true;
   error.value = "";
@@ -137,7 +139,7 @@ watch(
   ([nextQuery, nextOffset]) => {
     const q = String(nextQuery || "");
     const offset = Math.max(0, Number(nextOffset) || 0);
-    if (q === query.value && offset === page.value.offset) return;
+    if (q === query.value && offset === requestedOffset.value) return;
     query.value = q;
     void load(offset, false);
   },
