@@ -115,10 +115,6 @@ function seconds(value: number | null | undefined) {
   return `${value.toFixed(value < 10 ? 2 : 1)} s`;
 }
 
-function count(side: "left" | "right", key: string) {
-  const value = result.value?.[side].retrieval?.[key];
-  return typeof value === "number" ? value : null;
-}
 </script>
 
 <template>
