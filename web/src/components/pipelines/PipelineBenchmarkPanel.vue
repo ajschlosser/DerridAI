@@ -196,7 +196,10 @@ function seconds(value: number | null | undefined) {
 
       <p v-if="error" class="benchmark-error" role="alert">{{ error }}</p>
 
-      <section class="case-editor" :aria-label="t('pipelines.benchmark_new_case', 'New benchmark case')">
+      <section
+        class="case-editor"
+        :aria-label="t('pipelines.benchmark_new_case', 'New benchmark case')"
+      >
         <div class="case-grid">
           <label>
             <span>{{ t("pipelines.benchmark_id", "Case ID") }}</span>
@@ -213,9 +216,7 @@ function seconds(value: number | null | undefined) {
               v-model="name"
               type="text"
               maxlength="200"
-              :placeholder="
-                t('pipelines.benchmark_name_placeholder', 'Core trace retrieval case')
-              "
+              :placeholder="t('pipelines.benchmark_name_placeholder', 'Core trace retrieval case')"
             />
           </label>
           <label class="question-field">
@@ -248,13 +249,7 @@ function seconds(value: number | null | undefined) {
         <button
           class="btn"
           type="button"
-          :disabled="
-            saving ||
-            !benchmarkId.trim() ||
-            !name.trim() ||
-            !prompt.trim() ||
-            !collection
-          "
+          :disabled="saving || !benchmarkId.trim() || !name.trim() || !prompt.trim() || !collection"
           @click="saveCase"
         >
           {{
@@ -357,7 +352,9 @@ function seconds(value: number | null | undefined) {
             <strong>
               {{ result.case.name }} · {{ result.benchmark_id }}@{{ result.benchmark_version }}
             </strong>
-            <span><code>{{ result.benchmark_run_id }}</code></span>
+            <span
+              ><code>{{ result.benchmark_run_id }}</code></span
+            >
           </div>
           <span>
             {{
