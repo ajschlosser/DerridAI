@@ -25,7 +25,7 @@ const systemDataRoute = (
   },
 });
 
-const routes: RouteRecordRaw[] = [
+export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/",
     name: "home",
@@ -476,7 +476,7 @@ const routes: RouteRecordRaw[] = [
 
 const router = createRouter({
   history: createWebHistory(),
-  routes,
+  routes: APP_ROUTES,
   scrollBehavior: (to, from, savedPosition) =>
     savedPosition ?? (to.path === from.path ? false : { top: 0 }),
 });
