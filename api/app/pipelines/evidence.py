@@ -323,8 +323,18 @@ def _candidate_decision(item: dict[str, Any], decision: str) -> dict[str, Any]:
             payload[key] = item[key]
     signals = item.get("signals") if isinstance(item.get("signals"), dict) else {}
     support = signals.get("support") if isinstance(signals.get("support"), dict) else {}
-    if support.get("reason"):
-        payload["reason"] = str(support["reason"])[:500]
+    provenance = (
+        signals.get("provenance")
+        if isinstance(signals.get("provenance"), dict)
+        else {}
+    )
+    reason = (
+        provenance.get("reason")
+        if decision == "rejected_provenance"
+        else support.get("reason")
+    )
+    if reason:
+        payload["reason"] = str(reason)[:500]
     return payload
 
 
