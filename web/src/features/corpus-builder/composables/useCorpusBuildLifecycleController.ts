@@ -7,7 +7,6 @@ import {
   type PdfAsset,
 } from "../../../api/corpus";
 import * as runtime from "../../../runtime/runtime.js";
-import { realtime } from "../../../realtime";
 import { followResource } from "../../../realtime/follow";
 import type {
   CorpusBuildEvent,
