@@ -91,7 +91,9 @@ export const DenseAnswerEvidence: Story = {
         stance: "analysis",
         discourse_role: "engagement",
         text:
-          "This deliberately long evidence passage demonstrates the compact inspector. ".repeat(24) +
+          "This deliberately long evidence passage demonstrates the compact inspector. ".repeat(
+            24,
+          ) +
           "The full passage remains available without forcing the evidence rail to consume the entire viewport.",
         concepts: ["responsibility", "decision", "other"],
       },
