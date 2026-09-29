@@ -37,6 +37,7 @@ const emit = defineEmits<{
   ocr: [];
   history: [];
   pdf: [];
+  semanticMap: [];
 }>();
 const i18n = useI18nStore();
 const menuOpen = ref(false);
@@ -113,6 +114,9 @@ function act(fn: () => void) {
         @click="emit('edit')"
       >
         <AppIcon name="edit" />{{ i18n.t("record.edit") }}
+      </button>
+      <button type="button" class="record-primary-action" @click="emit('semanticMap')">
+        <AppIcon name="map" />{{ i18n.t("semantic_map.open") }}
       </button>
       <details class="record-shortcuts">
         <summary :title="i18n.t('record.keyboard_shortcuts')">?</summary>

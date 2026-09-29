@@ -8,12 +8,16 @@ import RecordWorkspaceHeader from "../components/record/RecordWorkspaceHeader.vu
 import RecordReadingPane from "../components/record/RecordReadingPane.vue";
 import RecordInspector from "../components/record/RecordInspector.vue";
 import RecordEditSheet from "../components/record/RecordEditSheet.vue";
+import SemanticMapFrame from "../components/semantic/SemanticMapFrame.vue";
 import type { RecordWorkspaceSnapshot } from "../types/record";
+import type { SemanticMapSource } from "../domain/semanticMap";
 import type { DerridaiNormativeModel, ResearchObjectGraph } from "../types/researchObjectGraph";
+import { useSemanticMapStore } from "../stores/semanticMap";
 import { annotationsService } from "../services/annotations";
 
 const i18n = useI18nStore();
 const shell = useShellStore();
+const semanticMap = useSemanticMapStore();
 const route = useRoute();
 const snapshot = ref<RecordWorkspaceSnapshot>({ available: false, mode: "workspace" });
 const loading = ref(true);
@@ -38,6 +42,27 @@ const annotationNote = ref("");
 const annotationTags = ref("");
 const annotationField = ref("text");
 const annotationError = ref("");
+const semanticSources = ref<SemanticMapSource[]>([]);
+const semanticFocus = ref("");
+const showRecordMap = computed(
+  () => semanticMap.enabled && semanticMap.placement === "record" && snapshot.value.available,
+);
+
+function loadSemanticMap() {
+  try {
+    const data = runtime.listSemanticMapSources();
+    semanticSources.value = data?.records || [];
+    semanticFocus.value = data?.focusId || String(snapshot.value.record_id || "");
+  } catch {
+    semanticSources.value = [];
+    semanticFocus.value = String(snapshot.value.record_id || "");
+  }
+}
+function openSemanticMap() {
+  semanticMap.enable(semanticMap.placement);
+  loadSemanticMap();
+  if (semanticMap.placement === "page") runtime.navigateView("semanticmap");
+}
 
 const record = computed(() => snapshot.value.record || {});
 const work = computed(() =>
@@ -102,6 +127,7 @@ async function load() {
   try {
     snapshot.value = (await runtime.getRecordWorkspaceSnapshot()) as RecordWorkspaceSnapshot;
     void loadTraceability(snapshot.value);
+    loadSemanticMap();
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);
   } finally {
@@ -310,6 +336,14 @@ onBeforeUnmount(() => {
         @ocr="action('ocr')"
         @history="action('history')"
         @pdf="action('pdf_explorer')"
+        @semantic-map="openSemanticMap"
+      />
+
+      <SemanticMapFrame
+        v-if="showRecordMap"
+        variant="record"
+        :sources="semanticSources"
+        :focus-id="semanticFocus"
       />
 
       <div class="record-context-strip" :aria-label="i18n.t('record.status')">

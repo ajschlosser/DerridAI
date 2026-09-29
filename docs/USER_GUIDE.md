@@ -60,6 +60,19 @@ Dashboard charts include legends, graded horizontal axes/gridlines, and date/yea
 
 The `needs_review` historical chart reconstructs prior state from the current record plus audited `needs_review` changes when that history exists.
 
+## Corpus term map
+
+This map is separate from the Record review **Semantic map** tab, which walks entities and relations inside a corpus build. The corpus term map draws concepts, topics, and persons that occur together in the corpus you can already see. It does not show record text. Drag the background to move the map. Drag a term to reposition it. Arrow keys pan the map, plus and minus change the zoom, and 0 resets the view.
+
+Open it from **Record view** or from **More tools → Semantic map**. Administrators can open it immediately. A new installation includes it for the Researcher role. On an installation that already has roles, turn on **Semantic map** under **Roles & permissions**. The placement control keeps the same map in one of four places:
+
+- **Sidebar** — a panel beside the current page
+- **Above the record** — a band on the record you are reading
+- **Large dialog** — a wide overlay you can dismiss
+- **Dedicated view** — the Semantic map page
+
+The choice is remembered in this browser.
+
 ## Background operations
 
 Background operations are managed from Dashboard and also appear in the global operations dock. The dock is attached to the top bar by default whenever there is something to show.

@@ -72,6 +72,7 @@ export const viewConfig = [
   { id: "works", label: "Works", icon: "books", section: "Corpus" },
   { id: "global", label: "Search", icon: "search", section: "Corpus" },
   { id: "annotations", label: "Annotations", icon: "record", section: "Corpus" },
+  { id: "semanticmap", label: "Semantic map", icon: "map", section: "Corpus" },
   { id: "pdf", label: "Corpus Builder", icon: "pdf", section: "Tools" },
   { id: "compare", label: "Compare", icon: "compare", section: "Tools" },
   { id: "vector", label: "Corpus Data", icon: "database", section: "Tools" },

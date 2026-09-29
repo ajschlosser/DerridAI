@@ -31,6 +31,7 @@ export const viewPathMap: Record<string, string> = {
   works: "/works",
   global: "/search",
   annotations: "/annotations",
+  semanticmap: "/semantic-map",
   pdf: "/pdf",
   compare: "/compare",
   vector: "/databases",

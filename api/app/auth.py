@@ -42,6 +42,7 @@ CAPABILITY_CATALOG: dict[str, dict[str, str | bool]] = {
     "page.works": {"category": "Pages", "label": "Works", "description": "Browse works exposed by corpus databases.", "researcher_default": True},
     "page.search": {"category": "Pages", "label": "Search", "description": "Open corpus/global search.", "researcher_default": True},
     "page.annotations": {"category": "Pages", "label": "Annotations", "description": "Open the annotations workspace.", "researcher_default": True},
+    "page.semantic_map": {"category": "Pages", "label": "Semantic map", "description": "Open the semantic map of concepts, topics, and persons.", "researcher_default": True},
     "page.compare": {"category": "Pages", "label": "Compare", "description": "Compare researcher-visible records.", "researcher_default": True},
     "page.vector": {"category": "Pages", "label": "Corpus database", "description": "Browse researcher-visible vector collections.", "researcher_default": True},
     "page.research": {"category": "Pages", "label": "Research", "description": "Open the evidence-grounded Research workspace.", "researcher_default": True},

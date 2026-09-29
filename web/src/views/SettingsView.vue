@@ -899,6 +899,12 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                 @click="go('/annotations', 'annotations')"
               />
               <UiButton
+                v-if="auth.can('page.semantic_map')"
+                icon="map"
+                :label="i18n.t('nav.semantic_map')"
+                @click="go('/semantic-map', 'semanticmap')"
+              />
+              <UiButton
                 v-if="auth.can('page.research')"
                 icon="spark"
                 :label="i18n.t('nav.rag')"

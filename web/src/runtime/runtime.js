@@ -150,6 +150,7 @@ import { createCompareLibrary } from "../domain/compareLibrary";
 import { createBackupWorkspace } from "../domain/backupWorkspace";
 import { createResearchWorkspace } from "../domain/researchWorkspace";
 import { createAnnotationsWorkspace } from "../domain/annotationsWorkspace";
+import { slimSemanticSource } from "../domain/semanticMap";
 import { subscribeToJobChanges, touchJobs } from "../state/jobsState";
 import { touchCorpus } from "../state/workspaceState";
 import { createRuntimeState } from "./runtimeState";
@@ -1128,6 +1129,7 @@ function currentContext() {
       "Annotations",
       "Review annotations by work or in recent-activity order",
     ],
+    semanticmap: ["Corpus", "Semantic map", "Concepts, topics, and persons that occur together"],
     pdf: [
       "Tools",
       state.pdf.title || "Corpus Builder",
@@ -1357,6 +1359,7 @@ const pageCapabilities = {
   works: "page.works",
   global: "page.search",
   annotations: "page.annotations",
+  semanticmap: "page.semantic_map",
   pdf: "page.pdf",
   compare: "page.compare",
   vector: "page.vector",
@@ -2709,6 +2712,39 @@ async function syncResearcherProviderProfiles() {
   state.researcherProviderProfiles = result.profiles || [];
 }
 
+function listSemanticMapSources() {
+  const seen = new Set();
+  const records = [];
+  const push = (record) => {
+    const slim = slimSemanticSource(record);
+    if (!slim) return;
+    const key =
+      slim.id ||
+      [slim.work, slim.concepts.join("|"), slim.topics.join("|"), slim.persons.join("|")].join("~");
+    if (seen.has(key)) return;
+    seen.add(key);
+    records.push(slim);
+  };
+  const current = selectedRecord();
+  if (current) push(current);
+  const pools = isResearcher()
+    ? [researcherDbRecords(), state.storeRecords || []]
+    : [
+        (state.files || []).flatMap((file) => file.records || []),
+        state.storeRecords || [],
+        researcherDbRecords(),
+      ];
+  for (const pool of pools) {
+    for (const record of pool || []) {
+      push(record);
+      if (records.length >= 400) break;
+    }
+    if (records.length >= 400) break;
+  }
+  const focus = current || {};
+  return { records, focusId: String(focus.record_id || focus._chroma_id || "") };
+}
+
 function translatedNavLabel(item) {
   const keys = {
     home: "nav.dashboard",
@@ -2717,6 +2753,7 @@ function translatedNavLabel(item) {
     works: "nav.works",
     global: "nav.search",
     annotations: "nav.annotations",
+    semanticmap: "nav.semantic_map",
     pdf: "nav.pdf",
     compare: "nav.compare",
     vector: "nav.vector",
@@ -3241,6 +3278,7 @@ async function bootstrapRuntime() {
         "record",
         "compare",
         "annotations",
+        "semanticmap",
         "config",
       ].includes(state.view)
     )
@@ -3396,6 +3434,7 @@ export {
   renderCorpusBuildsHomeCard,
   renderOperationsPanel,
   researcherDbRecords,
+  listSemanticMapSources,
   searchByMetadata,
   mountOperationsPanelHost,
   wireCorpusBuildsHomeCard,

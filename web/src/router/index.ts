@@ -46,6 +46,12 @@ const routes: RouteRecordRaw[] = [
     meta: { view: "annotations", capability: "page.annotations", vueNative: true },
   },
   {
+    path: "/semantic-map",
+    name: "semanticmap",
+    component: () => import("../views/SemanticMapView.vue"),
+    meta: { view: "semanticmap", capability: "page.semantic_map", vueNative: true },
+  },
+  {
     path: "/pdf",
     name: "pdf",
     component: () => import("../views/PdfWorkspaceView.vue"),
