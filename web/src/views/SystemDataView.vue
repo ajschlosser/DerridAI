@@ -6,44 +6,64 @@ import AppIcon from "../components/AppIcon.vue";
 import SystemDataAdvanced from "../components/system-data/SystemDataAdvanced.vue";
 import SystemDataDatabases from "../components/system-data/SystemDataDatabases.vue";
 import SystemDataMetadataExamples from "../components/system-data/SystemDataMetadataExamples.vue";
-import SystemDataPipelines from "../components/system-data/SystemDataPipelines.vue";
 import SystemDataOverview from "../components/system-data/SystemDataOverview.vue";
 import SystemDataResponses from "../components/system-data/SystemDataResponses.vue";
 import { useI18nStore } from "../stores/i18n";
 
-type Section = "overview" | "responses" | "metadata" | "pipelines" | "databases" | "advanced";
+type Section = "overview" | "responses" | "metadata" | "databases" | "advanced";
+type SystemDestination = Section | "pipelines";
 
 const route = useRoute();
 const router = useRouter();
 const i18n = useI18nStore();
 
-const sections: Array<{ id: Section; labelKey: string; fallback: string; icon: string }> = [
-  { id: "overview", labelKey: "runtime.system_overview", fallback: "Overview", icon: "dashboard" },
-  { id: "responses", labelKey: "runtime.system_responses", fallback: "Responses", icon: "record" },
+const sections: Array<{
+  id: Section;
+  routeName: string;
+  labelKey: string;
+  fallback: string;
+  icon: string;
+}> = [
+  {
+    id: "overview",
+    routeName: "system-data-overview",
+    labelKey: "runtime.system_overview",
+    fallback: "Overview",
+    icon: "dashboard",
+  },
+  {
+    id: "responses",
+    routeName: "system-data-responses",
+    labelKey: "runtime.system_responses",
+    fallback: "Responses",
+    icon: "record",
+  },
   {
     id: "metadata",
+    routeName: "system-data-metadata",
     labelKey: "runtime.system_metadata_examples",
     fallback: "Metadata examples",
     icon: "spark",
   },
   {
-    id: "pipelines",
-    labelKey: "pipelines.title",
-    fallback: "Pipeline Studio",
-    icon: "compare",
-  },
-  {
     id: "databases",
+    routeName: "system-data-databases",
     labelKey: "runtime.system_databases",
     fallback: "Databases",
     icon: "database",
   },
-  { id: "advanced", labelKey: "runtime.system_advanced", fallback: "Advanced", icon: "gear" },
+  {
+    id: "advanced",
+    routeName: "system-data-advanced",
+    labelKey: "runtime.system_advanced",
+    fallback: "Advanced",
+    icon: "gear",
+  },
 ];
 
 const activeSection = computed<Section>(() => {
-  const requested = String(route.query.section || "overview");
-  return sections.some((item) => item.id === requested) ? (requested as Section) : "overview";
+  const match = sections.find((item) => item.routeName === String(route.name || ""));
+  return match?.id || "overview";
 });
 const activeComponent = computed(
   () =>
@@ -51,7 +71,6 @@ const activeComponent = computed(
       overview: SystemDataOverview,
       responses: SystemDataResponses,
       metadata: SystemDataMetadataExamples,
-      pipelines: SystemDataPipelines,
       databases: SystemDataDatabases,
       advanced: SystemDataAdvanced,
     })[activeSection.value],
@@ -61,8 +80,14 @@ function t(key: string, fallback: string) {
   return i18n.t(key, fallback);
 }
 
-function setSection(section: Section) {
-  void router.push({ path: "/system-data", query: { ...route.query, section } });
+function setSection(section: SystemDestination) {
+  if (section === "pipelines") {
+    void router.push({ name: "pipelines", query: route.query });
+    return;
+  }
+  const target = sections.find((item) => item.id === section);
+  if (!target || target.routeName === route.name) return;
+  void router.push({ name: target.routeName, query: route.query });
 }
 </script>
 
