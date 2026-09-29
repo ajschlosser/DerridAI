@@ -168,6 +168,12 @@ async function rawMarkup(
             : page.locator("main").first();
   const html = await locator.evaluate((el) => {
     const copy = el.cloneNode(true) as HTMLElement;
+    // These legacy snapshots characterize backup/restore states. Data retention is a separate
+    // Vue workspace with dedicated component coverage, so keep it from invalidating all six
+    // backup snapshots whenever its independent UI changes.
+    copy
+      .querySelectorAll('[aria-labelledby="settings-heading-data-retention"]')
+      .forEach((section) => section.remove());
     copy.querySelectorAll(".disabled-control-tooltip").forEach((wrap) => {
       const tip = wrap.getAttribute("data-tooltip");
       wrap.querySelectorAll("[title]").forEach((node) => {
@@ -193,7 +199,7 @@ async function rawMarkup(
       .replace(/\s+(style="[^"]*")/g, " $1")
       // Scoped-style hashes change whenever a component's source does, and mean nothing to a person.
       .replace(/ data-v-[0-9a-f]{8}=""/g, "")
-      .replace(/Build [0-9a-f]{7,40}\b/g, "Build <hash>")
+      .replace(/Build [0-9a-f]{7}\b/g, "Build <hash>")
       .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, "<uuid>")
       .replace(/\b\d{1,2}\/\d{1,2}\/\d{4},? \d{1,2}:\d{2}(:\d{2})?( [AP]M)?/g, "<date>")
   );

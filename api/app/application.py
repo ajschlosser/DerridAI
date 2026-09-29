@@ -62,11 +62,15 @@ realtime_observer = RealtimeObserver(realtime_broker)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    from .services import retention_scheduler
+
     if settings.realtime_enabled:
         realtime_observer.start()
+    retention_scheduler.start()
     try:
         yield
     finally:
+        retention_scheduler.stop()
         realtime_observer.stop()
 
 
