@@ -17013,6 +17013,27 @@ button {
   background-position: center;
   opacity: 0.55;
 }
+
+.operation-drag-help {
+  position: fixed;
+  z-index: 10000;
+  inline-size: max-content;
+  max-inline-size: min(24rem, calc(100vw - 2rem));
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--border-strong, var(--line-strong));
+  border-radius: var(--radius-overlay, 0.625rem);
+  background: var(--surface-overlay, var(--card));
+  color: var(--text);
+  box-shadow: var(--shadow-overlay, 0 12px 30px rgb(0 0 0 / 20%));
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.45;
+  white-space: normal;
+  pointer-events: none;
+}
+.operation-drag-help[hidden] {
+  display: none;
+}
 .operation-dock-toggle {
   display: flex;
   align-items: center;
@@ -17151,6 +17172,10 @@ html[data-operations-dock-mode="docked"] #operationProgressStack .operation-drag
   }
   .operation-progress-stack,
   .operation-stack-toolbar {
+    border-color: CanvasText;
+  }
+
+  .operation-drag-help {
     border-color: CanvasText;
   }
 }
