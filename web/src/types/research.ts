@@ -165,6 +165,8 @@ export type ResearchPromptMetadataPolicy = {
 };
 
 export type ResearchConfig = {
+  pipeline_id: string;
+  pipeline_version: number | null;
   source_collection: string;
   locales: string[];
   search_types: string[];
