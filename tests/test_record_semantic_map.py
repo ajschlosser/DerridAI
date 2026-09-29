@@ -23,7 +23,10 @@ from app.config import APP_VERSION
 from app.nlp_annotations import text_digest
 from app.record_semantic_map import record_semantic_map, semantic_node_neighborhood
 from app.reviewer_context import current_reviewer
-from app.semantic_content_graph import build_semantic_content_graph, document_entity_node_id
+from app.semantic_content_graph import (
+    build_semantic_content_graph,
+    document_entity_node_id,
+)
 
 
 def _terms(text: str, *spans: tuple[str, str, str]) -> dict:
