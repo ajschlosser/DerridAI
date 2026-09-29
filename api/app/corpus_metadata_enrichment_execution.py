@@ -219,6 +219,12 @@ class MetadataEnrichmentExecutionMixin:
                 if isinstance(values, list) and values
             },
             "packet_token_estimate": example_token_estimate,
+            "pipeline_trace": (
+                editorial_memory.get("pipeline_trace")
+                if isinstance(editorial_memory, dict)
+                and isinstance(editorial_memory.get("pipeline_trace"), dict)
+                else None
+            ),
             "progressive_retrieval": {
                 key: progressive_retrieval[key]
                 for key in (
@@ -232,6 +238,11 @@ class MetadataEnrichmentExecutionMixin:
                     "packet_chars",
                     "fields_served",
                     "fallback_reason",
+                    "fallback_kind",
+                    "pipeline_id",
+                    "pipeline_version",
+                    "pipeline_hash",
+                    "pipeline_run_id",
                 )
                 if key in progressive_retrieval
             },
