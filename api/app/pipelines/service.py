@@ -50,7 +50,21 @@ class PipelineService:
         self.registry = registry
 
     def strategies(self) -> list[dict[str, Any]]:
-        return [item.model_dump(mode="json") for item in self.registry.list()]
+        """Serialize strategy contracts with stable localization keys.
+
+        The server remains authoritative for strategy identity and fallback
+        English copy. Clients resolve these keys through the normal locale
+        dictionary rather than hard-coding strategy names in each surface.
+        """
+
+        rows: list[dict[str, Any]] = []
+        for item in self.registry.list():
+            payload = item.model_dump(mode="json")
+            key_stem = item.strategy_id.replace(".", "_").replace("-", "_")
+            payload["label_key"] = f"pipelines.strategy.{key_stem}.label"
+            payload["description_key"] = f"pipelines.strategy.{key_stem}.description"
+            rows.append(payload)
+        return rows
 
     def built_in_pipelines(self) -> list[PipelineDefinition]:
         return list(BUILT_IN_PIPELINES)
