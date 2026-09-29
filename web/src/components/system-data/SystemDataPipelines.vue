@@ -7,6 +7,7 @@ import PipelineDefinitionBrowser from "../pipelines/PipelineDefinitionBrowser.vu
 import PipelineDefinitionDetail from "../pipelines/PipelineDefinitionDetail.vue";
 import PipelineExecutionHistory from "../pipelines/PipelineExecutionHistory.vue";
 import PipelineComparisonPanel from "../pipelines/PipelineComparisonPanel.vue";
+import PipelineBenchmarkPanel from "../pipelines/PipelineBenchmarkPanel.vue";
 import PipelineOperationsSummary from "../pipelines/PipelineOperationsSummary.vue";
 import PipelineVersionEditorPanel from "../pipelines/PipelineVersionEditorPanel.vue";
 import { pipelinesApi } from "../../api/pipelines";
@@ -392,6 +393,8 @@ onMounted(load);
       />
 
       <PipelineComparisonPanel :pipelines="pipelines" />
+
+      <PipelineBenchmarkPanel :pipelines="pipelines" />
 
       <PipelineOperationsSummary v-if="metrics" :metrics="metrics" />
 
