@@ -375,7 +375,7 @@ function endDrag(event: PointerEvent) {
   background: var(--card);
   color: var(--muted);
   font: inherit;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   cursor: pointer;
 }
 .diagram-controls button.selected {
