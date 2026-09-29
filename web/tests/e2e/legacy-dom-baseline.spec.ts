@@ -113,12 +113,24 @@ async function open(page: Page, scenario: Scenario) {
   }
   // The runtime picks its view from in-app navigation, so go there the way a person would.
   if (scenario.nav && scenario.nav !== "Home") {
-    // The sidebar entry; the top bar has its own "Search" button.
-    await page
-      .locator("nav, aside")
-      .getByRole("button", { name: scenario.nav, exact: true })
-      .first()
-      .click();
+    if (scenario.nav === "Record View") {
+      // Record View is deliberately contextual rather than a global destination:
+      // enter through Records and open a concrete record.
+      await page
+        .locator("nav, aside")
+        .getByRole("button", { name: "Records", exact: true })
+        .first()
+        .click();
+      await page.waitForLoadState("networkidle");
+      await page.locator('tr[aria-label^="Open record"]').first().click();
+    } else {
+      // The sidebar entry; the top bar has its own "Search" button.
+      await page
+        .locator("nav, aside")
+        .getByRole("button", { name: scenario.nav, exact: true })
+        .first()
+        .click();
+    }
   }
   await page.waitForLoadState("networkidle");
   await scenario.steps?.(page);
@@ -307,7 +319,7 @@ function samplePdf(): Buffer {
 }
 
 const inPdfExplorer = async (page: Page, { open = true } = {}) => {
-  const explorerPath = "/pdf?mode=explorer";
+  const explorerPath = "/source-explorer";
   await expect
     .poll(
       async () => {
@@ -466,9 +478,11 @@ const RESTORE_RESPONSE = {
 const researchWithEvidence = async (page: Page) => {
   await page
     .locator("nav, aside")
-    .getByRole("button", { name: "Record View", exact: true })
+    .getByRole("button", { name: "Records", exact: true })
     .first()
     .click();
+  await page.waitForLoadState("networkidle");
+  await page.locator('tr[aria-label^="Open record"]').first().click();
   const addEvidence = page.getByRole("button", { name: "Add evidence" }).first();
   await expect(addEvidence).toBeVisible();
   await addEvidence.click();
