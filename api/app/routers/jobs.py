@@ -21,7 +21,14 @@ from ..models import (
 )
 from ..provider_profile_options import profile_generation_options
 from ..researcher_view import sanitize_rag_job
-from ..services import capture_jobs, document_nlp_pack_jobs, llm_jobs, llm_tool_jobs, rag_jobs, upsert_jobs
+from ..services import (
+    capture_jobs,
+    document_nlp_pack_jobs,
+    llm_jobs,
+    llm_tool_jobs,
+    rag_jobs,
+    upsert_jobs,
+)
 from ..system_store import system_store
 
 router = APIRouter(tags=["jobs"])
