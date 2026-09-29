@@ -124,6 +124,7 @@ watch(
   border: 1px solid var(--line);
   border-radius: 11px;
   background: var(--soft);
+  color: var(--text);
 }
 .llm-notice div,
 .llm-execution label {
@@ -147,8 +148,10 @@ watch(
   grid-column: 1/-1;
   margin: 0;
   padding: 9px 10px;
-  border: 1px solid var(--warning, #a16207);
+  border: 1px solid var(--tone-warn-border);
   border-radius: 8px;
+  background: var(--tone-warn-bg);
+  color: var(--tone-warn-fg);
   font-size: 0.8125rem;
   line-height: 1.45;
 }
