@@ -120,7 +120,7 @@ def test_llm_disagreement_is_recorded_but_reviewer_structure_stays_selected(tmp_
             "primary_text":{"status":"deterministic","method":"human_document_layout","confidence":.99,"reason":"Reviewer structure."},
         },
     }
-    def fake_chat(_request,_prompt,*,response_model,max_tokens,schema_name,build_id=""):
+    def fake_chat(_request,_prompt,*,response_model,max_tokens,schema_name,build_id="", **_kwargs):
         if schema_name=="derridai_record_discourse":
             return {
                 "metadata":{"region_type":"front_matter","primary_text":False,"discourse_role":"analysis"},
@@ -169,7 +169,7 @@ def test_confident_stance_alias_is_normalized_and_auto_populated(tmp_path:Path,m
             "primary_text":{"status":"deterministic","method":"human_document_layout","confidence":.99},
         },
     }
-    def fake_chat(_request,_prompt,*,response_model,max_tokens,schema_name,build_id=""):
+    def fake_chat(_request,_prompt,*,response_model,max_tokens,schema_name,build_id="", **_kwargs):
         if schema_name=="derridai_record_discourse":
             return {
                 "metadata":{"region_type":"main_text","primary_text":True,"discourse_role":"assertion","stance":"affirmed"},

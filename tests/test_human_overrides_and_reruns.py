@@ -142,7 +142,7 @@ def test_fast_enrichment_skips_unsignaled_quotation_and_indexing_but_deep_runs_a
     repo, build = install_review_build(tmp_path, {"text": "Derrida discusses hospitality without a direct citation."})
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
     called: list[str] = []
-    def fake(_request, prompt, *, response_model, max_tokens, schema_name, build_id=""):
+    def fake(_request, prompt, *, response_model, max_tokens, schema_name, build_id="", **_kwargs):
         called.append(schema_name)
         if schema_name == "derridai_record_discourse":
             return {"metadata": {"region_type": "main_text", "primary_text": True, "discourse_role": "analysis"}, "field_evidence": {}, "review_reason": ""}
@@ -189,7 +189,7 @@ def test_selective_metadata_rerun_preserves_human_values_and_other_family_state(
     repo, build = install_review_build(tmp_path, record)
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
     called: list[str] = []
-    def fake(_request, prompt, *, response_model, max_tokens, schema_name, build_id=""):
+    def fake(_request, prompt, *, response_model, max_tokens, schema_name, build_id="", **_kwargs):
         called.append(schema_name)
         return {
             "metadata": {"speaker": "Model speaker", "region_type": "main_text", "primary_text": True, "discourse_role": "analysis"},
