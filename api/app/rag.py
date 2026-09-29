@@ -962,6 +962,7 @@ def run_rag_pipeline(
     cancelled: Callable[[], bool] | None = None,
     owner: str | None = None,
     on_generation_delta: Callable[[str], None] | None = None,
+    stop_after_context: bool = False,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     stages: list[dict[str, Any]] = []
@@ -1016,16 +1017,16 @@ def run_rag_pipeline(
             else settings.ollama_model
         )
     )
-    if not model:
+    effective_query_decomposition = (
+        request.query_decomposition and pipeline_plan.query_decomposition_available
+    )
+    if not model and (effective_query_decomposition or not stop_after_context):
         raise ValueError("No generation model selected.")
 
     # Step 1-2: query metadata/decomposition, adapted from the supplied pipeline.
     stage_start = time.perf_counter()
     update("query_metadata", 0, 1, "Decomposing the research prompt")
     parsed_query: dict[str, Any] = {}
-    effective_query_decomposition = (
-        request.query_decomposition and pipeline_plan.query_decomposition_available
-    )
     if effective_query_decomposition:
         decomposition_prompt = QUERY_TEMPLATE.format(
             prompt=request.prompt,
@@ -1605,6 +1606,60 @@ def run_rag_pipeline(
         raise ValueError(f"RAG evidence sufficiency failed: {detail}")
     check_cancel()
 
+    retrieval_summary = {
+        "raw_count": len(raw_results),
+        "deduplicated_count": len(deduped),
+        "reranked_count": len(reranked),
+        "search_types": list(effective_search_types),
+        "requested_search_types": list(request.search_types),
+        "available_search_types": sorted(available_search_types),
+        "post_rerank_diversity": pipeline_plan.post_rerank_diversity,
+        "k": request.k,
+        "fetch_k": max(semantic_fetch_k, lexical_fetch_k),
+        "semantic_fetch_k": semantic_fetch_k,
+        "lexical_fetch_k": lexical_fetch_k,
+        "lambda_mult": runtime_settings.retrieval_mmr_lambda,
+        "retrieval_mmr_lambda": runtime_settings.retrieval_mmr_lambda,
+        "diversity_lambda": runtime_settings.diversity_lambda,
+        "rrf_k": runtime_settings.rrf_k,
+        "reranker": effective_reranker,
+        "requested_reranker": request.reranker,
+        "rerank_top_n": runtime_settings.rerank_top_n,
+        "effective_rerank_top_n": len(reranked),
+        "query_decomposition": effective_query_decomposition,
+        "requested_query_decomposition": request.query_decomposition,
+        "query_decomposition_num_predict": runtime_settings.query_decomposition_num_predict,
+        "skip_retrieval": request.skip_retrieval,
+        "selected_evidence_count": len(selected_candidates),
+        "response_language": request.response_language,
+        "evidence_record_char_limit": runtime_settings.evidence_record_char_limit,
+        "evidence_total_char_limit": runtime_settings.evidence_total_char_limit,
+        "evidence_sufficiency": {"passed": True, "issues": []},
+    }
+
+    if stop_after_context:
+        return {
+            "prompt": request.prompt,
+            "query_metadata": query_metadata,
+            "answer": "",
+            "raw_answer": "",
+            "evidence": evidence,
+            "works": works,
+            "collections": [item["name"] for item in collections],
+            "warnings": warnings,
+            "stages": stages,
+            "provider": provider,
+            "model": model,
+            "pipeline": pipeline_summary,
+            "elapsed_seconds": time.perf_counter() - started,
+            "retrieval": retrieval_summary,
+            "memory": {
+                "mode": "skipped_for_non_persistent_dry_run",
+                "warnings": [],
+            },
+            "dry_run": True,
+        }
+
     # Advisory memory is chosen after the evidence packet exists so validated-claim
     # support can be checked against the Records this answer may actually cite.
     prior_response_memory, prior_claim_memory, memory_detail = memory_guidance(
@@ -1693,35 +1748,6 @@ def run_rag_pipeline(
         "model": model,
         "pipeline": pipeline_summary,
         "elapsed_seconds": time.perf_counter() - started,
-        "retrieval": {
-            "raw_count": len(raw_results),
-            "deduplicated_count": len(deduped),
-            "reranked_count": len(reranked),
-            "search_types": list(effective_search_types),
-            "requested_search_types": list(request.search_types),
-            "available_search_types": sorted(available_search_types),
-            "post_rerank_diversity": pipeline_plan.post_rerank_diversity,
-            "k": request.k,
-            "fetch_k": max(semantic_fetch_k, lexical_fetch_k),
-            "semantic_fetch_k": semantic_fetch_k,
-            "lexical_fetch_k": lexical_fetch_k,
-            "lambda_mult": runtime_settings.retrieval_mmr_lambda,
-            "retrieval_mmr_lambda": runtime_settings.retrieval_mmr_lambda,
-            "diversity_lambda": runtime_settings.diversity_lambda,
-            "rrf_k": runtime_settings.rrf_k,
-            "reranker": effective_reranker,
-            "requested_reranker": request.reranker,
-            "rerank_top_n": runtime_settings.rerank_top_n,
-            "effective_rerank_top_n": len(reranked),
-            "query_decomposition": effective_query_decomposition,
-            "requested_query_decomposition": request.query_decomposition,
-            "query_decomposition_num_predict": runtime_settings.query_decomposition_num_predict,
-            "skip_retrieval": request.skip_retrieval,
-            "selected_evidence_count": len(selected_candidates),
-            "response_language": request.response_language,
-            "evidence_record_char_limit": runtime_settings.evidence_record_char_limit,
-            "evidence_total_char_limit": runtime_settings.evidence_total_char_limit,
-            "evidence_sufficiency": {"passed": True, "issues": []},
-        },
+        "retrieval": retrieval_summary,
         "memory": memory_detail,
     }
