@@ -233,10 +233,9 @@ const statusLabel = computed(() => {
 .research-draft-text {
   margin: 6px 0 8px;
   color: var(--text);
-  font:
-    14px/1.6 Georgia,
-    "Times New Roman",
-    serif;
+  font-family: var(--font-reading);
+  font-size: var(--fs-base);
+  line-height: 1.6;
   white-space: pre-line;
 }
 .research-draft-help {
