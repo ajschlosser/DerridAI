@@ -128,6 +128,7 @@ export type ResearchPipelineOptions = {
   assignment: PipelineAssignment;
   override_allowed: boolean;
   pipelines: Array<PipelineDefinition & { assigned?: boolean }>;
+  strategies: PipelineStrategy[];
 };
 
 export type PipelineValidationResponse = {
