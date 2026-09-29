@@ -6,14 +6,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "api"))
 
 from app import config
-from app import cross_encoder as cross_encoder_module
 from app.evidence_suggestions import (
-    CASCADE_MAX_BLOCKS,
     evidence_cascade_llm_enabled,
     semantic_query,
     suggest_evidence_blocks,
     suggest_evidence_blocks_semantic,
-    suggest_evidence_cascade,
     validate_llm_choice,
 )
 
@@ -148,119 +145,6 @@ def test_llm_choice_remains_closed_and_bounded():
     result = {"block_ids": ["b2", "b3", "b1"], "reason": "supported"}
     out = validate_llm_choice(result, BLOCKS, "speech", limit=1)
     assert [item["block_id"] for item in out] == ["b2"]
-
-
-# --- suggest_evidence_cascade ------------------------------------------------------------
-
-
-class TrackingProjection(LocalProjection):
-    """Counts sync/embedding calls so a test can prove a later stage was never reached."""
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.sync_calls = 0
-
-    def sync(self, *args, **kwargs):
-        self.sync_calls += 1
-        return super().sync(*args, **kwargs)
-
-
-def test_cascade_stops_at_strong_lexical_match_without_touching_embeddings():
-    projection = TrackingProjection({})
-    result = suggest_evidence_cascade(
-        "calm", [{"block_id": "b1", "text": "calm calm calm"}],
-        field="mood", field_metadata={"label": "Mood"}, source_document_id="doc", projection=projection,
-    )
-    assert result["block_ids"] == ["b1"]
-    assert result["method"] == "deterministic-lexical-v1"
-    assert result["confidence"] is None and result["backfilled"] is True
-    assert projection.sync_calls == 0  # stage 2/3 never reached
-
-
-def test_cascade_falls_to_cross_encoder_rerank_when_lexical_is_weak(monkeypatch):
-    blocks = [
-        {"block_id": "b1", "text": "A passage about something else entirely."},
-        {"block_id": "b2", "text": "A passage about hospitality and the stranger."},
-    ]
-    projection = LocalProjection({"b1": [1.0, 0.0], "b2": [0.9, 0.1]}, query_vector=[1.0, 0.0])
-
-    def fake_predict_scores(pairs, *, model_name, timeout_seconds):
-        # Cross-encoder disagrees with the cosine order above: whichever pair's text
-        # mentions hospitality wins the rerank (positive), the other is rejected (negative).
-        return [0.8 if "hospitality" in text else -0.5 for _query, text in pairs], {}
-
-    monkeypatch.setattr(cross_encoder_module, "predict_scores", fake_predict_scores)
-    result = suggest_evidence_cascade(
-        "welcoming the stranger", blocks,
-        field="topic", field_metadata={"label": "Topic"}, source_document_id="doc", projection=projection,
-    )
-    assert result["method"] == "cross-encoder-rerank-v1"
-    assert result["block_ids"] == ["b2"]
-    assert result["confidence"] is None and result["backfilled"] is True
-
-
-def test_cascade_falls_to_mmr_similarity_when_cross_encoder_is_unavailable(monkeypatch):
-    blocks = [
-        {"block_id": "b1", "text": "A passage about hospitality and the stranger."},
-        {"block_id": "b2", "text": "A passage about something else entirely."},
-    ]
-    projection = LocalProjection({"b1": [1.0, 0.0], "b2": [0.0, 1.0]}, query_vector=[1.0, 0.0])
-    monkeypatch.setattr(cross_encoder_module, "predict_scores", lambda *a, **k: (None, {"fallback_reason": "missing_dependency"}))
-    result = suggest_evidence_cascade(
-        "welcoming the stranger", blocks,
-        field="topic", field_metadata={"label": "Topic"}, source_document_id="doc", projection=projection,
-        limit=1,
-    )
-    assert result["method"] == "mmr-similarity-v1"
-    assert result["block_ids"] == ["b1"]
-    assert len(result["block_ids"]) <= CASCADE_MAX_BLOCKS
-    assert result["confidence"] is None and result["backfilled"] is True
-
-
-def test_cascade_falls_to_llm_as_last_resort_and_accepts_unsupported_choice(monkeypatch):
-    blocks = [{"block_id": "b1", "text": "Nothing relevant here."}]
-    projection = LocalProjection({}, error=RuntimeError("no embedding backend"))
-    monkeypatch.setattr(cross_encoder_module, "predict_scores", lambda *a, **k: (None, {}))
-
-    def llm_choice(prompt: str):
-        assert "topic" in prompt
-        return {"block_ids": ["b1"], "reason": "The model's own judgment."}
-
-    result = suggest_evidence_cascade(
-        "an unrelated value", blocks,
-        field="topic", field_metadata={"label": "Topic"}, source_document_id="doc", projection=projection,
-        llm_choice=llm_choice,
-    )
-    assert result["method"] == "llm-evidence-choice-v1"
-    assert result["block_ids"] == ["b1"]
-    assert result["confidence"] is None and result["backfilled"] is True
-
-
-def test_cascade_returns_none_when_the_llm_stage_raises():
-    blocks = [{"block_id": "b1", "text": "Nothing relevant here."}]
-    projection = LocalProjection({}, error=RuntimeError("no embedding backend"))
-
-    def failing_llm_choice(prompt: str):
-        raise RuntimeError("provider unreachable")
-
-    result = suggest_evidence_cascade(
-        "an unrelated value", blocks,
-        field="topic", field_metadata={"label": "Topic"}, source_document_id="doc", projection=projection,
-        llm_choice=failing_llm_choice,
-    )
-    assert result is None
-
-
-def test_cascade_returns_none_for_empty_blocks_or_empty_value():
-    projection = TrackingProjection({})
-    assert suggest_evidence_cascade(
-        "x", [], field="f", field_metadata={}, source_document_id="doc", projection=projection,
-    ) is None
-    assert suggest_evidence_cascade(
-        None, [{"block_id": "b1", "text": "anything"}], field="f", field_metadata={}, source_document_id="doc",
-        projection=projection,
-    ) is None
-    assert projection.sync_calls == 0
 
 
 def test_evidence_cascade_llm_enabled_request_flag_wins_over_setting(monkeypatch):

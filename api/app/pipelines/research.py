@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from .models import PipelineDefinition, PipelineStageDefinition
+from .registry import reject_unhonoured_config
 from .service import pipeline_hash
 
 ResearchDiversity = Literal["none", "source_aware", "mmr"]
@@ -350,6 +351,7 @@ def compile_research_pipeline(pipeline: PipelineDefinition) -> ResearchPipelineP
         raise ValueError(
             f"Pipeline {pipeline.pipeline_id!r} has purpose {pipeline.purpose!r}, not 'research'."
         )
+    reject_unhonoured_config(pipeline, "Research")
 
     stages = _enabled_stages(pipeline)
     unknown = sorted(

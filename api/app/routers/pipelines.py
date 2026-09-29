@@ -494,21 +494,40 @@ def pipeline_runs(
     request: Request,
     feature: str = Query(default="", max_length=160),
     owner: str = Query(default="", max_length=200),
+    pipeline_id: str = Query(default="", max_length=160),
+    status: str = Query(default="", max_length=40),
+    q: str = Query(default="", max_length=200),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> dict[str, Any]:
     require_admin(request)
-    rows = pipeline_store.list_runs(
-        feature=feature or None,
-        owner=owner or None,
-        limit=limit,
-        offset=offset,
-    )
+    filters = {
+        "feature": feature or None,
+        "owner": owner or None,
+        "pipeline_id": pipeline_id or None,
+        "status": status or None,
+        "query": q or None,
+    }
+    rows = pipeline_store.list_runs(limit=limit, offset=offset, **filters)
     return {
         "runs": [row.model_dump(mode="json") for row in rows],
         "limit": limit,
         "offset": offset,
+        "total": pipeline_store.count_runs(**filters),
     }
+
+
+@router.post("/runs/clear")
+def clear_pipeline_runs(body: dict[str, Any], request: Request) -> dict[str, Any]:
+    """Delete every execution trace. Definitions and assignments are untouched."""
+
+    require_admin(request)
+    if body.get("confirm") != "clear-execution-history":
+        raise HTTPException(
+            status_code=422,
+            detail="Confirm history deletion with confirm=clear-execution-history.",
+        )
+    return {"deleted": pipeline_store.clear_runs()}
 
 
 @router.get("/runs/{run_id}")
@@ -518,3 +537,14 @@ def pipeline_run(run_id: str, request: Request) -> dict[str, Any]:
     if trace is None:
         raise HTTPException(status_code=404, detail="Pipeline trace not found.")
     return {"run": trace.model_dump(mode="json")}
+
+
+@router.delete("/runs/{run_id}")
+def delete_pipeline_run(run_id: str, request: Request) -> dict[str, Any]:
+    """Delete one execution trace. The saved pipeline version is not affected."""
+
+    require_admin(request)
+    deleted = pipeline_store.delete_run(run_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Pipeline trace not found.")
+    return {"deleted": True, "run_id": run_id}

@@ -8,6 +8,7 @@ IDs and parameter schemas, but cannot smuggle executable code into the server.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from typing import Any
 
 from .models import StrategySpec
 
@@ -131,7 +132,13 @@ DEFAULT_STRATEGIES = [
         description="Rank candidate text with the local deterministic BM25-style lexical retriever.",
         input_type="query",
         output_type="candidate_set",
-        config_schema={"type": "object", "properties": {"fetch_k": _integer(1, 5000)}},
+        config_schema={
+            "type": "object",
+            "properties": {
+                "fetch_k": _integer(1, 5000),
+                "min_score": _number(0, 1),
+            },
+        },
     ),
     StrategySpec(
         strategy_id="retrieve.metadata_exemplars",
@@ -255,6 +262,7 @@ DEFAULT_STRATEGIES = [
                 "model": {"type": "string"},
                 "top_k": _integer(1, 500),
                 "timeout_seconds": _number(0.1, 300),
+                "min_score": _number(-100, 100),
             },
         },
     ),
@@ -304,6 +312,7 @@ DEFAULT_STRATEGIES = [
             "properties": {
                 "lambda_mult": _number(0, 1),
                 "limit": _integer(1, 500),
+                "min_relevance": _number(-1, 1),
             },
         },
     ),
@@ -388,8 +397,8 @@ DEFAULT_STRATEGIES = [
         strategy_id="llm.closed_choice_evidence",
         family="llm",
         label="Closed-choice evidence selection",
-        description="Ask a chat model to choose only from supplied source-unit IDs, then validate the IDs deterministically.",
-        input_type="candidate_set",
+        description="Ask a chat model to choose only among the current Record's source-unit IDs, then validate the IDs deterministically. It reads every source unit of the Record, not only upstream candidates.",
+        input_type="any",
         output_type="candidate_set",
         deterministic=False,
         invokes_llm=True,
@@ -409,3 +418,23 @@ DEFAULT_STRATEGIES = [
 ]
 
 strategy_registry = StrategyRegistry(DEFAULT_STRATEGIES)
+
+
+# Settings only the evidence-recovery runtime honours. Other adapters reject
+# them so Pipeline Studio never shows an editable value that nothing applies.
+RECOVERY_ONLY_CONFIG: dict[str, frozenset[str]] = {
+    "retrieve.lexical_bm25": frozenset({"min_score"}),
+    "rerank.cross_encoder": frozenset({"min_score"}),
+    "select.mmr": frozenset({"min_relevance"}),
+}
+
+
+def reject_unhonoured_config(pipeline: Any, adapter: str) -> None:
+    """Raise when an enabled stage sets a recovery-only key this adapter ignores."""
+
+    for stage in pipeline.stages:
+        ignored = sorted(set(stage.config) & RECOVERY_ONLY_CONFIG.get(stage.strategy, frozenset()))
+        if stage.enabled and ignored:
+            raise ValueError(
+                f"The {adapter} adapter does not apply {', '.join(ignored)} on stage {stage.id!r}."
+            )

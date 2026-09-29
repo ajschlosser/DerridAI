@@ -214,6 +214,22 @@ PR #270 is not part of the retrieval algorithm itself, but it changes the integr
 
 Any follow-up Pipeline Studio UI should target the routed `/pipelines` experience and preserve the new navigation architecture rather than recreating the older “System Data subsection only” mental model.
 
+### 4.10 Automatic evidence recovery moved onto pipeline runtime
+
+Enrichment evidence recovery and accept-time evidence backfill no longer call the legacy `suggest_evidence_cascade()` (removed). Both resolve the `evidence_recovery` assignment and execute it through `execute_evidence_recovery()` in `api/app/pipelines/evidence_recovery.py`, a cascade runtime over a closed set of registered strategies.
+
+Runtime contract (purpose `evidence_recovery`):
+
+- A stage that produces candidates follows its single `next` edge; an empty result follows `on_empty`; unavailable, timed-out, and failed stages follow `on_unavailable`, `on_timeout`, and `on_error`. A fallback edge hands the target the input the failed stage received, and service validation now type-checks fallback edges on that basis. Stages the graph never routes to never run, so expensive stages run only when cheaper ones find nothing.
+- The provenance gate and terminal top-K selection are mandatory, and only the provenance gate may route to selection.
+- cELF compliance is computed, not assumed: a graph is compliant only when every edge into provenance comes from `validate.evidence_support` (at least 0.50) or the closed-choice model. Non-compliant graphs are executable, carry a validation warning, report `celf_compliant: false` in runtime support, and stamp every evidence entry they produce.
+- Recovery-only settings (`retrieve.lexical_bm25.min_score`, `rerank.cross_encoder.min_score`, `select.mmr.min_relevance`) are rejected by the Research, reviewer-evidence, and metadata-precedent adapters rather than ignored.
+- A record without a source-document identity is reported before any retrieval or model call.
+
+Built-ins: `evidence.recovery.celf@1` (text support, then closed-choice model; no embeddings or reranking) and `evidence.recovery.cascade@1` (exact legacy first-hit order: text, similarity, cross-encoder, MMR, model). Traces list only the stages that ran, in execution order, with `fallback_reason` on each stage that left along a fallback edge.
+
+The remaining direct `predict_scores()` callers are `rag.py` (Research pipeline) and `metadata_exemplar_retrieval.py` (metadata-precedent pipeline). Re-verify they are unreachable outside those pipelines before closing the CrossEncoder criterion.
+
 ## 5. Current built-in assignments
 
 As of current `master`, built-in system assignments are:
@@ -222,6 +238,7 @@ As of current `master`, built-in system assignments are:
 | ---------------------------- | ------------------------------- | ------ |
 | Research                     | `research.current@1`            | active |
 | Reviewer evidence suggestion | `evidence.reviewer.current@2`   | active |
+| Evidence recovery            | `evidence.recovery.cascade@1`   | active |
 | Metadata precedents          | `metadata.precedents.current@1` | active |
 | Validated claim memory       | `memory.claim.current@1`        | active |
 | Prior response memory        | `memory.response.current@1`     | active |

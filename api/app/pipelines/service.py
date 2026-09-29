@@ -94,13 +94,27 @@ class PipelineService:
 
         incoming: dict[str, set[str]] = defaultdict(set)
         for stage in pipeline.stages:
+            fallback_targets = {
+                stage.on_empty,
+                stage.on_unavailable,
+                stage.on_timeout,
+                stage.on_error,
+            } - set(stage.next)
             for target in stage.edge_targets():
                 incoming[target].add(stage.id)
                 source_spec = strategy_specs.get(stage.id)
                 target_spec = strategy_specs.get(target)
                 if source_spec is None or target_spec is None:
                     continue
-                if not self._types_compatible(source_spec.output_type, target_spec.input_type):
+                # A fallback edge hands the target the input the failed stage
+                # was given, so either the stage's output or input type fits.
+                compatible = self._types_compatible(
+                    source_spec.output_type, target_spec.input_type
+                ) or (
+                    target in fallback_targets
+                    and self._types_compatible(source_spec.input_type, target_spec.input_type)
+                )
+                if not compatible:
                     issues.append(
                         PipelineValidationIssue(
                             level="error",
@@ -178,10 +192,46 @@ class PipelineService:
                     )
                 )
 
+        if pipeline.purpose == "evidence_recovery":
+            issues.extend(self._recovery_issues(pipeline))
+
         return PipelineValidationResult(
             valid=not any(issue.level == "error" for issue in issues),
             issues=issues,
         )
+
+    @staticmethod
+    def _recovery_issues(pipeline: PipelineDefinition) -> list[PipelineValidationIssue]:
+        """Provenance is mandatory; loosening the support gate is allowed but reported."""
+
+        enabled = {stage.strategy for stage in pipeline.stages if stage.enabled}
+        if "validate.provenance" not in enabled:
+            return [
+                PipelineValidationIssue(
+                    level="error" if pipeline.status == "active" else "warning",
+                    code="evidence_without_provenance_gate",
+                    message=(
+                        "Evidence recovery must verify that every suggestion binds to a real "
+                        "source unit of the current source document. An active chain cannot "
+                        "omit this gate."
+                    ),
+                )
+            ]
+        from .evidence_recovery import compile_recovery_pipeline
+
+        try:
+            plan = compile_recovery_pipeline(pipeline)
+        except ValueError:
+            return []  # runtime support reports why the graph cannot execute
+        if plan.celf_compliant:
+            return []
+        return [
+            PipelineValidationIssue(
+                level="warning",
+                code="evidence_recovery_not_celf_compliant",
+                message=plan.compliance_reason,
+            )
+        ]
 
     def resolve_builtin(self, feature: str) -> dict[str, Any]:
         assignment = built_in_assignment(feature)

@@ -1147,14 +1147,19 @@ class ReviewActionsMixin:
     def _cascade_evidence_for_accepted(
         self, build_id: str, record: dict[str, Any], fields: Any
     ) -> list[str]:
-        """Run the evidence cascade, without its LLM stage, for accepted values nothing has bound yet.
+        """Run automatic evidence recovery, without its LLM stage, for accepted values nothing has bound yet.
 
-        A reviewer can accept a value the enrichment cascade never looked at (a hint, a
-        dropdown suggestion, a typed value). The result stays advisory exactly as it
-        would during enrichment (``backfilled``, no confidence): it points the reviewer
-        at supporting spans but never counts as reviewed evidence. Returns warnings.
+        A reviewer can accept a value enrichment never looked at (a hint, a dropdown
+        suggestion, a typed value). Recovery executes the assigned
+        ``evidence_recovery`` pipeline, and the result stays advisory
+        exactly as it would during enrichment (``backfilled``, no confidence): it
+        points the reviewer at supporting spans but never counts as reviewed
+        evidence. Returns warnings.
         """
-        from .evidence_suggestions import suggest_evidence_cascade
+        from .pipelines.evidence_recovery import (
+            MISSING_SOURCE_DOCUMENT,
+            execute_evidence_recovery,
+        )
         from .source_embeddings import SourceEmbeddingProjection
 
         evidence = record.get("metadata_evidence") if isinstance(record.get("metadata_evidence"), dict) else {}
@@ -1177,15 +1182,19 @@ class ReviewActionsMixin:
         for name in pending:
             assertion = current_assertion_by_name(record, name)
             try:
-                entry = suggest_evidence_cascade(
-                    assertion.value, blocks, field=name,
+                recovery = execute_evidence_recovery(
+                    value=assertion.value, blocks=blocks, field=name,
                     field_metadata=self._evidence_field_metadata(build_id, name),
                     source_document_id=source_document_id, projection=projection,
                     llm_choice=None,
+                    llm_skip_reason="Accepting a value never spends a model call on evidence recovery.",
                 )
             except Exception as exc:  # noqa: BLE001 - advisory evidence must not fail a saved decision
-                warnings.append(f"Evidence cascade did not run for {name}: {exc}")
+                warnings.append(f"Evidence recovery did not run for {name}: {exc}")
                 continue
+            if recovery.status.get("skipped") == MISSING_SOURCE_DOCUMENT:
+                warnings.append(recovery.status["reason"])
+            entry = recovery.entry
             if entry:
                 replace_assertion_evidence(record, assertion, [entry], reason=entry["reason"])
         project_record_assertions(record)

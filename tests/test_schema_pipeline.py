@@ -333,6 +333,56 @@ def test_evidence_cascade_llm_stage_only_runs_when_enabled(tmp_path):
     assert evidence["method"] == "llm-evidence-choice-v1"
 
 
+def test_enrichment_evidence_is_bound_to_the_recovery_pipeline_identity(tmp_path):
+    m, bid = manager(tmp_path, notes_schema())
+    m._evidence_source_blocks = lambda *a, **k: [{"block_id": "b1", "text": "calm calm calm"}]
+    record = {"record_id": "r", "text": "t", "metadata_field_status": {}}
+    out = m._reconcile_metadata_results(
+        record, m._profile_for(bid), ["b1"], [("discourse", _no_evidence_answer(mood="calm"), None)], False,
+        request={"model": "q"}, build_id=bid, schema=m._schema_for(bid),
+    )
+    pipeline = out["metadata_evidence"]["mood"]["pipeline"]
+    assert pipeline["feature"] == "evidence_recovery"
+    assert pipeline["pipeline_id"] == "evidence.recovery.cascade"
+    assert pipeline["pipeline_hash"] and pipeline["trace_id"]
+
+
+def test_failed_evidence_recovery_pipeline_stays_visible_and_pending_review(tmp_path, monkeypatch, caplog):
+    from app import corpus_metadata_enrichment_execution as enrichment
+
+    def unavailable(**_kwargs):
+        raise KeyError("evidence_recovery")
+
+    monkeypatch.setattr(enrichment, "execute_evidence_recovery", unavailable)
+    m, bid = manager(tmp_path, notes_schema())
+    m._evidence_source_blocks = lambda *a, **k: [{"block_id": "b1", "text": "calm calm calm"}]
+    record = {"record_id": "r", "text": "t", "metadata_field_status": {}}
+    out = m._reconcile_metadata_results(
+        record, m._profile_for(bid), ["b1"], [("discourse", _no_evidence_answer(mood="calm"), None)], False,
+        request={"model": "q"}, build_id=bid, schema=m._schema_for(bid),
+    )
+    assert out["metadata_evidence"].get("mood") is None
+    status = out["metadata_field_status"]["mood"]
+    assert status["reason_code"] == "evidence_failed"
+    assert status["verification_status"] == "pending_review" and not status["autofilled"]
+    assert any("Evidence recovery pipeline did not run for mood" in message for message in caplog.messages)
+
+
+def test_missing_source_document_identity_is_logged_and_left_pending_review(tmp_path, monkeypatch, caplog):
+    m, bid = manager(tmp_path, notes_schema())
+    real_get_build = m.repo.get_build
+    monkeypatch.setattr(m.repo, "get_build", lambda build_id: {**real_get_build(build_id), "asset_id": ""})
+    m._evidence_source_blocks = lambda *a, **k: [{"block_id": "b1", "text": "calm calm calm"}]
+    record = {"record_id": "r", "text": "t", "metadata_field_status": {}}
+    out = m._reconcile_metadata_results(
+        record, m._profile_for(bid), ["b1"], [("discourse", _no_evidence_answer(mood="calm"), None)], False,
+        request={"model": "q"}, build_id=bid, schema=m._schema_for(bid),
+    )
+    assert out["metadata_evidence"].get("mood") is None
+    assert out["metadata_field_status"]["mood"]["reason_code"] == "evidence_failed"
+    assert any("no source document identity" in message for message in caplog.messages)
+
+
 def test_evidence_mode_defaults_to_with_value_and_rejects_unknown_values(monkeypatch):
     import dataclasses
 
