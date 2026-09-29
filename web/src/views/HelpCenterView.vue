@@ -1,6 +1,7 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { visibleHelp } from "../domain/helpTopics";
 import { useAuthStore } from "../stores/auth";
 import { useI18nStore } from "../stores/i18n";
@@ -9,10 +10,32 @@ import UiPageHeader from "../components/ui/UiPageHeader.vue";
 // Explains where a user's decisions matter and what they change downstream.
 const i18n = useI18nStore();
 const auth = useAuthStore();
-const query = ref("");
+const route = useRoute();
+const router = useRouter();
+const query = ref(String(route.query.q || ""));
+let applyingRouteState = false;
 const sections = computed(() => visibleHelp(auth.isAdmin, query.value, (key) => i18n.t(key)));
 const matchCount = computed(() =>
   sections.value.reduce((total, section) => total + section.entries.length, 0),
+);
+
+watch(query, (value) => {
+  if (applyingRouteState) return;
+  void router.replace({
+    name: "help",
+    query: { ...route.query, q: value.trim() || undefined },
+  });
+});
+
+watch(
+  () => route.query.q,
+  (value) => {
+    const next = String(value || "");
+    if (next === query.value) return;
+    applyingRouteState = true;
+    query.value = next;
+    applyingRouteState = false;
+  },
 );
 </script>
 
