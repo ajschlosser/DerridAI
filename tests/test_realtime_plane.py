@@ -456,11 +456,18 @@ def test_corpus_build_notes_become_corpus_and_operations_events():
     observer.tick()
     base = {
         "id": "build-1", "type": "pdf_corpus", "status": "running", "raw_status": "running", "stage": "enriching",
-        "metadata_tasks_total": 10, "metadata_tasks_completed": 1, "review_count": 0, "request": {"api_key": "sk-secret"},
+        "record_count": 4, "accepted_count": 0, "review_count": 0,
+        "metadata_total": 4, "metadata_enriched_count": 1,
+        "metadata_tasks_total": 10, "metadata_tasks_completed": 1, "request": {"api_key": "sk-secret"},
     }
     operation_events.note_corpus_build(dict(base))
     observer.tick()
-    operation_events.note_corpus_build({**base, "metadata_tasks_completed": 4, "review_count": 2})
+    operation_events.note_corpus_build({
+        **base,
+        "metadata_enriched_count": 2,
+        "metadata_tasks_completed": 4,
+        "review_count": 2,
+    })
     observer.tick()
     operation_events.note_corpus_build({**base, "metadata_tasks_completed": 10, "status": "completed", "raw_status": "completed"})
     observer.tick()
@@ -477,6 +484,10 @@ def test_corpus_build_notes_become_corpus_and_operations_events():
         ("job", "job.completed"),
     ]
     assert all(event.audience.admin_only for event in seen)
+    metadata_progress = next(event for event in seen if event.type == "corpus.metadata_progress")
+    assert metadata_progress.payload["build"]["record_count"] == 4
+    assert metadata_progress.payload["build"]["metadata_total"] == 4
+    assert metadata_progress.payload["build"]["metadata_enriched_count"] == 2
     assert "sk-secret" not in str([event.payload for event in seen])
 
 
