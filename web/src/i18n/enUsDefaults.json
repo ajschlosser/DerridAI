@@ -6900,5 +6900,22 @@
   "research.pipeline_override_badge": "Per-run override",
   "research.pipeline_system_assignment_badge": "System assignment",
   "research.pipeline_trace": "Pipeline execution trace",
-  "research.pipeline_options_with_chain": "Pipeline, retrieval, evidence & generation"
+  "research.pipeline_options_with_chain": "Pipeline, retrieval, evidence & generation",
+  "pipelines.definition_count": "Pipeline definition count",
+  "pipelines.move_stage_up": "Move stage up",
+  "pipelines.move_stage_down": "Move stage down",
+  "pipelines.remove_stage": "Remove stage",
+  "pipelines.family_query_transform": "Query transform",
+  "pipelines.family_candidate_generation": "Candidate generation",
+  "pipelines.family_filter": "Filter",
+  "pipelines.family_normalization": "Normalization",
+  "pipelines.family_fusion": "Fusion",
+  "pipelines.family_rerank": "Reranking",
+  "pipelines.family_support_validation": "Support validation",
+  "pipelines.family_diversity": "Diversity",
+  "pipelines.family_selection": "Selection",
+  "pipelines.family_context_pack": "Context packing",
+  "pipelines.family_llm": "LLM",
+  "pipelines.family_evaluation": "Evaluation",
+  "pipelines.family_unknown": "Unknown"
 }
