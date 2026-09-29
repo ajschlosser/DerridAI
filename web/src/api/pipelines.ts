@@ -7,10 +7,14 @@ import type {
   PipelineDefinition,
   PipelineRunTrace,
   PipelineValidationResponse,
+  ResearchPipelineOptions,
 } from "../types/pipelines";
 
 export const pipelinesApi = {
   catalog: () => apiRequest<PipelineCatalog>("/api/system/pipelines"),
+
+  researchOptions: () =>
+    apiRequest<ResearchPipelineOptions>("/api/system/pipelines/research-options"),
 
   validate: (pipeline: PipelineDefinition) =>
     apiRequest<PipelineValidationResponse>("/api/system/pipelines/validate", {
