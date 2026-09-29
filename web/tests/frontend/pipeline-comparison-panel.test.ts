@@ -9,6 +9,7 @@ import PipelineComparisonPanel from "../../src/components/pipelines/PipelineComp
 import { useI18nStore } from "../../src/stores/i18n";
 import type {
   PipelineDefinition,
+  ResearchPipelineBenchmarkRun,
   ResearchPipelineComparisonResult,
 } from "../../src/types/pipelines";
 
@@ -192,6 +193,32 @@ const comparison: ResearchPipelineComparisonResult = {
   },
 };
 
+const benchmark: ResearchPipelineBenchmarkRun = {
+  benchmark_run_id: "benchmark-123",
+  case_id: "trace-definition-001",
+  case_version: 2,
+  mode: "retrieval_only",
+  created_at: "2026-09-29T20:00:00Z",
+  created_by: "admin",
+  notes: "Fixed trace case",
+  fixed_input: {
+    prompt: "What is the trace?",
+    source_collection: "corpus",
+  },
+  corpus: {
+    source_snapshot_hash: "source-hash",
+    build_id: "build-123",
+    embedding_revision: "rev-7",
+  },
+  retrieval_config: { k: 64, reranker: "cross_encoder" },
+  model_config: { cross_encoder_model: "cross-encoder/test" },
+  left_pipeline: comparison.left.pipeline,
+  right_pipeline: comparison.right.pipeline,
+  comparison,
+  reproducibility_warnings: [],
+};
+
+
 describe("PipelineComparisonPanel", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -207,6 +234,9 @@ describe("PipelineComparisonPanel", () => {
       },
     ] as never);
     vi.spyOn(pipelinesApi, "compareResearch").mockResolvedValue(structuredClone(comparison));
+    vi.spyOn(pipelinesApi, "runResearchBenchmark").mockResolvedValue({
+      benchmark: structuredClone(benchmark),
+    });
   });
 
   it("runs a non-persistent comparison and explains descriptive overlap", async () => {
@@ -248,5 +278,50 @@ describe("PipelineComparisonPanel", () => {
     expect(wrapper.text()).toContain("r1");
     expect(wrapper.text()).toContain("r3");
     expect(wrapper.text()).toContain("does not declare either pipeline better");
+  });
+
+  it("persists a fixed benchmark separately from the dry comparison", async () => {
+    const wrapper = mount(PipelineComparisonPanel, { props: { pipelines } });
+    const details = wrapper.find("details");
+    (details.element as HTMLDetailsElement).open = true;
+    await details.trigger("toggle");
+    await flushPromises();
+
+    await wrapper.find("textarea").setValue("What is the trace?");
+    const selects = wrapper.findAll("select");
+    await selects[0].setValue("corpus");
+    await selects[1].setValue("research.current@1");
+    await selects[2].setValue("research.balanced@1");
+
+    const inputs = wrapper.findAll("input");
+    expect(inputs.length).toBeGreaterThanOrEqual(3);
+    await inputs[0].setValue("trace-definition-001");
+    await inputs[1].setValue("2");
+    await inputs[2].setValue("Fixed trace case");
+
+    const button = wrapper
+      .findAll("button")
+      .find((item) => item.text().includes("Run and save benchmark"));
+    expect(button).toBeTruthy();
+    await button!.trigger("click");
+    await flushPromises();
+
+    expect(pipelinesApi.runResearchBenchmark).toHaveBeenCalledWith({
+      case_id: "trace-definition-001",
+      case_version: 2,
+      notes: "Fixed trace case",
+      request: {
+        prompt: "What is the trace?",
+        source_collection: "corpus",
+        query_decomposition: false,
+      },
+      left: { pipeline_id: "research.current", version: 1 },
+      right: { pipeline_id: "research.balanced", version: 1 },
+    });
+    expect(wrapper.text()).toContain("Saved benchmark");
+    expect(wrapper.text()).toContain("benchmark-123");
+    expect(wrapper.text()).toContain("source-hash");
+    expect(wrapper.text()).toContain("left");
+    expect(wrapper.text()).toContain("right");
   });
 });
