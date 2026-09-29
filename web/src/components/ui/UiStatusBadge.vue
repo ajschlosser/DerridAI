@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import UiTooltip from "./UiTooltip.vue";
+
 withDefaults(
   defineProps<{
     label: string;
@@ -10,10 +12,20 @@ withDefaults(
 );
 </script>
 <template>
-  <span class="ui-status-badge" :data-tone="tone" :title="help"
-    ><span v-if="showDot" class="ui-status-dot" aria-hidden="true"></span>{{ label
-    }}<span v-if="help" class="sr-only"> — {{ help }}</span></span
+  <UiTooltip
+    v-if="help"
+    :text="help"
+    :label="`${label}: ${help}`"
+    placement="bottom"
+    trigger-mode="content"
   >
+    <span class="ui-status-badge" :data-tone="tone">
+      <span v-if="showDot" class="ui-status-dot" aria-hidden="true"></span>{{ label }}
+    </span>
+  </UiTooltip>
+  <span v-else class="ui-status-badge" :data-tone="tone">
+    <span v-if="showDot" class="ui-status-dot" aria-hidden="true"></span>{{ label }}
+  </span>
 </template>
 <style scoped>
 .ui-status-badge {
