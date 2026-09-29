@@ -203,7 +203,11 @@ def source_aware_select[Candidate: Mapping[str, Any]](
             overlap = len(left_terms & right_terms) / max(1, min(len(left_terms), len(right_terms)))
             penalty += min(0.30, overlap * 0.30)
 
-        return min(0.85, penalty)
+        # Same-source adjacent near-duplicates should lose to a reasonably
+        # relevant alternative source. Keep a small floor for exceptional cases
+        # where every candidate is redundant, but allow the combined penalty to
+        # outweigh a near-tied relevance score.
+        return min(0.95, penalty)
 
     selected: list[dict[str, Any]] = []
     while remaining and len(selected) < bounded_limit:
