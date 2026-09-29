@@ -460,7 +460,7 @@ function openSharedAnnotation(store: string, recordId: string) {
 function openCorpusBuilder() {
   window.dispatchEvent(
     new CustomEvent("derridai:navigate-native", {
-      detail: { path: "/pdf?mode=builder", runtimeView: "pdf" },
+      detail: { path: "/corpus-builder", runtimeView: "pdf" },
     }),
   );
 }
