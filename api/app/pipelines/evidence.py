@@ -21,7 +21,6 @@ from ..evidence_suggestions import (
     CROSS_ENCODER_METHOD,
     LLM_METHOD,
     METHOD,
-    SEMANTIC_METHOD,
     llm_prompt,
     semantic_query,
     suggest_evidence_blocks,
@@ -205,7 +204,7 @@ def _support_rows(
     items: list[dict[str, Any]],
     *,
     min_score: float,
-) -> tuple[list[dict[str, Any]], int]:
+) -> list[dict[str, Any]]:
     supported = {
         item["block_id"]: item
         for item in suggest_evidence_blocks(
@@ -237,7 +236,7 @@ def _support_rows(
         row["signals"] = signals
         if support:
             rows.append(row)
-    return rows, len(supported)
+    return rows
 
 
 def execute_reviewer_evidence_pipeline(
@@ -392,7 +391,7 @@ def execute_reviewer_evidence_pipeline(
     if plan.support_stage_id is not None:
         support_started = time.perf_counter()
         input_count = len(items)
-        items, supported_count = _support_rows(
+        items = _support_rows(
             value,
             blocks,
             items,
