@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import {
   systemApi,
   type LanguageContentPolicy,
@@ -18,8 +19,10 @@ import LanguageWorkspaceHeader from "../components/LanguageWorkspaceHeader.vue";
 import AppIcon from "../components/AppIcon.vue";
 
 const i18n = useI18nStore();
+const route = useRoute();
+const router = useRouter();
 const languages = ref<LanguageInfo[]>([]);
-const selectedCode = ref("en-US");
+const selectedCode = ref(String(route.query.locale || "en-US"));
 const current = ref<LanguageDictionary | null>(null);
 const referenceDictionary = ref<Record<string, string>>({});
 const providerProfiles = ref<ProviderProfile[]>([]);
@@ -42,10 +45,16 @@ let confirmationReturnFocus: HTMLElement | null = null;
 const pendingDelete = ref<LanguageInfo | null>(null);
 const pendingLocaleCode = ref("");
 const localeQuery = ref("");
-const keyQuery = ref("");
-const activeCategory = ref("all");
+const keyQuery = ref(String(route.query.q || ""));
+const activeCategory = ref(String(route.query.category || "all"));
 const importInput = ref<HTMLInputElement | null>(null);
-const statusFilter = ref<"all" | "localized" | "english" | "missing" | "review">("all");
+const validStatusFilters = new Set(["all", "localized", "english", "missing", "review"]);
+const requestedStatusFilter = String(route.query.status || "all");
+const statusFilter = ref<"all" | "localized" | "english" | "missing" | "review">(
+  validStatusFilters.has(requestedStatusFilter)
+    ? (requestedStatusFilter as "all" | "localized" | "english" | "missing" | "review")
+    : "all",
+);
 const install = ref({ code: "", name: "", flag: "🌐" });
 const installAutoName = ref("");
 const installFlagTouched = ref(false);
@@ -316,7 +325,20 @@ async function refreshLanguages() {
   if (!languages.value.some((item) => item.code === selectedCode.value))
     selectedCode.value = languages.value[0]?.code || "en-US";
 }
-async function load(code = selectedCode.value) {
+function syncRouteState() {
+  void router.replace({
+    name: "languages",
+    query: {
+      ...route.query,
+      locale: selectedCode.value || undefined,
+      q: keyQuery.value || undefined,
+      category: activeCategory.value !== "all" ? activeCategory.value : undefined,
+      status: statusFilter.value !== "all" ? statusFilter.value : undefined,
+    },
+  });
+}
+
+async function load(code = selectedCode.value, resetFilters = true) {
   loading.value = true;
   error.value = "";
   try {
@@ -324,10 +346,18 @@ async function load(code = selectedCode.value) {
     const value = await systemApi.language(code);
     current.value = { ...value, flag: flagFor(value.code, value.flag) };
     baseline.value = snapshotCurrent();
-    keyQuery.value = "";
-    activeCategory.value = categories.value[1]?.id || "all";
-    statusFilter.value = "all";
+    if (resetFilters) {
+      keyQuery.value = "";
+      activeCategory.value = categories.value[1]?.id || "all";
+      statusFilter.value = "all";
+    } else if (
+      activeCategory.value !== "all" &&
+      !categories.value.some((item) => item.id === activeCategory.value)
+    ) {
+      activeCategory.value = "all";
+    }
     await loadContentPolicy(code);
+    syncRouteState();
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);
   } finally {
@@ -882,6 +912,28 @@ function trapFocus(event: KeyboardEvent, root: HTMLElement | null) {
   }
 }
 
+watch([keyQuery, activeCategory, statusFilter], () => syncRouteState());
+watch(
+  () => route.query.locale,
+  (value) => {
+    const requested = String(value || "");
+    if (!requested || requested === selectedCode.value) return;
+    requestLoad(requested);
+  },
+);
+watch(
+  () => [route.query.q, route.query.category, route.query.status],
+  ([q, category, status]) => {
+    const nextQuery = String(q || "");
+    const nextCategory = String(category || "all");
+    const nextStatus = String(status || "all");
+    if (keyQuery.value !== nextQuery) keyQuery.value = nextQuery;
+    if (activeCategory.value !== nextCategory) activeCategory.value = nextCategory;
+    if (validStatusFilters.has(nextStatus) && statusFilter.value !== nextStatus)
+      statusFilter.value = nextStatus as "all" | "localized" | "english" | "missing" | "review";
+  },
+);
+
 watch(selectedProviderId, () => {
   translationRiskAcknowledged.value = false;
 });
@@ -942,7 +994,7 @@ onMounted(async () => {
     const base = await systemApi.language("en-US");
     referenceDictionary.value = base.dictionary || {};
     await refreshLanguages();
-    await load(selectedCode.value);
+    await load(selectedCode.value, false);
     await restoreLanguageTranslationJob();
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);
