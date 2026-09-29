@@ -3,6 +3,7 @@
 import { computed } from "vue";
 import PipelineStageConnections from "./PipelineStageConnections.vue";
 import PipelineStrategyConfigFields from "./PipelineStrategyConfigFields.vue";
+import { pipelineStageFamilyLabel } from "../../domain/pipelinePresentation";
 import { useI18nStore } from "../../stores/i18n";
 import type { PipelineStage, PipelineStrategy } from "../../types/pipelines";
 
@@ -74,7 +75,7 @@ const strategiesByFamily = computed(() => {
             :value="stage.strategy"
             @change="emit('updateStrategy', stageIndex, ($event.target as HTMLSelectElement).value)"
           >
-            <optgroup v-for="group in strategiesByFamily" :key="group.family" :label="group.family">
+            <optgroup v-for="group in strategiesByFamily" :key="group.family" :label="pipelineStageFamilyLabel(group.family, t)">
               <option
                 v-for="option in group.strategies"
                 :key="option.strategy_id"
@@ -137,7 +138,7 @@ const strategiesByFamily = computed(() => {
     <div class="strategy-summary">
       <div>
         <strong>{{ strategy?.label || stage.strategy }}</strong>
-        <span>{{ strategy?.family || "unknown" }}</span>
+        <span>{{ pipelineStageFamilyLabel(strategy?.family, t) }}</span>
       </div>
       <p v-if="strategy?.description">{{ strategy.description }}</p>
       <small v-if="strategy">
