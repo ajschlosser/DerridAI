@@ -11,7 +11,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .benchmark import ResearchPipelineBenchmarkRun
+from .benchmark import (
+    ResearchPipelineBenchmarkCase,
+    ResearchPipelineBenchmarkRun,
+)
 from .benchmark_store import PipelineBenchmarkStore
 from .definition_store import PipelineDefinitionStore
 from .models import (
@@ -108,6 +111,32 @@ class PipelineStore:
             offset=offset,
         )
 
+    def put_benchmark_case(
+        self,
+        case: ResearchPipelineBenchmarkCase,
+    ) -> ResearchPipelineBenchmarkCase:
+        return self.benchmarks.put_case(case)
+
+    def get_benchmark_case(
+        self,
+        case_id: str,
+        version: int | None = None,
+    ) -> ResearchPipelineBenchmarkCase | None:
+        return self.benchmarks.get_case(case_id, version)
+
+    def list_benchmark_cases(
+        self,
+        *,
+        case_id: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[ResearchPipelineBenchmarkCase]:
+        return self.benchmarks.list_cases(
+            case_id=case_id,
+            limit=limit,
+            offset=offset,
+        )
+
     def put_benchmark(
         self,
         run: ResearchPipelineBenchmarkRun,
@@ -150,6 +179,7 @@ class PipelineStore:
         list[PipelineAssignment],
         list[PipelineRunTrace],
         list[tuple[str, PipelineStageTrace]],
+        list[ResearchPipelineBenchmarkCase],
         list[ResearchPipelineBenchmarkRun],
     ]:
         """Validate a complete backup before any persistent row is changed."""
@@ -160,6 +190,7 @@ class PipelineStore:
         assignment_rows = payload.get("assignments") or []
         run_rows = payload.get("runs") or []
         stage_rows = payload.get("stages") or []
+        benchmark_case_rows = payload.get("benchmark_cases") or []
         benchmark_rows = payload.get("benchmark_runs") or []
         if not all(
             isinstance(items, list)
@@ -168,6 +199,7 @@ class PipelineStore:
                 assignment_rows,
                 run_rows,
                 stage_rows,
+                benchmark_case_rows,
                 benchmark_rows,
             )
         ):
@@ -248,6 +280,21 @@ class PipelineStore:
             stage_keys.add(key)
             stages.append((run_id, stage))
 
+        benchmark_cases: list[ResearchPipelineBenchmarkCase] = []
+        benchmark_case_keys: set[tuple[str, int]] = set()
+        for raw in benchmark_case_rows:
+            if not isinstance(raw, dict):
+                raise ValueError("Pipeline backup contains an invalid benchmark case row.")
+            case = ResearchPipelineBenchmarkCase.model_validate(raw)
+            key = (case.case_id, case.version)
+            if key in benchmark_case_keys:
+                raise ValueError(
+                    "Pipeline backup contains duplicate benchmark case "
+                    f"{case.case_id}@{case.version}."
+                )
+            benchmark_case_keys.add(key)
+            benchmark_cases.append(case)
+
         benchmarks: list[ResearchPipelineBenchmarkRun] = []
         benchmark_ids: set[str] = set()
         for raw in benchmark_rows:
@@ -260,9 +307,14 @@ class PipelineStore:
                     f"{benchmark.benchmark_run_id!r}."
                 )
             benchmark_ids.add(benchmark.benchmark_run_id)
+            if (benchmark.case_id, benchmark.case_version) not in benchmark_case_keys:
+                raise ValueError(
+                    "Pipeline backup benchmark references unknown fixed case "
+                    f"{benchmark.case_id}@{benchmark.case_version}."
+                )
             benchmarks.append(benchmark)
 
-        return definitions, assignments, runs, stages, benchmarks
+        return definitions, assignments, runs, stages, benchmark_cases, benchmarks
 
     def validate_snapshot(self, payload: dict[str, Any]) -> None:
         """Validate a backup without mutating persistent state."""
@@ -273,12 +325,19 @@ class PipelineStore:
         """Atomically replace pipeline state with a validated backup.
 
         Validation happens before the transaction starts. Definitions,
-        assignments, runs, stage traces, and benchmark results are then replaced
+        assignments, runs, stage traces, benchmark cases, and benchmark results are then replaced
         through one SQLite connection so any insertion failure rolls the whole
         restore back.
         """
 
-        definitions, assignments, runs, stages, benchmarks = self._validated_snapshot(payload)
+        (
+            definitions,
+            assignments,
+            runs,
+            stages,
+            benchmark_cases,
+            benchmarks,
+        ) = self._validated_snapshot(payload)
 
         with self.database.lock, self.database.connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
@@ -286,6 +345,7 @@ class PipelineStore:
                 conn.execute("DELETE FROM pipeline_stage_runs")
                 conn.execute("DELETE FROM pipeline_runs")
                 conn.execute("DELETE FROM pipeline_benchmark_runs")
+                conn.execute("DELETE FROM pipeline_benchmark_cases")
                 conn.execute("DELETE FROM pipeline_assignments")
                 conn.execute("DELETE FROM pipeline_definitions")
 
@@ -385,6 +445,26 @@ class PipelineStore:
                                 if stage.finished_at
                                 else None
                             ),
+                            dump_json(data),
+                        ),
+                    )
+
+                for case in benchmark_cases:
+                    data = case.model_dump(mode="json")
+                    conn.execute(
+                        """
+                        INSERT INTO pipeline_benchmark_cases
+                            (case_id,version,created_at,created_by,source_collection,
+                             corpus_fingerprint,payload_json)
+                        VALUES(?,?,?,?,?,?,?)
+                        """,
+                        (
+                            case.case_id,
+                            case.version,
+                            case.created_at.isoformat(),
+                            case.created_by,
+                            case.source_collection,
+                            case.corpus_snapshot.fingerprint,
                             dump_json(data),
                         ),
                     )
