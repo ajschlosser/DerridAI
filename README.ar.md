@@ -57,13 +57,12 @@ SourceDocument
 
 ### خدمات التشغيل
 
-| الخدمة | التقنية | الدور |
-| --- | --- | --- |
-| `web` | Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js, nginx | تطبيق المتصفح؛ يعمل proxy لـ `/api/`؛ ويستهلك REST وGraphQL وإشعارات realtime. Storybook ملف تطوير اختياري. |
-| `api` | Python 3.12, FastAPI, Strawberry GraphQL, ChromaDB client, PyMuPDF, sentence-transformers, spaCy | الحد التطبيقي ذو السلطة لـ auth، وعمليات المصادر/corpus، وcELF reads، وprovenance، وRAG، وpipelines، وjobs، وحالة النظام. |
-| `document-nlp` | BookNLP worker | تحسين اختياري ومعزول لـ Document Intelligence باللغة الإنجليزية. يستقبل نصاً محدوداً ومراجعاً ولا يملك سلطة على corpus. |
-| `chroma` | Chroma server | ملف HTTP اختياري. يبقى `PersistentClient` المضمن هو الافتراضي؛ ويخزن الوضعان projections بحث/متجهات مشتقة. |
-| `ollama` | Ollama | ملف محلي اختياري. يمكن لـ DerridAI بدلاً منه استخدام Ollama على المضيف أو أي endpoint متوافق مع OpenAI. |
+
+- `web` — Vue 3 وTypeScript وPinia وVue Router وVite وPDF.js وnginx. تطبيق المتصفح؛ يعمل proxy لـ `/api/` ويستهلك REST وGraphQL وإشعارات realtime. Storybook ملف تطوير اختياري.
+- `api` — Python 3.12 وFastAPI وStrawberry GraphQL وChromaDB client وPyMuPDF وsentence-transformers وspaCy. الحد التطبيقي ذو السلطة للمصادقة وعمليات المصادر/corpus وcELF reads وprovenance وRAG وpipelines وjobs وحالة النظام.
+- `document-nlp` — worker BookNLP اختياري ومعزول لـ Document Intelligence باللغة الإنجليزية. يستقبل نصاً محدوداً ومراجعاً ولا يملك سلطة على corpus.
+- `chroma` — خادم HTTP Chroma اختياري. يبقى `PersistentClient` المضمن هو الافتراضي؛ ويخزن الوضعان projections بحث/متجهات مشتقة.
+- `ollama` — خدمة Ollama محلية اختيارية. يمكن لـ DerridAI استخدام Ollama العامل مسبقاً على المضيف أو أي endpoint متوافق مع OpenAI.
 
 تبدأ مجموعة Compose الافتراضية خدمتي `web` و`api`؛ أما بقية الخدمات فملفات اختيارية أو مزوّدون خارجيون.
 
