@@ -22,7 +22,9 @@ function numeric(value: unknown, fallback = 0) {
       <summary>{{ i18n.t("providers.group_capacity") }}</summary>
       <div class="provider-fields three">
         <label class="field"
-          ><span>{{ i18n.t("providers.concurrency") }} <UiTooltip :text="i18n.t('providers.concurrency_help')" /></span
+          ><span
+            >{{ i18n.t("providers.concurrency") }}
+            <UiTooltip :text="i18n.t('providers.concurrency_help')" /></span
           ><input
             class="control"
             type="number"
@@ -39,7 +41,9 @@ function numeric(value: unknown, fallback = 0) {
           /><small v-if="sharedEndpoint">{{ i18n.t("providers.shared_endpoint") }}</small></label
         >
         <label class="field"
-          ><span>{{ i18n.t("providers.context") }} <UiTooltip :text="i18n.t('help.glossary.context_window.definition')" /></span
+          ><span
+            >{{ i18n.t("providers.context") }}
+            <UiTooltip :text="i18n.t('help.glossary.context_window.definition')" /></span
           ><input
             class="control"
             type="number"
@@ -50,7 +54,9 @@ function numeric(value: unknown, fallback = 0) {
             "
         /></label>
         <label class="field"
-          ><span>{{ i18n.t("providers.max_output") }} <UiTooltip :text="i18n.t('providers.max_output_help')" /></span
+          ><span
+            >{{ i18n.t("providers.max_output") }}
+            <UiTooltip :text="i18n.t('providers.max_output_help')" /></span
           ><input
             class="control"
             type="number"
@@ -70,7 +76,9 @@ function numeric(value: unknown, fallback = 0) {
       <summary>{{ i18n.t("providers.advanced") }}</summary>
       <div class="provider-fields three">
         <label v-if="profile.type === 'openai'" class="field"
-          ><span>{{ i18n.t("providers.model_kind") }} <UiTooltip :text="i18n.t('providers.model_kind_help')" /></span
+          ><span
+            >{{ i18n.t("providers.model_kind") }}
+            <UiTooltip :text="i18n.t('providers.model_kind_help')" /></span
           ><select
             class="control"
             :value="profile.model_kind || 'any'"
@@ -82,7 +90,9 @@ function numeric(value: unknown, fallback = 0) {
           </select></label
         >
         <label class="field"
-          ><span>{{ i18n.t("providers.temperature") }} <UiTooltip :text="i18n.t('help.glossary.temperature.definition')" /></span
+          ><span
+            >{{ i18n.t("providers.temperature") }}
+            <UiTooltip :text="i18n.t('help.glossary.temperature.definition')" /></span
           ><input
             class="control"
             type="number"
@@ -95,7 +105,9 @@ function numeric(value: unknown, fallback = 0) {
             "
         /></label>
         <label class="field"
-          ><span>{{ i18n.t("providers.top_p") }} <UiTooltip :text="i18n.t('help.glossary.top_p.definition')" /></span
+          ><span
+            >{{ i18n.t("providers.top_p") }}
+            <UiTooltip :text="i18n.t('help.glossary.top_p.definition')" /></span
           ><input
             class="control"
             type="number"
@@ -106,7 +118,9 @@ function numeric(value: unknown, fallback = 0) {
             @input="emit('update', 'top_p', numeric(($event.target as HTMLInputElement).value, 1))"
         /></label>
         <label v-if="profile.type === 'ollama'" class="field"
-          ><span>{{ i18n.t("providers.top_k") }} <UiTooltip :text="i18n.t('providers.top_k_help')" /></span
+          ><span
+            >{{ i18n.t("providers.top_k") }}
+            <UiTooltip :text="i18n.t('providers.top_k_help')" /></span
           ><input
             class="control"
             type="number"
@@ -115,7 +129,9 @@ function numeric(value: unknown, fallback = 0) {
             @input="emit('update', 'top_k', numeric(($event.target as HTMLInputElement).value, 0))"
         /></label>
         <label class="field"
-          ><span>{{ i18n.t("providers.seed") }} <UiTooltip :text="i18n.t('help.glossary.seed.definition')" /></span
+          ><span
+            >{{ i18n.t("providers.seed") }}
+            <UiTooltip :text="i18n.t('help.glossary.seed.definition')" /></span
           ><input
             class="control"
             type="number"
@@ -123,7 +139,9 @@ function numeric(value: unknown, fallback = 0) {
             @input="emit('update', 'seed', numeric(($event.target as HTMLInputElement).value, 0))"
         /></label>
         <label v-if="profile.type === 'ollama'" class="field"
-          ><span>{{ i18n.t("providers.think") }} <UiTooltip :text="i18n.t('providers.think_help')" /></span
+          ><span
+            >{{ i18n.t("providers.think") }}
+            <UiTooltip :text="i18n.t('providers.think_help')" /></span
           ><select
             class="control"
             :value="String(profile.think ?? 'false')"
@@ -137,14 +155,18 @@ function numeric(value: unknown, fallback = 0) {
           </select></label
         >
         <label v-if="profile.type === 'ollama'" class="field"
-          ><span>{{ i18n.t("providers.keep_alive") }} <UiTooltip :text="i18n.t('providers.keep_alive_help')" /></span
+          ><span
+            >{{ i18n.t("providers.keep_alive") }}
+            <UiTooltip :text="i18n.t('providers.keep_alive_help')" /></span
           ><input
             class="control"
             :value="profile.keep_alive || '10m'"
             @input="emit('update', 'keep_alive', ($event.target as HTMLInputElement).value)"
         /></label>
         <label class="field field-wide"
-          ><span>{{ i18n.t("providers.extra_options") }} <UiTooltip :text="i18n.t('providers.extra_options_help')" /></span
+          ><span
+            >{{ i18n.t("providers.extra_options") }}
+            <UiTooltip :text="i18n.t('providers.extra_options_help')" /></span
           ><textarea
             class="control provider-json"
             rows="4"

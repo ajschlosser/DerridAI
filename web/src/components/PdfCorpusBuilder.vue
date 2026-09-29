@@ -3146,7 +3146,9 @@ defineExpose({
                           v-if="editingText"
                           :text="i18n.t('pdf_corpus.save_reviewed_text') + ' (Ctrl/Cmd S)'"
                           trigger-mode="content"
-                          :content-focusable="Boolean(busy !== '' || reviewLocked || !textDraft.trim())"
+                          :content-focusable="
+                            Boolean(busy !== '' || reviewLocked || !textDraft.trim())
+                          "
                           placement="bottom"
                         >
                           <button
@@ -3157,8 +3159,8 @@ defineExpose({
                             aria-keyshortcuts="Control+S Meta+S"
                           >
                             {{ i18n.t("ui.save") }}
-                          </button>
-                        </UiTooltip><button
+                          </button> </UiTooltip
+                        ><button
                           v-if="editingText"
                           type="button"
                           class="btn small"
@@ -3428,7 +3430,9 @@ defineExpose({
                       spellcheck="false"
                       @input="metadataEditorDirty = true"
                     ></textarea>
-                    <p class="metadata-rerun-consequence">{{ i18n.t("pdf_corpus.metadata_rerun_consequence") }}</p>
+                    <p class="metadata-rerun-consequence">
+                      {{ i18n.t("pdf_corpus.metadata_rerun_consequence") }}
+                    </p>
                     <div class="data-actions">
                       <button
                         type="button"
@@ -3464,8 +3468,8 @@ defineExpose({
                           :disabled="busy !== ''"
                         >
                           {{ i18n.t("pdf_corpus.rerun_metadata") }}
-                        </button>
-                      </UiTooltip><UiTooltip
+                        </button> </UiTooltip
+                      ><UiTooltip
                         :text="i18n.t('pdf_corpus.requeue_metadata_help')"
                         trigger-mode="content"
                         :content-focusable="busy !== ''"
@@ -3478,8 +3482,8 @@ defineExpose({
                           :disabled="busy !== ''"
                         >
                           {{ i18n.t("pdf_corpus.requeue_metadata") }}
-                        </button>
-                      </UiTooltip><UiTooltip
+                        </button> </UiTooltip
+                      ><UiTooltip
                         :text="i18n.t('pdf_corpus.metadata_enrichment_again_help')"
                         trigger-mode="content"
                         :content-focusable="busy !== ''"

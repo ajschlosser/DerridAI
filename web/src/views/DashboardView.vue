@@ -851,7 +851,10 @@ onBeforeUnmount(() => {
         >
           <div class="dashboard-card-title">
             <span class="dashboard-title-icon" v-html="icon('gear')"></span>
-            <b>{{ i18n.t("dashboard.appearance") }} <UiTooltip :text="i18n.t('dashboard.appearance_help')" /></b>
+            <b
+              >{{ i18n.t("dashboard.appearance") }}
+              <UiTooltip :text="i18n.t('dashboard.appearance_help')"
+            /></b>
           </div>
           <fieldset class="dashboard-theme-options">
             <legend>{{ i18n.t("dashboard.interface_theme") }}</legend>
@@ -890,7 +893,10 @@ onBeforeUnmount(() => {
         <article v-else class="card dashboard-quick-card dashboard-language-card">
           <div class="dashboard-card-title">
             <span class="dashboard-title-icon" v-html="icon('gear')"></span>
-            <b>{{ i18n.t("dashboard.language_settings") }} <UiTooltip :text="i18n.t('dashboard.language_settings_help')" /></b>
+            <b
+              >{{ i18n.t("dashboard.language_settings") }}
+              <UiTooltip :text="i18n.t('dashboard.language_settings_help')"
+            /></b>
           </div>
           <div class="dashboard-quick-field dashboard-locale-field">
             <span>{{ i18n.t("dashboard.interface_language") }}</span>
@@ -906,7 +912,10 @@ onBeforeUnmount(() => {
         <article class="card dashboard-quick-card dashboard-provider-card">
           <div class="dashboard-card-title">
             <span class="dashboard-title-icon"><AppIcon name="spark" /></span>
-            <b>{{ i18n.t("dashboard.llm_provider_settings") }} <UiTooltip :text="i18n.t('dashboard.llm_provider_help')" /></b>
+            <b
+              >{{ i18n.t("dashboard.llm_provider_settings") }}
+              <UiTooltip :text="i18n.t('dashboard.llm_provider_help')"
+            /></b>
           </div>
           <div class="dashboard-provider-fields">
             <div class="dashboard-quick-field">

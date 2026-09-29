@@ -85,7 +85,13 @@ onBeforeUnmount(hide);
 </script>
 
 <template>
-  <span class="ui-tooltip" :data-trigger-mode="triggerMode" @mouseenter="show" @mouseleave="hide" @keydown="onKeydown">
+  <span
+    class="ui-tooltip"
+    :data-trigger-mode="triggerMode"
+    @mouseenter="show"
+    @mouseleave="hide"
+    @keydown="onKeydown"
+  >
     <button
       v-if="triggerMode === 'icon'"
       ref="trigger"

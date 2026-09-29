@@ -103,16 +103,16 @@ defineExpose({ focusAccept: () => acceptButton.value?.focus({ preventScroll: tru
             aria-keyshortcuts="M"
             @click="emit('focusBlocker')"
           >
-          <AppIcon name="warning" /><b class="dock-blocker-count">{{
-            i18n.tf("pdf_corpus.metadata_decisions_count", { count: props.blockingCount })
-          }}</b
-          ><b class="dock-blocker-short"
-            ><span aria-hidden="true">{{ props.blockingCount }}</span
-            ><span class="sr-only">{{
+            <AppIcon name="warning" /><b class="dock-blocker-count">{{
               i18n.tf("pdf_corpus.metadata_decisions_count", { count: props.blockingCount })
-            }}</span></b
-          ><span class="dock-blocker-text">{{ props.blockingLabel }}</span
-          ><kbd aria-hidden="true">{{ i18n.t("pdf_corpus.shortcut.metadata") }}</kbd>
+            }}</b
+            ><b class="dock-blocker-short"
+              ><span aria-hidden="true">{{ props.blockingCount }}</span
+              ><span class="sr-only">{{
+                i18n.tf("pdf_corpus.metadata_decisions_count", { count: props.blockingCount })
+              }}</span></b
+            ><span class="dock-blocker-text">{{ props.blockingLabel }}</span
+            ><kbd aria-hidden="true">{{ i18n.t("pdf_corpus.shortcut.metadata") }}</kbd>
           </button>
         </UiTooltip>
         <span v-else class="dock-ready" role="status"
@@ -139,8 +139,8 @@ defineExpose({ focusAccept: () => acceptButton.value?.focus({ preventScroll: tru
             @click="emit('undo')"
           >
             <AppIcon name="history" />
-          </button>
-        </UiTooltip><UiTooltip
+          </button> </UiTooltip
+        ><UiTooltip
           :text="i18n.t('pdf_corpus.redo')"
           trigger-mode="content"
           :content-focusable="Boolean(props.busy)"

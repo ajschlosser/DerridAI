@@ -618,12 +618,7 @@ const traceRows = computed(() => {
           :content-focusable="Boolean(busy)"
           placement="bottom"
         >
-          <button
-            type="button"
-            class="btn small"
-            :disabled="busy"
-            @click="emit('noValue')"
-          >
+          <button type="button" class="btn small" :disabled="busy" @click="emit('noValue')">
             {{ i18n.t("pdf_corpus.no_value_short") }}
           </button>
         </UiTooltip>
@@ -653,12 +648,7 @@ const traceRows = computed(() => {
             :content-focusable="Boolean(busy)"
             placement="bottom"
           >
-            <button
-              type="button"
-              class="link-button"
-              :disabled="busy"
-              @click="selectFromText"
-            >
+            <button type="button" class="link-button" :disabled="busy" @click="selectFromText">
               {{ i18n.t("pdf_corpus.select_from_text") }}
             </button>
           </UiTooltip></template
@@ -716,7 +706,10 @@ const traceRows = computed(() => {
             ? i18n.t("pdf_corpus.llm_value_auto_resolved")
             : i18n.t("pdf_corpus.llm_suggestion_prefilled")
         }}</span>
-        <span v-if="status?.llm_assessed === true || status?.llm_checked === true" class="field-meta-help">
+        <span
+          v-if="status?.llm_assessed === true || status?.llm_checked === true"
+          class="field-meta-help"
+        >
           {{ i18n.t("pdf_corpus.llm_field_assessed") }}
           <UiTooltip :text="i18n.t('pdf_corpus.llm_field_assessed_help')" placement="bottom" />
         </span>
@@ -756,14 +749,20 @@ const traceRows = computed(() => {
           <div v-if="status?.derivation_method">
             <dt class="assertion-term">
               <span>{{ i18n.t("pdf_corpus.assertion_derivation", "Derivation") }}</span>
-              <UiTooltip :text="i18n.t('pdf_corpus.assertion_derivation_help')" placement="bottom" />
+              <UiTooltip
+                :text="i18n.t('pdf_corpus.assertion_derivation_help')"
+                placement="bottom"
+              />
             </dt>
             <dd>{{ derivationLabel(status.derivation_method) }}</dd>
           </div>
           <div v-if="status?.evaluation_status">
             <dt class="assertion-term">
               <span>{{ i18n.t("pdf_corpus.assertion_evaluation", "Evaluation") }}</span>
-              <UiTooltip :text="i18n.t('pdf_corpus.assertion_evaluation_help')" placement="bottom" />
+              <UiTooltip
+                :text="i18n.t('pdf_corpus.assertion_evaluation_help')"
+                placement="bottom"
+              />
             </dt>
             <dd>{{ humanizeToken(status.evaluation_status) }}</dd>
           </div>
@@ -777,7 +776,10 @@ const traceRows = computed(() => {
           <div v-if="status?.value_status">
             <dt class="assertion-term">
               <span>{{ i18n.t("pdf_corpus.assertion_value_state", "Value state") }}</span>
-              <UiTooltip :text="i18n.t('pdf_corpus.assertion_value_state_help')" placement="bottom" />
+              <UiTooltip
+                :text="i18n.t('pdf_corpus.assertion_value_state_help')"
+                placement="bottom"
+              />
             </dt>
             <dd>{{ humanizeToken(status.value_status) }}</dd>
           </div>

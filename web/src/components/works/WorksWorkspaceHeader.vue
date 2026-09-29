@@ -54,7 +54,13 @@ const i18n = useI18nStore();
           <AppIcon name="upload" aria-hidden="true" />{{ i18n.t("records.choose_jsonl") }}
         </button>
       </UiTooltip>
-      <button v-else id="chooseWorksJsonl" type="button" class="btn small" @click="emit('chooseJsonl')">
+      <button
+        v-else
+        id="chooseWorksJsonl"
+        type="button"
+        class="btn small"
+        @click="emit('chooseJsonl')"
+      >
         <AppIcon name="upload" aria-hidden="true" />{{ i18n.t("records.choose_jsonl") }}
       </button>
       <button id="separateWorks" type="button" class="btn small" @click="emit('separate')">
@@ -70,7 +76,13 @@ const i18n = useI18nStore();
           <AppIcon name="spark" aria-hidden="true" />{{ i18n.t("works.populate_all_metadata") }}
         </button>
       </UiTooltip>
-      <button v-else id="populateAllWorks" type="button" class="btn small soft" @click="emit('populateAll')">
+      <button
+        v-else
+        id="populateAllWorks"
+        type="button"
+        class="btn small soft"
+        @click="emit('populateAll')"
+      >
         <AppIcon name="spark" aria-hidden="true" />{{ i18n.t("works.populate_all_metadata") }}
       </button>
       <UiTooltip
@@ -83,7 +95,13 @@ const i18n = useI18nStore();
           <AppIcon name="database" aria-hidden="true" />{{ i18n.t("works.sync_all") }}
         </button>
       </UiTooltip>
-      <button v-else id="syncAllWorks" type="button" class="btn small primary" @click="emit('syncAll')">
+      <button
+        v-else
+        id="syncAllWorks"
+        type="button"
+        class="btn small primary"
+        @click="emit('syncAll')"
+      >
         <AppIcon name="database" aria-hidden="true" />{{ i18n.t("works.sync_all") }}
       </button>
     </div>

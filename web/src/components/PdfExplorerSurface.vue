@@ -473,7 +473,12 @@ onBeforeUnmount(() => {
           </div>
           <div class="pdf-command-divider"></div>
           <div class="pdf-view-actions">
-            <UiTooltip :text="copy.rotateLeft" trigger-mode="content" :content-focusable="false" placement="bottom">
+            <UiTooltip
+              :text="copy.rotateLeft"
+              trigger-mode="content"
+              :content-focusable="false"
+              placement="bottom"
+            >
               <button
                 class="btn small icon-only"
                 id="pdfRotateLeft"
@@ -482,7 +487,12 @@ onBeforeUnmount(() => {
                 v-text="'↶'"
               ></button>
             </UiTooltip>
-            <UiTooltip :text="copy.rotateRight" trigger-mode="content" :content-focusable="false" placement="bottom">
+            <UiTooltip
+              :text="copy.rotateRight"
+              trigger-mode="content"
+              :content-focusable="false"
+              placement="bottom"
+            >
               <button
                 class="btn small icon-only"
                 id="pdfRotateRight"

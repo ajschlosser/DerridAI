@@ -76,7 +76,9 @@ const tooltipLabel = computed(() =>
         @click="emit('click', $event)"
       >
         <AppIcon v-if="props.icon" :name="props.icon" aria-hidden="true" />
-        <span v-if="!props.iconOnly"><slot>{{ props.label }}</slot></span>
+        <span v-if="!props.iconOnly"
+          ><slot>{{ props.label }}</slot></span
+        >
         <slot v-else name="icon-label" />
         <span v-if="props.count" class="ui-button-count" aria-hidden="true">{{ props.count }}</span>
         <span v-if="props.count" class="sr-only">{{ props.count }}</span>
@@ -101,7 +103,9 @@ const tooltipLabel = computed(() =>
       @click="emit('click', $event)"
     >
       <AppIcon v-if="props.icon" :name="props.icon" aria-hidden="true" />
-      <span v-if="!props.iconOnly"><slot>{{ props.label }}</slot></span>
+      <span v-if="!props.iconOnly"
+        ><slot>{{ props.label }}</slot></span
+      >
       <slot v-else name="icon-label" />
       <span v-if="props.count" class="ui-button-count" aria-hidden="true">{{ props.count }}</span>
       <span v-if="props.count" class="sr-only">{{ props.count }}</span>

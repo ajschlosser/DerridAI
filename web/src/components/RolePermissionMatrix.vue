@@ -131,7 +131,11 @@ function describedBy(id: string) {
           <small :id="describedBy(capability.id)">{{
             i18n.t(capabilityHelpKey(capability.id), capability.description)
           }}</small>
-          <UiTooltip :text="i18n.t('roles.permission_id')" trigger-mode="content" placement="bottom">
+          <UiTooltip
+            :text="i18n.t('roles.permission_id')"
+            trigger-mode="content"
+            placement="bottom"
+          >
             <code>{{ capability.id }}</code>
           </UiTooltip>
         </span>

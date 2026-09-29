@@ -580,7 +580,10 @@ onBeforeUnmount(() => {
             <div v-if="selectedAsset.deterministic_checked_at" class="check-row">
               <dt class="source-fact-label">
                 {{ i18n.t("pdf_corpus.deterministic_check") }}
-                <UiTooltip :text="i18n.t('pdf_corpus.deterministic_check_help')" placement="bottom" />
+                <UiTooltip
+                  :text="i18n.t('pdf_corpus.deterministic_check_help')"
+                  placement="bottom"
+                />
               </dt>
               <dd>
                 <span

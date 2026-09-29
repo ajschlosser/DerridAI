@@ -78,7 +78,9 @@ function contextWindow(profile: ProviderProfile) {
             {{ profile.name || profile.id }} · {{ profile.model || props.modelNotSetLabel
             }}<template v-if="profile.available === false">
               · {{ props.unavailableLabel
-              }}<template v-if="profile.availability_error"> — {{ profile.availability_error }}</template>
+              }}<template v-if="profile.availability_error">
+                — {{ profile.availability_error }}</template
+              >
             </template>
           </option>
         </select>

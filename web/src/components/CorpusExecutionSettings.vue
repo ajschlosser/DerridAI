@@ -129,7 +129,9 @@ function concurrent(event: Event) {
 
       <div class="settings-grid">
         <label class="field" for="corpus-num-ctx"
-          ><span>{{ i18n.t("pdf_corpus.context_window") }} <UiTooltip :text="i18n.t('help.glossary.context_window.definition')" /></span
+          ><span
+            >{{ i18n.t("pdf_corpus.context_window") }}
+            <UiTooltip :text="i18n.t('help.glossary.context_window.definition')" /></span
           ><input
             id="corpus-num-ctx"
             class="control"
@@ -139,10 +141,11 @@ function concurrent(event: Event) {
             :disabled="props.disabled || props.useProfileDefaults"
             :value="props.generation?.num_ctx ?? ''"
             @input="numericGeneration('num_ctx', $event, { integer: true, min: 2048 })"
-          /></label
-        >
+        /></label>
         <label class="field" for="corpus-concurrency"
-          ><span>{{ i18n.t("pdf_corpus.max_concurrent") }} <UiTooltip :text="i18n.t('pdf_corpus.max_concurrent_help')" /></span
+          ><span
+            >{{ i18n.t("pdf_corpus.max_concurrent") }}
+            <UiTooltip :text="i18n.t('pdf_corpus.max_concurrent_help')" /></span
           ><input
             id="corpus-concurrency"
             class="control"
@@ -151,10 +154,11 @@ function concurrent(event: Event) {
             max="16"
             :value="props.maxConcurrentRequests"
             @input="concurrent"
-          /></label
-        >
+        /></label>
         <label class="field" for="corpus-temperature"
-          ><span>{{ i18n.t("pdf_corpus.temperature") }} <UiTooltip :text="i18n.t('help.glossary.temperature.definition')" /></span
+          ><span
+            >{{ i18n.t("pdf_corpus.temperature") }}
+            <UiTooltip :text="i18n.t('help.glossary.temperature.definition')" /></span
           ><input
             id="corpus-temperature"
             class="control"
@@ -167,7 +171,9 @@ function concurrent(event: Event) {
             @input="numericGeneration('temperature', $event)"
         /></label>
         <label class="field" for="corpus-top-k"
-          ><span>{{ i18n.t("pdf_corpus.top_k") }} <UiTooltip :text="i18n.t('providers.top_k_help')" /></span
+          ><span
+            >{{ i18n.t("pdf_corpus.top_k") }}
+            <UiTooltip :text="i18n.t('providers.top_k_help')" /></span
           ><input
             id="corpus-top-k"
             class="control"
@@ -179,7 +185,9 @@ function concurrent(event: Event) {
             @input="numericGeneration('top_k', $event, { integer: true, min: 0 })"
         /></label>
         <label class="field" for="corpus-top-p"
-          ><span>{{ i18n.t("pdf_corpus.top_p") }} <UiTooltip :text="i18n.t('help.glossary.top_p.definition')" /></span
+          ><span
+            >{{ i18n.t("pdf_corpus.top_p") }}
+            <UiTooltip :text="i18n.t('help.glossary.top_p.definition')" /></span
           ><input
             id="corpus-top-p"
             class="control"
@@ -192,7 +200,9 @@ function concurrent(event: Event) {
             @input="numericGeneration('top_p', $event)"
         /></label>
         <label class="field" for="corpus-min-p"
-          ><span>{{ i18n.t("pdf_corpus.min_p") }} <UiTooltip :text="i18n.t('providers.min_p_help')" /></span
+          ><span
+            >{{ i18n.t("pdf_corpus.min_p") }}
+            <UiTooltip :text="i18n.t('providers.min_p_help')" /></span
           ><input
             id="corpus-min-p"
             class="control"
@@ -205,7 +215,9 @@ function concurrent(event: Event) {
             @input="numericGeneration('min_p', $event)"
         /></label>
         <label class="field" for="corpus-repeat"
-          ><span>{{ i18n.t("pdf_corpus.repeat_penalty") }} <UiTooltip :text="i18n.t('providers.repeat_penalty_help')" /></span
+          ><span
+            >{{ i18n.t("pdf_corpus.repeat_penalty") }}
+            <UiTooltip :text="i18n.t('providers.repeat_penalty_help')" /></span
           ><input
             id="corpus-repeat"
             class="control"
@@ -217,7 +229,9 @@ function concurrent(event: Event) {
             @input="numericGeneration('repeat_penalty', $event)"
         /></label>
         <label class="field" for="corpus-seed"
-          ><span>{{ i18n.t("pdf_corpus.seed") }} <UiTooltip :text="i18n.t('help.glossary.seed.definition')" /></span
+          ><span
+            >{{ i18n.t("pdf_corpus.seed") }}
+            <UiTooltip :text="i18n.t('help.glossary.seed.definition')" /></span
           ><input
             id="corpus-seed"
             class="control"
@@ -228,7 +242,9 @@ function concurrent(event: Event) {
             @input="numericGeneration('seed', $event, { integer: true })"
         /></label>
         <label class="field" for="corpus-think"
-          ><span>{{ i18n.t("pdf_corpus.thinking") }} <UiTooltip :text="i18n.t('providers.think_help')" /></span
+          ><span
+            >{{ i18n.t("pdf_corpus.thinking") }}
+            <UiTooltip :text="i18n.t('providers.think_help')" /></span
           ><select
             id="corpus-think"
             class="control"
@@ -244,7 +260,9 @@ function concurrent(event: Event) {
           </select></label
         >
         <label class="field" for="corpus-mirostat"
-          ><span>{{ i18n.t("pdf_corpus.mirostat") }} <UiTooltip :text="i18n.t('providers.mirostat_help')" /></span
+          ><span
+            >{{ i18n.t("pdf_corpus.mirostat") }}
+            <UiTooltip :text="i18n.t('providers.mirostat_help')" /></span
           ><select
             id="corpus-mirostat"
             class="control"
@@ -258,7 +276,9 @@ function concurrent(event: Event) {
           </select></label
         >
         <label class="field" for="corpus-mirostat-eta"
-          ><span>{{ i18n.t("pdf_corpus.mirostat_eta") }} <UiTooltip :text="i18n.t('providers.mirostat_eta_help')" /></span
+          ><span
+            >{{ i18n.t("pdf_corpus.mirostat_eta") }}
+            <UiTooltip :text="i18n.t('providers.mirostat_eta_help')" /></span
           ><input
             id="corpus-mirostat-eta"
             class="control"
@@ -270,7 +290,9 @@ function concurrent(event: Event) {
             @input="numericGeneration('mirostat_eta', $event, { min: 0 })"
         /></label>
         <label class="field" for="corpus-mirostat-tau"
-          ><span>{{ i18n.t("pdf_corpus.mirostat_tau") }} <UiTooltip :text="i18n.t('providers.mirostat_tau_help')" /></span
+          ><span
+            >{{ i18n.t("pdf_corpus.mirostat_tau") }}
+            <UiTooltip :text="i18n.t('providers.mirostat_tau_help')" /></span
           ><input
             id="corpus-mirostat-tau"
             class="control"
@@ -288,7 +310,9 @@ function concurrent(event: Event) {
         <p class="help">{{ i18n.t("pdf_corpus.stage_budgets_help") }}</p>
         <div class="settings-grid stage-grid">
           <label class="field" for="corpus-window"
-            ><span>{{ i18n.t("pdf_corpus.segmentation_window") }} <UiTooltip :text="i18n.t('pdf_corpus.segmentation_window_help')" /></span
+            ><span
+              >{{ i18n.t("pdf_corpus.segmentation_window") }}
+              <UiTooltip :text="i18n.t('pdf_corpus.segmentation_window_help')" /></span
             ><input
               id="corpus-window"
               class="control"
@@ -300,10 +324,11 @@ function concurrent(event: Event) {
                 props.stageLimits?.segmentation_window_tokens ?? defaults.segmentation_window_tokens
               "
               @input="stage('segmentation_window_tokens', $event)"
-            /></label
-          >
+          /></label>
           <label class="field" for="corpus-seg-output"
-            ><span>{{ i18n.t("pdf_corpus.segmentation_output") }} <UiTooltip :text="i18n.t('pdf_corpus.stage_output_budget_help')" /></span
+            ><span
+              >{{ i18n.t("pdf_corpus.segmentation_output") }}
+              <UiTooltip :text="i18n.t('pdf_corpus.stage_output_budget_help')" /></span
             ><input
               id="corpus-seg-output"
               class="control"
@@ -317,7 +342,9 @@ function concurrent(event: Event) {
               @input="stage('segmentation_num_predict', $event)"
           /></label>
           <label class="field" for="corpus-reconcile-output"
-            ><span>{{ i18n.t("pdf_corpus.reconciliation_output") }} <UiTooltip :text="i18n.t('pdf_corpus.stage_output_budget_help')" /></span
+            ><span
+              >{{ i18n.t("pdf_corpus.reconciliation_output") }}
+              <UiTooltip :text="i18n.t('pdf_corpus.stage_output_budget_help')" /></span
             ><input
               id="corpus-reconcile-output"
               class="control"
@@ -331,7 +358,9 @@ function concurrent(event: Event) {
               @input="stage('reconciliation_num_predict', $event)"
           /></label>
           <label class="field" for="corpus-manifest-output"
-            ><span>{{ i18n.t("pdf_corpus.manifest_output") }} <UiTooltip :text="i18n.t('pdf_corpus.stage_output_budget_help')" /></span
+            ><span
+              >{{ i18n.t("pdf_corpus.manifest_output") }}
+              <UiTooltip :text="i18n.t('pdf_corpus.stage_output_budget_help')" /></span
             ><input
               id="corpus-manifest-output"
               class="control"
@@ -343,7 +372,9 @@ function concurrent(event: Event) {
               @input="stage('manifest_num_predict', $event)"
           /></label>
           <label class="field" for="corpus-discourse-output"
-            ><span>{{ i18n.t("pdf_corpus.discourse_output") }} <UiTooltip :text="i18n.t('pdf_corpus.stage_output_budget_help')" /></span
+            ><span
+              >{{ i18n.t("pdf_corpus.discourse_output") }}
+              <UiTooltip :text="i18n.t('pdf_corpus.stage_output_budget_help')" /></span
             ><input
               id="corpus-discourse-output"
               class="control"
@@ -355,7 +386,9 @@ function concurrent(event: Event) {
               @input="stage('discourse_num_predict', $event)"
           /></label>
           <label class="field" for="corpus-quotation-output"
-            ><span>{{ i18n.t("pdf_corpus.quotation_output") }} <UiTooltip :text="i18n.t('pdf_corpus.stage_output_budget_help')" /></span
+            ><span
+              >{{ i18n.t("pdf_corpus.quotation_output") }}
+              <UiTooltip :text="i18n.t('pdf_corpus.stage_output_budget_help')" /></span
             ><input
               id="corpus-quotation-output"
               class="control"
@@ -367,7 +400,9 @@ function concurrent(event: Event) {
               @input="stage('quotation_num_predict', $event)"
           /></label>
           <label class="field" for="corpus-index-output"
-            ><span>{{ i18n.t("pdf_corpus.indexing_output") }} <UiTooltip :text="i18n.t('pdf_corpus.stage_output_budget_help')" /></span
+            ><span
+              >{{ i18n.t("pdf_corpus.indexing_output") }}
+              <UiTooltip :text="i18n.t('pdf_corpus.stage_output_budget_help')" /></span
             ><input
               id="corpus-index-output"
               class="control"

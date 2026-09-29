@@ -12,12 +12,7 @@ withDefaults(
 );
 </script>
 <template>
-  <UiTooltip
-    v-if="help"
-    :text="help"
-    placement="bottom"
-    trigger-mode="content"
-  >
+  <UiTooltip v-if="help" :text="help" placement="bottom" trigger-mode="content">
     <span class="ui-status-badge" :data-tone="tone">
       <span v-if="showDot" class="ui-status-dot" aria-hidden="true"></span>{{ label }}
     </span>

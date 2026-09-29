@@ -763,7 +763,9 @@ onBeforeUnmount(() => {
                     :checked="snapshot.method === item[0]"
                     @change="changeMethod(item[0])"
                   /><span
-                    ><b>{{ i18n.t(item[1], item[2]) }} <UiTooltip :text="searchMethodHelp(item[0])" /></b
+                    ><b
+                      >{{ i18n.t(item[1], item[2]) }}
+                      <UiTooltip :text="searchMethodHelp(item[0])" /></b
                     ><small>{{
                       item[0] === "similarity"
                         ? i18n.t("search.method_similarity_short")
@@ -776,7 +778,9 @@ onBeforeUnmount(() => {
               </fieldset>
               <div v-if="snapshot.method === 'mmr'" class="search-mmr-controls">
                 <label
-                  ><span>{{ i18n.t("research.fetch_k_label") }} <UiTooltip :text="i18n.t('help.glossary.fetch_k.definition')" /></span
+                  ><span
+                    >{{ i18n.t("research.fetch_k_label") }}
+                    <UiTooltip :text="i18n.t('help.glossary.fetch_k.definition')" /></span
                   ><input
                     class="control"
                     type="number"
@@ -787,7 +791,9 @@ onBeforeUnmount(() => {
                       updateMmrOption('fetch_k', Number(($event.target as HTMLInputElement).value))
                     " /></label
                 ><label
-                  ><span>{{ i18n.t("search.mmr_lambda") }} <UiTooltip :text="i18n.t('help.glossary.mmr_lambda.definition')" /></span
+                  ><span
+                    >{{ i18n.t("search.mmr_lambda") }}
+                    <UiTooltip :text="i18n.t('help.glossary.mmr_lambda.definition')" /></span
                   ><input
                     class="control"
                     type="number"
@@ -1172,8 +1178,8 @@ onBeforeUnmount(() => {
                         >
                           <span class="search-relevance-mini"
                             >{{ i18n.t("search.relevance") }} {{ similarityPercent(result) }}</span
-                          >
-                        </UiTooltip><span v-for="reason in result.match_reasons" :key="reason">{{
+                          > </UiTooltip
+                        ><span v-for="reason in result.match_reasons" :key="reason">{{
                           reason
                         }}</span>
                       </div></template

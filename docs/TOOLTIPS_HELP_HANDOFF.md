@@ -28,7 +28,6 @@ Before continuing substantial work, sync this branch with current `master` and r
 
 All work described below is already committed to the remote branch. No uncommitted local work is required for the handoff.
 
-
 ### Progress update — 2026-09-29
 
 The branch has now been synchronized with `master` at `db0eeb9daae3d8847fd119299b7c7a7d535ceb20` by merge commit `8ac4be754d4b97576fe004b4691e94b7315d58d1`. The first post-handoff implementation pass has also started:
@@ -674,7 +673,7 @@ Do not add English-only fallback prose as the final implementation.
 
 Where frontend defaults exist for the same keys, keep them synchronized with locale content.
 
-Preserve plain-language wording. For academic users, explain what a setting *does* before naming its algorithmic implementation.
+Preserve plain-language wording. For academic users, explain what a setting _does_ before naming its algorithmic implementation.
 
 ## Accessibility requirements
 

@@ -12,12 +12,7 @@ withDefaults(
 );
 </script>
 <template>
-  <UiTooltip
-    v-if="detail"
-    :text="detail"
-    placement="bottom"
-    trigger-mode="content"
-  >
+  <UiTooltip v-if="detail" :text="detail" placement="bottom" trigger-mode="content">
     <span class="ui-health-chip" :data-available="available ? 'true' : 'false'">
       <span class="ui-health-dot" aria-hidden="true"></span>
       <span>{{ label }}</span>

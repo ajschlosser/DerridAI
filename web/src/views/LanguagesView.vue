@@ -1176,8 +1176,8 @@ onUnmounted(() => {
               ><span class="language-field-label"
                 >{{ i18n.t("language.name") }}
                 <UiTooltip :text="i18n.t('language.name_help')" placement="bottom" /></span
-              ><input v-model="current.name" class="control" /></label
-            >
+              ><input v-model="current.name" class="control"
+            /></label>
             <CountryFlagPicker
               v-model="current.flag"
               :locale-code="current.code"
@@ -1187,7 +1187,9 @@ onUnmounted(() => {
             <div class="language-source-card">
               <span class="language-field-label"
                 >{{ i18n.t("language.source_language") }}
-                <UiTooltip :text="i18n.t('language.source_language_help')" placement="bottom" /></span
+                <UiTooltip
+                  :text="i18n.t('language.source_language_help')"
+                  placement="bottom" /></span
               ><b>🇺🇸 {{ i18n.t("language.english_us") }}</b>
             </div>
             <button
@@ -1617,7 +1619,9 @@ onUnmounted(() => {
                 <label class="workflow-field"
                   ><span class="language-field-label"
                     >{{ i18n.t("language.locale_code") }}
-                    <UiTooltip :text="i18n.t('language.locale_code_help_modern')" placement="bottom" /></span
+                    <UiTooltip
+                      :text="i18n.t('language.locale_code_help_modern')"
+                      placement="bottom" /></span
                   ><input
                     ref="installCodeInput"
                     v-model="install.code"
@@ -1626,8 +1630,7 @@ onUnmounted(() => {
                     autocomplete="off"
                     spellcheck="false"
                     placeholder="de-DE"
-                    :disabled="Boolean(resumeJobId)"
-                  /></label
+                    :disabled="Boolean(resumeJobId)" /></label
                 ><label class="workflow-field"
                   ><span class="language-field-label"
                     >{{ i18n.t("language.name") }}
@@ -1636,8 +1639,7 @@ onUnmounted(() => {
                     v-model="install.name"
                     class="control"
                     autocomplete="off"
-                    placeholder="Deutsch (Deutschland)"
-                  /></label
+                    placeholder="Deutsch (Deutschland)" /></label
                 ><CountryFlagPicker
                   :model-value="install.flag"
                   :locale-code="install.code"
