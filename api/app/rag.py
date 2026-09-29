@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import logging
-import math
 import re
 import time
 from collections.abc import Callable, Mapping, Sequence
@@ -20,13 +19,13 @@ from .pipelines.manager import pipeline_manager
 from .pipelines.models import PipelineDefinition
 from .pipelines.research import compile_research_pipeline
 from .record_types import EvidenceItem, QueryDecomposition, RetrievalCandidate
+from .research_memory import ResponseMemoryIndex, memory_guidance
 from .retrieval_selection import (
     cosine_similarity,
     distance_to_relevance,
     mmr_select,
     source_aware_select,
 )
-from .research_memory import ResponseMemoryIndex, memory_guidance
 from .system_store import system_store
 
 logger = logging.getLogger(__name__)
