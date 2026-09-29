@@ -3,6 +3,9 @@ import { apiRequest } from "./http";
 export type SchemaFieldType = "text" | "number" | "boolean" | "choice" | "list";
 export type SchemaFieldRole = "scholarly" | "structural" | "document" | "operational";
 export type SchemaReviewVisibility = "primary" | "details" | "hidden";
+/** Where a value lives: on each record, or once for the whole corpus. */
+export type SchemaFieldScope = "record" | "corpus";
+export type DocumentRequirement = "evidence" | "publication";
 export interface RetrievalProfile {
   enabled: boolean;
   max_items: number;
@@ -27,8 +30,8 @@ export interface SchemaField {
   group: string;
   role?: SchemaFieldRole;
   review_visibility?: SchemaReviewVisibility;
-  /** The value is the same for every record of a work, so it can be filled in once before segmentation. */
-  applies_to_work?: boolean;
+  /** "corpus" values are filled in once before segmentation and inherited by every record. */
+  scope?: SchemaFieldScope;
   values: SchemaValue[];
   strict: boolean;
   instruction: string;
@@ -50,6 +53,11 @@ export interface SchemaGroup {
   footer: string;
   retrieval_profile?: RetrievalProfile | null;
 }
+/** A schema's policy for one DerridAI-owned bibliographic field (title, document_author, …). */
+export interface DocumentFieldPolicy {
+  name: string;
+  required_for: DocumentRequirement[];
+}
 export interface MetadataSchema {
   format_version: number;
   schema_version?: string;
@@ -58,6 +66,8 @@ export interface MetadataSchema {
   description: string;
   groups: SchemaGroup[];
   fields: SchemaField[];
+  /** One policy per document field, in DerridAI's canonical order; the server fills any that are missing. */
+  document_fields?: DocumentFieldPolicy[];
 }
 export interface SchemaSummary {
   id: string;
@@ -80,6 +90,39 @@ export interface SchemaPreview {
 /** The three fields every schema has, in the "discourse" group. Their instructions are built in and cannot be edited. */
 export const CORE_FIELDS = ["region_type", "primary_text", "discourse_role"] as const;
 export const CORE_GROUP = "discourse";
+
+/** DerridAI-owned bibliographic fields, in the server's canonical order (metadata_schema.DOCUMENT_FIELDS). */
+export const DOCUMENT_FIELD_NAMES = [
+  "title",
+  "short_title",
+  "original_title",
+  "document_author",
+  "translator",
+  "publisher",
+  "publication_place",
+  "publication_year",
+  "edition",
+  "isbn",
+  "language",
+  "original_language",
+  "document_is_translation",
+  "document_type",
+] as const;
+const DEFAULT_REQUIRED = new Set(["title", "document_author"]);
+
+/** The server's default policies (metadata_schema.default_document_fields). */
+export function defaultDocumentFields(): DocumentFieldPolicy[] {
+  return DOCUMENT_FIELD_NAMES.map((name) => ({
+    name,
+    required_for: DEFAULT_REQUIRED.has(name) ? ["evidence", "publication"] : [],
+  }));
+}
+
+/** One policy per document field in canonical order, keeping the given ones (as the server does). */
+export function completeDocumentFields(given: DocumentFieldPolicy[] = []): DocumentFieldPolicy[] {
+  const byName = new Map(given.map((p) => [p.name, p]));
+  return defaultDocumentFields().map((p) => byName.get(p.name) ?? p);
+}
 
 const base = "/api/pdf/metadata-schemas";
 export const metadataSchemasApi = {
@@ -111,7 +154,7 @@ export function blankField(group = CORE_GROUP): SchemaField {
     group,
     role: "scholarly",
     review_visibility: "primary",
-    applies_to_work: false,
+    scope: "record",
     values: [],
     strict: false,
     instruction: "",
