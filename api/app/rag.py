@@ -17,6 +17,7 @@ from .config import settings
 from .cross_encoder import predict_scores
 from .models import OllamaTouchupOptions, RAGPromptMetadataPolicy, RAGRunRequest
 from .record_types import EvidenceItem, QueryDecomposition, RetrievalCandidate
+from .retrieval_selection import cosine_similarity, distance_to_relevance, mmr_select
 from .research_memory import ResponseMemoryIndex, memory_guidance
 from .system_store import system_store
 
@@ -712,29 +713,16 @@ def _bind_sources(answer: str, evidence: list[EvidenceItem], include_works_cited
     return bound
 
 
-def _cosine(a: list[float] | None, b: list[float] | None) -> float:
-    # Retrieval embeddings may arrive as NumPy arrays from Chroma. Explicit
-    # length checks avoid ambiguous NumPy truth-value evaluation.
-    if (
-        a is None
-        or b is None
-        or len(a) == 0
-        or len(b) == 0
-        or len(a) != len(b)
-    ):
-        return 0.0
-    dot = sum(x * y for x, y in zip(a, b))
-    na = math.sqrt(sum(x * x for x in a))
-    nb = math.sqrt(sum(y * y for y in b))
-    if not na or not nb:
-        return 0.0
-    return dot / (na * nb)
+def _cosine(a: Any, b: Any) -> float:
+    """Compatibility wrapper around the shared retrieval-scoring primitive."""
+
+    return cosine_similarity(a, b)
 
 
 def _distance_similarity(distance: float | None) -> float:
-    if distance is None:
-        return 0.0
-    return 1.0 / (1.0 + max(0.0, float(distance)))
+    """Legacy metric-unknown wrapper retained for memory/reranker compatibility."""
+
+    return distance_to_relevance(distance)
 
 
 def _mmr_select(
@@ -743,31 +731,15 @@ def _mmr_select(
     k: int,
     lambda_mult: float,
 ) -> list[dict[str, Any]]:
-    if not candidates:
-        return []
-    remaining = list(candidates)
-    selected: list[dict[str, Any]] = []
+    """Compatibility wrapper that now preserves MMR objective provenance."""
 
-    while remaining and len(selected) < k:
-        best_index = 0
-        best_score = -float("inf")
-        for index, candidate in enumerate(remaining):
-            relevance = _distance_similarity(candidate.get("distance"))
-            diversity = 0.0
-            if selected:
-                diversity = max(
-                    _cosine(candidate.get("embedding"), chosen.get("embedding"))
-                    for chosen in selected
-                )
-            score = lambda_mult * relevance - (1.0 - lambda_mult) * diversity
-            if score > best_score:
-                best_score = score
-                best_index = index
-        chosen = remaining.pop(best_index)
-        chosen = dict(chosen)
-        chosen["mmr_score"] = best_score
-        selected.append(chosen)
-    return selected
+    return mmr_select(
+        candidates,
+        limit=k,
+        lambda_mult=lambda_mult,
+        relevance=lambda candidate: _distance_similarity(candidate.get("distance")),
+        vector=lambda candidate: candidate.get("embedding"),
+    )
 
 
 def _tokenize(text: str) -> set[str]:
