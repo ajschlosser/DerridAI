@@ -419,6 +419,15 @@ def test_editorial_memory_semantic_retrieval_uses_bound_canonical_exemplars():
             assert kwargs["exclude_record_id"] == "r2"
             assert kwargs["field_limits"] == {"position_holder": 3}
             assert kwargs["field_min_similarity"] == {"position_holder": 0.73}
+            assert kwargs["packet_char_budget"] == 4800
+            assert kwargs["fetch_k"] == 16
+            assert kwargs["semantic_weight"] == 0.8
+            assert kwargs["lexical_weight"] == 0.2
+            assert kwargs["mmr_lambda"] == 0.72
+            assert kwargs["cross_encoder_enabled"] is True
+            assert kwargs["cross_encoder_top_k"] == 8
+            assert kwargs["cross_encoder_model"] == "cross-encoder/ms-marco-MiniLM-L-6-v2"
+            assert kwargs["cross_encoder_timeout_seconds"] == 15.0
             assert len(kwargs["exemplars"]) == 1
             exemplar = kwargs["exemplars"][0]
             assert exemplar["evidence_text"] == blocks()["b2"]["text"]
@@ -458,6 +467,9 @@ def test_editorial_memory_semantic_retrieval_uses_bound_canonical_exemplars():
     assert example["evidence_bound"] is True
     assert example["similarity"] == 0.97
     assert memory["progressive_retrieval"]["query_ms"] == 8
+    assert memory["progressive_retrieval"]["pipeline_id"] == "metadata.precedents.current"
+    assert memory["progressive_retrieval"]["pipeline_version"] == 1
+    assert memory["progressive_retrieval"]["pipeline_hash"]
 
 
 def test_editorial_memory_can_disable_progressive_retrieval_for_ablation():
