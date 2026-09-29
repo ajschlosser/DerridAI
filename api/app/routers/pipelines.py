@@ -68,10 +68,22 @@ def research_pipeline_options(request: Request) -> dict[str, Any]:
             -int(item.get("version") or 0),
         )
     )
+    strategy_ids = {
+        str(stage.get("strategy") or "")
+        for pipeline in rows
+        for stage in pipeline.get("stages", [])
+        if isinstance(stage, dict)
+    }
+    strategies = [
+        spec
+        for spec in pipeline_manager.service.strategies()
+        if str(spec.get("strategy_id") or "") in strategy_ids
+    ]
     return {
         "assignment": assignment,
         "override_allowed": user.role == "admin" or override_allowed,
         "pipelines": rows,
+        "strategies": strategies,
     }
 
 
