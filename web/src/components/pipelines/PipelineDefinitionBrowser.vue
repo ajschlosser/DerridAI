@@ -7,6 +7,7 @@ import {
   pipelinePurposeLabel,
 } from "../../domain/pipelinePresentation";
 import type { PipelineAssignment, PipelineDefinition } from "../../types/pipelines";
+import UiTooltip from "../ui/UiTooltip.vue";
 
 const props = defineProps<{
   pipelines: PipelineDefinition[];
@@ -32,7 +33,17 @@ function assigned(pipeline: PipelineDefinition) {
 <template>
   <aside class="pipeline-browser" :aria-label="t('pipelines.definitions', 'Pipeline definitions')">
     <div class="browser-heading">
-      <strong>{{ t("pipelines.definitions", "Pipeline definitions") }}</strong>
+      <strong class="heading-with-help">
+        {{ t("pipelines.definitions", "Pipeline definitions") }}
+        <UiTooltip
+          :text="
+            t(
+              'pipelines.definitions_help',
+              'Each row is one immutable pipeline version. Several rows can share the same pipeline ID because version history is preserved rather than overwritten.',
+            )
+          "
+        />
+      </strong>
       <span :aria-label="t('pipelines.definition_count', 'Pipeline definition count')">
         {{ pipelines.length }}
       </span>
@@ -84,6 +95,11 @@ function assigned(pipeline: PipelineDefinition) {
 .browser-heading span {
   color: var(--muted);
   font-size: 0.78rem;
+}
+.heading-with-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
 .pipeline-choice {
   position: relative;
