@@ -866,6 +866,14 @@ The **Response Library** page provides:
 - re-run with the original parameters
 - re-grade with any configured LLM provider
 
+## Pipeline Studio
+
+Pipeline Studio is an administrator workspace at **AI & Automation → Pipeline Studio**. It has three sections:
+
+- **Pipelines** lists every saved version. Search and filters narrow the list by name, purpose, and status. The selected version opens as a relational diagram: stages are nodes, solid arrows are the normal path, and dashed arrows are fallbacks. Stage details stay available under the diagram. **Clone & edit** prepares a new immutable version; **Make active** changes the system assignment for that feature without rewriting past runs.
+- **Executions** queries the full run history. Filter by text, purpose, pipeline, status, and owner, then page through the results. Selecting a run draws the same stage graph with runtime status, timing, and counts, and **Open configuration** returns to the saved version. **Delete** removes one trace. **Clear history** removes every trace. Definitions and assignments stay in place.
+- **Operations** keeps dry-run Research comparisons, immutable Research benchmarks, and sampled operational health.
+
 ## Compare
 
 Compare is a Vue-native two-column workspace at **Tools → Compare**. Each column can independently show a **library** record (loaded JSONL files for administrators, corpus-database summaries for researchers) or an **editable copy**. Use **Load into editor** to populate A or B from any existing record, then edit the JSON/JSONL without changing the source until you copy it elsewhere. **Copy A into B** makes a working duplicate. Field differences update as soon as both sides parse as a single JSON object. Audit `updates` history is excluded from the comparison. Researcher accounts cannot mutate corpus records from this page.
