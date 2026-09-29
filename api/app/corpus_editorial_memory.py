@@ -24,7 +24,9 @@ from .field_assertions import (
     migrate_record_assertions,
     project_record_assertions,
 )
+from .metadata_exemplar_retrieval import DEFAULT_FETCH_K, DEFAULT_MMR_LAMBDA
 from .metadata_exemplars import (
+    DEFAULT_PROMPT_TOKEN_BUDGET,
     PROMPT_CHARS_PER_TOKEN,
     budget_prompt_examples,
     build_correction_exemplars,
@@ -338,24 +340,33 @@ class EditorialMemoryMixin:
         metadata_pipeline_plan = None
         metadata_pipeline_info: dict[str, Any] = {}
         if use_progressive:
-            from .pipelines.manager import pipeline_manager
-            from .pipelines.metadata_precedents import (
-                compile_metadata_precedent_pipeline,
-            )
-            from .pipelines.models import PipelineDefinition
+            try:
+                from .pipelines.manager import pipeline_manager
+                from .pipelines.metadata_precedents import (
+                    compile_metadata_precedent_pipeline,
+                )
+                from .pipelines.models import PipelineDefinition
 
-            resolved_pipeline = pipeline_manager.resolve("metadata_precedents")
-            resolved_definition = PipelineDefinition.model_validate(
-                resolved_pipeline["pipeline"]
-            )
-            metadata_pipeline_plan = compile_metadata_precedent_pipeline(
-                resolved_definition
-            )
-            metadata_pipeline_info = {
-                "pipeline_id": resolved_definition.pipeline_id,
-                "pipeline_version": resolved_definition.version,
-                "pipeline_hash": resolved_pipeline.get("pipeline_hash"),
-            }
+                resolved_pipeline = pipeline_manager.resolve("metadata_precedents")
+                resolved_definition = PipelineDefinition.model_validate(
+                    resolved_pipeline["pipeline"]
+                )
+                metadata_pipeline_plan = compile_metadata_precedent_pipeline(
+                    resolved_definition
+                )
+                metadata_pipeline_info = {
+                    "pipeline_id": resolved_definition.pipeline_id,
+                    "pipeline_version": resolved_definition.version,
+                    "pipeline_hash": resolved_pipeline.get("pipeline_hash"),
+                }
+            except Exception as exc:  # noqa: BLE001 - editorial memory remains advisory
+                self._append_warning(
+                    build_id,
+                    "Metadata precedent pipeline could not be resolved; "
+                    "progressive semantic precedents were skipped and deterministic "
+                    f"editorial memory remained available ({type(exc).__name__}: {exc}).",
+                )
+                use_progressive = False
 
         # Bound the complete few-shot packet rather than only each field. This
         # keeps progressive retrieval from trading metadata quality for prompt
@@ -405,13 +416,13 @@ class EditorialMemoryMixin:
                         metadata_pipeline_plan.packet_char_budget
                         if metadata_pipeline_plan is not None
                         and metadata_pipeline_plan.packet_char_budget is not None
-                        else 4800
+                        else DEFAULT_PROMPT_TOKEN_BUDGET * PROMPT_CHARS_PER_TOKEN
                     ),
                     fetch_k=(
                         metadata_pipeline_plan.fetch_k
                         if metadata_pipeline_plan is not None
                         and metadata_pipeline_plan.fetch_k is not None
-                        else 16
+                        else DEFAULT_FETCH_K
                     ),
                     semantic_weight=(
                         metadata_pipeline_plan.semantic_weight
@@ -426,11 +437,13 @@ class EditorialMemoryMixin:
                     mmr_lambda=(
                         metadata_pipeline_plan.mmr_lambda
                         if metadata_pipeline_plan is not None
-                        else 0.72
+                        else DEFAULT_MMR_LAMBDA
                     ),
-                    cross_encoder_enabled=bool(
-                        metadata_pipeline_plan
+                    cross_encoder_enabled=(
+                        None
+                        if metadata_pipeline_plan is not None
                         and metadata_pipeline_plan.rerank_stage_id
+                        else False
                     ),
                     cross_encoder_top_k=(
                         metadata_pipeline_plan.cross_encoder_top_k
