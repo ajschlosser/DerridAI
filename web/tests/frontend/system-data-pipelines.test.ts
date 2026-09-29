@@ -290,8 +290,6 @@ describe("System Data Pipeline Studio", () => {
     expect((idInput.element as HTMLInputElement).value).toBe("research.current.custom");
     expect(wrapper.text()).toContain("Stage settings");
   });
-});
-
 
 
   it("asks the server for the next version when cloning a saved custom pipeline", async () => {
@@ -320,3 +318,4 @@ describe("System Data Pipeline Studio", () => {
     const versionInput = inputs.find((input) => input.attributes("type") === "number");
     expect((versionInput!.element as HTMLInputElement).value).toBe("3");
   });
+});
