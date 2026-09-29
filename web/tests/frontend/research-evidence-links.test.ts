@@ -30,4 +30,48 @@ describe("ResearchEvidencePanel links", () => {
     });
     expect(wrapper.find(".research-evidence-links").exists()).toBe(false);
   });
+  it("keeps long answer evidence compact until the reader asks for the full passage", async () => {
+    const longText = "A".repeat(1100);
+    const wrapper = mount(ResearchEvidencePanel, {
+      props: {
+        resultEvidence: [
+          {
+            evidence_id: "E1",
+            full_citation: "Derrida, Jacques. Test Work.",
+            collection: "derrida_primary",
+            record: { record_id: "rec-1", work: "Test Work", text: longText },
+          },
+        ],
+      },
+    });
+
+    const passage = wrapper.get(".research-evidence-text");
+    expect(passage.text().length).toBeLessThan(longText.length);
+    const expand = wrapper.get('.research-evidence-passage button[aria-expanded="false"]');
+    await expand.trigger("click");
+    expect(wrapper.get(".research-evidence-text").text()).toBe(longText);
+    const collapse = wrapper.get('.research-evidence-passage button[aria-expanded="true"]');
+    expect(collapse.attributes("aria-expanded")).toBe("true");
+  });
+
+  it("keeps secondary source details collapsed by default", () => {
+    const wrapper = mount(ResearchEvidencePanel, {
+      props: {
+        resultEvidence: [
+          {
+            evidence_id: "E1",
+            full_citation: "Derrida, Jacques. Test Work.",
+            collection: "derrida_primary",
+            rerank_score: 0.91,
+            record: { record_id: "rec-1", work: "Test Work", text: "Evidence text." },
+          },
+        ],
+      },
+    });
+
+    const disclosures = wrapper.findAll(".research-evidence-disclosure");
+    expect(disclosures).toHaveLength(1);
+    expect(disclosures[0].attributes("open")).toBeUndefined();
+    expect(disclosures[0].text()).toContain("Derrida, Jacques. Test Work.");
+  });
 });

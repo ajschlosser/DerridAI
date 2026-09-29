@@ -72,3 +72,31 @@ export const AnswerEvidence: Story = {
     ],
   },
 };
+
+export const DenseAnswerEvidence: Story = {
+  args: {
+    activeIndex: 0,
+    resultEvidence: Array.from({ length: 6 }, (_, index) => ({
+      evidence_id: `E${index + 1}`,
+      inline_citation: `(Derrida 1999: ${20 + index})`,
+      full_citation: "Derrida, Jacques. Adieu to Emmanuel Levinas.",
+      collection: "derrida_primary",
+      rerank_score: 0.94 - index * 0.03,
+      record: {
+        record_id: `adieu-00${index + 20}`,
+        work: index % 2 ? "Adieu to Emmanuel Levinas" : "The Gift of Death",
+        page_start: 20 + index,
+        speaker: "Derrida",
+        position_holder: index % 2 ? "Levinas" : "Derrida",
+        stance: "analysis",
+        discourse_role: "engagement",
+        text:
+          "This deliberately long evidence passage demonstrates the compact inspector. ".repeat(
+            24,
+          ) +
+          "The full passage remains available without forcing the evidence rail to consume the entire viewport.",
+        concepts: ["responsibility", "decision", "other"],
+      },
+    })),
+  },
+};

@@ -57,3 +57,26 @@ export const Completed: Story = {
     },
   },
 };
+
+export const FormattingStress: Story = {
+  args: {
+    job: {
+      id: "run-formatting",
+      status: "completed",
+      prompt: "How does undecidability condition responsibility?",
+      provider: "ollama",
+      model: "qwen3:14b",
+    },
+    result: {
+      prompt: "How does undecidability condition responsibility?",
+      provider: "ollama",
+      model: "qwen3:14b",
+      evidence: [
+        { evidence_id: "E1", inline_citation: "(Derrida 1995: 24)" },
+        { evidence_id: "E2", inline_citation: "(Derrida 1999: 20–21)" },
+      ],
+      answer:
+        "**Responsibility does not begin with the mechanical application of a rule. It requires a decision where calculation reaches its limit.**\n\n**A decision worthy of the name** must pass through undecidability **(Derrida **1995**: 24)** while still answering to inherited norms.\n\n### Consequences\n\n1. Citation typography remains part of the reading line (Derrida 1999: 20–21).\n2. Local **emphasis remains local** instead of changing an entire paragraph.\n\n**Works Cited**\n\n1. Derrida, Jacques. The Gift of Death.",
+    },
+  },
+};
