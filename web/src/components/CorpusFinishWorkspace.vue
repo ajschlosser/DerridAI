@@ -2,6 +2,9 @@
 import { computed, ref } from "vue";
 import type { CorpusBuild } from "../api/pdfCorpus";
 import { useI18nStore } from "../stores/i18n";
+import AppIcon from "./AppIcon.vue";
+
+type ValidationIssue = { code?: string; record_id?: string; field?: string; reason?: string };
 
 const props = defineProps<{ build: CorpusBuild; busy?: boolean }>();
 const emit = defineEmits<{
@@ -32,10 +35,50 @@ const validationIssues = computed(() =>
   Array.isArray(validation.value.validation_issues) ? validation.value.validation_issues : [],
 );
 const sourceQuality = computed(() => props.build.source_quality || {});
-const showAllIssues = ref(false);
-const shownIssues = computed(() =>
-  showAllIssues.value ? validationIssues.value : validationIssues.value.slice(0, 5),
+
+/** One entry per record with a finding, in first-seen order, so the same record's
+ * several findings read as one thing to fix rather than several identical-looking rows. */
+interface ValidationIssueGroup {
+  recordId: string;
+  issues: ValidationIssue[];
+}
+const groupedValidationIssues = computed<ValidationIssueGroup[]>(() => {
+  const order: string[] = [];
+  const byRecord = new Map<string, ValidationIssue[]>();
+  for (const issue of validationIssues.value) {
+    const recordId = String(issue?.record_id || "");
+    if (!byRecord.has(recordId)) {
+      order.push(recordId);
+      byRecord.set(recordId, []);
+    }
+    byRecord.get(recordId)?.push(issue);
+  }
+  return order.map((recordId) => ({ recordId, issues: byRecord.get(recordId) || [] }));
+});
+const showAllIssueGroups = ref(false);
+const shownIssueGroups = computed(() =>
+  showAllIssueGroups.value
+    ? groupedValidationIssues.value
+    : groupedValidationIssues.value.slice(0, 5),
 );
+function issueGroupLabel(issue: ValidationIssue) {
+  const reason = issue.reason || blockerLabel(issue.code);
+  return issue.field ? `${issue.field}: ${reason}` : reason;
+}
+const validationIssueSummaryLabel = computed(() => {
+  const issueCount = validationIssues.value.length;
+  const recordCount = groupedValidationIssues.value.length;
+  return recordCount > 0 && recordCount !== issueCount
+    ? i18n.tf("pdf_corpus.validation_issue_summary_grouped", {
+        issues: issueCount,
+        records: recordCount,
+      })
+    : i18n.tf("pdf_corpus.validation_issue_count", { count: issueCount });
+});
+/** A decorative status glyph; the adjacent label already carries the state in words. */
+function stateIcon(attention: boolean) {
+  return attention ? "warning" : "check";
+}
 const noPublishable = computed(() => Boolean(readiness.value.no_publishable_records));
 const primaryLabel = computed(() => {
   if (publication.value) return i18n.t("pdf_corpus.download_jsonl");
@@ -138,7 +181,9 @@ function fixBlocker(code?: string) {
       aria-labelledby="no-publishable-title"
     >
       <div>
-        <span class="readiness-state">{{ i18n.t("pdf_corpus.no_publishable_status") }}</span>
+        <span class="readiness-state" data-tone="attention"
+          ><AppIcon :name="stateIcon(true)" />{{ i18n.t("pdf_corpus.no_publishable_status") }}</span
+        >
         <h3 id="no-publishable-title">{{ i18n.t("pdf_corpus.no_publishable_title") }}</h3>
         <p>{{ i18n.t("pdf_corpus.no_publishable_help") }}</p>
       </div>
@@ -155,7 +200,9 @@ function fixBlocker(code?: string) {
 
     <section v-if="publication" class="publication-snapshot" role="status">
       <div>
-        <span class="readiness-state">{{ i18n.t("pdf_corpus.complete") }}</span>
+        <span class="readiness-state" data-tone="ok"
+          ><AppIcon :name="stateIcon(false)" />{{ i18n.t("pdf_corpus.complete") }}</span
+        >
         <b>{{ i18n.t("pdf_corpus.publication") }}</b>
       </div>
       <p>
@@ -190,7 +237,9 @@ function fixBlocker(code?: string) {
     >
       <div class="publication-blockers-head">
         <div>
-          <span class="readiness-state">{{ i18n.t("pdf_corpus.attention_required") }}</span>
+          <span class="readiness-state" data-tone="attention"
+            ><AppIcon :name="stateIcon(true)" />{{ i18n.t("pdf_corpus.attention_required") }}</span
+          >
           <h3 id="publication-blockers-title">
             {{ i18n.tf("pdf_corpus.view_publication_blockers", { count: blockers.length }) }}
           </h3>
@@ -201,9 +250,16 @@ function fixBlocker(code?: string) {
         <li v-for="(blocker, index) in blockers" :key="`${blocker.code}-${index}`">
           <span>
             <b>{{ blockerLabel(blocker.code) }}</b>
-            <small v-if="blocker.count">{{ blocker.count }}</small>
+            <small v-if="blocker.count" class="count-pill">{{ blocker.count }}</small>
           </span>
-          <button type="button" class="btn small" @click="fixBlocker(blocker.code)">
+          <button
+            type="button"
+            class="btn small"
+            :aria-label="
+              i18n.tf('pdf_corpus.fix_blocker_labelled', { blocker: blockerLabel(blocker.code) })
+            "
+            @click="fixBlocker(blocker.code)"
+          >
             {{ i18n.t("pdf_corpus.go_fix") }}
           </button>
         </li>
@@ -216,7 +272,11 @@ function fixBlocker(code?: string) {
         :data-state="Number(readiness.records_pending || 0) > 0 ? 'attention' : 'complete'"
       >
         <div class="readiness-row-copy">
-          <span class="readiness-state">
+          <span
+            class="readiness-state"
+            :data-tone="Number(readiness.records_pending || 0) > 0 ? 'attention' : 'ok'"
+          >
+            <AppIcon :name="stateIcon(Number(readiness.records_pending || 0) > 0)" />
             {{
               Number(readiness.records_pending || 0) > 0
                 ? i18n.t("pdf_corpus.attention_required")
@@ -268,7 +328,11 @@ function fixBlocker(code?: string) {
         :data-state="Number(summary.fields_unresolved || 0) > 0 ? 'attention' : 'complete'"
       >
         <div class="readiness-row-copy">
-          <span class="readiness-state">
+          <span
+            class="readiness-state"
+            :data-tone="Number(summary.fields_unresolved || 0) > 0 ? 'attention' : 'ok'"
+          >
+            <AppIcon :name="stateIcon(Number(summary.fields_unresolved || 0) > 0)" />
             {{
               Number(summary.fields_unresolved || 0) > 0
                 ? i18n.t("pdf_corpus.attention_required")
@@ -329,7 +393,8 @@ function fixBlocker(code?: string) {
 
       <section class="readiness-row" :data-state="validation.valid ? 'complete' : 'attention'">
         <div class="readiness-row-copy">
-          <span class="readiness-state">
+          <span class="readiness-state" :data-tone="validation.valid ? 'ok' : 'attention'">
+            <AppIcon :name="stateIcon(!validation.valid)" />
             {{
               validation.valid
                 ? i18n.t("pdf_corpus.complete")
@@ -393,42 +458,59 @@ function fixBlocker(code?: string) {
             {{ i18n.t("pdf_corpus.review_validation_issues") }}
           </button>
         </div>
-        <div v-if="validationIssues.length" class="validation-issue-summary">
-          <b>{{
-            i18n.tf("pdf_corpus.validation_issue_count", {
-              count: validationIssues.length,
-            })
-          }}</b>
+        <div v-if="groupedValidationIssues.length" class="validation-issue-summary">
+          <b>{{ validationIssueSummaryLabel }}</b>
           <ul>
             <li
-              v-for="(issue, index) in shownIssues"
-              :key="`${issue.code}-${issue.record_id}-${issue.field}-${index}`"
+              v-for="group in shownIssueGroups"
+              :key="group.recordId || 'ungrouped'"
+              class="issue-group"
             >
-              <code>{{ issue.field || issue.record_id || issue.code || "validation" }}</code>
-              <span>{{ issue.reason || blockerLabel(issue.code) }}</span>
-              <small v-if="issue.record_id">{{ issue.record_id }}</small>
-              <button
-                v-if="issue.record_id"
-                type="button"
-                class="btn small"
-                @click="emit('fixIssue', issue)"
-              >
-                {{ i18n.t("pdf_corpus.fix_this_issue") }}
-              </button>
+              <div class="issue-group-head">
+                <span class="issue-group-heading">
+                  <code v-if="group.recordId">{{ group.recordId }}</code>
+                  <span v-if="group.issues.length > 1" class="count-pill">{{
+                    group.issues.length
+                  }}</span>
+                </span>
+                <button
+                  v-if="group.recordId"
+                  type="button"
+                  class="btn small"
+                  :aria-label="
+                    group.issues.length > 1
+                      ? i18n.tf('pdf_corpus.fix_record_issues', {
+                          count: group.issues.length,
+                          record: group.recordId,
+                        })
+                      : i18n.tf('pdf_corpus.fix_issue_labelled', {
+                          reason: issueGroupLabel(group.issues[0]),
+                        })
+                  "
+                  @click="emit('fixIssue', group.issues[0])"
+                >
+                  {{ i18n.t("pdf_corpus.fix_this_issue") }}
+                </button>
+              </div>
+              <ul class="issue-group-reasons">
+                <li v-for="(issue, index) in group.issues" :key="`${issue.code}-${index}`">
+                  {{ issueGroupLabel(issue) }}
+                </li>
+              </ul>
             </li>
           </ul>
           <button
-            v-if="validationIssues.length > 5"
+            v-if="groupedValidationIssues.length > 5"
             type="button"
             class="link-button"
-            :aria-expanded="showAllIssues"
-            @click="showAllIssues = !showAllIssues"
+            :aria-expanded="showAllIssueGroups"
+            @click="showAllIssueGroups = !showAllIssueGroups"
           >
             {{
-              showAllIssues
+              showAllIssueGroups
                 ? i18n.t("pdf_corpus.validation_show_fewer")
-                : i18n.tf("pdf_corpus.validation_more_issues", {
-                    count: validationIssues.length - 5,
+                : i18n.tf("pdf_corpus.validation_more_records", {
+                    count: groupedValidationIssues.length - 5,
                   })
             }}
           </button>
@@ -479,6 +561,22 @@ function fixBlocker(code?: string) {
   letter-spacing: 0.07em;
   text-transform: uppercase;
 }
+.readiness-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.readiness-state svg {
+  width: 0.9em;
+  height: 0.9em;
+  flex: none;
+}
+.readiness-state[data-tone="attention"] svg {
+  color: var(--tone-warn-fg);
+}
+.readiness-state[data-tone="ok"] svg {
+  color: var(--tone-ok-fg);
+}
 .publication-primary {
   display: flex;
   min-width: 0;
@@ -522,8 +620,8 @@ function fixBlocker(code?: string) {
   gap: var(--space-4);
   align-items: center;
   padding: var(--space-3) var(--space-4);
-  border-color: var(--tone-success-border);
-  background: var(--tone-success-bg);
+  border-color: var(--tone-ok-border);
+  background: var(--tone-ok-bg);
 }
 .publication-snapshot .not-conformant {
   grid-column: 1 / -1;
@@ -608,8 +706,18 @@ function fixBlocker(code?: string) {
   gap: var(--space-2);
   align-items: baseline;
 }
-.publication-blockers small {
-  color: var(--text-secondary);
+.count-pill {
+  display: inline-grid;
+  min-width: 1.3rem;
+  height: 1.3rem;
+  padding-inline: 0.35em;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--tone-warn-bg);
+  color: var(--tone-warn-fg);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  line-height: 1;
 }
 .publication-readiness-list {
   display: grid;
@@ -632,7 +740,7 @@ function fixBlocker(code?: string) {
   box-shadow: inset 3px 0 0 var(--tone-warn-fg);
 }
 .readiness-row[data-state="complete"] {
-  box-shadow: inset 3px 0 0 var(--tone-success-fg);
+  box-shadow: inset 3px 0 0 var(--tone-ok-fg);
 }
 .readiness-row-copy {
   min-width: 0;
@@ -686,17 +794,34 @@ dd {
   list-style: none;
 }
 .validation-issue-summary li {
-  display: grid;
-  grid-template-columns: minmax(8rem, auto) minmax(0, 1fr);
-  gap: var(--space-3);
-  padding-block: var(--space-1);
+  padding-block: var(--space-2);
 }
-.validation-issue-summary code {
+.validation-issue-summary li + li {
+  border-top: 1px solid var(--border-subtle);
+}
+.issue-group-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+}
+.issue-group-heading {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.issue-group-heading code {
   overflow-wrap: anywhere;
   font-size: var(--fs-xs);
 }
-.validation-issue-summary li span,
-.validation-issue-summary small {
+.issue-group-reasons {
+  display: grid;
+  gap: var(--space-1);
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-4);
+  list-style: disc;
   color: var(--text-secondary);
   font-size: var(--fs-xs);
   line-height: 1.4;
@@ -727,8 +852,9 @@ dd {
     align-items: flex-start;
     flex-direction: column;
   }
-  .validation-issue-summary li {
-    grid-template-columns: 1fr;
+  .issue-group-head {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 </style>

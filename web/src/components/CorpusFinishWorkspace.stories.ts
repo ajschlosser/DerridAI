@@ -146,6 +146,53 @@ export const MixedAcceptedAndRejected: Story = {
     },
   },
 };
+export const ValidationIssuesGrouped: Story = {
+  args: {
+    build: {
+      ...base,
+      metadata_completed: 63,
+      metadata_issue_summary: { records_incomplete: 0, fields_unresolved: 0 },
+      validation: {
+        valid: false,
+        source_valid: true,
+        metadata_valid: false,
+        coverage: 0.97,
+        validation_issues: [
+          {
+            code: "metadata_evidence",
+            record_id: "of-grammatology-00042",
+            field: "speaker",
+            reason: "no valid source block",
+          },
+          {
+            code: "metadata_evidence",
+            record_id: "of-grammatology-00042",
+            field: "position_holder",
+            reason: "confidence 0.41 below 0.60",
+          },
+          {
+            code: "citation",
+            record_id: "of-grammatology-00042",
+            field: "",
+            reason: "citation is missing or incomplete",
+          },
+          {
+            code: "metadata_schema",
+            record_id: "of-grammatology-00107",
+            field: "stance",
+            reason: "value is not a supported enum value",
+          },
+        ],
+      },
+      publication_readiness: {
+        ...base.publication_readiness,
+        can_publish: false,
+        next_action: "resolve_validation",
+        blockers: [{ code: "metadata_validation", count: 4 }],
+      },
+    },
+  },
+};
 export const NoPublishableRecords: Story = {
   args: {
     build: {

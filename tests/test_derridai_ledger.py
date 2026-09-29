@@ -38,7 +38,7 @@ def test_not_evaluated_omits_confidence():
     assert 'confidence' not in out
 
 
-def test_compact_deduplicates_evidence_and_drops_flat_projection():
+def test_compact_deduplicates_evidence_and_keeps_flat_projection():
     evidence=[{'block_id':'b1','quote':'abc'}]
     record={
         'record_id':'r1','source_document_id':'doc1','text':'abc',
@@ -64,7 +64,9 @@ def test_compact_deduplicates_evidence_and_drops_flat_projection():
         'legacy_metadata':{},
     }
     out=compact_public_record(record,serialize_record=identity)
-    assert 'speaker' not in out
+    # A consumer that never learns the FieldAssertion model (an external tool,
+    # a human opening the exported JSONL) must still see the scholarly value.
+    assert out['speaker']=='Derrida'
     a1,a2=out['field_assertions']['derridai.speaker']
     assert a1['evidence']==evidence
     assert 'evidence' not in a2

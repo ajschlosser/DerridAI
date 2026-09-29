@@ -227,7 +227,7 @@ describe("Corpus Builder build, review, and finish states", () => {
     };
     const wrapper = mount(CorpusFinishWorkspace, { props: { build } });
     expect(wrapper.find(".blockers").exists()).toBe(true);
-    await buttonByText(wrapper, "Go fix").trigger("click");
+    await buttonByText(wrapper, "Fix").trigger("click");
     expect(wrapper.emitted("editDocumentMetadata")).toHaveLength(1);
   });
 
@@ -244,7 +244,7 @@ describe("Corpus Builder build, review, and finish states", () => {
     };
     const wrapper = mount(CorpusFinishWorkspace, { props: { build } });
 
-    await buttonByText(wrapper, "Go fix").trigger("click");
+    await buttonByText(wrapper, "Fix").trigger("click");
 
     expect(wrapper.emitted("reviewValidation")).toHaveLength(1);
     expect(wrapper.emitted("reviewMetadata")).toBeUndefined();
@@ -262,7 +262,7 @@ describe("Corpus Builder build, review, and finish states", () => {
     };
     const wrapper = mount(CorpusFinishWorkspace, { props: { build } });
 
-    await buttonByText(wrapper, "Go fix").trigger("click");
+    await buttonByText(wrapper, "Fix").trigger("click");
 
     expect(wrapper.emitted("reviewIssues")).toHaveLength(1);
   });
@@ -279,8 +279,54 @@ describe("Corpus Builder build, review, and finish states", () => {
     };
     const wrapper = mount(CorpusFinishWorkspace, { props: { build } });
 
-    await buttonByText(wrapper, "Go fix").trigger("click");
+    await buttonByText(wrapper, "Fix").trigger("click");
 
     expect(wrapper.emitted("reviewTopology")).toHaveLength(1);
+  });
+
+  it("groups several validation findings on the same record into one fixable row", async () => {
+    const build: any = {
+      ...buildBase,
+      validation: {
+        valid: false,
+        source_valid: true,
+        metadata_valid: false,
+        coverage: 1,
+        validation_issues: [
+          {
+            code: "metadata_evidence",
+            record_id: "r1",
+            field: "speaker",
+            reason: "no valid source block",
+          },
+          {
+            code: "citation",
+            record_id: "r1",
+            field: "",
+            reason: "citation is missing or incomplete",
+          },
+          { code: "metadata_schema", record_id: "r2", field: "stance", reason: "value is invalid" },
+        ],
+      },
+      publication_readiness: {
+        ...buildBase.publication_readiness,
+        can_publish: false,
+        next_action: "resolve_validation",
+        blockers: [{ code: "metadata_validation", count: 3 }],
+      },
+    };
+    const wrapper = mount(CorpusFinishWorkspace, { props: { build } });
+
+    // Two findings on r1 read as one row with a count, not two look-alike rows.
+    const groups = wrapper.findAll(".issue-group");
+    expect(groups).toHaveLength(2);
+    expect(groups[0].text()).toContain("r1");
+    expect(groups[0].get(".count-pill").text()).toBe("2");
+    expect(groups[0].findAll(".issue-group-reasons li")).toHaveLength(2);
+
+    await groups[0].get("button").trigger("click");
+    const [issue] = lastEmission(wrapper, "fixIssue");
+    expect(issue.record_id).toBe("r1");
+    expect(issue.field).toBe("speaker");
   });
 });

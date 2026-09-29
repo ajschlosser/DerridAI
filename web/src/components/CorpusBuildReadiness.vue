@@ -205,8 +205,8 @@ const providerSummary = computed(() =>
   box-shadow: 0 0 0 4px var(--tone-warn-bg);
 }
 .build-command-bar[data-ready="true"] .build-command-indicator {
-  background: var(--tone-success-fg);
-  box-shadow: 0 0 0 4px var(--tone-success-bg);
+  background: var(--tone-ok-fg);
+  box-shadow: 0 0 0 4px var(--tone-ok-bg);
 }
 .build-command-status h3,
 .build-command-status p {

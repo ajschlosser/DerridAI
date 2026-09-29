@@ -676,6 +676,16 @@ const fixContext = ref<FixContext | null>(null);
 const fixIssues = computed(() =>
   (currentBuild.value?.validation?.validation_issues || []).filter((item) => item?.record_id),
 );
+/** Where the current finding sits in the queue, so the reviewer can see how much is left. */
+const fixProgress = computed(() => {
+  const current = fixContext.value;
+  const total = fixIssues.value.length;
+  if (!current || total <= 1) return null;
+  const index = fixIssues.value.findIndex(
+    (item) => item.record_id === current.recordId && item.field === current.field,
+  );
+  return index < 0 ? null : { position: index + 1, total };
+});
 /** Land on the record, on the tab that holds the problem, with the field's editor open. */
 async function fixValidationIssue(issue: {
   code?: string;
@@ -693,6 +703,11 @@ async function fixValidationIssue(issue: {
     reason: String(issue.reason || ""),
   };
   await openValidationIssueQueue(recordId);
+  // The reviewer may have left the split "record" view in a full-screen Source or
+  // Metadata workspace mode on whatever record they last touched. The metadata and
+  // evidence panels below only render in "record" mode, so without this the fix
+  // navigation silently lands on the record with no visible way to see the problem.
+  setReviewWorkspaceMode("record");
   await nextTick();
   if (!field) return;
   if (issue.code === "metadata_evidence") {
@@ -2887,6 +2902,12 @@ defineExpose({
           <div v-if="fixContext" class="fix-banner" role="status">
             <span>
               <b>{{ i18n.t("pdf_corpus.fixing_title") }}</b>
+              <span v-if="fixProgress" class="fix-banner-progress">{{
+                i18n.tf("pdf_corpus.fixing_progress", {
+                  position: fixProgress.position,
+                  total: fixProgress.total,
+                })
+              }}</span>
               {{ fixContext.reason }}
               <code>{{ fixContext.field || fixContext.recordId }}</code>
             </span>
