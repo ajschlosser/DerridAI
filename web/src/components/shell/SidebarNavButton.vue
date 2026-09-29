@@ -1,6 +1,7 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import AppIcon from "../AppIcon.vue";
+import UiTooltip from "../ui/UiTooltip.vue";
 
 defineProps<{
   id: string;
@@ -13,24 +14,26 @@ defineEmits<{ navigate: [string] }>();
 </script>
 
 <template>
-  <span class="nav-tooltip-wrap" :data-tooltip="disabledReason || ''">
-    <button
-      type="button"
-      :class="{ active }"
-      :disabled="Boolean(disabledReason)"
-      :aria-current="active ? 'page' : undefined"
-      :aria-label="label"
-      :aria-describedby="disabledReason ? `sidebar-nav-reason-${id}` : undefined"
-      :title="disabledReason || label"
-      @click="$emit('navigate', id)"
-    >
-      <AppIcon :name="icon" aria-hidden="true" />
-      <span>{{ label }}</span>
-    </button>
-    <span v-if="disabledReason" :id="`sidebar-nav-reason-${id}`" class="sr-only">
-      {{ disabledReason }}
+  <UiTooltip
+    :text="disabledReason || label"
+    trigger-mode="content"
+    :content-focusable="Boolean(disabledReason)"
+    placement="bottom"
+  >
+    <span class="nav-tooltip-wrap">
+      <button
+        type="button"
+        :class="{ active }"
+        :disabled="Boolean(disabledReason)"
+        :aria-current="active ? 'page' : undefined"
+        :aria-label="label"
+        @click="$emit('navigate', id)"
+      >
+        <AppIcon :name="icon" aria-hidden="true" />
+        <span>{{ label }}</span>
+      </button>
     </span>
-  </span>
+  </UiTooltip>
 </template>
 
 <style scoped>
