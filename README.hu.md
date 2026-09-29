@@ -57,7 +57,6 @@ A normatív cELF 1.0 specifikációt és a DerridAI nem normatív white paperét
 
 ### Futásidejű szolgáltatások
 
-
 - `web` — Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js és nginx. Böngészős alkalmazás; proxyzza az `/api/` útvonalat, és REST-et, GraphQL-t valamint realtime értesítéseket használ. A Storybook opcionális fejlesztői profil.
 - `api` — Python 3.12, FastAPI, Strawberry GraphQL, ChromaDB kliens, PyMuPDF, sentence-transformers és spaCy. Autoritatív alkalmazási határ a hitelesítés, forrás/korpusz műveletek, cELF-olvasások, proveniencia, RAG, pipeline-ok, jobok és rendszerállapot számára.
 - `document-nlp` — opcionális izolált BookNLP worker angol Document Intelligence céljára. Korlátozott, ellenőrzött szöveget kap, és nincs korpuszautorítása.
