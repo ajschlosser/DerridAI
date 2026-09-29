@@ -939,12 +939,16 @@ onBeforeUnmount(() => {
                   <span class="section-label">{{ result.record_id }}</span>
                   <h3>{{ result.work || i18n.t("works.untitled") }}</h3>
                 </div>
-                <span
+                <UiTooltip
                   v-if="databaseMode && similarityPercent(result) != null"
-                  class="search-relevance-badge"
-                  :title="i18n.t('search.similarity_explanation')"
-                  >{{ i18n.t("search.relevance") }} {{ similarityPercent(result) }}</span
+                  :text="i18n.t('search.similarity_explanation')"
+                  trigger-mode="content"
+                  placement="bottom"
                 >
+                  <span class="search-relevance-badge"
+                    >{{ i18n.t("search.relevance") }} {{ similarityPercent(result) }}</span
+                  >
+                </UiTooltip>
               </header>
               <div class="search-result-meta">
                 <span v-if="result.page_span"
@@ -1160,9 +1164,16 @@ onBeforeUnmount(() => {
                         "
                         class="search-inline-explanation"
                       >
-                        <span v-if="similarityPercent(result) != null" class="search-relevance-mini"
-                          >{{ i18n.t("search.relevance") }} {{ similarityPercent(result) }}</span
-                        ><span v-for="reason in result.match_reasons" :key="reason">{{
+                        <UiTooltip
+                          v-if="similarityPercent(result) != null"
+                          :text="i18n.t('search.similarity_explanation')"
+                          trigger-mode="content"
+                          placement="bottom"
+                        >
+                          <span class="search-relevance-mini"
+                            >{{ i18n.t("search.relevance") }} {{ similarityPercent(result) }}</span
+                          >
+                        </UiTooltip><span v-for="reason in result.match_reasons" :key="reason">{{
                           reason
                         }}</span>
                       </div></template
