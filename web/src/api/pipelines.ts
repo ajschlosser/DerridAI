@@ -7,6 +7,8 @@ import type {
   PipelineDefinition,
   PipelineOperationalMetrics,
   PipelineRunTrace,
+  ResearchPipelineComparisonRequest,
+  ResearchPipelineComparisonResult,
   PipelineValidationResponse,
   ResearchPipelineOptions,
 } from "../types/pipelines";
@@ -57,6 +59,12 @@ export const pipelinesApi = {
     apiRequest<Record<string, unknown>>(
       `/api/system/pipelines/resolved/${encodeURIComponent(feature)}`,
     ),
+
+  compareResearch: (body: ResearchPipelineComparisonRequest) =>
+    apiRequest<ResearchPipelineComparisonResult>("/api/system/pipelines/compare/research", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 
   metrics: (filters: { feature?: string; owner?: string; limit?: number } = {}) => {
     const query = new URLSearchParams();
