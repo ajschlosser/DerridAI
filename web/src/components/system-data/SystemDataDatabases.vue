@@ -259,12 +259,6 @@ watch(
           <div>
             <h3>
               {{ table.name }}
-              <UiTooltip
-                v-if="tableHelp(table.name)"
-                :text="tableHelp(table.name)"
-                :label="i18n.tf('runtime.system_table_about', { table: table.name })"
-                placement="bottom"
-              />
             </h3>
             <p v-if="tableHelp(table.name)" class="table-about">{{ tableHelp(table.name) }}</p>
             <p>
