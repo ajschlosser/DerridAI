@@ -1,8 +1,8 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed } from "vue";
+import PipelineStageEditor from "./PipelineStageEditor.vue";
 import { useI18nStore } from "../../stores/i18n";
-import type { PipelineDefinition, PipelineStage, PipelineStrategy } from "../../types/pipelines";
+import type { PipelineDefinition, PipelineStrategy } from "../../types/pipelines";
 
 const props = defineProps<{
   modelValue: PipelineDefinition;
@@ -14,49 +14,27 @@ const emit = defineEmits<{
 }>();
 
 const i18n = useI18nStore();
-const strategyMap = computed(
-  () => new Map(props.strategies.map((strategy) => [strategy.strategy_id, strategy])),
-);
-const strategiesByFamily = computed(() => {
-  const groups = new Map<string, PipelineStrategy[]>();
-  for (const strategy of props.strategies) {
-    const rows = groups.get(strategy.family) || [];
-    rows.push(strategy);
-    groups.set(strategy.family, rows);
-  }
-  return [...groups.entries()].map(([family, strategies]) => ({
-    family,
-    strategies: strategies.sort((a, b) => a.label.localeCompare(b.label)),
-  }));
-});
-const fallbackOptions = [
-  { key: "on_empty" as const, label: () => t("pipelines.on_empty", "On empty") },
-  {
-    key: "on_unavailable" as const,
-    label: () => t("pipelines.on_unavailable", "On unavailable"),
-  },
-  { key: "on_timeout" as const, label: () => t("pipelines.on_timeout", "On timeout") },
-  { key: "on_error" as const, label: () => t("pipelines.on_error", "On error") },
-];
+const t = (key: string, fallback: string) => i18n.t(key, fallback);
 
-function t(key: string, fallback: string) {
-  return i18n.t(key, fallback);
-}
 function clonePipeline(): PipelineDefinition {
   return JSON.parse(JSON.stringify(props.modelValue)) as PipelineDefinition;
 }
+
 function updateRoot<K extends keyof PipelineDefinition>(key: K, value: PipelineDefinition[K]) {
   const next = clonePipeline();
   next[key] = value;
   emit("update:modelValue", next);
 }
+
 function replaceStageReference(value: string | null | undefined, from: string, to: string) {
   return value === from ? to : value;
 }
+
 function updateStageId(stageIndex: number, value: string) {
   const next = clonePipeline();
   const stage = next.stages[stageIndex];
   if (!stage) return;
+
   const previous = stage.id;
   const normalized = String(value || "").trim();
   stage.id = normalized;
@@ -75,39 +53,49 @@ function updateStageId(stageIndex: number, value: string) {
   }
   emit("update:modelValue", next);
 }
+
 function updateStageStrategy(stageIndex: number, strategyId: string) {
   const next = clonePipeline();
   const stage = next.stages[stageIndex];
   if (!stage) return;
   stage.strategy = strategyId;
-  // Configuration is schema-owned by the strategy. Carrying arbitrary keys
-  // across a strategy switch is misleading and can alter runtime behavior.
+  // Configuration is owned by the registered strategy schema. Carrying keys
+  // across a strategy switch can silently change runtime behavior.
   stage.config = {};
   emit("update:modelValue", next);
 }
+
 function toggleStageEnabled(stageIndex: number, enabled: boolean) {
   const next = clonePipeline();
-  if (!next.stages[stageIndex]) return;
-  next.stages[stageIndex].enabled = enabled;
+  const stage = next.stages[stageIndex];
+  if (!stage) return;
+  stage.enabled = enabled;
   emit("update:modelValue", next);
 }
+
 function toggleEntry(stageId: string, checked: boolean) {
   const next = clonePipeline();
   const entries = new Set(next.entry_stage_ids);
-  if (checked) entries.add(stageId);
-  else if (entries.size > 1) entries.delete(stageId);
+  if (checked) {
+    entries.add(stageId);
+  } else if (entries.size > 1) {
+    entries.delete(stageId);
+  }
   next.entry_stage_ids = [...entries];
   emit("update:modelValue", next);
 }
+
 function toggleNext(stageIndex: number, targetId: string, checked: boolean) {
   const next = clonePipeline();
   const stage = next.stages[stageIndex];
   if (!stage) return;
   const edges = new Set(stage.next);
-  checked ? edges.add(targetId) : edges.delete(targetId);
+  if (checked) edges.add(targetId);
+  else edges.delete(targetId);
   stage.next = [...edges];
   emit("update:modelValue", next);
 }
+
 function updateFallback(
   stageIndex: number,
   key: "on_empty" | "on_unavailable" | "on_timeout" | "on_error",
@@ -119,12 +107,39 @@ function updateFallback(
   stage[key] = target || null;
   emit("update:modelValue", next);
 }
+
+function updateConfig(
+  stageIndex: number,
+  key: string,
+  raw: string | boolean,
+  rule: Record<string, unknown>,
+) {
+  const next = clonePipeline();
+  const stage = next.stages[stageIndex];
+  if (!stage) return;
+
+  const kind = String(rule.type || "string");
+  if (kind === "boolean") {
+    stage.config[key] = Boolean(raw);
+  } else if (kind === "integer" || kind === "number") {
+    const value = Number(raw);
+    if (raw === "" || !Number.isFinite(value)) delete stage.config[key];
+    else stage.config[key] = kind === "integer" ? Math.trunc(value) : value;
+  } else if (String(raw).trim() === "") {
+    delete stage.config[key];
+  } else {
+    stage.config[key] = String(raw);
+  }
+  emit("update:modelValue", next);
+}
+
 function addStage() {
   const next = clonePipeline();
   const strategy =
     props.strategies.find((item) => item.strategy_id === "query.passthrough") ||
     props.strategies[0];
   if (!strategy) return;
+
   const used = new Set(next.stages.map((stage) => stage.id));
   const stem =
     strategy.strategy_id
@@ -134,6 +149,7 @@ function addStage() {
   let suffix = next.stages.length + 1;
   let id = stem;
   while (used.has(id)) id = `${stem}_${suffix++}`;
+
   next.stages.push({
     id,
     strategy: strategy.strategy_id,
@@ -148,11 +164,13 @@ function addStage() {
   if (!next.entry_stage_ids.length) next.entry_stage_ids = [id];
   emit("update:modelValue", next);
 }
+
 function removeStage(stageIndex: number) {
   if (props.modelValue.stages.length <= 1) return;
   const next = clonePipeline();
   const [removed] = next.stages.splice(stageIndex, 1);
   if (!removed) return;
+
   next.entry_stage_ids = next.entry_stage_ids.filter((id) => id !== removed.id);
   for (const stage of next.stages) {
     stage.next = stage.next.filter((id) => id !== removed.id);
@@ -165,6 +183,7 @@ function removeStage(stageIndex: number) {
   }
   emit("update:modelValue", next);
 }
+
 function moveStage(stageIndex: number, direction: -1 | 1) {
   const target = stageIndex + direction;
   if (target < 0 || target >= props.modelValue.stages.length) return;
@@ -172,41 +191,6 @@ function moveStage(stageIndex: number, direction: -1 | 1) {
   const [stage] = next.stages.splice(stageIndex, 1);
   if (!stage) return;
   next.stages.splice(target, 0, stage);
-  emit("update:modelValue", next);
-}
-function configProperties(stage: PipelineStage) {
-  const schema = strategyMap.value.get(stage.strategy)?.config_schema;
-  if (!schema || typeof schema !== "object") return [] as Array<[string, Record<string, unknown>]>;
-  const properties = (schema as { properties?: unknown }).properties;
-  if (!properties || typeof properties !== "object" || Array.isArray(properties)) return [];
-  return Object.entries(properties as Record<string, Record<string, unknown>>);
-}
-function configValue(stage: PipelineStage, key: string, rule: Record<string, unknown>) {
-  if (stage.config[key] !== undefined) return stage.config[key];
-  if (rule.default !== undefined) return rule.default;
-  return "";
-}
-function updateConfig(
-  stageIndex: number,
-  key: string,
-  raw: string | boolean,
-  rule: Record<string, unknown>,
-) {
-  const next = clonePipeline();
-  const stage = next.stages[stageIndex];
-  if (!stage) return;
-  const kind = String(rule.type || "string");
-  if (kind === "boolean") {
-    stage.config[key] = Boolean(raw);
-  } else if (kind === "integer" || kind === "number") {
-    const value = Number(raw);
-    if (raw === "" || !Number.isFinite(value)) delete stage.config[key];
-    else stage.config[key] = kind === "integer" ? Math.trunc(value) : value;
-  } else if (String(raw).trim() === "") {
-    delete stage.config[key];
-  } else {
-    stage.config[key] = String(raw);
-  }
   emit("update:modelValue", next);
 }
 </script>
@@ -294,212 +278,24 @@ function updateConfig(
         </button>
       </header>
 
-      <article
+      <PipelineStageEditor
         v-for="(stage, stageIndex) in modelValue.stages"
-        :key="stageIndex"
-        class="stage-settings-card"
-      >
-        <div class="stage-settings-heading">
-          <div class="stage-identity-grid">
-            <label>
-              <span>{{ t("pipelines.stage_id", "Stage ID") }}</span>
-              <input
-                class="control"
-                :value="stage.id"
-                autocomplete="off"
-                @input="updateStageId(stageIndex, ($event.target as HTMLInputElement).value)"
-              />
-            </label>
-            <label>
-              <span>{{ t("pipelines.strategy", "Strategy") }}</span>
-              <select
-                class="control"
-                :value="stage.strategy"
-                @change="
-                  updateStageStrategy(stageIndex, ($event.target as HTMLSelectElement).value)
-                "
-              >
-                <optgroup
-                  v-for="group in strategiesByFamily"
-                  :key="group.family"
-                  :label="group.family"
-                >
-                  <option
-                    v-for="option in group.strategies"
-                    :key="option.strategy_id"
-                    :value="option.strategy_id"
-                  >
-                    {{ option.label }}
-                  </option>
-                </optgroup>
-              </select>
-            </label>
-          </div>
-          <div class="stage-toolbar">
-            <label class="stage-toggle">
-              <input
-                type="checkbox"
-                :checked="stage.enabled"
-                @change="
-                  toggleStageEnabled(stageIndex, ($event.target as HTMLInputElement).checked)
-                "
-              />
-              <span>{{ t("pipelines.enabled", "Enabled") }}</span>
-            </label>
-            <label class="stage-toggle">
-              <input
-                type="checkbox"
-                :checked="modelValue.entry_stage_ids.includes(stage.id)"
-                @change="toggleEntry(stage.id, ($event.target as HTMLInputElement).checked)"
-              />
-              <span>{{ t("pipelines.entry_stage", "Entry") }}</span>
-            </label>
-            <button
-              class="btn icon-only"
-              type="button"
-              :disabled="stageIndex === 0"
-              :aria-label="t('pipelines.move_stage_up', 'Move stage up')"
-              @click="moveStage(stageIndex, -1)"
-            >
-              ↑
-            </button>
-            <button
-              class="btn icon-only"
-              type="button"
-              :disabled="stageIndex === modelValue.stages.length - 1"
-              :aria-label="t('pipelines.move_stage_down', 'Move stage down')"
-              @click="moveStage(stageIndex, 1)"
-            >
-              ↓
-            </button>
-            <button
-              class="btn icon-only"
-              type="button"
-              :disabled="modelValue.stages.length <= 1"
-              :aria-label="t('pipelines.remove_stage', 'Remove stage')"
-              @click="removeStage(stageIndex)"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-
-        <div class="strategy-summary">
-          <div>
-            <strong>{{ strategyMap.get(stage.strategy)?.label || stage.strategy }}</strong>
-            <span>{{ strategyMap.get(stage.strategy)?.family || "unknown" }}</span>
-          </div>
-          <p v-if="strategyMap.get(stage.strategy)?.description">
-            {{ strategyMap.get(stage.strategy)?.description }}
-          </p>
-          <small v-if="strategyMap.get(stage.strategy)">
-            {{ strategyMap.get(stage.strategy)?.input_type }}
-            <span aria-hidden="true">→</span>
-            {{ strategyMap.get(stage.strategy)?.output_type }}
-            <template v-if="strategyMap.get(stage.strategy)?.invokes_llm">
-              · {{ t("pipelines.invokes_llm", "invokes LLM") }}
-            </template>
-          </small>
-        </div>
-
-        <fieldset class="edge-editor">
-          <legend>{{ t("pipelines.connections", "Connections") }}</legend>
-          <div class="edge-grid">
-            <div class="next-targets">
-              <span class="edge-label">{{ t("pipelines.next_stages", "Next stages") }}</span>
-              <div class="edge-target-list">
-                <label
-                  v-for="target in modelValue.stages.filter((item) => item.id !== stage.id)"
-                  :key="target.id"
-                >
-                  <input
-                    type="checkbox"
-                    :checked="stage.next.includes(target.id)"
-                    @change="
-                      toggleNext(stageIndex, target.id, ($event.target as HTMLInputElement).checked)
-                    "
-                  />
-                  <code>{{ target.id }}</code>
-                </label>
-                <small v-if="modelValue.stages.length <= 1">
-                  {{ t("pipelines.no_other_stages", "Add another stage to create an edge.") }}
-                </small>
-              </div>
-            </div>
-
-            <div class="fallback-grid">
-              <label v-for="fallback in fallbackOptions" :key="fallback.key">
-                <span>{{ fallback.label() }}</span>
-                <select
-                  class="control"
-                  :value="stage[fallback.key] || ''"
-                  @change="
-                    updateFallback(
-                      stageIndex,
-                      fallback.key,
-                      ($event.target as HTMLSelectElement).value,
-                    )
-                  "
-                >
-                  <option value="">{{ t("pipelines.no_fallback", "No fallback") }}</option>
-                  <option
-                    v-for="target in modelValue.stages.filter((item) => item.id !== stage.id)"
-                    :key="target.id"
-                    :value="target.id"
-                  >
-                    {{ target.id }}
-                  </option>
-                </select>
-              </label>
-            </div>
-          </div>
-        </fieldset>
-
-        <div v-if="configProperties(stage).length" class="config-grid">
-          <label v-for="[key, rule] in configProperties(stage)" :key="key">
-            <span>{{ key }}</span>
-            <input
-              v-if="rule.type === 'number' || rule.type === 'integer'"
-              class="control"
-              type="number"
-              :step="rule.type === 'integer' ? 1 : 'any'"
-              :min="typeof rule.minimum === 'number' ? rule.minimum : undefined"
-              :max="typeof rule.maximum === 'number' ? rule.maximum : undefined"
-              :value="configValue(stage, key, rule)"
-              @input="
-                updateConfig(stageIndex, key, ($event.target as HTMLInputElement).value, rule)
-              "
-            />
-            <select
-              v-else-if="rule.type === 'boolean'"
-              class="control"
-              :value="String(configValue(stage, key, rule))"
-              @change="
-                updateConfig(
-                  stageIndex,
-                  key,
-                  ($event.target as HTMLSelectElement).value === 'true',
-                  rule,
-                )
-              "
-            >
-              <option value="true">{{ t("common.yes", "Yes") }}</option>
-              <option value="false">{{ t("common.no", "No") }}</option>
-            </select>
-            <input
-              v-else
-              class="control"
-              :value="String(configValue(stage, key, rule))"
-              @input="
-                updateConfig(stageIndex, key, ($event.target as HTMLInputElement).value, rule)
-              "
-            />
-          </label>
-        </div>
-        <p v-else class="no-config">
-          {{ t("pipelines.no_stage_settings", "This stage has no configurable parameters.") }}
-        </p>
-      </article>
+        :key="`${stage.id}:${stageIndex}`"
+        :stage="stage"
+        :stage-index="stageIndex"
+        :stages="modelValue.stages"
+        :strategies="strategies"
+        :entry-stage-ids="modelValue.entry_stage_ids"
+        @update-id="updateStageId"
+        @update-strategy="updateStageStrategy"
+        @update-enabled="toggleStageEnabled"
+        @toggle-entry="toggleEntry"
+        @move="moveStage"
+        @remove="removeStage"
+        @toggle-next="toggleNext"
+        @update-fallback="updateFallback"
+        @update-config="updateConfig"
+      />
     </section>
   </div>
 </template>
@@ -509,20 +305,17 @@ function updateConfig(
   display: grid;
   gap: 16px;
 }
-.identity-grid,
-.config-grid {
+.identity-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 .identity-grid label,
-.config-grid label,
 .notes-field {
   display: grid;
   gap: 5px;
 }
 .identity-grid label > span,
-.config-grid label > span,
 .notes-field > span {
   color: var(--muted);
   font-size: 0.75rem;
@@ -548,190 +341,23 @@ function updateConfig(
 .stage-settings-header .btn {
   flex: 0 0 auto;
 }
-.stage-settings header h4 {
+.stage-settings-header h4 {
   margin: 0;
   font-size: 0.95rem;
 }
-.stage-settings header p {
+.stage-settings-header p {
   margin: 4px 0 0;
   color: var(--muted);
   font-size: 0.78rem;
   line-height: 1.45;
 }
-.stage-settings-card {
-  display: grid;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 11px;
-  background: var(--soft);
-}
-.stage-settings-heading {
-  display: flex;
-  align-items: start;
-  justify-content: space-between;
-  gap: 12px;
-}
-.stage-identity-grid {
-  display: grid;
-  grid-template-columns: minmax(10rem, 0.75fr) minmax(14rem, 1.25fr);
-  gap: 10px;
-  flex: 1;
-}
-.stage-identity-grid label,
-.fallback-grid label {
-  display: grid;
-  gap: 5px;
-}
-.stage-identity-grid label > span,
-.fallback-grid label > span,
-.edge-label {
-  color: var(--muted);
-  font-size: 0.75rem;
-  font-weight: 750;
-}
-.stage-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-  justify-content: flex-end;
-}
-.stage-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 34px;
-  padding: 0 8px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--card);
-  font-size: 0.75rem;
-  font-weight: 700;
-}
-.stage-toggle input {
-  margin: 0;
-}
-.strategy-summary {
-  display: grid;
-  gap: 4px;
-  padding: 9px 10px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--card);
-}
-.strategy-summary > div {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-}
-.strategy-summary strong {
-  font-size: 0.78rem;
-}
-.strategy-summary span,
-.strategy-summary p,
-.strategy-summary small {
-  color: var(--muted);
-}
-.strategy-summary > div span {
-  font-size: 0.75rem;
-  font-weight: 700;
-}
-.strategy-summary p,
-.strategy-summary small {
-  margin: 0;
-  font-size: 0.75rem;
-  line-height: 1.4;
-}
-.edge-editor {
-  margin: 0;
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--card);
-}
-.edge-editor legend {
-  padding: 0 5px;
-  color: var(--muted);
-  font-size: 0.75rem;
-  font-weight: 800;
-}
-.edge-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(16rem, 1fr);
-  gap: 12px;
-}
-.next-targets {
-  display: grid;
-  align-content: start;
-  gap: 6px;
-}
-.edge-target-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.edge-target-list label {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 7px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--soft);
-  font-size: 0.75rem;
-}
-.edge-target-list code {
-  overflow-wrap: anywhere;
-}
-.edge-target-list small {
-  color: var(--muted);
-  font-size: 0.75rem;
-}
-.fallback-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-.stage-settings-heading strong,
-.stage-settings-heading code {
-  display: block;
-}
-.stage-settings-heading strong {
-  font-size: 0.82rem;
-}
-.stage-settings-heading code {
-  margin-top: 2px;
-  color: var(--muted);
-  font-size: 0.75rem;
-}
-.stage-settings-heading > span {
-  color: var(--muted);
-  font-size: 0.75rem;
-  font-weight: 700;
-}
-.no-config {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.76rem;
-}
 @media (max-width: 860px) {
-  .stage-settings-header,
-  .stage-settings-heading {
+  .stage-settings-header {
     display: grid;
-  }
-  .stage-toolbar {
-    justify-content: flex-start;
-  }
-  .edge-grid {
-    grid-template-columns: 1fr;
   }
 }
 @media (max-width: 680px) {
-  .identity-grid,
-  .config-grid,
-  .stage-identity-grid,
-  .fallback-grid {
+  .identity-grid {
     grid-template-columns: 1fr;
   }
   .identity-name {
