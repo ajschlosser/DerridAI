@@ -172,7 +172,7 @@ function updateConfig(
               :step="rule.type === 'integer' ? 1 : 'any'"
               :min="typeof rule.minimum === 'number' ? rule.minimum : undefined"
               :max="typeof rule.maximum === 'number' ? rule.maximum : undefined"
-              :value="configValue(stage, key, rule) as string | number"
+              :value="configValue(stage, key, rule)"
               @input="
                 updateConfig(
                   stageIndex,
