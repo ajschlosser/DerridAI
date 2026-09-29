@@ -18,6 +18,7 @@ import { localizedAuthError } from "../domain/authErrors";
 import { notify } from "../composables/notifications";
 import SettingsSaveState from "../components/settings/SettingsSaveState.vue";
 import UiButton from "../components/ui/UiButton.vue";
+import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
 import UiCard from "../components/ui/UiCard.vue";
 import UiDialog from "../components/ui/UiDialog.vue";
@@ -397,8 +398,8 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
       </template>
     </UiPageHeader>
     <p v-if="error" class="info error" role="alert">{{ error }}</p>
-    <section v-if="loading && !roles.length" class="roles-loading" role="status">
-      <span class="spinner"></span>{{ i18n.t("roles.loading") }}
+    <section v-if="loading && !roles.length" class="roles-loading">
+      <UiLoadingState :label="i18n.t('roles.loading')" />
     </section>
     <AccessibleEmptyState
       v-else-if="error && !roles.length"

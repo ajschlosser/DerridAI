@@ -4,6 +4,7 @@ import { computed, onMounted, ref } from "vue";
 import { corpusBuilderApi, type SourceBlock } from "../../api/corpus";
 import { useI18nStore } from "../../stores/i18n";
 import UiDialog from "../ui/UiDialog.vue";
+import UiLoadingState from "../ui/UiLoadingState.vue";
 
 /**
  * Cite evidence that sits outside the record under review: browse the source units around it (the same source,
@@ -117,9 +118,7 @@ function locator(block: SourceBlock) {
       </button>
     </div>
     <p v-if="error" class="browser-error" role="alert">{{ error }}</p>
-    <p v-else-if="loading" class="browser-status" role="status">
-      {{ i18n.t("pdf_corpus.units_loading") }}
-    </p>
+    <UiLoadingState v-else-if="loading" :label="i18n.t('pdf_corpus.units_loading')" />
     <ol v-else class="browser-list">
       <li
         v-for="block in shown"

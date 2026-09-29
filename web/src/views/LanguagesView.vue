@@ -17,6 +17,7 @@ import ProviderProfileSelect from "../components/ProviderProfileSelect.vue";
 import CountryFlagPicker from "../components/CountryFlagPicker.vue";
 import LanguageWorkspaceHeader from "../components/LanguageWorkspaceHeader.vue";
 import AppIcon from "../components/AppIcon.vue";
+import UiLoadingState from "../components/ui/UiLoadingState.vue";
 
 const i18n = useI18nStore();
 const route = useRoute();
@@ -1122,7 +1123,7 @@ onUnmounted(() => {
 
       <section class="language-editor-workspace" aria-live="polite">
         <div v-if="loading" class="language-loading">
-          <span class="spinner"></span>{{ i18n.t("ui.loading_dictionary") }}
+          <UiLoadingState :label="i18n.t('ui.loading_dictionary')" />
         </div>
         <template v-else-if="current">
           <header class="language-editor-hero">

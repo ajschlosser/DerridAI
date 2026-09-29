@@ -9,6 +9,7 @@ import { notify } from "../composables/notifications";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
 import UserAccountRow from "../components/UserAccountRow.vue";
 import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
+import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import { localizedAuthError } from "../domain/authErrors";
 
 const auth = useAuthStore();
@@ -229,8 +230,8 @@ onMounted(refresh);
           {{ i18n.t("users.refresh") }}
         </button>
       </div>
-      <div v-if="loading && !dataCurrent" class="users-loading" role="status">
-        {{ i18n.t("users.loading") }}
+      <div v-if="loading && !dataCurrent" class="users-loading">
+        <UiLoadingState :label="i18n.t('users.loading')" />
       </div>
       <AccessibleEmptyState
         v-else-if="error && !users.length"

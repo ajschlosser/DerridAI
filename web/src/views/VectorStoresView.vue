@@ -13,6 +13,7 @@ import { useI18nStore } from "../stores/i18n";
 import { useShellStore } from "../stores/shell";
 import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
 import UiButton from "../components/ui/UiButton.vue";
+import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import UiCard from "../components/ui/UiCard.vue";
 import UiDialog from "../components/ui/UiDialog.vue";
 import UiField from "../components/ui/UiField.vue";
@@ -498,16 +499,11 @@ onBeforeUnmount(() => {
     :aria-busy="loading"
     aria-labelledby="vector-page-title"
   >
-    <div v-if="auth.isResearcher" class="vector-page-loading" role="status">
-      <span class="spinner"></span
-      >{{ i18n.t("search.redirect_database", "Opening corpus search…") }}
+    <div v-if="auth.isResearcher" class="vector-page-loading">
+      <UiLoadingState :label="i18n.t('search.redirect_database')" />
     </div>
-    <div
-      v-else-if="loading && !collections.length && !error"
-      class="vector-page-loading"
-      role="status"
-    >
-      <span class="spinner"></span>{{ i18n.t("vector.loading_stores", "Loading Corpus Data…") }}
+    <div v-else-if="loading && !collections.length && !error" class="vector-page-loading">
+      <UiLoadingState :label="i18n.t('vector.loading_stores')" />
     </div>
     <section v-else-if="error" class="vector-page-error">
       <h1 id="vector-page-title">{{ i18n.t("nav.vector", "Corpus Data") }}</h1>
