@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from ..models import RAGRunRequest
 
@@ -26,6 +26,43 @@ class ResearchPipelineComparisonRequest(BaseModel):
     request: RAGRunRequest
     left: PipelineVersionRef
     right: PipelineVersionRef
+
+
+class ResearchPipelineBenchmarkCase(BaseModel):
+    """One fixed prompt/corpus case used to compare two Research pipelines."""
+
+    case_id: str = Field(min_length=1, max_length=120)
+    label: str = Field(default="", max_length=240)
+    request: RAGRunRequest
+    expected_record_ids: list[str] = Field(default_factory=list, max_length=500)
+
+    @model_validator(mode="after")
+    def normalize_case(self) -> "ResearchPipelineBenchmarkCase":
+        self.case_id = self.case_id.strip()
+        self.label = self.label.strip()
+        self.expected_record_ids = list(
+            dict.fromkeys(
+                value.strip()
+                for value in self.expected_record_ids
+                if value and value.strip()
+            )
+        )
+        return self
+
+
+class ResearchPipelineBenchmarkRequest(BaseModel):
+    """A bounded, non-persistent batch of fixed Research comparison cases."""
+
+    cases: list[ResearchPipelineBenchmarkCase] = Field(min_length=1, max_length=25)
+    left: PipelineVersionRef
+    right: PipelineVersionRef
+
+    @model_validator(mode="after")
+    def unique_case_ids(self) -> "ResearchPipelineBenchmarkRequest":
+        case_ids = [item.case_id for item in self.cases]
+        if len(case_ids) != len(set(case_ids)):
+            raise ValueError("Benchmark case IDs must be unique.")
+        return self
 
 
 def _record_id(item: dict[str, Any]) -> str:
@@ -219,5 +256,144 @@ def compare_research_dry_runs(
                 and isinstance(right.get("context_characters"), int)
                 else None
             ),
+        },
+    }
+
+
+
+def expected_record_coverage(
+    actual_record_ids: list[str],
+    expected_record_ids: list[str],
+) -> dict[str, Any]:
+    """Describe benchmark-ground-truth coverage without declaring a winner."""
+
+    expected = list(dict.fromkeys(str(value) for value in expected_record_ids if str(value)))
+    actual = set(str(value) for value in actual_record_ids if str(value))
+    matched = [record_id for record_id in expected if record_id in actual]
+    return {
+        "expected_count": len(expected),
+        "matched_count": len(matched),
+        "matched_record_ids": matched,
+        "coverage": (len(matched) / len(expected)) if expected else None,
+    }
+
+
+def benchmark_case_result(
+    case: ResearchPipelineBenchmarkCase,
+    left_result: dict[str, Any],
+    right_result: dict[str, Any],
+) -> dict[str, Any]:
+    """Compare one fixed benchmark case using the same safe dry-run summaries."""
+
+    compared = compare_research_dry_runs(left_result, right_result)
+    expected = list(case.expected_record_ids)
+    left_candidates = list(compared["left"]["candidates"]["pre_rerank"]["record_ids"])
+    right_candidates = list(compared["right"]["candidates"]["pre_rerank"]["record_ids"])
+    left_evidence = [str(item["record_id"]) for item in compared["left"]["evidence"]]
+    right_evidence = [str(item["record_id"]) for item in compared["right"]["evidence"]]
+    return {
+        "case_id": case.case_id,
+        "label": case.label,
+        "status": "completed",
+        "expected_record_ids": expected,
+        "comparison": compared,
+        "expected_coverage": {
+            "left": {
+                "candidate": expected_record_coverage(left_candidates, expected),
+                "final_evidence": expected_record_coverage(left_evidence, expected),
+            },
+            "right": {
+                "candidate": expected_record_coverage(right_candidates, expected),
+                "final_evidence": expected_record_coverage(right_evidence, expected),
+            },
+        },
+    }
+
+
+def _mean(values: list[float]) -> float | None:
+    return (sum(values) / len(values)) if values else None
+
+
+def aggregate_research_benchmark(
+    cases: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Aggregate completed benchmark cases descriptively.
+
+    The aggregate deliberately reports measurements rather than selecting a
+    better pipeline. Expected-record coverage is calculated only when a case
+    supplies reviewer-curated expected IDs.
+    """
+
+    completed = [item for item in cases if item.get("status") == "completed"]
+    failed = [item for item in cases if item.get("status") != "completed"]
+
+    candidate_overlap: list[float] = []
+    evidence_overlap: list[float] = []
+    left_elapsed: list[float] = []
+    right_elapsed: list[float] = []
+    left_context: list[float] = []
+    right_context: list[float] = []
+    left_expected_candidate: list[float] = []
+    right_expected_candidate: list[float] = []
+    left_expected_final: list[float] = []
+    right_expected_final: list[float] = []
+    left_cross_encoder_calls = 0
+    right_cross_encoder_calls = 0
+
+    for item in completed:
+        compared = item["comparison"]
+        comparison = compared["comparison"]
+        candidate_overlap.append(float(comparison["candidate_overlap"]["jaccard_overlap"]))
+        evidence_overlap.append(float(comparison["jaccard_overlap"]))
+
+        left = compared["left"]
+        right = compared["right"]
+        if isinstance(left.get("elapsed_seconds"), (int, float)):
+            left_elapsed.append(float(left["elapsed_seconds"]))
+        if isinstance(right.get("elapsed_seconds"), (int, float)):
+            right_elapsed.append(float(right["elapsed_seconds"]))
+        if isinstance(left.get("context_characters"), int):
+            left_context.append(float(left["context_characters"]))
+        if isinstance(right.get("context_characters"), int):
+            right_context.append(float(right["context_characters"]))
+        left_cross_encoder_calls += int(
+            (left.get("resource_use") or {}).get("cross_encoder_calls") or 0
+        )
+        right_cross_encoder_calls += int(
+            (right.get("resource_use") or {}).get("cross_encoder_calls") or 0
+        )
+
+        coverage = item.get("expected_coverage") or {}
+        for side, candidate_values, final_values in (
+            ("left", left_expected_candidate, left_expected_final),
+            ("right", right_expected_candidate, right_expected_final),
+        ):
+            side_coverage = coverage.get(side) or {}
+            candidate = (side_coverage.get("candidate") or {}).get("coverage")
+            final_evidence = (side_coverage.get("final_evidence") or {}).get("coverage")
+            if isinstance(candidate, (int, float)):
+                candidate_values.append(float(candidate))
+            if isinstance(final_evidence, (int, float)):
+                final_values.append(float(final_evidence))
+
+    return {
+        "case_count": len(cases),
+        "completed_case_count": len(completed),
+        "failed_case_count": len(failed),
+        "mean_candidate_overlap": _mean(candidate_overlap),
+        "mean_final_evidence_overlap": _mean(evidence_overlap),
+        "left": {
+            "mean_elapsed_seconds": _mean(left_elapsed),
+            "mean_context_characters": _mean(left_context),
+            "cross_encoder_calls": left_cross_encoder_calls,
+            "mean_expected_candidate_coverage": _mean(left_expected_candidate),
+            "mean_expected_final_coverage": _mean(left_expected_final),
+        },
+        "right": {
+            "mean_elapsed_seconds": _mean(right_elapsed),
+            "mean_context_characters": _mean(right_context),
+            "cross_encoder_calls": right_cross_encoder_calls,
+            "mean_expected_candidate_coverage": _mean(right_expected_candidate),
+            "mean_expected_final_coverage": _mean(right_expected_final),
         },
     }
