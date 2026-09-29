@@ -32,6 +32,28 @@ def resolved_pipeline(feature: str, request: Request) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail=f"No pipeline is assigned to {feature!r}.") from exc
 
 
+@router.post("/validate")
+def validate_pipeline_definition(
+    body: PipelineDefinition,
+    request: Request,
+) -> dict[str, Any]:
+    require_admin(request)
+    validation = pipeline_manager.service.validate(body)
+    runtime_error = None
+    if validation.valid and body.purpose == "research":
+        from ..pipelines.research import compile_research_pipeline
+
+        try:
+            compile_research_pipeline(body)
+        except ValueError as exc:
+            runtime_error = str(exc)
+    return {
+        "validation": validation.model_dump(mode="json"),
+        "runtime_supported": validation.valid and runtime_error is None,
+        "runtime_error": runtime_error,
+    }
+
+
 @router.post("/definitions")
 def create_pipeline_definition(
     body: PipelineDefinition,
