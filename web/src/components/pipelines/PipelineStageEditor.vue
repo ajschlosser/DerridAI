@@ -81,7 +81,11 @@ const strategiesByFamily = computed(() => {
             :value="stage.strategy"
             @change="emit('updateStrategy', stageIndex, ($event.target as HTMLSelectElement).value)"
           >
-            <optgroup v-for="group in strategiesByFamily" :key="group.family" :label="pipelineStageFamilyLabel(group.family, t)">
+            <optgroup
+              v-for="group in strategiesByFamily"
+              :key="group.family"
+              :label="pipelineStageFamilyLabel(group.family, t)"
+            >
               <option
                 v-for="option in group.strategies"
                 :key="option.strategy_id"
