@@ -132,6 +132,7 @@ export function pipelineStageFamilyHelp(
     )
   );
 }
+
 export function pipelineEdgeKindLabel(kind: string, t: PipelineTranslator) {
   const labels: Record<string, string> = {
     next: t("pipelines.then", "then"),
