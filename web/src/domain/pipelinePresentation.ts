@@ -170,6 +170,7 @@ export function pipelineConfigLabel(key: string, t: PipelineTranslator) {
     timeout_seconds: t("pipelines.config.timeout_seconds.label", "Time limit (seconds)"),
     record_char_limit: t("pipelines.config.record_char_limit.label", "Text limit per record"),
     total_char_limit: t("pipelines.config.total_char_limit.label", "Total evidence text limit"),
+    char_budget: t("pipelines.config.char_budget.label", "Prompt packet text budget"),
     num_predict: t("pipelines.config.num_predict.label", "Maximum query-analysis tokens"),
     semantic_weight: t("pipelines.config.semantic_weight.label", "Semantic-search weight"),
     lexical_weight: t("pipelines.config.lexical_weight.label", "Word-match weight"),
@@ -216,17 +217,21 @@ export function pipelineConfigHelp(key: string, t: PipelineTranslator) {
       "pipelines.config.total_char_limit.help",
       "Maximum combined text characters in the evidence packet sent to the answer-generation model.",
     ),
+    char_budget: t(
+      "pipelines.config.char_budget.help",
+      "Technical name: char_budget. This is the maximum amount of precedent text that may be packed into the metadata-enrichment prompt. It limits prompt size; it does not change which reviewed values are authoritative.",
+    ),
     num_predict: t(
       "pipelines.config.num_predict.help",
       "Maximum number of tokens the model may generate while analyzing or decomposing the research question before retrieval begins.",
     ),
     semantic_weight: t(
       "pipelines.config.semantic_weight.help",
-      "How much the combined score should depend on semantic similarity: similarity in meaning, even when the wording is different.",
+      "How strongly the combined precedent score should depend on semantic similarity: similarity in meaning, even when the wording is different. Semantic and word-match weights are treated as relative weights and normalized together.",
     ),
     lexical_weight: t(
       "pipelines.config.lexical_weight.help",
-      "How much the combined score should depend on lexical similarity: overlap in words or phrases.",
+      "How strongly the combined precedent score should depend on lexical similarity: overlap in words or phrases. Semantic and word-match weights are treated as relative weights and normalized together.",
     ),
     min_score: t(
       "pipelines.config.min_score.help",
