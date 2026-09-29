@@ -160,10 +160,7 @@ function citationCandidates(evidence: ResearchResultEvidence[]) {
     .sort((a, b) => b.marker.length - a.marker.length);
 }
 
-export function parseResearchAnswer(
-  value: string,
-  worksCitedLabel: string,
-): ResearchAnswerBlock[] {
+export function parseResearchAnswer(value: string, worksCitedLabel: string): ResearchAnswerBlock[] {
   const source = String(value || "")
     .replace(/\r\n?/g, "\n")
     .trim();
@@ -198,7 +195,9 @@ export function segmentResearchAnswer(
   const citationRanges: Array<{ start: number; end: number; evidenceIndex: number }> = [];
 
   if (candidates.length) {
-    const lookup = new Map(candidates.map((candidate) => [candidate.marker, candidate.evidenceIndex]));
+    const lookup = new Map(
+      candidates.map((candidate) => [candidate.marker, candidate.evidenceIndex]),
+    );
     const pattern = new RegExp(
       candidates.map((candidate) => escapedPattern(candidate.marker)).join("|"),
       "g",
@@ -234,7 +233,9 @@ export function segmentResearchAnswer(
     const text = normalized.text.slice(start, end);
     if (!text) continue;
 
-    const citation = citationRanges.find((range) => start >= range.start && end <= range.end);
+    const citation = citationRanges.find(
+      (range) => start >= range.start && end <= range.end,
+    );
     const bold =
       !citation &&
       normalized.boldRanges.some((range) => start >= range.start && end <= range.end);
