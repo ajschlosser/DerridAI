@@ -150,17 +150,29 @@ def compile_evidence_pipeline(pipeline: PipelineDefinition) -> EvidencePipelineP
                     f"Evidence cross-encoder {fallback_edge} must continue to {support.id!r}."
                 )
 
-    _require_target(support, provenance.id)
+    if support.next != [provenance.id]:
+        raise ValueError(
+            f"Evidence support stage must route normal results only to {provenance.id!r}."
+        )
+    for fallback_edge in ("on_unavailable", "on_timeout", "on_error"):
+        if getattr(support, fallback_edge) is not None:
+            raise ValueError(
+                f"Evidence support stage may not use {fallback_edge}; support failures "
+                "must not bypass deterministic validation."
+            )
     if llm is not None:
         _require_target(support, llm.id, edge="on_empty")
-        _require_target(llm, provenance.id)
+        if llm.edge_targets() != [provenance.id]:
+            raise ValueError(
+                "Closed-choice evidence fallback may only continue to the provenance gate."
+            )
     elif support.on_empty is not None:
         raise ValueError("Evidence support on_empty references an unsupported fallback stage.")
 
-    _require_target(provenance, select.id)
-    if provenance.on_empty is not None:
+    if provenance.edge_targets() != [select.id]:
         raise ValueError(
-            "Evidence provenance validation may not bypass directly to another stage."
+            "Evidence provenance validation may only continue to top-K selection; "
+            "it cannot expose a bypass edge."
         )
 
     if select.edge_targets():
