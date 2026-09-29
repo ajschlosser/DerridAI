@@ -146,6 +146,13 @@ def test_conservative_pipeline_keeps_relevance_and_support_scores_distinct(monke
     assert item["cross_encoder_score"] == 0.2
     assert item["support_score"] == 1.0
     assert item["support_status"] == "supported"
+    decisions = {
+        row["block_id"]: row
+        for row in result.status["candidate_decisions"]
+    }
+    assert decisions["b1"]["decision"] == "selected"
+    assert decisions["b2"]["decision"] == "rejected_support"
+    assert decisions["b2"]["cross_encoder_score"] == 0.9
     trace = {stage.stage_id: stage for stage in result.trace.stages}
     assert trace["rerank"].score_summary["max"] == 0.9
     assert trace["support"].input_count == 2
