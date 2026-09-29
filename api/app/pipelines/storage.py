@@ -106,5 +106,31 @@ class PipelineDatabase:
                 );
                 CREATE INDEX IF NOT EXISTS idx_pipeline_stage_strategy
                     ON pipeline_stage_runs(strategy_id, started_at DESC);
+
+                CREATE TABLE IF NOT EXISTS pipeline_benchmark_cases (
+                    benchmark_id TEXT NOT NULL,
+                    version INTEGER NOT NULL,
+                    name TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    created_by TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    PRIMARY KEY (benchmark_id, version)
+                );
+                CREATE INDEX IF NOT EXISTS idx_pipeline_benchmark_cases_created
+                    ON pipeline_benchmark_cases(created_at DESC, benchmark_id, version DESC);
+
+                CREATE TABLE IF NOT EXISTS pipeline_benchmark_runs (
+                    benchmark_run_id TEXT PRIMARY KEY,
+                    benchmark_id TEXT NOT NULL,
+                    benchmark_version INTEGER NOT NULL,
+                    owner TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    FOREIGN KEY (benchmark_id, benchmark_version)
+                        REFERENCES pipeline_benchmark_cases(benchmark_id, version)
+                        ON DELETE RESTRICT
+                );
+                CREATE INDEX IF NOT EXISTS idx_pipeline_benchmark_runs_case_created
+                    ON pipeline_benchmark_runs(benchmark_id, benchmark_version, created_at DESC);
                 """
             )
