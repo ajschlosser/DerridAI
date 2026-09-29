@@ -2,39 +2,39 @@
 
 This directory contains the normative product requirements and requirements traceability matrices for DerridAI.
 
-The requirements are derived from the current product on `master`, the cELF specification, current architecture and user documentation, and behavior already protected by the test suite. These documents are intended to make the product contract explicit enough that product, design, architecture, implementation, review, and verification can all trace back to stable requirement IDs.
+The requirements are derived from the current product, cELF, the architecture and user documentation, merged implementation history, and the existing automated test suite. The purpose is to make the product contract explicit enough that product, design, architecture, implementation, review, and verification can all trace back to stable requirement IDs.
 
-## How to read these documents
+## How to use these documents
 
-Requirements use the normative terms **MUST**, **MUST NOT**, **SHALL**, **SHALL NOT**, **SHOULD**, **SHOULD NOT**, and **MAY**.
+Requirements use **MUST**, **MUST NOT**, **SHALL**, **SHALL NOT**, **SHOULD**, **SHOULD NOT**, and **MAY** in their normative sense.
 
-Each detailed requirements document uses a traceability table with stable IDs. Where an automated test directly or partially verifies a requirement, the requirement links to that test. Where no test fully establishes the requirement, the verification column says so rather than implying automated coverage.
+Each detailed document contains requirement tables with stable IDs, acceptance criteria, parent/global trace, implementation/documentation trace, and verification links. Where an automated test exists, the row links it. Where test coverage is incomplete, the row says **Partial**, **Architectural**, or **Gap** rather than implying verification.
 
-Detailed requirements should trace upward to one or more [global requirements](GLOBAL_REQUIREMENTS.md). Where a cELF requirement applies, the product requirement should also identify the cELF source or invariant.
+Detailed requirements trace upward to [Global Product Requirements](GLOBAL_REQUIREMENTS.md). cELF remains authoritative for cELF conformance; these documents specify DerridAI product behavior in addition to those information-model requirements.
 
 ## Table of contents
 
-| Section | Document | Description | Status |
-| --- | --- | --- | --- |
-| 1. Global product requirements | [GLOBAL_REQUIREMENTS.md](GLOBAL_REQUIREMENTS.md) | Product-wide invariants: provenance, scholarly authority, source vs. derived state, human review, traceability, reproducibility, local-first operation, UX, accessibility, internationalization, quality, and requirements governance. | Initial baseline |
-| 2. Source acquisition, ingestion, and Corpus Builder | [INGESTION_AND_CORPUS_BUILDER.md](INGESTION_AND_CORPUS_BUILDER.md) | SourceDocument acquisition, media-aware extraction, hostile-input boundaries, OCR/transcription, source locations, segmentation, Record creation, revision, review, and publication readiness. | Initial requirements |
-| 3. Metadata schemas, assertions, and human review | [METADATA_AND_REVIEW.md](METADATA_AND_REVIEW.md) | MetadataSchema and SchemaField contracts, stable field identity, FieldAssertion semantics, evidence and assessment, human authority, confirmed absence, review queues, and audit history. | Initial requirements |
-| 4. Search, retrieval, evidence, and Research | [RESEARCH_RETRIEVAL_AND_EVIDENCE.md](RESEARCH_RETRIEVAL_AND_EVIDENCE.md) | Search and retrieval, hybrid candidate generation, reranking, provenance/support gates, EvidenceRef/EvidencePacket, Research generation, GeneratedClaim, SupportBinding, citation, memory, and research traceability. | Initial requirements |
-| 5. Configurable pipelines, benchmarks, and System Data | [PIPELINES_AND_SYSTEM_DATA.md](PIPELINES_AND_SYSTEM_DATA.md) | Immutable pipeline definitions, stage contracts, fallbacks, traces, operational metrics, dry-run comparison, fixed benchmarks, reproducibility, and administrative presentation of system data. | Initial requirements |
-| 6. Application shell, UX, accessibility, and internationalization | [UX_ACCESSIBILITY_AND_I18N.md](UX_ACCESSIBILITY_AND_I18N.md) | Navigation, canonical routes, workspace state, shared data-workspace patterns, progressive disclosure, semantic design tokens, responsive behavior, WCAG 2.2 AA, Help Center, and locale parity. | Initial requirements |
-| 7. Records, Works, and corpus management | _Planned: `RECORDS_WORKS_AND_CORPORA.md`_ | Records workspace, Record Inspector, Works, work-level metadata, JSONL workspaces, subset/merge flows, corpus views, Semantic Map, and bulk operations. | Planned |
-| 8. Metadata and research memory | _Planned: `MEMORY_AND_PRECEDENTS.md`_ | Metadata exemplars, Metadata Memory, claim memory, response memory, eligibility, owner scope, evidence status, rebuild semantics, and advisory authority. | Planned |
-| 9. Vector stores and embeddings | _Planned: `VECTOR_STORES_AND_EMBEDDINGS.md`_ | Chroma modes, collection roles, embedding contracts, language mirrors, derived-state authority, upserts, pending synchronization, and round trips. | Planned |
-| 10. LLM providers and model configuration | _Planned: `LLM_PROVIDERS.md`_ | Provider profiles, Ollama and OpenAI-compatible backends, discovery, warmup, model parameters, concurrency, secret handling, embeddings, and availability. | Planned |
-| 11. Users, roles, capabilities, and security | _Planned: `USERS_ROLES_AND_SECURITY.md`_ | Authentication, capability enforcement, researcher/admin boundaries, sensitive-data filtering, secrets, destructive administration, and realtime authorization. | Planned |
-| 12. Operations and realtime behavior | _Planned: `OPERATIONS_AND_REALTIME.md`_ | Background jobs, progress, cancellation, restart semantics, durable history, realtime events, polling fallback, Operations workspace, and undo behavior. | Planned |
-| 13. Publication, import/export, and interoperability | _Planned: `PUBLICATION_AND_INTEROPERABILITY.md`_ | Publication validation, JSONL interchange, citation projections, import/export, cELF conformance, PROV, RO-Crate, nanopublication compatibility, and round trips. | Planned |
-| 14. Persistence, backup, restore, and recovery | _Planned: `PERSISTENCE_BACKUP_AND_RECOVERY.md`_ | Canonical persistence, browser-local state, SQLite/system data, backup contents, restore integrity, derived-index recovery, and concurrent-operation guards. | Planned |
-| 15. APIs and integration contracts | _Planned: `API_AND_INTEGRATION_CONTRACTS.md`_ | REST, GraphQL, realtime transport, typed contracts, errors, pagination, capability enforcement, schema/code generation, and compatibility. | Planned |
-| 16. Reliability, performance, and failure handling | _Planned: `RELIABILITY_AND_PERFORMANCE.md`_ | Resource bounds, timeouts, concurrency, caching, partial failure, fallback behavior, dependency unavailability, stale state, and integrity-over-performance rules. | Planned |
-| 17. Testing and quality gates | _Planned: `TESTING_AND_QUALITY_GATES.md`_ | Backend/frontend/E2E testing, Storybook, contracts, accessibility sweeps, localization checks, type/lint/format/build gates, and test-to-requirement linkage. | Planned |
-| 18. Compatibility, migration, and deprecation | _Planned: `COMPATIBILITY_AND_MIGRATION.md`_ | Schema migration, FieldAssertion migration, pipeline migration, legacy routes/runtime behavior, historical inspectability, and deprecation policy. | Planned |
-| 19. Master traceability matrix | _Planned: `TRACEABILITY_MATRIX.md`_ | Consolidated requirement → parent requirement → cELF requirement → implementation → test → documentation → status mapping. | Planned |
+| Section | Document | Description |
+| --- | --- | --- |
+| 1. Global product requirements | [GLOBAL_REQUIREMENTS.md](GLOBAL_REQUIREMENTS.md) | Product-wide invariants: provenance, scholarly authority, source vs. derived state, human review, traceability, reproducibility, local-first operation, UX, accessibility, internationalization, quality, and change control. |
+| 2. Source acquisition, ingestion, and Corpus Builder | [INGESTION_AND_CORPUS_BUILDER.md](INGESTION_AND_CORPUS_BUILDER.md) | SourceDocument acquisition, hostile-input boundaries, media-aware extraction, OCR/transcription, source locators, segmentation, Record creation, revision, validation, review, and publication readiness. |
+| 3. Metadata schemas, assertions, and human review | [METADATA_AND_REVIEW.md](METADATA_AND_REVIEW.md) | MetadataSchema/SchemaField contracts, stable field identity, FieldAssertion semantics, attribution, evidence/assessment policy, human ownership, confirmed absence, review queues, and auditability. |
+| 4. Search, retrieval, evidence, and Research | [RESEARCH_RETRIEVAL_AND_EVIDENCE.md](RESEARCH_RETRIEVAL_AND_EVIDENCE.md) | Search and hybrid retrieval, reranking/diversity, fallback lineage, evidence support/provenance gates, EvidenceRef/EvidencePacket, Research generation, GeneratedClaim, SupportBinding, citation, grading, and memory use. |
+| 5. Configurable pipelines, benchmarks, and System Data | [PIPELINES_AND_SYSTEM_DATA.md](PIPELINES_AND_SYSTEM_DATA.md) | Immutable pipeline definitions, stages/strategies, validators, fallbacks, traces, operational telemetry, dry-run comparison, fixed benchmarks, reproducibility, and administrative System Data behavior. |
+| 6. Application shell, UX, accessibility, and internationalization | [UX_ACCESSIBILITY_AND_I18N.md](UX_ACCESSIBILITY_AND_I18N.md) | Task-oriented navigation, canonical routes, workspace URL state, shared data-workspace patterns, progressive disclosure, Help Center, design tokens, responsive behavior, WCAG 2.2 AA, and locale parity. |
+| 7. Records, Works, and corpus management | [RECORDS_WORKS_AND_CORPORA.md](RECORDS_WORKS_AND_CORPORA.md) | Records workspace/Inspector, Works, work/corpus-scoped metadata, bulk operations, source/evidence navigation, semantic maps, derived graph views, and corpus-management authority boundaries. |
+| 8. Metadata and research memory | [MEMORY_AND_PRECEDENTS.md](MEMORY_AND_PRECEDENTS.md) | Metadata exemplars/precedents, editorial memory, claim memory, response memory, eligibility, owner scope, stable field identity, evidence status, projection indexes, fallback, and advisory authority. |
+| 9. Vector stores and embeddings | [VECTOR_STORES_AND_EMBEDDINGS.md](VECTOR_STORES_AND_EMBEDDINGS.md) | Chroma embedded/HTTP modes, collection identity, derived-state authority, embedding contracts, language mirrors, synchronization/upserts, researcher access, and recovery/rebuild semantics. |
+| 10. LLM providers and model configuration | [LLM_PROVIDERS.md](LLM_PROVIDERS.md) | Provider profiles, Ollama/OpenAI-compatible backends, model discovery, testing, warmup, provider switching, concurrency, credentials, embedding profiles, and degraded-state behavior. |
+| 11. Users, roles, capabilities, and security | [USERS_ROLES_AND_SECURITY.md](USERS_ROLES_AND_SECURITY.md) | Authentication, session hardening, role/capability enforcement, researcher/admin boundaries, blind-review privacy, owner scope, secrets, realtime authorization, and destructive administration. |
+| 12. Operations and realtime behavior | [OPERATIONS_AND_REALTIME.md](OPERATIONS_AND_REALTIME.md) | Background-job lifecycle, progress, cancellation, durable history, restart semantics, Operations UI, WebSocket authorization, replay/resync, bounded delivery, polling fallback, and ephemeral live hints. |
+| 13. Publication, export/import, and interoperability | [PUBLICATION_AND_INTEROPERABILITY.md](PUBLICATION_AND_INTEROPERABILITY.md) | Publication validation, JSONL materialization, integrity, citations, import/export semantics, cELF interoperability, PROV, RO-Crate, and nanopublication compatibility. |
+| 14. Persistence, backup, restore, and recovery | [PERSISTENCE_BACKUP_AND_RECOVERY.md](PERSISTENCE_BACKUP_AND_RECOVERY.md) | SQLite/system durability, browser-vs-server state, job restart behavior, backup manifests, credentials disclosure, restore validation, ZIP safety, Chroma rollback, and recovery. |
+| 15. APIs and integration contracts | [API_AND_INTEGRATION_CONTRACTS.md](API_AND_INTEGRATION_CONTRACTS.md) | REST commands/mutations, read-only GraphQL, realtime transport, typed frontend contracts, authorization, bounds, stable errors, schema/code generation, and compatibility. |
+| 16. Reliability, performance, and failure handling | [RELIABILITY_AND_PERFORMANCE.md](RELIABILITY_AND_PERFORMANCE.md) | Failure visibility, resource limits, batching/checkpoints, concurrency safety, explicit fallbacks, derived-side-effect isolation, restart/realtime resilience, and integrity-over-performance constraints. |
+| 17. Testing and quality gates | [TESTING_AND_QUALITY_GATES.md](TESTING_AND_QUALITY_GATES.md) | Test taxonomy, backend/frontend contracts, unit/regression/characterization/workflow tests, accessibility, localization, Storybook/build/static gates, release consistency, and requirement-to-test linkage. |
+| 18. Compatibility, migration, and deprecation | [COMPATIBILITY_AND_MIGRATION.md](COMPATIBILITY_AND_MIGRATION.md) | FieldAssertion/schema/pipeline migrations, legacy inspectability, safe execution boundaries, route/runtime migration, characterization baselines, and deprecation policy. |
+| 19. Master traceability matrix | [TRACEABILITY_MATRIX.md](TRACEABILITY_MATRIX.md) | Consolidated index of all requirement IDs, source documents, parent/global traces, and linked verification status/tests. |
 
 ## Requirement ID prefixes
 
@@ -43,7 +43,7 @@ Detailed requirements should trace upward to one or more [global requirements](G
 | `PRD-G-*` | Global product requirements |
 | `PRD-ING-*` | Source acquisition and ingestion |
 | `PRD-CB-*` | Corpus Builder |
-| `PRD-MDS-*` | Metadata schemas |
+| `PRD-MDS-*` | Metadata schemas and FieldAssertions |
 | `PRD-REV-*` | Human review and editorial authority |
 | `PRD-REC-*` | Records |
 | `PRD-WRK-*` | Works |
@@ -74,16 +74,25 @@ Detailed requirements should trace upward to one or more [global requirements](G
 
 | Label | Meaning |
 | --- | --- |
-| **Direct** | An automated test directly exercises the requirement or its principal invariant. |
-| **Partial** | Tests cover important parts of the requirement, but the requirement is broader than any individual test. |
-| **Architectural** | Conformance requires design/code review plus lower-level tests; no single automated test establishes the full requirement. |
-| **Gap** | A requirement is implemented or intended but lacks adequate automated verification and should receive explicit test coverage. |
+| **Direct** | One or more automated tests directly exercise the requirement or its principal invariant. |
+| **Partial** | Tests cover important parts of the requirement, but the full requirement requires broader review or additional scenarios. |
+| **Architectural** | Conformance spans multiple components/design boundaries and cannot be established by one test. |
+| **Gap** | Adequate automated verification has not yet been identified and should be treated as explicit QA debt. |
+
+## Traceability model
+
+The intended chain is:
+
+`cELF / product invariant → PRD-G global requirement → area requirement → implementation/documentation → automated test or explicit verification gap`
+
+The [Master Traceability Matrix](TRACEABILITY_MATRIX.md) provides a consolidated view. The detailed area document remains authoritative for each requirement's complete acceptance criteria and context.
 
 ## Change rules
 
-1. Requirement IDs are stable identifiers and should not be renumbered merely to reorder a document.
+1. Requirement IDs are stable. Do not renumber existing IDs merely to reorder prose.
 2. New detailed requirements should identify their parent `PRD-G-*` requirement(s).
-3. Requirements that are mechanically testable should link directly to the validating test file and, when useful, name the validating test case.
-4. A pull request that changes a global requirement should update these documents in the same change.
-5. A product behavior that intentionally violates a SHOULD-level requirement should document the exception and rationale.
-6. cELF requirements remain authoritative for cELF conformance. These documents specify DerridAI product behavior in addition to those information-model invariants.
+3. Mechanically testable requirements should link directly to validating tests; missing coverage must be labeled explicitly.
+4. A pull request that changes a global requirement should update the requirement document and affected tests in the same change.
+5. A product behavior that intentionally departs from a SHOULD-level requirement should document the exception and rationale.
+6. cELF requirements remain authoritative for cELF conformance.
+7. When implementation changes make a requirement obsolete, deprecate or supersede it deliberately rather than silently deleting historical traceability.
