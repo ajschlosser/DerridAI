@@ -4,7 +4,6 @@ from __future__ import annotations
 import dataclasses
 
 import pytest
-
 from app import config
 from app import cross_encoder as cross_encoder_module
 from app.pipelines.defaults import built_in_pipeline
