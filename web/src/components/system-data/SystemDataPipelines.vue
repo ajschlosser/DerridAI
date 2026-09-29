@@ -1,6 +1,7 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import AppIcon from "../AppIcon.vue";
 import PipelineDefinitionBrowser from "../pipelines/PipelineDefinitionBrowser.vue";
 import PipelineDefinitionDetail from "../pipelines/PipelineDefinitionDetail.vue";
@@ -20,13 +21,15 @@ import type {
 } from "../../types/pipelines";
 
 const i18n = useI18nStore();
+const route = useRoute();
+const router = useRouter();
 const catalog = ref<PipelineCatalog | null>(null);
 const runs = ref<PipelineRunTrace[]>([]);
 const metrics = ref<PipelineOperationalMetrics | null>(null);
 const loading = ref(true);
 const error = ref("");
-const selectedKey = ref("");
-const selectedTraceId = ref("");
+const selectedKey = ref(String(route.query.pipeline || ""));
+const selectedTraceId = ref(String(route.query.run || ""));
 const draft = ref<PipelineDefinition | null>(null);
 const validation = ref<PipelineValidationResponse | null>(null);
 const saving = ref(false);
@@ -34,6 +37,27 @@ const assigning = ref(false);
 const cloning = ref(false);
 
 const t = (key: string, fallback: string) => i18n.t(key, fallback);
+
+function syncRouteState() {
+  void router.replace({
+    name: "pipelines",
+    query: {
+      ...route.query,
+      pipeline: selectedKey.value || undefined,
+      run: selectedTraceId.value || undefined,
+    },
+  });
+}
+
+function selectPipeline(key: string) {
+  selectedKey.value = key;
+  syncRouteState();
+}
+
+function selectTrace(runId: string) {
+  selectedTraceId.value = runId;
+  syncRouteState();
+}
 
 function featureForPurpose(purpose: string) {
   const map: Record<string, string> = {
@@ -112,6 +136,7 @@ async function load() {
     ) {
       selectedTraceId.value = runs.value[0].run_id;
     }
+    syncRouteState();
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);
   } finally {
@@ -152,7 +177,7 @@ async function saveDraft() {
     const saved = await pipelinesApi.createDefinition(draft.value);
     draft.value = null;
     await load();
-    selectedKey.value = pipelineKey(saved.pipeline);
+    selectPipeline(pipelineKey(saved.pipeline));
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);
   } finally {
@@ -181,7 +206,7 @@ async function assignSelected() {
   try {
     await pipelinesApi.setAssignment(assignment);
     await load();
-    selectedKey.value = pipelineKey(pipeline);
+    selectPipeline(pipelineKey(pipeline));
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);
   } finally {
@@ -207,6 +232,26 @@ async function resetSelectedAssignment() {
   }
 }
 
+watch(
+  () => [route.query.pipeline, route.query.run],
+  ([pipeline, run]) => {
+    const nextPipeline = String(pipeline || "");
+    const nextRun = String(run || "");
+    if (
+      nextPipeline &&
+      nextPipeline !== selectedKey.value &&
+      pipelines.value.some((item) => pipelineKey(item) === nextPipeline)
+    )
+      selectedKey.value = nextPipeline;
+    if (
+      nextRun &&
+      nextRun !== selectedTraceId.value &&
+      runs.value.some((item) => item.run_id === nextRun)
+    )
+      selectedTraceId.value = nextRun;
+  },
+);
+
 onMounted(load);
 </script>
 
@@ -214,7 +259,7 @@ onMounted(load);
   <div class="pipeline-workspace">
     <header class="workspace-heading">
       <div>
-        <h2>{{ t("pipelines.title", "Pipeline Studio") }}</h2>
+        <h1>{{ t("pipelines.title", "Pipeline Studio") }}</h1>
         <p>
           {{
             t(
@@ -317,7 +362,7 @@ onMounted(load);
           :pipelines="pipelines"
           :assignments="assignments"
           :selected-key="selectedKey"
-          @select="selectedKey = $event"
+          @select="selectPipeline"
         />
         <PipelineDefinitionDetail
           v-if="selectedPipeline"
@@ -350,7 +395,7 @@ onMounted(load);
       <PipelineExecutionHistory
         :runs="runs"
         :selected-run-id="selectedTraceId"
-        @select="selectedTraceId = $event"
+        @select="selectTrace"
       />
     </template>
   </div>
@@ -367,7 +412,7 @@ onMounted(load);
   justify-content: space-between;
   gap: 16px;
 }
-.workspace-heading h2 {
+.workspace-heading h1 {
   margin: 0;
   font-size: 1.25rem;
 }

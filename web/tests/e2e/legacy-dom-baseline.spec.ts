@@ -113,12 +113,26 @@ async function open(page: Page, scenario: Scenario) {
   }
   // The runtime picks its view from in-app navigation, so go there the way a person would.
   if (scenario.nav && scenario.nav !== "Home") {
-    // The sidebar entry; the top bar has its own "Search" button.
-    await page
-      .locator("nav, aside")
-      .getByRole("button", { name: scenario.nav, exact: true })
-      .first()
-      .click();
+    if (scenario.nav === "Record View") {
+      // These fixtures load records directly into the runtime rather than the
+      // server-backed Records table, so preserve that state while routing to
+      // the now-contextual Record View.
+      await page.evaluate(() => {
+        window.dispatchEvent(
+          new CustomEvent("derridai:navigate-native", {
+            detail: { path: "/record", runtimeView: "record" },
+          }),
+        );
+      });
+      await expect(page.locator("main.record-workspace-page")).toBeVisible();
+    } else {
+      // Target destination buttons, not same-named collapsible section headings.
+      await page
+        .locator(".shell-sidebar .nav-tooltip-wrap")
+        .getByRole("button", { name: scenario.nav, exact: true })
+        .first()
+        .click();
+    }
   }
   await page.waitForLoadState("networkidle");
   await scenario.steps?.(page);
@@ -307,7 +321,7 @@ function samplePdf(): Buffer {
 }
 
 const inPdfExplorer = async (page: Page, { open = true } = {}) => {
-  const explorerPath = "/pdf?mode=explorer";
+  const explorerPath = "/source-explorer";
   await expect
     .poll(
       async () => {
@@ -464,16 +478,19 @@ const RESTORE_RESPONSE = {
 
 /** Selects the first record as evidence in the Record view, then opens Research. */
 const researchWithEvidence = async (page: Page) => {
-  await page
-    .locator("nav, aside")
-    .getByRole("button", { name: "Record View", exact: true })
-    .first()
-    .click();
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new CustomEvent("derridai:navigate-native", {
+        detail: { path: "/record", runtimeView: "record" },
+      }),
+    );
+  });
+  await expect(page.locator("main.record-workspace-page")).toBeVisible();
   const addEvidence = page.getByRole("button", { name: "Add evidence" }).first();
   await expect(addEvidence).toBeVisible();
   await addEvidence.click();
   await page
-    .locator("nav, aside")
+    .locator(".shell-sidebar .nav-tooltip-wrap")
     .getByRole("button", { name: "Research", exact: true })
     .first()
     .click();
@@ -1020,15 +1037,11 @@ const scenarios: Scenario[] = [
     },
   },
   {
-    name: "records-select-all",
+    name: "records-select-page",
     nav: "Records",
     load: true,
     steps: async (page) => {
-      const target = page.getByRole("button", { name: "Select all" }).first();
-      const menus = page.locator("summary", { hasText: "More" });
-      for (let i = 0; i < (await menus.count()) && !(await target.isVisible()); i++)
-        await menus.nth(i).click();
-      await target.click();
+      await page.locator(".records-table thead input[type=checkbox]").first().check();
       await page.waitForTimeout(700);
     },
   },
@@ -1206,7 +1219,7 @@ const scenarios: Scenario[] = [
   { name: "styles-compare-light", nav: "Compare", load: true, styles: true },
   { name: "styles-providers-light", nav: "LLM Providers", styles: true },
   { name: "styles-users-light", nav: "Users & roles", styles: true },
-  { name: "styles-roles-light", nav: "Roles & permissions", styles: true },
+  { name: "styles-roles-light", path: "/roles", styles: true },
   { name: "styles-languages-light", nav: "Manage languages", styles: true },
   { name: "styles-settings-light", nav: "Settings", styles: true },
   { name: "styles-app-shell-light", load: true, target: "app", styles: true },
@@ -1596,6 +1609,20 @@ test.describe("legacy runtime DOM baseline", () => {
       } else if (target === "dock") {
         expect(stableMarkup).toContain('id="operationProgressStack"');
         expect(stableMarkup).toContain('id="operationStackItems"');
+      } else if (target === "main" && scenario.name.startsWith("records-")) {
+        // Records is Vue-owned; keep this legacy suite focused on the workspace
+        // contract instead of freezing the migrated presentation.
+        expect(stableMarkup).toContain('id="records-page-title"');
+      } else if (
+        [
+          "annotations-empty",
+          "annotations-loaded",
+          "annotations-recent",
+          "annotations-search",
+          "annotations-remove",
+        ].includes(scenario.name)
+      ) {
+        expect(stableMarkup).toContain('id="annotations-page-title"');
       } else if (
         ["works-loaded", "works-search", "works-actions-menu", "annotations-open-work"].includes(
           scenario.name,

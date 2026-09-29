@@ -16,7 +16,20 @@
 </svg>
 </button>
 </div>
-<nav class="side-nav shell-primary-nav" aria-label="Primary navigation">
+<nav class="shell-navigation" aria-label="Primary navigation">
+<label class="shell-nav-search">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<circle cx="11" cy="11" r="7">
+</circle>
+<path d="m20 20-4-4">
+</path>
+</svg>
+<span class="sr-only">Filter navigation…</span>
+<input type="search" autocomplete="off" placeholder="Filter navigation…">
+</label>
+<section class="shell-nav-section overview">
+<div class="shell-nav-list">
+<div class="shell-nav-row">
 <span class="nav-tooltip-wrap" data-tooltip="">
 <button type="button" class="" aria-label="Home" title="Home">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -32,39 +45,21 @@
 <span>Home</span>
 </button>
 </span>
-<span class="nav-tooltip-wrap" data-tooltip="">
-<button type="button" class="" aria-label="Search" title="Search">
+</div>
+</div>
+</section>
+<section class="shell-nav-section">
+<h2 class="shell-nav-group-heading">
+<button type="button" class="shell-nav-group-toggle" aria-expanded="true">
+<span>Research</span>
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<circle cx="11" cy="11" r="7">
-</circle>
-<path d="m20 20-4-4">
+<path d="m6 9.5 6 6 6-6">
 </path>
 </svg>
-<span>Search</span>
 </button>
-</span>
-<span class="nav-tooltip-wrap" data-tooltip="">
-<button type="button" class="" aria-label="Works" title="Works">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20">
-</path>
-<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z">
-</path>
-</svg>
-<span>Works</span>
-</button>
-</span>
-<span class="nav-tooltip-wrap" data-tooltip="">
-<button type="button" class="" aria-label="Record View" title="Record View">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<rect x="5" y="3" width="14" height="18" rx="2">
-</rect>
-<path d="M8 8h8M8 12h8M8 16h5">
-</path>
-</svg>
-<span>Record View</span>
-</button>
-</span>
+</h2>
+<div class="shell-nav-list">
+<div class="shell-nav-row">
 <span class="nav-tooltip-wrap" data-tooltip="">
 <button type="button" class="" aria-label="Research" title="Research">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -76,49 +71,85 @@
 <span>Research</span>
 </button>
 </span>
-<span class="nav-tooltip-wrap" data-tooltip="">
-<button type="button" class="" aria-label="Annotations" title="Annotations">
+<button type="button" class="shell-nav-favorite" aria-label="Pin Research" title="Pin Research">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<rect x="5" y="3" width="14" height="18" rx="2">
-</rect>
-<path d="M8 8h8M8 12h8M8 16h5">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
 </path>
 </svg>
-<span>Annotations</span>
 </button>
-</span>
-<span class="nav-tooltip-wrap" data-tooltip="">
-<button type="button" class="active" aria-label="Settings" title="Settings" aria-current="page">
+</div>
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="ChromaDB is unavailable, so the Response Library cannot be opened.">
+<button type="button" class="" disabled="" aria-label="Response Library" aria-describedby="sidebar-nav-reason-faq" title="ChromaDB is unavailable, so the Response Library cannot be opened.">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<circle cx="12" cy="12" r="3">
-</circle>
-<path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21h-4v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1-.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H3v-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1L7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V3h4v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9A1.7 1.7 0 0 0 21 10h.1v4H21a1.7 1.7 0 0 0-1.6 1Z">
+<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20">
+</path>
+<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z">
 </path>
 </svg>
-<span>Settings</span>
+<span>Response Library</span>
 </button>
+<span id="sidebar-nav-reason-faq" class="sr-only">ChromaDB is unavailable, so the Response Library cannot be opened.</span>
 </span>
-<span class="nav-tooltip-wrap" data-tooltip="">
-<button type="button" class="" aria-label="Operations" title="Operations">
+<button type="button" class="shell-nav-favorite" aria-label="Pin Response Library" title="Pin Response Library">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="M3 12a9 9 0 1 0 3-6.7L3 8">
-</path>
-<path d="M3 3v5h5M12 7v5l3 2">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
 </path>
 </svg>
-<span>Operations</span>
 </button>
-</span>
-</nav>
-<details class="shell-more-tools" open="">
-<summary aria-expanded="true">
-<span>More tools</span>
+</div>
+</div>
+</section>
+<section class="shell-nav-section">
+<h2 class="shell-nav-group-heading">
+<button type="button" class="shell-nav-group-toggle" aria-expanded="true">
+<span>Corpora</span>
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <path d="m6 9.5 6 6 6-6">
 </path>
 </svg>
-</summary>
-<div class="shell-more-tools-list">
+</button>
+</h2>
+<div class="shell-nav-list">
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="Search" title="Search">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<circle cx="11" cy="11" r="7">
+</circle>
+<path d="m20 20-4-4">
+</path>
+</svg>
+<span>Search</span>
+</button>
+</span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin Search" title="Pin Search">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="Works" title="Works">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20">
+</path>
+<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z">
+</path>
+</svg>
+<span>Works</span>
+</button>
+</span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin Works" title="Pin Works">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+<div class="shell-nav-row">
 <span class="nav-tooltip-wrap" data-tooltip="">
 <button type="button" class="" aria-label="Records" title="Records">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -130,6 +161,33 @@
 <span>Records</span>
 </button>
 </span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin Records" title="Pin Records">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="Annotations" title="Annotations">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<rect x="5" y="3" width="14" height="18" rx="2">
+</rect>
+<path d="M8 8h8M8 12h8M8 16h5">
+</path>
+</svg>
+<span>Annotations</span>
+</button>
+</span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin Annotations" title="Pin Annotations">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+<div class="shell-nav-row">
 <span class="nav-tooltip-wrap" data-tooltip="">
 <button type="button" class="" aria-label="Semantic map" title="Semantic map">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -145,17 +203,44 @@
 <span>Semantic map</span>
 </button>
 </span>
-<span class="nav-tooltip-wrap" data-tooltip="">
-<button type="button" class="" aria-label="Corpus Builder" title="Corpus Builder">
+<button type="button" class="shell-nav-favorite" aria-label="Pin Semantic map" title="Pin Semantic map">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="M6 2h9l5 5v15H6z">
-</path>
-<path d="M14 2v6h6M8.5 15h7M8.5 18h5">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
 </path>
 </svg>
-<span>Corpus Builder</span>
+</button>
+</div>
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="Compare" title="Compare">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M8 7h11M16 4l3 3-3 3M16 17H5M8 14l-3 3 3 3">
+</path>
+</svg>
+<span>Compare</span>
 </button>
 </span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin Compare" title="Pin Compare">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+</div>
+</section>
+<section class="shell-nav-section">
+<h2 class="shell-nav-group-heading">
+<button type="button" class="shell-nav-group-toggle" aria-expanded="true">
+<span>Corpus Management</span>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m6 9.5 6 6 6-6">
+</path>
+</svg>
+</button>
+</h2>
+<div class="shell-nav-list">
+<div class="shell-nav-row">
 <span class="nav-tooltip-wrap" data-tooltip="">
 <button type="button" class="" aria-label="Sources" title="Sources">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -167,15 +252,33 @@
 <span>Sources</span>
 </button>
 </span>
-<span class="nav-tooltip-wrap" data-tooltip="">
-<button type="button" class="" aria-label="Compare" title="Compare">
+<button type="button" class="shell-nav-favorite" aria-label="Pin Sources" title="Pin Sources">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="M8 7h11M16 4l3 3-3 3M16 17H5M8 14l-3 3 3 3">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
 </path>
 </svg>
-<span>Compare</span>
+</button>
+</div>
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="Corpus Builder" title="Corpus Builder">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M6 2h9l5 5v15H6z">
+</path>
+<path d="M14 2v6h6M8.5 15h7M8.5 18h5">
+</path>
+</svg>
+<span>Corpus Builder</span>
 </button>
 </span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin Corpus Builder" title="Pin Corpus Builder">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+<div class="shell-nav-row">
 <span class="nav-tooltip-wrap" data-tooltip="">
 <button type="button" class="" aria-label="Corpus Data" title="Corpus Data">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -187,40 +290,14 @@
 <span>Corpus Data</span>
 </button>
 </span>
-<span class="nav-tooltip-wrap" data-tooltip="ChromaDB is unavailable, so the Response Library cannot be opened.">
-<button type="button" class="" disabled="" aria-label="Response Library" aria-describedby="sidebar-nav-reason-faq" title="ChromaDB is unavailable, so the Response Library cannot be opened.">
+<button type="button" class="shell-nav-favorite" aria-label="Pin Corpus Data" title="Pin Corpus Data">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20">
-</path>
-<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
 </path>
 </svg>
-<span>Response Library</span>
 </button>
-<span id="sidebar-nav-reason-faq" class="sr-only">ChromaDB is unavailable, so the Response Library cannot be opened.</span>
-</span>
-<span class="nav-tooltip-wrap" data-tooltip="">
-<button type="button" class="" aria-label="System Data" title="System Data">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<ellipse cx="12" cy="5" rx="8" ry="3">
-</ellipse>
-<path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6">
-</path>
-</svg>
-<span>System Data</span>
-</button>
-</span>
-<span class="nav-tooltip-wrap" data-tooltip="">
-<button type="button" class="" aria-label="LLM Providers" title="LLM Providers">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="m12 3 1.2 4.1L17 9l-3.8 1.9L12 15l-1.2-4.1L7 9l3.8-1.9L12 3Z">
-</path>
-<path d="m19 15 .7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7L19 15Z">
-</path>
-</svg>
-<span>LLM Providers</span>
-</button>
-</span>
+</div>
+<div class="shell-nav-row">
 <span class="nav-tooltip-wrap" data-tooltip="">
 <button type="button" class="" aria-label="Metadata schemas" title="Metadata schemas">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -232,6 +309,63 @@
 <span>Metadata schemas</span>
 </button>
 </span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin Metadata schemas" title="Pin Metadata schemas">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+</div>
+</section>
+<section class="shell-nav-section">
+<h2 class="shell-nav-group-heading">
+<button type="button" class="shell-nav-group-toggle" aria-expanded="true">
+<span>AI &amp; Automation</span>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m6 9.5 6 6 6-6">
+</path>
+</svg>
+</button>
+</h2>
+<div class="shell-nav-list">
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="LLM Providers" title="LLM Providers">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 1.2 4.1L17 9l-3.8 1.9L12 15l-1.2-4.1L7 9l3.8-1.9L12 3Z">
+</path>
+<path d="m19 15 .7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7L19 15Z">
+</path>
+</svg>
+<span>LLM Providers</span>
+</button>
+</span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin LLM Providers" title="Pin LLM Providers">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="Pipeline Studio" title="Pipeline Studio">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M8 7h11M16 4l3 3-3 3M16 17H5M8 14l-3 3 3 3">
+</path>
+</svg>
+<span>Pipeline Studio</span>
+</button>
+</span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin Pipeline Studio" title="Pin Pipeline Studio">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+<div class="shell-nav-row">
 <span class="nav-tooltip-wrap" data-tooltip="">
 <button type="button" class="" aria-label="Metadata memory" title="Metadata memory">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -243,6 +377,46 @@
 <span>Metadata memory</span>
 </button>
 </span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin Metadata memory" title="Pin Metadata memory">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+</div>
+</section>
+<section class="shell-nav-section">
+<h2 class="shell-nav-group-heading">
+<button type="button" class="shell-nav-group-toggle" aria-expanded="true">
+<span>System</span>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m6 9.5 6 6 6-6">
+</path>
+</svg>
+</button>
+</h2>
+<div class="shell-nav-list">
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="System Data" title="System Data">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<ellipse cx="12" cy="5" rx="8" ry="3">
+</ellipse>
+<path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6">
+</path>
+</svg>
+<span>System Data</span>
+</button>
+</span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin System Data" title="Pin System Data">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+<div class="shell-nav-row">
 <span class="nav-tooltip-wrap" data-tooltip="">
 <button type="button" class="" aria-label="Users &amp; roles" title="Users &amp; roles">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -256,17 +430,14 @@
 <span>Users &amp; roles</span>
 </button>
 </span>
-<span class="nav-tooltip-wrap" data-tooltip="">
-<button type="button" class="" aria-label="Roles &amp; permissions" title="Roles &amp; permissions">
+<button type="button" class="shell-nav-favorite" aria-label="Pin Users &amp; roles" title="Pin Users &amp; roles">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="M12 2 20 5v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5z">
-</path>
-<path d="M9 12l2 2 4-5">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
 </path>
 </svg>
-<span>Roles &amp; permissions</span>
 </button>
-</span>
+</div>
+<div class="shell-nav-row">
 <span class="nav-tooltip-wrap" data-tooltip="">
 <button type="button" class="" aria-label="Manage languages" title="Manage languages">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -278,10 +449,55 @@
 <span>Manage languages</span>
 </button>
 </span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin Manage languages" title="Pin Manage languages">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
 </div>
-</details>
+</div>
+</section>
+</nav>
 <div class="sidebar-spacer">
 </div>
+<nav class="shell-utility-nav" aria-label="Utility navigation">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="Operations" title="Operations">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M3 12a9 9 0 1 0 3-6.7L3 8">
+</path>
+<path d="M3 3v5h5M12 7v5l3 2">
+</path>
+</svg>
+<span>Operations</span>
+</button>
+</span>
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="Help center" title="Help center">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<circle cx="12" cy="12" r="9">
+</circle>
+<path d="M9.4 9.4a2.6 2.6 0 1 1 3.7 2.35c-.8.4-1.3.9-1.3 1.75V14">
+</path>
+<path d="M12 17.2h.01">
+</path>
+</svg>
+<span>Help center</span>
+</button>
+</span>
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="active" aria-label="Settings" title="Settings" aria-current="page">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<circle cx="12" cy="12" r="3">
+</circle>
+<path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21h-4v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1-.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H3v-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1L7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V3h4v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9A1.7 1.7 0 0 0 21 10h.1v4H21a1.7 1.7 0 0 0-1.6 1Z">
+</path>
+</svg>
+<span>Settings</span>
+</button>
+</span>
+</nav>
 <div class="shell-sidebar-footer">
 <div class="shell-mini-status">
 <span>
@@ -292,6 +508,14 @@
 </aside>
 <section class="workspace shell-workspace">
 <header class="topbar shell-topbar">
+<button class="mobile-navigation-trigger" type="button" aria-label="Open navigation" title="Open navigation">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M5 7h14M5 12h14M5 17h14">
+</path>
+<path d="M3 7h.01M3 12h.01M3 17h.01">
+</path>
+</svg>
+</button>
 <form class="shell-command-search">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <circle cx="11" cy="11" r="7">
@@ -300,9 +524,10 @@
 </path>
 </svg>
 <input placeholder="Search the corpus, works, concepts, or annotations…" type="search" autocomplete="off">
-<kbd>Ctrl K</kbd>
 </form>
 <div class="shell-top-actions">
+<button class="shell-command-palette-button" type="button" title="Go to…" aria-label="Go to…">Go to… <kbd>Ctrl K</kbd>
+</button>
 <input id="fileInput" type="file" accept=".jsonl,.ndjson,.json,.zst" multiple="" hidden="">
 <div class="topbar-chrome">
 <span class="ui-button-wrap" data-tooltip="">
@@ -348,7 +573,7 @@
 </header>
 <nav class="vue-breadcrumb shell-breadcrumb" aria-label="Navigation history">
 <div class="breadcrumb-nav">
-<button class="breadcrumb-nav-button" type="button" title="Home" aria-label="Back">
+<button class="breadcrumb-nav-button" type="button" title="Back" aria-label="Back">
 <span aria-hidden="true">←</span>
 <span class="breadcrumb-button-label">Back</span>
 </button>
@@ -358,9 +583,11 @@
 </button>
 </div>
 <div class="vue-breadcrumb-path">
-<span>DerridAI</span>
+<a href="/" class="">DerridAI</a>
 <b aria-hidden="true">›</b>
-<strong>Settings</strong>
+<a href="/settings/workspace" class="">Settings</a>
+<b aria-hidden="true">›</b>
+<strong>System and operations</strong>
 <span class="shell-breadcrumb-meta">Workspace, research defaults, and operations</span>
 </div>
 </nav>
@@ -1210,6 +1437,702 @@
 </div>
 </section>
 </div>
+<dialog class="mobile-navigation-drawer" aria-label="Primary navigation">
+<header class="mobile-navigation-header">
+<div>
+<strong>DerridAI</strong>
+<span>Primary navigation</span>
+</div>
+<button type="button" class="mobile-navigation-close" aria-label="Close navigation">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M6 6l12 12M18 6 6 18">
+</path>
+</svg>
+</button>
+</header>
+<nav class="shell-navigation" aria-label="Primary navigation">
+<label class="shell-nav-search">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<circle cx="11" cy="11" r="7">
+</circle>
+<path d="m20 20-4-4">
+</path>
+</svg>
+<span class="sr-only">Filter navigation…</span>
+<input type="search" autocomplete="off" placeholder="Filter navigation…">
+</label>
+<section class="shell-nav-section overview">
+<div class="shell-nav-list">
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="Home" title="Home">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<rect x="3" y="3" width="7" height="7" rx="1">
+</rect>
+<rect x="14" y="3" width="7" height="7" rx="1">
+</rect>
+<rect x="3" y="14" width="7" height="7" rx="1">
+</rect>
+<rect x="14" y="14" width="7" height="7" rx="1">
+</rect>
+</svg>
+<span>Home</span>
+</button>
+</span>
+</div>
+</div>
+</section>
+<section class="shell-nav-section">
+<h2 class="shell-nav-group-heading">
+<button type="button" class="shell-nav-group-toggle" aria-expanded="true">
+<span>Research</span>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m6 9.5 6 6 6-6">
+</path>
+</svg>
+</button>
+</h2>
+<div class="shell-nav-list">
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="Research" title="Research">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 1.2 4.1L17 9l-3.8 1.9L12 15l-1.2-4.1L7 9l3.8-1.9L12 3Z">
+</path>
+<path d="m19 15 .7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7L19 15Z">
+</path>
+</svg>
+<span>Research</span>
+</button>
+</span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin Research" title="Pin Research">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="ChromaDB is unavailable, so the Response Library cannot be opened.">
+<button type="button" class="" disabled="" aria-label="Response Library" aria-describedby="sidebar-nav-reason-faq" title="ChromaDB is unavailable, so the Response Library cannot be opened.">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20">
+</path>
+<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z">
+</path>
+</svg>
+<span>Response Library</span>
+</button>
+<span id="sidebar-nav-reason-faq" class="sr-only">ChromaDB is unavailable, so the Response Library cannot be opened.</span>
+</span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin Response Library" title="Pin Response Library">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+</div>
+</section>
+<section class="shell-nav-section">
+<h2 class="shell-nav-group-heading">
+<button type="button" class="shell-nav-group-toggle" aria-expanded="true">
+<span>Corpora</span>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m6 9.5 6 6 6-6">
+</path>
+</svg>
+</button>
+</h2>
+<div class="shell-nav-list">
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="Search" title="Search">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<circle cx="11" cy="11" r="7">
+</circle>
+<path d="m20 20-4-4">
+</path>
+</svg>
+<span>Search</span>
+</button>
+</span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin Search" title="Pin Search">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="Works" title="Works">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20">
+</path>
+<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z">
+</path>
+</svg>
+<span>Works</span>
+</button>
+</span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin Works" title="Pin Works">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="Records" title="Records">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M5 7h14M5 12h14M5 17h14">
+</path>
+<path d="M3 7h.01M3 12h.01M3 17h.01">
+</path>
+</svg>
+<span>Records</span>
+</button>
+</span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin Records" title="Pin Records">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="Annotations" title="Annotations">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<rect x="5" y="3" width="14" height="18" rx="2">
+</rect>
+<path d="M8 8h8M8 12h8M8 16h5">
+</path>
+</svg>
+<span>Annotations</span>
+</button>
+</span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin Annotations" title="Pin Annotations">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="Semantic map" title="Semantic map">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<circle cx="6" cy="8" r="2.2">
+</circle>
+<circle cx="16" cy="7" r="2.2">
+</circle>
+<circle cx="12" cy="16" r="2.2">
+</circle>
+<path d="M8 9.2 10.4 14M14.2 8.8 13 14">
+</path>
+</svg>
+<span>Semantic map</span>
+</button>
+</span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin Semantic map" title="Pin Semantic map">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="Compare" title="Compare">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M8 7h11M16 4l3 3-3 3M16 17H5M8 14l-3 3 3 3">
+</path>
+</svg>
+<span>Compare</span>
+</button>
+</span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin Compare" title="Pin Compare">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+</div>
+</section>
+<section class="shell-nav-section">
+<h2 class="shell-nav-group-heading">
+<button type="button" class="shell-nav-group-toggle" aria-expanded="true">
+<span>Corpus Management</span>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m6 9.5 6 6 6-6">
+</path>
+</svg>
+</button>
+</h2>
+<div class="shell-nav-list">
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="Sources" title="Sources">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20">
+</path>
+<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z">
+</path>
+</svg>
+<span>Sources</span>
+</button>
+</span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin Sources" title="Pin Sources">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="Corpus Builder" title="Corpus Builder">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M6 2h9l5 5v15H6z">
+</path>
+<path d="M14 2v6h6M8.5 15h7M8.5 18h5">
+</path>
+</svg>
+<span>Corpus Builder</span>
+</button>
+</span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin Corpus Builder" title="Pin Corpus Builder">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="Corpus Data" title="Corpus Data">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<ellipse cx="12" cy="5" rx="8" ry="3">
+</ellipse>
+<path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6">
+</path>
+</svg>
+<span>Corpus Data</span>
+</button>
+</span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin Corpus Data" title="Pin Corpus Data">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="Metadata schemas" title="Metadata schemas">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M5 7h14M5 12h14M5 17h14">
+</path>
+<path d="M3 7h.01M3 12h.01M3 17h.01">
+</path>
+</svg>
+<span>Metadata schemas</span>
+</button>
+</span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin Metadata schemas" title="Pin Metadata schemas">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+</div>
+</section>
+<section class="shell-nav-section">
+<h2 class="shell-nav-group-heading">
+<button type="button" class="shell-nav-group-toggle" aria-expanded="true">
+<span>AI &amp; Automation</span>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m6 9.5 6 6 6-6">
+</path>
+</svg>
+</button>
+</h2>
+<div class="shell-nav-list">
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="LLM Providers" title="LLM Providers">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 1.2 4.1L17 9l-3.8 1.9L12 15l-1.2-4.1L7 9l3.8-1.9L12 3Z">
+</path>
+<path d="m19 15 .7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7L19 15Z">
+</path>
+</svg>
+<span>LLM Providers</span>
+</button>
+</span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin LLM Providers" title="Pin LLM Providers">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="Pipeline Studio" title="Pipeline Studio">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M8 7h11M16 4l3 3-3 3M16 17H5M8 14l-3 3 3 3">
+</path>
+</svg>
+<span>Pipeline Studio</span>
+</button>
+</span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin Pipeline Studio" title="Pin Pipeline Studio">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="Metadata memory" title="Metadata memory">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 1.2 4.1L17 9l-3.8 1.9L12 15l-1.2-4.1L7 9l3.8-1.9L12 3Z">
+</path>
+<path d="m19 15 .7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7L19 15Z">
+</path>
+</svg>
+<span>Metadata memory</span>
+</button>
+</span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin Metadata memory" title="Pin Metadata memory">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+</div>
+</section>
+<section class="shell-nav-section">
+<h2 class="shell-nav-group-heading">
+<button type="button" class="shell-nav-group-toggle" aria-expanded="true">
+<span>System</span>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m6 9.5 6 6 6-6">
+</path>
+</svg>
+</button>
+</h2>
+<div class="shell-nav-list">
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="System Data" title="System Data">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<ellipse cx="12" cy="5" rx="8" ry="3">
+</ellipse>
+<path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6">
+</path>
+</svg>
+<span>System Data</span>
+</button>
+</span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin System Data" title="Pin System Data">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="Users &amp; roles" title="Users &amp; roles">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<circle cx="9" cy="8" r="3">
+</circle>
+<circle cx="17" cy="9" r="2.5">
+</circle>
+<path d="M3.5 20c.5-4 2.4-6 5.5-6s5 2 5.5 6M14 15c3.4-.8 5.6.9 6.5 4">
+</path>
+</svg>
+<span>Users &amp; roles</span>
+</button>
+</span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin Users &amp; roles" title="Pin Users &amp; roles">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="Manage languages" title="Manage languages">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<circle cx="12" cy="12" r="9">
+</circle>
+<path d="M3 12h18M12 3c2.4 2.5 3.6 5.5 3.6 9s-1.2 6.5-3.6 9M12 3C9.6 5.5 8.4 8.5 8.4 12s1.2 6.5 3.6 9">
+</path>
+</svg>
+<span>Manage languages</span>
+</button>
+</span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin Manage languages" title="Pin Manage languages">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+</div>
+</section>
+<section class="shell-nav-section">
+<h2 class="shell-nav-group-heading">
+<button type="button" class="shell-nav-group-toggle" aria-expanded="true">
+<span>Utilities</span>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m6 9.5 6 6 6-6">
+</path>
+</svg>
+</button>
+</h2>
+<div class="shell-nav-list">
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="Operations" title="Operations">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M3 12a9 9 0 1 0 3-6.7L3 8">
+</path>
+<path d="M3 3v5h5M12 7v5l3 2">
+</path>
+</svg>
+<span>Operations</span>
+</button>
+</span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin Operations" title="Pin Operations">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="" aria-label="Help center" title="Help center">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<circle cx="12" cy="12" r="9">
+</circle>
+<path d="M9.4 9.4a2.6 2.6 0 1 1 3.7 2.35c-.8.4-1.3.9-1.3 1.75V14">
+</path>
+<path d="M12 17.2h.01">
+</path>
+</svg>
+<span>Help center</span>
+</button>
+</span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin Help center" title="Pin Help center">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+<div class="shell-nav-row">
+<span class="nav-tooltip-wrap" data-tooltip="">
+<button type="button" class="active" aria-label="Settings" title="Settings" aria-current="page">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<circle cx="12" cy="12" r="3">
+</circle>
+<path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21h-4v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1-.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H3v-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1L7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V3h4v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9A1.7 1.7 0 0 0 21 10h.1v4H21a1.7 1.7 0 0 0-1.6 1Z">
+</path>
+</svg>
+<span>Settings</span>
+</button>
+</span>
+<button type="button" class="shell-nav-favorite" aria-label="Pin Settings" title="Pin Settings">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z">
+</path>
+</svg>
+</button>
+</div>
+</div>
+</section>
+</nav>
+</dialog>
+<dialog class="navigation-command-dialog" aria-label="Go to…">
+<div class="navigation-command-shell">
+<label class="navigation-command-input">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<circle cx="11" cy="11" r="7">
+</circle>
+<path d="m20 20-4-4">
+</path>
+</svg>
+<span class="sr-only">Search pages and workspaces…</span>
+<input type="search" autocomplete="off" placeholder="Search pages and workspaces…">
+<kbd>Esc</kbd>
+</label>
+<div class="navigation-command-results">
+<button type="button">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<rect x="3" y="3" width="7" height="7" rx="1">
+</rect>
+<rect x="14" y="3" width="7" height="7" rx="1">
+</rect>
+<rect x="3" y="14" width="7" height="7" rx="1">
+</rect>
+<rect x="14" y="14" width="7" height="7" rx="1">
+</rect>
+</svg>
+<span>
+<b>Home</b>
+<small>Overview</small>
+</span>
+</button>
+<button type="button">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="m12 3 1.2 4.1L17 9l-3.8 1.9L12 15l-1.2-4.1L7 9l3.8-1.9L12 3Z">
+</path>
+<path d="m19 15 .7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7L19 15Z">
+</path>
+</svg>
+<span>
+<b>Research</b>
+<small>Research</small>
+</span>
+</button>
+<button type="button">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20">
+</path>
+<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z">
+</path>
+</svg>
+<span>
+<b>Response Library</b>
+<small>Research</small>
+</span>
+</button>
+<button type="button">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<circle cx="11" cy="11" r="7">
+</circle>
+<path d="m20 20-4-4">
+</path>
+</svg>
+<span>
+<b>Search</b>
+<small>Corpora</small>
+</span>
+</button>
+<button type="button">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20">
+</path>
+<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z">
+</path>
+</svg>
+<span>
+<b>Works</b>
+<small>Corpora</small>
+</span>
+</button>
+<button type="button">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M5 7h14M5 12h14M5 17h14">
+</path>
+<path d="M3 7h.01M3 12h.01M3 17h.01">
+</path>
+</svg>
+<span>
+<b>Records</b>
+<small>Corpora</small>
+</span>
+</button>
+<button type="button">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<rect x="5" y="3" width="14" height="18" rx="2">
+</rect>
+<path d="M8 8h8M8 12h8M8 16h5">
+</path>
+</svg>
+<span>
+<b>Annotations</b>
+<small>Corpora</small>
+</span>
+</button>
+<button type="button">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<circle cx="6" cy="8" r="2.2">
+</circle>
+<circle cx="16" cy="7" r="2.2">
+</circle>
+<circle cx="12" cy="16" r="2.2">
+</circle>
+<path d="M8 9.2 10.4 14M14.2 8.8 13 14">
+</path>
+</svg>
+<span>
+<b>Semantic map</b>
+<small>Corpora</small>
+</span>
+</button>
+<button type="button">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M8 7h11M16 4l3 3-3 3M16 17H5M8 14l-3 3 3 3">
+</path>
+</svg>
+<span>
+<b>Compare</b>
+<small>Corpora</small>
+</span>
+</button>
+<button type="button">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20">
+</path>
+<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z">
+</path>
+</svg>
+<span>
+<b>Sources</b>
+<small>Corpus Management</small>
+</span>
+</button>
+<button type="button">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M6 2h9l5 5v15H6z">
+</path>
+<path d="M14 2v6h6M8.5 15h7M8.5 18h5">
+</path>
+</svg>
+<span>
+<b>Corpus Builder</b>
+<small>Corpus Management</small>
+</span>
+</button>
+<button type="button">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<ellipse cx="12" cy="5" rx="8" ry="3">
+</ellipse>
+<path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6">
+</path>
+</svg>
+<span>
+<b>Corpus Data</b>
+<small>Corpus Management</small>
+</span>
+</button>
+</div>
+</div>
+</dialog>
 <section class="notifications" aria-live="polite" aria-atomic="true">
 </section>
 </div>

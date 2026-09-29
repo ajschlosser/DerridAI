@@ -143,7 +143,7 @@ function useInBuilder(ids: string[]) {
   window.dispatchEvent(
     new CustomEvent("derridai:navigate-native", {
       detail: {
-        path: `/pdf?mode=builder&sources=${encodeURIComponent(ids.join(","))}`,
+        path: `/corpus-builder?sources=${encodeURIComponent(ids.join(","))}`,
         runtimeView: "pdf",
       },
     }),
@@ -189,7 +189,7 @@ onMounted(() => void loadCaptures());
 <template>
   <main class="vue-native-page sources-page" aria-labelledby="sources-title">
     <UiPageHeader
-      :kicker="i18n.t('section.tools')"
+      :kicker="i18n.t('section.corpus_management')"
       :title="i18n.t('sources.title')"
       title-id="sources-title"
       :description="i18n.t('sources.help')"

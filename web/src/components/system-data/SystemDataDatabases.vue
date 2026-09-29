@@ -1,7 +1,7 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import { RouterLink, useRoute } from "vue-router";
+import { RouterLink, useRoute, useRouter } from "vue-router";
 import AppIcon from "../AppIcon.vue";
 import { systemApi, type SystemDataDatabase, type SystemDataTable } from "../../api/system";
 import { useI18nStore } from "../../stores/i18n";
@@ -11,10 +11,11 @@ type DataRow = Record<string, unknown>;
 
 const i18n = useI18nStore();
 const route = useRoute();
+const router = useRouter();
 const databases = ref<SystemDataDatabase[]>([]);
-const selectedDatabase = ref("system");
-const selectedTable = ref("");
-const search = ref("");
+const selectedDatabase = ref(String(route.query.db || "system"));
+const selectedTable = ref(String(route.query.table || ""));
+const search = ref(String(route.query.q || ""));
 const page = ref<(SystemDataTable & { rows: DataRow[]; offset: number; limit: number }) | null>(
   null,
 );
@@ -81,7 +82,8 @@ async function loadDatabases() {
     if (!database.value?.tables.some((item) => item.name === selectedTable.value))
       selectedTable.value = database.value?.tables[0]?.name || "";
     applyRequestedTable();
-    if (selectedTable.value) await loadTable(0);
+    const requestedOffset = Math.max(0, Number(route.query.offset) || 0);
+    if (selectedTable.value) await loadTable(requestedOffset, false);
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : String(cause);
   } finally {
@@ -97,8 +99,22 @@ function applyRequestedTable() {
   selectedDatabase.value = owner.name;
   selectedTable.value = requested;
 }
-async function loadTable(offset = 0) {
+function syncRoute(offset = page.value?.offset || 0) {
+  void router.replace({
+    name: "system-data-databases",
+    query: {
+      ...route.query,
+      db: selectedDatabase.value || undefined,
+      table: selectedTable.value || undefined,
+      q: search.value || undefined,
+      offset: offset > 0 ? String(offset) : undefined,
+    },
+  });
+}
+
+async function loadTable(offset = 0, updateRoute = true) {
   if (!selectedDatabase.value || !selectedTable.value) return;
+  if (updateRoute) syncRoute(offset);
   tableLoading.value = true;
   tableError.value = "";
   detail.value = null;
@@ -127,13 +143,30 @@ function chooseTable(name: string) {
 }
 
 onMounted(() => void loadDatabases());
-// The workspace is kept alive, so a link followed while it is cached must still switch tables.
+watch(search, () => syncRoute(page.value?.offset || 0));
+// Keep URL-addressable database/table/page state authoritative when a cached
+// System Data workspace is revisited through breadcrumbs or browser history.
 watch(
-  () => route?.query.table,
-  () => {
+  () => [route.query.db, route.query.table, route.query.q, route.query.offset],
+  ([db, tableName, query, offset]) => {
     if (!databases.value.length) return;
+    const nextDb = String(db || selectedDatabase.value || "system");
+    const nextTable = String(tableName || "");
+    const nextQuery = String(query || "");
+    const nextOffset = Math.max(0, Number(offset) || 0);
+    if (
+      nextDb === selectedDatabase.value &&
+      nextTable === selectedTable.value &&
+      nextQuery === search.value &&
+      nextOffset === Number(page.value?.offset || 0)
+    )
+      return;
+    if (databases.value.some((item) => item.name === nextDb)) selectedDatabase.value = nextDb;
+    search.value = nextQuery;
     applyRequestedTable();
-    void loadTable(0);
+    if (nextTable && database.value?.tables.some((item) => item.name === nextTable))
+      selectedTable.value = nextTable;
+    void loadTable(nextOffset, false);
   },
 );
 </script>

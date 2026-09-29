@@ -123,14 +123,14 @@ const visibleSections = computed(() => {
 });
 const section = computed<SettingsSectionId>({
   get() {
-    const raw = String(route.query.section || "workspace");
+    const raw = String(route.params.section || "workspace");
     const requested = isSettingsSectionId(raw) ? raw : "workspace";
     return visibleSections.value.some((item) => item.id === requested)
       ? requested
       : visibleSections.value[0]?.id || "workspace";
   },
   set(id) {
-    void router.replace({ path: "/settings", query: { ...route.query, section: id } });
+    void router.push({ name: "settings-section", params: { section: id }, query: route.query });
   },
 });
 const appearanceDirty = computed(() => !sameSettings(appearanceDraft.value, appearanceSaved.value));

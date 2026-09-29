@@ -305,7 +305,7 @@ export function createJobDialogs(deps: Deps) {
         window.dispatchEvent(
           new CustomEvent("derridai:navigate-native", {
             detail: {
-              path: `/pdf?mode=builder&build=${encodeURIComponent(job.build_id || job.id)}`,
+              path: `/corpus-builder?build=${encodeURIComponent(job.build_id || job.id)}`,
               runtimeView: "pdf",
             },
           }),
