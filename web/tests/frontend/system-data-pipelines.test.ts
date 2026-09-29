@@ -310,9 +310,7 @@ describe("System Data Pipeline Studio", () => {
 
     expect(pipelinesApi.cloneDraft).toHaveBeenCalledWith("research.custom", 2);
     const inputs = wrapper.findAll(".pipeline-editor input");
-    const idInput = inputs.find(
-      (input) => (input.attributes("autocomplete") || "") === "off",
-    );
+    const idInput = inputs.find((input) => (input.attributes("autocomplete") || "") === "off");
     expect((idInput!.element as HTMLInputElement).value).toBe("research.custom");
     const versionInput = inputs.find((input) => input.attributes("type") === "number");
     expect((versionInput!.element as HTMLInputElement).value).toBe("3");
