@@ -1037,15 +1037,11 @@ const scenarios: Scenario[] = [
     },
   },
   {
-    name: "records-select-all",
+    name: "records-select-page",
     nav: "Records",
     load: true,
     steps: async (page) => {
-      const target = page.getByRole("button", { name: "Select all" }).first();
-      const menus = page.locator("summary", { hasText: "More" });
-      for (let i = 0; i < (await menus.count()) && !(await target.isVisible()); i++)
-        await menus.nth(i).click();
-      await target.click();
+      await page.locator(".records-table thead input[type=checkbox]").first().check();
       await page.waitForTimeout(700);
     },
   },

@@ -3271,7 +3271,7 @@ defineExpose({
                   </button>
                 </div>
                 <div
-                  v-show="reviewWorkspaceMode === 'record'"
+                  v-if="reviewWorkspaceMode === 'record' && selectedRecord"
                   class="review-inspector-tabs"
                   role="tablist"
                   :aria-label="i18n.t('pdf_corpus.review_detail_views')"
