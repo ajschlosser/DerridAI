@@ -10,8 +10,9 @@ administrator can assign them.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Literal, Mapping
+from typing import Any, Literal
 
 from .models import PipelineDefinition, PipelineStageDefinition
 from .service import pipeline_hash
