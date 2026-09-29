@@ -3,6 +3,7 @@
 import { useI18nStore } from "../../stores/i18n";
 import AppIcon from "../AppIcon.vue";
 import type { WorksStore } from "../../types/works";
+import UiTooltip from "../ui/UiTooltip.vue";
 
 const props = defineProps<{
   stores: WorksStore[];
@@ -43,40 +44,46 @@ const i18n = useI18nStore();
     </div>
 
     <div class="works-header-actions" :aria-label="i18n.t('works.workspace_actions')">
-      <button
-        id="chooseWorksJsonl"
-        type="button"
-        class="btn small"
-        :disabled="!props.canManageCorpus"
-        :data-disabled-reason="props.canManageCorpus ? undefined : props.corpusManageDeniedReason"
-        :title="props.canManageCorpus ? undefined : props.corpusManageDeniedReason"
-        @click="emit('chooseJsonl')"
+      <UiTooltip
+        v-if="!props.canManageCorpus"
+        :text="props.corpusManageDeniedReason"
+        trigger-mode="content"
+        placement="bottom"
       >
+        <button id="chooseWorksJsonl" type="button" class="btn small" disabled>
+          <AppIcon name="upload" aria-hidden="true" />{{ i18n.t("records.choose_jsonl") }}
+        </button>
+      </UiTooltip>
+      <button v-else id="chooseWorksJsonl" type="button" class="btn small" @click="emit('chooseJsonl')">
         <AppIcon name="upload" aria-hidden="true" />{{ i18n.t("records.choose_jsonl") }}
       </button>
       <button id="separateWorks" type="button" class="btn small" @click="emit('separate')">
         <AppIcon name="filter" aria-hidden="true" />{{ i18n.t("works.separate_jsonl") }}
       </button>
-      <button
-        id="populateAllWorks"
-        type="button"
-        class="btn small soft"
-        :disabled="!props.canPopulate"
-        :data-disabled-reason="props.canPopulate ? undefined : props.populateDisabledReason"
-        :title="props.canPopulate ? undefined : props.populateDisabledReason"
-        @click="emit('populateAll')"
+      <UiTooltip
+        v-if="!props.canPopulate"
+        :text="props.populateDisabledReason"
+        trigger-mode="content"
+        placement="bottom"
       >
+        <button id="populateAllWorks" type="button" class="btn small soft" disabled>
+          <AppIcon name="spark" aria-hidden="true" />{{ i18n.t("works.populate_all_metadata") }}
+        </button>
+      </UiTooltip>
+      <button v-else id="populateAllWorks" type="button" class="btn small soft" @click="emit('populateAll')">
         <AppIcon name="spark" aria-hidden="true" />{{ i18n.t("works.populate_all_metadata") }}
       </button>
-      <button
-        id="syncAllWorks"
-        type="button"
-        class="btn small primary"
-        :disabled="!props.canSyncAll"
-        :data-disabled-reason="props.canSyncAll ? undefined : props.syncAllDisabledReason"
-        :title="props.canSyncAll ? undefined : props.syncAllDisabledReason"
-        @click="emit('syncAll')"
+      <UiTooltip
+        v-if="!props.canSyncAll"
+        :text="props.syncAllDisabledReason"
+        trigger-mode="content"
+        placement="bottom"
       >
+        <button id="syncAllWorks" type="button" class="btn small primary" disabled>
+          <AppIcon name="database" aria-hidden="true" />{{ i18n.t("works.sync_all") }}
+        </button>
+      </UiTooltip>
+      <button v-else id="syncAllWorks" type="button" class="btn small primary" @click="emit('syncAll')">
         <AppIcon name="database" aria-hidden="true" />{{ i18n.t("works.sync_all") }}
       </button>
     </div>
@@ -103,8 +110,6 @@ const i18n = useI18nStore();
         class="control compact-select"
         :value="props.activeStore"
         :disabled="!props.stores.length"
-        :data-disabled-reason="props.stores.length ? undefined : props.dbUnavailableReason"
-        :title="props.stores.length ? undefined : props.dbUnavailableReason"
         @change="emit('changeStore', ($event.target as HTMLSelectElement).value)"
       >
         <option v-if="!props.stores.length" value="">{{ props.storesEmptyLabel }}</option>
