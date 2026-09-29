@@ -6,7 +6,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { pipelinesApi } from "../../src/api/pipelines";
 import SystemDataPipelines from "../../src/components/system-data/SystemDataPipelines.vue";
 import { useI18nStore } from "../../src/stores/i18n";
-import type { PipelineCatalog, PipelineRunTrace } from "../../src/types/pipelines";
+import type {
+  PipelineCatalog,
+  PipelineOperationalMetrics,
+  PipelineRunTrace,
+} from "../../src/types/pipelines";
 
 const catalog: PipelineCatalog = {
   strategies: [
@@ -163,6 +167,45 @@ const catalog: PipelineCatalog = {
   ],
 };
 
+const metrics: PipelineOperationalMetrics = {
+  sampled_run_count: 3,
+  status_counts: { completed: 2, failed: 1 },
+  fallback_run_count: 1,
+  warning_run_count: 1,
+  average_run_elapsed_ms: 900,
+  p95_run_elapsed_ms: 1400,
+  features: [
+    {
+      feature: "research",
+      run_count: 3,
+      failed_count: 1,
+      fallback_run_count: 1,
+      warning_run_count: 1,
+      average_elapsed_ms: 900,
+      p95_elapsed_ms: 1400,
+    },
+  ],
+  strategies: [
+    {
+      strategy_id: "retrieve.chroma_similarity",
+      stage_ids: ["dense"],
+      executions: 3,
+      fallback_count: 1,
+      warning_count: 1,
+      model_call_count: 0,
+      issue_count: 1,
+      status_counts: { completed: 2, unavailable: 1 },
+      average_elapsed_ms: 55,
+      p95_elapsed_ms: 80,
+      average_input_count: 1,
+      average_output_count: 18,
+    },
+  ],
+  sample_limit: 250,
+  feature_filter: null,
+  owner_filter: null,
+};
+
 const trace: PipelineRunTrace = {
   run_id: "rag-1",
   feature: "research",
@@ -200,6 +243,7 @@ describe("System Data Pipeline Studio", () => {
       limit: 30,
       offset: 0,
     });
+    vi.spyOn(pipelinesApi, "metrics").mockResolvedValue(structuredClone(metrics));
     vi.spyOn(pipelinesApi, "cloneDraft").mockImplementation(async (pipelineId, version) => {
       const source = catalog.pipelines.find(
         (item) => item.pipeline_id === pipelineId && item.version === version,
@@ -230,6 +274,9 @@ describe("System Data Pipeline Studio", () => {
     expect(wrapper.text()).toContain("Pipeline Studio");
     expect(wrapper.text()).toContain("Research — current production chain");
     expect(wrapper.text()).toContain("Chroma semantic similarity");
+    expect(wrapper.text()).toContain("Operational health");
+    expect(wrapper.text()).toContain("95th-percentile run time");
+    expect(wrapper.text()).toContain("Stage strategy health");
     expect(wrapper.text()).toContain("Recent executions");
     expect(wrapper.text()).toContain("retrieve.chroma_similarity");
     expect(wrapper.text()).toContain("Active assignment");
