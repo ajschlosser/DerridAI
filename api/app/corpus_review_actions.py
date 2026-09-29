@@ -1198,22 +1198,34 @@ class ReviewActionsMixin:
     def suggest_evidence_result(
         self, build_id: str, record_id: str, field: str, limit: int = 5
     ) -> dict[str, Any]:
-        """Return advisory lexical/local-semantic suggestions plus retrieval status."""
-        from .evidence_suggestions import suggest_evidence_blocks_semantic
+        """Execute the assigned reviewer evidence pipeline and return advisory suggestions."""
+        from .pipelines.evidence import execute_reviewer_evidence_pipeline
+        from .pipelines.manager import pipeline_manager
+        from .pipelines.models import PipelineDefinition
+        from .pipelines.store import pipeline_store
         from .source_embeddings import SourceEmbeddingProjection
 
         value, blocks = self._evidence_candidates(build_id, record_id, field)
         record = self.repo.get_record(build_id, record_id)
         projection = SourceEmbeddingProjection(self._progressive_metadata_index.store)
-        items, status = suggest_evidence_blocks_semantic(
-            value,
-            blocks,
+        resolved = pipeline_manager.resolve("evidence_suggestion.reviewer")
+        pipeline = PipelineDefinition.model_validate(resolved["pipeline"])
+        execution = execute_reviewer_evidence_pipeline(
+            pipeline=pipeline,
+            resolved_hash=str(resolved.get("pipeline_hash") or ""),
+            value=value,
+            blocks=blocks,
             field_metadata=self._evidence_field_metadata(build_id, field),
             source_document_id=self._evidence_document_id(build_id, record),
             projection=projection,
             limit=limit,
         )
-        return {"items": items, "status": status}
+        status = dict(execution.status)
+        try:
+            pipeline_store.put_run(execution.trace)
+        except Exception:  # noqa: BLE001 - telemetry must never block advisory review
+            status["trace_warning"] = "Pipeline trace persistence failed."
+        return {"items": execution.items, "status": status}
 
     def suggest_evidence_llm(
         self, build_id: str, record_id: str, field: str, request: dict[str, Any], limit: int = 5
