@@ -28,8 +28,6 @@ import {
 } from "./domain/appNavigation";
 import { SETTINGS_SECTIONS, isSettingsSectionId } from "./domain/settings";
 import { viewConfig } from "./domain/runtimeConstants";
-import SemanticMapHost from "./components/semantic/SemanticMapHost.vue";
-import { useSemanticMapStore } from "./stores/semanticMap";
 import * as runtime from "./runtime/runtime.js";
 
 const router = useRouter();
