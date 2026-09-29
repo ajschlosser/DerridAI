@@ -424,7 +424,7 @@ def test_editorial_memory_semantic_retrieval_uses_bound_canonical_exemplars():
             assert kwargs["semantic_weight"] == 0.8
             assert kwargs["lexical_weight"] == 0.2
             assert kwargs["mmr_lambda"] == 0.72
-            assert kwargs["cross_encoder_enabled"] is True
+            assert kwargs["cross_encoder_enabled"] is None
             assert kwargs["cross_encoder_top_k"] == 8
             assert kwargs["cross_encoder_model"] == "cross-encoder/ms-marco-MiniLM-L-6-v2"
             assert kwargs["cross_encoder_timeout_seconds"] == 15.0
