@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import { RouterView, useRoute, useRouter } from "vue-router";
+import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import { useShellStore, type ShellNavItem } from "./stores/shell";
 import { useAuthStore } from "./stores/auth";
 import { useI18nStore } from "./stores/i18n";
@@ -10,10 +10,18 @@ import AppNotifications from "./components/AppNotifications.vue";
 import LlmReviewWorkspace from "./components/LlmReviewWorkspace.vue";
 import SidebarBrand from "./components/shell/SidebarBrand.vue";
 import TopbarChrome from "./components/shell/TopbarChrome.vue";
-import SidebarPrimaryNav from "./components/shell/SidebarPrimaryNav.vue";
-import SidebarMoreTools from "./components/shell/SidebarMoreTools.vue";
+import SidebarNavigator from "./components/shell/SidebarNavigator.vue";
+import NavigationCommandPalette from "./components/shell/NavigationCommandPalette.vue";
 import SidebarStatus from "./components/shell/SidebarStatus.vue";
-import type { SidebarNavEntry } from "./components/shell/sidebarNav";
+import type { SidebarNavEntry, SidebarNavGroup } from "./components/shell/sidebarNav";
+import {
+  CONTEXTUAL_NAV_IDS,
+  NAV_SECTION_ORDER,
+  NAV_TARGETS,
+  navIdForRoute,
+} from "./domain/appNavigation";
+import { SETTINGS_SECTIONS, isSettingsSectionId } from "./domain/settings";
+import { viewConfig } from "./domain/runtimeConstants";
 import * as runtime from "./runtime/runtime.js";
 
 const router = useRouter();
@@ -24,21 +32,16 @@ const i18n = useI18nStore();
 const runtimeStarted = ref(false);
 const handlingAuthExpiry = ref(false);
 const topSearch = ref("");
-const commandSearch = ref<InstanceType<typeof CommandSearch> | null>(null);
-const MORE_TOOLS_KEY = "derridai.ui.moreToolsOpen";
-function storedMoreTools(): boolean | null {
-  try {
-    const v = localStorage.getItem(MORE_TOOLS_KEY);
-    return v === "1" ? true : v === "0" ? false : null;
-  } catch {
-    return null;
-  }
-}
-// Open by default for administrators, but a choice the user has made is remembered.
-const moreToolsOpen = ref(storedMoreTools() ?? false);
+const commandPalette = ref<InstanceType<typeof NavigationCommandPalette> | null>(null);
+const commandShortcut =
+  typeof navigator !== "undefined" &&
+  /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent || "")
+    ? "⌘K"
+    : "Ctrl K";
 const nativeBackPath = ref<string | null>(null);
 const nativeForwardPath = ref<string | null>(null);
 const s = computed(() => shell.snapshot);
+
 const pageCapability: Record<string, string> = {
   home: "page.dashboard",
   list: "page.records",
@@ -63,10 +66,12 @@ const pageCapability: Record<string, string> = {
   languages: "page.languages",
   roles: "page.roles",
 };
+
 function canNav(id: string) {
   const capability = pageCapability[id];
   return !capability || auth.can(capability);
 }
+
 try {
   const saved = localStorage.getItem("derridai.ui.theme") || "green";
   document.documentElement.dataset.uiTheme = ["green", "blue", "slate"].includes(saved)
@@ -87,147 +92,193 @@ try {
   document.documentElement.dataset.uiTheme = "green";
 }
 
-const groupedNav = computed(() => {
-  // Never draw a partial menu: the Vue-side admin items below are appended to the runtime's
-  // list, so show nothing until that list exists.
+function sectionLabel(section: string) {
+  const key =
+    section === "Corpora"
+      ? "section.corpora"
+      : section === "Build"
+        ? "section.build"
+        : section === "Research"
+          ? "section.research"
+          : section === "System"
+            ? "section.system"
+            : "section.overview";
+  return i18n.t(key, section);
+}
+
+const currentNavId = computed(() =>
+  navIdForRoute(route.name, String(route.meta.navId || route.meta.view || s.value.view || "")),
+);
+
+function isNavActive(item: { id: string }) {
+  return currentNavId.value === item.id;
+}
+
+function navEntry(item: ShellNavItem): SidebarNavEntry {
+  return {
+    id: item.id,
+    label:
+      item.id === "home"
+        ? i18n.t("nav.home")
+        : item.id === "responsecache"
+          ? i18n.t("runtime.system_data", "System Data")
+          : auth.isResearcher && item.id === "vector"
+            ? i18n.t("research.corpus_search", item.label)
+            : item.label,
+    icon: item.icon,
+    active: isNavActive(item),
+    disabledReason: item.disabledReason,
+  };
+}
+
+const groupedNavItems = computed<SidebarNavGroup[]>(() => {
   if (!shell.navReady) return [];
-  const groups = shell.groupedNav.map((group) => ({
-    section: i18n.t(`section.${group.section.toLowerCase()}`, group.section),
-    items: group.items
-      .filter((item) => canNav(item.id))
-      .map((item) => ({
-        ...item,
-        label:
-          item.id === "home"
-            ? i18n.t("nav.home")
-            : auth.isResearcher && item.id === "vector"
-              ? i18n.t("research.corpus_search", item.label)
-              : i18n.t(`nav.${item.id}`, item.label),
-      })),
-  }));
-  if (auth.isAdmin && canNav("sources")) {
-    // Sources sits in Tools next to Corpus Builder: capture and manage sources there, build here.
-    const tools = groups.find((group) => group.items.some((item) => item.id === "pdf"));
-    if (tools) {
-      const at = tools.items.findIndex((item) => item.id === "pdf");
-      tools.items.splice(at + 1, 0, {
-        id: "sources",
-        label: i18n.t("nav.sources"),
-        icon: "books",
-        section: "Tools",
-      } as ShellNavItem);
-    }
+
+  const byId = new Map(s.value.nav.filter((item) => canNav(item.id)).map((item) => [item.id, item]));
+  const canonical = new Map<string, SidebarNavEntry[]>();
+  canonical.set("Overview", []);
+
+  for (const section of NAV_SECTION_ORDER) canonical.set(section, []);
+
+  for (const definition of viewConfig) {
+    if (CONTEXTUAL_NAV_IDS.has(definition.id)) continue;
+    const item = byId.get(definition.id);
+    if (!item) continue;
+    const group = canonical.get(definition.section) || [];
+    group.push(navEntry(item));
+    canonical.set(definition.section, group);
   }
+
+  if (auth.isAdmin && canNav("sources")) {
+    const build = canonical.get("Build") || [];
+    const at = build.findIndex((item) => item.id === "pdf");
+    build.splice(Math.max(0, at + 1), 0, {
+      id: "sources",
+      label: i18n.t("nav.sources"),
+      icon: "books",
+      active: currentNavId.value === "sources",
+    });
+    canonical.set("Build", build);
+  }
+
   if (auth.isAdmin) {
-    const systemLabel = i18n.t("section.system");
-    let system = groups.find((group) => group.section === systemLabel);
-    if (!system) {
-      system = { section: systemLabel, items: [] };
-      groups.push(system);
-    }
-    if (auth.can("page.response_cache"))
-      system.items.push({
+    const system = canonical.get("System") || [];
+    const add = (entry: SidebarNavEntry) => {
+      if (!system.some((item) => item.id === entry.id)) system.push(entry);
+    };
+    if (canNav("metadatamemory"))
+      add({
         id: "metadatamemory",
         label: i18n.t("nav.metadatamemory"),
         icon: "spark",
-        section: "System",
-      } as ShellNavItem);
-    if (auth.can("page.users"))
-      system.items.push({
+        active: currentNavId.value === "metadatamemory",
+      });
+    if (canNav("users"))
+      add({
         id: "users",
         label: i18n.t("nav.users"),
         icon: "users",
-        section: "System",
-      } as ShellNavItem);
-    if (auth.can("page.roles"))
-      system.items.push({
+        active: currentNavId.value === "users",
+      });
+    if (canNav("roles"))
+      add({
         id: "roles",
         label: i18n.t("nav.roles"),
         icon: "roles",
-        section: "System",
-      } as ShellNavItem);
-    if (auth.can("page.languages"))
-      system.items.push({
+        active: currentNavId.value === "roles",
+      });
+    if (canNav("languages"))
+      add({
         id: "languages",
         label: i18n.t("language.manage"),
         icon: "language",
-        section: "System",
-      } as ShellNavItem);
-  }
-  return groups;
-});
-const flatNav = computed(() => groupedNav.value.flatMap((group) => group.items));
-const primaryNav = computed(() => {
-  const order = ["home", "global", "works", "record", "rag", "annotations", "config"];
-  const byId = new Map(flatNav.value.map((item) => [item.id, item]));
-  return order.map((id) => byId.get(id)).filter((item): item is ShellNavItem => Boolean(item));
-});
-const utilityNav = computed(() => {
-  const ids = new Set(primaryNav.value.map((item) => item.id));
-  return flatNav.value.filter((item) => !ids.has(item.id));
-});
-const primaryNavItems = computed<SidebarNavEntry[]>(() => {
-  const items: SidebarNavEntry[] = primaryNav.value.map((item) => ({
-    id: item.id,
-    label: item.label,
-    icon: item.icon,
-    active: isNavActive(item),
-    disabledReason: item.disabledReason,
-  }));
-  if (auth.isAdmin)
-    items.push({
+        active: currentNavId.value === "languages",
+      });
+    add({
       id: "operations",
       label: i18n.t("ui.operations"),
       icon: "history",
-      active: operationsActive.value,
+      active: currentNavId.value === "operations",
     });
+    canonical.set("System", system);
+  }
+
+  return ["Overview", ...NAV_SECTION_ORDER]
+    .map((section) => ({
+      section: sectionLabel(section),
+      items: canonical.get(section) || [],
+    }))
+    .filter((group) => group.items.length);
+});
+
+function translatedRouteTitle() {
+  if (route.name === "record" && s.value.context.title) return s.value.context.title;
+  if (route.name === "settings-section") {
+    const requested = String(route.params.section || "workspace");
+    const id = isSettingsSectionId(requested) ? requested : "workspace";
+    const section = SETTINGS_SECTIONS.find((item) => item.id === id);
+    return section
+      ? i18n.t(section.labelKey, section.labelFallback)
+      : i18n.t("nav.config", "Settings");
+  }
+  const key = String(route.meta.titleKey || "");
+  const fallback = String(route.meta.titleFallback || s.value.context.title || i18n.t("nav.home"));
+  return key ? i18n.t(key, fallback) : fallback;
+}
+
+const breadcrumbItems = computed(() => {
+  const items: Array<{ label: string; to?: string }> = [];
+  const section = String(route.meta.navSection || "");
+  if (section && section !== "Overview") {
+    const sectionPath =
+      section === "Research"
+        ? "/search"
+        : section === "Corpora"
+          ? "/works"
+          : section === "Build"
+            ? "/corpus-builder"
+            : "/system-data/overview";
+    items.push({ label: sectionLabel(section), to: sectionPath });
+  }
+
+  const parentKey = String(route.meta.breadcrumbParentKey || "");
+  if (parentKey) {
+    items.push({
+      label: i18n.t(parentKey, String(route.meta.breadcrumbParentFallback || "")),
+      to: "/system-data/overview",
+    });
+  } else if (route.name === "settings-section") {
+    items.push({ label: i18n.t("nav.config", "Settings"), to: "/settings/workspace" });
+  }
+
+  const title = translatedRouteTitle();
+  if (!items.length || items.at(-1)?.label !== title) items.push({ label: title });
   return items;
 });
-const utilityNavItems = computed<SidebarNavEntry[]>(() =>
-  utilityNav.value.map((item) => ({
-    id: item.id,
-    label: item.label,
-    icon: item.icon,
-    active: isNavActive(item),
-    disabledReason: item.disabledReason,
-  })),
-);
-const breadcrumbTitle = computed(() =>
-  route.name === "sources"
-    ? i18n.t("sources.title")
-    : route.name === "metadatamemory"
-      ? i18n.t("metadata_memory.title")
-      : route.name === "users"
-        ? i18n.t("nav.users")
-        : route.name === "roles"
-          ? i18n.t("nav.roles")
-          : route.name === "languages"
-            ? i18n.t("language.manage")
-            : route.name === "config"
-              ? i18n.t("nav.config")
-              : route.name === "compare"
-                ? i18n.t("nav.compare")
-                : route.name === "list"
-                  ? i18n.t("nav.records")
-                  : route.name === "works"
-                    ? i18n.t("nav.works")
-                    : s.value.context.title || i18n.t("nav.home"),
-);
-const breadcrumbMeta = computed(() =>
-  route.name === "sources"
-    ? i18n.t("sources.help_short")
-    : route.name === "metadatamemory"
-      ? i18n.t("metadata_memory.help")
-      : route.name === "config"
-        ? i18n.t("settings.page_help_short")
-        : route.name === "compare"
-          ? i18n.t("context.compare.meta")
-          : route.name === "list"
-            ? i18n.t("context.list.meta")
-            : ["users", "roles", "languages"].includes(String(route.name || ""))
-              ? ""
-              : s.value.context.meta,
-);
+
+const breadcrumbMeta = computed(() => {
+  const name = String(route.name || "");
+  if (name === "sources") return i18n.t("sources.help_short");
+  if (name === "metadatamemory") return i18n.t("metadata_memory.help");
+  if (name === "settings-section") return i18n.t("settings.page_help_short");
+  if (name === "list") return i18n.t("context.list.meta");
+  if (name === "record") return s.value.context.meta;
+  if (name === "relationships") return i18n.t("context.relationships.meta");
+  if (name === "global") return i18n.t("context.global.meta");
+  if (name === "rag") return i18n.t("context.rag.meta");
+  if (name === "faq") return i18n.t("context.faq.meta");
+  if (name === "works") return i18n.t("context.works.meta");
+  if (name === "annotations") return i18n.t("context.annotations.meta");
+  if (name === "compare") return i18n.t("context.compare.meta");
+  if (name === "vector") return i18n.t("context.vector.meta");
+  if (name === "corpus-builder" || name === "source-explorer") return i18n.t("context.pdf.meta");
+  if (name === "providers") return i18n.t("context.providers.meta");
+  if (name === "schemas") return i18n.t("schemas.manage_help");
+  if (name.startsWith("system-data-")) return i18n.t("runtime.system_data_help");
+  if (["users", "roles", "languages", "operations"].includes(name)) return "";
+  return "";
+});
+
 const canBreadcrumbBack = computed(() => Boolean(nativeBackPath.value) || s.value.canGoBack);
 const canBreadcrumbForward = computed(
   () => Boolean(nativeForwardPath.value) || s.value.canGoForward,
@@ -242,25 +293,32 @@ const breadcrumbForwardLabel = computed(() =>
 function onImport(files: FileList) {
   if (auth.isAdmin) runtime.triggerImport(files);
 }
+
 function onFiles(event: Event) {
   const input = event.target as HTMLInputElement;
   if (input.files?.length) onImport(input.files);
   input.value = "";
 }
+
 function navigateNative(path: string, runtimeView?: string) {
   const current = router.currentRoute.value.fullPath;
-  if (current === path) return;
+  const target = router.resolve(path).fullPath;
+  if (current === target) return;
   nativeBackPath.value = current;
   nativeForwardPath.value = null;
   if (runtimeView) {
-    // Keep runtime state and the native route/query in lockstep. Some
-    // native workspaces (notably Corpus Builder / PDF Explorer) use query
-    // parameters to select a tab or a durable background build.
-    runtime.navigateView(runtimeView, path);
+    runtime.navigateView(runtimeView, target);
     return;
   }
-  void router.push(path);
+  void router.push(target);
 }
+
+function navigate(view: string) {
+  const target = NAV_TARGETS[view];
+  if (!target) return;
+  navigateNative(target.path, target.runtimeView);
+}
+
 function goBreadcrumbBack() {
   if (nativeBackPath.value) {
     const target = nativeBackPath.value;
@@ -271,6 +329,7 @@ function goBreadcrumbBack() {
   }
   runtime.triggerBack();
 }
+
 function goBreadcrumbForward() {
   if (nativeForwardPath.value) {
     const target = nativeForwardPath.value;
@@ -281,108 +340,30 @@ function goBreadcrumbForward() {
   }
   runtime.triggerForward();
 }
-// Operations is a panel shown over the dashboard, not a route, so track it
-// here to highlight the right nav item instead of "Home".
-const operationsActive = ref(false);
-// Navigating to Operations itself changes the route, so re-derive from whether the
-// panel is actually on screen after the new route settles.
-watch(
-  () => route.fullPath,
-  () => {
-    window.setTimeout(() => {
-      operationsActive.value = Boolean(document.querySelector("#operationsPanel"));
-    }, 250);
-  },
-);
-function navigate(view: string) {
-  operationsActive.value = view === "operations";
-  // Do not gate Research from the shell's cached database snapshot. ResearchView
-  // refreshes the authoritative store list before deciding whether a redirect is
-  // needed. This avoids a false “create a database” redirect immediately after
-  // a collection is created or restored.
-  if (view === "metadatamemory") {
-    navigateNative("/metadata-memory");
-    return;
-  }
-  if (view === "sources") {
-    navigateNative("/sources");
-    return;
-  }
-  if (view === "help") {
-    navigateNative("/help");
-    return;
-  }
-  if (view === "users") {
-    navigateNative("/users");
-    return;
-  }
-  if (view === "languages") {
-    navigateNative("/languages");
-    return;
-  }
-  if (view === "roles") {
-    navigateNative("/roles");
-    return;
-  }
-  if (view === "operations") {
-    runtime.triggerOperations();
-    window.setTimeout(
-      () =>
-        document
-          .querySelector("#operationsPanel")
-          ?.scrollIntoView({ behavior: "smooth", block: "start" }),
-      80,
-    );
-    return;
-  }
-  nativeBackPath.value = null;
-  nativeForwardPath.value = null;
-  runtime.navigateView(view);
-}
-function isNavActive(item: ShellNavItem) {
-  if (operationsActive.value && item.id === "home") return false;
-  if (item.id === "metadatamemory") return route.name === "metadatamemory";
-  if (item.id === "sources") return route.name === "sources";
-  if (item.id === "users") return route.name === "users";
-  if (item.id === "roles") return route.name === "roles";
-  if (item.id === "languages") return route.name === "languages";
-  return (
-    !["metadatamemory", "sources", "users", "roles", "languages", "help"].includes(
-      String(route.name || ""),
-    ) && s.value.view === item.id
-  );
-}
-function submitTopSearch() {
-  const query = topSearch.value.trim();
-  if (!query) return;
-  runtime.state.globalSearch = query;
-  runtime.state.storeQuery = query;
+
+function searchCorpus(query: string) {
+  const value = query.trim();
+  if (!value) return;
+  topSearch.value = value;
+  runtime.state.globalSearch = value;
+  runtime.state.storeQuery = value;
   runtime.state.globalPage = 1;
   runtime.state.storeSearchResults = [];
   runtime.state.globalSearchMode = "traditional";
   runtime.navigateView("global");
 }
-function onMoreToolsToggle(open: boolean) {
-  // A programmatic change already matches the model; only a user toggle differs from it.
-  if (open === moreToolsOpen.value) return;
-  moreToolsOpen.value = open;
-  try {
-    localStorage.setItem(MORE_TOOLS_KEY, open ? "1" : "0");
-  } catch {
-    /* preference is optional */
-  }
+
+function submitTopSearch() {
+  searchCorpus(topSearch.value);
 }
+
 async function startRuntime() {
   if (!auth.user || runtimeStarted.value) return;
   runtimeStarted.value = true;
   runtime.setUserContext(auth.user);
   runtime.setShellRefreshHook(() => shell.sync());
-  // Menu membership needs only the user and static config, so publish it now rather than
-  // after the (potentially slow) bootstrap below finishes its first full snapshot.
   shell.syncNav();
   runtime.setUrlSyncHook((href: string, options: { replace?: boolean }) => {
-    // Runtime rendering requests URL synchronization frequently. Never send
-    // Vue Router to the location it already owns.
     const target = router.resolve(href).fullPath;
     if (router.currentRoute.value.fullPath === target) return;
     const method = options?.replace ? router.replace : router.push;
@@ -408,8 +389,8 @@ async function logout() {
   await auth.logout();
   await router.replace("/");
 }
+
 async function handleAuthExpired() {
-  // Ignore 401s from pre-auth/bootstrap requests. There is no session to expire.
   if (handlingAuthExpiry.value || !auth.user) return;
   handlingAuthExpiry.value = true;
   try {
@@ -418,8 +399,6 @@ async function handleAuthExpired() {
     auth.expireSession(i18n.t("auth.session_expired"));
     if (router.currentRoute.value.path !== "/") await router.replace("/");
   } finally {
-    // Keep one microtask between a burst of 401 responses and accepting a new
-    // expiry event from a future authenticated session.
     queueMicrotask(() => {
       handlingAuthExpiry.value = false;
     });
@@ -430,8 +409,6 @@ onMounted(async () => {
   window.addEventListener("derridai-auth-expired", () => {
     void handleAuthExpired();
   });
-  // The realtime socket reports a role/permission change; re-read the session so
-  // navigation and capability checks reflect it (an expired session still 401s).
   window.addEventListener("derridai:permissions-changed", () => {
     void auth.loadStatus();
   });
@@ -442,23 +419,14 @@ onMounted(async () => {
   window.addEventListener("keydown", (event: KeyboardEvent) => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
       event.preventDefault();
-      commandSearch.value?.focus();
+      commandPalette.value?.open();
     }
   });
-  // Authentication must be resolved before protected runtime bootstrap. The
-  // read-only language endpoints are public so the sign-in screen can still be
-  // fully localized.
   if (!auth.initialized) await auth.loadStatus();
   if (!i18n.languages.length) await i18n.initialize();
   await startRuntime();
 });
-watch(
-  () => auth.isAdmin,
-  (value) => {
-    if (storedMoreTools() === null) moreToolsOpen.value = Boolean(value);
-  },
-  { immediate: true },
-);
+
 watch(
   () => auth.user?.id,
   (id) => {
@@ -488,12 +456,9 @@ watch(
         @navigate-home="navigate('home')"
         @toggle="runtime.toggleSidebar()"
       />
-      <SidebarPrimaryNav :items="primaryNavItems" @navigate="navigate" />
-      <SidebarMoreTools
-        v-if="utilityNavItems.length && !s.sidebarCollapsed"
-        :items="utilityNavItems"
-        :open="moreToolsOpen"
-        @update:open="onMoreToolsToggle"
+      <SidebarNavigator
+        :groups="groupedNavItems"
+        :collapsed="s.sidebarCollapsed"
         @navigate="navigate"
       />
       <div class="sidebar-spacer"></div>
@@ -512,12 +477,21 @@ watch(
     <section class="workspace shell-workspace">
       <header class="topbar shell-topbar">
         <CommandSearch
-          ref="commandSearch"
           v-model="topSearch"
+          shortcut=""
           :placeholder="i18n.t('ui.global_search_placeholder')"
           @submit="submitTopSearch"
         />
         <div class="shell-top-actions">
+          <button
+            class="shell-command-palette-button"
+            type="button"
+            :title="i18n.t('nav.command_palette')"
+            :aria-label="i18n.t('nav.command_palette')"
+            @click="commandPalette?.open()"
+          >
+            {{ i18n.t("nav.command_palette") }} <kbd>{{ commandShortcut }}</kbd>
+          </button>
           <input
             id="fileInput"
             type="file"
@@ -548,8 +522,8 @@ watch(
             type="button"
             :disabled="!canBreadcrumbBack"
             :title="breadcrumbBackLabel"
-            @click="goBreadcrumbBack"
             :aria-label="i18n.t('ui.back')"
+            @click="goBreadcrumbBack"
           >
             <span aria-hidden="true">←</span
             ><span class="breadcrumb-button-label">{{ i18n.t("ui.back") }}</span></button
@@ -558,21 +532,34 @@ watch(
             type="button"
             :disabled="!canBreadcrumbForward"
             :title="breadcrumbForwardLabel"
-            @click="goBreadcrumbForward"
             :aria-label="i18n.t('ui.forward')"
+            @click="goBreadcrumbForward"
           >
             <span class="breadcrumb-button-label">{{ i18n.t("ui.forward") }}</span
             ><span aria-hidden="true">→</span>
           </button>
         </div>
         <div class="vue-breadcrumb-path">
-          <span>DerridAI</span><b aria-hidden="true">›</b><strong>{{ breadcrumbTitle }}</strong
-          ><span v-if="breadcrumbMeta" class="shell-breadcrumb-meta">{{ breadcrumbMeta }}</span>
+          <RouterLink to="/">DerridAI</RouterLink>
+          <template v-for="(item, index) in breadcrumbItems" :key="`${item.label}-${index}`">
+            <b aria-hidden="true">›</b>
+            <RouterLink v-if="item.to && index < breadcrumbItems.length - 1" :to="item.to">
+              {{ item.label }}
+            </RouterLink>
+            <strong v-else>{{ item.label }}</strong>
+          </template>
+          <span v-if="breadcrumbMeta" class="shell-breadcrumb-meta">{{ breadcrumbMeta }}</span>
         </div>
       </nav>
       <div id="appContent" class="app-content-region" tabindex="-1"><RouterView /></div>
     </section>
   </div>
+  <NavigationCommandPalette
+    ref="commandPalette"
+    :groups="groupedNavItems"
+    @navigate="navigate"
+    @search="searchCorpus"
+  />
   <LlmReviewWorkspace />
   <AppNotifications />
 </template>
@@ -605,6 +592,39 @@ watch(
   align-items: center;
   gap: 8px;
 }
+.shell-command-palette-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+.shell-command-palette-button:hover,
+.shell-command-palette-button:focus-visible {
+  color: var(--text);
+  background: var(--soft);
+}
+.shell-command-palette-button kbd {
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.vue-breadcrumb-path a {
+  color: var(--muted);
+  text-decoration: none;
+}
+.vue-breadcrumb-path a:hover,
+.vue-breadcrumb-path a:focus-visible {
+  color: var(--text);
+  text-decoration: underline;
+}
 .shell-breadcrumb-meta {
   margin-left: 4px;
   overflow: hidden;
@@ -633,6 +653,16 @@ watch(
     transition: none;
   }
 }
+@media (max-width: 1100px) {
+  .shell-command-palette-button {
+    width: 34px;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .shell-command-palette-button kbd {
+    display: none;
+  }
+}
 @media (max-width: 900px) {
   .app-shell-modern {
     grid-template-columns: 64px minmax(0, 1fr);
@@ -642,15 +672,14 @@ watch(
   .app-shell-modern {
     display: block;
   }
-}
-@media (max-width: 650px) {
   .shell-top-actions {
     display: flex;
     flex: 0 0 auto;
     gap: 4px;
   }
-}
-@media (max-width: 650px) {
+  .shell-command-palette-button {
+    display: none;
+  }
   .app-content-region {
     padding-bottom: 64px;
   }
