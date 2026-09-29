@@ -23,6 +23,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "api"))
 from app import research_memory as rm  # noqa: E402
 from app.chroma_store import ChromaStore  # noqa: E402
 from app.persistence import SQLiteSystemRepository  # noqa: E402
+from app.pipelines.defaults import built_in_assignment, built_in_pipeline  # noqa: E402
+from app.pipelines.memory import compile_memory_pipeline  # noqa: E402
+from app.pipelines.service import pipeline_hash  # noqa: E402
+
+
+def _pipeline_resolver(feature: str):
+    assignment = built_in_assignment(feature)
+    assert assignment is not None
+    pipeline = built_in_pipeline(assignment.pipeline_id, assignment.pipeline_version)
+    assert pipeline is not None
+    return {
+        "pipeline": pipeline.model_dump(mode="json"),
+        "pipeline_hash": pipeline_hash(pipeline),
+    }
 
 
 @pytest.fixture()
@@ -162,13 +176,115 @@ def test_memory_guidance_records_what_steered_the_run(repo):
         system_store=repo,
         response_index_factory=lambda: FakeResponseIndex([{"response_id": "good", "similarity": 0.9}]),
         claim_index_factory=FakeClaimIndex,
+        pipeline_resolver=_pipeline_resolver,
     )
     assert "[prior-response:good] (graded 8/10 by judge" in response_text
     assert claim_text == ""
     assert detail["response_ids"] == ["good"] and detail["claim_mode"] == "off"
+    assert detail["response_pipeline"]["pipeline_id"] == "memory.response.current"
+    assert detail["response_pipeline"]["pipeline_version"] == 1
+    assert detail["response_pipeline"]["pipeline_hash"]
+    assert detail["response_pipeline_observations"]["retrieve"]["parameters"] == {
+        "fetch_k": 4,
+        "min_similarity": 0.5,
+    }
 
 
 def test_response_cache_vectors_distinguish_different_text():
     first = ChromaStore._response_cache_embedding("Derrida on hospitality")
     second = ChromaStore._response_cache_embedding("Levinas on the face")
     assert first != second
+
+
+
+def test_response_memory_plan_controls_retrieval_and_selection(repo):
+    source = built_in_pipeline("memory.response.current", 1)
+    assert source is not None
+    stages = []
+    for stage in source.stages:
+        if stage.id == "retrieve":
+            stage = stage.model_copy(
+                update={"config": {"fetch_k": 7, "min_similarity": 0.8}}
+            )
+        elif stage.id == "select":
+            stage = stage.model_copy(update={"config": {"limit": 1}})
+        stages.append(stage)
+    plan = compile_memory_pipeline(
+        source.model_copy(
+            update={
+                "pipeline_id": "memory.response.tuned",
+                "built_in": False,
+                "stages": stages,
+            }
+        )
+    )
+
+    class CapturingIndex(FakeResponseIndex):
+        def __init__(self):
+            super().__init__(
+                [
+                    {"response_id": "good", "similarity": 0.9},
+                    {"response_id": "weak", "similarity": 0.85},
+                ]
+            )
+            self.kwargs = {}
+
+        def similar(self, question, **kwargs):
+            self.kwargs = kwargs
+            return self.hits
+
+    index = CapturingIndex()
+    out = rm.select_prior_responses(
+        "hospitality",
+        owner="ann",
+        system_store=repo,
+        index_factory=lambda: index,
+        plan=plan,
+    )
+
+    assert index.kwargs["limit"] == 7
+    assert index.kwargs["min_similarity"] == pytest.approx(0.8)
+    assert [item["response_id"] for item in out["items"]] == ["good"]
+    assert out["observations"]["select"]["parameters"]["limit"] == 1
+
+
+def test_memory_pipeline_can_decline_lexical_fallback(repo):
+    source = built_in_pipeline("memory.response.current", 1)
+    assert source is not None
+    stages = []
+    for stage in source.stages:
+        if stage.id == "retrieve":
+            stage = stage.model_copy(
+                update={
+                    "on_unavailable": None,
+                    "on_timeout": None,
+                    "on_error": None,
+                }
+            )
+        if stage.id != "lexical":
+            stages.append(stage)
+    plan = compile_memory_pipeline(
+        source.model_copy(
+            update={
+                "pipeline_id": "memory.response.no-fallback",
+                "built_in": False,
+                "stages": stages,
+            }
+        )
+    )
+
+    def broken():
+        raise RuntimeError("embedding service offline")
+
+    out = rm.select_prior_responses(
+        "Derrida and hospitality",
+        owner="ann",
+        system_store=repo,
+        index_factory=broken,
+        plan=plan,
+    )
+
+    assert out["mode"] == "semantic_error"
+    assert out["items"] == []
+    assert "no configured error fallback" in out["warnings"][0]
+    assert "lexical" not in out["observations"]
