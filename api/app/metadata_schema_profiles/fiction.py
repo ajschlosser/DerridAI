@@ -247,7 +247,7 @@ def fiction_schema() -> MetadataSchema:
             "themes",
             "Themes",
             "list",
-            "literary",
+            "indexing",
             "lists broad ideas or problems that the record substantively develops, not merely nouns that appear. Use concise thematic phrases "
             "and require local textual support; do not assign work-wide themes from generic or transitional language.",
             pos_tags=("ADJ", "NOUN", "PROPN"),
@@ -257,7 +257,7 @@ def fiction_schema() -> MetadataSchema:
             "motifs",
             "Motifs",
             "list",
-            "literary",
+            "indexing",
             "lists recurring images, situations, phrases, objects, or patterns that this record materially instantiates as a literary motif. "
             "Do not treat a one-off detail as a motif unless recurrence is supported by available context or reviewed precedent.",
             pos_tags=("ADJ", "NOUN", "PROPN"),
@@ -267,7 +267,7 @@ def fiction_schema() -> MetadataSchema:
             "symbols",
             "Symbols",
             "list",
-            "literary",
+            "indexing",
             "lists objects, images, places, gestures, or figures that the passage gives a supported symbolic function beyond literal reference. "
             "Be conservative: a salient object is not automatically a symbol.",
             pos_tags=("NOUN", "PROPN"),
@@ -277,7 +277,7 @@ def fiction_schema() -> MetadataSchema:
             "tone",
             "Tone",
             "list",
-            "literary",
+            "indexing",
             "lists one or two concise labels for the narrator's or passage's textual attitude or tonal register, such as ironic, elegiac, comic, "
             "menacing, detached, or tender. Base labels on linguistic evidence rather than the reader's emotional reaction.",
             pos_tags=("ADJ", "NOUN"),
@@ -287,7 +287,7 @@ def fiction_schema() -> MetadataSchema:
             "literary_devices",
             "Literary devices",
             "list",
-            "literary",
+            "indexing",
             "lists literary techniques materially used in this record, such as irony, foreshadowing, metaphor, simile, free indirect discourse, "
             "unreliable narration, stream of consciousness, or dramatic irony. Prefer established concise terms and avoid speculative over-labeling.",
             pos_tags=("NOUN", "ADJ"),
@@ -337,7 +337,7 @@ def fiction_schema() -> MetadataSchema:
                 footer=PROFILE_FOOTER,
             ),
             SchemaGroup(
-                key="literary",
+                key="indexing",
                 label="Literary interpretation",
                 intro=(
                     "Infer conservative literary-indexing metadata for this fiction record. Themes, motifs, symbols, tone, and devices are "
