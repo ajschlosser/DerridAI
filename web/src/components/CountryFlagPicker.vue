@@ -464,7 +464,7 @@ onBeforeUnmount(detachFloatingListeners);
             :key="item.code"
             type="button"
             :aria-pressed="props.modelValue === item.flag"
-            :title="`${item.name} (${item.code})`"
+            :aria-label="`${item.name} (${item.code})`"
             @click="choose(item.flag)"
           >
             <span class="flag-option-symbol" aria-hidden="true">{{ item.flag }}</span>
