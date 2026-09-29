@@ -9,14 +9,13 @@ import type { RealtimeEvent } from "../../src/realtime/protocol";
 
 describe("Corpus LLM activity inspector", () => {
   let handler: ((event: RealtimeEvent) => void) | undefined;
-  let subscribeSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-09-29T02:00:00Z"));
     setActivePinia(createPinia());
     handler = undefined;
-    subscribeSpy = vi.spyOn(realtime, "subscribe").mockImplementation((_topic, callback) => {
+    vi.spyOn(realtime, "subscribe").mockImplementation((_topic, callback) => {
       handler = callback;
       return () => undefined;
     });
