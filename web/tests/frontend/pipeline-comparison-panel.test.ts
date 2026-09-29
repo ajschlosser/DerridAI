@@ -7,7 +7,10 @@ import { chromaApi } from "../../src/api/chroma";
 import { pipelinesApi } from "../../src/api/pipelines";
 import PipelineComparisonPanel from "../../src/components/pipelines/PipelineComparisonPanel.vue";
 import { useI18nStore } from "../../src/stores/i18n";
-import type { PipelineDefinition, ResearchPipelineComparisonResult } from "../../src/types/pipelines";
+import type {
+  PipelineDefinition,
+  ResearchPipelineComparisonResult,
+} from "../../src/types/pipelines";
 
 const pipelines: PipelineDefinition[] = [
   {
