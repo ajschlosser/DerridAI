@@ -349,15 +349,32 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
         purpose="claim_memory",
         status="active",
         entry_stage_ids=["retrieve"],
+        notes=(
+            "Search reviewer-validated claims semantically, fall back visibly to "
+            "deterministic lexical matching on retrieval failures, then keep a "
+            "bounded advisory set. Claim validation and support provenance remain "
+            "authoritative outside this computational graph."
+        ),
         stages=[
             {
                 "id": "retrieve",
                 "strategy": "retrieve.claim_memory",
+                "config": {"fetch_k": 6, "min_similarity": 0.5},
+                "on_unavailable": "lexical",
+                "on_timeout": "lexical",
+                "on_error": "lexical",
+                "next": ["select"],
+            },
+            {
+                "id": "lexical",
+                "strategy": "retrieve.memory_lexical_fallback",
+                "config": {"fetch_k": 6},
                 "next": ["select"],
             },
             {
                 "id": "select",
                 "strategy": "select.top_k",
+                "config": {"limit": 6},
             },
         ],
     ),
@@ -368,15 +385,32 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
         purpose="response_memory",
         status="active",
         entry_stage_ids=["retrieve"],
+        notes=(
+            "Search eligible graded responses semantically, fall back visibly to "
+            "deterministic lexical matching on retrieval failures, then keep a "
+            "bounded advisory set. Response grade eligibility remains authoritative "
+            "outside this computational graph."
+        ),
         stages=[
             {
                 "id": "retrieve",
                 "strategy": "retrieve.response_memory",
+                "config": {"fetch_k": 4, "min_similarity": 0.5},
+                "on_unavailable": "lexical",
+                "on_timeout": "lexical",
+                "on_error": "lexical",
+                "next": ["select"],
+            },
+            {
+                "id": "lexical",
+                "strategy": "retrieve.memory_lexical_fallback",
+                "config": {"fetch_k": 4},
                 "next": ["select"],
             },
             {
                 "id": "select",
                 "strategy": "select.top_k",
+                "config": {"limit": 4},
             },
         ],
     ),
