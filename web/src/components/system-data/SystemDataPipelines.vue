@@ -225,6 +225,82 @@ onMounted(load);
       </button>
     </header>
 
+    <section class="concept-guide" aria-labelledby="pipeline-guide-title">
+      <div>
+        <strong id="pipeline-guide-title">
+          {{ t("pipelines.plain_intro_title", "A pipeline is DerridAI’s research recipe") }}
+        </strong>
+        <p>
+          {{
+            t(
+              "pipelines.plain_intro",
+              "It is a saved sequence of steps that determines how DerridAI finds candidate passages, orders them, checks provenance, prepares evidence, and—when applicable—asks a language model to produce or evaluate an answer.",
+            )
+          }}
+        </p>
+      </div>
+      <details>
+        <summary>{{ t("pipelines.key_terms", "Key terms in plain language") }}</summary>
+        <dl>
+          <div>
+            <dt>{{ t("pipelines.term_stage", "Stage") }}</dt>
+            <dd>
+              {{
+                t(
+                  "pipelines.term_stage_help",
+                  "One step in the recipe, such as retrieving passages, reranking them, checking provenance, or generating an answer.",
+                )
+              }}
+            </dd>
+          </div>
+          <div>
+            <dt>{{ t("pipelines.term_strategy", "Strategy") }}</dt>
+            <dd>
+              {{
+                t(
+                  "pipelines.term_strategy_help",
+                  "The approved operation a stage performs. In technical terms, it is a registered server-side implementation with a known input, output, and configuration schema.",
+                )
+              }}
+            </dd>
+          </div>
+          <div>
+            <dt>{{ t("pipelines.term_edge", "Connection / edge") }}</dt>
+            <dd>
+              {{
+                t(
+                  "pipelines.term_edge_help",
+                  "A direction from one stage to another. Normal edges describe the usual path; fallback edges describe what to do when a stage is empty, unavailable, timed out, or fails.",
+                )
+              }}
+            </dd>
+          </div>
+          <div>
+            <dt>{{ t("pipelines.term_assignment", "Assignment") }}</dt>
+            <dd>
+              {{
+                t(
+                  "pipelines.term_assignment_help",
+                  "The version DerridAI uses by default for a feature. Saving a new version does not change the assignment; activation is a separate, explicit step.",
+                )
+              }}
+            </dd>
+          </div>
+          <div>
+            <dt>{{ t("pipelines.term_trace", "Execution trace") }}</dt>
+            <dd>
+              {{
+                t(
+                  "pipelines.term_trace_help",
+                  "An audit record of what actually ran: the exact version, stage path, fallbacks, models, candidate counts, and timings. This lets you distinguish the intended recipe from the runtime history.",
+                )
+              }}
+            </dd>
+          </div>
+        </dl>
+      </details>
+    </section>
+
     <p v-if="error" class="error-banner" role="alert">{{ error }}</p>
     <div v-if="loading && !catalog" class="loading-card" role="status">
       {{ t("common.loading", "Loading…") }}
@@ -297,6 +373,46 @@ onMounted(load);
 .workspace-heading :deep(svg) {
   width: 15px;
   height: 15px;
+}
+.concept-guide {
+  display: grid;
+  gap: 9px;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--soft);
+}
+.concept-guide > div {
+  display: grid;
+  gap: 3px;
+}
+.concept-guide strong,
+.concept-guide summary {
+  font-size: 0.82rem;
+}
+.concept-guide p,
+.concept-guide dd {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+.concept-guide summary {
+  cursor: pointer;
+  font-weight: 750;
+}
+.concept-guide dl {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+}
+.concept-guide dl > div {
+  display: grid;
+  gap: 2px;
+}
+.concept-guide dt {
+  font-size: 0.77rem;
+  font-weight: 750;
 }
 .error-banner,
 .loading-card {
