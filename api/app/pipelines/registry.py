@@ -61,6 +61,14 @@ def _integer(minimum: int | None = None, maximum: int | None = None) -> dict:
 # the UI and validators one authoritative answer to "what can this stage mean?"
 DEFAULT_STRATEGIES = [
     StrategySpec(
+        strategy_id="query.passthrough",
+        family="query_transform",
+        label="Query passthrough",
+        description="Preserve the user query without invoking a model-based decomposition stage.",
+        input_type="query",
+        output_type="query",
+    ),
+    StrategySpec(
         strategy_id="query.research_decompose",
         family="query_transform",
         label="Research query decomposition",
@@ -79,6 +87,14 @@ DEFAULT_STRATEGIES = [
         description="Build an evidence query deterministically from the target metadata field and proposed value.",
         input_type="query",
         output_type="query",
+    ),
+    StrategySpec(
+        strategy_id="retrieve.selected_evidence",
+        family="candidate_generation",
+        label="User-selected evidence",
+        description="Resolve explicitly selected collection/record identifiers to authoritative Records without vector retrieval.",
+        input_type="query",
+        output_type="candidate_set",
     ),
     StrategySpec(
         strategy_id="retrieve.chroma_similarity",
@@ -223,6 +239,14 @@ DEFAULT_STRATEGIES = [
         output_type="candidate_set",
         capabilities=["evidence_validation"],
         config_schema={"type": "object", "properties": {"min_score": _number(0, 1)}},
+    ),
+    StrategySpec(
+        strategy_id="validate.citation_binding",
+        family="support_validation",
+        label="Citation binding",
+        description="Bind generated evidence markers to deterministic bibliographic citations and optional Works Cited entries.",
+        input_type="model_output",
+        output_type="model_output",
     ),
     StrategySpec(
         strategy_id="validate.provenance",
