@@ -76,6 +76,10 @@ export function createRuntimeState() {
     faqPage: 1,
     faqExpanded: {},
     ragConfig: {
+      // Empty means "resolve the current system Research assignment". Once a
+      // run or rerun pins an immutable pipeline version these fields preserve it.
+      pipeline_id: "",
+      pipeline_version: null,
       source_collection: "",
       locales: ["en", "fr"],
       search_types: ["similarity", "lexical", "mmr"],
