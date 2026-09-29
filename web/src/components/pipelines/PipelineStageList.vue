@@ -6,6 +6,7 @@ import {
   pipelineConfigHelp,
   pipelineConfigLabel,
   pipelineEdgeKindLabel,
+  pipelineStageFamilyHelp,
   pipelineStageFamilyLabel,
   pipelineStrategyDescription,
   pipelineStrategyLabel,
@@ -58,7 +59,13 @@ function compactConfig(config: Record<string, unknown>) {
             <code>{{ stage.id }}</code>
           </div>
           <div class="stage-badges">
-            <span class="badge">{{ pipelineStageFamilyLabel(strategy(stage)?.family, t) }}</span>
+            <span class="badge badge-with-help">
+              {{ pipelineStageFamilyLabel(strategy(stage)?.family, t) }}
+              <UiTooltip
+                :text="pipelineStageFamilyHelp(strategy(stage)?.family, t)"
+                :label="t('pipelines.explain_stage_family', 'Explain this kind of stage')"
+              />
+            </span>
             <span v-if="strategy(stage)?.invokes_llm" class="badge badge-with-help">
               <AppIcon name="spark" />
               {{ t("pipelines.llm", "LLM") }}
