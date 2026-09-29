@@ -79,9 +79,7 @@ export const pipelinesApi = {
       },
     ),
 
-  researchBenchmarkCases: (
-    filters: { caseId?: string; limit?: number; offset?: number } = {},
-  ) => {
+  researchBenchmarkCases: (filters: { caseId?: string; limit?: number; offset?: number } = {}) => {
     const query = new URLSearchParams();
     if (filters.caseId) query.set("case_id", filters.caseId);
     query.set("limit", String(filters.limit ?? 100));
