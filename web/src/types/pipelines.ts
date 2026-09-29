@@ -178,7 +178,6 @@ export type PipelineOperationalMetrics = {
   owner_filter?: string | null;
 };
 
-
 export type ResearchPipelineComparisonEvidence = {
   record_id: string;
   rank: number;
