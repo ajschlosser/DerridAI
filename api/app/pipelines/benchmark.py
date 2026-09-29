@@ -22,6 +22,10 @@ from ..models import LanguageCode, RAGRunRequest, SearchType
 from .comparison import PipelineVersionRef
 
 
+class BenchmarkCorpusDriftError(ValueError):
+    """The persisted fixed-case manifest no longer matches the live corpus/index."""
+
+
 class BenchmarkCollectionSnapshot(BaseModel):
     """Bounded identity for one collection that may serve the fixed case."""
 
@@ -267,7 +271,7 @@ def assert_benchmark_corpus_unchanged(
         locales=[str(value) for value in case.locales],
     )
     if current.fingerprint != case.corpus_snapshot.fingerprint:
-        raise ValueError(
+        raise BenchmarkCorpusDriftError(
             "Benchmark corpus/index drift detected. "
             f"Case {case.case_id}@{case.version} expects "
             f"{case.corpus_snapshot.fingerprint[:12]}, but the current manifest is "
