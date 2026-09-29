@@ -68,7 +68,7 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
     const build = options.currentBuild.value;
     if (!build || build.build_id !== summary.id) return;
     const patch: Partial<CorpusBuild> = {};
-    if (summary.raw_status !== undefined) patch.status = summary.raw_status as CorpusBuild["status"];
+    if (summary.raw_status !== undefined)\n      patch.status = summary.raw_status as CorpusBuild["status"];
     if (summary.stage !== undefined) patch.stage = summary.stage as CorpusBuild["stage"];
     if (summary.progress !== undefined) patch.progress = summary.progress;
     if (summary.record_count !== undefined) patch.record_count = summary.record_count;
