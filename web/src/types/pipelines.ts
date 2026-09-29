@@ -338,4 +338,3 @@ export type ResearchBenchmarkRun = {
   reproducibility_warnings: string[];
   comparison: ResearchPipelineComparisonResult;
 };
-
