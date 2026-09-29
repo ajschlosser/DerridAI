@@ -384,6 +384,7 @@ def compile_research_pipeline(pipeline: PipelineDefinition) -> ResearchPipelineP
     fusion = _single_stage(by_strategy, "fusion.rrf")
     cross_encoder = _single_stage(by_strategy, "rerank.cross_encoder")
     lexical_rerank = _single_stage(by_strategy, "rerank.lexical_fallback")
+    top_k_stages = by_strategy.get("select.top_k", [])
     provenance = _single_stage(by_strategy, "validate.provenance", required=True)
     context_pack = _single_stage(by_strategy, "pack.evidence_context", required=True)
     generation = _single_stage(by_strategy, "llm.generate_answer", required=True)
@@ -399,6 +400,39 @@ def compile_research_pipeline(pipeline: PipelineDefinition) -> ResearchPipelineP
     assert generation is not None
     assert citation_binding is not None
 
+    enabled_entries = [
+        stage_id
+        for stage_id in pipeline.entry_stage_ids
+        if stage_id in stages
+    ]
+    if query_stage:
+        if enabled_entries != [query_stage.id]:
+            raise ValueError(
+                "Research pipelines with a query-transform stage must use that "
+                "stage as the single enabled entry point."
+            )
+        for retrieval_stage in (semantic, lexical):
+            if retrieval_stage and not _reachable(
+                stages,
+                query_stage.id,
+                retrieval_stage.id,
+            ):
+                raise ValueError(
+                    f"Research query stage {query_stage.id!r} must feed "
+                    f"retrieval stage {retrieval_stage.id!r}."
+                )
+    else:
+        expected_entries = {
+            stage.id
+            for stage in (semantic, lexical)
+            if stage is not None
+        }
+        if set(enabled_entries) != expected_entries:
+            raise ValueError(
+                "Research pipelines without a query transform must use their "
+                "retrieval stages as entry points."
+            )
+
     mmr_stages = by_strategy.get("select.mmr", [])
     if len(mmr_stages) > 2:
         raise ValueError("Research supports at most one retrieval MMR and one diversity MMR stage.")
@@ -407,6 +441,10 @@ def compile_research_pipeline(pipeline: PipelineDefinition) -> ResearchPipelineP
     post_mmr: PipelineStageDefinition | None = None
     for mmr in mmr_stages:
         if fusion and _reachable(stages, mmr.id, fusion.id):
+            if semantic is None or not _reachable(stages, semantic.id, mmr.id):
+                raise ValueError(
+                    "Pre-fusion Research MMR must be fed by semantic retrieval."
+                )
             if pre_fusion_mmr is not None:
                 raise ValueError("Research supports only one pre-fusion MMR stage.")
             pre_fusion_mmr = mmr
@@ -511,6 +549,7 @@ def compile_research_pipeline(pipeline: PipelineDefinition) -> ResearchPipelineP
         raise ValueError("Research evaluation must follow citation binding.")
 
     fallbacks: dict[str, tuple[str, str]] = {}
+    fallback_target_ids: set[str] = set()
     if cross_encoder:
         fallback_values = {
             "empty": cross_encoder.on_empty,
@@ -518,6 +557,17 @@ def compile_research_pipeline(pipeline: PipelineDefinition) -> ResearchPipelineP
             "timeout": cross_encoder.on_timeout,
             "error": cross_encoder.on_error,
         }
+        fallback_target_ids = {
+            target_id
+            for target_id in fallback_values.values()
+            if target_id
+        }
+        for top_k in top_k_stages:
+            if top_k.id not in fallback_target_ids:
+                raise ValueError(
+                    "Research top-K stages are currently supported only as "
+                    "explicit reranker fallback targets."
+                )
         for condition, target_id in fallback_values.items():
             if not target_id:
                 continue
