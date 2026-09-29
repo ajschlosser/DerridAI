@@ -53,6 +53,23 @@ function purposeLabel(purpose: string) {
   };
   return labels[purpose] || purpose;
 }
+function definitionStatusLabel(status: PipelineDefinition["status"]) {
+  const labels: Record<PipelineDefinition["status"], string> = {
+    draft: t("pipelines.status_draft", "Draft"),
+    active: t("pipelines.status_active", "Active"),
+    disabled: t("pipelines.status_disabled", "Disabled"),
+  };
+  return labels[status];
+}
+function runStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    completed: t("pipelines.status_completed", "Completed"),
+    failed: t("pipelines.status_failed", "Failed"),
+    cancelled: t("pipelines.status_cancelled", "Cancelled"),
+    running: t("pipelines.status_running", "Running"),
+  };
+  return labels[status] || status;
+}
 
 const pipelines = computed(() => catalog.value?.pipelines || []);
 const strategies = computed(() => catalog.value?.strategies || []);
@@ -107,7 +124,8 @@ async function load() {
           item.pipeline_id === assignedResearch?.pipeline_id &&
           item.version === assignedResearch?.pipeline_version,
       );
-      selectedKey.value = keyFor(preferred || nextCatalog.pipelines[0]);
+      const fallback = preferred || nextCatalog.pipelines[0];
+      selectedKey.value = fallback ? keyFor(fallback) : "";
     }
     if (
       runs.value.length &&
@@ -253,7 +271,7 @@ onMounted(load);
     </div>
 
     <template v-else-if="catalog">
-      <section class="studio-grid" aria-label="Pipeline definitions">
+      <section class="studio-grid" :aria-label="t('pipelines.definitions', 'Pipeline definitions')">
         <aside class="pipeline-browser">
           <div class="browser-heading">
             <div>
@@ -278,7 +296,7 @@ onMounted(load);
             <span class="choice-meta">
               {{ purposeLabel(pipeline.purpose) }}
               <span aria-hidden="true">·</span>
-              {{ pipeline.status }}
+              {{ definitionStatusLabel(pipeline.status) }}
             </span>
             <span v-if="pipeline.built_in" class="choice-badge">
               {{ t("pipelines.built_in", "Built in") }}
@@ -376,7 +394,7 @@ onMounted(load);
           <div
             v-if="selectedPipeline.validation?.issues?.length"
             class="validation-issues"
-            aria-label="Validation issues"
+            :aria-label="t('pipelines.validation_issues', 'Validation issues')"
           >
             <p
               v-for="issue in selectedPipeline.validation.issues"
@@ -484,7 +502,7 @@ onMounted(load);
                 <small>{{ run.feature }}</small>
               </span>
               <span>
-                <strong>{{ run.status }}</strong>
+                <strong>{{ runStatusLabel(run.status) }}</strong>
                 <small>{{ formatDate(run.started_at) }}</small>
               </span>
             </button>
