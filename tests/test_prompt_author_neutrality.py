@@ -24,6 +24,7 @@ PROMPT_SOURCE_PATHS = (
     "api/app/rag.py",
     "api/app/llm_tools.py",
     "api/app/corpus_segmentation_execution.py",
+    "api/app/corpus_metadata_enrichment_execution.py",
     "web/src/components/metadata-schemas/SchemaPreviewPanel.vue",
 )
 
@@ -58,6 +59,11 @@ def test_record_audit_and_research_prompts_use_document_author_context() -> None
     assert "default author" in llm.SYSTEM_PROMPT
     assert "document_author from each evidence record" in rag.FOCUSED_PROMPT
     assert "Do not equate document authorship with proposition ownership" in rag.FOCUSED_PROMPT
+    root = Path(__file__).resolve().parents[1]
+    enrichment_source = (root / "api/app/corpus_metadata_enrichment_execution.py").read_text(
+        encoding="utf-8"
+    )
+    assert "use it as source-document authorship context" in enrichment_source
 
 
 class _SegmentationProbe(corpus_segmentation_execution.BuildSegmentationExecutionMixin):
