@@ -1,6 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import { createMemoryHistory, createRouter } from "vue-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../src/runtime/runtime.js", () => ({
@@ -11,6 +12,22 @@ vi.mock("../../src/runtime/runtime.js", () => ({
 import MetadataSchemasView from "../../src/views/MetadataSchemasView.vue";
 import { metadataSchemasApi } from "../../src/api/metadataSchemas";
 import { useI18nStore } from "../../src/stores/i18n";
+
+async function mountView(query: Record<string, string> = {}) {
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: "/schemas", name: "schemas", component: { template: "<div />" } }],
+  });
+  await router.push({ name: "schemas", query });
+  await router.isReady();
+  return {
+    router,
+    wrapper: mount(MetadataSchemasView, {
+      attachTo: document.body,
+      global: { plugins: [router] },
+    }),
+  };
+}
 
 describe("Metadata schemas page", () => {
   beforeEach(() => {
@@ -46,11 +63,55 @@ describe("Metadata schemas page", () => {
   });
 
   it("hosts the schema editor in Corpus Management", async () => {
-    const wrapper = mount(MetadataSchemasView, { attachTo: document.body });
+    const { wrapper } = await mountView();
     await flushPromises();
     expect(wrapper.get("#schemas-page-title").text()).toBe("Metadata schemas");
     expect(wrapper.text()).toContain("Corpus Management");
     expect(wrapper.find(".schema-editor").exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("restores schema and tab selection from the URL", async () => {
+    vi.spyOn(metadataSchemasApi, "list").mockResolvedValueOnce({
+      items: [
+        {
+          id: "default",
+          name: "DerridAI scholarly default",
+          description: "",
+          builtin: true,
+          field_count: 23,
+          groups: [],
+          hash: "a",
+        },
+        {
+          id: "notes",
+          name: "Notes",
+          description: "",
+          builtin: false,
+          field_count: 2,
+          groups: [],
+          hash: "b",
+        },
+      ],
+    });
+    vi.spyOn(metadataSchemasApi, "get").mockImplementationOnce(async () => ({
+      format_version: 1,
+      id: "notes",
+      name: "Notes",
+      description: "",
+      groups: [],
+      fields: [],
+    }) as never);
+
+    const { wrapper, router } = await mountView({ schema: "notes", tab: "groups" });
+    await flushPromises();
+
+    expect(metadataSchemasApi.get).toHaveBeenCalledWith("notes");
+    expect(wrapper.get("#schema-tab-groups").attributes("aria-selected")).toBe("true");
+
+    await wrapper.get("#schema-tab-preview").trigger("click");
+    await flushPromises();
+    expect(router.currentRoute.value.query.tab).toBe("preview");
     wrapper.unmount();
   });
 
@@ -72,7 +133,7 @@ describe("Metadata schemas page", () => {
       ],
       fields: [],
     } as never);
-    const wrapper = mount(MetadataSchemasView, { attachTo: document.body });
+    const { wrapper } = await mountView();
     await flushPromises();
     await wrapper.get("button.new-schema").trigger("click");
     await flushPromises();
