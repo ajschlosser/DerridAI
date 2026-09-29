@@ -971,6 +971,84 @@ defineExpose({ open, close });
 </template>
 
 <style scoped>
+.pipeline-selection-card,
+.pipeline-inspector-card,
+.research-settings-note {
+  min-width: 0;
+}
+.pipeline-select-field {
+  display: grid;
+  gap: 0.375rem;
+  margin-top: 0.75rem;
+}
+.pipeline-select-field > span {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+.pipeline-select-field small {
+  color: var(--muted);
+  line-height: 1.45;
+}
+.pipeline-inspector-card {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.875rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card, 0.75rem);
+  background: var(--card);
+}
+.pipeline-inspector-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.pipeline-inspector-head h4 {
+  margin: 0.125rem 0 0;
+  color: var(--text-2);
+  font-size: 0.9375rem;
+}
+.pipeline-inspector-head p {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+.pipeline-status-chip {
+  flex: 0 0 auto;
+  padding: 0.1875rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 0.6875rem;
+  font-weight: 750;
+}
+.research-settings-note {
+  display: flex;
+  gap: 0.625rem;
+  align-items: flex-start;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control, 0.625rem);
+  background: var(--soft);
+}
+.research-settings-note :deep(svg) {
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.125rem;
+}
+.research-settings-note p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.pipeline-inspector-card :deep(.pipeline-stage-list) {
+  margin-top: 0.125rem;
+}
 .research-prompt-metadata {
   min-width: 0;
 }
