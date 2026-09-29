@@ -248,8 +248,7 @@ export function segmentResearchAnswer(
     const previous = segments.at(-1);
     if (
       previous &&
-      previous.evidenceIndex == null &&
-      next.evidenceIndex == null &&
+      previous.evidenceIndex === next.evidenceIndex &&
       Boolean(previous.bold) === Boolean(next.bold)
     ) {
       previous.text += next.text;
