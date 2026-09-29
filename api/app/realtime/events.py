@@ -43,8 +43,11 @@ _CORPUS_SUMMARY_KEYS = (
     "stage_detail",
     "record_count",
     "accepted_count",
+    "rejected_count",
     "review_count",
+    "review_queue_counts",
     "metadata_total",
+    "metadata_completed",
     "metadata_enriched_count",
     "metadata_tasks_total",
     "metadata_tasks_completed",
@@ -65,6 +68,7 @@ _CORPUS_SUMMARY_KEYS = (
 TERMINAL_JOB_STATUSES = frozenset({"completed", "failed", "cancelled", "interrupted"})
 _METADATA_KEYS = (
     "metadata_total",
+    "metadata_completed",
     "metadata_enriched_count",
     *(key for key in _CORPUS_SUMMARY_KEYS if key.startswith("metadata_tasks_")),
 )
