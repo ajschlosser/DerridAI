@@ -1,6 +1,7 @@
 // Copyright 2026 Aaron John Schlosser, PhD.
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import { createMemoryHistory, createRouter } from "vue-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ProvidersView from "../../src/views/ProvidersView.vue";
 
@@ -25,14 +26,28 @@ vi.mock("../../src/runtime/runtime.js", () => ({
   notifyToast: vi.fn(),
 }));
 
+async function mountView(query: Record<string, string> = {}) {
+  const pinia = createPinia();
+  setActivePinia(pinia);
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: "/providers", name: "providers", component: { template: "<div />" } }],
+  });
+  await router.push({ name: "providers", query });
+  await router.isReady();
+  return {
+    router,
+    wrapper: mount(ProvidersView, { global: { plugins: [pinia, router] } }),
+  };
+}
+
 describe("ProvidersView", () => {
   beforeEach(() => {
-    setActivePinia(createPinia());
     saved.mockClear();
   });
 
   it("starts collapsed with no save bar, then reveals fields and saves only after an edit", async () => {
-    const wrapper = mount(ProvidersView);
+    const { wrapper } = await mountView();
     await flushPromises();
     const summary = wrapper.get(".provider-summary");
     expect(summary.attributes("aria-expanded")).toBe("false");
@@ -50,8 +65,21 @@ describe("ProvidersView", () => {
     await vi.waitFor(() => expect(wrapper.find(".providers-save").exists()).toBe(false));
   });
 
+  it("restores expanded providers from the URL and keeps panel state shareable", async () => {
+    const { wrapper, router } = await mountView({ open: "p1" });
+    await flushPromises();
+
+    const summary = wrapper.get(".provider-summary");
+    expect(summary.attributes("aria-expanded")).toBe("true");
+
+    await summary.trigger("click");
+    await flushPromises();
+    expect(summary.attributes("aria-expanded")).toBe("false");
+    expect(router.currentRoute.value.query.open).toBeUndefined();
+  });
+
   it("discards edits", async () => {
-    const wrapper = mount(ProvidersView);
+    const { wrapper } = await mountView();
     await flushPromises();
     await wrapper.get(".provider-summary").trigger("click");
     await wrapper.get(".provider-body input.control").setValue("Renamed");

@@ -1,6 +1,6 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useSchemaCopy } from "../composables/useSchemaCopy";
 import type { ProviderProfile } from "../api/system";
 import UiButton from "./ui/UiButton.vue";
@@ -24,21 +24,37 @@ import {
 // not edited here. A build copies the schema it starts with, so nothing done here changes a build already made.
 // This component owns the draft and every request; the tables and forms below only edit the draft in place.
 const props = withDefaults(
-  defineProps<{ providerProfiles?: ProviderProfile[]; defaultProviderId?: string }>(),
-  { providerProfiles: () => [], defaultProviderId: "" },
+  defineProps<{
+    providerProfiles?: ProviderProfile[];
+    defaultProviderId?: string;
+    initialSchemaId?: string;
+    initialTab?: string;
+  }>(),
+  {
+    providerProfiles: () => [],
+    defaultProviderId: "",
+    initialSchemaId: "default",
+    initialTab: "fields",
+  },
 );
-const emit = defineEmits<{ saved: [id: string]; changed: [] }>();
+const emit = defineEmits<{
+  saved: [id: string];
+  changed: [];
+  selection: [id: string];
+  tab: [id: string];
+}>();
 const { t } = useSchemaCopy();
 
+const VALID_TABS = new Set(["fields", "document", "groups", "preview"]);
 const summaries = ref<SchemaSummary[]>([]);
-const selectedId = ref("default");
+const selectedId = ref(props.initialSchemaId || "default");
 const draft = ref<MetadataSchema | null>(null);
 const savedHash = ref("");
 const error = ref("");
 const notice = ref("");
 const busy = ref(false);
 const isNew = ref(false);
-const tab = ref("fields");
+const tab = ref(VALID_TABS.has(props.initialTab) ? props.initialTab : "fields");
 
 const builtin = computed(() => {
   if (isNew.value) return false;
@@ -76,10 +92,14 @@ async function refresh(keep?: string) {
 }
 async function select(id: string, force = false) {
   if (!force && id === selectedId.value && !isNew.value) return;
-  if (!force && !confirmDiscard()) return;
+  if (!force && !confirmDiscard()) {
+    emit("selection", selectedId.value);
+    return;
+  }
   selectedId.value = id;
   notice.value = "";
   load(await metadataSchemasApi.get(id));
+  emit("selection", id);
 }
 async function guarded<T>(work: () => Promise<T>): Promise<T | undefined> {
   busy.value = true;
@@ -108,6 +128,8 @@ async function newSchema() {
     true,
   );
   savedHash.value = "";
+  // Unsaved drafts are deliberately transient. Keep the URL bound to the last
+  // durable schema until this draft is saved.
   selectedId.value = "";
   tab.value = "fields";
 }
@@ -118,6 +140,7 @@ function duplicate() {
     true,
   );
   savedHash.value = ""; // a copy is unsaved
+  // Do not put unsaved draft identity into the shareable route.
   selectedId.value = "";
 }
 async function save() {
@@ -192,6 +215,22 @@ function onKeydown(event: KeyboardEvent) {
 function onBeforeUnload(event: BeforeUnloadEvent) {
   if (dirty.value && !builtin.value) event.preventDefault();
 }
+watch(tab, (id) => emit("tab", id));
+watch(
+  () => props.initialSchemaId,
+  (value) => {
+    const id = value || "default";
+    if (id === selectedId.value || !summaries.value.length) return;
+    void select(summaries.value.some((item) => item.id === id) ? id : "default");
+  },
+);
+watch(
+  () => props.initialTab,
+  (value) => {
+    if (VALID_TABS.has(value) && value !== tab.value) tab.value = value;
+  },
+);
+
 onMounted(() => {
   window.addEventListener("keydown", onKeydown);
   window.addEventListener("beforeunload", onBeforeUnload);
