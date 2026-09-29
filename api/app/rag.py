@@ -1413,8 +1413,21 @@ def run_rag_pipeline(
                     elif fallback and fallback[1] == "select.top_k":
                         active_rerank_stage_id = fallback[0]
                         effective_reranker = "none"
+                        fallback_limit = max(
+                            1,
+                            int(
+                                pipeline_plan.config_value(
+                                    fallback[0],
+                                    "limit",
+                                    rerank_pool_limit,
+                                )
+                            ),
+                        )
                         reranked_retrieved = [
-                            dict(item) for item in retrieved_pool[:rerank_pool_limit]
+                            dict(item)
+                            for item in retrieved_pool[
+                                : min(rerank_pool_limit, fallback_limit)
+                            ]
                         ]
                         for item in reranked_retrieved:
                             item["rerank_score"] = item.get("rrf_score", 0.0)
