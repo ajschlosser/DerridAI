@@ -280,6 +280,14 @@ function seconds(value: number | null | undefined) {
             <strong>{{ seconds(result.right.elapsed_seconds) }}</strong>
           </div>
         </section>
+        <p class="comparison-interpretation">
+          {{
+            t(
+              "pipelines.compare_overlap_interpretation",
+              "Overlap describes how similar the selected evidence sets are; it does not measure scholarly quality.",
+            )
+          }}
+        </p>
 
         <div class="side-grid">
           <section>
@@ -427,6 +435,12 @@ function seconds(value: number | null | undefined) {
   display: grid;
   gap: 14px;
   padding: 0 16px 16px;
+}
+.comparison-interpretation {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
 }
 .comparison-help {
   max-width: 900px;
