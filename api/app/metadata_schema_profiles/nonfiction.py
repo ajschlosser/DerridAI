@@ -198,6 +198,92 @@ def nonfiction_schema() -> MetadataSchema:
         ),
         profile_field(
             "nonfiction",
+            "is_direct_quote",
+            "Direct quotation",
+            "boolean",
+            "quotation",
+            "is true only when the record contains words presented as a direct quotation from a person, document, interview, speech, dataset note, or other source. "
+            "It is false for paraphrase, summary, indirect speech, and ordinary citation without quoted wording.",
+        ),
+        profile_field(
+            "nonfiction",
+            "quoted_speaker",
+            "Quoted speaker",
+            "text",
+            "quotation",
+            "identifies the person, group, or institution represented as speaking the directly quoted words. Distinguish the quoted speaker from the current "
+            "document author and from a reporter or narrator who introduces the quotation.",
+            pos_tags=("PRON", "PROPN", "NOUN"),
+            ner_tags=("PERSON", "ORG", "NORP"),
+        ),
+        profile_field(
+            "nonfiction",
+            "quoted_author",
+            "Quoted author",
+            "text",
+            "quotation",
+            "identifies the author of a quoted written source when the record supports that relation. Do not assume that a cited author is the author of the "
+            "quoted wording unless the attribution is explicit or locally resolvable.",
+            pos_tags=("PROPN",),
+            ner_tags=("PERSON", "ORG"),
+        ),
+        profile_field(
+            "nonfiction",
+            "quoted_work",
+            "Quoted work",
+            "text",
+            "quotation",
+            "identifies the document, book, article, report, law, speech, interview, or other work from which quoted wording is presented. Use the title or "
+            "stable source label supplied by the record and do not invent missing bibliographic detail.",
+            pos_tags=("PROPN", "NOUN"),
+            ner_tags=("WORK_OF_ART", "LAW"),
+        ),
+        profile_field(
+            "nonfiction",
+            "quoted_position_holder",
+            "Quoted position holder",
+            "text",
+            "quotation",
+            "identifies who holds the proposition expressed by the quotation when that holder differs from the quoted speaker or author. Preserve the distinction "
+            "between voicing words and being committed to the position they express.",
+            pos_tags=("PRON", "PROPN", "NOUN"),
+            ner_tags=("PERSON", "ORG", "NORP"),
+        ),
+        profile_field(
+            "nonfiction",
+            "quoted_addressee",
+            "Quoted addressee",
+            "text",
+            "quotation",
+            "identifies the person, group, institution, or audience directly addressed within the quotation when the source makes that relation material. "
+            "Return null when no addressee is stated or reliably resolvable.",
+            pos_tags=("PRON", "PROPN", "NOUN"),
+            ner_tags=("PERSON", "ORG", "NORP"),
+        ),
+        profile_field(
+            "nonfiction",
+            "quoted_referent",
+            "Quoted referent",
+            "text",
+            "quotation",
+            "identifies the principal person, organization, work, event, policy, place, or concept the quoted words refer to when that referent is material to "
+            "understanding the attribution. Use a concise source-supported label.",
+            pos_tags=("PROPN", "NOUN"),
+            ner_tags=("PERSON", "ORG", "NORP", "GPE", "LOC", "EVENT", "LAW", "WORK_OF_ART"),
+        ),
+        profile_field(
+            "nonfiction",
+            "quotation_chain",
+            "Quotation chain",
+            "list",
+            "quotation",
+            "records a materially supported chain of quotation or transmission when the current author quotes one source quoting another. List the chain in "
+            "outer-to-inner order using concise person/work labels; do not create a chain for a single ordinary quotation.",
+            pos_tags=("PROPN", "NOUN"),
+            ner_tags=("PERSON", "ORG", "WORK_OF_ART"),
+        ),
+        profile_field(
+            "nonfiction",
             "evidence_types",
             "Evidence types",
             "list",
@@ -259,6 +345,16 @@ def nonfiction_schema() -> MetadataSchema:
             "lists research methods, analytical procedures, experimental steps, documentary methods, technical procedures, or operational instructions "
             "explicitly described in the record. Use concise method names or action phrases and do not infer unstated methodology.",
             pos_tags=("NOUN", "VERB"),
+        ),
+        profile_field(
+            "nonfiction",
+            "findings",
+            "Findings",
+            "list",
+            "evidence",
+            "lists results or findings that the record explicitly reports as outcomes of inquiry, analysis, measurement, observation, or investigation. "
+            "Preserve material qualifiers and quantities, and distinguish a reported finding from the author's later interpretation or recommendation.",
+            pos_tags=("NOUN", "VERB", "NUM"),
         ),
         profile_field(
             "nonfiction",
@@ -408,14 +504,24 @@ def nonfiction_schema() -> MetadataSchema:
             "lists conclusions or implications that the record explicitly draws from prior reasoning or evidence. Use concise source-faithful propositions and "
             "distinguish a conclusion from a premise, raw result, or recommendation.",
         ),
+        profile_field(
+            "nonfiction",
+            "limitations",
+            "Limitations",
+            "list",
+            "structure",
+            "lists explicit limitations, caveats, boundary conditions, uncertainties, data constraints, methodological weaknesses, or limits on generalization "
+            "that the record places on its own claims, evidence, methods, findings, or recommendations. Do not invent criticism the source does not state.",
+            pos_tags=("NOUN", "ADJ"),
+        ),
     ]
     return MetadataSchema(
         id=NONFICTION_SCHEMA_ID,
         schema_version="1.0.0",
         name="Non-fiction",
         description=(
-            "Claims, attribution, evidence, sources, statistics, methods, entities, rhetorical structure, "
-            "recommendations, and conclusions for general non-fiction."
+            "Claims, attribution, quotations, evidence, findings, sources, statistics, methods, entities, rhetorical structure, "
+            "recommendations, limitations, and conclusions for general non-fiction."
         ),
         groups=[
             SchemaGroup(
@@ -433,10 +539,20 @@ def nonfiction_schema() -> MetadataSchema:
                 footer=PROFILE_FOOTER,
             ),
             SchemaGroup(
+                key="quotation",
+                label="Quotations and source attribution",
+                intro=(
+                    "Infer ONLY direct-quotation and quotation-source relations for this non-fiction record. Distinguish the current document author or narrator "
+                    "from the quoted speaker, quoted author, quoted work, proposition holder, addressee, and referent. A citation or mentioned name is not by "
+                    "itself evidence that the source supplied quoted wording."
+                ),
+                footer=PROFILE_FOOTER,
+            ),
+            SchemaGroup(
                 key="evidence",
                 label="Evidence and methods",
                 intro=(
-                    "Infer ONLY evidence, source, quantitative, example or case, and method metadata for this non-fiction record. Capture concrete support "
+                    "Infer ONLY evidence, source, quantitative, example or case, method, and finding metadata for this non-fiction record. Capture concrete support "
                     "actually used or described by the passage; do not treat every factual statement as evidence for an unstated claim."
                 ),
                 footer=PROFILE_FOOTER,
@@ -455,7 +571,7 @@ def nonfiction_schema() -> MetadataSchema:
                 label="Rhetorical and documentary structure",
                 intro=(
                     "Infer ONLY the record's document or rhetorical function plus explicit definitions, questions, counterpositions, recommendations, and "
-                    "conclusions. Distinguish what the passage does in the document from the subject matter it discusses."
+                    "conclusions, and limitations. Distinguish what the passage does in the document from the subject matter it discusses."
                 ),
                 footer=PROFILE_FOOTER,
             ),
