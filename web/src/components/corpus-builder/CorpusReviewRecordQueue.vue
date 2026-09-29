@@ -5,6 +5,7 @@ import type { CorpusQueueRow } from "../../features/corpus-builder/api/reviewRea
 import { rowHasSourceWarning } from "../../features/corpus-builder/domain/queueRows";
 import { useI18nStore } from "../../stores/i18n";
 import AppIcon from "../AppIcon.vue";
+import UiTooltip from "../ui/UiTooltip.vue";
 
 const props = defineProps<{
   /** Lightweight queue rows (never full Records). */
@@ -144,14 +145,17 @@ function recordSelectionChanged(recordId: string, event: Event) {
           <span class="record-row-status" :data-state="record.review_state">
             {{ recordStateLabel(record) }}
           </span>
-          <span
+          <UiTooltip
             v-if="record.review_state === 'ready' && record.metadata_llm_processed"
-            class="record-llm-processed"
-            :title="llmProcessedHelp"
+            :text="llmProcessedHelp"
+            trigger-mode="content"
+            placement="bottom"
           >
-            <AppIcon name="spark" />
-            {{ i18n.t("pdf_corpus.llm_processed", "LLM processed") }}
-          </span>
+            <span class="record-llm-processed">
+              <AppIcon name="spark" />
+              {{ i18n.t("pdf_corpus.llm_processed", "LLM processed") }}
+            </span>
+          </UiTooltip>
           <small v-if="extraIssueKinds(record).length" class="record-issue-summary">
             {{
               extraIssueKinds(record)
