@@ -54,7 +54,9 @@ function compactConfig(config: Record<string, unknown>) {
       <div class="stage-main">
         <div class="stage-title-row">
           <div>
-            <strong>{{ strategy(stage) ? pipelineStrategyLabel(strategy(stage), t) : stage.strategy }}</strong>
+            <strong>{{
+              strategy(stage) ? pipelineStrategyLabel(strategy(stage), t) : stage.strategy
+            }}</strong>
             <code>{{ stage.id }}</code>
           </div>
           <div class="stage-badges">
