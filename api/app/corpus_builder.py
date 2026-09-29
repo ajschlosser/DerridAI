@@ -1902,7 +1902,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
 
         The derived graph may use the bounded in-process cache, but this helper does
         not persist checkpoints or mutate the build. Record- and node-centred
-        exploration therefore remain read-only.
+        exploration therefore remains read-only.
         """
         records = [json.loads(json.dumps(row)) for row in self.repo.load_records(build_id)]
         for row in records:
