@@ -2881,6 +2881,7 @@
   "pdf_corpus.rerun_family": "Rerun",
   "pdf_corpus.rerun_metadata": "Rerun metadata",
   "pdf_corpus.rerun_metadata_help": "Re-evaluate only this Record using the selected metadata family.",
+  "pdf_corpus.metadata_rerun_consequence": "Rerunning, requeuing, or enriching again can replace or add derived metadata proposals for this Record. Human review authority and the audit trail remain explicit.",
   "pdf_corpus.resolve_metadata_before_accept": "Resolve the highlighted metadata fields before accepting this record.",
   "pdf_corpus.resolve_metadata_before_accept_fields": "Confirm {fields} before accepting this record.",
   "pdf_corpus.resolve_metadata_issues": "Resolve metadata issues",
