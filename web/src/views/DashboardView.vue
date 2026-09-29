@@ -781,15 +781,21 @@ onBeforeUnmount(() => {
           ></button>
         </div>
         <div class="dashboard-work-carousel-shell">
-          <button
-            class="carousel-arrow"
-            id="dashWorksPrev"
-            type="button"
-            :title="i18n.t('ui.previous')"
-            :aria-label="i18n.t('ui.previous')"
-            @click="scrollWorks(-1)"
-            v-text="'‹'"
-          ></button>
+          <UiTooltip
+            :text="i18n.t('ui.previous')"
+            trigger-mode="content"
+            :content-focusable="false"
+            placement="bottom"
+          >
+            <button
+              class="carousel-arrow"
+              id="dashWorksPrev"
+              type="button"
+              :aria-label="i18n.t('ui.previous')"
+              @click="scrollWorks(-1)"
+              v-text="'‹'"
+            ></button>
+          </UiTooltip>
           <div class="dashboard-work-strip" id="dashWorksCarousel" ref="worksCarouselEl">
             <template v-if="works.length">
               <button
@@ -821,15 +827,21 @@ onBeforeUnmount(() => {
             </template>
             <div v-else class="note">{{ i18n.t("research.no_works") }}</div>
           </div>
-          <button
-            class="carousel-arrow"
-            id="dashWorksNext"
-            type="button"
-            :title="i18n.t('ui.next')"
-            :aria-label="i18n.t('ui.next')"
-            @click="scrollWorks(1)"
-            v-text="'›'"
-          ></button>
+          <UiTooltip
+            :text="i18n.t('ui.next')"
+            trigger-mode="content"
+            :content-focusable="false"
+            placement="bottom"
+          >
+            <button
+              class="carousel-arrow"
+              id="dashWorksNext"
+              type="button"
+              :aria-label="i18n.t('ui.next')"
+              @click="scrollWorks(1)"
+              v-text="'›'"
+            ></button>
+          </UiTooltip>
         </div>
       </section>
       <section class="dashboard-page-lower">
