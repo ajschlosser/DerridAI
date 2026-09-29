@@ -17,6 +17,8 @@ from collections.abc import Callable
 from difflib import SequenceMatcher
 from typing import Any
 
+from .retrieval_selection import mmr_select
+
 METHOD = "deterministic-lexical-v1"
 EVIDENCE_MODES = ("with_value", "backfill")
 DEFAULT_EVIDENCE_MODE = "with_value"
@@ -436,25 +438,38 @@ def _cascade_entry(picks: list[dict[str, Any]], method: str, reason: str) -> dic
         "backfilled": True,
         "method": method,
         "score": picks[0].get("score"),
+        # Keep stage-specific scores separate. These are operational ranking
+        # signals only; none of them turns a suggestion into reviewed evidence.
+        "score_details": [
+            {
+                key: item[key]
+                for key in (
+                    "block_id",
+                    "score",
+                    "lexical_score",
+                    "semantic_score",
+                    "cross_encoder_score",
+                    "mmr_score",
+                )
+                if key in item
+            }
+            for item in picks
+        ],
     }
 
 
 def _mmr_select(
     rows: list[dict[str, Any]], *, limit: int, lambda_mult: float = CASCADE_MMR_LAMBDA
 ) -> list[dict[str, Any]]:
-    """Pick up to ``limit`` rows (each with ``vector`` and ``score``) balancing relevance against diversity."""
-    selected: list[dict[str, Any]] = []
-    remaining = list(rows)
-    while remaining and len(selected) < max(0, int(limit)):
-        best_index, best_score = 0, -float("inf")
-        for index, row in enumerate(remaining):
-            diversity = max((_cosine(row["vector"], chosen["vector"]) for chosen in selected), default=0.0)
-            score = lambda_mult * row["score"] - (1.0 - lambda_mult) * diversity
-            if score > best_score:
-                best_index, best_score = index, score
-        selected.append(remaining.pop(best_index))
-    return selected
+    """Select evidence candidates while preserving relevance and MMR scores separately."""
 
+    return mmr_select(
+        rows,
+        limit=limit,
+        lambda_mult=lambda_mult,
+        relevance=lambda row: float(row.get("score") or 0.0),
+        vector=lambda row: row.get("vector"),
+    )
 
 def suggest_evidence_cascade(
     value: Any,
@@ -520,8 +535,14 @@ def suggest_evidence_cascade(
         if scores:
             ranked = sorted(zip(top, scores), key=lambda pair: -pair[1])
             picks = [
-                {"block_id": row["block_id"], "score": round(float(score), 4)}
-                for row, score in ranked[:limit] if score > 0
+                {
+                    "block_id": row["block_id"],
+                    "score": round(float(score), 4),
+                    "semantic_score": round(float(row.get("score") or 0.0), 4),
+                    "cross_encoder_score": round(float(score), 4),
+                }
+                for row, score in ranked[:limit]
+                if score > 0
             ]
             if picks:
                 return _cascade_entry(
@@ -531,10 +552,23 @@ def suggest_evidence_cascade(
 
     if candidates and candidates[0]["score"] >= SEMANTIC_MIN_SCORE:
         selected = _mmr_select(candidates, limit=limit)
-        picks = [{"block_id": row["block_id"], "score": round(row["score"], 4)} for row in selected]
+        picks = [
+            {
+                "block_id": row["block_id"],
+                "score": round(float(row["score"]), 4),
+                "semantic_score": round(float(row["score"]), 4),
+                "mmr_score": round(float(row.get("mmr_score") or 0.0), 4),
+            }
+            for row in selected
+        ]
         return _cascade_entry(
-            picks, MMR_METHOD,
-            f"Suggested by the evidence cascade's similarity ranking (top score {picks[0]['score']:.3f}).",
+            picks,
+            MMR_METHOD,
+            (
+                "Suggested by the evidence cascade's maximum marginal relevance "
+                f"selection (top semantic score {picks[0]['score']:.3f}; "
+                f"MMR objective {picks[0]['mmr_score']:.3f})."
+            ),
         )
 
     if llm_choice is not None:
