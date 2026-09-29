@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import dataclasses
 
+import pytest
 from app import config
 from app import cross_encoder as cross_encoder_module
 from app.pipelines.defaults import built_in_pipeline
@@ -31,8 +32,8 @@ class LocalProjection:
         return self.query_vector
 
 
-def test_current_evidence_pipeline_compiles_to_legacy_reviewer_chain() -> None:
-    pipeline = built_in_pipeline("evidence.reviewer.current", 1)
+def test_current_evidence_pipeline_requires_support_and_provenance() -> None:
+    pipeline = built_in_pipeline("evidence.reviewer.current", 2)
     assert pipeline is not None
 
     plan = compile_evidence_pipeline(pipeline)
@@ -41,8 +42,18 @@ def test_current_evidence_pipeline_compiles_to_legacy_reviewer_chain() -> None:
     assert plan.semantic_stage_id == "semantic"
     assert plan.lexical_stage_id == "lexical"
     assert plan.rerank_stage_id is None
-    assert plan.support_stage_id is None
+    assert plan.support_stage_id == "support"
+    assert plan.provenance_stage_id == "provenance"
     assert plan.select_stage_id == "select"
+
+
+def test_legacy_reviewer_pipeline_remains_inspectable_but_not_executable() -> None:
+    pipeline = built_in_pipeline("evidence.reviewer.current", 1)
+    assert pipeline is not None
+    assert pipeline.status == "disabled"
+
+    with pytest.raises(ValueError, match="validate.evidence_support"):
+        compile_evidence_pipeline(pipeline)
 
 
 def test_conservative_evidence_pipeline_compiles_support_gate_and_fallback() -> None:
@@ -53,11 +64,12 @@ def test_conservative_evidence_pipeline_compiles_support_gate_and_fallback() -> 
 
     assert plan.rerank_stage_id == "rerank"
     assert plan.support_stage_id == "support"
+    assert plan.provenance_stage_id == "provenance"
     assert plan.llm_stage_id == "llm_choice"
 
 
 def test_current_evidence_execution_preserves_separate_lexical_semantic_signals() -> None:
-    pipeline = built_in_pipeline("evidence.reviewer.current", 1)
+    pipeline = built_in_pipeline("evidence.reviewer.current", 2)
     assert pipeline is not None
     blocks = [{"block_id": "b1", "text": "Hospitality welcomes the stranger."}]
     projection = LocalProjection({"b1": [1.0, 0.0]})
@@ -85,7 +97,7 @@ def test_current_evidence_execution_preserves_separate_lexical_semantic_signals(
 
 
 def test_semantic_failure_is_visible_in_evidence_trace_without_losing_lexical_result() -> None:
-    pipeline = built_in_pipeline("evidence.reviewer.current", 1)
+    pipeline = built_in_pipeline("evidence.reviewer.current", 2)
     assert pipeline is not None
     blocks = [{"block_id": "b1", "text": "Hospitality welcomes the stranger."}]
     projection = LocalProjection({}, error=RuntimeError("embedding backend unavailable"))
@@ -158,3 +170,71 @@ def test_conservative_pipeline_keeps_relevance_and_support_scores_distinct(monke
     assert trace["support"].input_count == 2
     assert trace["support"].output_count == 1
     assert trace["llm_choice"].status == "skipped"
+    assert trace["provenance"].input_count == 1
+    assert trace["provenance"].output_count == 1
+
+
+
+def test_provenance_gate_rejects_candidates_without_source_document_identity() -> None:
+    pipeline = built_in_pipeline("evidence.reviewer.current", 2)
+    assert pipeline is not None
+    blocks = [{"block_id": "b1", "text": "Hospitality welcomes the stranger."}]
+    projection = LocalProjection({"b1": [1.0, 0.0]})
+
+    result = execute_reviewer_evidence_pipeline(
+        pipeline=pipeline,
+        resolved_hash=None,
+        value="hospitality",
+        blocks=blocks,
+        field_metadata={"name": "topic", "label": "Topic"},
+        source_document_id="",
+        projection=projection,
+    )
+
+    assert result.items == []
+    decisions = {
+        row["block_id"]: row
+        for row in result.status["candidate_decisions"]
+    }
+    assert decisions["b1"]["decision"] == "rejected_provenance"
+    assert decisions["b1"]["provenance_status"] == "rejected"
+    trace = {stage.stage_id: stage for stage in result.trace.stages}
+    assert trace["support"].output_count == 1
+    assert trace["provenance"].input_count == 1
+    assert trace["provenance"].output_count == 0
+
+
+
+def test_support_and_provenance_gates_cannot_expose_bypass_edges() -> None:
+    source = built_in_pipeline("evidence.reviewer.current", 2)
+    assert source is not None
+
+    support_bypass = source.model_copy(
+        update={
+            "pipeline_id": "evidence.support-bypass",
+            "built_in": False,
+            "stages": [
+                stage.model_copy(update={"on_error": "select"})
+                if stage.id == "support"
+                else stage
+                for stage in source.stages
+            ],
+        }
+    )
+    with pytest.raises(ValueError, match="support stage may not use on_error"):
+        compile_evidence_pipeline(support_bypass)
+
+    provenance_bypass = source.model_copy(
+        update={
+            "pipeline_id": "evidence.provenance-bypass",
+            "built_in": False,
+            "stages": [
+                stage.model_copy(update={"on_error": "select"})
+                if stage.id == "provenance"
+                else stage
+                for stage in source.stages
+            ],
+        }
+    )
+    with pytest.raises(ValueError, match="cannot expose a bypass edge"):
+        compile_evidence_pipeline(provenance_bypass)

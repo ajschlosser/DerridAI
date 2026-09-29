@@ -198,9 +198,9 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
     _pipeline(
         pipeline_id="evidence.reviewer.current",
         version=1,
-        name="Evidence suggestion — reviewer semantic",
+        name="Evidence suggestion — reviewer semantic (legacy)",
         purpose="evidence_suggestion",
-        status="active",
+        status="disabled",
         entry_stage_ids=["query"],
         notes=(
             "Current reviewer-facing path combines deterministic lexical support "
@@ -220,6 +220,54 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
             {
                 "id": "lexical",
                 "strategy": "retrieve.lexical_bm25",
+                "next": ["select"],
+            },
+            {
+                "id": "select",
+                "strategy": "select.top_k",
+            },
+        ],
+    ),
+    _pipeline(
+        pipeline_id="evidence.reviewer.current",
+        version=2,
+        name="Evidence suggestion — reviewer support-gated",
+        purpose="evidence_suggestion",
+        status="active",
+        entry_stage_ids=["query"],
+        derived_from="evidence.reviewer.current@1",
+        notes=(
+            "Reviewer-facing evidence retrieval preserves the current lexical and "
+            "semantic candidate generation while adding mandatory direct-support and "
+            "source-provenance gates before top-K selection. Retrieval relevance may "
+            "surface a candidate; only deterministic validation may make it eligible "
+            "for evidence suggestion."
+        ),
+        stages=[
+            {
+                "id": "query",
+                "strategy": "query.evidence_field",
+                "next": ["semantic", "lexical"],
+            },
+            {
+                "id": "semantic",
+                "strategy": "retrieve.source_cosine",
+                "next": ["support"],
+            },
+            {
+                "id": "lexical",
+                "strategy": "retrieve.lexical_bm25",
+                "next": ["support"],
+            },
+            {
+                "id": "support",
+                "strategy": "validate.evidence_support",
+                "config": {"min_score": 0.5},
+                "next": ["provenance"],
+            },
+            {
+                "id": "provenance",
+                "strategy": "validate.provenance",
                 "next": ["select"],
             },
             {
@@ -269,11 +317,16 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
                 "id": "support",
                 "strategy": "validate.evidence_support",
                 "on_empty": "llm_choice",
-                "next": ["select"],
+                "next": ["provenance"],
             },
             {
                 "id": "llm_choice",
                 "strategy": "llm.closed_choice_evidence",
+                "next": ["provenance"],
+            },
+            {
+                "id": "provenance",
+                "strategy": "validate.provenance",
                 "next": ["select"],
             },
             {
@@ -434,7 +487,7 @@ BUILT_IN_ASSIGNMENTS: tuple[PipelineAssignment, ...] = (
     PipelineAssignment(
         feature="evidence_suggestion.reviewer",
         pipeline_id="evidence.reviewer.current",
-        pipeline_version=1,
+        pipeline_version=2,
         source="built_in",
         override_allowed=True,
     ),

@@ -9,13 +9,24 @@ from app.pipelines.service import PipelineService, pipeline_hash
 def test_built_in_pipeline_catalog_is_graph_valid() -> None:
     service = PipelineService()
 
-    results = {item.pipeline_id: service.validate(item) for item in BUILT_IN_PIPELINES}
+    results = {
+        (item.pipeline_id, item.version): service.validate(item)
+        for item in BUILT_IN_PIPELINES
+    }
 
     assert results
-    for pipeline_id, result in results.items():
-        assert result.valid, (pipeline_id, result.model_dump())
-    reviewer = results["evidence.reviewer.current"]
-    assert any(issue.code == "evidence_without_support_gate" for issue in reviewer.issues)
+    for pipeline_key, result in results.items():
+        assert result.valid, (pipeline_key, result.model_dump())
+
+    reviewer = results[("evidence.reviewer.current", 2)]
+    reviewer_codes = {issue.code for issue in reviewer.issues}
+    assert "evidence_without_support_gate" not in reviewer_codes
+    assert "evidence_without_provenance_gate" not in reviewer_codes
+
+    legacy = results[("evidence.reviewer.current", 1)]
+    legacy_codes = {issue.code for issue in legacy.issues}
+    assert "evidence_without_support_gate" in legacy_codes
+    assert "evidence_without_provenance_gate" in legacy_codes
 
 
 def test_pipeline_validator_rejects_unknown_strategy_and_cycles() -> None:
@@ -125,3 +136,27 @@ def test_pipeline_validator_rejects_unknown_config_keys() -> None:
 
     assert result.valid is False
     assert any(issue.code == "unknown_config_key" for issue in result.issues)
+
+
+
+def test_active_evidence_pipeline_without_required_gates_is_invalid() -> None:
+    service = PipelineService()
+    legacy = next(
+        item
+        for item in BUILT_IN_PIPELINES
+        if item.pipeline_id == "evidence.reviewer.current" and item.version == 1
+    )
+    active = legacy.model_copy(
+        update={
+            "pipeline_id": "evidence.unsafe",
+            "status": "active",
+            "built_in": False,
+        }
+    )
+
+    result = service.validate(active)
+
+    assert result.valid is False
+    codes = {issue.code for issue in result.issues}
+    assert "evidence_without_support_gate" in codes
+    assert "evidence_without_provenance_gate" in codes
