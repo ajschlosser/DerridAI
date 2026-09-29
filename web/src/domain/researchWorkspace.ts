@@ -170,6 +170,8 @@ export function createResearchWorkspace(deps: Deps) {
   }
   function updateResearchConfig(patch = {}) {
     const allowed = new Set([
+      "pipeline_id",
+      "pipeline_version",
       "source_collection",
       "locales",
       "search_types",
@@ -279,6 +281,8 @@ export function createResearchWorkspace(deps: Deps) {
     if (!hasCapability("rag.run")) throw new Error(tr("permissions.rag_denied"));
     const cfg: Loose = normalizedResearchConfig(updateResearchConfig(input.config || {}) as Loose);
     updateResearchConfig({
+      pipeline_id: cfg.pipeline_id,
+      pipeline_version: cfg.pipeline_version,
       k: cfg.k,
       fetch_k: cfg.fetch_k,
       lambda_mult: cfg.lambda_mult,
@@ -376,6 +380,8 @@ export function createResearchWorkspace(deps: Deps) {
       body: JSON.stringify({
         prompt,
         instructions: instructions || null,
+        pipeline_id: cfg.pipeline_id || null,
+        pipeline_version: cfg.pipeline_version || null,
         source_collection: cfg.source_collection || "",
         selected_evidence: selectedPayload,
         skip_retrieval: skipRetrieval,
@@ -461,6 +467,8 @@ export function createResearchWorkspace(deps: Deps) {
     const request = job?.request || job?.result?.rag_request || {};
     if (!request || typeof request !== "object") return researchConfigForUi();
     const keys = [
+      "pipeline_id",
+      "pipeline_version",
       "source_collection",
       "locales",
       "search_types",
@@ -563,6 +571,8 @@ export function createResearchWorkspace(deps: Deps) {
     if (Array.isArray(request.search_types) && request.search_types.length)
       cfg.search_types = [...request.search_types];
     for (const key of [
+      "pipeline_id",
+      "pipeline_version",
       "k",
       "fetch_k",
       "lambda_mult",
