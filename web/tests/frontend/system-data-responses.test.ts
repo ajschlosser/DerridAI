@@ -72,7 +72,7 @@ describe("System Data saved responses", () => {
     const wrapper = mount(SystemDataResponses);
     await flushPromises();
 
-    expect(wrapper.get('input[type="search"]').element.value).toBe("difference");
+    expect((wrapper.get('input[type="search"]').element as HTMLInputElement).value).toBe("difference");
     expect(systemApi.responseCacheRecords).toHaveBeenCalledWith(25, 25, "difference");
     wrapper.unmount();
   });
