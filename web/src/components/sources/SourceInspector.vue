@@ -12,6 +12,7 @@ import { enumLabel, enumTone } from "../../domain/sourceLabels";
 import { hasPages } from "../../domain/sourceMedia";
 import AppIcon from "../AppIcon.vue";
 import UiStatusBadge from "../ui/UiStatusBadge.vue";
+import UiLoadingState from "../ui/UiLoadingState.vue";
 
 /**
  * Side panel describing one SourceDocument through the read-only GraphQL document-intelligence
@@ -229,7 +230,7 @@ watch(() => props.detail, loadPreview);
         <AppIcon name="close" />
       </button>
     </header>
-    <p v-if="loading" role="status" class="si-state">{{ i18n.t("sources.loading") }}</p>
+    <UiLoadingState v-if="loading" :label="i18n.t('sources.loading')" />
     <p v-else-if="error" role="alert" class="si-error">
       <AppIcon name="warning" />{{ i18n.tf("sources.load_failed", { error }) }}
     </p>
@@ -296,9 +297,10 @@ watch(() => props.detail, loadPreview);
       </section>
       <section v-if="supportsTextPreview" class="si-section si-preview">
         <h4>{{ i18n.t("sources.inspector.preview_title") }}</h4>
-        <p v-if="previewLoading" role="status" class="si-muted">
-          {{ i18n.t("sources.inspector.preview_loading") }}
-        </p>
+        <UiLoadingState
+          v-if="previewLoading"
+          :label="i18n.t('sources.inspector.preview_loading')"
+        />
         <p v-else-if="previewError" role="alert" class="si-error">
           <AppIcon name="warning" />{{
             i18n.tf("sources.inspector.preview_failed", { error: previewError })

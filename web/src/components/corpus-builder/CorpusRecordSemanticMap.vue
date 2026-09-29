@@ -357,23 +357,75 @@ function recordPreview(recordId: string) {
 
 // --- pan & zoom -------------------------------------------------------------------------------------------------
 const zoom = ref(1);
+const pan = ref({ x: 0, y: 0 });
+const mapSvg = ref<SVGSVGElement | null>(null);
+let drag: {
+  x: number;
+  y: number;
+  px: number;
+  py: number;
+  moved: boolean;
+  startedOnNode: boolean;
+} | null = null;
+const suppressNodeClick = ref(false);
 function setZoom(next: number) {
   zoom.value = Math.max(0.5, Math.min(4, next));
 }
 function resetZoom() {
   zoom.value = 1;
+  pan.value = { x: 0, y: 0 };
 }
-watch(current, resetZoom);
+watch(current, resetZoom, { immediate: true });
 const viewBox = computed(() => {
   const w = SIZE.width / zoom.value;
   const h = SIZE.height / zoom.value;
-  const x = (SIZE.width - w) / 2;
-  const y = (SIZE.height - h) / 2;
+  const x = (SIZE.width - w) / 2 - pan.value.x;
+  const y = (SIZE.height - h) / 2 - pan.value.y;
   return `${x} ${y} ${w} ${h}`;
 });
 function onWheel(event: WheelEvent) {
   event.preventDefault();
   setZoom(zoom.value * (event.deltaY < 0 ? 1.15 : 1 / 1.15));
+}
+function svgScale() {
+  const rect = mapSvg.value?.getBoundingClientRect();
+  return rect?.width ? SIZE.width / zoom.value / rect.width : 1;
+}
+function onPointerDown(event: PointerEvent) {
+  if (event.button !== 0) return;
+  suppressNodeClick.value = false;
+  drag = {
+    x: event.clientX,
+    y: event.clientY,
+    px: pan.value.x,
+    py: pan.value.y,
+    moved: false,
+    startedOnNode: Boolean((event.target as Element | null)?.closest?.(".map-node")),
+  };
+}
+function onPointerMove(event: PointerEvent) {
+  if (!drag) return;
+  const dx = event.clientX - drag.x;
+  const dy = event.clientY - drag.y;
+  if (!drag.moved && Math.hypot(dx, dy) < 4) return;
+  if (!drag.moved) mapSvg.value?.setPointerCapture?.(event.pointerId);
+  drag.moved = true;
+  const scale = svgScale();
+  pan.value = { x: drag.px + dx * scale, y: drag.py + dy * scale };
+}
+function onPointerUp(event: PointerEvent) {
+  suppressNodeClick.value = Boolean(drag?.moved && drag.startedOnNode);
+  const captured = mapSvg.value?.hasPointerCapture?.(event.pointerId);
+  drag = null;
+  if (captured) mapSvg.value?.releasePointerCapture?.(event.pointerId);
+}
+function onNodeClick(event: MouseEvent, node: DiagramNode) {
+  event.stopPropagation();
+  if (suppressNodeClick.value) {
+    suppressNodeClick.value = false;
+    return;
+  }
+  if (node.walkable) walkToNode(node);
 }
 </script>
 
@@ -545,6 +597,7 @@ function onWheel(event: WheelEvent) {
 
     <div v-if="diagram.nodes.length > 1" class="semantic-map-canvas-wrap">
       <svg
+        ref="mapSvg"
         class="semantic-map-canvas"
         :viewBox="viewBox"
         role="group"
@@ -552,6 +605,10 @@ function onWheel(event: WheelEvent) {
           i18n.tf('pdf_corpus.semantic_map_accessible_label', { label: diagram.centerLabel })
         "
         @wheel="onWheel"
+        @pointerdown="onPointerDown"
+        @pointermove="onPointerMove"
+        @pointerup="onPointerUp"
+        @pointercancel="onPointerUp"
       >
         <g aria-hidden="true">
           <line
@@ -579,7 +636,7 @@ function onWheel(event: WheelEvent) {
               ? i18n.tf('pdf_corpus.semantic_map_walk_to', { label: `${node.label}, ${node.type}` })
               : undefined
           "
-          @click="node.walkable && walkToNode(node)"
+          @click="onNodeClick($event, node)"
           @keydown.enter.prevent="node.walkable && walkToNode(node)"
           @keydown.space.prevent="node.walkable && walkToNode(node)"
         >

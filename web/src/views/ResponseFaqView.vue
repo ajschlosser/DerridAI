@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
 import AppIcon from "../components/AppIcon.vue";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
+import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import ResponseFaqArchiveDialog from "../components/research/ResponseFaqArchiveDialog.vue";
 import ResponseFaqSelectionBar from "../components/research/ResponseFaqSelectionBar.vue";
 import ResearchResultPresentation from "../components/research/ResearchResultPresentation.vue";
@@ -350,8 +351,8 @@ onMounted(() => void load({ chooseFirst: true }));
       </template>
     </UiPageHeader>
 
-    <div v-if="loading && !payload" class="research-loading response-faq-loading" role="status">
-      <span class="spinner"></span>{{ i18n.t("faq.loading") }}
+    <div v-if="loading && !payload" class="research-loading response-faq-loading">
+      <UiLoadingState :label="i18n.t('faq.loading')" />
     </div>
 
     <AccessibleEmptyState

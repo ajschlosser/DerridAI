@@ -1,11 +1,14 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
+from pydantic import BaseModel, Field
 
 from ..corpus_builder import pdf_corpus_repository
+from ..data_retention import RetentionPolicy
 from ..http_auth import request_user, require_admin
 from ..llm import llm_status
 from ..metadata_memory import MetadataMemoryService
@@ -16,7 +19,7 @@ from ..models import (
     SystemEmbeddingDefaultsProbe,
     SystemEmbeddingDefaultsUpdate,
 )
-from ..services import store
+from ..services import retention_service, store
 from ..system_chroma_console import (
     execute_system_chroma_command,
     list_system_chroma_collections,
@@ -25,6 +28,7 @@ from ..system_chroma_console import (
 from ..system_store import system_store
 
 router = APIRouter(tags=["system"])
+logger = logging.getLogger(__name__)
 metadata_memory = MetadataMemoryService(store, pdf_corpus_repository)
 
 
@@ -254,3 +258,44 @@ def inspect_research_memory(
         "claims": claims,
         "support_bindings": bindings[: max(1, limit * 4)],
     }
+
+
+class DataRetentionApply(BaseModel):
+    store_ids: list[str] | None = Field(default=None, max_length=500)
+
+
+@router.get("/api/system/data-retention")
+def data_retention(request: Request) -> dict[str, Any]:
+    """Operational stores, their sizes, and what the saved policy would remove now."""
+    require_admin(request)
+    return retention_service.overview()
+
+
+@router.put("/api/system/data-retention")
+def update_data_retention(body: RetentionPolicy, request: Request) -> dict[str, Any]:
+    require_admin(request)
+    try:
+        retention_service.save_policy(body)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return retention_service.overview()
+
+
+@router.post("/api/system/data-retention/apply")
+def apply_data_retention(body: DataRetentionApply, request: Request) -> dict[str, Any]:
+    """Remove what the saved policy selects now. The UI previews and confirms first."""
+    user = require_admin(request)
+    result = retention_service.apply(store_ids=set(body.store_ids) if body.store_ids is not None else None)
+    removed = sum(int(row.get("removed_count") or 0) for row in result["stores"])
+    logger.info("Administrator %s applied data retention; %s record(s) removed.", getattr(user, "username", "?"), removed)
+    return result
+
+
+@router.post("/api/system/data-retention/reclaim")
+def reclaim_data_retention_space(request: Request) -> dict[str, Any]:
+    """Compact the system database so removed records release disk space."""
+    require_admin(request)
+    try:
+        return retention_service.reclaim_disk_space()
+    except Exception as exc:  # noqa: BLE001 - surfaced to the administrator
+        raise HTTPException(status_code=409, detail=f"Could not reclaim disk space: {exc}") from exc

@@ -916,7 +916,16 @@ const evidenceCandidateFields = computed(() => {
   );
 });
 const visibleBlocks = computed(() => {
-  const ids = new Set(selectedRecord.value?.source_block_ids || []);
+  const record = selectedRecord.value;
+  const ids = new Set(
+    [
+      ...(record?.source_block_ids || []),
+      ...(record?.source_unit_ids || []),
+      ...((record?.source_spans || [])
+        .map((span) => span.source_unit_id || span.block_id)
+        .filter(Boolean) as string[]),
+    ].map(String),
+  );
   return sourceBlocks.value.filter((block) => ids.has(block.block_id));
 });
 // Repeated short lines (running heads) are found across the visible page's text, read only when
@@ -1568,15 +1577,25 @@ function offerFirstSourceProblem(rows: CorpusQueueRow[]) {
 }
 
 async function refreshBlocks() {
-  if (!selectedAssetId.value || !selectedRecord.value?.source_block_ids?.length) {
+  const record = selectedRecord.value;
+  const ids = [
+    ...(record?.source_block_ids || []),
+    ...(record?.source_unit_ids || []),
+    ...((record?.source_spans || [])
+      .map((span) => span.source_unit_id || span.block_id)
+      .filter(Boolean) as string[]),
+  ]
+    .map(String)
+    .filter((id, index, all) => all.indexOf(id) === index);
+  if (!selectedAssetId.value || !ids.length) {
     sourceBlocks.value = [];
     return;
   }
   const result = await corpusBuilderApi.blocks(
     selectedAssetId.value,
     0,
-    Math.min(1000, selectedRecord.value.source_block_ids.length),
-    selectedRecord.value.source_block_ids,
+    Math.min(1000, ids.length),
+    ids,
   );
   sourceBlocks.value = result.items;
 }

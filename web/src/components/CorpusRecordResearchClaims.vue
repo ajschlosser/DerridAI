@@ -4,6 +4,7 @@ import { ref, useId, watch } from "vue";
 import { corpusBuilderApi, type RecordResearchClaim } from "../api/corpus";
 import { useI18nStore } from "../stores/i18n";
 import UiStatusBadge from "./ui/UiStatusBadge.vue";
+import UiLoadingState from "./ui/UiLoadingState.vue";
 
 // Research claims a reviewer validated that cite this record. A cross-reference for the
 // metadata reviewer, not metadata memory: it never suggests or sets a field value, and
@@ -74,7 +75,7 @@ function statusBadge(item: RecordResearchClaim) {
     </button>
     <div v-if="open" :id="panelId" class="record-research-claims-panel">
       <p class="record-research-claims-note">{{ i18n.t("pdf_corpus.research_claims_advisory") }}</p>
-      <p v-if="loading" role="status">{{ i18n.t("pdf_corpus.research_claims_loading") }}</p>
+      <UiLoadingState v-if="loading" :label="i18n.t('pdf_corpus.research_claims_loading')" />
       <p v-else-if="error" role="alert" class="record-research-claims-error">
         {{ i18n.tf("pdf_corpus.research_claims_error", { detail: error }) }}
       </p>

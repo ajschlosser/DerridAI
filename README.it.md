@@ -2,52 +2,98 @@
 
 # DerridAI
 
+![Logo DerridAI](https://repository-images.githubusercontent.com/1336867942/1ef2d928-ee57-480e-addb-5caf6acc1754)
+
 [English](README.md) · [Français](README.fr.md) · [Español](README.es.md) · [Deutsch](README.de.md) · [Italiano](README.it.md) · [Magyar](README.hu.md) · [Русский](README.ru.md) · [हिन्दी](README.hi.md) · [العربية](README.ar.md)
 
-DerridAI è un'applicazione Docker orientata all'esecuzione locale per creare, verificare e interrogare corpora accademici di testi filosofici. Acquisisce fonti PDF, testo/RTF/DOCX, immagini, audio, URL e Project Gutenberg trasformandole in record accademici che preservano la provenienza; supporta la revisione umana o tramite LLM e l'arricchimento dei metadati vincolato alle evidenze; costruisce proiezioni di ricerca derivate in ChromaDB; ed esegue sul risultato una pipeline di retrieval-augmented generation (RAG) basata sulle evidenze.
+DerridAI è un ambiente di ricerca local-first che preserva la provenienza per costruire, revisionare, cercare e interrogare corpora accademici. Riunisce acquisizione delle fonti, costruzione del corpus con supervisione umana, arricchimento dei metadati legato alle evidenze, indici vettoriali/di ricerca derivati e retrieval-augmented generation (RAG) fondata sulle evidenze in un'unica applicazione Docker.
 
-Versione corrente: **0.80.6 — Danvers** ([note di rilascio](docs/notes/0.80.6.md)).
+DerridAI è inoltre l'implementazione di riferimento originaria di **cELF 1.0 — Capta-Enriched Lexical Format**, un'architettura informativa che preserva la provenienza per la ricerca documentaria assistita dall'IA. L'implementazione mantiene separatamente ispezionabili identità della fonte, identità e revisione del record, asserzioni di metadati, evidenze, claim generati e legami di supporto, invece di appiattirli in un unico archivio vettoriale opaco.
 
-## Funzionalità
+Versione corrente: **0.80.7 — Exeter** ([note di rilascio](docs/notes/0.80.7.md)). Questo README descrive l'architettura corrente di `master`, compreso il lavoro post-Exeter già integrato nel repository.
 
-- **Corpus Builder** — un flusso sequenziale Sorgente → Struttura/trascrizione → LLM e arricchimento → Costruzione dei record → Revisione, con controlli che si adattano al supporto selezionato. L'estrazione è limitata e preserva la provenienza; le revisioni di struttura/testo e le evidenze sotto responsabilità del revisore restano verificabili.
-- **Revisione dei record** — spazi di lavoro JSONL con cronologia di audit, modifica dei metadati in blocco o a livello di opera, diff, navigazione verso sorgente/evidenze e titolarità dei campi umana o LLM. I record canonici `FieldAssertion` preservano provenienza del valore, autorità, evidenze e identità stabile del campo, mentre i metadati definiti dallo schema attraversano revisione, Search, Record Inspector, ritocco e presentazione Research.
-- **Revisione e strumenti LLM** — esecuzioni in primo piano, in background e Auto-improve in background contro profili nominati di provider Ollama o compatibili con OpenAI, ciascuno con il proprio limite di concorrenza e stato di warmup.
-- **Archivi vettoriali** — collezioni ChromaDB persistenti sul filesystem locale o su un server Chroma in esecuzione, con mirror linguistici inglese/francese, upsert in background e round-trip JSONL.
-- **RAG Research** — recupero ibrido, reranking con cross-encoder, instradamento linguistico, modalità evidenze selezionate, generazione in streaming e annullabile, memoria della provenienza di risposte e affermazioni, una Response Library in cache e valutazione tramite LLM.
-- **Ruoli** — account Admin e Researcher; i ricercatori vedono testo delle evidenze riassunto e non possono modificare i corpora.
-- **Backup e ripristino** — un unico ZIP contenente spazi di lavoro, cronologia di audit, profili dei provider, asset sorgente del corpus e ogni collezione Chroma con i relativi embedding.
-- **Bilingue e accessibile** — inglese e francese canadese sono locale di prima classe con parità delle chiavi obbligatoria. Accesso da tastiera, focus visibile, comportamento responsive/reflow, supporto ai colori forzati e WCAG 2.2 AA sono criteri di accettazione.
+## Cosa fa DerridAI
 
-Consulta la [Guida utente](docs/USER_GUIDE.md) per il riferimento completo delle funzionalità.
+- **Acquisisce e importa fonti eterogenee.** Carica PDF, testo semplice, RTF, DOCX, immagini e audio; importa URL e materiale Project Gutenberg; oppure usa Corpus Capture per scoprire e acquisire opere tramite adattatori come Wikidata, Project Gutenberg e Wikisource. L'ingestione applica limiti di sicurezza/risorse specifici per il mezzo e conserva la provenienza di estrattore, strumento e versione.
+- **Costruisce corpora con workflow sensibili al mezzo.** Corpus Builder separa registrazione della fonte, estrazione/trascrizione, mappatura delle unità di fonte, struttura/segmentazione, arricchimento, costruzione dei record, revisione e pubblicazione. Controlli e coordinate dell'evidenza si adattano al mezzo invece di applicare concetti PDF/pagina a tutto.
+- **Preserva provenienza cELF e autorità dei campi.** I `FieldAssertion` canonici distinguono derivazione, esito della valutazione, autorità, stato del valore, confidenza, evidenza, attore/modello, identità stabile del campo e revisione del record. La conferma umana non cancella la provenienza del modello o di una procedura deterministica.
+- **Revisiona i record con l'evidenza nel contesto.** I revisori possono modificare testo e metadati, ispezionare `SourceSpan` ed evidenze provenienti da altri record, confrontare revisioni, esplorare mappe semantiche e relazioni, accettare/rifiutare suggerimenti e pubblicare decisioni auditabili. I salvataggi ottimistici mantengono l'interfaccia reattiva mentre le scritture conflittuali sullo stesso record vengono serializzate.
+- **Usa schemi di metadati configurabili e precedenti revisionati.** Gli schemi definiscono campi stabili, tipi, valori controllati, regole di evidenza/revisione, suggerimenti POS/NER, ambito del campo, istruzioni al modello e policy di retrieval. Gli esempi revisionati diventano precedenti limitati e legati all'evidenza per arricchimenti successivi senza sostituire le decisioni canoniche del revisore.
+- **Aggiunge Document Intelligence opzionale.** Un livello di analisi derivato e indipendente dal provider può aggiungere entità, coreferenza, parlanti delle citazioni e relazioni di contenuto semantico. I language pack spaCy forniscono la base multilingue; un worker BookNLP isolato è disponibile come potenziamento opzionale per l'inglese. Queste annotazioni restano analisi ricostruibili, non evidenza di fonte né autorità del corpus.
+- **Cerca in proiezioni derivate senza confonderle con il corpus.** ChromaDB memorizza proiezioni semantiche/di ricerca e cache ricostruibili, in modalità embedded o server HTTP. Sono disponibili retrieval denso, lessicale e MMR, RRF, filtri, routing linguistico e reranking cross-encoder limitato dove appropriato.
+- **Esegue Research/RAG fondato sulle evidenze.** Research supporta retrieval ibrido, reranking, modalità a evidenze selezionate, budget di evidenza, generazione in streaming e annullabile, rendering deterministico delle citazioni, persistenza claim/support, validazione dei claim, memoria di risposte/claim e valutazione LLM. I record con provenienza incompleta vengono esclusi dall'evidenza invece di essere trattati silenziosamente come supporto valido.
+- **Ispeziona e configura pipeline IA.** Pipeline Studio espone definizioni versionate, assegnazioni, trace di esecuzione, metriche per fase di latenza/errore/fallback, trace nel punto d'uso, confronto A/B Research non persistente e benchmark Research a casi fissi. Le fasi di retrieval, memoria, precedenti di metadati ed evidenza del revisore possono diventare esplicite, mentre i gate di provenienza/autorità restano vincoli strutturali.
+- **Separa i trasporti API per responsabilità.** REST gestisce comandi e mutazioni; una facciata GraphQL cELF di sola lettura compone query tipizzate; un piano WebSocket autenticato invia notifiche realtime sulle operazioni. I messaggi realtime non sono mai stato canonico e i client possono risincronizzarsi da REST/GraphQL.
+- **Supporta ricerca multiutente controllata.** I ruoli integrati Administrator e Researcher, insieme a ruoli personalizzati sicuri per i ricercatori, sono applicati sia dall'UI sia dall'API. Il testo di fonte visibile al ricercatore viene sintetizzato al confine API, i job sono associati al proprietario e le mutazioni corpus/sistema riservate agli amministratori restano inaccessibili.
+- **Rende osservabili le operazioni lunghe.** Build del corpus, revisione LLM, RAG, grading, import, lavoro su modelli/language pack e upsert vettoriali appaiono come operazioni annullabili con snapshot/storico durevoli e progresso realtime. Il lavoro in-process interrotto da un riavvio viene marcato come fallito invece di essere rieseguito silenziosamente.
+- **Fornisce un'interfaccia accessibile e multilingue.** Inglese e francese canadese sono locale di prima classe con parità delle chiavi verificata; la copertura README è più ampia. WCAG 2.2 AA, tastiera, focus visibile, reflow, movimento ridotto, forced colors/high contrast e test di localizzazione/stringhe lunghe sono criteri di rilascio. L'Help Center offre guide per pagina, FAQ di workflow e un glossario in linguaggio chiaro.
+- **Esegue backup dell'ambiente di ricerca.** Backup/restore copre workspace, cronologia di audit, profili provider, asset sorgente, stato sistema/provenienza e collezioni Chroma con gli embedding.
+
+Consultare la [Guida utente](docs/USER_GUIDE.md) per il riferimento completo delle funzionalità.
+
+## Modello di tracciabilità cELF
+
+Il modello dei dati accademici di DerridAI segue la distinzione cELF tra stato documentario/accademico autoritativo e proiezioni computazionali ricostruibili. Con tracciabilità completa, il percorso concettuale è:
+
+```text
+SourceDocument
+  -> SourceSpan
+  -> Record
+  -> RecordRevision
+  -> FieldAssertion
+  -> Evidence Acquisition
+  -> EvidenceRef
+  -> EvidencePacket
+  -> GenerationRun
+  -> GeneratedClaim
+  -> SupportBinding
+```
+
+In questo modo un claim generato può essere auditato all'indietro fino a supporto, evidenza, revisione del record, segmento di fonte e documento sorgente. Embedding, rank di retrieval, score di reranking, cache, stato UI e altri valori specifici dell'operazione restano stato derivato; non diventano proprietà intrinseche del record sorgente.
+
+Vedere [SPECIFICATION.md](SPECIFICATION.md) per la specifica normativa cELF 1.0 e il white paper DerridAI non normativo.
 
 ## Architettura
 
-<!-- prettier-ignore -->
-| Servizio    | Stack                                                               | Note                                                                                                                                           |
-| ----------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `web`       | Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js, servito da nginx | Inoltra `/api/` all'API; Storybook è disponibile come servizio di sviluppo opzionale                                                         |
-| `api`       | Python 3.12, FastAPI, ChromaDB, PyMuPDF, sentence-transformers      | I file autorevoli del corpus/build e lo stato SQLite di autenticazione/sistema/provenienza risiedono sotto `./data`; Chroma contiene proiezioni derivate di ricerca/risultati |
-| Backend LLM | Ollama (predefinito) o qualsiasi endpoint compatibile con OpenAI    | Viene eseguito sull'host o altrove; non fa parte dello stack Compose predefinito                                                              |
+### Servizi runtime
 
-Per i confini di responsabilità del codice e della persistenza, consulta [Architettura](docs/ARCHITECTURE.md).
+- `web` — Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js e nginx. È l’applicazione browser; fa da proxy a `/api/` e usa REST, GraphQL e notifiche realtime. Storybook è un profilo di sviluppo opzionale.
+- `api` — Python 3.12, FastAPI, Strawberry GraphQL, client ChromaDB, PyMuPDF, sentence-transformers e spaCy. È il confine applicativo autoritativo per autenticazione, fonti/corpus, letture cELF, provenienza, RAG, pipeline, job e stato di sistema.
+- `document-nlp` — worker BookNLP opzionale e isolato per Document Intelligence in inglese. Riceve testo revisionato e limitato e non ha autorità sul corpus.
+- `chroma` — server HTTP Chroma opzionale. `PersistentClient` embedded resta il default; entrambe le modalità memorizzano proiezioni di ricerca/vettoriali derivate.
+- `ollama` — servizio Ollama locale opzionale. DerridAI può usare in alternativa Ollama già in esecuzione sull’host o qualunque endpoint compatibile OpenAI configurato.
+
+Lo stack Compose predefinito avvia `web` e `api`; gli altri servizi sono profili opzionali o provider esterni.
+
+### Autorità e persistenza
+
+DerridAI non considera intenzionalmente tutti gli store come ugualmente autoritativi:
+
+- **Stato accademico canonico** — asset/identità delle fonti, record e revisioni, field assertion, decisioni di revisione, legami esatti di evidenza/supporto e stato di pubblicazione.
+- **Stato durevole del server** — autenticazione e stato sistema/provenienza/job/pipeline in SQLite sotto `./data`.
+- **Stato derivato/ricostruibile** — indici Chroma, embedding, proiezioni di esempi di metadati, score di retrieval, proiezioni di contenuto semantico, output Document Intelligence e cache.
+- **Stato workspace del browser** — preferenze locali e lavoro non salvato, separati dall'autorità del corpus.
+
+### Separazione dei trasporti
+
+- **REST**: tutti i comandi e le mutazioni, inclusi upload, decisioni di revisione, job, pubblicazione, amministrazione, backup e restore.
+- **GraphQL**: facciata tipizzata cELF di sola lettura a `POST /api/graphql`; nessuna radice Mutation o Subscription.
+- **WebSocket**: piano autenticato di notifiche a `WS /api/ws/events`; mai fonte di verità.
+
+Per ownership dei moduli, confini di persistenza e flusso dati vedere [Architecture](docs/ARCHITECTURE.md), [GraphQL](docs/GRAPHQL.md) e [Realtime](docs/REALTIME.md).
 
 ## Per iniziare
 
-Questi passaggi costituiscono il percorso supportato a partire da un checkout pulito. Sono volutamente espliciti, così un nuovo sviluppatore può ripeterli senza dipendere da una directory dati DerridAI esistente o da un ambiente shell preconfigurato.
-
 ### 1. Prerequisiti
 
-Installa Git, Docker Engine/Desktop con il comando `docker compose` e un endpoint LLM. La configurazione predefinita prevede Ollama sull'host.
+Installare Git, Docker Engine/Desktop con `docker compose` e un endpoint LLM. La configurazione predefinita si aspetta Ollama sull'host.
 
-I modelli Ollama predefiniti sono:
+Modelli predefiniti:
 
 ```text
 gemma4:e2b
 bge-m3:latest
 ```
-
-Se usi un modello Ollama diverso o un provider compatibile con OpenAI, modifica `.env` prima di avviare DerridAI.
 
 ### 2. Clonare e configurare
 
@@ -57,26 +103,26 @@ cd DerridAI
 cp .env.example .env
 ```
 
-Equivalente PowerShell:
+PowerShell:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Su Docker Desktop con WSL, imposta `HOST_UID` e `HOST_GID` in `.env` usando l'output di `id -u` e `id -g`. In questo modo i file Chroma/SQLite montati tramite bind restano di proprietà dell'utente host.
+Con Docker Desktop su WSL, impostare `HOST_UID` e `HOST_GID` in `.env` usando l'output di `id -u` e `id -g`.
 
-Non esportare globalmente nella shell variabili di storage di test DerridAI come `CHROMA_DATA_ROOT`, `AUTH_DB_PATH`, `SYSTEM_DB_PATH` o `CHROMA_PATH`. Compose interpola le variabili esportate prima che i valori del file vengano passati al container.
+Non esportare globalmente variabili di storage di test come `CHROMA_DATA_ROOT`, `AUTH_DB_PATH`, `SYSTEM_DB_PATH` o `CHROMA_PATH`; Compose interpola prima le variabili già esportate.
 
-### 3. Rendere disponibili i modelli configurati
+### 3. Preparare i modelli
 
-Per Ollama già in esecuzione sull'host:
+Con Ollama già in esecuzione sull'host:
 
 ```bash
 ollama pull gemma4:e2b
 ollama pull bge-m3:latest
 ```
 
-Il file `.env.example` predefinito usa:
+Valori predefiniti:
 
 ```env
 OLLAMA_BASE_URL=http://host.docker.internal:11434
@@ -85,7 +131,7 @@ OLLAMA_EMBED_MODEL=bge-m3:latest
 EMBEDDING_PROVIDER=ollama
 ```
 
-In alternativa, usa il servizio Ollama opzionale di Compose:
+Oppure usare il servizio Compose Ollama opzionale:
 
 ```bash
 docker compose --profile ollama up -d ollama
@@ -93,18 +139,22 @@ docker compose exec ollama ollama pull gemma4:e2b
 docker compose exec ollama ollama pull bge-m3:latest
 ```
 
-Poi imposta `OLLAMA_BASE_URL=http://ollama:11434` in `.env`.
+Poi impostare `OLLAMA_BASE_URL=http://ollama:11434`.
 
-### 4. Validare la configurazione Compose e avviare DerridAI
+### 4. Avviare DerridAI
 
 ```bash
 docker compose config --quiet
 docker compose up -d --build
 ```
 
-I binding predefiniti sono applicazione <http://localhost:8181>, API <http://127.0.0.1:8000> e documentazione API <http://127.0.0.1:8000/docs>.
+Endpoint predefiniti:
 
-Al primo avvio DerridAI chiede di creare l'account amministratore iniziale. Non vengono fornite credenziali predefinite.
+- Applicazione: <http://localhost:8181>
+- API: <http://127.0.0.1:8000>
+- Documentazione OpenAPI: <http://127.0.0.1:8000/docs>
+
+Al primo avvio, creare nel browser l'account amministratore iniziale. Non vengono fornite credenziali predefinite.
 
 ### 5. Verificare l'installazione
 
@@ -113,9 +163,9 @@ docker compose ps
 curl -fsS http://127.0.0.1:8000/api/live
 ```
 
-L'endpoint live dovrebbe restituire JSON contenente `"ok": true`, la versione dell'applicazione e il commit Git incorporato quando disponibile. I servizi `web` e `api` dovrebbero risultare healthy in `docker compose ps`.
+La risposta di liveness dovrebbe contenere `"ok": true`, la versione dell'applicazione e, se disponibile, il commit Git integrato.
 
-Per una diagnostica locale più ampia:
+Diagnostica più ampia:
 
 ```bash
 ./scripts/diagnose.sh
@@ -127,26 +177,39 @@ PowerShell:
 .\scripts\diagnose.ps1
 ```
 
-### 6. Arrestare o ricostruire
+### 6. Servizi opzionali
 
-Arresta l'applicazione senza eliminare la directory `./data` montata tramite bind:
+```bash
+# Ollama locale
+docker compose --profile ollama up -d ollama
+
+# Server HTTP Chroma (poi impostare CHROMA_MODE=http)
+docker compose --profile chroma up -d chroma
+
+# Estensione inglese BookNLP per Document Intelligence
+docker compose --profile document-nlp up -d document-nlp
+
+# Superficie di sviluppo Storybook
+docker compose --profile dev up storybook
+```
+
+Consultare [Document Intelligence](docs/DOCUMENT_INTELLIGENCE.md) prima di abilitare o installare language pack NLP.
+
+### 7. Arrestare o ricostruire
 
 ```bash
 docker compose down
-```
 
-Ricostruisci dopo aver recuperato modifiche:
-
-```bash
+# dopo aver aggiornato il repository
 docker compose down
 docker compose up -d --build
 ```
 
-Se una versione precedente ha lasciato file di proprietà di root sotto `data/`, esegui `./scripts/fix-data-permissions.sh` sugli host Unix-like supportati.
+Se una release precedente ha lasciato file di proprietà root sotto `data/`, eseguire `./scripts/fix-data-permissions.sh` su sistemi Unix supportati.
 
-## Configurazione per sviluppatori
+## Sviluppo
 
-La CI usa Python 3.12 e Node 22; usa queste versioni localmente quando riproduci errori.
+La CI usa Python 3.12 e Node 22.
 
 Ambiente backend/test:
 
@@ -166,7 +229,7 @@ npx playwright install chromium
 cd ..
 ```
 
-Esegui i controlli locali rapidi di qualità dalla radice del repository:
+Controlli locali rapidi:
 
 ```bash
 ruff check api/app tests scripts/check_frontend_api_contract.py
@@ -183,33 +246,40 @@ npm run test:unit
 npm run build
 ```
 
-Usa `npm run format:repo` da `web/` per formattare tutti i file sorgente, di configurazione e di documentazione supportati da Prettier nel repository. L'HTML generato degli snapshot DOM legacy è escluso intenzionalmente.
+Usare `npm run format:repo` da `web/` per formattare tutti i file supportati da Prettier. Gli snapshot HTML DOM legacy generati sono volutamente esclusi.
 
-Per copertura browser, Storybook, parità con CI e regole di contribuzione, consulta [CONTRIBUTING.md](CONTRIBUTING.md).
+Per copertura browser, Storybook, parità CI e regole di contribuzione vedere [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Mappa del repository
 
-- `api/app/` — applicazione FastAPI, ingestione/revisione del corpus, provenienza, persistenza, RAG, provider e job in background.
-- `web/src/` — applicazione Vue, componenti riutilizzabili, moduli di dominio, store e il livello di compatibilità runtime legacy in riduzione.
-- `tests/` — test backend, di regressione e di contratto.
-- `web/tests/frontend/` — test Vitest di componenti e dominio.
-- `web/tests/e2e/` — copertura Playwright dell'applicazione, Storybook, accessibilità e caratterizzazione legacy.
-- `docs/` — contratti correnti di architettura/dominio più note di rilascio storiche sotto `docs/notes/`.
-- `data/` — stato runtime locale; ignorato da Git salvo i placeholder. Non eseguire mai il commit del suo contenuto.
+- `api/app/` — backend FastAPI: fonti/corpus, servizi di lettura cELF, GraphQL, realtime, provenienza, pipeline, RAG, provider, persistenza e job.
+- `web/src/` — applicazione Vue 3: view, componenti, store Pinia, routing, client API, client realtime, moduli di dominio e compatibilità legacy rimanente.
+- `booknlp-worker/` — worker BookNLP opzionale e isolato.
+- `tests/` — test backend, regressione, contract, consistenza release e architettura.
+- `web/tests/frontend/` — test Vitest.
+- `web/tests/e2e/` — Playwright, Storybook, accessibilità e caratterizzazione.
+- `docs/` — contratti correnti di architettura/dominio e note di rilascio storiche.
+- `data/` — stato runtime locale; ignorato da Git salvo placeholder. Non commetterne mai il contenuto.
 
 ## Documentazione
 
-Inizia dai documenti che descrivono il comportamento corrente:
+- [Guida utente](docs/USER_GUIDE.md) — funzioni e workflow
+- [Architettura](docs/ARCHITECTURE.md) — runtime, autorità, persistenza e flusso dati
+- [Specifica cELF 1.0](SPECIFICATION.md) — modello normativo e white paper dell'implementazione di riferimento
+- [Contesto del progetto](docs/PROJECT_CONTEXT.md) — motivazione accademica e capacità implementate/previste
+- [GraphQL](docs/GRAPHQL.md) — facciata di lettura cELF
+- [Realtime](docs/REALTIME.md) — protocollo WebSocket e risincronizzazione
+- [Document Intelligence](docs/DOCUMENT_INTELLIGENCE.md) — analisi linguistica derivata e language pack
+- [Ingestione delle fonti](docs/INGESTION_VALIDATION.md) — sicurezza, limiti e fedeltà di estrazione
+- [Schemi di metadati](docs/METADATA_SCHEMAS.md) — contratti di campo configurabili
+- [Memoria dei metadati](docs/METADATA_MEMORY.md) — precedenti revisionati e confini di autorità
+- [Migrazione FieldAssertion](docs/FIELD_ASSERTION_MIGRATION.md) — modello canonico delle asserzioni
+- [CONTRIBUTING.md](CONTRIBUTING.md) e [AGENTS.md](AGENTS.md) — regole di sviluppo
 
-- [Guida utente](docs/USER_GUIDE.md) — riferimento delle funzionalità, operazioni, backup e limitazioni
-- [Architettura](docs/ARCHITECTURE.md) — confini runtime, autorità, persistenza e flusso dei dati
-- [Contesto del progetto](docs/PROJECT_CONTEXT.md) — motivazione accademica e capacità implementate rispetto a quelle previste
-- [Contribuire](CONTRIBUTING.md) — configurazione per sviluppatori umani, controlli di qualità e regole di modifica
-- [AGENTS.md](AGENTS.md) — regole aggiuntive per gli agenti di programmazione
-- Contratti specifici: [ingestione delle sorgenti](docs/INGESTION_VALIDATION.md), [schemi di metadati](docs/METADATA_SCHEMAS.md), [migrazione FieldAssertion](docs/FIELD_ASSERTION_MIGRATION.md), [memoria dei metadati](docs/METADATA_MEMORY.md), [design token](docs/DESIGN_TOKENS.md) e [localizzazione fr-CA](docs/LOCALIZATION_FR_CA.md)
-
-La cronologia delle versioni è in [CHANGELOG.md](CHANGELOG.md) e `docs/notes/<version>.md`. Le note specifiche di una versione sono registrazioni storiche; non sono documenti dell'architettura corrente né del backlog.
+La cronologia dei rilasci è in [CHANGELOG.md](CHANGELOG.md) e `docs/notes/<version>.md`. Le note di versione sono documenti storici, non la descrizione dell'architettura corrente.
 
 ## Licenza
 
-Copyright © 2026 Aaron John Schlosser, PhD. DerridAI è distribuito secondo i termini della [GNU Affero General Public License, versione 3](LICENSE) (`AGPL-3.0-only`). La schermata di accesso, il menu account e Impostazioni → Informazioni su DerridAI mostrano `© 2026 The New England Transcendental Club of California`.
+DerridAI è distribuito secondo la [GNU Affero General Public License v3.0](LICENSE).
+
+Copyright © 2026 Aaron John Schlosser, PhD. L'applicazione mostra anche © 2026 The New England Transcendental Club of California.

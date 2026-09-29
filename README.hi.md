@@ -2,52 +2,98 @@
 
 # DerridAI
 
+![DerridAI लोगो](https://repository-images.githubusercontent.com/1336867942/1ef2d928-ee57-480e-addb-5caf6acc1754)
+
 [English](README.md) · [Français](README.fr.md) · [Español](README.es.md) · [Deutsch](README.de.md) · [Italiano](README.it.md) · [Magyar](README.hu.md) · [Русский](README.ru.md) · [हिन्दी](README.hi.md) · [العربية](README.ar.md)
 
-DerridAI एक स्थानीय-प्रथम Docker अनुप्रयोग है, जिसका उपयोग दार्शनिक ग्रंथों के विद्वतापूर्ण कॉर्पस बनाने, उनका ऑडिट करने और उन पर क्वेरी चलाने के लिए किया जाता है। यह PDF, टेक्स्ट/RTF/DOCX, चित्र, ऑडियो, URL और Project Gutenberg स्रोतों को ऐसे विद्वतापूर्ण रिकॉर्ड में ग्रहण करता है जो provenance को सुरक्षित रखते हैं; मानव/LLM समीक्षा और साक्ष्य-बद्ध metadata enrichment का समर्थन करता है; व्युत्पन्न ChromaDB search projections बनाता है; और परिणाम पर साक्ष्य-आधारित retrieval-augmented generation (RAG) pipeline चलाता है।
+DerridAI एक local-first, provenance-preserving शोध वातावरण है, जिसका उपयोग विद्वतापूर्ण corpora बनाने, समीक्षा करने, खोजने और उन पर प्रश्न चलाने के लिए किया जाता है। यह एक ही Docker अनुप्रयोग में source ingestion, human-in-the-loop corpus निर्माण, evidence-bound metadata enrichment, derived vector/search indexes और evidence-grounded retrieval-augmented generation (RAG) को एक साथ लाता है।
 
-वर्तमान संस्करण: **0.80.6 — Danvers** ([रिलीज़ नोट्स](docs/notes/0.80.6.md))।
+DerridAI **cELF 1.0 — Capta-Enriched Lexical Format** का मूल reference implementation भी है। cELF AI-सहायित documentary research के लिए provenance-preserving information architecture परिभाषित करता है। DerridAI source identity, record identity और revision, metadata assertions, evidence, generated claims और support bindings को अलग-अलग audit करने योग्य रूप में रखता है, न कि उन्हें एक opaque vector store में मिला देता है।
 
-## विशेषताएँ
+वर्तमान संस्करण: **0.80.7 — Exeter** ([release notes](docs/notes/0.80.7.md)). यह README वर्तमान `master` architecture का वर्णन करता है, जिसमें Exeter के बाद repository में merge हो चुका कार्य भी शामिल है।
 
-- **Corpus Builder** — एक क्रमबद्ध Source → Structure/transcription → LLM & enrichment → Record construction → Review workflow, जिसके नियंत्रण चुने गए माध्यम के अनुसार बदलते हैं। Extraction सीमाबद्ध है और provenance सुरक्षित रखता है; reviewer के स्वामित्व वाले structure/text संशोधन और evidence audit योग्य बने रहते हैं।
-- **Record review** — audit history, bulk/work-level metadata editing, diffs, source/evidence navigation और human/LLM field ownership वाले JSONL workspaces। Canonical `FieldAssertion` records value provenance, authority, evidence और stable field identity को सुरक्षित रखते हैं, जबकि schema-defined metadata review, Search, Record Inspector, touch-up और Research presentation के माध्यम से प्रवाहित होता है।
-- **LLM review और tools** — named Ollama या OpenAI-compatible provider profiles के विरुद्ध foreground, background और background Auto-improve runs, जिनमें प्रत्येक का अपना concurrency limit और warmup state होता है।
-- **Vector stores** — स्थानीय filesystem या चल रहे Chroma server पर persistent ChromaDB collections, English/French language mirrors, background upserts और JSONL round-tripping के साथ।
-- **RAG Research** — hybrid retrieval, cross-encoder reranking, language routing, selected-evidence mode, streamed/cancellable generation, response/claim provenance memory, cached Response Library और LLM grading।
-- **Roles** — Admin और Researcher accounts; researchers को summarized evidence text दिखाई देता है और वे corpora में बदलाव नहीं कर सकते।
-- **Backup & restore** — एक ZIP जिसमें workspaces, audit history, provider profiles, corpus source assets और embeddings सहित प्रत्येक Chroma collection शामिल है।
-- **Bilingual और accessible** — English और Canadian French first-class locales हैं और key parity लागू की जाती है। Keyboard access, visible focus, responsive/reflow व्यवहार, forced-colors support और WCAG 2.2 AA acceptance criteria हैं।
+## DerridAI क्या करता है
+
+- **विविध स्रोतों को प्राप्त और ingest करता है।** PDF, plain text, RTF, DOCX, images और audio अपलोड करें; URL और Project Gutenberg सामग्री import करें; या Corpus Capture के माध्यम से Wikidata, Project Gutenberg और Wikisource adapters से कार्य खोजें और प्राप्त करें। Ingestion media-specific safety/resource limits लागू करता है और extractor/tool/version provenance सुरक्षित रखता है।
+- **माध्यम के अनुसार corpus बनाता है।** Corpus Builder source registration, extraction/transcription, source-unit mapping, structure/segmentation, enrichment, record construction, review और publication को अलग stages में रखता है। Controls और evidence coordinates source medium के अनुसार बदलते हैं; PDF/page semantics हर source पर लागू नहीं किए जाते।
+- **cELF provenance और field authority सुरक्षित रखता है।** Canonical `FieldAssertion` records derivation, evaluation, authority, value state, confidence, evidence, actor/model, stable field identity और record revision को अलग-अलग दर्शाते हैं। Human confirmation model या deterministic provenance को मिटाती नहीं है।
+- **Evidence को context में रखकर records की समीक्षा करता है।** Reviewer text और metadata संपादित कर सकते हैं, `SourceSpan` और दूसरे records की evidence देख सकते हैं, revisions की तुलना कर सकते हैं, semantic maps और relationships में जा सकते हैं, suggestions स्वीकार/अस्वीकार कर सकते हैं और auditable decisions के साथ publish कर सकते हैं। Optimistic saves UI को responsive रखते हैं और एक ही record पर conflicting writes को serialize किया जाता है।
+- **Configurable metadata schemas और reviewed precedents का उपयोग करता है।** Schemas stable fields, types, controlled values, evidence/review rules, POS/NER hints, field scope, model guidance और retrieval policy परिभाषित करते हैं। Reviewed examples सीमित, evidence-linked precedents बन सकते हैं, लेकिन वे canonical reviewer decisions को replace नहीं करते।
+- **Optional Document Intelligence जोड़ता है।** Provider-neutral derived analysis layer entities, coreference, quotation speakers और semantic-content relationships प्रदान कर सकती है। spaCy language packs multilingual baseline देते हैं; isolated BookNLP worker optional English enhancement है। ये annotations rebuildable analysis रहते हैं, source evidence या corpus authority नहीं बनते।
+- **Derived projections में search करता है, corpus authority से अलग रखते हुए।** ChromaDB embedded या HTTP-server mode में rebuildable semantic/search projections और caches रखता है। Dense, lexical और MMR retrieval, RRF, filters, language routing और bounded cross-encoder reranking उपलब्ध हैं।
+- **Evidence-grounded Research/RAG चलाता है।** Research hybrid retrieval, reranking, selected-evidence mode, evidence budgets, streamed/cancellable generation, deterministic citation rendering, claim/support persistence, claim validation, response/claim memory और LLM grading का समर्थन करता है। Incomplete provenance वाले records evidence से बाहर रखे जाते हैं; उन्हें चुपचाप valid support नहीं माना जाता।
+- **AI pipelines को inspect और configure करता है।** Pipeline Studio versioned pipeline definitions, assignments, run traces, stage-level latency/error/fallback metrics, point-of-use traces, non-persistent Research A/B comparison और fixed-case Research benchmark runs दिखाता है। Retrieval, memory, metadata-precedent और reviewer-evidence stages स्पष्ट रूप से configure किए जा सकते हैं, जबकि provenance/authority gates structural constraints बने रहते हैं।
+- **API transports को जिम्मेदारी के अनुसार अलग करता है।** REST commands और mutations का मालिक है; read-only cELF-aware GraphQL façade typed reads देता है; authenticated WebSocket plane realtime operation notifications भेजता है। Realtime messages कभी canonical state नहीं होते और clients REST/GraphQL से resynchronize कर सकते हैं।
+- **Controlled multi-user research का समर्थन करता है।** Built-in Administrator और Researcher roles के साथ researcher-safe custom roles UI और API दोनों में enforce होते हैं। Researcher-visible source text API boundary पर summarize होता है, jobs owner-scoped होते हैं और administrator-only corpus/system mutations उपलब्ध नहीं होते।
+- **Long-running work को observable बनाता है।** Corpus builds, LLM review, RAG, grading, imports, model/language-pack work और vector upserts cancellable operations के रूप में durable snapshots/history और realtime progress के साथ दिखाई देते हैं। Restart से interrupted process-local work failed mark होता है; उसे silently replay नहीं किया जाता।
+- **Accessible और multilingual interface देता है।** English और Canadian French first-class UI locales हैं और key parity enforce की जाती है; README coverage इससे अधिक भाषाओं में है। WCAG 2.2 AA, keyboard access, visible focus, reflow, reduced motion, forced colors/high contrast और long-string/localization checks release criteria हैं। Help Center route-specific guides, workflow FAQs और plain-language glossary देता है।
+- **Research environment का backup रखता है।** Backup/restore workspaces, audit history, provider profiles, source assets, system/provenance state और Chroma collections/embeddings को शामिल करता है।
 
 पूरी feature reference के लिए [User Guide](docs/USER_GUIDE.md) देखें।
 
-## आर्किटेक्चर
+## cELF traceability model
 
-<!-- prettier-ignore -->
-| सेवा        | स्टैक                                                               | नोट्स                                                                                                                                          |
-| ----------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `web`       | Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js, nginx द्वारा served | `/api/` को API तक proxy करता है; Storybook एक optional dev service के रूप में उपलब्ध है                                                      |
-| `api`       | Python 3.12, FastAPI, ChromaDB, PyMuPDF, sentence-transformers      | Authoritative corpus/build files और SQLite auth/system/provenance state `./data` के अंतर्गत रहते हैं; Chroma derived search/result projections रखता है |
-| LLM backend | Ollama (default) या कोई OpenAI-compatible endpoint                 | Host या किसी अन्य स्थान पर चलता है; default compose stack का हिस्सा नहीं है                                                                  |
+DerridAI का scholarly data model authoritative documentary/scholarly state और rebuildable computational projections के बीच cELF distinction का पालन करता है। Full traceability में conceptual path यह है:
 
-Code ownership और persistence boundaries के लिए [Architecture](docs/ARCHITECTURE.md) देखें।
+```text
+SourceDocument
+  -> SourceSpan
+  -> Record
+  -> RecordRevision
+  -> FieldAssertion
+  -> Evidence Acquisition
+  -> EvidenceRef
+  -> EvidencePacket
+  -> GenerationRun
+  -> GeneratedClaim
+  -> SupportBinding
+```
 
-## आरंभ करना
+इससे generated claim को उसके support, evidence, record revision, source span और source document तक पीछे audit किया जा सकता है। Embeddings, retrieval rank, reranker scores, caches, UI state और अन्य operation-specific values derived state रहते हैं; वे source record की intrinsic properties नहीं बनते।
 
-ये चरण clean checkout के लिए समर्थित मार्ग हैं। इन्हें जानबूझकर स्पष्ट रखा गया है ताकि नया developer किसी मौजूदा DerridAI data directory या shell environment पर निर्भर हुए बिना इन्हें दोहरा सके।
+Normative cELF 1.0 specification और non-normative DerridAI white paper के लिए [SPECIFICATION.md](SPECIFICATION.md) देखें।
 
-### 1. पूर्वापेक्षाएँ
+## Architecture
 
-Git, `docker compose` command सहित Docker Engine/Desktop और एक LLM endpoint स्थापित करें। Default configuration host पर Ollama की अपेक्षा करता है।
+### Runtime services
 
-Default Ollama models हैं:
+- `web` — Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js और nginx। यह browser application है; `/api/` को proxy करता है और REST, GraphQL तथा realtime notifications उपयोग करता है। Storybook optional development profile है।
+- `api` — Python 3.12, FastAPI, Strawberry GraphQL, ChromaDB client, PyMuPDF, sentence-transformers और spaCy। यह authentication, source/corpus operations, cELF reads, provenance, RAG, pipelines, jobs और system state के लिए authoritative application boundary है।
+- `document-nlp` — English Document Intelligence के लिए optional isolated BookNLP worker। यह bounded reviewed text प्राप्त करता है और corpus authority नहीं रखता।
+- `chroma` — optional HTTP Chroma server। Embedded `PersistentClient` default है; दोनों modes derived search/vector projections रखते हैं।
+- `ollama` — optional local Ollama service। DerridAI host पर पहले से चल रहे Ollama या किसी configured OpenAI-compatible endpoint का उपयोग भी कर सकता है।
+
+Default Compose stack `web` और `api` शुरू करता है; अन्य services optional profiles या external providers हैं।
+
+### Authority और persistence
+
+DerridAI सभी stores को समान authority नहीं देता:
+
+- **Canonical scholarly state** — source assets/identity, records और revisions, field assertions, review decisions, exact evidence/support bindings और publication state।
+- **Server-owned durable state** — authentication तथा system/provenance/job/pipeline state SQLite में `./data` के अंतर्गत।
+- **Derived/rebuildable state** — Chroma indexes, embeddings, metadata-exemplar projections, retrieval scores, semantic-content projections, Document Intelligence output और caches।
+- **Browser workspace state** — local preferences और unsaved workspace state, corpus authority से अलग।
+
+### Transport split
+
+- **REST**: सभी commands और mutations — uploads, review decisions, jobs, publication, administration, backup और restore।
+- **GraphQL**: `POST /api/graphql` पर read-only cELF-aware typed query façade; कोई Mutation या Subscription root नहीं।
+- **WebSocket**: `WS /api/ws/events` पर authenticated realtime notification plane; कभी source of truth नहीं।
+
+विस्तृत module ownership, persistence boundaries और data flow के लिए [Architecture](docs/ARCHITECTURE.md), [GraphQL](docs/GRAPHQL.md) और [Realtime](docs/REALTIME.md) देखें।
+
+## शुरू करना
+
+### 1. Prerequisites
+
+Git, Docker Engine/Desktop (`docker compose` सहित) और एक LLM endpoint स्थापित करें। Default configuration host पर Ollama अपेक्षित करता है।
+
+Default models:
 
 ```text
 gemma4:e2b
 bge-m3:latest
 ```
-
-यदि आप कोई अलग Ollama model या OpenAI-compatible provider उपयोग करते हैं, तो DerridAI शुरू करने से पहले `.env` बदलें।
 
 ### 2. Clone और configure करें
 
@@ -57,26 +103,26 @@ cd DerridAI
 cp .env.example .env
 ```
 
-PowerShell equivalent:
+PowerShell:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Docker Desktop with WSL पर `.env` में `HOST_UID` और `HOST_GID` को `id -u` और `id -g` के output पर सेट करें। इससे bind-mounted Chroma/SQLite files आपके host user के स्वामित्व में रहती हैं।
+Docker Desktop + WSL पर `.env` में `HOST_UID` और `HOST_GID` को क्रमशः `id -u` और `id -g` के output पर सेट करें।
 
-`CHROMA_DATA_ROOT`, `AUTH_DB_PATH`, `SYSTEM_DB_PATH` या `CHROMA_PATH` जैसी DerridAI test-storage variables को अपने shell में globally export न करें। Compose exported variables को file से values container तक पहुँचने से पहले interpolate करता है।
+`CHROMA_DATA_ROOT`, `AUTH_DB_PATH`, `SYSTEM_DB_PATH` या `CHROMA_PATH` जैसी test-storage variables को shell में globally export न करें; Compose exported variables को पहले interpolate करता है।
 
-### 3. Configured models उपलब्ध कराएँ
+### 3. Models उपलब्ध कराएँ
 
-Host पर पहले से चल रहे Ollama के लिए:
+यदि Ollama host पर चल रहा है:
 
 ```bash
 ollama pull gemma4:e2b
 ollama pull bge-m3:latest
 ```
 
-Default `.env.example` यह उपयोग करता है:
+Default values:
 
 ```env
 OLLAMA_BASE_URL=http://host.docker.internal:11434
@@ -85,7 +131,7 @@ OLLAMA_EMBED_MODEL=bge-m3:latest
 EMBEDDING_PROVIDER=ollama
 ```
 
-वैकल्पिक रूप से optional compose Ollama service उपयोग करें:
+या optional Compose Ollama service का उपयोग करें:
 
 ```bash
 docker compose --profile ollama up -d ollama
@@ -93,18 +139,22 @@ docker compose exec ollama ollama pull gemma4:e2b
 docker compose exec ollama ollama pull bge-m3:latest
 ```
 
-फिर `.env` में `OLLAMA_BASE_URL=http://ollama:11434` सेट करें।
+फिर `OLLAMA_BASE_URL=http://ollama:11434` सेट करें।
 
-### 4. Compose configuration validate करें और DerridAI शुरू करें
+### 4. DerridAI शुरू करें
 
 ```bash
 docker compose config --quiet
 docker compose up -d --build
 ```
 
-Default bindings हैं: application <http://localhost:8181>, API <http://127.0.0.1:8000> और API documentation <http://127.0.0.1:8000/docs>।
+Default endpoints:
 
-पहली बार launch करने पर DerridAI initial administrator account बनाने को कहता है। कोई default credentials शामिल नहीं किए जाते।
+- Application: <http://localhost:8181>
+- API: <http://127.0.0.1:8000>
+- OpenAPI docs: <http://127.0.0.1:8000/docs>
+
+पहली बार launch पर browser में initial administrator account बनाएँ। कोई default credentials ship नहीं किए जाते।
 
 ### 5. Installation verify करें
 
@@ -113,9 +163,9 @@ docker compose ps
 curl -fsS http://127.0.0.1:8000/api/live
 ```
 
-Live endpoint को ऐसा JSON लौटाना चाहिए जिसमें `"ok": true`, application version और उपलब्ध होने पर baked git commit हो। `docker compose ps` में `web` और `api` services healthy दिखनी चाहिए।
+Liveness response में `"ok": true`, application version और उपलब्ध होने पर baked Git commit होना चाहिए।
 
-अधिक व्यापक local diagnostic के लिए:
+विस्तृत diagnostic:
 
 ```bash
 ./scripts/diagnose.sh
@@ -127,26 +177,39 @@ PowerShell:
 .\scripts\diagnose.ps1
 ```
 
-### 6. Stop या rebuild करें
+### 6. Optional services
 
-Bind-mounted `./data` directory हटाए बिना application रोकें:
+```bash
+# Local Ollama
+docker compose --profile ollama up -d ollama
+
+# Chroma HTTP server (फिर CHROMA_MODE=http सेट करें)
+docker compose --profile chroma up -d chroma
+
+# English BookNLP Document Intelligence enhancement
+docker compose --profile document-nlp up -d document-nlp
+
+# Storybook development surface
+docker compose --profile dev up storybook
+```
+
+NLP language packs enable या install करने से पहले [Document Intelligence](docs/DOCUMENT_INTELLIGENCE.md) देखें।
+
+### 7. Stop या rebuild
 
 ```bash
 docker compose down
-```
 
-Changes pull करने के बाद rebuild करें:
-
-```bash
+# repository update के बाद
 docker compose down
 docker compose up -d --build
 ```
 
-यदि किसी पुराने release ने `data/` के अंतर्गत root-owned files छोड़ी हों, तो supported Unix-like hosts पर `./scripts/fix-data-permissions.sh` चलाएँ।
+यदि पुरानी release ने `data/` में root-owned files छोड़ी हों, तो supported Unix-like host पर `./scripts/fix-data-permissions.sh` चलाएँ।
 
 ## Developer setup
 
-CI Python 3.12 और Node 22 उपयोग करता है; failures reproduce करते समय स्थानीय रूप से यही versions उपयोग करें।
+CI Python 3.12 और Node 22 उपयोग करता है।
 
 Backend/test environment:
 
@@ -166,7 +229,7 @@ npx playwright install chromium
 cd ..
 ```
 
-Repository root से तेज़ local quality gates चलाएँ:
+Fast local quality gates:
 
 ```bash
 ruff check api/app tests scripts/check_frontend_api_contract.py
@@ -183,33 +246,40 @@ npm run test:unit
 npm run build
 ```
 
-Repository में Prettier-supported source, configuration और documentation files को format करने के लिए `web/` से `npm run format:repo` उपयोग करें। Generated legacy DOM snapshot HTML जानबूझकर बाहर रखा गया है।
+`web/` से `npm run format:repo` चलाकर सभी Prettier-supported source, configuration और documentation files format करें। Generated legacy DOM snapshot HTML जानबूझकर excluded है।
 
 Browser coverage, Storybook, CI parity और contribution rules के लिए [CONTRIBUTING.md](CONTRIBUTING.md) देखें।
 
 ## Repository map
 
-- `api/app/` — FastAPI application, corpus ingestion/review, provenance, persistence, RAG, providers और background jobs।
-- `web/src/` — Vue application, reusable components, domain modules, stores और घटती हुई legacy runtime compatibility layer।
-- `tests/` — backend/regression/contract tests।
-- `web/tests/frontend/` — Vitest component/domain tests।
-- `web/tests/e2e/` — Playwright application, Storybook, accessibility और legacy characterization coverage।
-- `docs/` — current architecture/domain contracts और `docs/notes/` के अंतर्गत historical release notes।
-- `data/` — local runtime state; placeholders को छोड़कर git-ignored। इसकी contents कभी commit न करें।
+- `api/app/` — FastAPI backend: sources/corpus, cELF read services, GraphQL, realtime, provenance, pipelines, RAG, providers, persistence और jobs।
+- `web/src/` — Vue 3 application: views, components, Pinia stores, routing, API clients, realtime client, domain modules और remaining legacy compatibility layer।
+- `booknlp-worker/` — optional isolated BookNLP worker।
+- `tests/` — backend, regression, contract, release-consistency और architecture tests।
+- `web/tests/frontend/` — Vitest tests।
+- `web/tests/e2e/` — Playwright, Storybook, accessibility और characterization coverage।
+- `docs/` — current architecture/domain contracts और historical release notes।
+- `data/` — local runtime state; placeholders को छोड़कर git-ignored। इसका content commit न करें।
 
 ## Documentation
 
-उन documents से शुरू करें जो current behavior का वर्णन करते हैं:
-
-- [User Guide](docs/USER_GUIDE.md) — feature reference, operations, backup और limitations
+- [User Guide](docs/USER_GUIDE.md) — features और workflows
 - [Architecture](docs/ARCHITECTURE.md) — runtime boundaries, authority, persistence और data flow
-- [Project context](docs/PROJECT_CONTEXT.md) — scholarly rationale और implemented-versus-intended capabilities
-- [Contributing](CONTRIBUTING.md) — human developer setup, quality gates और change rules
-- [AGENTS.md](AGENTS.md) — coding agents के लिए अतिरिक्त नियम
-- Focused contracts: [source ingestion](docs/INGESTION_VALIDATION.md), [metadata schemas](docs/METADATA_SCHEMAS.md), [FieldAssertion migration](docs/FIELD_ASSERTION_MIGRATION.md), [metadata memory](docs/METADATA_MEMORY.md), [design tokens](docs/DESIGN_TOKENS.md) और [fr-CA localization](docs/LOCALIZATION_FR_CA.md)
+- [cELF 1.0 specification](SPECIFICATION.md) — normative information model और reference-implementation white paper
+- [Project context](docs/PROJECT_CONTEXT.md) — scholarly rationale और implemented/intended capabilities
+- [GraphQL](docs/GRAPHQL.md) — read-only cELF query façade
+- [Realtime](docs/REALTIME.md) — WebSocket protocol और resynchronization
+- [Document Intelligence](docs/DOCUMENT_INTELLIGENCE.md) — derived linguistic analysis और language packs
+- [Source ingestion](docs/INGESTION_VALIDATION.md) — safety, limits और extraction fidelity
+- [Metadata schemas](docs/METADATA_SCHEMAS.md) — configurable field contracts
+- [Metadata memory](docs/METADATA_MEMORY.md) — reviewed precedents और authority boundaries
+- [FieldAssertion migration](docs/FIELD_ASSERTION_MIGRATION.md) — canonical assertion model
+- [CONTRIBUTING.md](CONTRIBUTING.md) और [AGENTS.md](AGENTS.md) — development rules
 
-Release history [CHANGELOG.md](CHANGELOG.md) और `docs/notes/<version>.md` में है। Version-specific release notes historical records हैं; वे current architecture या backlog documents नहीं हैं।
+Release history [CHANGELOG.md](CHANGELOG.md) और `docs/notes/<version>.md` में है। Version-specific release notes historical records हैं, current architecture का वर्णन नहीं।
 
-## लाइसेंस
+## License
 
-Copyright © 2026 Aaron John Schlosser, PhD. DerridAI [GNU Affero General Public License, संस्करण 3](LICENSE) (`AGPL-3.0-only`) के अंतर्गत लाइसेंस प्राप्त है। Sign-in screen, account menu और Settings → About DerridAI पर `© 2026 The New England Transcendental Club of California` दिखाया जाता है।
+DerridAI [GNU Affero General Public License v3.0](LICENSE) के तहत licensed है।
+
+Copyright © 2026 Aaron John Schlosser, PhD. Application में © 2026 The New England Transcendental Club of California भी प्रदर्शित होता है।

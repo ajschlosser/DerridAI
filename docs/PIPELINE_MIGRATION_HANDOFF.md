@@ -216,7 +216,7 @@ Any follow-up Pipeline Studio UI should target the routed `/pipelines` experienc
 
 ### 4.10 Automatic evidence recovery moved onto pipeline runtime
 
-Enrichment evidence recovery and accept-time evidence backfill no longer call the legacy `suggest_evidence_cascade()` (removed). Both resolve the `evidence_recovery` assignment and execute it through `execute_evidence_recovery()` in `api/app/pipelines/evidence_recovery.py`, a cascade runtime over a closed set of registered strategies.
+Enrichment evidence recovery and accept-time evidence backfill no longer call the removed `suggest_evidence_cascade()`. Both resolve the `evidence_recovery` assignment and execute it through `execute_evidence_recovery()` in `api/app/pipelines/evidence_recovery.py`, a cascade runtime over a closed set of registered strategies.
 
 Runtime contract (purpose `evidence_recovery`):
 
@@ -226,7 +226,7 @@ Runtime contract (purpose `evidence_recovery`):
 - Recovery-only settings (`retrieve.lexical_bm25.min_score`, `rerank.cross_encoder.min_score`, `select.mmr.min_relevance`) are rejected by the Research, reviewer-evidence, and metadata-precedent adapters rather than ignored.
 - A record without a source-document identity is reported before any retrieval or model call.
 
-Built-ins: `evidence.recovery.celf@1` (text support, then closed-choice model; no embeddings or reranking) and `evidence.recovery.cascade@1` (exact legacy first-hit order: text, similarity, cross-encoder, MMR, model). Traces list only the stages that ran, in execution order, with `fallback_reason` on each stage that left along a fallback edge.
+Built-ins: `evidence.recovery.celf@1` (text support, then closed-choice model; no embeddings or reranking) and `evidence.recovery.cascade@1` (relevance-first order: text, similarity, cross-encoder, MMR, model). The cascade is non-cELF-guaranteed at its output boundary, so its suggestions remain advisory until direct evidence is bound and validated. Traces list only the stages that ran, in execution order, with `fallback_reason` on each stage that left along a fallback edge.
 
 The remaining direct `predict_scores()` callers are `rag.py` (Research pipeline) and `metadata_exemplar_retrieval.py` (metadata-precedent pipeline). Re-verify they are unreachable outside those pipelines before closing the CrossEncoder criterion.
 
