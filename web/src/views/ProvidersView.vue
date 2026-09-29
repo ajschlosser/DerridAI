@@ -9,6 +9,7 @@ import ProviderProfileCard from "../components/providers/ProviderProfileCard.vue
 import ProviderSaveBar from "../components/providers/ProviderSaveBar.vue";
 import ProviderBulkApply from "../components/providers/ProviderBulkApply.vue";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
+import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import type { DiscoveredModel } from "../domain/providerModels";
 import { applyProfileFieldValues } from "../domain/providerBulkFields";
 
@@ -216,7 +217,9 @@ onMounted(() => {
       </template>
     </UiPageHeader>
     <div v-if="error" class="info error" role="alert">{{ error }}</div>
-    <section v-if="loading" class="card" aria-live="polite">{{ i18n.t("ui.loading") }}</section>
+    <section v-if="loading" class="card">
+      <UiLoadingState :label="i18n.t('ui.loading')" />
+    </section>
     <p v-else-if="!profiles.length" class="providers-empty">{{ i18n.t("providers.empty") }}</p>
     <ul v-else class="provider-list" :aria-label="i18n.t('providers.list_label')">
       <ProviderProfileCard

@@ -4,6 +4,7 @@ import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import PdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.mjs?url";
 import { useI18nStore } from "../stores/i18n";
 import type { SourceBlock } from "../api/pdfCorpus";
+import UiLoadingState from "./ui/UiLoadingState.vue";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = PdfWorkerUrl;
 const props = withDefaults(
@@ -217,9 +218,7 @@ onBeforeUnmount(async () => {
         {{ i18n.t("pdf_corpus.zoom_reset") }}
       </button>
     </div>
-    <div v-if="loading" class="viewer-state" role="status" aria-live="polite">
-      {{ i18n.t("pdf_corpus.pdf_loading") }}
-    </div>
+    <UiLoadingState v-if="loading" :label="i18n.t('pdf_corpus.pdf_loading')" />
     <div v-if="error" class="viewer-state error" role="alert">
       {{
         i18n.tf("pdf_corpus.pdf_render_error", {

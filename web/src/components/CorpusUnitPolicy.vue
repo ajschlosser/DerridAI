@@ -9,6 +9,7 @@ import {
   type SourceUnitPreview,
 } from "../api/corpus";
 import { useI18nStore } from "../stores/i18n";
+import UiLoadingState from "./ui/UiLoadingState.vue";
 
 /**
  * How finely the source is divided into evidence units. Choosing a policy previews the result;
@@ -251,7 +252,7 @@ function apply() {
           </li>
         </ol>
       </template>
-      <p v-else class="unit-loading">{{ i18n.t("pdf_corpus.units_loading") }}</p>
+      <UiLoadingState v-else :label="i18n.t('pdf_corpus.units_loading')" />
     </div>
 
     <footer class="unit-actions">

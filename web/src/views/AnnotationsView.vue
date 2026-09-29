@@ -5,6 +5,7 @@ import AnnotationFeedItem from "../components/annotations/AnnotationFeedItem.vue
 import { useAnnotationsWorkspace } from "../composables/useAnnotationsWorkspace";
 import { useI18nStore } from "../stores/i18n";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
+import UiLoadingState from "../components/ui/UiLoadingState.vue";
 
 const i18n = useI18nStore();
 const annotations = useAnnotationsWorkspace();
@@ -29,8 +30,8 @@ onMounted(() => void annotations.load());
       :description="i18n.t('annotations.page_help')"
     />
 
-    <section v-if="loading" class="card annotations-state" role="status">
-      {{ i18n.t("ui.loading") }}
+    <section v-if="loading" class="card annotations-state">
+      <UiLoadingState :label="i18n.t('ui.loading')" />
     </section>
     <section v-else-if="error" class="card annotations-state" role="alert">
       <strong>{{ i18n.t("annotations.open_failed") }}</strong>

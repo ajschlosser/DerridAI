@@ -20,6 +20,7 @@ import {
   type CaptureStep,
 } from "../../domain/captureReview";
 import UiDialog from "../ui/UiDialog.vue";
+import UiLoadingState from "../ui/UiLoadingState.vue";
 import AppIcon from "../AppIcon.vue";
 import CaptureAuthorResolver from "./CaptureAuthorResolver.vue";
 import CaptureOptionsForm from "./CaptureOptionsForm.vue";
@@ -287,7 +288,7 @@ onMounted(() => {
       @retry="run('retry')"
       @use-in-builder="emit('useInBuilder', $event)"
     />
-    <p v-else class="capture-loading" role="status">{{ i18n.t("sources.loading") }}</p>
+    <UiLoadingState v-else :label="i18n.t('sources.loading')" />
 
     <template #footer>
       <div class="capture-footer">
