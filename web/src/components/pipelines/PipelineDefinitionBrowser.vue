@@ -33,7 +33,9 @@ function assigned(pipeline: PipelineDefinition) {
   <aside class="pipeline-browser" :aria-label="t('pipelines.definitions', 'Pipeline definitions')">
     <div class="browser-heading">
       <strong>{{ t("pipelines.definitions", "Pipeline definitions") }}</strong>
-      <span :aria-label="t('pipelines.definition_count', 'Pipeline definition count')">{{ pipelines.length }}</span>
+      <span :aria-label="t('pipelines.definition_count', 'Pipeline definition count')">
+        {{ pipelines.length }}
+      </span>
     </div>
 
     <button
