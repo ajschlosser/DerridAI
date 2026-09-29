@@ -44,9 +44,7 @@ function formatCount(value: number | null | undefined) {
         </p>
       </div>
       <span class="sample-note">
-        {{
-          t("pipelines.metrics_sample", "Recent trace sample")
-        }}:
+        {{ t("pipelines.metrics_sample", "Recent trace sample") }}:
         <strong>{{ formatCount(metrics.sampled_run_count) }}</strong>
         /
         {{ formatCount(metrics.sample_limit) }}
@@ -303,13 +301,13 @@ tbody tr:last-child td {
   border-bottom: 0;
 }
 td code {
-  font-size: 0.74rem;
+  font-size: 0.75rem;
 }
 td small {
   display: block;
   margin-top: 2px;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
 }
 .empty-state {
   padding: 12px 13px;
