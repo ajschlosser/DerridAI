@@ -203,3 +203,39 @@ def test_provenance_gate_rejects_candidates_without_source_document_identity() -
     assert trace["support"].output_count == 1
     assert trace["provenance"].input_count == 1
     assert trace["provenance"].output_count == 0
+
+
+
+def test_support_and_provenance_gates_cannot_expose_bypass_edges() -> None:
+    source = built_in_pipeline("evidence.reviewer.current", 2)
+    assert source is not None
+
+    support_bypass = source.model_copy(
+        update={
+            "pipeline_id": "evidence.support-bypass",
+            "built_in": False,
+            "stages": [
+                stage.model_copy(update={"on_error": "select"})
+                if stage.id == "support"
+                else stage
+                for stage in source.stages
+            ],
+        }
+    )
+    with pytest.raises(ValueError, match="support stage may not use on_error"):
+        compile_evidence_pipeline(support_bypass)
+
+    provenance_bypass = source.model_copy(
+        update={
+            "pipeline_id": "evidence.provenance-bypass",
+            "built_in": False,
+            "stages": [
+                stage.model_copy(update={"on_error": "select"})
+                if stage.id == "provenance"
+                else stage
+                for stage in source.stages
+            ],
+        }
+    )
+    with pytest.raises(ValueError, match="cannot expose a bypass edge"):
+        compile_evidence_pipeline(provenance_bypass)
