@@ -4,12 +4,14 @@ import { computed } from "vue";
 import PipelineStageConnections from "./PipelineStageConnections.vue";
 import PipelineStrategyConfigFields from "./PipelineStrategyConfigFields.vue";
 import {
+  pipelineDataTypeHelp,
   pipelineStageFamilyLabel,
   pipelineStrategyDescription,
   pipelineStrategyLabel,
 } from "../../domain/pipelinePresentation";
 import { useI18nStore } from "../../stores/i18n";
 import type { PipelineStage, PipelineStrategy } from "../../types/pipelines";
+import UiTooltip from "../ui/UiTooltip.vue";
 
 const props = defineProps<{
   stage: PipelineStage;
@@ -66,7 +68,17 @@ const strategiesByFamily = computed(() => {
     <div class="stage-settings-heading">
       <div class="stage-identity-grid">
         <label>
-          <span>{{ t("pipelines.stage_id", "Stage ID") }}</span>
+          <span class="label-with-help">
+            {{ t("pipelines.stage_id", "Stage ID") }}
+            <UiTooltip
+              :text="
+                t(
+                  'pipelines.stage_id_help',
+                  'A short internal name for this step. Other stages use this name when they point to it. Renaming it here also updates those connections.',
+                )
+              "
+            />
+          </span>
           <input
             class="control"
             :value="stage.id"
@@ -75,7 +87,17 @@ const strategiesByFamily = computed(() => {
           />
         </label>
         <label>
-          <span>{{ t("pipelines.strategy", "Strategy") }}</span>
+          <span class="label-with-help">
+            {{ t("pipelines.strategy", "Strategy") }}
+            <UiTooltip
+              :text="
+                t(
+                  'pipelines.strategy_help',
+                  'The strategy is the server-approved operation this stage performs—for example semantic retrieval, reranking, provenance checking, or answer generation. You are choosing among registered operations, not writing executable code.',
+                )
+              "
+            />
+          </span>
           <select
             class="control"
             :value="stage.strategy"
@@ -105,7 +127,17 @@ const strategiesByFamily = computed(() => {
             :checked="stage.enabled"
             @change="emit('updateEnabled', stageIndex, ($event.target as HTMLInputElement).checked)"
           />
-          <span>{{ t("pipelines.enabled", "Enabled") }}</span>
+          <span class="toggle-copy">
+            {{ t("pipelines.enabled", "Enabled") }}
+            <UiTooltip
+              :text="
+                t(
+                  'pipelines.enabled_help',
+                  'When disabled, this stage remains in the saved definition for reference but is not part of the executable graph.',
+                )
+              "
+            />
+          </span>
         </label>
         <label class="stage-toggle">
           <input
@@ -113,7 +145,17 @@ const strategiesByFamily = computed(() => {
             :checked="entryStageIds.includes(stage.id)"
             @change="emit('toggleEntry', stage.id, ($event.target as HTMLInputElement).checked)"
           />
-          <span>{{ t("pipelines.entry_stage", "Entry") }}</span>
+          <span class="toggle-copy">
+            {{ t("pipelines.entry_stage", "Entry") }}
+            <UiTooltip
+              :text="
+                t(
+                  'pipelines.entry_stage_help',
+                  'An entry stage is where execution starts. Most Research pipelines have one entry step, usually a query-analysis step; some graph types may allow more than one.',
+                )
+              "
+            />
+          </span>
         </label>
         <button
           class="btn icon-only"
@@ -151,13 +193,44 @@ const strategiesByFamily = computed(() => {
         <span>{{ pipelineStageFamilyLabel(strategy?.family, t) }}</span>
       </div>
       <p v-if="strategy">{{ pipelineStrategyDescription(strategy, t) }}</p>
-      <small v-if="strategy">
-        {{ strategy.input_type }}
+      <small v-if="strategy" class="strategy-io">
+        <span>
+          {{ t("pipelines.input", "Input") }}: <code>{{ strategy.input_type }}</code>
+          <UiTooltip
+            :text="pipelineDataTypeHelp(strategy.input_type, t)"
+            :label="t('pipelines.explain_input_type', 'Explain this input type')"
+          />
+        </span>
         <span aria-hidden="true">→</span>
-        {{ strategy.output_type }}
-        <template v-if="strategy.invokes_llm">
-          · {{ t("pipelines.invokes_llm", "invokes LLM") }}
-        </template>
+        <span>
+          {{ t("pipelines.output", "Output") }}: <code>{{ strategy.output_type }}</code>
+          <UiTooltip
+            :text="pipelineDataTypeHelp(strategy.output_type, t)"
+            :label="t('pipelines.explain_output_type', 'Explain this output type')"
+          />
+        </span>
+        <span v-if="strategy.invokes_llm">
+          {{ t("pipelines.invokes_llm", "Uses a language model") }}
+          <UiTooltip
+            :text="
+              t(
+                'pipelines.invokes_llm_help',
+                'This stage calls a configured language model. Its output may vary between runs, so DerridAI records the model and execution trace for auditability.',
+              )
+            "
+          />
+        </span>
+        <span v-else>
+          {{ t("pipelines.deterministic", "Deterministic") }}
+          <UiTooltip
+            :text="
+              t(
+                'pipelines.deterministic_help',
+                'This stage follows fixed program logic rather than asking a language model to decide the result. The same inputs and configuration should produce the same result.',
+              )
+            "
+          />
+        </span>
       </small>
     </div>
 
@@ -205,6 +278,22 @@ const strategiesByFamily = computed(() => {
   color: var(--muted);
   font-size: 0.75rem;
   font-weight: 750;
+}
+.label-with-help,
+.toggle-copy,
+.strategy-io > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.strategy-io {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+.strategy-io code {
+  font-size: 0.72rem;
 }
 .stage-toolbar {
   display: flex;
