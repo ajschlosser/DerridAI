@@ -27,6 +27,7 @@ This is the historical DerridAI profile and remains the fallback when no profile
 
 The Fiction profile separates narrative voice, storyworld facts, speech relations, literary interpretation, and work-level classification. Its field guidance is deliberately conservative about narrator/focalizer distinctions, scene presence, symbolic interpretation, and outside plot knowledge.
 
+<!-- prettier-ignore -->
 | Field | Scope | Guidance |
 | --- | --- | --- |
 | `fiction_form` | Corpus | Classify the work as novel, novella, short story, story cycle, drama, narrative poetry, other fiction, or mixed/uncertain from whole-work or paratextual evidence rather than one incidental passage. |
@@ -59,6 +60,7 @@ The profile groups these fields as **Narrative voice and perspective**, **Charac
 
 The Non-fiction profile separates propositions and attribution from the evidence used to support them, semantic entities from rhetorical/document structure, and local record metadata from work-level genre/audience metadata.
 
+<!-- prettier-ignore -->
 | Field | Scope | Guidance |
 | --- | --- | --- |
 | `nonfiction_genre` | Corpus | Classify the work as scholarly article, monograph, essay, journalism, history, biography, memoir, report, textbook, reference, technical documentation, legal/policy, speech/lecture, correspondence, other, or mixed/uncertain from whole-document evidence. |
