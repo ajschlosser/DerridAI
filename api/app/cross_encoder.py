@@ -40,7 +40,12 @@ def predict_scores(
         return None, telemetry
 
     try:
+        import sentence_transformers
         from sentence_transformers import CrossEncoder
+
+        telemetry["library_version"] = str(
+            getattr(sentence_transformers, "__version__", "") or ""
+        ) or None
     except Exception as exc:
         telemetry["fallback_reason"] = f"missing_dependency: {exc}"
         telemetry["timing_ms"] = _elapsed_ms(started)
