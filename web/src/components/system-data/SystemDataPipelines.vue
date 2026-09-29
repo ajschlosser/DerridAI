@@ -5,6 +5,7 @@ import AppIcon from "../AppIcon.vue";
 import PipelineDefinitionBrowser from "../pipelines/PipelineDefinitionBrowser.vue";
 import PipelineDefinitionDetail from "../pipelines/PipelineDefinitionDetail.vue";
 import PipelineExecutionHistory from "../pipelines/PipelineExecutionHistory.vue";
+import PipelineOperationsSummary from "../pipelines/PipelineOperationsSummary.vue";
 import PipelineVersionEditorPanel from "../pipelines/PipelineVersionEditorPanel.vue";
 import { pipelinesApi } from "../../api/pipelines";
 import { pipelineKey } from "../../domain/pipelinePresentation";
@@ -13,6 +14,7 @@ import type {
   PipelineAssignment,
   PipelineCatalog,
   PipelineDefinition,
+  PipelineOperationalMetrics,
   PipelineRunTrace,
   PipelineValidationResponse,
 } from "../../types/pipelines";
@@ -20,6 +22,7 @@ import type {
 const i18n = useI18nStore();
 const catalog = ref<PipelineCatalog | null>(null);
 const runs = ref<PipelineRunTrace[]>([]);
+const metrics = ref<PipelineOperationalMetrics | null>(null);
 const loading = ref(true);
 const error = ref("");
 const selectedKey = ref("");
@@ -80,12 +83,14 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    const [nextCatalog, tracePage] = await Promise.all([
+    const [nextCatalog, tracePage, nextMetrics] = await Promise.all([
       pipelinesApi.catalog(),
       pipelinesApi.runs({ limit: 30 }),
+      pipelinesApi.metrics({ limit: 250 }),
     ]);
     catalog.value = nextCatalog;
     runs.value = tracePage.runs || [];
+    metrics.value = nextMetrics;
 
     if (
       !selectedKey.value ||
@@ -339,6 +344,8 @@ onMounted(load);
         @validate="validateDraft"
         @save="saveDraft"
       />
+
+      <PipelineOperationsSummary v-if="metrics" :metrics="metrics" />
 
       <PipelineExecutionHistory
         :runs="runs"

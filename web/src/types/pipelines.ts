@@ -138,3 +138,42 @@ export type PipelineValidationResponse = {
   runtime_supported: boolean;
   runtime_error?: string | null;
 };
+
+export type PipelineFeatureMetrics = {
+  feature: string;
+  run_count: number;
+  failed_count: number;
+  fallback_run_count: number;
+  warning_run_count: number;
+  average_elapsed_ms?: number | null;
+  p95_elapsed_ms?: number | null;
+};
+
+export type PipelineStrategyMetrics = {
+  strategy_id: string;
+  stage_ids: string[];
+  executions: number;
+  fallback_count: number;
+  warning_count: number;
+  model_call_count: number;
+  issue_count: number;
+  status_counts: Record<string, number>;
+  average_elapsed_ms?: number | null;
+  p95_elapsed_ms?: number | null;
+  average_input_count?: number | null;
+  average_output_count?: number | null;
+};
+
+export type PipelineOperationalMetrics = {
+  sampled_run_count: number;
+  status_counts: Record<string, number>;
+  fallback_run_count: number;
+  warning_run_count: number;
+  average_run_elapsed_ms?: number | null;
+  p95_run_elapsed_ms?: number | null;
+  features: PipelineFeatureMetrics[];
+  strategies: PipelineStrategyMetrics[];
+  sample_limit: number;
+  feature_filter?: string | null;
+  owner_filter?: string | null;
+};

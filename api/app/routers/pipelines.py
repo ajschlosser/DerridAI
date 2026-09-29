@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 
 from ..http_auth import request_user, require_admin
 from ..pipelines.manager import pipeline_manager
+from ..pipelines.metrics import aggregate_pipeline_metrics
 from ..pipelines.models import PipelineAssignment, PipelineDefinition
 from ..pipelines.store import pipeline_store
 
@@ -183,6 +184,30 @@ def reset_pipeline_assignment(feature: str, request: Request) -> dict[str, Any]:
     except KeyError:
         resolved = None
     return {"deleted": removed, "resolved": resolved}
+
+
+@router.get("/metrics")
+def pipeline_metrics(
+    request: Request,
+    feature: str = Query(default="", max_length=160),
+    owner: str = Query(default="", max_length=200),
+    limit: int = Query(default=250, ge=1, le=1000),
+) -> dict[str, Any]:
+    """Aggregate recent operational traces without exposing source/prompt content."""
+
+    require_admin(request)
+    rows = pipeline_store.list_runs(
+        feature=feature or None,
+        owner=owner or None,
+        limit=limit,
+        offset=0,
+    )
+    return {
+        **aggregate_pipeline_metrics(rows),
+        "sample_limit": limit,
+        "feature_filter": feature or None,
+        "owner_filter": owner or None,
+    }
 
 
 @router.get("/runs")

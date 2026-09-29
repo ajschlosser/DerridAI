@@ -8150,6 +8150,39 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'pipelines.purpose_precedents': 'Précédents de métadonnées',
  'pipelines.purpose_research': 'Recherche',
  'pipelines.purpose_response_memory': 'Mémoire des réponses',
+ 'pipelines.metrics_title': 'Santé opérationnelle',
+ 'pipelines.metrics_help': ('Agrégées à partir de traces d’exécution récentes. Ces mesures décrivent le comportement du système—'
+                            'latence, échecs et replis—et non la validité savante des preuves récupérées.'),
+ 'pipelines.metrics_sample': 'Échantillon récent de traces',
+ 'pipelines.metrics_runs': 'Exécutions échantillonnées',
+ 'pipelines.metrics_runs_help': ('Traces de pipeline les plus récentes incluses dans ce résumé, jusqu’à la limite configurée. '
+                                 'Il s’agit d’un échantillon opérationnel, pas d’un total historique.'),
+ 'pipelines.metrics_fallback_runs': 'Exécutions avec repli ou échec d’étape',
+ 'pipelines.metrics_fallback_runs_help': ('Une exécution est comptée ici si une étape a échoué, dépassé le délai, été indisponible '
+                                          'ou enregistré un motif de repli. L’exécution globale peut néanmoins avoir réussi.'),
+ 'pipelines.metrics_failed_runs': 'Exécutions échouées',
+ 'pipelines.metrics_failed_runs_help': ('Exécutions dont l’état global du pipeline est un échec. Un repli d’étape ne transforme '
+                                        'pas automatiquement toute l’exécution en échec.'),
+ 'pipelines.metrics_p95_runtime': 'Durée au 95e centile',
+ 'pipelines.metrics_p95_runtime_help': ('Environ 95 % des exécutions échantillonnées se sont terminées dans cette durée ou moins. '
+                                        'Cette mesure rend visible la lenteur de la queue que la moyenne peut masquer.'),
+ 'pipelines.metrics_by_feature': 'Par fonctionnalité',
+ 'pipelines.metrics_by_strategy': 'Santé des stratégies d’étape',
+ 'pipelines.metrics_by_strategy_help': ('Les stratégies avec échecs ou replis apparaissent en premier. Une stratégie peut être '
+                                        'utilisée sous plusieurs ID d’étape et versions de pipeline.'),
+ 'pipelines.metric_feature': 'Fonctionnalité',
+ 'pipelines.metric_runs': 'Exécutions',
+ 'pipelines.metric_fallbacks': 'Replis',
+ 'pipelines.metric_failed': 'Échecs',
+ 'pipelines.metric_p95': 'Temps p95',
+ 'pipelines.metric_strategy': 'Stratégie',
+ 'pipelines.metric_executions': 'Exécutions',
+ 'pipelines.metric_issues': 'Problèmes',
+ 'pipelines.metric_flow': 'Moy. entrée → sortie',
+ 'pipelines.metric_model_calls': 'Appels de modèle',
+ 'pipelines.metrics_empty': 'Aucune mesure d’exécution pour le moment',
+ 'pipelines.metrics_empty_help': ('Les mesures apparaîtront après que les fonctionnalités utilisant des pipelines auront produit '
+                                  'des traces d’exécution.'),
  'pipelines.recent_runs': 'Exécutions récentes',
  'pipelines.recent_runs_help': ('Retracez le chemin des stratégies, les replis, le nombre de candidats, les modèles, '
                                 'les collections et les durées réellement exécutés.'),
