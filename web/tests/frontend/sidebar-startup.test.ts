@@ -272,6 +272,12 @@ describe("sidebar at sign-in", () => {
         .find((button) => button.text() === "Pipeline Studio")
         ?.attributes("aria-current"),
     ).toBe("page");
+    expect(
+      wrapper
+        .findAll(".shell-nav-group-toggle")
+        .find((button) => button.text() === "AI & Automation")
+        ?.attributes("aria-expanded"),
+    ).toBe("true");
   });
 
   it("filters navigation without hiding its information architecture", async () => {
@@ -288,10 +294,15 @@ describe("sidebar at sign-in", () => {
 
   it("remembers collapsed groups while keeping the active group expanded", async () => {
     const { wrapper, router } = await signIn("admin");
-    const corpora = wrapper
-      .findAll(".shell-nav-group-toggle")
-      .find((button) => button.text() === "Corpora");
+    const groupToggle = (label: string) =>
+      wrapper.findAll(".shell-nav-group-toggle").find((button) => button.text() === label);
+    const corpora = groupToggle("Corpora");
     expect(corpora).toBeTruthy();
+    expect(groupToggle("Research")?.attributes("aria-expanded")).toBe("true");
+    expect(corpora?.attributes("aria-expanded")).toBe("true");
+    expect(groupToggle("Corpus Management")?.attributes("aria-expanded")).toBe("false");
+    expect(groupToggle("AI & Automation")?.attributes("aria-expanded")).toBe("false");
+    expect(groupToggle("System")?.attributes("aria-expanded")).toBe("false");
 
     await corpora!.trigger("click");
     expect(corpora!.attributes("aria-expanded")).toBe("false");
