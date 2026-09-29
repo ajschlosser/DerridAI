@@ -153,6 +153,13 @@ DEFAULT_STRATEGIES = [
         output_type="candidate_set",
         deterministic=False,
         capabilities=["embedding", "chroma"],
+        config_schema={
+            "type": "object",
+            "properties": {
+                "fetch_k": _integer(1, 500),
+                "min_similarity": _number(0, 1),
+            },
+        },
     ),
     StrategySpec(
         strategy_id="retrieve.response_memory",
@@ -163,6 +170,27 @@ DEFAULT_STRATEGIES = [
         output_type="candidate_set",
         deterministic=False,
         capabilities=["embedding", "chroma"],
+        config_schema={
+            "type": "object",
+            "properties": {
+                "fetch_k": _integer(1, 500),
+                "min_similarity": _number(0, 1),
+            },
+        },
+    ),
+    StrategySpec(
+        strategy_id="retrieve.memory_lexical_fallback",
+        family="candidate_generation",
+        label="Lexical memory fallback",
+        description="When semantic memory retrieval fails, match eligible durable memory rows by word overlap without changing their authority or provenance status.",
+        input_type="any",
+        output_type="candidate_set",
+        config_schema={
+            "type": "object",
+            "properties": {
+                "fetch_k": _integer(1, 500),
+            },
+        },
     ),
     StrategySpec(
         strategy_id="filter.metadata_scope",
