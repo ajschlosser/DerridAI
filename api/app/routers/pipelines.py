@@ -39,18 +39,18 @@ def validate_pipeline_definition(
 ) -> dict[str, Any]:
     require_admin(request)
     validation = pipeline_manager.service.validate(body)
-    runtime_error = None
-    if validation.valid and body.purpose == "research":
-        from ..pipelines.research import compile_research_pipeline
-
-        try:
-            compile_research_pipeline(body)
-        except ValueError as exc:
-            runtime_error = str(exc)
+    runtime = (
+        pipeline_manager.runtime_support(body)
+        if validation.valid
+        else {
+            "supported": False,
+            "reason": "Resolve graph validation errors before testing runtime support.",
+        }
+    )
     return {
         "validation": validation.model_dump(mode="json"),
-        "runtime_supported": validation.valid and runtime_error is None,
-        "runtime_error": runtime_error,
+        "runtime_supported": bool(runtime.get("supported")),
+        "runtime_error": runtime.get("reason"),
     }
 
 
