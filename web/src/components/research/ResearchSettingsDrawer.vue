@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import AppIcon from "../AppIcon.vue";
+import PipelineStageList from "../pipelines/PipelineStageList.vue";
 import { useI18nStore } from "../../stores/i18n";
+import type { PipelineAssignment, PipelineDefinition } from "../../types/pipelines";
 import type {
   ResearchConfig,
   ResearchProfile,
   ResearchPromptMetadataPolicy,
 } from "../../types/research";
 
-type SettingsSection = "retrieval" | "evidence" | "generation";
-const props = defineProps<{
+type SettingsSection = "pipeline" | "retrieval" | "evidence" | "generation";
+const props = withDefaults(defineProps<{
   config: ResearchConfig;
   profiles: ResearchProfile[];
   selectedProfileId: string;
@@ -18,7 +20,14 @@ const props = defineProps<{
   models: string[];
   metadataFields: string[];
   researcher: boolean;
-}>();
+  pipelineOptions?: PipelineDefinition[];
+  pipelineAssignment?: PipelineAssignment | null;
+  pipelineOverrideAllowed?: boolean;
+}>(), {
+  pipelineOptions: () => [],
+  pipelineAssignment: null,
+  pipelineOverrideAllowed: false,
+});
 const emit = defineEmits<{
   apply: [
     payload: {
@@ -41,9 +50,46 @@ const settingsError = ref("");
 const selectedProfile = computed(
   () => props.profiles.find((profile) => profile.id === props.selectedProfileId) || null,
 );
+const assignedPipeline = computed(
+  () =>
+    props.pipelineOptions.find(
+      (pipeline) =>
+        pipeline.pipeline_id === props.pipelineAssignment?.pipeline_id &&
+        pipeline.version === props.pipelineAssignment?.pipeline_version,
+    ) || null,
+);
+const selectedPipeline = computed(() => {
+  const id = String(draft.value.pipeline_id || "").trim();
+  const version = Number(draft.value.pipeline_version || 0);
+  if (!id) return assignedPipeline.value;
+  return (
+    props.pipelineOptions.find(
+      (pipeline) => pipeline.pipeline_id === id && pipeline.version === version,
+    ) || assignedPipeline.value
+  );
+});
+const pipelineSelection = computed({
+  get: () => {
+    const id = String(draft.value.pipeline_id || "").trim();
+    const version = Number(draft.value.pipeline_version || 0);
+    return id && version ? `${id}@${version}` : "";
+  },
+  set: (value: string) => {
+    const raw = String(value || "");
+    if (!raw) {
+      draft.value.pipeline_id = "";
+      draft.value.pipeline_version = null;
+      return;
+    }
+    const split = raw.lastIndexOf("@");
+    draft.value.pipeline_id = split > 0 ? raw.slice(0, split) : raw;
+    draft.value.pipeline_version = split > 0 ? Number(raw.slice(split + 1)) || null : null;
+  },
+});
 const activeSectionTitle = computed(
   () =>
     ({
+      pipeline: i18n.t("research.pipeline_chain", "Pipeline chain"),
       retrieval: i18n.t("research.retrieval"),
       evidence: i18n.t("research.evidence_citations"),
       generation: i18n.t("research.generation"),
@@ -53,6 +99,8 @@ const activeSectionTitle = computed(
 function sync() {
   settingsError.value = "";
   draft.value = {
+    pipeline_id: props.config.pipeline_id || "",
+    pipeline_version: props.config.pipeline_version || null,
     locales: [...(props.config.locales || [])],
     search_types: [...(props.config.search_types || [])],
     k: props.config.k,
@@ -84,7 +132,7 @@ function sync() {
   const raw = props.generation.extra_options;
   extraOptions.value = typeof raw === "string" ? raw : JSON.stringify(raw || {}, null, 2);
 }
-function open(section: SettingsSection = "retrieval", focusPromptMetadata = false) {
+function open(section: SettingsSection = "pipeline", focusPromptMetadata = false) {
   sync();
   activeSection.value = section;
   isOpen.value = true;
@@ -132,7 +180,12 @@ function togglePromptMetadata(
 
 function resetSection(section: SettingsSection) {
   const source = props.config;
-  if (section === "retrieval")
+  if (section === "pipeline")
+    Object.assign(draft.value, {
+      pipeline_id: source.pipeline_id || "",
+      pipeline_version: source.pipeline_version || null,
+    });
+  else if (section === "retrieval")
     Object.assign(draft.value, {
       locales: [...(source.locales || [])],
       search_types: [...(source.search_types || [])],
