@@ -200,6 +200,27 @@ describe("System Data Pipeline Studio", () => {
       limit: 30,
       offset: 0,
     });
+    vi.spyOn(pipelinesApi, "cloneDraft").mockImplementation(async (pipelineId, version) => {
+      const source = catalog.pipelines.find(
+        (item) => item.pipeline_id === pipelineId && item.version === version,
+      );
+      if (!source) throw new Error("Pipeline definition not found.");
+      return {
+        pipeline: {
+          ...structuredClone(source),
+          pipeline_id: source.built_in ? `${source.pipeline_id}.custom` : source.pipeline_id,
+          version: source.built_in ? 1 : source.version + 1,
+          name: source.built_in ? `${source.name} — custom` : source.name,
+          status: "draft",
+          built_in: false,
+          derived_from: `${source.pipeline_id}@${source.version}`,
+          created_at: null,
+          created_by: null,
+          validation: undefined,
+          runtime_support: undefined,
+        },
+      };
+    });
   });
 
   it("shows assigned definitions and durable execution traces", async () => {
@@ -261,10 +282,41 @@ describe("System Data Pipeline Studio", () => {
       .find((item) => item.text().includes("Clone & edit"));
     expect(clone).toBeTruthy();
     await clone!.trigger("click");
+    await flushPromises();
 
+    expect(pipelinesApi.cloneDraft).toHaveBeenCalledWith("research.current", 1);
     expect(wrapper.text()).toContain("Configure cloned pipeline");
     const idInput = wrapper.find('.pipeline-editor input[autocomplete="off"]');
     expect((idInput.element as HTMLInputElement).value).toBe("research.current.custom");
     expect(wrapper.text()).toContain("Stage settings");
   });
 });
+
+
+
+  it("asks the server for the next version when cloning a saved custom pipeline", async () => {
+    const wrapper = mount(SystemDataPipelines);
+    await flushPromises();
+
+    const custom = wrapper
+      .findAll(".pipeline-choice")
+      .find((item) => item.text().includes("Research — custom"));
+    expect(custom).toBeTruthy();
+    await custom!.trigger("click");
+
+    const clone = wrapper
+      .findAll(".detail-actions .btn")
+      .find((item) => item.text().includes("Clone & edit"));
+    expect(clone).toBeTruthy();
+    await clone!.trigger("click");
+    await flushPromises();
+
+    expect(pipelinesApi.cloneDraft).toHaveBeenCalledWith("research.custom", 2);
+    const inputs = wrapper.findAll(".pipeline-editor input");
+    const idInput = inputs.find(
+      (input) => (input.attributes("autocomplete") || "") === "off",
+    );
+    expect((idInput!.element as HTMLInputElement).value).toBe("research.custom");
+    const versionInput = inputs.find((input) => input.attributes("type") === "number");
+    expect((versionInput!.element as HTMLInputElement).value).toBe("3");
+  });
