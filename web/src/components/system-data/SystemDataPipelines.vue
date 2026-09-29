@@ -348,7 +348,7 @@ onMounted(load);
 
       <PipelineComparisonPanel :pipelines="pipelines" />
 
-            <PipelineOperationsSummary v-if="metrics" :metrics="metrics" />
+      <PipelineOperationsSummary v-if="metrics" :metrics="metrics" />
 
       <PipelineExecutionHistory
         :runs="runs"
