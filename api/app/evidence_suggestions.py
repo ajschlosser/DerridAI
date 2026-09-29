@@ -202,6 +202,7 @@ def suggest_evidence_blocks_semantic(
     limit: int = 5,
     provider: str | None = None,
     model: str | None = None,
+    query: str | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Combine deterministic lexical and local source-unit semantic signals.
 
@@ -216,7 +217,7 @@ def suggest_evidence_blocks_semantic(
     try:
         if not blocks or not _flatten(value):
             raise ValueError("No proposed value or source blocks are available.")
-        query = semantic_query(field_metadata, value)
+        query_text = query or semantic_query(field_metadata, value)
         projection.sync(
             source_document_id,
             blocks,
@@ -231,7 +232,7 @@ def suggest_evidence_blocks_semantic(
             provider=provider,
             model=model,
         )
-        query_vector = projection.embed_query(query, provider=provider, model=model)
+        query_vector = projection.embed_query(query_text, provider=provider, model=model)
         for block in blocks:
             block_id = str(block.get("block_id") or "")
             unit_id = str(block.get("source_unit_id") or block_id)
