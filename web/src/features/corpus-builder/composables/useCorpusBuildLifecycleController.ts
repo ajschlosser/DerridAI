@@ -157,7 +157,14 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
       return;
     }
     try {
-      options.currentBuild.value = await corpusBuilderApi.build(options.selectedBuildId.value);
+      const refreshed = await corpusBuilderApi.build(options.selectedBuildId.value);
+      if (options.currentBuild.value?.build_id === refreshed.build_id) {
+        // Reconcile into the existing reactive object so a background authoritative read
+        // cannot remount the active workspace or reset child component state.
+        Object.assign(options.currentBuild.value, refreshed);
+      } else {
+        options.currentBuild.value = refreshed;
+      }
       syncBuildInRail(options.currentBuild.value);
     } catch (exc) {
       options.setMessage(exc instanceof Error ? exc.message : String(exc), "error");
