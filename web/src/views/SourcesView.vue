@@ -143,7 +143,7 @@ function useInBuilder(ids: string[]) {
   window.dispatchEvent(
     new CustomEvent("derridai:navigate-native", {
       detail: {
-        path: `/pdf?mode=builder&sources=${encodeURIComponent(ids.join(","))}`,
+        path: `/corpus-builder?sources=${encodeURIComponent(ids.join(","))}`,
         runtimeView: "pdf",
       },
     }),
