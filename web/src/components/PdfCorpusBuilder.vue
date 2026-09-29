@@ -1555,7 +1555,9 @@ async function ensureReviewHydrated(preferredId = "") {
   );
   if (expected < 1) return;
   await nextTick();
-  await refreshRecords(true, preferredId);
+  // Background topology hydration must reconcile in place. A reset clears the selected
+  // Record cache and pagination, which makes live enrichment look like a page refresh.
+  await refreshRecords(false, preferredId);
   if (selectedRecord.value && !sourceBlocks.value.length) await refreshBlocks();
 }
 async function refreshAll() {
@@ -1894,11 +1896,12 @@ watch(
     ] as const,
   async ([buildId, count, metadataTotal, metadataEnriched, status, stage]) => {
     const expected = Math.max(Number(count || 0), Number(metadataTotal || 0));
-    const enriched = Number(metadataEnriched || 0);
-    if (enriched > hydratedMetadataCount.value) {
-      hydratedMetadataCount.value = enriched;
-      await ensureReviewHydrated(selectedRecordId.value);
-    }
+    // Per-record completion arrives separately over the build WebSocket and patches only
+    // that queue row/open Record. Do not re-page the whole review workspace for this counter.
+    hydratedMetadataCount.value = Math.max(
+      hydratedMetadataCount.value,
+      Number(metadataEnriched || 0),
+    );
     if (!buildId || expected < 1) return;
     const visibleStage =
       ["enriching", "review", "ready"].includes(String(stage || "")) ||
