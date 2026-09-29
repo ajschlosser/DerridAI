@@ -31,11 +31,14 @@
   line-height: var(--lh-tight);
 }
 
-/* Leave room for the operations dock so it never covers the end of the page. */
-body:has(#operationProgressStack.minimized) #appContent > * {
+/* Leave room only for the floating operations dock. The top-bar dock is part of shell chrome. */
+html[data-operations-dock-mode="floating"] body:has(#operationProgressStack.minimized) #appContent > * {
   padding-bottom: 72px;
 }
-body:has(#operationProgressStack:not(.minimized)) #appContent > * {
+html[data-operations-dock-mode="floating"]
+  body:has(#operationProgressStack:not(.minimized))
+  #appContent
+  > * {
   padding-bottom: min(36vh, 280px);
 }
 
@@ -47,7 +50,10 @@ body:has(#operationProgressStack:not(.minimized)) #appContent > * {
   }
 }
 @media (max-width: 650px) {
-  body:has(#operationProgressStack.minimized) #appContent > * {
+  html[data-operations-dock-mode="floating"]
+    body:has(#operationProgressStack.minimized)
+    #appContent
+    > * {
     padding-bottom: 120px;
   }
 }
