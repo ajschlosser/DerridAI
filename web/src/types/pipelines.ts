@@ -275,16 +275,64 @@ export type ResearchPipelineComparisonRequest = {
 };
 
 
+export type BenchmarkCollectionSnapshot = {
+  name: string;
+  storage_name?: string | null;
+  count: number;
+  manifest_version?: number | null;
+  embedding_provider?: string | null;
+  embedding_model?: string | null;
+  embedding_dimension?: number | null;
+  embedding_revision?: string | null;
+  distance_metric?: string | null;
+  retrieval_mode?: string | null;
+  status?: string | null;
+  build_id?: string | null;
+  build_created_at?: string | null;
+  last_synced_at?: string | null;
+  source_kind?: string | null;
+  source_label?: string | null;
+  source_record_count?: number | null;
+  source_snapshot_hash?: string | null;
+  app_version?: string | null;
+};
+
+export type BenchmarkCorpusSnapshot = {
+  fingerprint: string;
+  collections: BenchmarkCollectionSnapshot[];
+  limitations: string[];
+};
+
+export type ResearchPipelineBenchmarkCaseCreate = {
+  case_id: string;
+  version: number;
+  prompt: string;
+  instructions?: string | null;
+  source_collection: string;
+  locales?: Array<"en" | "fr">;
+  search_types?: Array<"mmr" | "similarity" | "lexical">;
+  k?: number;
+  fetch_k?: number;
+  lambda_mult?: number;
+  rrf_k?: number;
+  rerank_top_n?: number;
+  reranker?: "cross_encoder" | "lexical" | "none";
+  cross_encoder_model?: string;
+  query_decomposition?: false;
+  evidence_record_char_limit?: number;
+  evidence_total_char_limit?: number;
+  notes?: string | null;
+};
+
+export type ResearchPipelineBenchmarkCase = ResearchPipelineBenchmarkCaseCreate & {
+  corpus_snapshot: BenchmarkCorpusSnapshot;
+  created_at: string;
+  created_by?: string | null;
+};
+
 export type ResearchPipelineBenchmarkRequest = {
   case_id: string;
   case_version: number;
-  notes?: string | null;
-  request: {
-    prompt: string;
-    instructions?: string | null;
-    source_collection: string;
-    query_decomposition?: boolean;
-  };
   left: { pipeline_id: string; version: number };
   right: { pipeline_id: string; version: number };
 };
@@ -296,17 +344,21 @@ export type ResearchPipelineBenchmarkRun = {
   mode: "retrieval_only";
   created_at: string;
   created_by?: string | null;
-  notes?: string | null;
+  case_snapshot: Record<string, unknown>;
   fixed_input: {
     prompt: string;
     instructions?: string | null;
     source_collection: string;
   };
-  corpus: Record<string, unknown>;
+  corpus: BenchmarkCorpusSnapshot;
   retrieval_config: Record<string, unknown>;
   model_config: Record<string, unknown>;
-  left_pipeline: ResearchPipelineComparisonSide["pipeline"];
-  right_pipeline: ResearchPipelineComparisonSide["pipeline"];
+  left_pipeline: ResearchPipelineComparisonSide["pipeline"] & {
+    resolved_pipeline?: Record<string, unknown>;
+  };
+  right_pipeline: ResearchPipelineComparisonSide["pipeline"] & {
+    resolved_pipeline?: Record<string, unknown>;
+  };
   comparison: ResearchPipelineComparisonResult;
   reproducibility_warnings: string[];
 };
