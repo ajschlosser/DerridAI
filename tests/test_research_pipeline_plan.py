@@ -4,7 +4,10 @@ from __future__ import annotations
 import pytest
 from app.pipelines.defaults import built_in_pipeline
 from app.pipelines.models import PipelineDefinition
-from app.pipelines.research import compile_research_pipeline
+from app.pipelines.research import (
+    compile_research_pipeline,
+    resolve_research_runtime_settings,
+)
 
 
 def test_current_research_pipeline_compiles_to_parallel_mmr_plan() -> None:
@@ -92,3 +95,96 @@ def test_research_compiler_rejects_unimplemented_strategy_family() -> None:
 
     with pytest.raises(ValueError, match="does not implement"):
         compile_research_pipeline(pipeline)
+
+
+
+def test_pipeline_stage_config_overrides_request_defaults() -> None:
+    source = built_in_pipeline("research.current", 1)
+    assert source is not None
+    stages = []
+    for stage in source.stages:
+        config = dict(stage.config)
+        if stage.id == "dense":
+            config["fetch_k"] = 37
+        elif stage.id == "rrf":
+            config["rrf_k"] = 17
+        elif stage.id == "rerank":
+            config.update(
+                {
+                    "top_k": 9,
+                    "model": "custom/cross-encoder",
+                    "timeout_seconds": 12.5,
+                }
+            )
+        elif stage.id == "pack":
+            config.update(
+                {
+                    "record_char_limit": 4321,
+                    "total_char_limit": 54321,
+                }
+            )
+        stages.append(stage.model_copy(update={"config": config}))
+
+    custom = source.model_copy(
+        update={
+            "pipeline_id": "research.configured",
+            "version": 2,
+            "built_in": False,
+            "stages": stages,
+        }
+    )
+    plan = compile_research_pipeline(custom)
+    settings = resolve_research_runtime_settings(
+        plan,
+        {
+            "k": 64,
+            "fetch_k": 500,
+            "rrf_k": 60,
+            "rerank_top_n": 24,
+            "cross_encoder_model": "request/model",
+            "lambda_mult": 0.7,
+            "query_decomposition_num_predict": 768,
+            "evidence_record_char_limit": 12000,
+            "evidence_total_char_limit": 120000,
+        },
+    )
+
+    assert settings.semantic_fetch_k == 64  # fetch_k cannot undercut requested retrieval K
+    assert settings.rrf_k == 17
+    assert settings.rerank_top_n == 9
+    assert settings.cross_encoder_model == "custom/cross-encoder"
+    assert settings.cross_encoder_timeout_seconds == 12.5
+    assert settings.evidence_record_char_limit == 4321
+    assert settings.evidence_total_char_limit == 54321
+
+
+def test_research_fallbacks_follow_declared_edges() -> None:
+    source = built_in_pipeline("research.current", 1)
+    assert source is not None
+    stages = []
+    for stage in source.stages:
+        if stage.id == "rerank":
+            stage = stage.model_copy(
+                update={
+                    "on_unavailable": None,
+                    "on_timeout": "rerank_fallback",
+                    "on_error": None,
+                }
+            )
+        stages.append(stage)
+
+    custom = source.model_copy(
+        update={
+            "pipeline_id": "research.timeout-only-fallback",
+            "built_in": False,
+            "stages": stages,
+        }
+    )
+    plan = compile_research_pipeline(custom)
+
+    assert plan.rerank_fallback("timeout") == (
+        "rerank_fallback",
+        "rerank.lexical_fallback",
+    )
+    assert plan.rerank_fallback("unavailable") is None
+    assert plan.rerank_fallback("error") is None
