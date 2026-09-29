@@ -57,7 +57,6 @@ Siehe [SPECIFICATION.md](SPECIFICATION.md) für die normative cELF-1.0-Spezifika
 
 ### Laufzeitdienste
 
-
 - `web` — Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js und nginx. Browseranwendung; proxyt `/api/` und nutzt REST, GraphQL sowie Realtime-Benachrichtigungen. Storybook ist ein optionales Dev-Profil.
 - `api` — Python 3.12, FastAPI, Strawberry GraphQL, ChromaDB-Client, PyMuPDF, sentence-transformers und spaCy. Autoritative Anwendungsgrenze für Authentifizierung, Quellen/Korpus, cELF-Reads, Provenienz, RAG, Pipelines, Jobs und Systemzustand.
 - `document-nlp` — optionaler isolierter BookNLP-Worker für englische Document Intelligence. Er erhält begrenzten, geprüften Text und besitzt keine Korpusautorität.
