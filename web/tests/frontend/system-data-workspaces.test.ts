@@ -4,7 +4,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const push = vi.fn();
-const route = { query: { section: "metadata" } };
+const route = { name: "system-data-metadata", query: {} };
 
 vi.mock("vue-router", () => ({
   RouterLink: { props: ["to"], template: "<a><slot /></a>" },
@@ -50,8 +50,8 @@ describe("System Data workspaces", () => {
     expect(advanced).toBeTruthy();
     await advanced!.trigger("click");
     expect(push).toHaveBeenCalledWith({
-      path: "/system-data",
-      query: { section: "advanced" },
+      name: "system-data-advanced",
+      query: {},
     });
   });
 

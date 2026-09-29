@@ -171,7 +171,7 @@ export const scenarios: Scenario[] = [
     ready: (p) => p.getByRole("heading", { name: "Using DerridAI" }),
     scan: ".ui-dialog",
     steps: async (p) => {
-      await p.getByRole("button", { name: "Help" }).click();
+      await p.locator(".topbar-chrome").getByRole("button", { name: "Help" }).click();
     },
   },
   {

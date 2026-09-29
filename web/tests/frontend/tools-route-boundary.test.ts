@@ -19,7 +19,7 @@ async function resolvedRouteComponent(path: string): Promise<unknown> {
 
 describe("Tools route boundaries", () => {
   it("routes PDF tools directly to the lazy-loaded Vue-owned workspace", async () => {
-    expect(await resolvedRouteComponent("/pdf")).toBe(PdfWorkspaceView);
+    expect(await resolvedRouteComponent("/corpus-builder")).toBe(PdfWorkspaceView);
   });
 
   it("routes vector tools directly to the lazy-loaded Vue-owned workspace", async () => {

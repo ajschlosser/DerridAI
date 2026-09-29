@@ -160,7 +160,7 @@ describe("Metadata memory page", () => {
 
     const targets = wrapper.findAll(".memory-relations a").map((a) => a.attributes("data-to"));
     expect(targets.join()).toContain("semantic_memory_outbox");
-    expect(targets.join()).toContain('"section":"metadata"');
+    expect(targets.join()).toContain("system-data-metadata");
 
     expect(wrapper.text()).not.toContain("Context around the evidence.");
     await wrapper.get(".details-toggle").trigger("click");
