@@ -798,7 +798,16 @@ def _cross_encoder_rerank(
     docs: list[dict[str, Any]],
     top_n: int,
     model_name: str,
-) -> tuple[list[dict[str, Any]], str | None]:
+    *,
+    allow_lexical_fallback: bool = True,
+) -> tuple[list[dict[str, Any]], str | None, dict[str, Any]]:
+    """Rerank a bounded candidate set and report the strategy that actually ran.
+
+    Cross-encoder availability is an operational condition, not a reason to hide
+    a path change. The returned telemetry therefore records whether the model
+    reranker completed or whether the explicit lexical fallback was used.
+    """
+
     scores, telemetry = predict_scores(
         [
             (query, str(item["record"].get("text") or ""))
@@ -808,17 +817,28 @@ def _cross_encoder_rerank(
         timeout_seconds=settings.ollama_timeout_seconds,
     )
     if scores is None:
-        return _lexical_rerank(query, docs, top_n), (
-            f"Cross-encoder fallback ({telemetry.get('fallback_reason')}); "
-            "used lexical/vector fallback."
-        )
+        reason = str(telemetry.get("fallback_reason") or "unavailable")
+        if allow_lexical_fallback:
+            fallback = _lexical_rerank(query, docs, top_n)
+            return fallback, (
+                f"Cross-encoder fallback ({reason}); used lexical/vector fallback."
+            ), {**telemetry, "mode": "lexical_fallback", "fallback_reason": reason}
+
+        fallback = [dict(item) for item in docs[:top_n]]
+        for item in fallback:
+            item["rerank_score"] = item.get("rrf_score", 0.0)
+        return fallback, (
+            f"Cross-encoder unavailable ({reason}); retained fused retrieval order."
+        ), {**telemetry, "mode": "none", "fallback_reason": reason}
+
     ranked = []
     for item, score in zip(docs, scores):
         row = dict(item)
         row["rerank_score"] = score
+        row["cross_encoder_score"] = score
         ranked.append(row)
     ranked.sort(key=lambda item: item["rerank_score"], reverse=True)
-    return ranked[:top_n], None
+    return ranked[:top_n], None, {**telemetry, "mode": "cross_encoder"}
 
 
 def _resolve_search_collections(
@@ -1325,6 +1345,8 @@ def run_rag_pipeline(
         ),
     )
 
+    rerank_telemetry: dict[str, Any] = {"mode": effective_reranker}
+
     if request.skip_retrieval:
         reranked = selected_pool or deduped
         for item in reranked:
@@ -1344,12 +1366,18 @@ def run_rag_pipeline(
         reranked_retrieved = []
         if rerank_pool_limit and retrieved_pool:
             if effective_reranker == "cross_encoder":
-                reranked_retrieved, rerank_warning = _cross_encoder_rerank(
+                reranked_retrieved, rerank_warning, rerank_telemetry = _cross_encoder_rerank(
                     rerank_query,
                     retrieved_pool,
                     rerank_pool_limit,
                     request.cross_encoder_model,
+                    allow_lexical_fallback=pipeline_plan.lexical_rerank_available,
                 )
+                actual_rerank_mode = str(rerank_telemetry.get("mode") or "cross_encoder")
+                if actual_rerank_mode == "lexical_fallback":
+                    effective_reranker = "lexical"
+                elif actual_rerank_mode == "none":
+                    effective_reranker = "none"
                 if rerank_warning:
                     warnings.append(rerank_warning)
             elif effective_reranker == "lexical":
@@ -1378,9 +1406,10 @@ def run_rag_pipeline(
             "selected_evidence_pinned": len(selected_pool),
             "cross_encoder_model": (
                 request.cross_encoder_model
-                if effective_reranker == "cross_encoder"
+                if request.reranker == "cross_encoder"
                 else None
             ),
+            "reranker_telemetry": rerank_telemetry,
         },
     })
     update("rerank", 1, 1, f"{len(reranked)} records after relevance reranking")
