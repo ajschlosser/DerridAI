@@ -264,12 +264,79 @@ export type ResearchPipelineComparisonResult = {
   };
 };
 
+export type ResearchPipelineDryRunRequest = {
+  prompt: string;
+  source_collection: string;
+  query_decomposition?: boolean;
+  locales?: string[];
+};
+
 export type ResearchPipelineComparisonRequest = {
-  request: {
-    prompt: string;
-    source_collection: string;
-    query_decomposition?: boolean;
+  request: ResearchPipelineDryRunRequest;
+  left: { pipeline_id: string; version: number };
+  right: { pipeline_id: string; version: number };
+};
+
+export type ResearchPipelineExpectedCoverage = {
+  expected_count: number;
+  matched_count: number;
+  matched_record_ids: string[];
+  coverage?: number | null;
+};
+
+export type ResearchPipelineBenchmarkCase = {
+  case_id: string;
+  label?: string;
+  request: ResearchPipelineDryRunRequest;
+  expected_record_ids?: string[];
+};
+
+export type ResearchPipelineBenchmarkCaseResult = {
+  case_id: string;
+  label: string;
+  status: "completed" | "failed";
+  expected_record_ids: string[];
+  comparison?: ResearchPipelineComparisonResult;
+  expected_coverage?: {
+    left: {
+      candidate: ResearchPipelineExpectedCoverage;
+      final_evidence: ResearchPipelineExpectedCoverage;
+    };
+    right: {
+      candidate: ResearchPipelineExpectedCoverage;
+      final_evidence: ResearchPipelineExpectedCoverage;
+    };
   };
+  left_error?: string | null;
+  right_error?: string | null;
+};
+
+export type ResearchPipelineBenchmarkAggregateSide = {
+  mean_elapsed_seconds?: number | null;
+  mean_context_characters?: number | null;
+  cross_encoder_calls: number;
+  mean_expected_candidate_coverage?: number | null;
+  mean_expected_final_coverage?: number | null;
+};
+
+export type ResearchPipelineBenchmarkResult = {
+  non_persistent: boolean;
+  left: { pipeline_id: string; version: number };
+  right: { pipeline_id: string; version: number };
+  cases: ResearchPipelineBenchmarkCaseResult[];
+  aggregate: {
+    case_count: number;
+    completed_case_count: number;
+    failed_case_count: number;
+    mean_candidate_overlap?: number | null;
+    mean_final_evidence_overlap?: number | null;
+    left: ResearchPipelineBenchmarkAggregateSide;
+    right: ResearchPipelineBenchmarkAggregateSide;
+  };
+};
+
+export type ResearchPipelineBenchmarkRequest = {
+  cases: ResearchPipelineBenchmarkCase[];
   left: { pipeline_id: string; version: number };
   right: { pipeline_id: string; version: number };
 };
