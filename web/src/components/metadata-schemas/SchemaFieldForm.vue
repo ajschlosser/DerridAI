@@ -77,6 +77,15 @@ const addValue = () => props.field.values.push({ value: "", definition: "" });
       >
       <label class="schema-field"
         ><span
+          >{{ t("field_scope", "Where the value lives") }}
+          <UiTooltip :text="t('field_scope_help')" /></span
+        ><select v-model="field.scope" class="control">
+          <option value="record">{{ t("scope_record", "On each record") }}</option>
+          <option value="corpus">{{ t("scope_corpus", "Once for the corpus") }}</option>
+        </select></label
+      >
+      <label class="schema-field"
+        ><span
           >{{ t("review_visibility", "Record review visibility") }}
           <UiTooltip :text="t('review_visibility_help')" /></span
         ><select v-model="field.review_visibility" class="control">
@@ -148,12 +157,6 @@ const addValue = () => props.field.values.push({ value: "", definition: "" });
         ><input v-model="field.review" type="checkbox" /><span class="option-copy"
           ><b>{{ t("review", "A person must settle it before accepting") }}</b
           ><small>{{ t("review_help") }}</small></span
-        ></label
-      >
-      <label class="option"
-        ><input v-model="field.applies_to_work" type="checkbox" /><span class="option-copy"
-          ><b>{{ t("applies_to_work", "This field applies to the work as a whole") }}</b
-          ><small>{{ t("applies_to_work_help") }}</small></span
         ></label
       >
     </fieldset>

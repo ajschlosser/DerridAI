@@ -24,6 +24,7 @@ const emit = defineEmits<{
   records: [];
   flagged: [];
   inspect: [field: string];
+  semanticMap: [];
 }>();
 const i18n = useI18nStore();
 
@@ -143,6 +144,14 @@ function onCardClick(event: MouseEvent) {
                   <AppIcon name="spark" aria-hidden="true" />{{ i18n.t("works.auto_improve") }}
                 </button>
               </template>
+              <button
+                type="button"
+                class="btn small"
+                :data-semantic-map-work="props.work.work"
+                @click.stop="emit('semanticMap')"
+              >
+                <AppIcon name="spark" aria-hidden="true" />{{ i18n.t("works.semantic_map") }}
+              </button>
               <button
                 type="button"
                 class="btn small danger"

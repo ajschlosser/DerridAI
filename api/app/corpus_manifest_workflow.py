@@ -50,8 +50,10 @@ from .field_assertions import (
 )
 from .metadata_schema import (
     DEFAULT_SCHEMA_ID,
+    DOCUMENT_FIELDS,
     MetadataSchema,
     build_group_prompt,
+    default_document_fields,
     edit_model,
     response_model_for,
 )
@@ -63,7 +65,7 @@ if TYPE_CHECKING:
 
 
 def _validated_work_metadata(schema: MetadataSchema, raw: Any) -> dict[str, Any]:
-    """Keep only well-formed values for fields the schema marks as applying to the whole work.
+    """Keep only well-formed values for fields the schema scopes to the whole corpus rather than to each record.
 
     Anything else is rejected rather than dropped, so a reviewer never believes a value was applied that was not.
     """
@@ -75,7 +77,7 @@ def _validated_work_metadata(schema: MetadataSchema, raw: Any) -> dict[str, Any]
     cleaned: dict[str, Any] = {}
     for name, value in raw.items():
         field = fields.get(name)
-        if field is None or not field.applies_to_work:
+        if field is None or field.scope == "record":
             raise ValueError(f"'{name}' is not a work-wide field in the selected metadata schema.")
         if value in (None, "", []):
             continue
@@ -97,6 +99,48 @@ def _validated_work_metadata(schema: MetadataSchema, raw: Any) -> dict[str, Any]
         if value not in ("", []):
             cleaned[name] = value
     return cleaned
+
+
+def _required_document_fields(build: dict[str, Any], requirement: str) -> list[str]:
+    """Document fields the build's pinned schema requires for `requirement`, read without revalidating the schema.
+
+    A schema stored before document-field policies existed takes the defaults.
+    """
+    raw = build.get("schema") if isinstance(build.get("schema"), dict) else {}
+    policies = raw.get("document_fields")
+    if not isinstance(policies, list):
+        policies = [policy.model_dump() for policy in default_document_fields()]
+    return [
+        str(policy.get("name"))
+        for policy in policies
+        if isinstance(policy, dict) and requirement in (policy.get("required_for") or [])
+    ]
+
+
+def _validated_document_metadata(raw: Any) -> dict[str, Any]:
+    """Validate reviewer-supplied document fields against the manifest contract; empty values are dropped.
+
+    Unknown or ill-typed fields are rejected rather than dropped, so a reviewer never believes a value was applied that was not.
+    """
+    if raw in (None, {}):
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError("Document metadata must be a field-to-value object.")
+    unknown = sorted(set(raw) - set(DOCUMENT_FIELDS))
+    if unknown:
+        raise ValueError("Unknown document field(s): " + ", ".join(unknown))
+    supplied = {
+        name: value.strip() if isinstance(value, str) else value
+        for name, value in raw.items()
+        if (value.strip() if isinstance(value, str) else value) not in (None, "", [])
+    }
+    try:
+        validated = DocumentManifestModel.model_validate(supplied).model_dump(mode="json")
+    except ValidationError as exc:
+        raise ValueError("Document metadata is not valid: " + "; ".join(
+            f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors()[:5]
+        )) from exc
+    return {name: validated[name] for name in supplied}
 
 
 class ManifestWorkflowMixin:
@@ -175,7 +219,11 @@ class ManifestWorkflowMixin:
         unknown_guidance_fields = sorted(set(guidance) - set(schema.field_names()))
         if unknown_guidance_fields:
             raise ValueError("Run guidance references fields outside the selected schema: " + ", ".join(unknown_guidance_fields))
-        request = {**request, "work_metadata": _validated_work_metadata(schema, request.get("work_metadata"))}
+        request = {
+            **request,
+            "work_metadata": _validated_work_metadata(schema, request.get("work_metadata")),
+            "document_metadata": _validated_document_metadata(request.get("document_metadata")),
+        }
         public_request = {k: v for k, v in request.items() if k not in {"api_key", "_review_provider"}}
         build = self.repo.create_build({
             "schema": schema.model_dump(mode="json"), "schema_id": schema.id, "schema_hash": schema.content_hash(), "schema_name": schema.name,
@@ -280,7 +328,7 @@ CURRENT REVIEWED RECORD TEXT:
         stage = str(build.get("stage") or "")
         profile = CORPUS_PROFILES.get(str(build.get("profile_id") or PROFILE_VERSION), CORPUS_PROFILES.get(PROFILE_VERSION, {}))
         required_fields = list(profile.get("publication_required_metadata_fields") or profile.get("required_metadata_fields") or [])
-        required_document_fields = list(profile.get("publication_required_document_fields") or [])
+        required_document_fields = _required_document_fields(build, "publication")
         manifest = build.get("manifest") if isinstance(build.get("manifest"), dict) else {}
         missing_document_fields = [field for field in required_document_fields if manifest.get(field) in (None, "", [])]
 

@@ -97,6 +97,8 @@ import CorpusEnrichmentConfiguration from "./corpus-builder/CorpusEnrichmentConf
 import CorpusSemanticGraphPanel from "./corpus-builder/CorpusSemanticGraphPanel.vue";
 import CorpusRecordSemanticMap from "./corpus-builder/CorpusRecordSemanticMap.vue";
 import CorpusMetadataConfiguration from "./corpus-builder/CorpusMetadataConfiguration.vue";
+import CorpusMissingDocumentFields from "./corpus-builder/CorpusMissingDocumentFields.vue";
+import { missingRequiredDocumentFields, suppliedDocumentMetadata } from "../domain/documentFields";
 import CorpusAdvancedConfiguration from "./corpus-builder/CorpusAdvancedConfiguration.vue";
 import { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
 import CorpusRecordDecisionDock from "./corpus-builder/CorpusRecordDecisionDock.vue";
@@ -466,6 +468,20 @@ async function switchWorkspace(workspace: CorpusWorkspaceMode) {
     },
   });
 }
+// Required document fields that detection on source load missed; only these are asked of the user.
+// Nothing is asked before detection has run for the source.
+const missingDocumentFields = computed(() =>
+  selectedAsset.value?.deterministic_checked_at
+    ? missingRequiredDocumentFields(selectedSchema.value, selectedAsset.value?.initial_metadata)
+    : [],
+);
+const documentMetadata = ref<Record<string, string>>({});
+watch(selectedAssetId, () => {
+  documentMetadata.value = {};
+});
+const documentMetadataPayload = () =>
+  suppliedDocumentMetadata(missingDocumentFields.value, documentMetadata.value);
+
 const {
   registerBuildOperation,
   syncBuildInRail,
@@ -499,6 +515,7 @@ const {
   metadataIssueCount,
   requestedBuildId: () => String(route.query.build || ""),
   runGuidancePayload,
+  documentMetadataPayload,
   applyBuildRequest,
   setMessage,
   resetReviewForBuildStart: () => {
@@ -1555,7 +1572,9 @@ async function ensureReviewHydrated(preferredId = "") {
   );
   if (expected < 1) return;
   await nextTick();
-  await refreshRecords(true, preferredId);
+  // Background topology hydration must reconcile in place. A reset clears the selected
+  // Record cache and pagination, which makes live enrichment look like a page refresh.
+  await refreshRecords(false, preferredId);
   if (selectedRecord.value && !sourceBlocks.value.length) await refreshBlocks();
 }
 async function refreshAll() {
@@ -1894,11 +1913,12 @@ watch(
     ] as const,
   async ([buildId, count, metadataTotal, metadataEnriched, status, stage]) => {
     const expected = Math.max(Number(count || 0), Number(metadataTotal || 0));
-    const enriched = Number(metadataEnriched || 0);
-    if (enriched > hydratedMetadataCount.value) {
-      hydratedMetadataCount.value = enriched;
-      await ensureReviewHydrated(selectedRecordId.value);
-    }
+    // Per-record completion arrives separately over the build WebSocket and patches only
+    // that queue row/open Record. Do not re-page the whole review workspace for this counter.
+    hydratedMetadataCount.value = Math.max(
+      hydratedMetadataCount.value,
+      Number(metadataEnriched || 0),
+    );
     if (!buildId || expected < 1) return;
     const visibleStage =
       ["enriching", "review", "ready"].includes(String(stage || "")) ||
@@ -2432,6 +2452,12 @@ defineExpose({
         @update:use-profile-defaults="useProfileDefaults = $event"
       />
 
+      <CorpusMissingDocumentFields
+        v-if="selectedAsset"
+        v-model="documentMetadata"
+        :fields="missingDocumentFields"
+        :disabled="busy !== ''"
+      />
       <CorpusBuildReadiness
         :media-kind="selectedAsset?.media_kind"
         :source-filename="selectedAsset?.filename || ''"

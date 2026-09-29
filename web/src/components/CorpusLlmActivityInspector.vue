@@ -17,7 +17,11 @@ const drafts = ref<Record<string, { text: string; gap: boolean; final: boolean; 
   {},
 );
 let unsubscribe: (() => void) | null = null;
+const LIVE_REFRESH_INTERVAL_MS = 750;
 let liveTimer: number | null = null;
+let liveRequestInFlight = false;
+let liveDirty = false;
+let lastLiveFetchAt = 0;
 
 const ordered = computed(() => [...items.value].reverse());
 
@@ -41,6 +45,12 @@ async function load() {
 
 async function loadLive() {
   if (!props.buildId || !open.value) return;
+  if (liveRequestInFlight) {
+    liveDirty = true;
+    return;
+  }
+  liveRequestInFlight = true;
+  liveDirty = false;
   try {
     const result = await corpusBuildsApi.llmLiveOutput(props.buildId);
     const next = { ...drafts.value };
@@ -62,16 +72,29 @@ async function loadLive() {
     drafts.value = next;
   } catch {
     // Live drafts are advisory. The persisted trace remains available even if this read fails.
+  } finally {
+    liveRequestInFlight = false;
+    lastLiveFetchAt = Date.now();
+    if (liveDirty && open.value) scheduleLiveLoad();
   }
 }
 
+/**
+ * WebSocket progress can arrive up to REALTIME_PROGRESS_MAX_HZ (8 Hz by default).
+ * Treat it as an invalidation signal, not permission to issue one HTTP read per event:
+ * at most one live-output snapshot starts per interval, and requests never overlap.
+ */
 function scheduleLiveLoad() {
   if (!open.value) return;
-  if (liveTimer !== null) window.clearTimeout(liveTimer);
+  liveDirty = true;
+  if (liveRequestInFlight || liveTimer !== null) return;
+  const wait = Math.max(0, LIVE_REFRESH_INTERVAL_MS - (Date.now() - lastLiveFetchAt));
   liveTimer = window.setTimeout(() => {
     liveTimer = null;
+    if (!liveDirty) return;
+    liveDirty = false;
     void loadLive();
-  }, 120);
+  }, wait);
 }
 
 function subscribe() {
@@ -120,6 +143,11 @@ function toggle(event: Event) {
   } else {
     unsubscribe?.();
     unsubscribe = null;
+    liveDirty = false;
+    if (liveTimer !== null) {
+      window.clearTimeout(liveTimer);
+      liveTimer = null;
+    }
   }
 }
 
@@ -137,6 +165,7 @@ watch(
 );
 onBeforeUnmount(() => {
   unsubscribe?.();
+  liveDirty = false;
   if (liveTimer !== null) window.clearTimeout(liveTimer);
 });
 </script>
