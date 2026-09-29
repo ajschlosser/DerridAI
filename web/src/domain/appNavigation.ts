@@ -8,6 +8,14 @@ export const NAV_SECTION_ORDER = [
   "System",
 ] as const;
 
+export const NAV_SECTION_TARGETS: Record<(typeof NAV_SECTION_ORDER)[number], string> = {
+  Research: "/rag",
+  Corpora: "/search",
+  "Corpus Management": "/sources",
+  "AI & Automation": "/pipelines",
+  System: "/system-data/overview",
+};
+
 export const UTILITY_NAV_IDS = new Set(["operations", "help", "config"]);
 
 export const CONTEXTUAL_NAV_IDS = new Set(["record", "relationships"]);

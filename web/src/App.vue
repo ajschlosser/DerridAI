@@ -22,6 +22,7 @@ import type { SidebarNavEntry, SidebarNavGroup } from "./components/shell/sideba
 import {
   CONTEXTUAL_NAV_IDS,
   NAV_SECTION_ORDER,
+  NAV_SECTION_TARGETS,
   NAV_TARGETS,
   UTILITY_NAV_IDS,
   navIdForRoute,
@@ -120,6 +121,10 @@ function sectionLabel(section: string) {
               ? "section.system"
               : "section.overview";
   return i18n.t(key, section);
+}
+
+function breadcrumbDestination(path: string): string | undefined {
+  return router.resolve(path).path === route.path ? undefined : path;
 }
 
 const currentNavId = computed(() =>
@@ -284,26 +289,22 @@ const breadcrumbItems = computed(() => {
   const section = String(route.meta.navSection || "");
   if (section && section !== "Overview") {
     const sectionPath =
-      section === "Research"
-        ? "/rag"
-        : section === "Corpora"
-          ? "/search"
-          : section === "Corpus Management"
-            ? "/sources"
-            : section === "AI & Automation"
-              ? "/pipelines"
-              : "/system-data/overview";
-    items.push({ label: sectionLabel(section), to: sectionPath });
+      NAV_SECTION_TARGETS[section as keyof typeof NAV_SECTION_TARGETS] ||
+      NAV_SECTION_TARGETS.System;
+    items.push({ label: sectionLabel(section), to: breadcrumbDestination(sectionPath) });
   }
 
   const parentKey = String(route.meta.breadcrumbParentKey || "");
   if (parentKey) {
     items.push({
       label: i18n.t(parentKey, String(route.meta.breadcrumbParentFallback || "")),
-      to: String(route.meta.breadcrumbParentPath || "/system-data/overview"),
+      to: breadcrumbDestination(String(route.meta.breadcrumbParentPath || "/system-data/overview")),
     });
   } else if (route.name === "settings-section") {
-    items.push({ label: i18n.t("nav.config", "Settings"), to: "/settings/workspace" });
+    items.push({
+      label: i18n.t("nav.config", "Settings"),
+      to: breadcrumbDestination("/settings/workspace"),
+    });
   }
 
   const title = translatedRouteTitle();
