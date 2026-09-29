@@ -7557,5 +7557,9 @@
   "help.glossary.cached_provenance.term": "Cached provenance",
   "help.glossary.cached_provenance.definition": "Reviewer-validated prior Research claims and their source bindings made available as advisory context for later runs.",
   "help.glossary.cached_provenance.practical": "A prior claim can steer attention, but DerridAI rechecks its cited records against the current run and does not let absent current evidence become a citation.",
-  "help.summary_label": "Help Center contents"
+  "help.summary_label": "Help Center contents",
+  "help.search_shortcut": "Press / to search",
+  "help.results_found": "{count} matches across page guides, glossary terms, and questions",
+  "help.expand_all": "Expand all",
+  "help.collapse_all": "Collapse all"
 }
