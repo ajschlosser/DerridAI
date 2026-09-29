@@ -11,6 +11,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from .benchmark import ResearchPipelineBenchmarkRun
+from .benchmark_store import PipelineBenchmarkStore
 from .definition_store import PipelineDefinitionStore
 from .models import (
     PipelineAssignment,
@@ -29,6 +31,7 @@ class PipelineStore:
         self.database = PipelineDatabase(path)
         self.definitions = PipelineDefinitionStore(self.database)
         self.traces = PipelineTraceStore(self.database)
+        self.benchmarks = PipelineBenchmarkStore(self.database)
 
     @property
     def path(self) -> Path:
@@ -105,12 +108,38 @@ class PipelineStore:
             offset=offset,
         )
 
+    def put_benchmark(
+        self,
+        run: ResearchPipelineBenchmarkRun,
+    ) -> ResearchPipelineBenchmarkRun:
+        return self.benchmarks.put(run)
+
+    def get_benchmark(
+        self,
+        benchmark_run_id: str,
+    ) -> ResearchPipelineBenchmarkRun | None:
+        return self.benchmarks.get(benchmark_run_id)
+
+    def list_benchmarks(
+        self,
+        *,
+        case_id: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[ResearchPipelineBenchmarkRun]:
+        return self.benchmarks.list(
+            case_id=case_id,
+            limit=limit,
+            offset=offset,
+        )
+
     def snapshot(self) -> dict[str, Any]:
-        """Return configuration and trace history for full system backups."""
+        """Return configuration, traces, and benchmark history for backups."""
 
         return {
             **self.definitions.snapshot(),
             **self.traces.snapshot(),
+            **self.benchmarks.snapshot(),
         }
 
     @staticmethod
@@ -121,6 +150,7 @@ class PipelineStore:
         list[PipelineAssignment],
         list[PipelineRunTrace],
         list[tuple[str, PipelineStageTrace]],
+        list[ResearchPipelineBenchmarkRun],
     ]:
         """Validate a complete backup before any persistent row is changed."""
 
@@ -130,6 +160,7 @@ class PipelineStore:
         assignment_rows = payload.get("assignments") or []
         run_rows = payload.get("runs") or []
         stage_rows = payload.get("stages") or []
+        benchmark_rows = payload.get("benchmark_runs") or []
         if not all(
             isinstance(items, list)
             for items in (
@@ -137,6 +168,7 @@ class PipelineStore:
                 assignment_rows,
                 run_rows,
                 stage_rows,
+                benchmark_rows,
             )
         ):
             raise ValueError("Pipeline backup is invalid.")
@@ -216,7 +248,21 @@ class PipelineStore:
             stage_keys.add(key)
             stages.append((run_id, stage))
 
-        return definitions, assignments, runs, stages
+        benchmarks: list[ResearchPipelineBenchmarkRun] = []
+        benchmark_ids: set[str] = set()
+        for raw in benchmark_rows:
+            if not isinstance(raw, dict):
+                raise ValueError("Pipeline backup contains an invalid benchmark row.")
+            benchmark = ResearchPipelineBenchmarkRun.model_validate(raw)
+            if benchmark.benchmark_run_id in benchmark_ids:
+                raise ValueError(
+                    "Pipeline backup contains duplicate benchmark "
+                    f"{benchmark.benchmark_run_id!r}."
+                )
+            benchmark_ids.add(benchmark.benchmark_run_id)
+            benchmarks.append(benchmark)
+
+        return definitions, assignments, runs, stages, benchmarks
 
     def validate_snapshot(self, payload: dict[str, Any]) -> None:
         """Validate a backup without mutating persistent state."""
@@ -227,17 +273,19 @@ class PipelineStore:
         """Atomically replace pipeline state with a validated backup.
 
         Validation happens before the transaction starts. Definitions,
-        assignments, runs, and stage traces are then replaced through one SQLite
-        connection so any insertion failure rolls the whole restore back.
+        assignments, runs, stage traces, and benchmark results are then replaced
+        through one SQLite connection so any insertion failure rolls the whole
+        restore back.
         """
 
-        definitions, assignments, runs, stages = self._validated_snapshot(payload)
+        definitions, assignments, runs, stages, benchmarks = self._validated_snapshot(payload)
 
         with self.database.lock, self.database.connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             try:
                 conn.execute("DELETE FROM pipeline_stage_runs")
                 conn.execute("DELETE FROM pipeline_runs")
+                conn.execute("DELETE FROM pipeline_benchmark_runs")
                 conn.execute("DELETE FROM pipeline_assignments")
                 conn.execute("DELETE FROM pipeline_definitions")
 
@@ -340,6 +388,30 @@ class PipelineStore:
                             dump_json(data),
                         ),
                     )
+
+                for benchmark in benchmarks:
+                    data = benchmark.model_dump(mode="json")
+                    conn.execute(
+                        """
+                        INSERT INTO pipeline_benchmark_runs
+                            (benchmark_run_id,case_id,case_version,created_at,
+                             created_by,left_pipeline_id,left_pipeline_version,
+                             right_pipeline_id,right_pipeline_version,payload_json)
+                        VALUES(?,?,?,?,?,?,?,?,?,?)
+                        """,
+                        (
+                            benchmark.benchmark_run_id,
+                            benchmark.case_id,
+                            benchmark.case_version,
+                            benchmark.created_at.isoformat(),
+                            benchmark.created_by,
+                            str(benchmark.left_pipeline.get("pipeline_id") or ""),
+                            int(benchmark.left_pipeline.get("pipeline_version") or 0),
+                            str(benchmark.right_pipeline.get("pipeline_id") or ""),
+                            int(benchmark.right_pipeline.get("pipeline_version") or 0),
+                            dump_json(data),
+                        ),
+                    )
                 conn.commit()
             except Exception:
                 conn.rollback()
@@ -348,6 +420,7 @@ class PipelineStore:
     def clear_all(self) -> dict[str, int]:
         return {
             **self.traces.clear(),
+            **self.benchmarks.clear(),
             **self.definitions.clear(),
         }
 
