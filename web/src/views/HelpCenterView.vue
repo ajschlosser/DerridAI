@@ -89,7 +89,7 @@ const hasResults = computed(() => matchCount.value > 0);
         </span>
       </label>
       <p class="help-search-hint">{{ i18n.t("help.search_hint") }}</p>
-      <div class="help-summary" aria-label="Help Center contents">
+      <div class="help-summary" :aria-label="i18n.t('help.summary_label')">
         <span>
           <strong>{{ pageGuides.length }}</strong>
           {{ i18n.t("help.pages_count_label") }}
@@ -721,7 +721,7 @@ const hasResults = computed(() => matchCount.value > 0);
   border-radius: var(--radius-pill);
   background: var(--surface-inset);
   color: var(--text-tertiary);
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: var(--fw-bold);
   letter-spacing: 0.02em;
 }
