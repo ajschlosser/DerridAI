@@ -296,7 +296,7 @@ describe("System Data Pipeline Studio", () => {
     expect(wrapper.text()).toContain("Pipeline Studio");
     expect(wrapper.text()).toContain("Research — current production chain");
     expect(wrapper.text()).toContain("Chroma semantic similarity");
-    expect(wrapper.text()).toContain("Relational diagram");
+    expect(wrapper.text()).toContain("Pipeline diagram");
     expect(wrapper.text()).toContain("Active assignment");
 
     await wrapper.find("#pipeline-tab-operations").trigger("click");
@@ -367,14 +367,14 @@ describe("System Data Pipeline Studio", () => {
     recoveryCatalog.pipelines.push({
       ...structuredClone(catalog.pipelines[0]),
       pipeline_id: "evidence.recovery.cascade",
-      name: "Evidence recovery — legacy cascade",
+      name: "Evidence recovery — relevance cascade (non-cELF-guaranteed)",
       purpose: "evidence_recovery",
       built_in: true,
       runtime_support: {
         supported: true,
         adapter: "evidence_recovery",
         celf_compliant: false,
-        reason: "Not cELF-compliant: candidates from 'mmr' reach the provenance gate.",
+        reason: "Non-cELF-guaranteed: candidates from 'mmr' reach the provenance gate.",
       },
     });
     vi.spyOn(pipelinesApi, "catalog").mockResolvedValue(recoveryCatalog);
@@ -393,12 +393,12 @@ describe("System Data Pipeline Studio", () => {
     const { wrapper } = await mountStudio();
     const choice = wrapper
       .findAll(".pipeline-choice")
-      .find((item) => item.text().includes("legacy cascade"));
+      .find((item) => item.text().includes("relevance cascade"));
     await choice!.trigger("click");
     await flushPromises();
 
     expect(wrapper.text()).toContain("Evidence recovery");
-    expect(wrapper.text()).toContain("Not cELF-compliant");
+    expect(wrapper.text()).toContain("Non-cELF-guaranteed");
     const activate = wrapper
       .findAll(".detail-actions .btn")
       .find((item) => item.text().includes("Make active"));
