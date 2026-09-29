@@ -114,7 +114,6 @@ function seconds(value: number | null | undefined) {
   if (value == null) return "—";
   return `${value.toFixed(value < 10 ? 2 : 1)} s`;
 }
-
 </script>
 
 <template>
@@ -179,7 +178,11 @@ function seconds(value: number | null | undefined) {
         <label>
           <span>{{ t("pipelines.compare_left", "Pipeline A") }}</span>
           <select v-model="leftKey">
-            <option v-for="pipeline in researchPipelines" :key="pipelineKey(pipeline)" :value="pipelineKey(pipeline)">
+            <option
+              v-for="pipeline in researchPipelines"
+              :key="pipelineKey(pipeline)"
+              :value="pipelineKey(pipeline)"
+            >
               {{ pipeline.name }} · v{{ pipeline.version }}
             </option>
           </select>
@@ -188,7 +191,11 @@ function seconds(value: number | null | undefined) {
         <label>
           <span>{{ t("pipelines.compare_right", "Pipeline B") }}</span>
           <select v-model="rightKey">
-            <option v-for="pipeline in researchPipelines" :key="pipelineKey(pipeline)" :value="pipelineKey(pipeline)">
+            <option
+              v-for="pipeline in researchPipelines"
+              :key="pipelineKey(pipeline)"
+              :value="pipelineKey(pipeline)"
+            >
               {{ pipeline.name }} · v{{ pipeline.version }}
             </option>
           </select>
@@ -279,7 +286,9 @@ function seconds(value: number | null | undefined) {
 
         <div class="side-grid">
           <section>
-            <h4>{{ result.left.pipeline.name }} · v{{ result.left.pipeline.pipeline_version }}</h4>
+            <h4>
+              {{ result.left.pipeline.name }} · v{{ result.left.pipeline.pipeline_version }}
+            </h4>
             <p>
               {{ t("pipelines.compare_flow", "Candidates: pre-rerank → reranked → final evidence") }}
               <strong>
@@ -309,7 +318,9 @@ function seconds(value: number | null | undefined) {
           </section>
 
           <section>
-            <h4>{{ result.right.pipeline.name }} · v{{ result.right.pipeline.pipeline_version }}</h4>
+            <h4>
+              {{ result.right.pipeline.name }} · v{{ result.right.pipeline.pipeline_version }}
+            </h4>
             <p>
               {{ t("pipelines.compare_flow", "Candidates: pre-rerank → reranked → final evidence") }}
               <strong>
