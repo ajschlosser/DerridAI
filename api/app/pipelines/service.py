@@ -8,7 +8,12 @@ import json
 from collections import defaultdict, deque
 from typing import Any
 
-from .defaults import BUILT_IN_ASSIGNMENTS, BUILT_IN_PIPELINES, built_in_assignment, built_in_pipeline
+from .defaults import (
+    BUILT_IN_ASSIGNMENTS,
+    BUILT_IN_PIPELINES,
+    built_in_assignment,
+    built_in_pipeline,
+)
 from .models import (
     PipelineAssignment,
     PipelineDefinition,
