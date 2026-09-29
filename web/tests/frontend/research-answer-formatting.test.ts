@@ -63,9 +63,9 @@ describe("research answer formatting", () => {
   });
 
   it("drops unmatched strong delimiters rather than leaking bold state through the rest of a block", () => {
-    expect(segmentResearchAnswer("A stable opening **followed by an unfinished emphasis", [])).toEqual([
-      { text: "A stable opening followed by an unfinished emphasis" },
-    ]);
+    expect(
+      segmentResearchAnswer("A stable opening **followed by an unfinished emphasis", []),
+    ).toEqual([{ text: "A stable opening followed by an unfinished emphasis" }]);
   });
 
   it("normalizes hard-wrapped prose into a single paragraph and preserves list structure", () => {
