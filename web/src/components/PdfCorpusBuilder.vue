@@ -471,7 +471,7 @@ async function switchWorkspace(workspace: CorpusWorkspaceMode) {
 // Required document fields that detection on source load missed; only these are asked of the user.
 // Nothing is asked before detection has run for the source.
 const missingDocumentFields = computed(() =>
-  selectedAsset.value?.deterministic_checked_at || selectedAsset.value?.initial_metadata
+  selectedAsset.value?.deterministic_checked_at
     ? missingRequiredDocumentFields(selectedSchema.value, selectedAsset.value?.initial_metadata)
     : [],
 );
