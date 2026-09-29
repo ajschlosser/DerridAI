@@ -590,6 +590,190 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
             },
         ],
     ),
+    _pipeline(
+        pipeline_id="store_search.similarity",
+        version=1,
+        name="Store search — semantic similarity",
+        purpose="vector_store_search",
+        status="active",
+        entry_stage_ids=["dense"],
+        notes=(
+            "Nearest records by embedding distance."
+        ),
+        stages=[
+            {
+                "id": "dense",
+                "strategy": "retrieve.chroma_similarity",
+                "next": ["select"],
+            },
+            {
+                "id": "select",
+                "strategy": "select.top_k",
+            },
+        ],
+    ),
+    _pipeline(
+        pipeline_id="store_search.mmr",
+        version=1,
+        name="Store search — maximum marginal relevance",
+        purpose="vector_store_search",
+        status="active",
+        entry_stage_ids=["dense"],
+        notes=(
+            "Draws a candidate pool of the request's fetch_k nearest records, then "
+            "selects a relevance/diversity balance using the collection's distance "
+            "metric."
+        ),
+        stages=[
+            {
+                "id": "dense",
+                "strategy": "retrieve.chroma_similarity",
+                "next": ["mmr"],
+            },
+            {
+                "id": "mmr",
+                "strategy": "select.mmr",
+                "next": ["select"],
+            },
+            {
+                "id": "select",
+                "strategy": "select.top_k",
+            },
+        ],
+    ),
+    _pipeline(
+        pipeline_id="store_search.hybrid",
+        version=1,
+        name="Store search — hybrid (semantic + lexical)",
+        purpose="vector_store_search",
+        status="active",
+        entry_stage_ids=["query"],
+        notes=(
+            "Semantic and BM25-style lexical legs fused by reciprocal rank. An empty "
+            "query lists records by metadata filter; a collection that cannot embed "
+            "queries continues with the lexical leg; a query with no lexical terms "
+            "uses record-text matching for that leg."
+        ),
+        stages=[
+            {
+                "id": "query",
+                "strategy": "query.passthrough",
+                "next": ["dense", "lexical"],
+                "on_empty": "filter",
+            },
+            {
+                "id": "dense",
+                "strategy": "retrieve.chroma_similarity",
+                "next": ["fuse"],
+                "on_unavailable": "fuse",
+            },
+            {
+                "id": "lexical",
+                "strategy": "retrieve.lexical_bm25",
+                "next": ["fuse"],
+                "on_unavailable": "keyword",
+            },
+            {
+                "id": "keyword",
+                "strategy": "retrieve.store_keyword",
+                "next": ["fuse"],
+            },
+            {
+                "id": "fuse",
+                "strategy": "fusion.rrf",
+                "next": ["select"],
+            },
+            {
+                "id": "filter",
+                "strategy": "retrieve.store_filter",
+                "next": ["select"],
+            },
+            {
+                "id": "select",
+                "strategy": "select.top_k",
+            },
+        ],
+    ),
+    _pipeline(
+        pipeline_id="store_search.lexical",
+        version=1,
+        name="Store search — lexical (BM25-style)",
+        purpose="vector_store_search",
+        status="active",
+        entry_stage_ids=["query"],
+        notes=(
+            "Ranks stored record text and key metadata by BM25-style term weighting. "
+            "An empty query, or one with no lexical terms, uses record-text matching "
+            "instead."
+        ),
+        stages=[
+            {
+                "id": "query",
+                "strategy": "query.passthrough",
+                "next": ["lexical"],
+                "on_empty": "keyword",
+            },
+            {
+                "id": "lexical",
+                "strategy": "retrieve.lexical_bm25",
+                "next": ["select"],
+                "on_unavailable": "keyword",
+            },
+            {
+                "id": "keyword",
+                "strategy": "retrieve.store_keyword",
+                "next": ["select"],
+            },
+            {
+                "id": "select",
+                "strategy": "select.top_k",
+            },
+        ],
+    ),
+    _pipeline(
+        pipeline_id="store_search.keyword",
+        version=1,
+        name="Store search — record text contains",
+        purpose="vector_store_search",
+        status="active",
+        entry_stage_ids=["keyword"],
+        notes=(
+            "Case-insensitive substring match on record text."
+        ),
+        stages=[
+            {
+                "id": "keyword",
+                "strategy": "retrieve.store_keyword",
+                "next": ["select"],
+            },
+            {
+                "id": "select",
+                "strategy": "select.top_k",
+            },
+        ],
+    ),
+    _pipeline(
+        pipeline_id="store_search.filter",
+        version=1,
+        name="Store search — metadata filter",
+        purpose="vector_store_search",
+        status="active",
+        entry_stage_ids=["filter"],
+        notes=(
+            "Records matching the metadata filter, ignoring the query text."
+        ),
+        stages=[
+            {
+                "id": "filter",
+                "strategy": "retrieve.store_filter",
+                "next": ["select"],
+            },
+            {
+                "id": "select",
+                "strategy": "select.top_k",
+            },
+        ],
+    ),
 )
 
 BUILT_IN_ASSIGNMENTS: tuple[PipelineAssignment, ...] = (
@@ -604,6 +788,13 @@ BUILT_IN_ASSIGNMENTS: tuple[PipelineAssignment, ...] = (
         feature="evidence_suggestion.reviewer",
         pipeline_id="evidence.reviewer.current",
         pipeline_version=2,
+        source="built_in",
+        override_allowed=True,
+    ),
+    PipelineAssignment(
+        feature="vector_store_search",
+        pipeline_id="store_search.similarity",
+        pipeline_version=1,
         source="built_in",
         override_allowed=True,
     ),
