@@ -6,6 +6,7 @@ import { createMemoryHistory, createRouter } from "vue-router";
 
 import { pipelinesApi } from "../../src/api/pipelines";
 import SystemDataPipelines from "../../src/components/system-data/SystemDataPipelines.vue";
+import { pipelineKey } from "../../src/domain/pipelinePresentation";
 import { useI18nStore } from "../../src/stores/i18n";
 import type { PipelineCatalog, PipelineRunTrace } from "../../src/types/pipelines";
 
