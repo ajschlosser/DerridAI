@@ -41,7 +41,9 @@ const i18n = useI18nStore();
 const helpOpen = ref(false);
 const storedOperationsMode = localStorage.getItem("derridai.operations-dock-mode");
 const operationsDocked = ref(storedOperationsMode !== "floating");
-document.documentElement.dataset.operationsDockMode = operationsDocked.value ? "docked" : "floating";
+document.documentElement.dataset.operationsDockMode = operationsDocked.value
+  ? "docked"
+  : "floating";
 document.documentElement.dataset.operationsDockOpen = "false";
 const operationsVisible = ref(false);
 const operationsSummary = ref("");
