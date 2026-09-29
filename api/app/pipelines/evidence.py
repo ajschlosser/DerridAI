@@ -253,6 +253,55 @@ def _support_rows(
     return rows, rejected
 
 
+def _provenance_rows(
+    source_document_id: str,
+    blocks: list[dict[str, Any]],
+    items: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Require every suggested item to bind to a real source unit in this document."""
+
+    valid_block_ids = {
+        str(block.get("block_id") or "")
+        for block in blocks
+        if str(block.get("block_id") or "")
+    }
+    verified: list[dict[str, Any]] = []
+    rejected: list[dict[str, Any]] = []
+    for item in items:
+        block_id = str(item.get("block_id") or "")
+        row = dict(item)
+        signals = dict(row.get("signals") or {})
+        if source_document_id and block_id and block_id in valid_block_ids:
+            row["provenance_status"] = "verified"
+            signals["provenance"] = {
+                "status": "verified",
+                "source_document_id": source_document_id,
+                "block_id": block_id,
+                "reason": (
+                    "Candidate block is a real source unit in the current source document."
+                ),
+            }
+            row["signals"] = signals
+            verified.append(row)
+            continue
+
+        reason = (
+            "Source document identity is missing."
+            if not source_document_id
+            else "Candidate block does not belong to the current source-unit set."
+        )
+        row["provenance_status"] = "rejected"
+        signals["provenance"] = {
+            "status": "rejected",
+            "source_document_id": source_document_id or None,
+            "block_id": block_id or None,
+            "reason": reason,
+        }
+        row["signals"] = signals
+        rejected.append(row)
+    return verified, rejected
+
+
 def _candidate_decision(item: dict[str, Any], decision: str) -> dict[str, Any]:
     """Return bounded score/reason metadata without copying candidate source text."""
 
@@ -268,6 +317,7 @@ def _candidate_decision(item: dict[str, Any], decision: str) -> dict[str, Any]:
         "cross_encoder_score",
         "support_score",
         "support_status",
+        "provenance_status",
     ):
         if item.get(key) is not None:
             payload[key] = item[key]
