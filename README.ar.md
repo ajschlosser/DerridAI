@@ -57,7 +57,6 @@ SourceDocument
 
 ### خدمات التشغيل
 
-
 - `web` — Vue 3 وTypeScript وPinia وVue Router وVite وPDF.js وnginx. تطبيق المتصفح؛ يعمل proxy لـ `/api/` ويستهلك REST وGraphQL وإشعارات realtime. Storybook ملف تطوير اختياري.
 - `api` — Python 3.12 وFastAPI وStrawberry GraphQL وChromaDB client وPyMuPDF وsentence-transformers وspaCy. الحد التطبيقي ذو السلطة للمصادقة وعمليات المصادر/corpus وcELF reads وprovenance وRAG وpipelines وjobs وحالة النظام.
 - `document-nlp` — worker BookNLP اختياري ومعزول لـ Document Intelligence باللغة الإنجليزية. يستقبل نصاً محدوداً ومراجعاً ولا يملك سلطة على corpus.
