@@ -6307,7 +6307,7 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
                             'modification en lot.',
  'works.need_review': 'à examiner',
  'works.no_catalogue_match': 'Aucune correspondance de catalogue',
- 'works.no_indexed_values': 'Cette mesure ne peut pas encore être calculée à partir des notices chargées. Ajoutez ou enrichissez le champ de métadonnées utilisé par ce graphique, puis actualisez la vue Œuvres.',
+ 'works.no_indexed_values': 'Aucune valeur de métadonnées renseignée pour l’instant.',
  'works.no_indexed_values_help': 'Cette carte compte les valeurs non vides des fiches chargées. Enrichissez ou '
                                  'modifiez les fiches pour renseigner ce champ.',
  'works.no_metadata_changes': 'Aucune modification de métadonnées n’a été proposée.',
