@@ -297,7 +297,7 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
             {
                 "id": "retrieve",
                 "strategy": "retrieve.metadata_exemplars",
-                "config": {"max_items": 16},
+                "config": {"fetch_k": 16},
                 "next": ["scope"],
             },
             {
