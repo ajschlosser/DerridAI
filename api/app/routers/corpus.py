@@ -1037,13 +1037,28 @@ def clear_all_pdf_corpus_metadata_cache() -> dict[str, Any]:
 
 @router.get("/api/pdf/corpus-builds/{build_id}/records/{record_id}/evidence-suggestions")
 def suggest_pdf_corpus_record_evidence(
-    request: Request, build_id: str, record_id: str, field: str = Query(min_length=1, max_length=120), limit: int = Query(5, ge=1, le=20)
+    request: Request,
+    build_id: str,
+    record_id: str,
+    field: str = Query(min_length=1, max_length=120),
+    limit: int = Query(5, ge=1, le=20),
+    pipeline_id: str = Query(default="", max_length=200),
+    pipeline_version: int | None = Query(default=None, ge=1),
 ) -> dict[str, Any]:
     require_admin(request)
     try:
-        return pdf_corpus_builds.suggest_evidence_result(build_id, record_id, field, limit)
+        return pdf_corpus_builds.suggest_evidence_result(
+            build_id,
+            record_id,
+            field,
+            limit,
+            pipeline_id=pipeline_id or None,
+            pipeline_version=pipeline_version,
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Corpus record not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/api/pdf/corpus-builds/{build_id}/records/{record_id}/evidence-suggestions/llm")
