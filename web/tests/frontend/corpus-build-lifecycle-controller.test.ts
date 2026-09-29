@@ -52,8 +52,8 @@ function spyOnRealtimeSubscribe() {
   return vi.spyOn(realtime, "subscribe");
 }
 
-/** The controller's own `corpus.record_completed` subscription: the real client's `subscribe`
- * spied on, so `followResource`'s own subscription (mocked above) keeps working unmodified. */
+/** The controller's build-topic subscription, created by followResource and fed through its
+ * event reducer before deciding whether an authoritative read is required. */
 function lastRecordEventSubscription(spy: ReturnType<typeof spyOnRealtimeSubscribe>) {
   const call = spy.mock.calls.at(-1);
   return call ? { topic: call[0] as string, handler: call[1] as (event: any) => void } : undefined;
@@ -211,6 +211,52 @@ describe("Corpus Builder lifecycle controller", () => {
       provider_profile_id: "profile-2",
     });
     expect(state.currentBuild.value?.build_id).toBe("build-1");
+  });
+
+  it("applies websocket progress in place without fetching the build snapshot", async () => {
+    const running = { ...build("build-1"), status: "running", stage: "enriching", progress: 0.1 };
+    const state = setup();
+    state.selectedBuildId.value = "build-1";
+    state.currentBuild.value = running;
+
+    state.controller.startPolling();
+    const subscription = lastRecordEventSubscription(subscribeSpy);
+    subscription?.handler({
+      type: "corpus.metadata_progress",
+      resource_type: "corpus_build",
+      resource_id: "build-1",
+      payload: {
+        build: {
+          id: "build-1",
+          raw_status: "running",
+          stage: "enriching",
+          progress: 0.5,
+          record_count: 2,
+          accepted_count: 0,
+          rejected_count: 0,
+          review_queue_counts: { all: 2, ready: 1, issues: 1, pending: 2 },
+          metadata_total: 2,
+          metadata_completed: 1,
+          metadata_enriched_count: 1,
+          metadata_tasks_total: 6,
+          metadata_tasks_completed: 3,
+          metadata_tasks_running: 1,
+          metadata_tasks_queued: 2,
+          review_count: 1,
+        },
+      },
+    });
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(corpusBuilderApi.build).not.toHaveBeenCalled();
+    expect(state.currentBuild.value?.progress).toBe(0.5);
+    expect(state.currentBuild.value?.metadata_enriched_count).toBe(1);
+    expect(state.currentBuild.value?.metadata_completed).toBe(1);
+    expect(state.currentBuild.value?.metadata_tasks_completed).toBe(3);
+    expect(state.currentBuild.value?.needs_review_count).toBe(1);
+    expect(state.currentBuild.value?.review_queue_counts?.issues).toBe(1);
+
+    state.controller.stopPolling();
   });
 
   it("does not poll records while build-state watchers own incremental hydration", async () => {
