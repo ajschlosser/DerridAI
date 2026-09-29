@@ -42,15 +42,36 @@ const loadedDisabledReason = useDisabledReason(loadedDisabled, loadedUnavailable
   >
     <template #actions>
       <div class="search-workspace-actions">
-        <button type="button" class="btn" @click="emit('views')">
-          <AppIcon name="history" />{{ i18n.t("search.saved_views") }}
-        </button>
-        <button type="button" class="btn" @click="emit('save')">
-          <AppIcon name="plus" />{{ i18n.t("search.save_view") }}
-        </button>
-        <button type="button" class="btn soft" @click="emit('share')">
-          <AppIcon name="copy" />{{ i18n.t("search.copy_link") }}
-        </button>
+        <UiTooltip
+          :text="i18n.t('search.saved_views_help')"
+          trigger-mode="content"
+          :content-focusable="false"
+          placement="bottom"
+        >
+          <button type="button" class="btn" @click="emit('views')">
+            <AppIcon name="history" />{{ i18n.t("search.saved_views") }}
+          </button>
+        </UiTooltip>
+        <UiTooltip
+          :text="i18n.t('search.save_view_help')"
+          trigger-mode="content"
+          :content-focusable="false"
+          placement="bottom"
+        >
+          <button type="button" class="btn" @click="emit('save')">
+            <AppIcon name="plus" />{{ i18n.t("search.save_view") }}
+          </button>
+        </UiTooltip>
+        <UiTooltip
+          :text="i18n.t('search.copy_link_help')"
+          trigger-mode="content"
+          :content-focusable="false"
+          placement="bottom"
+        >
+          <button type="button" class="btn soft" @click="emit('share')">
+            <AppIcon name="copy" />{{ i18n.t("search.copy_link") }}
+          </button>
+        </UiTooltip>
       </div>
     </template>
     <template #meta>
