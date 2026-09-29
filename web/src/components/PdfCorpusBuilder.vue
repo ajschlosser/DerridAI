@@ -1766,7 +1766,7 @@ async function chooseBuild(build: CorpusBuild) {
   if (buildRunning.value) startPolling();
 }
 async function openPdfExplorer() {
-  await router.replace({ query: { ...route.query, mode: "explorer" } });
+  await router.push({ name: "source-explorer", query: route.query });
 }
 async function reanalyzeDocument() {
   if (!currentBuild.value) return;
