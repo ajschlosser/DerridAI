@@ -1,6 +1,7 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import AppIcon from "../AppIcon.vue";
+import UiTooltip from "../ui/UiTooltip.vue";
 import PipelineStageList from "./PipelineStageList.vue";
 import { pipelinePurposeLabel } from "../../domain/pipelinePresentation";
 import { useI18nStore } from "../../stores/i18n";
@@ -17,6 +18,7 @@ defineProps<{
   assigned: boolean;
   canAssign: boolean;
   assigning: boolean;
+  cloning: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -44,29 +46,63 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
         </p>
       </div>
       <div class="detail-actions">
-        <button class="btn" type="button" @click="emit('clone')">
-          <AppIcon name="copy" />
-          {{ t("pipelines.clone", "Clone & edit") }}
-        </button>
-        <button
-          class="btn primary"
-          type="button"
-          :disabled="!canAssign || assigned || assigning"
-          @click="emit('assign')"
-        >
-          <AppIcon name="check" />
-          {{
-            assigned
-              ? t("pipelines.active_assignment", "Active assignment")
-              : t("pipelines.assign", "Make active")
-          }}
-        </button>
+        <span class="action-with-help">
+          <button class="btn" type="button" :disabled="cloning" @click="emit('clone')">
+            <AppIcon name="copy" />
+            {{
+              cloning
+                ? t("pipelines.preparing_clone", "Preparing copy…")
+                : t("pipelines.clone", "Clone & edit")
+            }}
+          </button>
+          <UiTooltip
+            :text="
+              t(
+                'pipelines.clone_help',
+                'Built-in and saved pipeline versions are immutable. Clone & edit asks the server for a safe new draft version, leaving the original untouched. The new copy is not used by Research until you save it and explicitly make it active.',
+              )
+            "
+          />
+        </span>
+        <span class="action-with-help">
+          <button
+            class="btn primary"
+            type="button"
+            :disabled="!canAssign || assigned || assigning"
+            @click="emit('assign')"
+          >
+            <AppIcon name="check" />
+            {{
+              assigned
+                ? t("pipelines.active_assignment", "Active assignment")
+                : t("pipelines.assign", "Make active")
+            }}
+          </button>
+          <UiTooltip
+            :text="
+              t(
+                'pipelines.assign_help',
+                'Making a version active changes the system-wide pipeline assignment for this feature. It does not rewrite previous runs: each run keeps the exact pipeline version it used.',
+              )
+            "
+          />
+        </span>
       </div>
     </header>
 
     <dl class="health-strip">
       <div>
-        <dt>{{ t("pipelines.graph_validation", "Graph validation") }}</dt>
+        <dt class="label-with-help">
+          {{ t("pipelines.graph_validation", "Graph validation") }}
+          <UiTooltip
+            :text="
+              t(
+                'pipelines.graph_validation_help',
+                'Validation checks the structure of the recipe: stage IDs, connections, configuration types and ranges, and other rules that can be checked before execution.',
+              )
+            "
+          />
+        </dt>
         <dd>
           {{
             pipeline.validation?.valid === false
@@ -76,7 +112,17 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
         </dd>
       </div>
       <div>
-        <dt>{{ t("pipelines.runtime_support", "Runtime support") }}</dt>
+        <dt class="label-with-help">
+          {{ t("pipelines.runtime_support", "Runtime support") }}
+          <UiTooltip
+            :text="
+              t(
+                'pipelines.runtime_support_help',
+                'A graph can be structurally valid but still not be executable by the current application adapter. “Executable” means DerridAI currently has runtime code that can carry out this exact graph shape.',
+              )
+            "
+          />
+        </dt>
         <dd>
           {{
             pipeline.runtime_support?.supported
@@ -86,7 +132,17 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
         </dd>
       </div>
       <div>
-        <dt>{{ t("pipelines.assignment", "Assignment") }}</dt>
+        <dt class="label-with-help">
+          {{ t("pipelines.assignment", "Assignment") }}
+          <UiTooltip
+            :text="
+              t(
+                'pipelines.assignment_help',
+                'The assignment is the pipeline version DerridAI will use by default for this feature. Other saved versions remain available for history, inspection, and—where authorized—explicit per-run selection.',
+              )
+            "
+          />
+        </dt>
         <dd>
           {{
             assigned
@@ -116,6 +172,18 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
         <span>{{ issue.message }}</span>
       </li>
     </ul>
+
+    <div class="reading-note">
+      <strong>{{ t("pipelines.how_to_read_chain", "How to read this chain") }}</strong>
+      <span>
+        {{
+          t(
+            "pipelines.how_to_read_chain_help",
+            "Read from the entry stage through each “then” connection. A fallback label marks an exception route. “Deterministic” stages use fixed rules, “Learned model” stages use non-generative machine-learning models, and “LLM” stages call a generative language model.",
+          )
+        }}
+      </span>
+    </div>
 
     <PipelineStageList :pipeline="pipeline" :strategies="strategies" />
 
@@ -170,6 +238,25 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
+}
+.action-with-help,
+.label-with-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.reading-note {
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--soft);
+  font-size: 0.77rem;
+}
+.reading-note span {
+  color: var(--muted);
+  line-height: 1.45;
 }
 .detail-actions :deep(svg),
 .support-note :deep(svg),
