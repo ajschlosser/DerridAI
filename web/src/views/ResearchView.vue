@@ -83,8 +83,7 @@ const effectivePipeline = computed(() => {
   const configuredVersion = Number(config.value?.pipeline_version || 0);
   if (configuredId) {
     const explicit = options.find(
-      (pipeline) =>
-        pipeline.pipeline_id === configuredId && pipeline.version === configuredVersion,
+      (pipeline) => pipeline.pipeline_id === configuredId && pipeline.version === configuredVersion,
     );
     if (explicit) return explicit;
   }
@@ -97,7 +96,9 @@ const effectivePipeline = computed(() => {
     ) || null
   );
 });
-const pipelineOverrideActive = computed(() => Boolean(String(config.value?.pipeline_id || "").trim()));
+const pipelineOverrideActive = computed(() =>
+  Boolean(String(config.value?.pipeline_id || "").trim()),
+);
 const metadataFields = computed(() => {
   const fields = new Set<string>();
   const selectedStore = stores.value.find(
