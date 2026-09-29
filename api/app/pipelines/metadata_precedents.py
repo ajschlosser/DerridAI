@@ -123,10 +123,11 @@ def compile_metadata_precedent_pipeline(
         _require_next(rerank, quotas.id)
         for edge in ("on_unavailable", "on_timeout", "on_error"):
             target = getattr(rerank, edge)
-            if target is not None and target != quotas.id:
+            if target != quotas.id:
                 raise ValueError(
                     f"Metadata-precedent cross-encoder {edge} must route to "
-                    f"{quotas.id!r}."
+                    f"{quotas.id!r}; the runtime falls open only through an "
+                    "explicitly declared fallback."
                 )
     else:
         _require_next(hybrid, quotas.id)
