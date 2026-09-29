@@ -549,6 +549,44 @@ def render_claims(items: list[dict[str, Any]]) -> str:
     return "\n".join(blocks)
 
 
+def _resolve_memory_runtime(
+    feature: str,
+    *,
+    resolver: Callable[[str], dict[str, Any]] | None = None,
+) -> tuple[MemoryPipelinePlan | None, dict[str, Any], list[str]]:
+    """Resolve one advisory-memory assignment without making memory mandatory."""
+
+    try:
+        if resolver is None:
+            from .pipelines.manager import pipeline_manager
+
+            resolver = pipeline_manager.resolve
+        from .pipelines.memory import compile_memory_pipeline
+        from .pipelines.models import PipelineDefinition
+
+        resolved = resolver(feature)
+        pipeline = PipelineDefinition.model_validate(resolved["pipeline"])
+        plan = compile_memory_pipeline(pipeline)
+        return (
+            plan,
+            {
+                "pipeline_id": pipeline.pipeline_id,
+                "pipeline_version": pipeline.version,
+                "pipeline_hash": resolved.get("pipeline_hash"),
+            },
+            [],
+        )
+    except Exception as exc:  # noqa: BLE001 - advisory memory may be skipped
+        return (
+            None,
+            {},
+            [
+                f"{feature} pipeline could not be resolved; that advisory memory "
+                f"channel was skipped ({type(exc).__name__}: {str(exc)[:200]})."
+            ],
+        )
+
+
 def memory_guidance(
     query: str,
     *,
@@ -559,24 +597,78 @@ def memory_guidance(
     system_store: Any,
     response_index_factory: Callable[[], ResponseMemoryIndex],
     claim_index_factory: Callable[[], ClaimMemoryIndex],
+    pipeline_resolver: Callable[[str], dict[str, Any]] | None = None,
 ) -> tuple[str, str, dict[str, Any]]:
-    """Prompt blocks for the selected memory channels plus a reproducibility record."""
-    off: dict[str, Any] = {"mode": "off", "items": [], "warnings": []}
-    responses: dict[str, Any] = (
-        select_prior_responses(query, owner=owner, system_store=system_store, index_factory=response_index_factory)
-        if use_responses
-        else off
-    )
-    claims: dict[str, Any] = (
-        select_prior_claims(
-            query, owner=owner, evidence=evidence, system_store=system_store, index_factory=claim_index_factory
+    """Prompt blocks for selected memory channels plus a reproducibility record."""
+
+    off: dict[str, Any] = {
+        "mode": "off",
+        "items": [],
+        "warnings": [],
+        "observations": {},
+    }
+    response_plan = claim_plan = None
+    response_pipeline: dict[str, Any] = {}
+    claim_pipeline: dict[str, Any] = {}
+    resolution_warnings: list[str] = []
+
+    if use_responses:
+        response_plan, response_pipeline, warnings = _resolve_memory_runtime(
+            "response_memory",
+            resolver=pipeline_resolver,
         )
-        if use_claims
-        else off
-    )
+        resolution_warnings.extend(warnings)
+    if use_claims:
+        claim_plan, claim_pipeline, warnings = _resolve_memory_runtime(
+            "claim_memory",
+            resolver=pipeline_resolver,
+        )
+        resolution_warnings.extend(warnings)
+
+    responses: dict[str, Any]
+    if use_responses and response_plan is not None:
+        responses = select_prior_responses(
+            query,
+            owner=owner,
+            system_store=system_store,
+            index_factory=response_index_factory,
+            plan=response_plan,
+        )
+    elif use_responses:
+        responses = {
+            **off,
+            "mode": "pipeline_unavailable",
+            "warnings": list(resolution_warnings),
+        }
+    else:
+        responses = off
+
+    claims: dict[str, Any]
+    if use_claims and claim_plan is not None:
+        claims = select_prior_claims(
+            query,
+            owner=owner,
+            evidence=evidence,
+            system_store=system_store,
+            index_factory=claim_index_factory,
+            plan=claim_plan,
+        )
+    elif use_claims:
+        claims = {
+            **off,
+            "mode": "pipeline_unavailable",
+            "warnings": list(resolution_warnings),
+        }
+    else:
+        claims = off
+
     detail = {
         "owner_scope": owner,
+        # Response eligibility remains an application quality rule, not a tunable
+        # retrieval-pipeline parameter.
         "min_grade": settings.research_memory_min_grade,
+        "response_pipeline": response_pipeline or None,
+        "claim_pipeline": claim_pipeline or None,
         "response_mode": responses["mode"],
         "claim_mode": claims["mode"],
         "response_count": len(responses["items"]),
@@ -584,7 +676,11 @@ def memory_guidance(
         "response_ids": [item["response_id"] for item in responses["items"]],
         "claim_ids": [item["claim_id"] for item in claims["items"]],
         "responses": [
-            {"response_id": item["response_id"], "similarity": item["similarity"], "grade": item["grade"]}
+            {
+                "response_id": item["response_id"],
+                "similarity": item["similarity"],
+                "grade": item["grade"],
+            }
             for item in responses["items"]
         ],
         "claims": [
@@ -592,13 +688,33 @@ def memory_guidance(
                 "claim_id": item["claim_id"],
                 "similarity": item.get("similarity"),
                 "support": [
-                    {key: support.get(key) for key in ("record_id", "record_revision", "evidence_id", "status")}
+                    {
+                        key: support.get(key)
+                        for key in (
+                            "record_id",
+                            "record_revision",
+                            "evidence_id",
+                            "status",
+                        )
+                    }
                     for support in item.get("support") or []
                 ],
             }
             for item in claims["items"]
         ],
-        "warnings": responses["warnings"] + claims["warnings"],
+        "response_pipeline_observations": responses.get("observations") or {},
+        "claim_pipeline_observations": claims.get("observations") or {},
+        "warnings": list(
+            dict.fromkeys(
+                resolution_warnings
+                + responses["warnings"]
+                + claims["warnings"]
+            )
+        ),
     }
-    # Round-trip so the detail stored with the run is plain JSON.
-    return render_responses(responses["items"]), render_claims(claims["items"]), json.loads(json.dumps(detail, default=str))
+    return (
+        render_responses(responses["items"]),
+        render_claims(claims["items"]),
+        json.loads(json.dumps(detail, default=str)),
+    )
+
