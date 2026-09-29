@@ -69,10 +69,7 @@ export function pipelineStageFamilyLabel(family: string | null | undefined, t: P
   return labels[value] || value || t("pipelines.family_unknown", "Unknown");
 }
 
-export function pipelineStageFamilyHelp(
-  family: string | null | undefined,
-  t: PipelineTranslator,
-) {
+export function pipelineStageFamilyHelp(family: string | null | undefined, t: PipelineTranslator) {
   const value = String(family || "");
   const help: Record<string, string> = {
     query_transform: t(
