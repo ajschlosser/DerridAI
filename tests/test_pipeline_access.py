@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import pytest
-from app.pipelines.access import resolve_research_pipeline
+from app.pipelines.access import resolve_evidence_pipeline, resolve_research_pipeline
 from app.pipelines.defaults import built_in_pipeline
 from app.pipelines.manager import PipelineManager
 from app.pipelines.models import PipelineAssignment
@@ -133,5 +133,104 @@ def test_admin_cannot_execute_disabled_pipeline(tmp_path) -> None:
             requested_id=disabled.pipeline_id,
             requested_version=disabled.version,
             is_admin=True,
+            manager=manager,
+        )
+
+
+
+def _save_evidence_definition(
+    manager: PipelineManager,
+    *,
+    pipeline_id: str,
+    status: str,
+):
+    source = built_in_pipeline("evidence.conservative", 1)
+    assert source is not None
+    custom = source.model_copy(
+        update={
+            "pipeline_id": pipeline_id,
+            "version": 1,
+            "name": "Custom evidence",
+            "status": status,
+            "built_in": False,
+            "derived_from": "evidence.conservative@1",
+        }
+    )
+    return manager.save_definition(custom, actor="admin")
+
+
+def test_evidence_resolution_uses_system_assignment_without_override(tmp_path) -> None:
+    manager = _manager(tmp_path)
+
+    resolved = resolve_evidence_pipeline(
+        requested_id=None,
+        requested_version=None,
+        is_admin=True,
+        manager=manager,
+    )
+
+    assert resolved.pipeline_id == "evidence.reviewer.current"
+    assert resolved.version == 1
+
+
+def test_admin_can_preview_supported_draft_evidence_pipeline(tmp_path) -> None:
+    manager = _manager(tmp_path)
+    draft = _save_evidence_definition(
+        manager,
+        pipeline_id="evidence.preview",
+        status="draft",
+    )
+
+    selected = resolve_evidence_pipeline(
+        requested_id=draft.pipeline_id,
+        requested_version=draft.version,
+        is_admin=True,
+        manager=manager,
+    )
+
+    assert selected.pipeline_id == "evidence.preview"
+    assert selected.status == "draft"
+
+
+def test_evidence_preview_rejects_disabled_pipeline(tmp_path) -> None:
+    manager = _manager(tmp_path)
+    disabled = _save_evidence_definition(
+        manager,
+        pipeline_id="evidence.disabled",
+        status="disabled",
+    )
+
+    with pytest.raises(ValueError, match="Disabled evidence pipelines"):
+        resolve_evidence_pipeline(
+            requested_id=disabled.pipeline_id,
+            requested_version=disabled.version,
+            is_admin=True,
+            manager=manager,
+        )
+
+
+def test_nonadmin_evidence_override_obeys_assignment_policy(tmp_path) -> None:
+    manager = _manager(tmp_path)
+    custom = _save_evidence_definition(
+        manager,
+        pipeline_id="evidence.active-custom",
+        status="active",
+    )
+    manager.store.put_assignment(
+        PipelineAssignment(
+            feature="evidence_suggestion.reviewer",
+            pipeline_id="evidence.reviewer.current",
+            pipeline_version=1,
+            override_allowed=False,
+            source="system",
+        ),
+        updated_at="test",
+    )
+
+    with pytest.raises(ValueError, match="does not allow per-run overrides"):
+        resolve_evidence_pipeline(
+            requested_id=custom.pipeline_id,
+            requested_version=custom.version,
+            is_admin=False,
             manager=manager,
         )
