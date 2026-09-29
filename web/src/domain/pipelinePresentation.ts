@@ -175,6 +175,7 @@ export function pipelineConfigLabel(key: string, t: PipelineTranslator) {
     semantic_weight: t("pipelines.config.semantic_weight.label", "Semantic-search weight"),
     lexical_weight: t("pipelines.config.lexical_weight.label", "Word-match weight"),
     min_score: t("pipelines.config.min_score.label", "Minimum support score"),
+    min_similarity: t("pipelines.config.min_similarity.label", "Minimum similarity"),
   };
   return labels[key] || key.replaceAll("_", " ");
 }
@@ -236,6 +237,10 @@ export function pipelineConfigHelp(key: string, t: PipelineTranslator) {
     min_score: t(
       "pipelines.config.min_score.help",
       "The lowest support score a candidate may have and still pass this validation stage.",
+    ),
+    min_similarity: t(
+      "pipelines.config.min_similarity.help",
+      "Technical name: min_similarity. Candidates below this semantic-similarity threshold are not allowed through the retrieval stage. Raising it makes memory more selective; lowering it admits looser analogies.",
     ),
   };
   return (
