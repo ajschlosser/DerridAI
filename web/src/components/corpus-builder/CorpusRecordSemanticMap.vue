@@ -579,7 +579,7 @@ function recordPreview(recordId: string) {
           </text>
         </g>
       </svg>
-      <div class="semantic-map-legend" aria-hidden="true">
+      <div class="semantic-map-legend">
         <span
           ><i class="legend-line semantic" />{{
             i18n.t("pdf_corpus.semantic_graph_semantic")
