@@ -1965,8 +1965,14 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         return graph
 
     def semantic_content_graph_view(self, build_id: str, **params: Any) -> dict[str, Any]:
-        """Bounded, filterable slice of the current graph for interactive display."""
-        return semantic_content_graph_view(self.semantic_content_graph(build_id), **params)
+        """Bounded, filterable slice of the current graph for interactive display.
+
+        View requests must not rewrite the durable graph checkpoint or build
+        manifest; the graph cache is the read projection and the full endpoint
+        owns persistence.
+        """
+        graph, _, _ = self._current_semantic_graph(build_id)
+        return semantic_content_graph_view(graph, **params)
 
     def _project_metadata_exemplars(
         self,
