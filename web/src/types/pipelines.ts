@@ -273,3 +273,69 @@ export type ResearchPipelineComparisonRequest = {
   left: { pipeline_id: string; version: number };
   right: { pipeline_id: string; version: number };
 };
+
+export type ResearchBenchmarkCollectionSnapshot = {
+  name?: string | null;
+  count?: number | null;
+  embedding_provider?: string | null;
+  embedding_model?: string | null;
+  embedding_dimension?: number | null;
+  embedding_revision?: string | null;
+  distance_metric?: string | null;
+  retrieval_mode?: string | null;
+  text_field?: string | null;
+  filter_fields?: string[] | null;
+  build_id?: string | null;
+  source_record_count?: number | null;
+  source_snapshot_hash?: string | null;
+  app_version?: string | null;
+};
+
+export type ResearchBenchmarkCase = {
+  benchmark_id: string;
+  version: number;
+  name: string;
+  request: Record<string, unknown> & {
+    prompt?: string;
+    source_collection?: string;
+    query_decomposition?: boolean;
+  };
+  collection_snapshot: ResearchBenchmarkCollectionSnapshot;
+  reproducibility_warnings: string[];
+  notes?: string | null;
+  created_at: string;
+  created_by: string;
+};
+
+export type ResearchBenchmarkCaseCreate = {
+  benchmark_id: string;
+  name: string;
+  request: {
+    prompt: string;
+    source_collection: string;
+    query_decomposition?: false;
+  };
+  notes?: string | null;
+};
+
+export type ResearchBenchmarkRunRequest = {
+  benchmark_id: string;
+  benchmark_version?: number | null;
+  left: { pipeline_id: string; version: number };
+  right: { pipeline_id: string; version: number };
+};
+
+export type ResearchBenchmarkRun = {
+  benchmark_run_id: string;
+  benchmark_id: string;
+  benchmark_version: number;
+  case: ResearchBenchmarkCase;
+  owner: string;
+  created_at: string;
+  app_version: string;
+  git_commit: string;
+  collection_snapshot: ResearchBenchmarkCollectionSnapshot;
+  reproducibility_warnings: string[];
+  comparison: ResearchPipelineComparisonResult;
+};
+
