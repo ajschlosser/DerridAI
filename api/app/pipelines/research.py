@@ -562,11 +562,31 @@ def compile_research_pipeline(pipeline: PipelineDefinition) -> ResearchPipelineP
             for target_id in fallback_values.values()
             if target_id
         }
-        for top_k in top_k_stages:
-            if top_k.id not in fallback_target_ids:
+        if (
+            lexical_rerank
+            and lexical_rerank.id not in fallback_target_ids
+        ):
+            raise ValueError(
+                "When a CrossEncoder is configured, the lexical reranker is "
+                "supported only as an explicit fallback target."
+            )
+        for fallback_stage in [*top_k_stages, *([lexical_rerank] if lexical_rerank else [])]:
+            if fallback_stage.id not in fallback_target_ids:
+                if fallback_stage.strategy == "select.top_k":
+                    raise ValueError(
+                        "Research top-K stages are currently supported only as "
+                        "explicit reranker fallback targets."
+                    )
+                continue
+            normal_predecessors = [
+                stage.id
+                for stage in stages.values()
+                if fallback_stage.id in stage.next
+            ]
+            if normal_predecessors:
                 raise ValueError(
-                    "Research top-K stages are currently supported only as "
-                    "explicit reranker fallback targets."
+                    f"Research fallback stage {fallback_stage.id!r} cannot also "
+                    "be on the normal execution path."
                 )
         for condition, target_id in fallback_values.items():
             if not target_id:
