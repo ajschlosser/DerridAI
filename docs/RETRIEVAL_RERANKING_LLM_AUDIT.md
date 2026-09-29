@@ -177,12 +177,12 @@ This path:
 
 ### Current evidence-suggestion matrix
 
-| Evidence operation | Current retrieval/selection behavior |
-| --- | --- |
-| Reviewer semantic "Suggest spans/evidence" | Lexical + cosine similarity; no MMR; no cross-encoder |
-| Automatic evidence recovery during enrichment | Lexical -> cosine candidates -> cross-encoder -> MMR fallback -> optional LLM |
-| Mapping reviewed precedent evidence onto current record | Cosine similarity with lexical fallback; no MMR; no cross-encoder |
-| Explicit reviewer "ask LLM to choose evidence" | Closed-choice LLM over this record's actual source blocks, followed by deterministic ID validation |
+| Evidence operation                                      | Current retrieval/selection behavior                                                               |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Reviewer semantic "Suggest spans/evidence"              | Lexical + cosine similarity; no MMR; no cross-encoder                                              |
+| Automatic evidence recovery during enrichment           | Lexical -> cosine candidates -> cross-encoder -> MMR fallback -> optional LLM                      |
+| Mapping reviewed precedent evidence onto current record | Cosine similarity with lexical fallback; no MMR; no cross-encoder                                  |
+| Explicit reviewer "ask LLM to choose evidence"          | Closed-choice LLM over this record's actual source blocks, followed by deterministic ID validation |
 
 ---
 
@@ -1200,14 +1200,14 @@ This is critical because total configurability without assignment visibility sim
 
 Example table:
 
-| Feature | Active pipeline | Source | Override allowed |
-| --- | --- | --- | --- |
-| Research | Research — Balanced v4 | system default | per run |
-| Evidence suggestion | Evidence — Conservative v2 | system default | per corpus build |
-| Metadata precedents | Metadata precedent v3 | system default | build/schema |
-| Claim memory | Claim similarity v1 | system default | no |
-| Corpus enrichment/discourse | Corpus metadata v5 | build profile | build |
-| Corpus enrichment/quotation | Corpus metadata v5 | build profile | build |
+| Feature                     | Active pipeline            | Source         | Override allowed |
+| --------------------------- | -------------------------- | -------------- | ---------------- |
+| Research                    | Research — Balanced v4     | system default | per run          |
+| Evidence suggestion         | Evidence — Conservative v2 | system default | per corpus build |
+| Metadata precedents         | Metadata precedent v3      | system default | build/schema     |
+| Claim memory                | Claim similarity v1        | system default | no               |
+| Corpus enrichment/discourse | Corpus metadata v5         | build profile  | build            |
+| Corpus enrichment/quotation | Corpus metadata v5         | build profile  | build            |
 
 "Source" should tell the user whether the assignment came from:
 
