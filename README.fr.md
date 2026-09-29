@@ -57,7 +57,6 @@ Voir [SPECIFICATION.md](SPECIFICATION.md) pour la spécification normative cELF 
 
 ### Services d’exécution
 
-
 - `web` — Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js et nginx. C’est l’application navigateur; elle proxifie `/api/` et consomme REST, GraphQL et les notifications temps réel. Storybook est un profil de développement facultatif.
 - `api` — Python 3.12, FastAPI, Strawberry GraphQL, le client ChromaDB, PyMuPDF, sentence-transformers et spaCy. C’est la frontière applicative faisant autorité pour l’authentification, les opérations source/corpus, les lectures cELF, la provenance, RAG, les pipelines, les jobs et l’état système.
 - `document-nlp` — worker BookNLP facultatif et isolé pour Document Intelligence en anglais. Il reçoit du texte révisé borné et n’a aucune autorité sur le corpus.
