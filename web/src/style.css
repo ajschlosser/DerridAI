@@ -17094,16 +17094,46 @@ button {
 .operation-progress-stack.minimized .operation-dock-clear {
   display: none;
 }
-[data-operations-dock-mode="docked"][data-operations-dock-open="false"] #operationProgressStack {
+html[data-operations-dock-mode="docked"][data-operations-dock-open="false"] #operationProgressStack {
   display: none !important;
 }
 html[data-operations-dock-mode="docked"][data-operations-dock-open="true"] #operationProgressStack {
-  top: 58px;
-  right: 18px;
-  bottom: auto;
-  left: auto;
-  translate: none;
+  top: var(--operations-dock-anchor-top, 58px) !important;
+  right: var(--operations-dock-anchor-right, 18px) !important;
+  bottom: auto !important;
+  left: auto !important;
+  translate: none !important;
+  transform: none !important;
   width: min(410px, calc(100vw - 36px));
+  max-height: calc(100dvh - var(--operations-dock-anchor-top, 58px) - 8px) !important;
+}
+html[data-operations-dock-mode="docked"] #operationProgressStack .operation-stack-toolbar {
+  cursor: default;
+  touch-action: auto;
+}
+html[data-operations-dock-mode="docked"] #operationProgressStack .operation-drag-grip {
+  opacity: 0.35;
+}
+.operation-dock-toggle:focus-visible,
+.operation-dock-clear:focus-visible,
+.operation-stack-toolbar:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+.operation-dock-clear {
+  min-width: 24px;
+  min-height: 24px;
+}
+@media (forced-colors: active) {
+  .operation-dock-toggle:focus-visible,
+  .operation-dock-clear:focus-visible,
+  .operation-stack-toolbar:focus-visible {
+    outline-color: Highlight;
+  }
+  .operation-progress-stack,
+  .operation-stack-toolbar {
+    border-color: CanvasText;
+  }
 }
 .operation-progress-stack .operation-progress {
   position: relative;
