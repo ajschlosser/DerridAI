@@ -6,6 +6,8 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
+
 if "chromadb" not in sys.modules:
     sys.modules["chromadb"] = types.SimpleNamespace()
 
@@ -626,3 +628,38 @@ def test_conditions_are_skipped_when_the_current_record_is_unreviewed():
         field_limits={"mood": 2}, field_match_fields={"mood": ["genre"]}, current_values={},
     )
     assert [item["record_id"] for item in result["examples"]["mood"]] == ["r-a"]
+
+
+
+def test_retrieval_honors_pipeline_computational_settings():
+    store = FakeStore()
+    index = ChromaMetadataExemplarIndex(store, collection_name="test_metadata_exemplars")
+    canonical = [
+        exemplar("mex-one", "speaker", "Derrida", "Derrida speaks."),
+        exemplar("mex-two", "speaker", "Levinas", "Levinas responds."),
+    ]
+
+    result = index.retrieve(
+        scope_id="build-1",
+        query_text="Derrida responds",
+        exemplars=canonical,
+        fields=["speaker"],
+        schema_id="schema",
+        schema_version="v1",
+        field_limits={"speaker": 2},
+        packet_char_budget=900,
+        fetch_k=7,
+        semantic_weight=0.25,
+        lexical_weight=0.75,
+        mmr_lambda=0.4,
+        cross_encoder_enabled=False,
+    )
+
+    telemetry = result["telemetry"]
+    assert result["ok"] is True
+    assert telemetry["fetch_k"] == 7
+    assert telemetry["semantic_weight"] == pytest.approx(0.25)
+    assert telemetry["lexical_weight"] == pytest.approx(0.75)
+    assert telemetry["mmr_lambda"] == pytest.approx(0.4)
+    assert telemetry["packet_char_budget"] == 900
+    assert telemetry["reranking"]["mode"] == "disabled"
