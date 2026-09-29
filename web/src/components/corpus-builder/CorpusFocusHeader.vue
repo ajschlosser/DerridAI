@@ -5,6 +5,7 @@ import { useI18nStore } from "../../stores/i18n";
 import type { CorpusRecord } from "../../api/pdfCorpus";
 import AppIcon from "../AppIcon.vue";
 import CorpusReviewShortcuts from "./CorpusReviewShortcuts.vue";
+import UiTooltip from "../ui/UiTooltip.vue";
 
 /** Focus View's header: which record this is, where it sits in the queue, movement, and the build's progress. */
 const props = defineProps<{
@@ -71,33 +72,43 @@ const progressPercent = computed(() =>
     </div>
     <nav class="focus-nav" :aria-label="i18n.t('pdf_corpus.focus_navigation')">
       <div class="focus-nav-group" role="group" :aria-label="i18n.t('record.previous_next')">
-        <button
-          class="btn small icon-only"
-          type="button"
-          :title="`${i18n.t('pdf_corpus.previous_record')} (Alt ←)`"
-          :disabled="!canPreviousRecord"
-          @click="emit('previousRecord')"
+        <UiTooltip
+          :text="`${i18n.t('pdf_corpus.previous_record')} (Alt ←)`"
+          trigger-mode="content"
+          :content-focusable="!canPreviousRecord"
+          placement="bottom"
         >
-          <AppIcon name="chevron-left" /><span class="sr-only">{{
-            i18n.t("pdf_corpus.previous_record")
-          }}</span>
-        </button>
+          <button
+            class="btn small icon-only"
+            type="button"
+            :disabled="!canPreviousRecord"
+            :aria-label="i18n.t('pdf_corpus.previous_record')"
+            @click="emit('previousRecord')"
+          >
+            <AppIcon name="chevron-left" />
+          </button>
+        </UiTooltip>
         <span class="focus-position" role="status">
           <template v-if="position"
             ><b>{{ position.index }}</b> / {{ position.total }}</template
           ><template v-else>—</template>
         </span>
-        <button
-          class="btn small icon-only"
-          type="button"
-          :title="`${i18n.t('pdf_corpus.next_record')} (Alt →)`"
-          :disabled="!canNextRecord"
-          @click="emit('nextRecord')"
+        <UiTooltip
+          :text="`${i18n.t('pdf_corpus.next_record')} (Alt →)`"
+          trigger-mode="content"
+          :content-focusable="!canNextRecord"
+          placement="bottom"
         >
-          <AppIcon name="chevron-right" /><span class="sr-only">{{
-            i18n.t("pdf_corpus.next_record")
-          }}</span>
-        </button>
+          <button
+            class="btn small icon-only"
+            type="button"
+            :disabled="!canNextRecord"
+            :aria-label="i18n.t('pdf_corpus.next_record')"
+            @click="emit('nextRecord')"
+          >
+            <AppIcon name="chevron-right" />
+          </button>
+        </UiTooltip>
       </div>
       <div class="focus-nav-group" role="group" :aria-label="i18n.t('pdf_corpus.record_history')">
         <button
