@@ -262,8 +262,20 @@ def build_research_trace(
         rerank_detail.get("active_stage_id") or ""
     ) or None
     fallback_condition = str(
-        rerank_detail.get("fallback_condition") or ""
+        rerank_detail.get("fallback_condition")
+        or rerank_telemetry.get("fallback_condition")
+        or ""
     ) or None
+    if active_rerank_stage_id is None:
+        telemetry_mode = str(rerank_telemetry.get("mode") or "")
+        if telemetry_mode == "cross_encoder":
+            active_rerank_stage_id = plan.rerank_stage_id
+        elif telemetry_mode == "lexical_fallback":
+            active_rerank_stage_id = plan.lexical_rerank_stage_id
+        elif telemetry_mode == "top_k_fallback":
+            active_rerank_stage_id = (
+                str(rerank_telemetry.get("fallback_stage_id") or "") or None
+            )
     requested_reranker = str(
         retrieval.get("requested_reranker")
         or rerank_detail.get("requested_mode")
