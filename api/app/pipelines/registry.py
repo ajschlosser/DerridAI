@@ -240,6 +240,7 @@ DEFAULT_STRATEGIES = [
         description="Convert collection-native distance/raw-score semantics into a normalized relevance contract.",
         input_type="candidate_set",
         output_type="candidate_set",
+        config_schema={"type": "object", "properties": {"method": {"type": "string"}}},
     ),
     StrategySpec(
         strategy_id="fusion.rrf",
@@ -351,6 +352,18 @@ DEFAULT_STRATEGIES = [
         input_type="candidate_set",
         output_type="candidate_set",
         config_schema={"type": "object", "properties": {"limit": _integer(1, 5000)}},
+    ),
+    StrategySpec(
+        strategy_id="select.memory_hints",
+        family="selection",
+        label="Reviewed-precedent hints",
+        description="Rank reviewed-precedent values by how many earlier records agree, then mean and best similarity, and keep up to the limit whose best similarity reaches the threshold (never below the field's own schema threshold). Hints are advisory; whether a value is pre-filled is decided by DerridAI, not by this stage.",
+        input_type="candidate_set",
+        output_type="candidate_set",
+        config_schema={
+            "type": "object",
+            "properties": {"limit": _integer(1, 20), "min_similarity": _number(0, 1)},
+        },
     ),
     StrategySpec(
         strategy_id="select.metadata_quotas",

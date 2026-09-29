@@ -67,6 +67,7 @@ function featureForPurpose(purpose: string) {
     evidence_suggestion: "evidence_suggestion.reviewer",
     evidence_recovery: "evidence_recovery",
     vector_store_search: "vector_store_search",
+    metadata_prefill: "metadata_prefill",
     metadata_precedents: "metadata_precedents",
     claim_memory: "claim_memory",
     response_memory: "response_memory",

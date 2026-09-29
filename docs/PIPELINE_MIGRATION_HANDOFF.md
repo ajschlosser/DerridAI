@@ -242,6 +242,16 @@ The remaining direct `predict_scores()` callers are `rag.py` (Research pipeline)
 
 Follow-up: show the pipeline identity next to results in the Search workspace; one trace is persisted per search, so trace retention is now pressing.
 
+### 4.12 Metadata pre-fill retrieval moved onto pipeline runtime
+
+`memory_prefill.prefill_records()` resolves the `metadata_prefill` assignment (built-in `metadata.prefill.current@1`: `retrieve.metadata_exemplars` → `normalize.collection_relevance` → new `select.memory_hints`) through `api/app/pipelines/metadata_prefill.py`.
+
+Classification of the former constants: `FETCH_K`, the distance-to-similarity conversion, `HINT_SIMILARITY`, and `MAX_HINTS_PER_FIELD` are pipeline settings; `MIN_AGREE`, `OBVIOUS_SIMILARITY`, `CONFLICT_MARGIN`, one vote per earlier Record, the 0.9 confidence cap, exemplar eligibility, excluding the current build, schema validity, and never overwriting reviewed or present values remain domain policy; `MAX_SPANS`, `BATCH`, `MIN_SPAN_CHARS`, and the time budget remain server bounds. The existing pre-fill tests pass unchanged.
+
+Metric-awareness finding: pre-fill converts distance with `1 / (1 + distance)` regardless of the collection metric. It is kept for parity because the pre-fill threshold was calibrated against it; the adapter rejects other normalization methods until one is calibrated.
+
+One trace is recorded per build; the build's `memory_prefill` summary carries the pipeline identity. The Corpus Builder does not display it yet.
+
 ## 5. Current built-in assignments
 
 As of current `master`, built-in system assignments are:
@@ -252,6 +262,7 @@ As of current `master`, built-in system assignments are:
 | Reviewer evidence suggestion | `evidence.reviewer.current@2`   | active |
 | Evidence recovery            | `evidence.recovery.cascade@1`   | active |
 | Vector Store search          | `store_search.similarity@1`     | active |
+| Metadata pre-fill            | `metadata.prefill.current@1`    | active |
 | Metadata precedents          | `metadata.precedents.current@1` | active |
 | Validated claim memory       | `memory.claim.current@1`        | active |
 | Prior response memory        | `memory.response.current@1`     | active |
@@ -471,9 +482,7 @@ Migrated in section 4.11: every mode now runs a versioned `store_search.<mode>` 
 
 ### 8.2 Metadata prefill
 
-The metadata-precedent path is migrated, but metadata prefill from reviewed precedent is a distinct path in the original audit. It uses prior-exemplar similarity, support aggregation, and field policy.
-
-Do not conflate `metadata_precedents` prompt-packet retrieval with automatic metadata prefill.
+Migrated in section 4.12; pre-fill policy remains domain code.
 
 ### 8.3 Precedent evidence remapping
 

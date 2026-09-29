@@ -13,6 +13,7 @@ export function pipelinePurposeLabel(purpose: string, t: PipelineTranslator) {
     evidence_suggestion: t("pipelines.purpose_evidence", "Evidence suggestion"),
     evidence_recovery: t("pipelines.purpose_evidence_recovery", "Evidence recovery"),
     vector_store_search: t("pipelines.purpose_store_search", "Vector Store search"),
+    metadata_prefill: t("pipelines.purpose_metadata_prefill", "Metadata pre-fill"),
     metadata_precedents: t("pipelines.purpose_precedents", "Metadata precedents"),
     claim_memory: t("pipelines.purpose_claim_memory", "Claim memory"),
     response_memory: t("pipelines.purpose_response_memory", "Response memory"),
