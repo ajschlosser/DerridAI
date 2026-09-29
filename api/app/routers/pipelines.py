@@ -11,7 +11,10 @@ from ..http_auth import request_user, require_admin
 from ..models import RAGRunRequest
 from ..pipelines.access import resolve_research_pipeline
 from ..pipelines.comparison import (
+    ResearchPipelineBenchmarkRequest,
     ResearchPipelineComparisonRequest,
+    aggregate_research_benchmark,
+    benchmark_case_result,
     compare_research_dry_runs,
 )
 from ..pipelines.manager import pipeline_manager
@@ -194,6 +197,39 @@ def reset_pipeline_assignment(feature: str, request: Request) -> dict[str, Any]:
     return {"deleted": removed, "resolved": resolved}
 
 
+def _execute_research_dry_run(
+    rag_request: RAGRunRequest,
+    *,
+    pipeline_id: str,
+    version: int,
+    owner: str,
+) -> dict[str, Any]:
+    """Execute one real Research retrieval chain without persistence/generation."""
+
+    selected = resolve_research_pipeline(
+        requested_id=pipeline_id,
+        requested_version=version,
+        is_admin=True,
+    )
+    payload = rag_request.model_dump(mode="python")
+    payload.update(
+        {
+            "pipeline_id": selected.pipeline_id,
+            "pipeline_version": selected.version,
+            "auto_grade": False,
+            "use_prior_response_memory": False,
+            "use_prior_claim_memory": False,
+        }
+    )
+    comparison_request = RAGRunRequest.model_validate(payload)
+    return run_rag_pipeline(
+        comparison_request,
+        store,
+        owner=owner,
+        stop_after_context=True,
+    )
+
+
 @router.post("/compare/research")
 def compare_research_pipelines(
     body: ResearchPipelineComparisonRequest,
@@ -219,36 +255,106 @@ def compare_research_pipelines(
             detail="Select a source collection for Research pipeline comparison.",
         )
 
-    def execute(pipeline_id: str, version: int) -> dict[str, Any]:
-        try:
-            selected = resolve_research_pipeline(
-                requested_id=pipeline_id,
-                requested_version=version,
-                is_admin=True,
-            )
-            payload = body.request.model_dump(mode="python")
-            payload.update(
+    try:
+        left = _execute_research_dry_run(
+            body.request,
+            pipeline_id=body.left.pipeline_id,
+            version=body.left.version,
+            owner=user.username,
+        )
+        right = _execute_research_dry_run(
+            body.request,
+            pipeline_id=body.right.pipeline_id,
+            version=body.right.version,
+            owner=user.username,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return compare_research_dry_runs(left, right)
+
+
+@router.post("/benchmark/research")
+def benchmark_research_pipelines(
+    body: ResearchPipelineBenchmarkRequest,
+    request: Request,
+) -> dict[str, Any]:
+    """Run a bounded set of fixed prompt/corpus cases against two pipelines.
+
+    Benchmark cases are deliberately non-persistent. They exercise real
+    retrieval/reranking/provenance/context packing, but do not generate answers,
+    write response memory, or create ordinary pipeline traces. Optional expected
+    Record IDs are reviewer-supplied benchmark ground truth, not model judgments.
+    """
+
+    user = require_admin(request)
+    cases: list[dict[str, Any]] = []
+
+    for case in body.cases:
+        invalid_reason = ""
+        if case.request.skip_retrieval:
+            invalid_reason = "Benchmark cases require retrieval to be enabled."
+        elif not str(case.request.source_collection or "").strip():
+            invalid_reason = "Benchmark cases require a source collection."
+
+        if invalid_reason:
+            cases.append(
                 {
-                    "pipeline_id": selected.pipeline_id,
-                    "pipeline_version": selected.version,
-                    "auto_grade": False,
-                    "use_prior_response_memory": False,
-                    "use_prior_claim_memory": False,
+                    "case_id": case.case_id,
+                    "label": case.label,
+                    "status": "failed",
+                    "expected_record_ids": list(case.expected_record_ids),
+                    "left_error": invalid_reason,
+                    "right_error": invalid_reason,
                 }
             )
-            comparison_request = RAGRunRequest.model_validate(payload)
-            return run_rag_pipeline(
-                comparison_request,
-                store,
+            continue
+
+        left_result: dict[str, Any] | None = None
+        right_result: dict[str, Any] | None = None
+        left_error: str | None = None
+        right_error: str | None = None
+
+        try:
+            left_result = _execute_research_dry_run(
+                case.request,
+                pipeline_id=body.left.pipeline_id,
+                version=body.left.version,
                 owner=user.username,
-                stop_after_context=True,
             )
         except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+            left_error = str(exc)
 
-    left = execute(body.left.pipeline_id, body.left.version)
-    right = execute(body.right.pipeline_id, body.right.version)
-    return compare_research_dry_runs(left, right)
+        try:
+            right_result = _execute_research_dry_run(
+                case.request,
+                pipeline_id=body.right.pipeline_id,
+                version=body.right.version,
+                owner=user.username,
+            )
+        except ValueError as exc:
+            right_error = str(exc)
+
+        if left_result is not None and right_result is not None:
+            cases.append(benchmark_case_result(case, left_result, right_result))
+        else:
+            cases.append(
+                {
+                    "case_id": case.case_id,
+                    "label": case.label,
+                    "status": "failed",
+                    "expected_record_ids": list(case.expected_record_ids),
+                    "left_error": left_error,
+                    "right_error": right_error,
+                }
+            )
+
+    return {
+        "non_persistent": True,
+        "left": body.left.model_dump(mode="json"),
+        "right": body.right.model_dump(mode="json"),
+        "cases": cases,
+        "aggregate": aggregate_research_benchmark(cases),
+    }
 
 
 @router.get("/metrics")
