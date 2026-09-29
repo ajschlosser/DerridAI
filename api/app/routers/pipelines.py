@@ -7,7 +7,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
-from ..http_auth import require_admin
+from ..http_auth import request_user, require_admin
 from ..pipelines.manager import pipeline_manager
 from ..pipelines.models import PipelineAssignment, PipelineDefinition
 from ..pipelines.store import pipeline_store
@@ -21,6 +21,58 @@ def pipeline_catalog(request: Request) -> dict[str, Any]:
 
     require_admin(request)
     return pipeline_manager.catalog()
+
+
+@router.get("/research-options")
+def research_pipeline_options(request: Request) -> dict[str, Any]:
+    """Return the executable Research chains visible to the signed-in user.
+
+    Pipeline definitions contain only registered strategy IDs and bounded
+    configuration, so exposing them here improves runtime transparency without
+    disclosing prompts, credentials, source text, or hidden reviewer values.
+    """
+
+    user = request_user(request)
+    resolved = pipeline_manager.resolve("research")
+    assignment = resolved["assignment"]
+    assigned_id = str(assignment["pipeline_id"])
+    assigned_version = int(assignment["pipeline_version"])
+    override_allowed = bool(assignment.get("override_allowed"))
+
+    rows: list[dict[str, Any]] = []
+    for pipeline in pipeline_manager.list_definitions(purpose="research"):
+        support = pipeline_manager.runtime_support(pipeline)
+        assigned = (
+            pipeline.pipeline_id == assigned_id
+            and pipeline.version == assigned_version
+        )
+        if not bool(support.get("supported")):
+            continue
+        if user.role != "admin":
+            if not assigned and (not override_allowed or pipeline.status != "active"):
+                continue
+        elif pipeline.status == "disabled":
+            continue
+        rows.append(
+            {
+                **pipeline.model_dump(mode="json"),
+                "runtime_support": support,
+                "assigned": assigned,
+            }
+        )
+
+    rows.sort(
+        key=lambda item: (
+            not bool(item.get("assigned")),
+            str(item.get("name") or item.get("pipeline_id") or "").casefold(),
+            -int(item.get("version") or 0),
+        )
+    )
+    return {
+        "assignment": assignment,
+        "override_allowed": user.role == "admin" or override_allowed,
+        "pipelines": rows,
+    }
 
 
 @router.get("/resolved/{feature}")
