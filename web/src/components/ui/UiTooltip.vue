@@ -94,8 +94,8 @@ onBeforeUnmount(hide);
       :aria-label="label || text"
       :aria-describedby="id"
       :aria-expanded="open ? 'true' : undefined"
-      @focusin="show"
-      @focusout="hide"
+      @focus="show"
+      @blur="hide"
       @click="toggle"
     >
       <span aria-hidden="true">i</span>
@@ -108,8 +108,8 @@ onBeforeUnmount(hide);
       :aria-label="label || undefined"
       :aria-describedby="id"
       :aria-expanded="open ? 'true' : undefined"
-      @focus="show"
-      @blur="hide"
+      @focusin="show"
+      @focusout="hide"
       @click="toggle"
     >
       <slot />
