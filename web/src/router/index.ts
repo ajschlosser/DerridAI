@@ -392,6 +392,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
     meta: {
       view: "config",
       navId: "config",
+      navSection: "System",
       titleKey: "nav.config",
       titleFallback: "Settings",
       capability: "page.settings",
