@@ -71,13 +71,24 @@ function compactConfig(config: Record<string, unknown>) {
                 "
               />
             </span>
-            <span v-else class="badge badge-with-help">
+            <span v-else-if="strategy(stage)?.deterministic" class="badge badge-with-help">
               {{ t("pipelines.deterministic", "Deterministic") }}
               <UiTooltip
                 :text="
                   t(
                     'pipelines.deterministic_help',
-                    'This stage follows fixed program logic rather than asking a language model to decide the result. The same inputs and configuration should produce the same result.',
+                    'This stage follows fixed program logic rather than using a learned model to score or generate a result. The same inputs and configuration should produce the same result.',
+                  )
+                "
+              />
+            </span>
+            <span v-else class="badge badge-with-help">
+              {{ t("pipelines.learned_model", "Learned model") }}
+              <UiTooltip
+                :text="
+                  t(
+                    'pipelines.learned_model_help',
+                    'This stage uses a statistical or machine-learning model, such as an embedding model or cross-encoder, but it is not a generative language-model step. Results are model-based rather than purely rule-based.',
                   )
                 "
               />
