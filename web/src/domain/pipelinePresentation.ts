@@ -132,7 +132,6 @@ export function pipelineStageFamilyHelp(
     )
   );
 }
-
 export function pipelineEdgeKindLabel(kind: string, t: PipelineTranslator) {
   const labels: Record<string, string> = {
     next: t("pipelines.then", "then"),
@@ -161,7 +160,6 @@ export function pipelineStrategyDescription(
     ? t(strategy.description_key, strategy.description)
     : strategy.description;
 }
-
 
 export function pipelineConfigLabel(key: string, t: PipelineTranslator) {
   const labels: Record<string, string> = {
