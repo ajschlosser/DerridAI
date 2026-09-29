@@ -552,6 +552,15 @@ function updateConfig(
   display: grid;
   gap: 9px;
 }
+.stage-settings-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.stage-settings-header .btn {
+  flex: 0 0 auto;
+}
 .stage-settings header h4 {
   margin: 0;
   font-size: 0.95rem;
@@ -576,6 +585,127 @@ function updateConfig(
   justify-content: space-between;
   gap: 12px;
 }
+.stage-identity-grid {
+  display: grid;
+  grid-template-columns: minmax(10rem, 0.75fr) minmax(14rem, 1.25fr);
+  gap: 10px;
+  flex: 1;
+}
+.stage-identity-grid label,
+.fallback-grid label {
+  display: grid;
+  gap: 5px;
+}
+.stage-identity-grid label > span,
+.fallback-grid label > span,
+.edge-label {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 750;
+}
+.stage-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+}
+.stage-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.stage-toggle input {
+  margin: 0;
+}
+.strategy-summary {
+  display: grid;
+  gap: 4px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--card);
+}
+.strategy-summary > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.strategy-summary strong {
+  font-size: 0.78rem;
+}
+.strategy-summary span,
+.strategy-summary p,
+.strategy-summary small {
+  color: var(--muted);
+}
+.strategy-summary > div span {
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+.strategy-summary p,
+.strategy-summary small {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+.edge-editor {
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--card);
+}
+.edge-editor legend {
+  padding: 0 5px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+.edge-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 1fr);
+  gap: 12px;
+}
+.next-targets {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+.edge-target-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.edge-target-list label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 7px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+  font-size: 0.7rem;
+}
+.edge-target-list code {
+  overflow-wrap: anywhere;
+}
+.edge-target-list small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.fallback-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
 .stage-settings-heading strong,
 .stage-settings-heading code {
   display: block;
@@ -598,9 +728,23 @@ function updateConfig(
   color: var(--muted);
   font-size: 0.76rem;
 }
+@media (max-width: 860px) {
+  .stage-settings-header,
+  .stage-settings-heading {
+    display: grid;
+  }
+  .stage-toolbar {
+    justify-content: flex-start;
+  }
+  .edge-grid {
+    grid-template-columns: 1fr;
+  }
+}
 @media (max-width: 680px) {
   .identity-grid,
-  .config-grid {
+  .config-grid,
+  .stage-identity-grid,
+  .fallback-grid {
     grid-template-columns: 1fr;
   }
   .identity-name {
