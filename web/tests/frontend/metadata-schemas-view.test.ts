@@ -94,14 +94,16 @@ describe("Metadata schemas page", () => {
         },
       ],
     });
-    vi.spyOn(metadataSchemasApi, "get").mockImplementationOnce(async () => ({
-      format_version: 1,
-      id: "notes",
-      name: "Notes",
-      description: "",
-      groups: [],
-      fields: [],
-    }) as never);
+    vi.spyOn(metadataSchemasApi, "get").mockImplementationOnce(async () => {
+      return {
+        format_version: 1,
+        id: "notes",
+        name: "Notes",
+        description: "",
+        groups: [],
+        fields: [],
+      } as never;
+    });
 
     const { wrapper, router } = await mountView({ schema: "notes", tab: "groups" });
     await flushPromises();
