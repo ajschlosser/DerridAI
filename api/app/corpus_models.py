@@ -353,7 +353,6 @@ CORPUS_PROFILES: dict[str, dict[str, Any]] = {
         "region_types": REGION_TYPES,
         "required_metadata_fields": list(HYBRID_REQUIRED_FIELDS),
         "publication_required_metadata_fields": list(HYBRID_REQUIRED_FIELDS),
-        "publication_required_document_fields": ["title", "document_author"],
         "review_metadata_fields": list(REVIEW_METADATA_FIELDS),
         "min_boundary_confidence": 0.72,
         "candidate_llm_threshold": 0.30,

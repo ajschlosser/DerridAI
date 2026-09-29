@@ -7,10 +7,12 @@ import UiButton from "./ui/UiButton.vue";
 import UiStatusBadge from "./ui/UiStatusBadge.vue";
 import UiTabs from "./ui/UiTabs.vue";
 import SchemaFieldsTable from "./metadata-schemas/SchemaFieldsTable.vue";
+import SchemaDocumentFieldsPanel from "./metadata-schemas/SchemaDocumentFieldsPanel.vue";
 import SchemaGroupsPanel from "./metadata-schemas/SchemaGroupsPanel.vue";
 import SchemaListTable from "./metadata-schemas/SchemaListTable.vue";
 import SchemaPreviewPanel from "./metadata-schemas/SchemaPreviewPanel.vue";
 import {
+  completeDocumentFields,
   blankField,
   metadataSchemasApi,
   type MetadataSchema,
@@ -43,6 +45,7 @@ const dirty = computed(() => JSON.stringify(draft.value) !== savedHash.value);
 const readonly = computed(() => builtin.value || busy.value);
 const tabs = computed(() => [
   { id: "fields", label: t("tab_fields", "Fields") },
+  { id: "document", label: t("tab_document_fields", "Document fields") },
   { id: "groups", label: t("tab_prompts", "Prompts") },
   { id: "preview", label: t("tab_preview", "Try it") },
 ]);
@@ -53,7 +56,9 @@ function load(schema: MetadataSchema, fresh = false) {
     field.retrieval_profile ||= blankField().retrieval_profile;
     field.pos_tags ||= [];
     field.ner_tags ||= [];
+    field.scope ||= "record";
   }
+  next.document_fields = completeDocumentFields(next.document_fields);
   draft.value = next;
   savedHash.value = JSON.stringify(draft.value);
   isNew.value = fresh;
@@ -298,6 +303,9 @@ defineExpose({ select, draft });
       >
         <fieldset v-if="tab === 'fields'" :disabled="readonly" class="schema-fieldset">
           <SchemaFieldsTable :draft="draft" :readonly="readonly" />
+        </fieldset>
+        <fieldset v-else-if="tab === 'document'" :disabled="readonly" class="schema-fieldset">
+          <SchemaDocumentFieldsPanel :draft="draft" :readonly="readonly" />
         </fieldset>
         <fieldset v-else-if="tab === 'groups'" :disabled="readonly" class="schema-fieldset">
           <SchemaGroupsPanel :draft="draft" :readonly="readonly" />

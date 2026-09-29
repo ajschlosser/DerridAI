@@ -52,6 +52,7 @@ from .metadata_schema import (
     DEFAULT_SCHEMA_ID,
     MetadataSchema,
     build_group_prompt,
+    default_document_fields,
     edit_model,
     response_model_for,
 )
@@ -63,7 +64,7 @@ if TYPE_CHECKING:
 
 
 def _validated_work_metadata(schema: MetadataSchema, raw: Any) -> dict[str, Any]:
-    """Keep only well-formed values for fields the schema marks as applying to the whole work.
+    """Keep only well-formed values for fields the schema scopes to a source or batch rather than a record.
 
     Anything else is rejected rather than dropped, so a reviewer never believes a value was applied that was not.
     """
@@ -75,7 +76,7 @@ def _validated_work_metadata(schema: MetadataSchema, raw: Any) -> dict[str, Any]
     cleaned: dict[str, Any] = {}
     for name, value in raw.items():
         field = fields.get(name)
-        if field is None or not field.applies_to_work:
+        if field is None or field.scope == "record":
             raise ValueError(f"'{name}' is not a work-wide field in the selected metadata schema.")
         if value in (None, "", []):
             continue
@@ -97,6 +98,22 @@ def _validated_work_metadata(schema: MetadataSchema, raw: Any) -> dict[str, Any]
         if value not in ("", []):
             cleaned[name] = value
     return cleaned
+
+
+def _required_document_fields(build: dict[str, Any], requirement: str) -> list[str]:
+    """Document fields the build's pinned schema requires for `requirement`, read without revalidating the schema.
+
+    A schema stored before document-field policies existed takes the defaults.
+    """
+    raw = build.get("schema") if isinstance(build.get("schema"), dict) else {}
+    policies = raw.get("document_fields")
+    if not isinstance(policies, list):
+        policies = [policy.model_dump() for policy in default_document_fields()]
+    return [
+        str(policy.get("name"))
+        for policy in policies
+        if isinstance(policy, dict) and requirement in (policy.get("required_for") or [])
+    ]
 
 
 class ManifestWorkflowMixin:
@@ -280,7 +297,7 @@ CURRENT REVIEWED RECORD TEXT:
         stage = str(build.get("stage") or "")
         profile = CORPUS_PROFILES.get(str(build.get("profile_id") or PROFILE_VERSION), CORPUS_PROFILES.get(PROFILE_VERSION, {}))
         required_fields = list(profile.get("publication_required_metadata_fields") or profile.get("required_metadata_fields") or [])
-        required_document_fields = list(profile.get("publication_required_document_fields") or [])
+        required_document_fields = _required_document_fields(build, "publication")
         manifest = build.get("manifest") if isinstance(build.get("manifest"), dict) else {}
         missing_document_fields = [field for field in required_document_fields if manifest.get(field) in (None, "", [])]
 

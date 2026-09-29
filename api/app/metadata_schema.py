@@ -44,7 +44,9 @@ from .corpus_metadata import (
     STANCE_VALUES,
 )
 
-FORMAT_VERSION = 1
+# Format 2 replaced SchemaField.applies_to_work with `scope` and added `document_fields`. Format 1 files still import.
+FORMAT_VERSION = 2
+READABLE_FORMAT_VERSIONS = {1, 2}
 DEFAULT_SCHEMA_ID = "default"
 CORE_FIELDS = ("region_type", "primary_text", "discourse_role")
 CORE_GROUP = "discourse"
@@ -84,6 +86,31 @@ MAX_GROUPS = 6
 FieldType = Literal["text", "number", "boolean", "choice", "list"]
 FieldRole = Literal["scholarly", "structural", "document", "operational"]
 ReviewVisibility = Literal["primary", "details", "hidden"]
+# Where a field's value lives: on each record, once per source (every record of that source inherits it), or once
+# per intake batch (every source started together, and so every record of theirs, inherits it).
+FieldScope = Literal["record", "source", "batch"]
+DocumentFieldScope = Literal["source", "batch"]
+# What an empty value blocks. "evidence": a record without it cannot be cited as RAG evidence; "publication": the
+# build cannot be published.
+DocumentRequirement = Literal["evidence", "publication"]
+
+# Bibliographic facts about a source. DerridAI owns their names, meaning and how records inherit them (see
+# corpus_segmentation._apply_manifest_metadata); a schema only configures their policy. The value is the stable identity.
+DOCUMENT_FIELDS: dict[str, str] = {
+    name: f"derridai.document.{name}"
+    for name in (
+        "title", "short_title", "original_title", "document_author", "translator", "publisher",
+        "publication_place", "publication_year", "edition", "isbn", "language", "original_language",
+        "document_is_translation", "document_type",
+    )
+}
+_DEFAULT_DOCUMENT_POLICY: dict[str, dict[str, Any]] = {
+    "title": {"prompt_at_intake": True, "required_for": ["evidence", "publication"]},
+    "document_author": {"prompt_at_intake": True, "required_for": ["evidence", "publication"]},
+    "translator": {"prompt_at_intake": True},
+    "edition": {"prompt_at_intake": True},
+    "publication_year": {"prompt_at_intake": True},
+}
 
 
 class RetrievalProfile(BaseModel):
@@ -143,10 +170,10 @@ class SchemaField(BaseModel):
     # participates in the product without hard-coding behavior to its name.
     role: FieldRole = "scholarly"
     review_visibility: ReviewVisibility = "primary"
-    # True when the value is the same for every record of a work (author, edition, ...). Such a field may be filled
-    # once, before segmentation, and every record inherits it. This is separate from ordinary bulk editing, where a
-    # reviewer picks records and fields after the fact.
-    applies_to_work: bool = False
+    # "source"/"batch": the value is shared by every record of a source (or of every source in an intake batch), so it
+    # may be filled once, before segmentation, and records inherit it. This is separate from ordinary bulk editing,
+    # where a reviewer picks records and fields after the fact.
+    scope: FieldScope = "record"
     # For "choice": the allowed values. `strict` makes them the only values the model may return; otherwise they are
     # what it is told to prefer, and a person may still type another.
     values: list[SchemaValue] = Field(default_factory=list, max_length=60)
@@ -175,6 +202,10 @@ class SchemaField(BaseModel):
             result["field_id"] = f"field-{uuid.uuid5(uuid.NAMESPACE_URL, 'derridai:field:' + name)}"
         if not str(result.get("semantic_compatibility_id") or "").strip() and name in SEMANTIC_COMPATIBILITY_IDS:
             result["semantic_compatibility_id"] = SEMANTIC_COMPATIBILITY_IDS[name]
+        # Format 1: a work-wide field is a source-scoped one.
+        if "applies_to_work" in result:
+            legacy = result.pop("applies_to_work")
+            result.setdefault("scope", "source" if legacy else "record")
         return result
 
     @field_validator("field_id")
@@ -232,6 +263,37 @@ class SchemaGroup(BaseModel):
         return value
 
 
+class DocumentFieldPolicy(BaseModel):
+    """A schema's policy for one DerridAI-owned bibliographic field: its scope, whether intake asks for it, and what it blocks."""
+
+    model_config = ConfigDict(extra="forbid")
+    name: str
+    scope: DocumentFieldScope = "source"
+    # Shown in the intake step before segmentation, prefilled from catalog/model inference.
+    prompt_at_intake: bool = False
+    required_for: list[DocumentRequirement] = Field(default_factory=list, max_length=2)
+
+    @field_validator("name")
+    @classmethod
+    def _known(cls, value: str) -> str:
+        if value not in DOCUMENT_FIELDS:
+            raise ValueError(f"'{value}' is not a document field DerridAI knows.")
+        return value
+
+    @field_validator("required_for")
+    @classmethod
+    def _unique(cls, value: list[str]) -> list[str]:
+        return sorted(set(value))
+
+    @property
+    def field_id(self) -> str:
+        return DOCUMENT_FIELDS[self.name]
+
+
+def default_document_fields() -> list[DocumentFieldPolicy]:
+    return [DocumentFieldPolicy(name=name, **_DEFAULT_DOCUMENT_POLICY.get(name, {})) for name in DOCUMENT_FIELDS]
+
+
 class MetadataSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
     format_version: int = FORMAT_VERSION
@@ -241,6 +303,23 @@ class MetadataSchema(BaseModel):
     description: str = Field(default="", max_length=600)
     groups: list[SchemaGroup] = Field(max_length=MAX_GROUPS)
     fields: list[SchemaField] = Field(default_factory=list, max_length=MAX_FIELDS)
+    # Always one policy per DOCUMENT_FIELDS entry, in that order; missing ones (format 1) take the defaults.
+    document_fields: list[DocumentFieldPolicy] = Field(default_factory=default_document_fields)
+
+    @field_validator("document_fields", mode="after")
+    @classmethod
+    def _complete_document_fields(cls, value: list[DocumentFieldPolicy]) -> list[DocumentFieldPolicy]:
+        given = {policy.name: policy for policy in value}
+        if len(given) != len(value):
+            raise ValueError("Each document field may have only one policy.")
+        defaults = {policy.name: policy for policy in default_document_fields()}
+        return [given.get(name) or defaults[name] for name in DOCUMENT_FIELDS]
+
+    @model_validator(mode="before")
+    @classmethod
+    def _current_format(cls, value: Any) -> Any:
+        # Older stored/imported bodies are migrated in memory by the field validators; they are then current.
+        return {**value, "format_version": FORMAT_VERSION} if isinstance(value, dict) else value
 
     @field_validator("schema_version")
     @classmethod
@@ -346,6 +425,16 @@ class MetadataSchema(BaseModel):
     def by_name(self) -> dict[str, SchemaField]:
         return {f.name: f for f in self.fields}
 
+    def shared_fields(self) -> list[SchemaField]:
+        """Schema fields filled once per source or batch rather than per record."""
+        return [f for f in self.fields if f.scope != "record"]
+
+    def document_policy(self, name: str) -> DocumentFieldPolicy:
+        return next(p for p in self.document_fields if p.name == name)
+
+    def required_document_fields(self, requirement: str) -> list[str]:
+        return [p.name for p in self.document_fields if requirement in p.required_for]
+
     def content_hash(self) -> str:
         body = self.model_dump(mode="json", exclude={"id"})
         return hashlib.sha256(json.dumps(body, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:16]
@@ -366,7 +455,7 @@ def import_schema(payload: Any) -> MetadataSchema:
     """Validate an exported schema. The hash catches a file edited or damaged after export; it is not a signature."""
     if not isinstance(payload, dict) or "derridai_metadata_schema" not in payload or not isinstance(payload.get("schema"), dict):
         raise SchemaImportError("This is not a DerridAI metadata schema file.")
-    if payload["derridai_metadata_schema"] != FORMAT_VERSION:
+    if payload["derridai_metadata_schema"] not in READABLE_FORMAT_VERSIONS:
         raise SchemaImportError(f"This schema file is format {payload['derridai_metadata_schema']}; this DerridAI reads format {FORMAT_VERSION}.")
     try:
         schema = MetadataSchema.model_validate({**payload["schema"], "id": ""})

@@ -17,8 +17,8 @@ from app.metadata_schema import SchemaField, default_schema  # noqa: E402
 def _schema():
     schema = default_schema()
     extra = [
-        SchemaField(name="edition_note", label="Edition note", group="discourse", applies_to_work=True),
-        SchemaField(name="period", label="Period", group="discourse", applies_to_work=True, type="list"),
+        SchemaField(name="edition_note", label="Edition note", group="discourse", scope="source"),
+        SchemaField(name="period", label="Period", group="discourse", scope="source", type="list"),
         SchemaField(name="tone", label="Tone", group="discourse"),
     ]
     return schema.model_copy(update={"fields": [*schema.fields, *extra]})
