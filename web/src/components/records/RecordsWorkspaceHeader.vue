@@ -4,6 +4,7 @@ import { computed } from "vue";
 import AppIcon from "../AppIcon.vue";
 import { useI18nStore } from "../../stores/i18n";
 import UiPageHeader from "../ui/UiPageHeader.vue";
+import UiTooltip from "../ui/UiTooltip.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -36,15 +37,16 @@ const copyLinkHelp = computed(() => i18n.t("records.copy_view_link_help"));
         <button type="button" class="btn" @click="emit('columns')">
           <AppIcon name="list" />{{ i18n.t("records.columns") }}
         </button>
-        <button
-          type="button"
-          class="btn soft"
-          aria-describedby="records-copy-link-help"
-          @click="emit('share')"
+        <UiTooltip
+          :text="copyLinkHelp"
+          trigger-mode="content"
+          :content-focusable="false"
+          placement="bottom"
         >
-          <AppIcon name="copy" />{{ i18n.t("records.copy_view_link") }}
-        </button>
-        <span id="records-copy-link-help" class="sr-only">{{ copyLinkHelp }}</span>
+          <button type="button" class="btn soft" @click="emit('share')">
+            <AppIcon name="copy" />{{ i18n.t("records.copy_view_link") }}
+          </button>
+        </UiTooltip>
       </div>
     </template>
     <template #meta>
