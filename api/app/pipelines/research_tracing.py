@@ -379,6 +379,11 @@ def build_research_trace(
                 parameters={
                     "top_n": retrieval.get("rerank_top_n"),
                     "fallback_from": (
+                        plan.rerank_strategy
+                        if active and requested_reranker == "cross_encoder"
+                        else None
+                    ),
+                    "fallback_from_stage_id": (
                         plan.rerank_stage_id
                         if active and requested_reranker == "cross_encoder"
                         else None
