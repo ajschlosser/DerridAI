@@ -19,6 +19,7 @@ from ..models import (
     RAGRunRequest,
     UpsertJobCreate,
 )
+from ..pipelines.access import resolve_research_pipeline
 from ..provider_profile_options import profile_generation_options
 from ..researcher_view import sanitize_rag_job
 from ..services import (
@@ -102,6 +103,21 @@ def create_rag_job(body: RAGRunRequest, request: Request) -> dict[str, Any]:
         for selection in body.selected_evidence:
             if isinstance(selection.record, dict):
                 selection.record.pop("updates", None)
+
+        pipeline = resolve_research_pipeline(
+            requested_id=body.pipeline_id,
+            requested_version=body.pipeline_version,
+            is_admin=user.role == "admin",
+        )
+        pipeline_payload = body.model_dump()
+        pipeline_payload.update(
+            {
+                "pipeline_id": pipeline.pipeline_id,
+                "pipeline_version": pipeline.version,
+            }
+        )
+        body = RAGRunRequest(**pipeline_payload)
+
         if user.role != "admin":
             # Researchers may only use administrator-approved static profiles.
             # Secrets and endpoint overrides are resolved server-side, preventing

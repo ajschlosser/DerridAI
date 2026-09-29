@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import logging
-import math
 import re
 import time
 from collections.abc import Callable, Mapping, Sequence
@@ -16,8 +15,17 @@ from .claim_memory import ClaimMemoryIndex
 from .config import settings
 from .cross_encoder import predict_scores
 from .models import OllamaTouchupOptions, RAGPromptMetadataPolicy, RAGRunRequest
+from .pipelines.manager import pipeline_manager
+from .pipelines.models import PipelineDefinition
+from .pipelines.research import compile_research_pipeline
 from .record_types import EvidenceItem, QueryDecomposition, RetrievalCandidate
 from .research_memory import ResponseMemoryIndex, memory_guidance
+from .retrieval_selection import (
+    cosine_similarity,
+    distance_to_relevance,
+    mmr_select,
+    source_aware_select,
+)
 from .system_store import system_store
 
 logger = logging.getLogger(__name__)
@@ -712,29 +720,16 @@ def _bind_sources(answer: str, evidence: list[EvidenceItem], include_works_cited
     return bound
 
 
-def _cosine(a: list[float] | None, b: list[float] | None) -> float:
-    # Retrieval embeddings may arrive as NumPy arrays from Chroma. Explicit
-    # length checks avoid ambiguous NumPy truth-value evaluation.
-    if (
-        a is None
-        or b is None
-        or len(a) == 0
-        or len(b) == 0
-        or len(a) != len(b)
-    ):
-        return 0.0
-    dot = sum(x * y for x, y in zip(a, b))
-    na = math.sqrt(sum(x * x for x in a))
-    nb = math.sqrt(sum(y * y for y in b))
-    if not na or not nb:
-        return 0.0
-    return dot / (na * nb)
+def _cosine(a: Any, b: Any) -> float:
+    """Compatibility wrapper around the shared retrieval-scoring primitive."""
+
+    return cosine_similarity(a, b)
 
 
 def _distance_similarity(distance: float | None) -> float:
-    if distance is None:
-        return 0.0
-    return 1.0 / (1.0 + max(0.0, float(distance)))
+    """Legacy metric-unknown wrapper retained for memory/reranker compatibility."""
+
+    return distance_to_relevance(distance)
 
 
 def _mmr_select(
@@ -743,31 +738,19 @@ def _mmr_select(
     k: int,
     lambda_mult: float,
 ) -> list[dict[str, Any]]:
-    if not candidates:
-        return []
-    remaining = list(candidates)
-    selected: list[dict[str, Any]] = []
+    """Compatibility wrapper that now preserves MMR objective provenance."""
 
-    while remaining and len(selected) < k:
-        best_index = 0
-        best_score = -float("inf")
-        for index, candidate in enumerate(remaining):
-            relevance = _distance_similarity(candidate.get("distance"))
-            diversity = 0.0
-            if selected:
-                diversity = max(
-                    _cosine(candidate.get("embedding"), chosen.get("embedding"))
-                    for chosen in selected
-                )
-            score = lambda_mult * relevance - (1.0 - lambda_mult) * diversity
-            if score > best_score:
-                best_score = score
-                best_index = index
-        chosen = remaining.pop(best_index)
-        chosen = dict(chosen)
-        chosen["mmr_score"] = best_score
-        selected.append(chosen)
-    return selected
+    return mmr_select(
+        candidates,
+        limit=k,
+        lambda_mult=lambda_mult,
+        relevance=lambda candidate: float(
+            candidate.get("relevance")
+            if candidate.get("relevance") is not None
+            else _distance_similarity(candidate.get("distance"))
+        ),
+        vector=lambda candidate: candidate.get("embedding"),
+    )
 
 
 def _tokenize(text: str) -> set[str]:
@@ -795,7 +778,11 @@ def _lexical_rerank(query: str, docs: list[dict[str, Any]], top_n: int) -> list[
         tokens = _tokenize(text)
         overlap = len(q & tokens) / max(1, len(q))
         retrieval_bonus = 1.0 / (60.0 + index + 1.0)
-        similarity = _distance_similarity(item.get("distance"))
+        similarity = float(
+            item.get("relevance")
+            if item.get("relevance") is not None
+            else _distance_similarity(item.get("distance"))
+        )
         row = dict(item)
         row["rerank_score"] = overlap * 2.0 + similarity + retrieval_bonus
         scored.append(row)
@@ -811,7 +798,16 @@ def _cross_encoder_rerank(
     docs: list[dict[str, Any]],
     top_n: int,
     model_name: str,
-) -> tuple[list[dict[str, Any]], str | None]:
+    *,
+    allow_lexical_fallback: bool = True,
+) -> tuple[list[dict[str, Any]], str | None, dict[str, Any]]:
+    """Rerank a bounded candidate set and report the strategy that actually ran.
+
+    Cross-encoder availability is an operational condition, not a reason to hide
+    a path change. The returned telemetry therefore records whether the model
+    reranker completed or whether the explicit lexical fallback was used.
+    """
+
     scores, telemetry = predict_scores(
         [
             (query, str(item["record"].get("text") or ""))
@@ -821,17 +817,28 @@ def _cross_encoder_rerank(
         timeout_seconds=settings.ollama_timeout_seconds,
     )
     if scores is None:
-        return _lexical_rerank(query, docs, top_n), (
-            f"Cross-encoder fallback ({telemetry.get('fallback_reason')}); "
-            "used lexical/vector fallback."
-        )
+        reason = str(telemetry.get("fallback_reason") or "unavailable")
+        if allow_lexical_fallback:
+            fallback = _lexical_rerank(query, docs, top_n)
+            return fallback, (
+                f"Cross-encoder fallback ({reason}); used lexical/vector fallback."
+            ), {**telemetry, "mode": "lexical_fallback", "fallback_reason": reason}
+
+        fallback = [dict(item) for item in docs[:top_n]]
+        for item in fallback:
+            item["rerank_score"] = item.get("rrf_score", 0.0)
+        return fallback, (
+            f"Cross-encoder unavailable ({reason}); retained fused retrieval order."
+        ), {**telemetry, "mode": "none", "fallback_reason": reason}
+
     ranked = []
     for item, score in zip(docs, scores):
         row = dict(item)
         row["rerank_score"] = score
+        row["cross_encoder_score"] = score
         ranked.append(row)
     ranked.sort(key=lambda item: item["rerank_score"], reverse=True)
-    return ranked[:top_n], None
+    return ranked[:top_n], None, {**telemetry, "mode": "cross_encoder"}
 
 
 def _resolve_search_collections(
@@ -962,6 +969,34 @@ def run_rag_pipeline(
     stages: list[dict[str, Any]] = []
     warnings: list[str] = []
 
+    if request.pipeline_id:
+        pipeline = pipeline_manager.get_definition(
+            request.pipeline_id,
+            request.pipeline_version,
+        )
+        if pipeline is None:
+            raise ValueError(
+                f"Research pipeline {request.pipeline_id!r}"
+                + (
+                    f"@{request.pipeline_version}"
+                    if request.pipeline_version is not None
+                    else ""
+                )
+                + " was not found."
+            )
+    else:
+        resolved = pipeline_manager.resolve("research")
+        pipeline = PipelineDefinition.model_validate(resolved["pipeline"])
+    pipeline_plan = compile_research_pipeline(pipeline)
+    pipeline_summary = {
+        "pipeline_id": pipeline.pipeline_id,
+        "pipeline_version": pipeline.version,
+        "pipeline_hash": pipeline_plan.pipeline_hash,
+        "name": pipeline.name,
+        "purpose": pipeline.purpose,
+        "resolved_pipeline": pipeline.model_dump(mode="json"),
+    }
+
     def update(stage: str, current: int, total: int, detail: str = "") -> None:
         if progress:
             progress(stage, current, total, detail)
@@ -986,7 +1021,10 @@ def run_rag_pipeline(
     stage_start = time.perf_counter()
     update("query_metadata", 0, 1, "Decomposing the research prompt")
     parsed_query: dict[str, Any] = {}
-    if request.query_decomposition:
+    effective_query_decomposition = (
+        request.query_decomposition and pipeline_plan.query_decomposition_available
+    )
+    if effective_query_decomposition:
         decomposition_prompt = QUERY_TEMPLATE.format(
             prompt=request.prompt,
             instructions=request.instructions or "",
@@ -1043,6 +1081,24 @@ def run_rag_pipeline(
     update("query_metadata", 1, 1, "Query decomposition complete")
     check_cancel()
 
+    available_search_types = pipeline_plan.available_search_types
+    effective_search_types = [
+        search_type
+        for search_type in request.search_types
+        if search_type in available_search_types
+    ]
+    if not effective_search_types and not request.skip_retrieval:
+        # The pipeline is the authoritative set of available retrieval stages.
+        # A stale client may submit only a route the selected chain no longer
+        # exposes, so fall back to the chain rather than silently retrieving zero.
+        effective_search_types = [
+            value
+            for value in ("similarity", "lexical", "mmr")
+            if value in available_search_types
+        ]
+    if not request.skip_retrieval and not effective_search_types:
+        raise ValueError("The selected Research pipeline has no usable retrieval route.")
+
     selected_candidates = _selected_evidence_candidates(request, store)
     if request.skip_retrieval and not selected_candidates:
         raise ValueError("Selected-evidence-only RAG requires at least one selected evidence record.")
@@ -1066,7 +1122,7 @@ def run_rag_pipeline(
     retrieve_k = max(1, int(request.k))
     fetch_k = max(retrieve_k, request.fetch_k)
     raw_results: list[dict[str, Any]] = []
-    total_units = len(collections) * max(1, len(request.search_types))
+    total_units = len(collections) * max(1, len(effective_search_types))
     unit = 0
 
     if request.skip_retrieval:
@@ -1082,7 +1138,7 @@ def run_rag_pipeline(
         )
 
         semantic_candidates: list[dict[str, Any]] = []
-        if {"similarity", "mmr"} & set(request.search_types):
+        if {"similarity", "mmr"} & set(effective_search_types):
             try:
                 semantic_candidates = _scope_rag_candidates(
                     store.semantic_candidates(
@@ -1096,7 +1152,7 @@ def run_rag_pipeline(
             except ValueError as exc:
                 # Precomputed-vector collections remain useful through the lexical
                 # route even though they cannot embed a new query.
-                if "lexical" not in request.search_types:
+                if "lexical" not in effective_search_types:
                     raise
                 update(
                     "retrieval",
@@ -1105,7 +1161,7 @@ def run_rag_pipeline(
                     f"Semantic route unavailable for {collection['name']}: {exc}",
                 )
 
-        if "similarity" in request.search_types:
+        if "similarity" in effective_search_types:
             unit += 1
             update(
                 "retrieval",
@@ -1119,7 +1175,7 @@ def run_rag_pipeline(
                 row["search_rank"] = rank
                 raw_results.append(row)
 
-        if "lexical" in request.search_types:
+        if "lexical" in effective_search_types:
             unit += 1
             update(
                 "retrieval",
@@ -1143,7 +1199,7 @@ def run_rag_pipeline(
                 row["search_rank"] = rank
                 raw_results.append(row)
 
-        if "mmr" in request.search_types:
+        if "mmr" in effective_search_types:
             unit += 1
             update(
                 "retrieval",
@@ -1188,12 +1244,17 @@ def run_rag_pipeline(
                 "search_type": item.get("search_type"),
                 "rank": item.get("search_rank"),
             })
-            old_distance = dedup[logical].get("distance")
-            new_distance = item.get("distance")
-            if new_distance is not None and (
-                old_distance is None or new_distance < old_distance
+            # Distances from cosine, L2, and inner-product collections are
+            # not directly comparable. Prefer the best normalized relevance and
+            # carry the distance/metric that produced it for traceability.
+            old_relevance = dedup[logical].get("relevance")
+            new_relevance = item.get("relevance")
+            if new_relevance is not None and (
+                old_relevance is None or float(new_relevance) > float(old_relevance)
             ):
-                dedup[logical]["distance"] = new_distance
+                dedup[logical]["distance"] = item.get("distance")
+                dedup[logical]["distance_metric"] = item.get("distance_metric")
+                dedup[logical]["relevance"] = float(new_relevance)
 
     for item in selected_candidates:
         record = item["record"]
@@ -1208,7 +1269,11 @@ def run_rag_pipeline(
         dedup.values(),
         key=lambda item: (
             item.get("rrf_score", 0.0),
-            _distance_similarity(item.get("distance")),
+            float(
+                item.get("relevance")
+                if item.get("relevance") is not None
+                else _distance_similarity(item.get("distance"))
+            ),
         ),
         reverse=True,
     )
@@ -1239,18 +1304,30 @@ def run_rag_pipeline(
 
     # Step 4: rerank.
     stage_start = time.perf_counter()
-    update("rerank", 0, 1, request.reranker)
+
+    effective_reranker = request.reranker
+    if effective_reranker == "cross_encoder" and not pipeline_plan.cross_encoder_available:
+        effective_reranker = (
+            "lexical" if pipeline_plan.lexical_rerank_available else "none"
+        )
+    if effective_reranker == "lexical" and not pipeline_plan.lexical_rerank_available:
+        effective_reranker = "none"
+
+    update("rerank", 0, 1, effective_reranker)
     rerank_query = (
         query_metadata["prompt_query"]
         + "\n"
         + query_metadata["prompt_query_fr"]
     ).strip()
-    # ``rerank_top_n`` is the single source of truth. Query decomposition may
-    # transform the wording of the query, but it must not alter pipeline limits.
-    # User-selected evidence is pinned: it is never allowed to disappear merely
-    # because a reranker prefers retrieved neighbors.  Selected records consume
-    # slots first, then the reranker fills the remaining requested slots.
-    requested_top_n = len(deduped) if request.skip_retrieval else max(1, int(request.rerank_top_n))
+    # rerank_top_n is the final evidence-record budget. When the selected
+    # pipeline has a post-rerank diversity stage, relevance reranking keeps a
+    # modestly wider pool so diversity can choose a different source rather than
+    # merely reorder the already-truncated final K.
+    requested_top_n = (
+        len(deduped)
+        if request.skip_retrieval
+        else max(1, int(request.rerank_top_n))
+    )
     selected_pool = [item for item in deduped if item.get("selected_evidence")]
     retrieved_pool = [item for item in deduped if not item.get("selected_evidence")]
     effective_top_n = (
@@ -1259,52 +1336,138 @@ def run_rag_pipeline(
         else min(max(requested_top_n, len(selected_pool)), max(1, len(deduped)))
     )
     remaining_slots = max(0, effective_top_n - len(selected_pool))
+    post_diversity = pipeline_plan.post_rerank_diversity
+    rerank_pool_limit = min(
+        len(retrieved_pool),
+        max(
+            remaining_slots,
+            remaining_slots * 3 if post_diversity != "none" else remaining_slots,
+        ),
+    )
+
+    rerank_telemetry: dict[str, Any] = {"mode": effective_reranker}
 
     if request.skip_retrieval:
         reranked = selected_pool or deduped
         for item in reranked:
             item["rerank_score"] = item.get("rerank_score", 1.0)
+        reranked_retrieved: list[dict[str, Any]] = []
+        selected_ranked = list(reranked)
     else:
         selected_ranked = []
         for item in selected_pool:
             row = dict(item)
-            row["rerank_score"] = max(1.0, float(item.get("rerank_score") or 0.0))
+            row["rerank_score"] = max(
+                1.0,
+                float(item.get("rerank_score") or 0.0),
+            )
             selected_ranked.append(row)
 
-        reranked_retrieved: list[dict[str, Any]] = []
-        if remaining_slots and retrieved_pool:
-            if request.reranker == "cross_encoder":
-                reranked_retrieved, rerank_warning = _cross_encoder_rerank(
+        reranked_retrieved = []
+        if rerank_pool_limit and retrieved_pool:
+            if effective_reranker == "cross_encoder":
+                reranked_retrieved, rerank_warning, rerank_telemetry = _cross_encoder_rerank(
                     rerank_query,
                     retrieved_pool,
-                    remaining_slots,
+                    rerank_pool_limit,
                     request.cross_encoder_model,
+                    allow_lexical_fallback=pipeline_plan.lexical_rerank_available,
                 )
+                actual_rerank_mode = str(rerank_telemetry.get("mode") or "cross_encoder")
+                if actual_rerank_mode == "lexical_fallback":
+                    effective_reranker = "lexical"
+                elif actual_rerank_mode == "none":
+                    effective_reranker = "none"
                 if rerank_warning:
                     warnings.append(rerank_warning)
-            elif request.reranker == "lexical":
+            elif effective_reranker == "lexical":
                 reranked_retrieved = _lexical_rerank(
-                    rerank_query, retrieved_pool, remaining_slots
+                    rerank_query,
+                    retrieved_pool,
+                    rerank_pool_limit,
                 )
             else:
-                reranked_retrieved = retrieved_pool[:remaining_slots]
+                reranked_retrieved = retrieved_pool[:rerank_pool_limit]
                 for item in reranked_retrieved:
                     item["rerank_score"] = item.get("rrf_score", 0.0)
+
+        if post_diversity == "none":
+            reranked_retrieved = reranked_retrieved[:remaining_slots]
         reranked = selected_ranked + reranked_retrieved
 
     stages.append({
         "name": "rerank",
         "seconds": time.perf_counter() - stage_start,
         "detail": {
-            "mode": request.reranker,
+            "mode": effective_reranker,
+            "requested_mode": request.reranker,
             "requested_top_n": requested_top_n,
-            "effective_top_n": len(reranked),
+            "rerank_pool_count": len(reranked_retrieved),
             "selected_evidence_pinned": len(selected_pool),
-            "cross_encoder_model": request.cross_encoder_model,
+            "cross_encoder_model": (
+                request.cross_encoder_model
+                if request.reranker == "cross_encoder"
+                else None
+            ),
+            "reranker_telemetry": rerank_telemetry,
         },
     })
-    update("rerank", 1, 1, f"{len(reranked)} evidence records retained")
+    update("rerank", 1, 1, f"{len(reranked)} records after relevance reranking")
     check_cancel()
+
+    if not request.skip_retrieval and post_diversity != "none" and remaining_slots:
+        diversity_started = time.perf_counter()
+        if post_diversity == "source_aware":
+            diversified = source_aware_select(
+                reranked_retrieved,
+                limit=remaining_slots,
+                relevance=lambda item: float(
+                    item.get("rerank_score")
+                    if item.get("rerank_score") is not None
+                    else item.get("rrf_score") or 0.0
+                ),
+            )
+        else:
+            # Cross-encoder scores are not calibrated to the [0,1] scale used by
+            # cosine diversity. Convert rerank order to a bounded rank relevance
+            # before applying post-rerank MMR so lambda remains interpretable.
+            ranked_for_diversity: list[dict[str, Any]] = []
+            denominator = max(1, len(reranked_retrieved) - 1)
+            for index, item in enumerate(reranked_retrieved):
+                row = dict(item)
+                row["_diversity_relevance"] = 1.0 - (index / denominator)
+                ranked_for_diversity.append(row)
+            diversified = mmr_select(
+                ranked_for_diversity,
+                limit=remaining_slots,
+                lambda_mult=request.lambda_mult,
+                relevance=lambda item: float(item.get("_diversity_relevance") or 0.0),
+                vector=lambda item: item.get("embedding"),
+            )
+            for item in diversified:
+                item.pop("_diversity_relevance", None)
+
+        reranked = selected_ranked + diversified
+        stages.append({
+            "name": "diversity",
+            "seconds": time.perf_counter() - diversity_started,
+            "detail": {
+                "mode": post_diversity,
+                "input_count": len(reranked_retrieved),
+                "output_count": len(diversified),
+                "selected_evidence_pinned": len(selected_ranked),
+                "lambda_mult": (
+                    request.lambda_mult if post_diversity == "mmr" else None
+                ),
+            },
+        })
+        update(
+            "diversity",
+            1,
+            1,
+            f"{len(reranked)} records retained after {post_diversity} diversity",
+        )
+        check_cancel()
 
     # Step 5: build compact evidence context.
     stage_start = time.perf_counter()
@@ -1440,20 +1603,26 @@ def run_rag_pipeline(
         "stages": stages,
         "provider": provider,
         "model": model,
+        "pipeline": pipeline_summary,
         "elapsed_seconds": time.perf_counter() - started,
         "retrieval": {
             "raw_count": len(raw_results),
             "deduplicated_count": len(deduped),
             "reranked_count": len(reranked),
-            "search_types": list(request.search_types),
+            "search_types": list(effective_search_types),
+            "requested_search_types": list(request.search_types),
+            "available_search_types": sorted(available_search_types),
+            "post_rerank_diversity": pipeline_plan.post_rerank_diversity,
             "k": request.k,
             "fetch_k": request.fetch_k,
             "lambda_mult": request.lambda_mult,
             "rrf_k": request.rrf_k,
-            "reranker": request.reranker,
+            "reranker": effective_reranker,
+            "requested_reranker": request.reranker,
             "rerank_top_n": request.rerank_top_n,
             "effective_rerank_top_n": len(reranked),
-            "query_decomposition": request.query_decomposition,
+            "query_decomposition": effective_query_decomposition,
+            "requested_query_decomposition": request.query_decomposition,
             "query_decomposition_num_predict": request.query_decomposition_num_predict,
             "skip_retrieval": request.skip_retrieval,
             "selected_evidence_count": len(selected_candidates),

@@ -1,0 +1,200 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
+"""Administrative API for pipeline configuration and execution traces."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from fastapi import APIRouter, HTTPException, Query, Request
+
+from ..http_auth import request_user, require_admin
+from ..pipelines.manager import pipeline_manager
+from ..pipelines.models import PipelineAssignment, PipelineDefinition
+from ..pipelines.store import pipeline_store
+
+router = APIRouter(prefix="/api/system/pipelines", tags=["pipelines"])
+
+
+@router.get("")
+def pipeline_catalog(request: Request) -> dict[str, Any]:
+    """Return the strategy catalog, saved pipelines, and effective assignments."""
+
+    require_admin(request)
+    return pipeline_manager.catalog()
+
+
+@router.get("/research-options")
+def research_pipeline_options(request: Request) -> dict[str, Any]:
+    """Return the executable Research chains visible to the signed-in user.
+
+    Pipeline definitions contain only registered strategy IDs and bounded
+    configuration, so exposing them here improves runtime transparency without
+    disclosing prompts, credentials, source text, or hidden reviewer values.
+    """
+
+    user = request_user(request)
+    resolved = pipeline_manager.resolve("research")
+    assignment = resolved["assignment"]
+    assigned_id = str(assignment["pipeline_id"])
+    assigned_version = int(assignment["pipeline_version"])
+    override_allowed = bool(assignment.get("override_allowed"))
+
+    rows: list[dict[str, Any]] = []
+    for pipeline in pipeline_manager.list_definitions(purpose="research"):
+        support = pipeline_manager.runtime_support(pipeline)
+        assigned = (
+            pipeline.pipeline_id == assigned_id
+            and pipeline.version == assigned_version
+        )
+        if not bool(support.get("supported")):
+            continue
+        if user.role != "admin":
+            if not assigned and (not override_allowed or pipeline.status != "active"):
+                continue
+        elif pipeline.status == "disabled":
+            continue
+        rows.append(
+            {
+                **pipeline.model_dump(mode="json"),
+                "runtime_support": support,
+                "assigned": assigned,
+            }
+        )
+
+    rows.sort(
+        key=lambda item: (
+            not bool(item.get("assigned")),
+            str(item.get("name") or item.get("pipeline_id") or "").casefold(),
+            -int(item.get("version") or 0),
+        )
+    )
+    strategy_ids = {
+        str(stage.get("strategy") or "")
+        for pipeline in rows
+        for stage in pipeline.get("stages", [])
+        if isinstance(stage, dict)
+    }
+    strategies = [
+        spec
+        for spec in pipeline_manager.service.strategies()
+        if str(spec.get("strategy_id") or "") in strategy_ids
+    ]
+    return {
+        "assignment": assignment,
+        "override_allowed": user.role == "admin" or override_allowed,
+        "pipelines": rows,
+        "strategies": strategies,
+    }
+
+
+@router.get("/resolved/{feature}")
+def resolved_pipeline(feature: str, request: Request) -> dict[str, Any]:
+    require_admin(request)
+    try:
+        return pipeline_manager.resolve(feature)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"No pipeline is assigned to {feature!r}.") from exc
+
+
+@router.post("/validate")
+def validate_pipeline_definition(
+    body: PipelineDefinition,
+    request: Request,
+) -> dict[str, Any]:
+    require_admin(request)
+    validation = pipeline_manager.service.validate(body)
+    runtime = (
+        pipeline_manager.runtime_support(body)
+        if validation.valid
+        else {
+            "supported": False,
+            "reason": "Resolve graph validation errors before testing runtime support.",
+        }
+    )
+    return {
+        "validation": validation.model_dump(mode="json"),
+        "runtime_supported": bool(runtime.get("supported")),
+        "runtime_error": runtime.get("reason"),
+    }
+
+
+@router.post("/definitions")
+def create_pipeline_definition(
+    body: PipelineDefinition,
+    request: Request,
+) -> dict[str, Any]:
+    user = require_admin(request)
+    try:
+        saved = pipeline_manager.save_definition(body, actor=user.username)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "pipeline": saved.model_dump(mode="json"),
+        "validation": pipeline_manager.service.validate(saved).model_dump(mode="json"),
+    }
+
+
+@router.put("/assignments/{feature}")
+def set_pipeline_assignment(
+    feature: str,
+    body: PipelineAssignment,
+    request: Request,
+) -> dict[str, Any]:
+    require_admin(request)
+    if body.feature != feature:
+        raise HTTPException(
+            status_code=422,
+            detail="Assignment feature must match the URL feature.",
+        )
+    if body.scope != "system" or body.scope_id is not None:
+        raise HTTPException(
+            status_code=422,
+            detail="The first configurable release supports system-scope assignments only.",
+        )
+    try:
+        saved = pipeline_manager.assign(body, actor_source="system")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"assignment": saved.model_dump(mode="json")}
+
+
+@router.delete("/assignments/{feature}")
+def reset_pipeline_assignment(feature: str, request: Request) -> dict[str, Any]:
+    require_admin(request)
+    removed = pipeline_store.delete_assignment(feature)
+    try:
+        resolved = pipeline_manager.resolve(feature)
+    except KeyError:
+        resolved = None
+    return {"deleted": removed, "resolved": resolved}
+
+
+@router.get("/runs")
+def pipeline_runs(
+    request: Request,
+    feature: str = Query(default="", max_length=160),
+    owner: str = Query(default="", max_length=200),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> dict[str, Any]:
+    require_admin(request)
+    rows = pipeline_store.list_runs(
+        feature=feature or None,
+        owner=owner or None,
+        limit=limit,
+        offset=offset,
+    )
+    return {
+        "runs": [row.model_dump(mode="json") for row in rows],
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@router.get("/runs/{run_id}")
+def pipeline_run(run_id: str, request: Request) -> dict[str, Any]:
+    require_admin(request)
+    trace = pipeline_store.get_run(run_id)
+    if trace is None:
+        raise HTTPException(status_code=404, detail="Pipeline trace not found.")
+    return {"run": trace.model_dump(mode="json")}

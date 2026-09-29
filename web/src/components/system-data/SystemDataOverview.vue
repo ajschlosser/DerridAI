@@ -10,9 +10,10 @@ import {
   type SystemMetadataExemplarPage,
   type SystemResponseCachePage,
 } from "../../api/system";
+import { pipelinesApi } from "../../api/pipelines";
 import { useI18nStore } from "../../stores/i18n";
 
-type Section = "overview" | "responses" | "metadata" | "databases" | "advanced";
+type Section = "overview" | "responses" | "metadata" | "pipelines" | "databases" | "advanced";
 defineEmits<{ "open-section": [section: Section] }>();
 
 const i18n = useI18nStore();
@@ -24,6 +25,8 @@ const exemplars = ref<SystemMetadataExemplarPage | null>(null);
 const exemplarState = ref<"loading" | "available" | "unavailable">("loading");
 const collections = ref<SystemChromaCollection[]>([]);
 const chromaState = ref<"loading" | "available" | "unavailable">("loading");
+const pipelineCount = ref(0);
+const pipelineState = ref<"loading" | "available" | "unavailable">("loading");
 
 function t(key: string, fallback: string) {
   return i18n.t(key, fallback);
@@ -78,8 +81,24 @@ async function loadChroma() {
     chromaState.value = "unavailable";
   }
 }
+async function loadPipelines() {
+  pipelineState.value = "loading";
+  try {
+    pipelineCount.value = (await pipelinesApi.catalog()).pipelines.length;
+    pipelineState.value = "available";
+  } catch {
+    pipelineCount.value = 0;
+    pipelineState.value = "unavailable";
+  }
+}
 function refresh() {
-  void Promise.allSettled([loadDatabases(), loadCache(), loadExemplars(), loadChroma()]);
+  void Promise.allSettled([
+    loadDatabases(),
+    loadCache(),
+    loadExemplars(),
+    loadChroma(),
+    loadPipelines(),
+  ]);
 }
 
 onMounted(refresh);
@@ -169,6 +188,21 @@ onMounted(refresh);
         :count="`${Number(exemplars?.count || 0).toLocaleString()} ${t('runtime.system_examples_count', 'examples')}`"
         :action-label="t('runtime.system_open', 'Open')"
         @open="$emit('open-section', 'metadata')"
+      />
+      <SystemDataStoreCard
+        icon="compare"
+        :title="t('pipelines.title', 'Pipeline Studio')"
+        :detail="
+          t(
+            'pipelines.overview_help',
+            'Versioned retrieval, reranking, validation, model, and fallback chains with inspectable execution traces.',
+          )
+        "
+        technical="system SQLite · operational configuration"
+        :status="stateLabel(pipelineState, pipelineCount === 0)"
+        :count="`${pipelineCount} ${t('pipelines.definitions_count', 'definitions')}`"
+        :action-label="t('runtime.system_open', 'Open')"
+        @open="$emit('open-section', 'pipelines')"
       />
       <SystemDataStoreCard
         icon="search"

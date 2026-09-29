@@ -21,6 +21,8 @@ from .job_state import (
 from .llm_tools import run_rag_grade
 from .models import RAGGradeRequest, RAGRunRequest
 from .persistence import job_repository
+from .pipelines.store import pipeline_store
+from .pipelines.tracing import build_research_trace
 from .rag import extract_evidence_ids, run_rag_pipeline, strip_evidence_markers
 
 
@@ -721,6 +723,30 @@ class RAGJobManager(PersistentJobStateMixin):
                             1,
                             auto_grade_error,
                         )
+
+                trace_finished_at = iso_now()
+                with self._lock:
+                    trace_started_at = self._jobs[job_id].get("started_at")
+                    trace_cancelled = bool(self._jobs[job_id].get("cancel_requested"))
+                try:
+                    pipeline_trace = build_research_trace(
+                        run_id=job_id,
+                        owner=job_owner,
+                        request=body,
+                        result=result,
+                        started_at=trace_started_at,
+                        finished_at=trace_finished_at,
+                        status="cancelled" if trace_cancelled else "completed",
+                    )
+                    pipeline_store.put_run(pipeline_trace)
+                    result["pipeline_trace"] = pipeline_trace.model_dump(mode="json")
+                except Exception as trace_error:
+                    # Telemetry is important but must never destroy a completed
+                    # scholarly answer. Surface the failure on the run so an
+                    # administrator can repair observability independently.
+                    result.setdefault("warnings", []).append(
+                        f"Pipeline trace persistence failed: {trace_error}"
+                    )
 
                 with self._lock:
                     job = self._jobs[job_id]

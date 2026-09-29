@@ -225,6 +225,12 @@ export function normalizedResearchConfig(cfg: Loose = {}) {
     : "auto";
   return {
     ...cfg,
+    pipeline_id: String(cfg.pipeline_id || "").trim(),
+    pipeline_version: finiteResearchNumber(cfg.pipeline_version, null, {
+      integer: true,
+      min: 1,
+      max: 1000000,
+    }),
     k: finiteResearchNumber(cfg.k, 64, { integer: true, min: 1, max: 500 }),
     fetch_k: finiteResearchNumber(cfg.fetch_k, 500, { integer: true, min: 1, max: 5000 }),
     lambda_mult: finiteResearchNumber(cfg.lambda_mult, 0.7, { min: 0, max: 1 }),

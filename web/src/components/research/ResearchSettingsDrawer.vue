@@ -1,24 +1,42 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import AppIcon from "../AppIcon.vue";
+import PipelineStageList from "../pipelines/PipelineStageList.vue";
 import { useI18nStore } from "../../stores/i18n";
+import type {
+  PipelineAssignment,
+  PipelineDefinition,
+  PipelineStrategy,
+} from "../../types/pipelines";
 import type {
   ResearchConfig,
   ResearchProfile,
   ResearchPromptMetadataPolicy,
 } from "../../types/research";
 
-type SettingsSection = "retrieval" | "evidence" | "generation";
-const props = defineProps<{
-  config: ResearchConfig;
-  profiles: ResearchProfile[];
-  selectedProfileId: string;
-  generation: Record<string, unknown>;
-  model: string;
-  models: string[];
-  metadataFields: string[];
-  researcher: boolean;
-}>();
+type SettingsSection = "pipeline" | "retrieval" | "evidence" | "generation";
+const props = withDefaults(
+  defineProps<{
+    config: ResearchConfig;
+    profiles: ResearchProfile[];
+    selectedProfileId: string;
+    generation: Record<string, unknown>;
+    model: string;
+    models: string[];
+    metadataFields: string[];
+    researcher: boolean;
+    pipelineOptions?: PipelineDefinition[];
+    pipelineStrategies?: PipelineStrategy[];
+    pipelineAssignment?: PipelineAssignment | null;
+    pipelineOverrideAllowed?: boolean;
+  }>(),
+  {
+    pipelineOptions: () => [],
+    pipelineStrategies: () => [],
+    pipelineAssignment: null,
+    pipelineOverrideAllowed: false,
+  },
+);
 const emit = defineEmits<{
   apply: [
     payload: {
@@ -41,9 +59,54 @@ const settingsError = ref("");
 const selectedProfile = computed(
   () => props.profiles.find((profile) => profile.id === props.selectedProfileId) || null,
 );
+const assignedPipeline = computed(
+  () =>
+    props.pipelineOptions.find(
+      (pipeline) =>
+        pipeline.pipeline_id === props.pipelineAssignment?.pipeline_id &&
+        pipeline.version === props.pipelineAssignment?.pipeline_version,
+    ) || null,
+);
+const hasPipelineVisibility = computed(
+  () => props.pipelineOptions.length > 0 || props.pipelineAssignment !== null,
+);
+const settingsTitle = computed(() =>
+  hasPipelineVisibility.value
+    ? i18n.t("research.pipeline_options_with_chain", "Pipeline, retrieval, evidence & generation")
+    : i18n.t("research.pipeline_options"),
+);
+const selectedPipeline = computed(() => {
+  const id = String(draft.value.pipeline_id || "").trim();
+  const version = Number(draft.value.pipeline_version || 0);
+  if (!id) return assignedPipeline.value;
+  return (
+    props.pipelineOptions.find(
+      (pipeline) => pipeline.pipeline_id === id && pipeline.version === version,
+    ) || assignedPipeline.value
+  );
+});
+const pipelineSelection = computed({
+  get: () => {
+    const id = String(draft.value.pipeline_id || "").trim();
+    const version = Number(draft.value.pipeline_version || 0);
+    return id && version ? `${id}@${version}` : "";
+  },
+  set: (value: string) => {
+    const raw = String(value || "");
+    if (!raw) {
+      draft.value.pipeline_id = "";
+      draft.value.pipeline_version = null;
+      return;
+    }
+    const split = raw.lastIndexOf("@");
+    draft.value.pipeline_id = split > 0 ? raw.slice(0, split) : raw;
+    draft.value.pipeline_version = split > 0 ? Number(raw.slice(split + 1)) || null : null;
+  },
+});
 const activeSectionTitle = computed(
   () =>
     ({
+      pipeline: i18n.t("research.pipeline_chain", "Pipeline chain"),
       retrieval: i18n.t("research.retrieval"),
       evidence: i18n.t("research.evidence_citations"),
       generation: i18n.t("research.generation"),
@@ -53,6 +116,8 @@ const activeSectionTitle = computed(
 function sync() {
   settingsError.value = "";
   draft.value = {
+    pipeline_id: props.config.pipeline_id || "",
+    pipeline_version: props.config.pipeline_version || null,
     locales: [...(props.config.locales || [])],
     search_types: [...(props.config.search_types || [])],
     k: props.config.k,
@@ -84,9 +149,10 @@ function sync() {
   const raw = props.generation.extra_options;
   extraOptions.value = typeof raw === "string" ? raw : JSON.stringify(raw || {}, null, 2);
 }
-function open(section: SettingsSection = "retrieval", focusPromptMetadata = false) {
+function open(section: SettingsSection = "pipeline", focusPromptMetadata = false) {
   sync();
-  activeSection.value = section;
+  activeSection.value =
+    section === "pipeline" && !hasPipelineVisibility.value ? "retrieval" : section;
   isOpen.value = true;
   dialog.value?.showModal();
   void nextTick(() => {
@@ -132,7 +198,12 @@ function togglePromptMetadata(
 
 function resetSection(section: SettingsSection) {
   const source = props.config;
-  if (section === "retrieval")
+  if (section === "pipeline")
+    Object.assign(draft.value, {
+      pipeline_id: source.pipeline_id || "",
+      pipeline_version: source.pipeline_version || null,
+    });
+  else if (section === "retrieval")
     Object.assign(draft.value, {
       locales: [...(source.locales || [])],
       search_types: [...(source.search_types || [])],
@@ -208,7 +279,7 @@ defineExpose({ open, close });
       <header class="research-settings-studio-head">
         <div>
           <span class="section-label">{{ i18n.t("research.expert_settings") }}</span>
-          <h2 id="research-settings-title">{{ i18n.t("research.pipeline_options") }}</h2>
+          <h2 id="research-settings-title">{{ settingsTitle }}</h2>
           <p>{{ i18n.t("research.expert_help") }}</p>
         </div>
         <div class="research-settings-studio-head-actions">
@@ -233,6 +304,24 @@ defineExpose({ open, close });
 
       <div class="research-settings-studio-body">
         <nav class="research-settings-nav" :aria-label="i18n.t('research.expert_sections')">
+          <button
+            v-if="hasPipelineVisibility"
+            data-settings-tab="pipeline"
+            type="button"
+            :class="{ active: activeSection === 'pipeline' }"
+            :aria-current="activeSection === 'pipeline' ? 'page' : undefined"
+            @click="activeSection = 'pipeline'"
+          >
+            <AppIcon name="compare" /><span
+              ><b>{{ i18n.t("research.pipeline_chain", "Pipeline chain") }}</b
+              ><small>{{
+                i18n.t(
+                  "research.pipeline_chain_nav_help",
+                  "Choose and inspect the executable strategy chain.",
+                )
+              }}</small></span
+            >
+          </button>
           <button
             data-settings-tab="retrieval"
             type="button"
@@ -277,13 +366,122 @@ defineExpose({ open, close });
 
         <main class="research-settings-panel" :aria-label="activeSectionTitle">
           <section
+            v-if="hasPipelineVisibility"
+            v-show="activeSection === 'pipeline'"
+            class="research-settings-page"
+            aria-labelledby="research-settings-pipeline-title"
+          >
+            <div class="research-settings-page-head">
+              <div>
+                <span class="section-label">01</span>
+                <h3 id="research-settings-pipeline-title">
+                  {{ i18n.t("research.pipeline_chain", "Pipeline chain") }}
+                </h3>
+                <p>
+                  {{
+                    i18n.t(
+                      "research.pipeline_chain_help",
+                      "Every run records the exact immutable pipeline version and the stages that actually executed.",
+                    )
+                  }}
+                </p>
+              </div>
+              <button class="research-text-action" type="button" @click="resetSection('pipeline')">
+                <AppIcon name="refresh" />{{ i18n.t("research.reset_section") }}
+              </button>
+            </div>
+
+            <fieldset class="research-settings-card pipeline-selection-card">
+              <legend>{{ i18n.t("research.pipeline_selection", "Execution chain") }}</legend>
+              <p>
+                {{
+                  i18n.t(
+                    "research.pipeline_selection_help",
+                    "Use the system assignment or select another authorized executable version for this run.",
+                  )
+                }}
+              </p>
+              <label class="pipeline-select-field">
+                <span>{{ i18n.t("research.pipeline_chain", "Pipeline chain") }}</span>
+                <select
+                  v-model="pipelineSelection"
+                  class="control"
+                  :disabled="!pipelineOverrideAllowed"
+                >
+                  <option value="">
+                    {{
+                      assignedPipeline
+                        ? `${i18n.t("research.pipeline_system_default", "System default")} · ${assignedPipeline.name} v${assignedPipeline.version}`
+                        : i18n.t("research.pipeline_system_default", "System default")
+                    }}
+                  </option>
+                  <option
+                    v-for="pipeline in pipelineOptions"
+                    :key="`${pipeline.pipeline_id}@${pipeline.version}`"
+                    :value="`${pipeline.pipeline_id}@${pipeline.version}`"
+                  >
+                    {{ pipeline.name }} · v{{ pipeline.version }} · {{ pipeline.status }}
+                  </option>
+                </select>
+                <small v-if="!pipelineOverrideAllowed">
+                  {{
+                    i18n.t(
+                      "research.pipeline_override_locked",
+                      "This role follows the system pipeline assignment.",
+                    )
+                  }}
+                </small>
+                <small v-else>
+                  {{
+                    i18n.t(
+                      "research.pipeline_override_allowed",
+                      "Authorized overrides apply only to this Research configuration; the resolved version is persisted with the run.",
+                    )
+                  }}
+                </small>
+              </label>
+            </fieldset>
+
+            <div v-if="selectedPipeline" class="pipeline-inspector-card">
+              <div class="pipeline-inspector-head">
+                <div>
+                  <span class="section-label">{{
+                    i18n.t("research.pipeline_effective", "Effective chain")
+                  }}</span>
+                  <h4>{{ selectedPipeline.name }}</h4>
+                  <p>
+                    <code>{{ selectedPipeline.pipeline_id }}@{{ selectedPipeline.version }}</code>
+                    <template v-if="selectedPipeline.notes">
+                      · {{ selectedPipeline.notes }}</template
+                    >
+                  </p>
+                </div>
+                <span class="pipeline-status-chip">{{ selectedPipeline.status }}</span>
+              </div>
+              <PipelineStageList :pipeline="selectedPipeline" :strategies="pipelineStrategies" />
+            </div>
+
+            <aside v-if="!researcher" class="research-settings-note">
+              <AppIcon name="gear" />
+              <p>
+                {{
+                  i18n.t(
+                    "research.pipeline_admin_note",
+                    "Administrators create, version, validate, and activate chains in System Data → Pipeline Studio.",
+                  )
+                }}
+              </p>
+            </aside>
+          </section>
+
+          <section
             v-show="activeSection === 'retrieval'"
             class="research-settings-page"
             aria-labelledby="research-settings-retrieval-title"
           >
             <div class="research-settings-page-head">
               <div>
-                <span class="section-label">01</span>
+                <span class="section-label">02</span>
                 <h3 id="research-settings-retrieval-title">{{ i18n.t("research.retrieval") }}</h3>
                 <p>{{ i18n.t("research.retrieval_expert_help") }}</p>
               </div>
@@ -438,7 +636,7 @@ defineExpose({ open, close });
           >
             <div class="research-settings-page-head">
               <div>
-                <span class="section-label">02</span>
+                <span class="section-label">03</span>
                 <h3 id="research-settings-evidence-title">
                   {{ i18n.t("research.evidence_citations") }}
                 </h3>
@@ -628,7 +826,7 @@ defineExpose({ open, close });
           >
             <div class="research-settings-page-head">
               <div>
-                <span class="section-label">03</span>
+                <span class="section-label">04</span>
                 <h3 id="research-settings-generation-title">{{ i18n.t("research.generation") }}</h3>
                 <p>
                   {{
@@ -790,6 +988,84 @@ defineExpose({ open, close });
 </template>
 
 <style scoped>
+.pipeline-selection-card,
+.pipeline-inspector-card,
+.research-settings-note {
+  min-width: 0;
+}
+.pipeline-select-field {
+  display: grid;
+  gap: 0.375rem;
+  margin-top: 0.75rem;
+}
+.pipeline-select-field > span {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+.pipeline-select-field small {
+  color: var(--muted);
+  line-height: 1.45;
+}
+.pipeline-inspector-card {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.875rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card, 0.75rem);
+  background: var(--card);
+}
+.pipeline-inspector-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.pipeline-inspector-head h4 {
+  margin: 0.125rem 0 0;
+  color: var(--text-2);
+  font-size: 0.9375rem;
+}
+.pipeline-inspector-head p {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+.pipeline-status-chip {
+  flex: 0 0 auto;
+  padding: 0.1875rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+.research-settings-note {
+  display: flex;
+  gap: 0.625rem;
+  align-items: flex-start;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control, 0.625rem);
+  background: var(--soft);
+}
+.research-settings-note :deep(svg) {
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.125rem;
+}
+.research-settings-note p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.pipeline-inspector-card :deep(.pipeline-stage-list) {
+  margin-top: 0.125rem;
+}
 .research-prompt-metadata {
   min-width: 0;
 }

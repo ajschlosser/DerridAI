@@ -44,12 +44,16 @@ describe("research payloads", () => {
 
   it("normalizes the Research configuration", () => {
     const cfg = normalizedResearchConfig({
+      pipeline_id: " research.balanced ",
+      pipeline_version: "2",
       k: 9999,
       locales: ["en", "xx"],
       reranker: "nope",
       bind_citations: false,
     });
     expect(cfg).toMatchObject({
+      pipeline_id: "research.balanced",
+      pipeline_version: 2,
       k: 500,
       locales: ["en"],
       reranker: "cross_encoder",
@@ -62,7 +66,11 @@ describe("research payloads", () => {
       fetch_k: 500,
       lambda_mult: 0.7,
     });
-    expect(normalizedResearchConfig().search_types).toEqual(["similarity", "lexical", "mmr"]);
+    expect(normalizedResearchConfig()).toMatchObject({
+      pipeline_id: "",
+      pipeline_version: null,
+      search_types: ["similarity", "lexical", "mmr"],
+    });
     expect(normalizedResearchConfig().prompt_metadata).toMatchObject({
       evidence: expect.arrayContaining(["speaker", "position_holder", "discourse_role"]),
       context: [],

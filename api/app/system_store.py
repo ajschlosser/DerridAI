@@ -605,34 +605,58 @@ class SystemStore:
 
         Unlike the public profile API this intentionally includes provider
         secrets, because a full DerridAI backup is already documented as a
-        credential-bearing administrative artifact.
+        credential-bearing administrative artifact. Pipeline definitions and
+        traces live in focused tables in the same database, so they are folded
+        into the logical snapshot here rather than hidden from backup/restore.
         """
+        from .pipelines.store import PipelineStore
+
         with self._lock:
-            return copy.deepcopy(self._read())
+            payload = copy.deepcopy(self._read())
+        payload["pipelines"] = PipelineStore(self.path).snapshot()
+        return payload
 
     def reset_to_fresh_install(self) -> dict[str, Any]:
-        """Restore shipped locales and drop profiles, annotations, and job history."""
+        """Restore shipped locales and drop operational configuration/history."""
+        from .pipelines.store import PipelineStore
+
         with self._lock:
             self._write(self._default())
         cleared_jobs = SQLiteJobRepository(self.path).clear_all()
+        cleared_pipelines = PipelineStore(self.path).clear_all()
         return {
             "languages": ["en-US", "fr-CA"],
             "profiles": 0,
             "annotations": 0,
             "cleared_jobs": cleared_jobs,
+            "cleared_pipelines": cleared_pipelines,
         }
 
     def restore_snapshot(self, payload: dict[str, Any]) -> None:
-        """Restore a current-format server-owned configuration snapshot."""
+        """Restore server-owned configuration plus pipeline operational state."""
+        from .pipelines.store import PipelineStore
+
         if not isinstance(payload, dict):
             raise ValueError("System configuration backup is invalid.")
         profiles = payload.get("researcher_provider_profiles", [])
         languages = payload.get("languages", {})
         if not isinstance(profiles, list) or not isinstance(languages, dict):
             raise ValueError("System configuration backup is invalid.")
+
+        restored = copy.deepcopy(payload)
+        pipeline_snapshot = restored.pop("pipelines", None)
         with self._lock:
-            self._write(copy.deepcopy(payload))
+            self._write(restored)
             self._ensure()
+
+        # A full restore replaces, rather than merges, operational state. Older
+        # backups predate pipeline tables and therefore restore an empty custom
+        # pipeline layer while built-in definitions remain available from code.
+        pipeline_store = PipelineStore(self.path)
+        if isinstance(pipeline_snapshot, dict):
+            pipeline_store.restore_snapshot(pipeline_snapshot)
+        else:
+            pipeline_store.clear_all()
 
 
 system_store = SystemStore()

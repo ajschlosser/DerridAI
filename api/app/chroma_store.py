@@ -28,6 +28,7 @@ from .chroma_connection import (
     public_http_config,
 )
 from .config import APP_VERSION, settings
+from .retrieval_selection import cosine_similarity, distance_to_relevance, mmr_select
 
 logger = logging.getLogger(__name__)
 
@@ -954,6 +955,18 @@ class ChromaStore:
         if provider == "ollama" and not model:
             model = settings.ollama_embed_model
         return provider, model
+
+    def _distance_metric(self, collection) -> str | None:
+        """Return the declared collection metric, or None for legacy collections.
+
+        A missing metric intentionally stays unknown instead of assuming cosine:
+        callers then preserve the pre-manifest inverse-distance behavior. New
+        DerridAI collections always persist an explicit cosine/l2/ip contract.
+        """
+
+        metadata = dict(getattr(collection, "metadata", None) or {})
+        metric = str(metadata.get(self._DISTANCE_KEY) or "").strip().lower()
+        return metric if metric in {"cosine", "l2", "ip"} else None
 
     @staticmethod
     def _normalize_language_code(value: str) -> str | None:
@@ -2730,6 +2743,7 @@ class ChromaStore:
         if count == 0:
             return []
         provider, model = self._embedding_spec(col)
+        distance_metric = self._distance_metric(col)
         vector = self.embeddings.embed_query(
             query,
             provider=provider,
@@ -2786,6 +2800,11 @@ class ChromaStore:
                 ),
                 "query_embedding": [float(x) for x in vector],
                 "collection": store,
+                "distance_metric": distance_metric,
+                "relevance": distance_to_relevance(
+                    distances[index] if index < len(distances) else None,
+                    distance_metric,
+                ),
             })
         return output
 
@@ -2843,56 +2862,81 @@ class ChromaStore:
 
     @staticmethod
     def _cosine(a: list[float] | None, b: list[float] | None) -> float:
-        # Chroma may return embeddings as NumPy arrays. Never truth-test an
-        # array: ``if not array`` raises the ambiguous truth-value error.
-        if (
-            a is None
-            or b is None
-            or len(a) == 0
-            or len(b) == 0
-            or len(a) != len(b)
-        ):
-            return 0.0
-        dot = sum(float(x) * float(y) for x, y in zip(a, b))
-        na = sum(float(x) * float(x) for x in a) ** 0.5
-        nb = sum(float(y) * float(y) for y in b) ** 0.5
-        return dot / (na * nb) if na and nb else 0.0
+        """Compatibility wrapper around the shared cosine implementation."""
 
-    def mmr_search(self, store: str, query: str, n_results: int, where: dict[str, Any] | None = None, *, fetch_k: int = 100, lambda_mult: float = 0.7) -> list[dict[str, Any]]:
+        return cosine_similarity(a, b)
+
+    def mmr_search(
+        self,
+        store: str,
+        query: str,
+        n_results: int,
+        where: dict[str, Any] | None = None,
+        *,
+        fetch_k: int = 100,
+        lambda_mult: float = 0.7,
+    ) -> list[dict[str, Any]]:
+        """Run collection-aware MMR while preserving relevance score provenance."""
+
         col = self._collection(store)
-        if col.count() == 0:
+        count = col.count()
+        if count == 0:
             return []
+
         provider, model = self._embedding_spec(col)
-        query_vector = self.embeddings.embed_query(query, provider=provider, model=model)
-        payload = col.query(query_embeddings=[query_vector], n_results=min(max(n_results, fetch_k), col.count()), where=where, include=["documents", "metadatas", "distances", "embeddings"])
+        distance_metric = self._distance_metric(col)
+        query_vector = self.embeddings.embed_query(
+            query,
+            provider=provider,
+            model=model,
+        )
+        payload = col.query(
+            query_embeddings=[query_vector],
+            n_results=min(max(n_results, fetch_k), count),
+            where=where,
+            include=["documents", "metadatas", "distances", "embeddings"],
+        )
         ids = (payload.get("ids") or [[]])[0]
         docs = (payload.get("documents") or [[]])[0]
         metas = (payload.get("metadatas") or [[]])[0]
         distances = (payload.get("distances") or [[]])[0]
         embedding_payload = payload.get("embeddings")
-        # Chroma commonly returns embeddings as a NumPy ndarray. Convert it
-        # before fallback/default handling so Python never evaluates the array
-        # as a boolean.
         if hasattr(embedding_payload, "tolist"):
             embedding_payload = embedding_payload.tolist()
         embeddings = (embedding_payload or [[]])[0]
-        candidates=[]
-        for index,chroma_id in enumerate(ids):
-            meta=decode_metadata(metas[index] if index < len(metas) else {})
-            document_field=meta.pop("_document_field","text"); logical_id=meta.pop("_record_id",None); record=dict(meta)
-            if logical_id is not None and "record_id" not in record: record["record_id"]=logical_id
-            record[document_field]=docs[index] if index < len(docs) else ""; record["_chroma_id"]=chroma_id
-            record=compact_record_payload(record,include_updates=False)
-            candidates.append({"id":chroma_id,"distance":distances[index] if index < len(distances) else None,"record":record,"embedding":embeddings[index] if index < len(embeddings) else None})
-        selected: list[dict[str, Any]] = []; remaining=list(candidates)
-        while remaining and len(selected)<n_results:
-            best_index=0; best_score=-float("inf")
-            for index,candidate in enumerate(remaining):
-                relevance=1.0/(1.0+max(0.0,float(candidate.get("distance") or 0.0)))
-                diversity=max((self._cosine(candidate.get("embedding"),chosen.get("embedding")) for chosen in selected),default=0.0)
-                score=lambda_mult*relevance-(1.0-lambda_mult)*diversity
-                if score>best_score: best_score=score; best_index=index
-            chosen=remaining.pop(best_index); chosen["mmr_score"]=best_score; chosen.pop("embedding",None); selected.append(chosen)
+
+        candidates: list[dict[str, Any]] = []
+        for index, chroma_id in enumerate(ids):
+            meta = decode_metadata(metas[index] if index < len(metas) else {})
+            document_field = meta.pop("_document_field", "text")
+            logical_id = meta.pop("_record_id", None)
+            record = dict(meta)
+            if logical_id is not None and "record_id" not in record:
+                record["record_id"] = logical_id
+            record[document_field] = docs[index] if index < len(docs) else ""
+            record["_chroma_id"] = chroma_id
+            record = compact_record_payload(record, include_updates=False)
+            distance = distances[index] if index < len(distances) else None
+            candidates.append(
+                {
+                    "id": chroma_id,
+                    "distance": distance,
+                    "distance_metric": distance_metric,
+                    "relevance": distance_to_relevance(distance, distance_metric),
+                    "record": record,
+                    "embedding": embeddings[index] if index < len(embeddings) else None,
+                }
+            )
+
+        selected = mmr_select(
+            candidates,
+            limit=n_results,
+            lambda_mult=lambda_mult,
+            relevance=lambda candidate: float(candidate.get("relevance") or 0.0),
+            vector=lambda candidate: candidate.get("embedding"),
+        )
+        for row in selected:
+            row.pop("embedding", None)
         return selected
 
     def filter_search(self, store: str, n_results: int, where: dict[str, Any] | None = None) -> list[dict[str, Any]]:

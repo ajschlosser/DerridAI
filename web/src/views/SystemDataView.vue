@@ -6,11 +6,12 @@ import AppIcon from "../components/AppIcon.vue";
 import SystemDataAdvanced from "../components/system-data/SystemDataAdvanced.vue";
 import SystemDataDatabases from "../components/system-data/SystemDataDatabases.vue";
 import SystemDataMetadataExamples from "../components/system-data/SystemDataMetadataExamples.vue";
+import SystemDataPipelines from "../components/system-data/SystemDataPipelines.vue";
 import SystemDataOverview from "../components/system-data/SystemDataOverview.vue";
 import SystemDataResponses from "../components/system-data/SystemDataResponses.vue";
 import { useI18nStore } from "../stores/i18n";
 
-type Section = "overview" | "responses" | "metadata" | "databases" | "advanced";
+type Section = "overview" | "responses" | "metadata" | "pipelines" | "databases" | "advanced";
 
 const route = useRoute();
 const router = useRouter();
@@ -24,6 +25,12 @@ const sections: Array<{ id: Section; labelKey: string; fallback: string; icon: s
     labelKey: "runtime.system_metadata_examples",
     fallback: "Metadata examples",
     icon: "spark",
+  },
+  {
+    id: "pipelines",
+    labelKey: "pipelines.title",
+    fallback: "Pipeline Studio",
+    icon: "compare",
   },
   {
     id: "databases",
@@ -44,6 +51,7 @@ const activeComponent = computed(
       overview: SystemDataOverview,
       responses: SystemDataResponses,
       metadata: SystemDataMetadataExamples,
+      pipelines: SystemDataPipelines,
       databases: SystemDataDatabases,
       advanced: SystemDataAdvanced,
     })[activeSection.value],

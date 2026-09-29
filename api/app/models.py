@@ -426,6 +426,11 @@ class RAGEvidenceSelection(BaseModel):
 class RAGRunRequest(BaseModel):
     prompt: str = Field(min_length=1)
     instructions: str | None = None
+    # Pipeline identity is resolved server-side from the active Research
+    # assignment unless an authorized caller explicitly selects another
+    # executable version. Persisting it on the request makes each run auditable.
+    pipeline_id: str | None = Field(default=None, min_length=1, max_length=160)
+    pipeline_version: int | None = Field(default=None, ge=1)
     # Empty is valid only for selected-evidence-only runs. The pipeline enforces
     # a collection when vector retrieval is enabled.
     source_collection: str = ""

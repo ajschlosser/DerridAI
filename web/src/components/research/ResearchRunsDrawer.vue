@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import AppIcon from "../AppIcon.vue";
+import PipelineRunTracePanel from "../pipelines/PipelineRunTracePanel.vue";
 import { useI18nStore } from "../../stores/i18n";
 import type { ResearchJob } from "../../types/research";
 import { researchJobDetail, researchStageLabel } from "./researchI18n";
@@ -40,6 +41,16 @@ function statusLabel(job: ResearchJob) {
 }
 function detail(job: ResearchJob) {
   return researchJobDetail(job, (key, fallback) => i18n.t(key, fallback), i18n.locale);
+}
+function pipelineLabel(job: ResearchJob) {
+  const pipeline = job.result?.pipeline;
+  if (pipeline?.name) {
+    return `${pipeline.name}${pipeline.pipeline_version ? ` · v${pipeline.pipeline_version}` : ""}`;
+  }
+  const request = job.request || {};
+  const id = String(request.pipeline_id || "").trim();
+  const version = Number(request.pipeline_version || 0);
+  return id ? `${id}${version ? ` · v${version}` : ""}` : "";
 }
 function stageLabel(stage: unknown) {
   return researchStageLabel(stage, (key, fallback) => i18n.t(key, fallback), i18n.locale);
@@ -92,6 +103,8 @@ defineExpose({ open, close });
                 }}<template v-if="selectedJob.model"> · {{ selectedJob.model }}</template
                 ><template v-if="selectedJob.source_collection">
                   · {{ selectedJob.source_collection }}</template
+                ><template v-if="pipelineLabel(selectedJob)">
+                  · {{ pipelineLabel(selectedJob) }}</template
                 >
               </p>
             </div>
@@ -109,6 +122,13 @@ defineExpose({ open, close });
               ><small>{{ Number(stage.seconds || 0).toFixed(3) }}s</small>
             </div>
           </div>
+          <details
+            v-if="selectedJob.result?.pipeline_trace"
+            class="research-run-diagnostics research-pipeline-trace-disclosure"
+          >
+            <summary>{{ i18n.t("research.pipeline_trace", "Pipeline execution trace") }}</summary>
+            <PipelineRunTracePanel :trace="selectedJob.result.pipeline_trace" />
+          </details>
           <details
             v-if="selectedJob.result?.query_metadata || selectedJob.result?.retrieval"
             class="research-run-diagnostics"

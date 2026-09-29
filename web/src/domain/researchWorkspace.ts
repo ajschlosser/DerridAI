@@ -141,6 +141,37 @@ export function createResearchWorkspace(deps: Deps) {
           profiles[0]
         )?.id || "";
     }
+
+    let pipelineVisibility: Loose = {
+      assignment: null,
+      override_allowed: false,
+      pipelines: [],
+      strategies: [],
+    };
+    try {
+      pipelineVisibility = await api("/api/system/pipelines/research-options");
+      const configuredId = String(state.ragConfig.pipeline_id || "").trim();
+      const configuredVersion = Number(state.ragConfig.pipeline_version || 0);
+      if (
+        configuredId &&
+        !((pipelineVisibility.pipelines || []) as Loose[]).some(
+          (pipeline: Loose) =>
+            String(pipeline.pipeline_id || "") === configuredId &&
+            Number(pipeline.version || 0) === configuredVersion,
+        )
+      ) {
+        // Remove an override that is no longer visible or authorized. Keeping
+        // it in browser preferences would make a later Research run fail for a
+        // pipeline the user can no longer select.
+        state.ragConfig.pipeline_id = "";
+        state.ragConfig.pipeline_version = null;
+      }
+    } catch (error) {
+      // Research remains available with server-side assignment resolution even
+      // if the visibility endpoint is temporarily unavailable.
+      console.warn("Could not load Research pipeline visibility", error);
+    }
+
     persistPrefs();
     return {
       config: researchConfigForUi(),
@@ -162,6 +193,17 @@ export function createResearchWorkspace(deps: Deps) {
               .filter(Boolean)
           : [],
       history: cloneAuditValue(state.ragConfig.history || []),
+      pipeline_assignment:
+        pipelineVisibility.assignment && typeof pipelineVisibility.assignment === "object"
+          ? cloneAuditValue(pipelineVisibility.assignment)
+          : null,
+      pipeline_options: Array.isArray(pipelineVisibility.pipelines)
+        ? cloneAuditValue(pipelineVisibility.pipelines)
+        : [],
+      pipeline_strategies: Array.isArray(pipelineVisibility.strategies)
+        ? cloneAuditValue(pipelineVisibility.strategies)
+        : [],
+      pipeline_override_allowed: Boolean(pipelineVisibility.override_allowed),
       can_run: hasCapability("rag.run"),
       can_select_evidence: hasCapability("evidence.select"),
       can_manage_jobs: !isResearcher() || hasCapability("rag.jobs.own"),
@@ -170,6 +212,8 @@ export function createResearchWorkspace(deps: Deps) {
   }
   function updateResearchConfig(patch = {}) {
     const allowed = new Set([
+      "pipeline_id",
+      "pipeline_version",
       "source_collection",
       "locales",
       "search_types",
@@ -279,6 +323,8 @@ export function createResearchWorkspace(deps: Deps) {
     if (!hasCapability("rag.run")) throw new Error(tr("permissions.rag_denied"));
     const cfg: Loose = normalizedResearchConfig(updateResearchConfig(input.config || {}) as Loose);
     updateResearchConfig({
+      pipeline_id: cfg.pipeline_id,
+      pipeline_version: cfg.pipeline_version,
       k: cfg.k,
       fetch_k: cfg.fetch_k,
       lambda_mult: cfg.lambda_mult,
@@ -376,6 +422,8 @@ export function createResearchWorkspace(deps: Deps) {
       body: JSON.stringify({
         prompt,
         instructions: instructions || null,
+        pipeline_id: cfg.pipeline_id || null,
+        pipeline_version: cfg.pipeline_version || null,
         source_collection: cfg.source_collection || "",
         selected_evidence: selectedPayload,
         skip_retrieval: skipRetrieval,
@@ -461,6 +509,8 @@ export function createResearchWorkspace(deps: Deps) {
     const request = job?.request || job?.result?.rag_request || {};
     if (!request || typeof request !== "object") return researchConfigForUi();
     const keys = [
+      "pipeline_id",
+      "pipeline_version",
       "source_collection",
       "locales",
       "search_types",
@@ -563,6 +613,8 @@ export function createResearchWorkspace(deps: Deps) {
     if (Array.isArray(request.search_types) && request.search_types.length)
       cfg.search_types = [...request.search_types];
     for (const key of [
+      "pipeline_id",
+      "pipeline_version",
       "k",
       "fetch_k",
       "lambda_mult",
