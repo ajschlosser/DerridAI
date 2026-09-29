@@ -64,7 +64,7 @@ if TYPE_CHECKING:
 
 
 def _validated_work_metadata(schema: MetadataSchema, raw: Any) -> dict[str, Any]:
-    """Keep only well-formed values for fields the schema scopes to a source or batch rather than a record.
+    """Keep only well-formed values for fields the schema scopes to the whole corpus rather than to each record.
 
     Anything else is rejected rather than dropped, so a reviewer never believes a value was applied that was not.
     """

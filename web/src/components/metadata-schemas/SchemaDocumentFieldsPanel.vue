@@ -10,8 +10,8 @@ import {
   type MetadataSchema,
 } from "../../api/metadataSchemas";
 
-// Policy for the bibliographic fields DerridAI owns: which to ask for before segmentation, whether a value is
-// shared by a whole intake batch, and what a missing value blocks. The fields themselves cannot be added or renamed.
+// Policy for the bibliographic fields DerridAI owns: which to ask for before segmentation and what a missing
+// value blocks. Each holds one value for the whole corpus. The fields themselves cannot be added or renamed.
 const props = defineProps<{ draft: MetadataSchema; readonly: boolean }>();
 const { t } = useSchemaCopy();
 
@@ -41,7 +41,6 @@ function toggleRequirement(
         <thead>
           <tr>
             <th scope="col">{{ t("document_field", "Field") }}</th>
-            <th scope="col">{{ t("document_field_scope", "Shared by") }}</th>
             <th scope="col">{{ t("prompt_at_intake", "Ask at intake") }}</th>
             <th v-for="r in requirements" :key="r" scope="col">
               {{ t(`required_for_${r}`) }}
@@ -53,17 +52,6 @@ function toggleRequirement(
             <th scope="row">
               {{ t(`document_field.${policy.name}`, policy.name) }} <code>{{ policy.name }}</code>
             </th>
-            <td>
-              <select
-                v-model="policy.scope"
-                class="control"
-                :disabled="readonly"
-                :aria-label="`${t(`document_field.${policy.name}`, policy.name)}: ${t('document_field_scope', 'Shared by')}`"
-              >
-                <option value="source">{{ t("scope_source", "Once per source") }}</option>
-                <option value="batch">{{ t("scope_batch", "Once per intake batch") }}</option>
-              </select>
-            </td>
             <td>
               <input
                 v-model="policy.prompt_at_intake"

@@ -81,8 +81,7 @@ const addValue = () => props.field.values.push({ value: "", definition: "" });
           <UiTooltip :text="t('field_scope_help')" /></span
         ><select v-model="field.scope" class="control">
           <option value="record">{{ t("scope_record", "On each record") }}</option>
-          <option value="source">{{ t("scope_source", "Once per source") }}</option>
-          <option value="batch">{{ t("scope_batch", "Once per intake batch") }}</option>
+          <option value="corpus">{{ t("scope_corpus", "Once for the corpus") }}</option>
         </select></label
       >
       <label class="schema-field"

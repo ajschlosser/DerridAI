@@ -20,9 +20,9 @@ def _body(**extra):
     return body
 
 
-def test_format_1_work_wide_flag_migrates_to_source_scope():
+def test_format_1_work_wide_flag_migrates_to_corpus_scope():
     field = ms.SchemaField.model_validate({"name": "edition_note", "label": "Edition note", "applies_to_work": True})
-    assert field.scope == "source"
+    assert field.scope == "corpus"
     plain = ms.SchemaField.model_validate({"name": "tone", "label": "Tone", "applies_to_work": False})
     assert plain.scope == "record"
     assert "applies_to_work" not in field.model_dump()
@@ -36,18 +36,18 @@ def test_format_1_file_imports_with_default_document_policies():
     body["fields"][0].pop("scope")
     schema = ms.import_schema({"derridai_metadata_schema": 1, "schema": body})
     assert schema.format_version == ms.FORMAT_VERSION
-    assert schema.fields[0].scope == "source"
+    assert schema.fields[0].scope == "corpus"
     assert [p.name for p in schema.document_fields] == list(ms.DOCUMENT_FIELDS)
     assert schema.required_document_fields("evidence") == ["title", "document_author"]
 
 
 def test_document_policies_are_completed_in_canonical_order_and_validated():
     schema = ms.MetadataSchema.model_validate(_body(document_fields=[
-        {"name": "translator", "scope": "batch", "prompt_at_intake": True, "required_for": ["publication", "publication"]},
+        {"name": "translator", "prompt_at_intake": True, "required_for": ["publication", "publication"]},
     ]))
     assert [p.name for p in schema.document_fields] == list(ms.DOCUMENT_FIELDS)
     translator = schema.document_policy("translator")
-    assert (translator.scope, translator.required_for) == ("batch", ["publication"])
+    assert (translator.prompt_at_intake, translator.required_for) == (True, ["publication"])
     assert translator.field_id == "derridai.document.translator"
     # Omitted policies take the defaults, so the author is still required.
     assert "document_author" in schema.required_document_fields("publication")

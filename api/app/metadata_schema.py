@@ -86,10 +86,8 @@ MAX_GROUPS = 6
 FieldType = Literal["text", "number", "boolean", "choice", "list"]
 FieldRole = Literal["scholarly", "structural", "document", "operational"]
 ReviewVisibility = Literal["primary", "details", "hidden"]
-# Where a field's value lives: on each record, once per source (every record of that source inherits it), or once
-# per intake batch (every source started together, and so every record of theirs, inherits it).
-FieldScope = Literal["record", "source", "batch"]
-DocumentFieldScope = Literal["source", "batch"]
+# Where a field's value lives: on each record, or once for the whole corpus (every record of the build inherits it).
+FieldScope = Literal["record", "corpus"]
 # What an empty value blocks. "evidence": a record without it cannot be cited as RAG evidence; "publication": the
 # build cannot be published.
 DocumentRequirement = Literal["evidence", "publication"]
@@ -170,8 +168,8 @@ class SchemaField(BaseModel):
     # participates in the product without hard-coding behavior to its name.
     role: FieldRole = "scholarly"
     review_visibility: ReviewVisibility = "primary"
-    # "source"/"batch": the value is shared by every record of a source (or of every source in an intake batch), so it
-    # may be filled once, before segmentation, and records inherit it. This is separate from ordinary bulk editing,
+    # "corpus": the value is shared by every record of the corpus, so it may be filled once, before segmentation, and
+    # records inherit it. This is separate from ordinary bulk editing,
     # where a reviewer picks records and fields after the fact.
     scope: FieldScope = "record"
     # For "choice": the allowed values. `strict` makes them the only values the model may return; otherwise they are
@@ -202,10 +200,10 @@ class SchemaField(BaseModel):
             result["field_id"] = f"field-{uuid.uuid5(uuid.NAMESPACE_URL, 'derridai:field:' + name)}"
         if not str(result.get("semantic_compatibility_id") or "").strip() and name in SEMANTIC_COMPATIBILITY_IDS:
             result["semantic_compatibility_id"] = SEMANTIC_COMPATIBILITY_IDS[name]
-        # Format 1: a work-wide field is a source-scoped one.
+        # Format 1: a work-wide field is a corpus-scoped one.
         if "applies_to_work" in result:
             legacy = result.pop("applies_to_work")
-            result.setdefault("scope", "source" if legacy else "record")
+            result.setdefault("scope", "corpus" if legacy else "record")
         return result
 
     @field_validator("field_id")
@@ -264,11 +262,13 @@ class SchemaGroup(BaseModel):
 
 
 class DocumentFieldPolicy(BaseModel):
-    """A schema's policy for one DerridAI-owned bibliographic field: its scope, whether intake asks for it, and what it blocks."""
+    """A schema's policy for one DerridAI-owned bibliographic field: whether intake asks for it and what it blocks.
+
+    Document fields always hold one value for the whole corpus.
+    """
 
     model_config = ConfigDict(extra="forbid")
     name: str
-    scope: DocumentFieldScope = "source"
     # Shown in the intake step before segmentation, prefilled from catalog/model inference.
     prompt_at_intake: bool = False
     required_for: list[DocumentRequirement] = Field(default_factory=list, max_length=2)
@@ -426,7 +426,7 @@ class MetadataSchema(BaseModel):
         return {f.name: f for f in self.fields}
 
     def shared_fields(self) -> list[SchemaField]:
-        """Schema fields filled once per source or batch rather than per record."""
+        """Schema fields filled once for the corpus rather than per record."""
         return [f for f in self.fields if f.scope != "record"]
 
     def document_policy(self, name: str) -> DocumentFieldPolicy:

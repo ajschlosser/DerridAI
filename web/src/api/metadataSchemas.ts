@@ -3,9 +3,8 @@ import { apiRequest } from "./http";
 export type SchemaFieldType = "text" | "number" | "boolean" | "choice" | "list";
 export type SchemaFieldRole = "scholarly" | "structural" | "document" | "operational";
 export type SchemaReviewVisibility = "primary" | "details" | "hidden";
-/** Where a value lives: on each record, once per source, or once per intake batch. */
-export type SchemaFieldScope = "record" | "source" | "batch";
-export type DocumentFieldScope = "source" | "batch";
+/** Where a value lives: on each record, or once for the whole corpus. */
+export type SchemaFieldScope = "record" | "corpus";
 export type DocumentRequirement = "evidence" | "publication";
 export interface RetrievalProfile {
   enabled: boolean;
@@ -31,7 +30,7 @@ export interface SchemaField {
   group: string;
   role?: SchemaFieldRole;
   review_visibility?: SchemaReviewVisibility;
-  /** "source"/"batch" values are filled in once before segmentation and inherited by every record. */
+  /** "corpus" values are filled in once before segmentation and inherited by every record. */
   scope?: SchemaFieldScope;
   values: SchemaValue[];
   strict: boolean;
@@ -57,7 +56,6 @@ export interface SchemaGroup {
 /** A schema's policy for one DerridAI-owned bibliographic field (title, document_author, …). */
 export interface DocumentFieldPolicy {
   name: string;
-  scope: DocumentFieldScope;
   prompt_at_intake: boolean;
   required_for: DocumentRequirement[];
 }
@@ -124,7 +122,6 @@ const DEFAULT_REQUIRED = new Set(["title", "document_author"]);
 export function defaultDocumentFields(): DocumentFieldPolicy[] {
   return DOCUMENT_FIELD_NAMES.map((name) => ({
     name,
-    scope: "source",
     prompt_at_intake: DEFAULT_INTAKE.has(name),
     required_for: DEFAULT_REQUIRED.has(name) ? ["evidence", "publication"] : [],
   }));
