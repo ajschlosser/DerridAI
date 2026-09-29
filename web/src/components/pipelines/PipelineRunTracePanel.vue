@@ -146,7 +146,7 @@ function stageDetail(stage: PipelineStageTrace) {
 }
 .eyebrow {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -175,7 +175,7 @@ function stageDetail(stage: PipelineStageTrace) {
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--soft);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 750;
 }
 .status-pill[data-status="completed"] {
@@ -244,14 +244,14 @@ function stageDetail(stage: PipelineStageTrace) {
 .trace-stage-heading code {
   margin-top: 2px;
   color: var(--muted);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
 }
 .trace-stage-metrics {
   flex-wrap: wrap;
   justify-content: end;
   gap: 8px;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
 }
 .trace-meta {
   margin: 5px 0 0;
@@ -262,7 +262,7 @@ function stageDetail(stage: PipelineStageTrace) {
   gap: 7px;
   margin-top: 7px;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
 }
 .trace-counts strong {
   color: inherit;
@@ -274,7 +274,7 @@ function stageDetail(stage: PipelineStageTrace) {
   padding: 8px 9px;
   border-radius: 8px;
   background: var(--soft);
-  font-size: 0.74rem;
+  font-size: 0.75rem;
   line-height: 1.4;
 }
 .trace-warning :deep(svg) {
@@ -288,7 +288,7 @@ function stageDetail(stage: PipelineStageTrace) {
   margin: 7px 0 0;
   padding-left: 18px;
   color: var(--muted);
-  font-size: 0.74rem;
+  font-size: 0.75rem;
 }
 .run-warnings {
   border-top: 1px solid var(--line);
