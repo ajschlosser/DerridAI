@@ -229,7 +229,7 @@ function seconds(value: number | null | undefined) {
                 v-model="caseId"
                 type="text"
                 :placeholder="
-                  t("pipelines.benchmark_case_id_placeholder", "e.g. trace-definition-001")
+                  t('pipelines.benchmark_case_id_placeholder', 'e.g. trace-definition-001')
                 "
               />
             </label>
