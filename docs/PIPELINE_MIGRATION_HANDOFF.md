@@ -252,6 +252,12 @@ Metric-awareness finding: pre-fill converts distance with `1 / (1 + distance)` r
 
 One trace is recorded per build; the build's `memory_prefill` summary carries the pipeline identity. The Corpus Builder does not display it yet.
 
+### 4.13 Precedent evidence remapping moved onto pipeline runtime
+
+`metadata_precedents_cache.rank_candidates()` (enrichment cache and live precedents panel) ranks through a `RemapSession` for the `precedent_evidence_remap` assignment (built-in `precedent.remap.current@1`: `retrieve.source_cosine`, falling back on unavailable/error to the new `retrieve.token_overlap`, then `validate.provenance` and `select.top_k` limit 3) in `api/app/pipelines/precedent_remap.py`. `rank_blocks_for_texts()` is replaced by strategy functions (`semantic_block_scores`, `lexical_block_scores`, `ranked_block_candidates`); its tests now run through the pipeline with the same assertions.
+
+The provenance gate and top-K selection cannot be removed; candidates remain advisory current-Record correspondences. An unresolvable assignment yields no candidates (logged) rather than failing the panel or the enrichment cache.
+
 ## 5. Current built-in assignments
 
 As of current `master`, built-in system assignments are:
@@ -263,6 +269,7 @@ As of current `master`, built-in system assignments are:
 | Evidence recovery            | `evidence.recovery.cascade@1`   | active |
 | Vector Store search          | `store_search.similarity@1`     | active |
 | Metadata pre-fill            | `metadata.prefill.current@1`    | active |
+| Precedent evidence remapping | `precedent.remap.current@1`     | active |
 | Metadata precedents          | `metadata.precedents.current@1` | active |
 | Validated claim memory       | `memory.claim.current@1`        | active |
 | Prior response memory        | `memory.response.current@1`     | active |
@@ -486,7 +493,7 @@ Migrated in section 4.12; pre-fill policy remains domain code.
 
 ### 8.3 Precedent evidence remapping
 
-Mapping prior reviewed evidence text onto the current Record’s source units is a separate similarity/lexical-fallback workflow. It is not made authoritative by the metadata-precedent pipeline and should be separately inventoried before changing it.
+Migrated in section 4.13.
 
 ### 8.4 Generic/feature-specific LLM operations
 

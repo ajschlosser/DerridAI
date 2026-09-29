@@ -141,6 +141,15 @@ DEFAULT_STRATEGIES = [
         },
     ),
     StrategySpec(
+        strategy_id="retrieve.token_overlap",
+        family="candidate_generation",
+        label="Word overlap",
+        description="Deterministic Jaccard overlap between the query's words and each source unit's words, with no stopword removal; a unit with no shared word is never a candidate.",
+        input_type="query",
+        output_type="candidate_set",
+        config_schema={"type": "object", "properties": {"min_score": _number(0, 1)}},
+    ),
+    StrategySpec(
         strategy_id="retrieve.store_keyword",
         family="candidate_generation",
         label="Record text contains",
