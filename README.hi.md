@@ -57,13 +57,12 @@ Normative cELF 1.0 specification और non-normative DerridAI white paper क�
 
 ### Runtime services
 
-| Service | Stack | भूमिका |
-| --- | --- | --- |
-| `web` | Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js, nginx | Browser application; `/api/` proxy करता है; REST, GraphQL और realtime notifications उपयोग करता है। Storybook optional development profile है। |
-| `api` | Python 3.12, FastAPI, Strawberry GraphQL, ChromaDB client, PyMuPDF, sentence-transformers, spaCy | Auth, source/corpus operations, cELF reads, provenance, RAG, pipelines, jobs और system state के लिए authoritative application boundary। |
-| `document-nlp` | BookNLP worker | Optional isolated English Document Intelligence enhancement। Bounded reviewed text प्राप्त करता है और corpus authority नहीं रखता। |
-| `chroma` | Chroma server | Optional HTTP profile। Embedded `PersistentClient` default है; दोनों modes derived search/vector projections रखते हैं। |
-| `ollama` | Ollama | Optional local profile। DerridAI host पर चल रहे Ollama या configured OpenAI-compatible endpoint का भी उपयोग कर सकता है। |
+
+- `web` — Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js और nginx। यह browser application है; `/api/` को proxy करता है और REST, GraphQL तथा realtime notifications उपयोग करता है। Storybook optional development profile है।
+- `api` — Python 3.12, FastAPI, Strawberry GraphQL, ChromaDB client, PyMuPDF, sentence-transformers और spaCy। यह authentication, source/corpus operations, cELF reads, provenance, RAG, pipelines, jobs और system state के लिए authoritative application boundary है।
+- `document-nlp` — English Document Intelligence के लिए optional isolated BookNLP worker। यह bounded reviewed text प्राप्त करता है और corpus authority नहीं रखता।
+- `chroma` — optional HTTP Chroma server। Embedded `PersistentClient` default है; दोनों modes derived search/vector projections रखते हैं।
+- `ollama` — optional local Ollama service। DerridAI host पर पहले से चल रहे Ollama या किसी configured OpenAI-compatible endpoint का उपयोग भी कर सकता है।
 
 Default Compose stack `web` और `api` शुरू करता है; अन्य services optional profiles या external providers हैं।
 
