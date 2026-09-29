@@ -1,7 +1,7 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, ref } from "vue";
-import { RouterLink } from "vue-router";
+import { computed, ref, watch } from "vue";
+import { RouterLink, useRoute, useRouter } from "vue-router";
 import AppIcon from "../components/AppIcon.vue";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
 import {
@@ -16,8 +16,11 @@ import { useI18nStore } from "../stores/i18n";
 
 const i18n = useI18nStore();
 const auth = useAuthStore();
-const query = ref("");
+const route = useRoute();
+const router = useRouter();
+const query = ref(String(route.query.q || ""));
 const glossaryCategory = ref<HelpGlossaryCategory>("all");
+let applyingRouteState = false;
 
 const groupOrder: HelpPageGroup[] = [
   "overview",
@@ -68,6 +71,25 @@ const matchCount = computed(
   () => pageGuides.value.length + glossary.value.length + questionCount.value,
 );
 const hasResults = computed(() => matchCount.value > 0);
+
+watch(query, (value) => {
+  if (applyingRouteState) return;
+  void router.replace({
+    name: "help",
+    query: { ...route.query, q: value.trim() || undefined },
+  });
+});
+
+watch(
+  () => route.query.q,
+  (value) => {
+    const next = String(value || "");
+    if (next === query.value) return;
+    applyingRouteState = true;
+    query.value = next;
+    applyingRouteState = false;
+  },
+);
 </script>
 
 <template>

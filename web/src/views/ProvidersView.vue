@@ -1,6 +1,7 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import type { ProviderProfile } from "../api/system";
 import { useI18nStore } from "../stores/i18n";
 import * as runtime from "../runtime/runtime.js";
@@ -14,6 +15,16 @@ import { applyProfileFieldValues } from "../domain/providerBulkFields";
 type ProviderStatus = { available?: boolean; models?: DiscoveredModel[]; error?: string };
 type ProviderWarmup = { message?: string };
 const i18n = useI18nStore();
+const route = useRoute();
+const router = useRouter();
+
+function routeExpandedProfiles() {
+  return String(route.query.open || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
 const profiles = ref<ProviderProfile[]>([]);
 const statuses = ref<Record<string, ProviderStatus>>({});
 const warmups = ref<Record<string, ProviderWarmup>>({});
@@ -23,7 +34,9 @@ const saving = ref(false);
 const error = ref("");
 const busy = ref<Record<string, string>>({});
 const revealedKeys = ref<Record<string, boolean>>({});
-const expanded = ref<Record<string, boolean>>({});
+const expanded = ref<Record<string, boolean>>(
+  Object.fromEntries(routeExpandedProfiles().map((id) => [id, true])),
+);
 function toggleKeyVisibility(id: string) {
   revealedKeys.value = { ...revealedKeys.value, [id]: !revealedKeys.value[id] };
 }
@@ -87,11 +100,21 @@ function copyProfiles() {
 function setBusy(id: string, value = "") {
   busy.value = { ...busy.value, [id]: value };
 }
+function syncExpandedProfiles() {
+  const open = Object.entries(expanded.value)
+    .filter(([, value]) => value)
+    .map(([id]) => id);
+  void router.replace({
+    name: "providers",
+    query: { ...route.query, open: open.length ? open.join(",") : undefined },
+  });
+}
 function isExpanded(id: string) {
   return expanded.value[id] === true;
 }
 function toggleExpanded(id: string) {
   expanded.value = { ...expanded.value, [id]: !isExpanded(id) };
+  syncExpandedProfiles();
 }
 async function save() {
   saving.value = true;
@@ -101,6 +124,7 @@ async function save() {
     await runtime.syncResearcherProviderProfiles?.();
     refresh();
     expanded.value = {};
+    syncExpandedProfiles();
     runtime.notifyToast?.(i18n.t("providers.saved"), { tone: "success" });
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);
@@ -115,7 +139,10 @@ function add(type: "ollama" | "openai") {
   const known = new Map(edits.map((item) => [item.id, item]));
   profiles.value = profiles.value.map((item) => known.get(item.id) || item);
   const id = created?.id || profiles.value.at(-1)?.id;
-  if (id) expanded.value = { ...expanded.value, [id]: true };
+  if (id) {
+    expanded.value = { ...expanded.value, [id]: true };
+    syncExpandedProfiles();
+  }
 }
 function applyBulk(ids: string[], values: Record<string, unknown>) {
   profiles.value = applyProfileFieldValues(profiles.value, ids, values);
@@ -127,6 +154,12 @@ async function remove(profile: ProviderProfile) {
   try {
     runtime.removeProviderProfileForUi?.(profile.id);
     profiles.value = profiles.value.filter((item) => item.id !== profile.id);
+    if (expanded.value[profile.id]) {
+      const next = { ...expanded.value };
+      delete next[profile.id];
+      expanded.value = next;
+      syncExpandedProfiles();
+    }
     refreshStatuses();
     snapshot.value = JSON.stringify(profiles.value);
   } catch (exc) {
@@ -150,6 +183,14 @@ async function run(profile: ProviderProfile, action: "test" | "warm") {
     setBusy(profile.id);
   }
 }
+watch(
+  () => route.query.open,
+  () => {
+    const next = Object.fromEntries(routeExpandedProfiles().map((id) => [id, true]));
+    if (JSON.stringify(next) !== JSON.stringify(expanded.value)) expanded.value = next;
+  },
+);
+
 onMounted(() => {
   refresh();
   loading.value = false;

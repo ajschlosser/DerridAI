@@ -1,6 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import { createMemoryHistory, createRouter } from "vue-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { metadataMemoryApi } from "../../src/api/metadataMemory";
@@ -56,8 +57,26 @@ const dictionary = {
 };
 
 const RouterLink = { props: ["to"], template: '<a :data-to="JSON.stringify(to)"><slot /></a>' };
-const mountView = () =>
-  mount(MetadataMemoryView, { attachTo: document.body, global: { stubs: { RouterLink } } });
+
+async function mountView(query: Record<string, string> = {}) {
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      {
+        path: "/metadata-memory",
+        name: "metadatamemory",
+        component: { template: "<div />" },
+      },
+    ],
+  });
+  await router.push({ name: "metadatamemory", query });
+  await router.isReady();
+  const wrapper = mount(MetadataMemoryView, {
+    attachTo: document.body,
+    global: { plugins: [router], stubs: { RouterLink } },
+  });
+  return { wrapper, router };
+}
 
 describe("Metadata memory page", () => {
   afterEach(() => vi.useRealTimers());
@@ -112,7 +131,7 @@ describe("Metadata memory page", () => {
   });
 
   it("presents learned metadata as auditable scholarly memory", async () => {
-    const wrapper = mountView();
+    const { wrapper } = await mountView();
     await flushPromises();
 
     expect(wrapper.get("#metadata-memory-title").text()).toBe("Metadata memory");
@@ -129,7 +148,7 @@ describe("Metadata memory page", () => {
 
   it("applies select filters immediately, shows removable chips, and debounces search", async () => {
     const list = vi.mocked(metadataMemoryApi.list);
-    const wrapper = mountView();
+    const { wrapper } = await mountView();
     await flushPromises();
     list.mockClear();
 
@@ -154,8 +173,42 @@ describe("Metadata memory page", () => {
     wrapper.unmount();
   });
 
+  it("restores filters from the URL and keeps filter state shareable", async () => {
+    const { wrapper, router } = await mountView({
+      q: "levinas",
+      field: "position_holder",
+      kind: "correction",
+      build: "build-1",
+      language: "en",
+      offset: "50",
+    });
+    await flushPromises();
+
+    const searchInput = wrapper.get("input[type=search]").element as HTMLInputElement;
+    const fieldSelect = wrapper.findAll("select")[0].element as HTMLSelectElement;
+    expect(searchInput.value).toBe("levinas");
+    expect(fieldSelect.value).toBe("position_holder");
+    expect(metadataMemoryApi.list).toHaveBeenCalledWith(
+      expect.objectContaining({
+        q: "levinas",
+        field: "position_holder",
+        kind: "correction",
+        build_id: "build-1",
+        language: "en",
+        offset: 50,
+      }),
+    );
+
+    await wrapper.findAll("select")[0].setValue("");
+    await flushPromises();
+    expect(router.currentRoute.value.query.field).toBeUndefined();
+    expect(router.currentRoute.value.query.q).toBe("levinas");
+
+    wrapper.unmount();
+  });
+
   it("links the related System Data surfaces and reveals details on demand", async () => {
-    const wrapper = mountView();
+    const { wrapper } = await mountView();
     await flushPromises();
 
     const targets = wrapper.findAll(".memory-relations a").map((a) => a.attributes("data-to"));

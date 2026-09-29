@@ -170,6 +170,22 @@ describe("the schema editor", () => {
   const button = (w: ReturnType<typeof mount>, label: string) =>
     w.findAll("button").find((b) => b.text() === label)!;
 
+  it("restores schema selection and editor tab from route-facing props", async () => {
+    const w = mount(MetadataSchemaEditor, {
+      props: { initialSchemaId: "notes", initialTab: "groups" },
+      attachTo: document.body,
+    });
+    await flushPromises();
+
+    expect(metadataSchemasApi.get).toHaveBeenCalledWith("notes");
+    expect(w.get("#schema-tab-groups").attributes("aria-selected")).toBe("true");
+    expect(w.emitted("selection")?.at(-1)).toEqual(["notes"]);
+
+    await w.get("#schema-tab-preview").trigger("click");
+    expect(w.emitted("tab")?.at(-1)).toEqual(["preview"]);
+    w.unmount();
+  });
+
   it("shows the built-in schema read-only, with the locked core stated", async () => {
     const w = await mountEditor();
     expect(w.text()).toContain(
@@ -213,7 +229,9 @@ describe("the schema editor", () => {
       .spyOn(metadataSchemasApi, "create")
       .mockResolvedValue({ ...schema(), id: "copy" });
     const w = await mountEditor();
+    const routeSelectionsBeforeDraft = w.emitted("selection")?.length || 0;
     await button(w, "Duplicate").trigger("click");
+    expect(w.emitted("selection")?.length || 0).toBe(routeSelectionsBeforeDraft);
     expect(w.text()).toContain("Not saved yet");
     expect(w.get("fieldset").attributes("disabled")).toBeUndefined();
     await button(w, "Add a field").trigger("click");
