@@ -8028,14 +8028,19 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'pipelines.config.total_char_limit.label': 'Limite totale du texte probant',
  'pipelines.config.total_char_limit.help': ('Nombre maximal de caractères combinés dans le paquet de preuves envoyé au modèle '
                                             'de génération de réponse.'),
+ 'pipelines.config.char_budget.label': 'Budget de texte du paquet de précédents',
+ 'pipelines.config.char_budget.help': ('Nom technique : char_budget. Quantité maximale de texte de précédents pouvant être placée dans '
+                                       'l’invite d’enrichissement des métadonnées. Cette limite borne la taille de l’invite; elle ne '
+                                       'modifie pas les valeurs examinées qui font autorité.'),
  'pipelines.config.num_predict.label': 'Jetons maximaux pour l’analyse de la requête',
  'pipelines.config.num_predict.help': ('Nombre maximal de jetons que le modèle peut générer pour analyser ou décomposer la question '
                                        'avant le repérage.'),
  'pipelines.config.semantic_weight.label': 'Poids du repérage sémantique',
- 'pipelines.config.semantic_weight.help': ('Part du score combiné qui dépend de la similarité de sens, même si les mots employés '
-                                           'sont différents.'),
+ 'pipelines.config.semantic_weight.help': ('Importance relative de la similarité de sens dans le score combiné des précédents, même si les mots employés '
+                                           'sont différents. Les poids sémantique et lexical sont normalisés ensemble.'),
  'pipelines.config.lexical_weight.label': 'Poids de la correspondance des mots',
- 'pipelines.config.lexical_weight.help': 'Part du score combiné qui dépend du chevauchement des mots ou des expressions.',
+ 'pipelines.config.lexical_weight.help': ('Importance relative du chevauchement des mots ou des expressions dans le score combiné des précédents. '
+                                          'Les poids sémantique et lexical sont normalisés ensemble.'),
  'pipelines.config.min_score.label': 'Score minimal de soutien',
  'pipelines.config.min_score.help': 'Plus faible score de soutien qu’un candidat peut obtenir tout en franchissant cette validation.',
  'pipelines.config.generic_help': ('Paramètre technique déclaré par le serveur pour la stratégie choisie. Le modifier change le '
