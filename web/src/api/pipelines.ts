@@ -7,6 +7,8 @@ import type {
   PipelineDefinition,
   PipelineOperationalMetrics,
   PipelineRunTrace,
+  ResearchPipelineBenchmarkRequest,
+  ResearchPipelineBenchmarkResult,
   ResearchPipelineComparisonRequest,
   ResearchPipelineComparisonResult,
   PipelineValidationResponse,
@@ -62,6 +64,12 @@ export const pipelinesApi = {
 
   compareResearch: (body: ResearchPipelineComparisonRequest) =>
     apiRequest<ResearchPipelineComparisonResult>("/api/system/pipelines/compare/research", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  benchmarkResearch: (body: ResearchPipelineBenchmarkRequest) =>
+    apiRequest<ResearchPipelineBenchmarkResult>("/api/system/pipelines/benchmark/research", {
       method: "POST",
       body: JSON.stringify(body),
     }),
