@@ -229,7 +229,9 @@ describe("the schema editor", () => {
       .spyOn(metadataSchemasApi, "create")
       .mockResolvedValue({ ...schema(), id: "copy" });
     const w = await mountEditor();
+    const routeSelectionsBeforeDraft = w.emitted("selection")?.length || 0;
     await button(w, "Duplicate").trigger("click");
+    expect(w.emitted("selection")?.length || 0).toBe(routeSelectionsBeforeDraft);
     expect(w.text()).toContain("Not saved yet");
     expect(w.get("fieldset").attributes("disabled")).toBeUndefined();
     await button(w, "Add a field").trigger("click");
