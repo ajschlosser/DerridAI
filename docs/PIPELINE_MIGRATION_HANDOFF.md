@@ -230,6 +230,18 @@ Built-ins: `evidence.recovery.celf@1` (text support, then closed-choice model; n
 
 The remaining direct `predict_scores()` callers are `rag.py` (Research pipeline) and `metadata_exemplar_retrieval.py` (metadata-precedent pipeline). Re-verify they are unreachable outside those pipelines before closing the CrossEncoder criterion.
 
+### 4.11 General Vector Store search moved onto pipeline runtime
+
+`POST /api/stores/{store}/search` no longer branches on `mode`. It resolves a `vector_store_search` pipeline and executes it with `execute_store_search()` in `api/app/pipelines/store_search.py`, a dataflow runtime over registered strategies (`query.passthrough`, `retrieve.chroma_similarity`, `retrieve.lexical_bm25`, `retrieve.store_keyword`, `retrieve.store_filter`, `fusion.rrf`, `select.mmr`, `select.top_k`). `ChromaStore.hybrid_search()` and `mmr_search()` are removed; fusion and MMR selection are pipeline stages.
+
+- Each existing mode is a shortcut to its built-in `store_search.<mode>@1`; `mode: "assigned"` runs the assignment (built-in: `store_search.similarity@1`); administrators may name an exact saved version.
+- The fallbacks that used to be implicit (empty query in hybrid/lexical, no lexical terms, hybrid on a collection without query embeddings) are graph edges. An unavailable or failed stage without a matching edge fails the request, as before.
+- Stage `fetch_k`, `lambda_mult`, `rrf_k`, and `limit` settings override request values when set. Without `fetch_k`, a retrieval stage fetches what its consumer needs (request `fetch_k` for MMR; four times the result count, 32–400, for fusion; otherwise the result count).
+- Output is pinned by `tests/test_store_search_characterization.py`, whose snapshot was captured from the pre-migration route.
+- Responses carry pipeline identity; traces keep collection, embedding provider/model, counts, score types, and filtered field names, never query text or filter values.
+
+Follow-up: show the pipeline identity next to results in the Search workspace; one trace is persisted per search, so trace retention is now pressing.
+
 ## 5. Current built-in assignments
 
 As of current `master`, built-in system assignments are:
@@ -239,6 +251,7 @@ As of current `master`, built-in system assignments are:
 | Research                     | `research.current@1`            | active |
 | Reviewer evidence suggestion | `evidence.reviewer.current@2`   | active |
 | Evidence recovery            | `evidence.recovery.cascade@1`   | active |
+| Vector Store search          | `store_search.similarity@1`     | active |
 | Metadata precedents          | `metadata.precedents.current@1` | active |
 | Validated claim memory       | `memory.claim.current@1`        | active |
 | Prior response memory        | `memory.response.current@1`     | active |
@@ -454,7 +467,7 @@ Re-audit these original inventory items before claiming migration completeness.
 
 Similarity, MMR, hybrid, lexical, and filter modes remain important search behaviors. The audit target was to expose them as named pipeline chains instead of isolated “magic modes.”
 
-Confirm whether any later work after this handoff migrates these search modes. At this handoff, they should still be treated as a remaining migration surface.
+Migrated in section 4.11: every mode now runs a versioned `store_search.<mode>` pipeline.
 
 ### 8.2 Metadata prefill
 

@@ -27,6 +27,14 @@ from ..models import (
     StoreLanguageUpdate,
     StoreProtectionUpdate,
 )
+from ..pipelines.store import pipeline_store
+from ..pipelines.store_search import (
+    SEARCH_FEATURE,
+    StoreSearchRequest,
+    compile_store_search_pipeline,
+    execute_store_search,
+    resolve_store_search_pipeline,
+)
 from ..researcher_view import sanitize_records_payload
 from ..services import store
 
@@ -431,21 +439,54 @@ def search(store_name: str, body: SearchRequest, request: Request) -> dict[str, 
         user = request_user(request)
         if user.role != "admin":
             enforce_researcher_text({"query": body.query, "where": body.where})
-        if body.mode == "filter":
-            rows = store.filter_search(store_name, body.n_results, body.where)
-        elif body.mode == "keyword":
-            rows = store.keyword_search(store_name, body.query, body.n_results, body.where)
-        elif body.mode == "lexical":
-            rows = store.lexical_search(store_name, body.query, body.n_results, body.where)
-        elif body.mode == "hybrid":
-            rows = store.hybrid_search(store_name, body.query, body.n_results, body.where)
-        elif body.mode == "mmr":
-            rows = store.mmr_search(store_name, body.query, body.n_results, body.where, fetch_k=body.fetch_k, lambda_mult=body.lambda_mult)
-        else:
-            rows = store.search(store_name, body.query, body.n_results, body.where)
-        result = {"results": rows}
+            if body.pipeline_id:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Only administrators may run a specific search pipeline version.",
+                )
+        pipeline, resolved_hash = resolve_store_search_pipeline(
+            mode=body.mode, pipeline_id=body.pipeline_id, pipeline_version=body.pipeline_version
+        )
+        execution = execute_store_search(
+            compile_store_search_pipeline(pipeline),
+            store=store,
+            request=StoreSearchRequest(
+                store=store_name,
+                query=body.query,
+                n_results=body.n_results,
+                where=body.where,
+                fetch_k=body.fetch_k,
+                lambda_mult=body.lambda_mult,
+            ),
+            resolved_hash=resolved_hash,
+            owner=user.username,
+            collection_identity=_search_collection_identity(store_name),
+        )
+        identity = {
+            "feature": SEARCH_FEATURE,
+            "pipeline_id": pipeline.pipeline_id,
+            "pipeline_version": pipeline.version,
+            "pipeline_hash": resolved_hash,
+            "trace_id": execution.trace.run_id,
+        }
+        try:
+            pipeline_store.put_run(execution.trace)
+        except Exception:  # noqa: BLE001 - telemetry must never block search results
+            identity["trace_warning"] = "Pipeline trace persistence failed."
+        result = {"results": execution.results, "pipeline": identity}
         if user.role != "admin":
             return sanitize_records_payload(result, max_chars=settings.researcher_text_max_chars)
         return result
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _search_collection_identity(store_name: str) -> dict[str, Any]:
+    """Embedding identity for the trace; unknown when the collection cannot be opened."""
+    try:
+        provider, model = store._embedding_spec(store._collection(store_name))
+    except Exception:  # noqa: BLE001 - the retrieval stage reports the real failure
+        return {}
+    return {"embedding_provider": provider, "embedding_model": model}

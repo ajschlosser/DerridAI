@@ -244,9 +244,14 @@ class SearchRequest(BaseModel):
     query: str = ""
     n_results: int = Field(default=10, ge=1, le=100)
     where: dict[str, Any] | None = None
-    mode: Literal["similarity", "mmr", "filter", "keyword", "lexical", "hybrid"] = "similarity"
+    # Each mode runs its built-in store_search.<mode> pipeline; "assigned" runs
+    # the vector_store_search assignment. Administrators may instead name an
+    # exact saved pipeline version.
+    mode: Literal["similarity", "mmr", "filter", "keyword", "lexical", "hybrid", "assigned"] = "similarity"
     fetch_k: int = Field(default=100, ge=1, le=1000)
     lambda_mult: float = Field(default=0.7, ge=0.0, le=1.0)
+    pipeline_id: str | None = Field(default=None, min_length=1, max_length=160)
+    pipeline_version: int | None = Field(default=None, ge=1)
 
 
 class OllamaTouchupOptions(BaseModel):

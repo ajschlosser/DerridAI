@@ -28,7 +28,7 @@ from .chroma_connection import (
     public_http_config,
 )
 from .config import APP_VERSION, settings
-from .retrieval_selection import cosine_similarity, distance_to_relevance, mmr_select
+from .retrieval_selection import cosine_similarity, distance_to_relevance
 
 logger = logging.getLogger(__name__)
 
@@ -2866,17 +2866,17 @@ class ChromaStore:
 
         return cosine_similarity(a, b)
 
-    def mmr_search(
+    def mmr_candidates(
         self,
         store: str,
         query: str,
-        n_results: int,
+        fetch_k: int,
         where: dict[str, Any] | None = None,
-        *,
-        fetch_k: int = 100,
-        lambda_mult: float = 0.7,
     ) -> list[dict[str, Any]]:
-        """Run collection-aware MMR while preserving relevance score provenance."""
+        """Dense candidates with embeddings and metric-aware relevance, for MMR selection.
+
+        Selection itself belongs to the store-search pipeline's ``select.mmr`` stage.
+        """
 
         col = self._collection(store)
         count = col.count()
@@ -2892,7 +2892,7 @@ class ChromaStore:
         )
         payload = col.query(
             query_embeddings=[query_vector],
-            n_results=min(max(n_results, fetch_k), count),
+            n_results=min(fetch_k, count),
             where=where,
             include=["documents", "metadatas", "distances", "embeddings"],
         )
@@ -2928,16 +2928,7 @@ class ChromaStore:
                 }
             )
 
-        selected = mmr_select(
-            candidates,
-            limit=n_results,
-            lambda_mult=lambda_mult,
-            relevance=lambda candidate: float(candidate.get("relevance") or 0.0),
-            vector=lambda candidate: candidate.get("embedding"),
-        )
-        for row in selected:
-            row.pop("embedding", None)
-        return selected
+        return candidates
 
     def filter_search(self, store: str, n_results: int, where: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         col = self._collection(store)
@@ -3129,60 +3120,6 @@ class ChromaStore:
             }
             for score, row in scored[:n_results]
         ]
-
-    def hybrid_search(
-        self,
-        store: str,
-        query: str,
-        n_results: int,
-        where: dict[str, Any] | None = None,
-        *,
-        rrf_k: int = 60,
-    ) -> list[dict[str, Any]]:
-        """Fuse dense semantic and BM25-style lexical retrieval with reciprocal rank.
-
-        This deliberately uses DerridAI's stored document text for the lexical leg
-        rather than requiring a second infrastructure service. It gives exact names,
-        quotations, neologisms, and multilingual terminology an independent path
-        into the candidate set while preserving semantic recall.
-        """
-        query = str(query or "").strip()
-        if not query:
-            return self.filter_search(store, n_results, where)
-        fetch_n = min(max(n_results * 4, 32), 400)
-        semantic: list[dict[str, Any]] = []
-        try:
-            semantic = self.search(store, query, fetch_n, where)
-        except ValueError:
-            # Precomputed-vector collections do not have a query embedding function.
-            semantic = []
-        lexical = self.lexical_search(store, query, fetch_n, where)
-
-        fused: dict[str, dict[str, Any]] = {}
-        for search_type, rows in (("semantic", semantic), ("lexical", lexical)):
-            for rank, row in enumerate(rows, start=1):
-                item_id = str(row.get("id") or (row.get("record") or {}).get("record_id") or "")
-                if not item_id:
-                    continue
-                score = 1.0 / (float(rrf_k) + float(rank))
-                if item_id not in fused:
-                    fused[item_id] = {
-                        **row,
-                        "hybrid_score": score,
-                        "retrieval_hits": [{"type": search_type, "rank": rank}],
-                    }
-                else:
-                    fused[item_id]["hybrid_score"] += score
-                    fused[item_id]["retrieval_hits"].append({"type": search_type, "rank": rank})
-                    if row.get("distance") is not None:
-                        current = fused[item_id].get("distance")
-                        if current is None or float(row["distance"]) < float(current):
-                            fused[item_id]["distance"] = row["distance"]
-        return sorted(
-            fused.values(),
-            key=lambda item: (float(item.get("hybrid_score") or 0.0), -float(item.get("distance") or 0.0)),
-            reverse=True,
-        )[:n_results]
 
     def _decode_result(
         self,
