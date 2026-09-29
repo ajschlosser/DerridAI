@@ -233,6 +233,27 @@ function count(side: "left" | "right", key: string) {
         <section class="comparison-overview" aria-labelledby="pipeline-comparison-result-title">
           <div>
             <span class="metric-label">
+              {{ t("pipelines.compare_candidate_overlap", "Candidate-pool overlap") }}
+              <UiTooltip
+                :text="
+                  t(
+                    'pipelines.compare_candidate_overlap_help',
+                    'This compares the unique candidate Record IDs presented to reranking on both sides. It shows whether the retrieval stages found the same material before later ranking and provenance checks.',
+                  )
+                "
+              />
+            </span>
+            <strong id="pipeline-comparison-result-title">
+              {{ percent(result.comparison.candidate_overlap.jaccard_overlap) }}
+            </strong>
+            <small>
+              {{ result.comparison.candidate_overlap.shared_count }} /
+              {{ result.comparison.candidate_overlap.union_count }}
+              {{ t("pipelines.compare_shared_union", "shared / distinct records") }}
+            </small>
+          </div>
+          <div>
+            <span class="metric-label">
               {{ t("pipelines.compare_overlap", "Final evidence overlap") }}
               <UiTooltip
                 :text="
@@ -243,9 +264,7 @@ function count(side: "left" | "right", key: string) {
                 "
               />
             </span>
-            <strong id="pipeline-comparison-result-title">
-              {{ percent(result.comparison.jaccard_overlap) }}
-            </strong>
+            <strong>{{ percent(result.comparison.jaccard_overlap) }}</strong>
             <small>
               {{ result.comparison.shared_count }} /
               {{ result.comparison.union_count }}
@@ -266,14 +285,24 @@ function count(side: "left" | "right", key: string) {
           <section>
             <h4>{{ result.left.pipeline.name }} · v{{ result.left.pipeline.pipeline_version }}</h4>
             <p>
-              {{ t("pipelines.compare_flow", "Candidates: raw → fused → final") }}
+              {{ t("pipelines.compare_flow", "Candidates: pre-rerank → reranked → final evidence") }}
               <strong>
-                {{ count("left", "raw_count") ?? "—" }}
+                {{ result.left.candidates.pre_rerank.count }}
                 →
-                {{ count("left", "deduplicated_count") ?? "—" }}
+                {{ result.left.candidates.post_rerank.count }}
                 →
                 {{ result.left.evidence.length }}
               </strong>
+            </p>
+            <p>
+              {{
+                t(
+                  "pipelines.compare_resources",
+                  "Context: {context} characters · Cross-encoder calls: {calls}",
+                )
+                  .replace("{context}", String(result.left.context_characters ?? "—"))
+                  .replace("{calls}", String(result.left.resource_use.cross_encoder_calls))
+              }}
             </p>
             <ol>
               <li v-for="item in result.left.evidence" :key="item.record_id">
@@ -286,14 +315,24 @@ function count(side: "left" | "right", key: string) {
           <section>
             <h4>{{ result.right.pipeline.name }} · v{{ result.right.pipeline.pipeline_version }}</h4>
             <p>
-              {{ t("pipelines.compare_flow", "Candidates: raw → fused → final") }}
+              {{ t("pipelines.compare_flow", "Candidates: pre-rerank → reranked → final evidence") }}
               <strong>
-                {{ count("right", "raw_count") ?? "—" }}
+                {{ result.right.candidates.pre_rerank.count }}
                 →
-                {{ count("right", "deduplicated_count") ?? "—" }}
+                {{ result.right.candidates.post_rerank.count }}
                 →
                 {{ result.right.evidence.length }}
               </strong>
+            </p>
+            <p>
+              {{
+                t(
+                  "pipelines.compare_resources",
+                  "Context: {context} characters · Cross-encoder calls: {calls}",
+                )
+                  .replace("{context}", String(result.right.context_characters ?? "—"))
+                  .replace("{calls}", String(result.right.resource_use.cross_encoder_calls))
+              }}
             </p>
             <ol>
               <li v-for="item in result.right.evidence" :key="item.record_id">
@@ -420,7 +459,7 @@ function count(side: "left" | "right", key: string) {
 }
 .comparison-overview {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
 .comparison-overview > div {
