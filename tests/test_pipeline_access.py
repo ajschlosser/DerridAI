@@ -1,0 +1,114 @@
+# Copyright 2026 Aaron John Schlosser, PhD.
+from __future__ import annotations
+
+import pytest
+
+from app.pipelines.access import resolve_research_pipeline
+from app.pipelines.defaults import built_in_pipeline
+from app.pipelines.manager import PipelineManager
+from app.pipelines.models import PipelineAssignment
+from app.pipelines.service import PipelineService
+from app.pipelines.store import PipelineStore
+
+
+def _manager(tmp_path) -> PipelineManager:
+    return PipelineManager(
+        service=PipelineService(),
+        store=PipelineStore(tmp_path / "system.sqlite3"),
+    )
+
+
+def _save_active_custom(manager: PipelineManager, pipeline_id: str = "research.custom"):
+    source = built_in_pipeline("research.current", 1)
+    assert source is not None
+    custom = source.model_copy(
+        update={
+            "pipeline_id": pipeline_id,
+            "version": 1,
+            "name": "Custom Research",
+            "status": "active",
+            "built_in": False,
+            "derived_from": "research.current@1",
+        }
+    )
+    return manager.save_definition(custom, actor="admin")
+
+
+def test_research_resolution_uses_system_assignment_without_override(tmp_path) -> None:
+    manager = _manager(tmp_path)
+
+    resolved = resolve_research_pipeline(
+        requested_id=None,
+        requested_version=None,
+        is_admin=False,
+        manager=manager,
+    )
+
+    assert resolved.pipeline_id == "research.current"
+    assert resolved.version == 1
+
+
+def test_researcher_can_select_active_pipeline_when_assignment_allows_overrides(tmp_path) -> None:
+    manager = _manager(tmp_path)
+    custom = _save_active_custom(manager)
+
+    selected = resolve_research_pipeline(
+        requested_id=custom.pipeline_id,
+        requested_version=custom.version,
+        is_admin=False,
+        manager=manager,
+    )
+
+    assert selected.pipeline_id == custom.pipeline_id
+
+
+def test_researcher_cannot_select_draft_pipeline(tmp_path) -> None:
+    manager = _manager(tmp_path)
+    source = built_in_pipeline("research.balanced", 1)
+    assert source is not None
+
+    with pytest.raises(ValueError, match="Only active Research pipelines"):
+        resolve_research_pipeline(
+            requested_id=source.pipeline_id,
+            requested_version=source.version,
+            is_admin=False,
+            manager=manager,
+        )
+
+
+def test_researcher_override_respects_assignment_policy(tmp_path) -> None:
+    manager = _manager(tmp_path)
+    custom = _save_active_custom(manager)
+    manager.store.put_assignment(
+        PipelineAssignment(
+            feature="research",
+            pipeline_id="research.current",
+            pipeline_version=1,
+            override_allowed=False,
+            source="system",
+        ),
+        updated_at="test",
+    )
+
+    with pytest.raises(ValueError, match="does not allow per-run overrides"):
+        resolve_research_pipeline(
+            requested_id=custom.pipeline_id,
+            requested_version=custom.version,
+            is_admin=False,
+            manager=manager,
+        )
+
+
+def test_admin_can_explicitly_test_supported_draft_pipeline(tmp_path) -> None:
+    manager = _manager(tmp_path)
+    draft = built_in_pipeline("research.balanced", 1)
+    assert draft is not None
+
+    selected = resolve_research_pipeline(
+        requested_id=draft.pipeline_id,
+        requested_version=draft.version,
+        is_admin=True,
+        manager=manager,
+    )
+
+    assert selected.status == "draft"
