@@ -205,7 +205,7 @@ export function createOperationDock(deps: Deps) {
     const handle = stack?.querySelector("[data-operation-drag]");
     if (!handle || handle.dataset.dragWired) return;
     handle.dataset.dragWired = "1";
-    const dragTooltip = document.querySelector("#operationDragHelp");
+    const dragTooltip = document.querySelector<HTMLElement>("#operationDragHelp");
     const showDragHelp = () => {
       if (!dragTooltip) return;
       dragTooltip.hidden = false;
@@ -351,7 +351,7 @@ export function createOperationDock(deps: Deps) {
       stack.setAttribute("aria-label", title);
       stack.innerHTML = `<div class="operation-stack-toolbar" data-operation-drag tabindex="0" role="group" aria-label="${esc(dragHelp)}" aria-describedby="operationDragHelp"><span class="operation-drag-grip" aria-hidden="true"></span><button type="button" class="operation-dock-toggle" id="operationStackToggle" aria-expanded="${state.operationToastsMinimized ? "false" : "true"}" aria-controls="operationStackItems" aria-label="${esc(state.operationToastsMinimized ? tr("operations.expand") : tr("operations.collapse"))}"><span class="operation-dock-dot" aria-hidden="true"></span><span class="operation-dock-copy"><b class="operation-dock-title">${esc(title)}</b><span id="operationStackCount"></span></span><span class="operation-dock-chevron" aria-hidden="true"></span></button><button type="button" class="btn tiny operation-dock-clear" id="operationStackClearFinished" hidden>${esc(tr("operations.clear_finished"))}</button></div><div id="operationStackLive" class="sr-only" aria-live="polite"></div><div id="operationStackItems" class="operation-stack-items" tabindex="0"></div>`;
       document.body.appendChild(stack);
-      let dragTooltip = document.querySelector("#operationDragHelp");
+      let dragTooltip = document.querySelector<HTMLElement>("#operationDragHelp");
       if (!dragTooltip) {
         dragTooltip = document.createElement("span");
         dragTooltip.id = "operationDragHelp";
