@@ -141,18 +141,18 @@ const isSelectedAssigned = computed(() => {
   const assignment = selectedAssignment.value;
   return Boolean(
     pipeline &&
-    assignment &&
-    assignment.pipeline_id === pipeline.pipeline_id &&
-    assignment.pipeline_version === pipeline.version,
+      assignment &&
+      assignment.pipeline_id === pipeline.pipeline_id &&
+      assignment.pipeline_version === pipeline.version,
   );
 });
 const canAssignSelected = computed(() => {
   const pipeline = selectedPipeline.value;
   return Boolean(
     pipeline &&
-    pipeline.status === "active" &&
-    pipeline.runtime_support?.supported &&
-    featureForPurpose(pipeline.purpose),
+      pipeline.status === "active" &&
+      pipeline.runtime_support?.supported &&
+      featureForPurpose(pipeline.purpose),
   );
 });
 
