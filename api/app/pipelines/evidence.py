@@ -39,10 +39,10 @@ class EvidencePipelinePlan:
     query_stage_id: str
     semantic_stage_id: str
     lexical_stage_id: str
-    select_stage_id: str
-    rerank_stage_id: str | None = None
     support_stage_id: str
     provenance_stage_id: str
+    select_stage_id: str
+    rerank_stage_id: str | None = None
     llm_stage_id: str | None = None
     selection_limit: int | None = None
     cross_encoder_top_k: int | None = None
