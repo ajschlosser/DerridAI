@@ -57,13 +57,12 @@ Consulte [SPECIFICATION.md](SPECIFICATION.md) para la especificación normativa 
 
 ### Servicios de ejecución
 
-| Servicio | Stack | Función |
-| --- | --- | --- |
-| `web` | Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js, nginx | Aplicación del navegador; hace proxy de `/api/`; consume REST, GraphQL y notificaciones realtime. Storybook es un perfil de desarrollo opcional. |
-| `api` | Python 3.12, FastAPI, Strawberry GraphQL, cliente ChromaDB, PyMuPDF, sentence-transformers, spaCy | Límite autoritativo de aplicación para autenticación, fuentes/corpus, lecturas cELF, procedencia, RAG, pipelines, jobs y estado del sistema. |
-| `document-nlp` | worker BookNLP | Mejora opcional y aislada de Document Intelligence en inglés. Recibe texto revisado y acotado; no tiene autoridad sobre el corpus. |
-| `chroma` | servidor Chroma | Perfil HTTP opcional. `PersistentClient` embebido sigue siendo el modo predeterminado; ambos modos almacenan proyecciones de búsqueda/vectoriales derivadas. |
-| `ollama` | Ollama | Perfil local opcional. DerridAI también puede usar Ollama en el host o cualquier endpoint compatible con OpenAI configurado. |
+
+- `web` — Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js y nginx. Es la aplicación del navegador; hace proxy de `/api/` y consume REST, GraphQL y notificaciones realtime. Storybook es un perfil de desarrollo opcional.
+- `api` — Python 3.12, FastAPI, Strawberry GraphQL, cliente ChromaDB, PyMuPDF, sentence-transformers y spaCy. Es el límite autoritativo de aplicación para autenticación, fuentes/corpus, lecturas cELF, procedencia, RAG, pipelines, jobs y estado del sistema.
+- `document-nlp` — worker BookNLP opcional y aislado para Document Intelligence en inglés. Recibe texto revisado y acotado; no tiene autoridad sobre el corpus.
+- `chroma` — servidor HTTP Chroma opcional. `PersistentClient` embebido sigue siendo el modo predeterminado; ambos modos almacenan proyecciones de búsqueda/vectoriales derivadas.
+- `ollama` — servicio Ollama local opcional. DerridAI también puede usar Ollama ya activo en el host o cualquier endpoint compatible con OpenAI configurado.
 
 La pila Compose predeterminada inicia `web` y `api`; los demás servicios son perfiles opcionales o proveedores externos.
 
