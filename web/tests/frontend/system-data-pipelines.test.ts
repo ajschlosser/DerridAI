@@ -300,6 +300,7 @@ describe("System Data Pipeline Studio", () => {
 
     await wrapper.find("#pipeline-tab-operations").trigger("click");
     expect(wrapper.text()).toContain("Test and compare Research pipelines");
+    expect(wrapper.text()).toContain("Benchmark Research pipelines");
     expect(wrapper.text()).toContain("Operational health");
     expect(wrapper.text()).toContain("95th-percentile run time");
     expect(wrapper.text()).toContain("Stage strategy health");

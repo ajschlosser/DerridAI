@@ -18,13 +18,18 @@ describe("Help Center", () => {
   it("has English copy for every question, page guide, and glossary term", () => {
     const questionKeys = HELP_SECTIONS.flatMap((section) => [
       `help.section.${section.id}`,
-      ...section.questions.flatMap((id) =>
-        ["question", "answer", "impact"].map((part) => `help.q.${id}.${part}`),
-      ),
+      ...section.questions.flatMap((question) => [
+        `help.q.${question.id}.question`,
+        `help.q.${question.id}.answer`,
+        ...(question.showImpact ? [`help.q.${question.id}.impact`] : []),
+      ]),
     ]);
-    const pageKeys = HELP_PAGE_GUIDES.flatMap((guide) =>
-      ["title", "summary", "tasks", "impact"].map((part) => `help.page.${guide.id}.${part}`),
-    );
+    const pageKeys = HELP_PAGE_GUIDES.flatMap((guide) => [
+      `help.page.${guide.id}.title`,
+      `help.page.${guide.id}.summary`,
+      `help.page.${guide.id}.tasks`,
+      ...(guide.showImpact ? [`help.page.${guide.id}.impact`] : []),
+    ]);
     const glossaryKeys = HELP_GLOSSARY.flatMap((entry) =>
       ["term", "definition", "practical"].map((part) => `help.glossary.${entry.id}.${part}`),
     );
@@ -39,7 +44,21 @@ describe("Help Center", () => {
     expect(guideRouteNames).toEqual(renderedRouteNames);
   });
 
-  it("hides administrator-only workflows from researchers", () => {
+  it("offers a substantial workflow FAQ without exposing admin-only guidance to researchers", () => {
+    const questionCount = HELP_SECTIONS.reduce(
+      (total, section) => total + section.questions.length,
+      0,
+    );
+    expect(questionCount).toBeGreaterThanOrEqual(30);
+
+    const commonIds = visibleHelp(false, "", t).flatMap((section) =>
+      section.entries.map((entry) => entry.id),
+    );
+    expect(commonIds).toContain("search_vs_research");
+    expect(commonIds).toContain("retrieval_modes");
+    expect(commonIds).toContain("slow_run");
+    expect(commonIds).not.toContain("needs_review");
+
     const researcherQuestions = visibleHelp(false, "", t).map((section) => section.id);
     const adminQuestions = visibleHelp(true, "", t).map((section) => section.id);
     expect(researcherQuestions).not.toContain("review");
@@ -67,11 +86,26 @@ describe("Help Center", () => {
     expect(adminPages).toContain("providers");
   });
 
+  it("shows downstream effects only for actions that actually have them", () => {
+    const common = visibleHelp(false, "", t).flatMap((section) => section.entries);
+    expect(common.find((entry) => entry.id === "search_vs_research")?.impact).toBeUndefined();
+    expect(common.find((entry) => entry.id === "select_evidence")?.impact).toBeTruthy();
+
+    const guides = visiblePageGuides(true, () => true, "", t);
+    expect(guides.find((guide) => guide.id === "dashboard")?.impact).toBeUndefined();
+    expect(guides.find((guide) => guide.id === "research")?.impact).toBeTruthy();
+  });
+
   it("searches page guides and workflow questions in plain language", () => {
     const questionHits = visibleHelp(true, "blind second opinion", t).flatMap((section) =>
       section.entries.map((entry) => entry.id),
     );
     expect(questionHits).toContain("second_opinion");
+    expect(
+      visibleHelp(true, "confidence not reported", t).flatMap((section) =>
+        section.entries.map((entry) => entry.id),
+      ),
+    ).toContain("confidence_not_reported");
 
     const pageHits = visiblePageGuides(true, () => true, "build a corpus", t).map(
       (guide) => guide.id,
