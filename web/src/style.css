@@ -13538,8 +13538,8 @@ button {
 
 .research-workspace-grid {
   display: grid;
-  grid-template-columns: minmax(0, 2.15fr) minmax(300px, 0.85fr);
-  gap: 14px;
+  grid-template-columns: minmax(0, 2.15fr) minmax(330px, 0.85fr);
+  gap: 16px;
   align-items: start;
 }
 .research-answer-workspace,
@@ -13680,6 +13680,7 @@ button {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: var(--surface-card);
 }
 .research-panel-heading {
   min-height: 56px;
@@ -13703,32 +13704,46 @@ button {
   color: var(--muted);
 }
 .research-evidence-index {
-  display: grid;
-  gap: 2px;
-  max-height: 250px;
-  overflow: auto;
-  padding: 7px;
+  display: flex;
+  gap: 6px;
+  max-height: none;
+  margin: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 7px 8px 8px;
   border-bottom: 1px solid var(--line);
+  list-style: none;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  overscroll-behavior-inline: contain;
+}
+.research-evidence-index > li {
+  flex: 0 0 238px;
+  min-width: 0;
+  scroll-snap-align: start;
 }
 .research-evidence-index button {
   width: 100%;
-  min-height: 53px;
+  min-width: 0;
+  min-height: 48px;
   display: grid;
-  grid-template-columns: 37px minmax(0, 1fr);
+  grid-template-columns: 34px minmax(0, 1fr);
   gap: 8px;
   align-items: center;
-  border: 0;
-  border-radius: 8px;
+  border: 1px solid transparent;
+  border-radius: 9px;
   background: transparent;
-  padding: 7px 8px;
+  padding: 6px 8px;
   text-align: left;
   color: var(--text-2);
   cursor: pointer;
 }
 .research-evidence-index button:hover {
-  background: var(--card);
+  border-color: var(--line);
+  background: var(--surface-hover);
 }
 .research-evidence-index button.active {
+  border-color: var(--ui-accent-border);
   background: var(--ui-accent-soft);
   color: var(--accent-fg);
 }
@@ -14067,7 +14082,7 @@ button {
     border-top: 1px solid var(--line);
   }
   .research-workspace-grid {
-    grid-template-columns: minmax(0, 1fr) 310px;
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 0.7fr);
   }
 }
 @media (max-width: 860px) {
@@ -14109,7 +14124,7 @@ button {
     max-height: none;
   }
   .research-evidence-index {
-    max-height: 220px;
+    max-height: none;
   }
   .research-answer-heading {
     flex-direction: column;
