@@ -57,7 +57,6 @@ SourceDocument
 
 ### Сервисы выполнения
 
-
 - `web` — Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js и nginx. Браузерное приложение; проксирует `/api/` и использует REST, GraphQL и realtime-уведомления. Storybook — опциональный dev-профиль.
 - `api` — Python 3.12, FastAPI, Strawberry GraphQL, ChromaDB client, PyMuPDF, sentence-transformers и spaCy. Авторитетная граница приложения для authentication, источников/corpus, cELF reads, provenance, RAG, pipelines, jobs и состояния системы.
 - `document-nlp` — опциональный изолированный BookNLP worker для английского Document Intelligence. Получает ограниченный проверенный текст и не имеет авторитета над corpus.
