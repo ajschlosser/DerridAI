@@ -3,7 +3,7 @@ import { computed, nextTick, ref, watch } from "vue";
 import AppIcon from "../AppIcon.vue";
 import PipelineStageList from "../pipelines/PipelineStageList.vue";
 import { useI18nStore } from "../../stores/i18n";
-import type { PipelineAssignment, PipelineDefinition } from "../../types/pipelines";
+import type { PipelineAssignment, PipelineDefinition, PipelineStrategy } from "../../types/pipelines";
 import type {
   ResearchConfig,
   ResearchProfile,
@@ -21,10 +21,12 @@ const props = withDefaults(defineProps<{
   metadataFields: string[];
   researcher: boolean;
   pipelineOptions?: PipelineDefinition[];
+  pipelineStrategies?: PipelineStrategy[];
   pipelineAssignment?: PipelineAssignment | null;
   pipelineOverrideAllowed?: boolean;
 }>(), {
   pipelineOptions: () => [],
+  pipelineStrategies: () => [],
   pipelineAssignment: null,
   pipelineOverrideAllowed: false,
 });
