@@ -3,6 +3,17 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const { routerPush, routerReplace, routeQuery } = vi.hoisted(() => ({
+  routerPush: vi.fn(),
+  routerReplace: vi.fn(),
+  routeQuery: {} as Record<string, string>,
+}));
+
+vi.mock("vue-router", () => ({
+  useRoute: () => ({ query: routeQuery }),
+  useRouter: () => ({ push: routerPush, replace: routerReplace }),
+}));
+
 import { systemApi } from "../../src/api/system";
 import SystemDataMetadataExamples from "../../src/components/system-data/SystemDataMetadataExamples.vue";
 import { useI18nStore } from "../../src/stores/i18n";
@@ -11,6 +22,9 @@ describe("System Data metadata examples", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.restoreAllMocks();
+    routerPush.mockReset();
+    routerReplace.mockReset();
+    for (const key of Object.keys(routeQuery)) delete routeQuery[key];
     useI18nStore().dictionary = {};
     vi.spyOn(systemApi, "systemMetadataExemplars").mockResolvedValue({
       exists: true,
@@ -83,6 +97,42 @@ describe("System Data metadata examples", () => {
         language: "en",
       }),
     );
+    expect(routerReplace).toHaveBeenLastCalledWith({
+      name: "system-data-metadata",
+      query: {
+        field: "position_holder",
+        kind: undefined,
+        language: "en",
+        build: undefined,
+        schema: undefined,
+        record: undefined,
+        offset: undefined,
+      },
+    });
+  });
+
+  it("restores metadata filters and pagination from the URL", async () => {
+    routeQuery.field = "position_holder";
+    routeQuery.language = "en";
+    routeQuery.build = "build-1";
+    routeQuery.schema = "derrida";
+    routeQuery.record = "record-1";
+    routeQuery.offset = "25";
+
+    const wrapper = mount(SystemDataMetadataExamples);
+    await flushPromises();
+
+    expect(systemApi.systemMetadataExemplars).toHaveBeenCalledWith(
+      expect.objectContaining({
+        field: "position_holder",
+        language: "en",
+        scope_id: "build-1",
+        schema_id: "derrida",
+        record_id: "record-1",
+        offset: 25,
+      }),
+    );
+    wrapper.unmount();
   });
 
   it("distinguishes a missing index from a built index with no matches", async () => {
