@@ -933,6 +933,42 @@ def _selected_evidence_candidates(request: RAGRunRequest, store: ChromaStore) ->
     return resolved
 
 
+def _candidate_diagnostic(item: Mapping[str, Any], rank: int) -> dict[str, Any]:
+    """Bounded candidate lineage for non-persistent comparison/benchmark runs.
+
+    Source text and arbitrary Record metadata are intentionally excluded. The
+    retained fields are enough to compare membership, rank, retrieval route,
+    and stage-specific scores without copying the corpus into diagnostics.
+    """
+
+    record = item.get("record") if isinstance(item.get("record"), Mapping) else {}
+    return {
+        "record_id": str(
+            record.get("record_id")
+            or item.get("chroma_id")
+            or item.get("id")
+            or ""
+        ),
+        "rank": rank,
+        "collection": item.get("collection"),
+        "selected_evidence": bool(item.get("selected_evidence")),
+        "distance": item.get("distance"),
+        "distance_metric": item.get("distance_metric"),
+        "relevance": item.get("relevance"),
+        "rrf_score": item.get("rrf_score"),
+        "rerank_score": item.get("rerank_score"),
+        "retrieval_hits": list(item.get("retrieval_hits") or []),
+    }
+
+
+def _candidate_diagnostics(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        diagnostic
+        for rank, item in enumerate(rows, start=1)
+        if (diagnostic := _candidate_diagnostic(item, rank))["record_id"]
+    ]
+
+
 def _scope_rag_candidates(
     rows: list[dict[str, Any]],
     collection: dict[str, Any],
@@ -962,6 +998,7 @@ def run_rag_pipeline(
     cancelled: Callable[[], bool] | None = None,
     owner: str | None = None,
     on_generation_delta: Callable[[str], None] | None = None,
+    stop_after_context: bool = False,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     stages: list[dict[str, Any]] = []
@@ -1016,16 +1053,16 @@ def run_rag_pipeline(
             else settings.ollama_model
         )
     )
-    if not model:
+    effective_query_decomposition = (
+        request.query_decomposition and pipeline_plan.query_decomposition_available
+    )
+    if not model and (effective_query_decomposition or not stop_after_context):
         raise ValueError("No generation model selected.")
 
     # Step 1-2: query metadata/decomposition, adapted from the supplied pipeline.
     stage_start = time.perf_counter()
     update("query_metadata", 0, 1, "Decomposing the research prompt")
     parsed_query: dict[str, Any] = {}
-    effective_query_decomposition = (
-        request.query_decomposition and pipeline_plan.query_decomposition_available
-    )
     if effective_query_decomposition:
         decomposition_prompt = QUERY_TEMPLATE.format(
             prompt=request.prompt,
@@ -1280,6 +1317,9 @@ def run_rag_pipeline(
         ),
         reverse=True,
     )
+    pre_rerank_diagnostics = (
+        _candidate_diagnostics(deduped) if stop_after_context else []
+    )
     update("deduplicate", 1, 1, f"{len(deduped)} unique records after rank fusion")
     stages.append({
         "name": "retrieval",
@@ -1353,6 +1393,7 @@ def run_rag_pipeline(
     rerank_telemetry: dict[str, Any] = {"mode": effective_reranker}
     active_rerank_stage_id: str | None = None
     fallback_condition: str | None = None
+    cross_encoder_calls = 0
 
     if request.skip_retrieval:
         reranked = selected_pool or deduped
@@ -1374,6 +1415,7 @@ def run_rag_pipeline(
         if rerank_pool_limit and retrieved_pool:
             if effective_reranker == "cross_encoder":
                 active_rerank_stage_id = pipeline_plan.rerank_stage_id
+                cross_encoder_calls += 1
                 attempted, rerank_warning, rerank_telemetry = _cross_encoder_rerank(
                     rerank_query,
                     retrieved_pool,
@@ -1487,6 +1529,7 @@ def run_rag_pipeline(
             "selected_evidence_pinned": len(selected_pool),
             "active_stage_id": active_rerank_stage_id,
             "fallback_condition": fallback_condition,
+            "cross_encoder_calls": cross_encoder_calls,
             "cross_encoder_model": (
                 runtime_settings.cross_encoder_model
                 if requested_reranker == "cross_encoder"
@@ -1495,6 +1538,9 @@ def run_rag_pipeline(
             "reranker_telemetry": rerank_telemetry,
         },
     })
+    post_rerank_diagnostics = (
+        _candidate_diagnostics(reranked) if stop_after_context else []
+    )
     update("rerank", 1, 1, f"{len(reranked)} records after relevance reranking")
     check_cancel()
 
@@ -1558,6 +1604,9 @@ def run_rag_pipeline(
         check_cancel()
 
     # Step 5: build compact evidence context.
+    post_selection_diagnostics = (
+        _candidate_diagnostics(reranked) if stop_after_context else []
+    )
     stage_start = time.perf_counter()
     reranked, insufficient_records = partition_sufficient_records(reranked)
     if insufficient_records:
@@ -1604,6 +1653,69 @@ def run_rag_pipeline(
         )
         raise ValueError(f"RAG evidence sufficiency failed: {detail}")
     check_cancel()
+
+    retrieval_summary = {
+        "raw_count": len(raw_results),
+        "deduplicated_count": len(deduped),
+        "reranked_count": len(reranked),
+        "search_types": list(effective_search_types),
+        "requested_search_types": list(request.search_types),
+        "available_search_types": sorted(available_search_types),
+        "post_rerank_diversity": pipeline_plan.post_rerank_diversity,
+        "k": request.k,
+        "fetch_k": max(semantic_fetch_k, lexical_fetch_k),
+        "semantic_fetch_k": semantic_fetch_k,
+        "lexical_fetch_k": lexical_fetch_k,
+        "lambda_mult": runtime_settings.retrieval_mmr_lambda,
+        "retrieval_mmr_lambda": runtime_settings.retrieval_mmr_lambda,
+        "diversity_lambda": runtime_settings.diversity_lambda,
+        "rrf_k": runtime_settings.rrf_k,
+        "reranker": effective_reranker,
+        "requested_reranker": request.reranker,
+        "rerank_top_n": runtime_settings.rerank_top_n,
+        "effective_rerank_top_n": len(reranked),
+        "query_decomposition": effective_query_decomposition,
+        "query_transform_model_calls": 1 if effective_query_decomposition else 0,
+        "cross_encoder_calls": cross_encoder_calls,
+        "requested_query_decomposition": request.query_decomposition,
+        "query_decomposition_num_predict": runtime_settings.query_decomposition_num_predict,
+        "skip_retrieval": request.skip_retrieval,
+        "selected_evidence_count": len(selected_candidates),
+        "response_language": request.response_language,
+        "evidence_record_char_limit": runtime_settings.evidence_record_char_limit,
+        "evidence_total_char_limit": runtime_settings.evidence_total_char_limit,
+        "evidence_sufficiency": {"passed": True, "issues": []},
+    }
+
+    if stop_after_context:
+        return {
+            "prompt": request.prompt,
+            "query_metadata": query_metadata,
+            "answer": "",
+            "raw_answer": "",
+            "evidence": evidence,
+            "works": works,
+            "collections": [item["name"] for item in collections],
+            "warnings": warnings,
+            "stages": stages,
+            "provider": provider,
+            "model": model,
+            "pipeline": pipeline_summary,
+            "elapsed_seconds": time.perf_counter() - started,
+            "retrieval": retrieval_summary,
+            "diagnostics": {
+                "candidate_retention": "complete_for_comparison",
+                "pre_rerank": pre_rerank_diagnostics,
+                "post_rerank": post_rerank_diagnostics,
+                "post_selection": post_selection_diagnostics,
+                "context_characters": len(retrieval_context),
+            },
+            "memory": {
+                "mode": "skipped_for_non_persistent_dry_run",
+                "warnings": [],
+            },
+            "dry_run": True,
+        }
 
     # Advisory memory is chosen after the evidence packet exists so validated-claim
     # support can be checked against the Records this answer may actually cite.
@@ -1693,35 +1805,6 @@ def run_rag_pipeline(
         "model": model,
         "pipeline": pipeline_summary,
         "elapsed_seconds": time.perf_counter() - started,
-        "retrieval": {
-            "raw_count": len(raw_results),
-            "deduplicated_count": len(deduped),
-            "reranked_count": len(reranked),
-            "search_types": list(effective_search_types),
-            "requested_search_types": list(request.search_types),
-            "available_search_types": sorted(available_search_types),
-            "post_rerank_diversity": pipeline_plan.post_rerank_diversity,
-            "k": request.k,
-            "fetch_k": max(semantic_fetch_k, lexical_fetch_k),
-            "semantic_fetch_k": semantic_fetch_k,
-            "lexical_fetch_k": lexical_fetch_k,
-            "lambda_mult": runtime_settings.retrieval_mmr_lambda,
-            "retrieval_mmr_lambda": runtime_settings.retrieval_mmr_lambda,
-            "diversity_lambda": runtime_settings.diversity_lambda,
-            "rrf_k": runtime_settings.rrf_k,
-            "reranker": effective_reranker,
-            "requested_reranker": request.reranker,
-            "rerank_top_n": runtime_settings.rerank_top_n,
-            "effective_rerank_top_n": len(reranked),
-            "query_decomposition": effective_query_decomposition,
-            "requested_query_decomposition": request.query_decomposition,
-            "query_decomposition_num_predict": runtime_settings.query_decomposition_num_predict,
-            "skip_retrieval": request.skip_retrieval,
-            "selected_evidence_count": len(selected_candidates),
-            "response_language": request.response_language,
-            "evidence_record_char_limit": runtime_settings.evidence_record_char_limit,
-            "evidence_total_char_limit": runtime_settings.evidence_total_char_limit,
-            "evidence_sufficiency": {"passed": True, "issues": []},
-        },
+        "retrieval": retrieval_summary,
         "memory": memory_detail,
     }

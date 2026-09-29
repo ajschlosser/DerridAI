@@ -8,10 +8,18 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from ..http_auth import request_user, require_admin
+from ..models import RAGRunRequest
+from ..pipelines.access import resolve_research_pipeline
+from ..pipelines.comparison import (
+    ResearchPipelineComparisonRequest,
+    compare_research_dry_runs,
+)
 from ..pipelines.manager import pipeline_manager
 from ..pipelines.metrics import aggregate_pipeline_metrics
 from ..pipelines.models import PipelineAssignment, PipelineDefinition
 from ..pipelines.store import pipeline_store
+from ..rag import run_rag_pipeline
+from ..services import store
 
 router = APIRouter(prefix="/api/system/pipelines", tags=["pipelines"])
 
@@ -184,6 +192,63 @@ def reset_pipeline_assignment(feature: str, request: Request) -> dict[str, Any]:
     except KeyError:
         resolved = None
     return {"deleted": removed, "resolved": resolved}
+
+
+@router.post("/compare/research")
+def compare_research_pipelines(
+    body: ResearchPipelineComparisonRequest,
+    request: Request,
+) -> dict[str, Any]:
+    """Run two saved Research pipelines through retrieval without persisting a run.
+
+    The comparison stops after provenance-checked evidence context construction.
+    It never generates a final answer, grades a response, writes response memory,
+    or creates a pipeline-run trace. Query decomposition may still call the
+    configured language model when the submitted request explicitly enables it.
+    """
+
+    user = require_admin(request)
+    if body.request.skip_retrieval:
+        raise HTTPException(
+            status_code=422,
+            detail="Research pipeline comparison requires retrieval to be enabled.",
+        )
+    if not str(body.request.source_collection or "").strip():
+        raise HTTPException(
+            status_code=422,
+            detail="Select a source collection for Research pipeline comparison.",
+        )
+
+    def execute(pipeline_id: str, version: int) -> dict[str, Any]:
+        try:
+            selected = resolve_research_pipeline(
+                requested_id=pipeline_id,
+                requested_version=version,
+                is_admin=True,
+            )
+            payload = body.request.model_dump(mode="python")
+            payload.update(
+                {
+                    "pipeline_id": selected.pipeline_id,
+                    "pipeline_version": selected.version,
+                    "auto_grade": False,
+                    "use_prior_response_memory": False,
+                    "use_prior_claim_memory": False,
+                }
+            )
+            comparison_request = RAGRunRequest.model_validate(payload)
+            return run_rag_pipeline(
+                comparison_request,
+                store,
+                owner=user.username,
+                stop_after_context=True,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    left = execute(body.left.pipeline_id, body.left.version)
+    right = execute(body.right.pipeline_id, body.right.version)
+    return compare_research_dry_runs(left, right)
 
 
 @router.get("/metrics")

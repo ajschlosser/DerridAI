@@ -177,3 +177,99 @@ export type PipelineOperationalMetrics = {
   feature_filter?: string | null;
   owner_filter?: string | null;
 };
+
+export type ResearchPipelineComparisonEvidence = {
+  record_id: string;
+  rank: number;
+  work: string;
+  citation: string;
+  collection?: string | null;
+  distance?: number | null;
+  rrf_score?: number | null;
+  rerank_score?: number | null;
+  retrieval_hits: Array<Record<string, unknown>>;
+};
+
+export type ResearchPipelineScoreSummary = {
+  count: number;
+  minimum?: number | null;
+  maximum?: number | null;
+  mean?: number | null;
+};
+
+export type ResearchPipelineCandidatePhase = {
+  count: number;
+  record_ids: string[];
+  scores: {
+    relevance: ResearchPipelineScoreSummary;
+    rrf_score: ResearchPipelineScoreSummary;
+    rerank_score: ResearchPipelineScoreSummary;
+  };
+};
+
+export type ResearchPipelineOverlap = {
+  shared_record_ids: string[];
+  left_only_record_ids: string[];
+  right_only_record_ids: string[];
+  shared_count: number;
+  union_count: number;
+  jaccard_overlap: number;
+};
+
+export type ResearchPipelineComparisonSide = {
+  pipeline: {
+    pipeline_id?: string | null;
+    pipeline_version?: number | null;
+    pipeline_hash?: string | null;
+    name?: string | null;
+    purpose?: string | null;
+  };
+  elapsed_seconds?: number | null;
+  warnings: string[];
+  retrieval: Record<string, unknown>;
+  candidate_retention: string;
+  candidates: {
+    pre_rerank: ResearchPipelineCandidatePhase;
+    post_rerank: ResearchPipelineCandidatePhase;
+    post_selection: ResearchPipelineCandidatePhase;
+  };
+  context_characters?: number | null;
+  resource_use: {
+    query_transform_model_calls: number;
+    cross_encoder_calls: number;
+  };
+  evidence: ResearchPipelineComparisonEvidence[];
+  stages: Array<{
+    name: string;
+    seconds?: number | null;
+    detail: Record<string, unknown>;
+  }>;
+};
+
+export type ResearchPipelineComparisonResult = {
+  non_persistent: boolean;
+  left: ResearchPipelineComparisonSide;
+  right: ResearchPipelineComparisonSide;
+  comparison: ResearchPipelineOverlap & {
+    candidate_overlap: ResearchPipelineOverlap;
+    post_rerank_overlap: ResearchPipelineOverlap;
+    elapsed_seconds_delta?: number | null;
+    context_characters_delta?: number | null;
+    rank_changes: Array<{
+      record_id: string;
+      left_rank: number;
+      right_rank: number;
+      rank_delta: number;
+    }>;
+  };
+};
+
+export type ResearchPipelineComparisonRequest = {
+  request: {
+    prompt: string;
+    source_collection: string;
+    query_decomposition?: boolean;
+  };
+  left: { pipeline_id: string; version: number };
+  right: { pipeline_id: string; version: number };
+};
