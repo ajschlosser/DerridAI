@@ -80,7 +80,9 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
       </button>
       <button class="btn primary" type="button" :disabled="saving" @click="emit('save')">
         <AppIcon name="check" />
-        {{ saving ? t("pipelines.saving", "Saving…") : t("pipelines.save_version", "Save version") }}
+        {{
+          saving ? t("pipelines.saving", "Saving…") : t("pipelines.save_version", "Save version")
+        }}
       </button>
     </footer>
   </section>
