@@ -319,6 +319,12 @@ DEFAULT_STRATEGIES = [
         description="Serialize selected reviewed precedents and corrections into the bounded metadata-enrichment prompt context.",
         input_type="candidate_set",
         output_type="context_packet",
+        config_schema={
+            "type": "object",
+            "properties": {
+                "char_budget": _integer(1000, 500000),
+            },
+        },
     ),
     StrategySpec(
         strategy_id="llm.generate_answer",
