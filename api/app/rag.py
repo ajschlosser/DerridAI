@@ -16,8 +16,16 @@ from .claim_memory import ClaimMemoryIndex
 from .config import settings
 from .cross_encoder import predict_scores
 from .models import OllamaTouchupOptions, RAGPromptMetadataPolicy, RAGRunRequest
+from .pipelines.manager import pipeline_manager
+from .pipelines.models import PipelineDefinition
+from .pipelines.research import compile_research_pipeline
 from .record_types import EvidenceItem, QueryDecomposition, RetrievalCandidate
-from .retrieval_selection import cosine_similarity, distance_to_relevance, mmr_select
+from .retrieval_selection import (
+    cosine_similarity,
+    distance_to_relevance,
+    mmr_select,
+    source_aware_select,
+)
 from .research_memory import ResponseMemoryIndex, memory_guidance
 from .system_store import system_store
 
@@ -941,6 +949,34 @@ def run_rag_pipeline(
     started = time.perf_counter()
     stages: list[dict[str, Any]] = []
     warnings: list[str] = []
+
+    if request.pipeline_id:
+        pipeline = pipeline_manager.get_definition(
+            request.pipeline_id,
+            request.pipeline_version,
+        )
+        if pipeline is None:
+            raise ValueError(
+                f"Research pipeline {request.pipeline_id!r}"
+                + (
+                    f"@{request.pipeline_version}"
+                    if request.pipeline_version is not None
+                    else ""
+                )
+                + " was not found."
+            )
+    else:
+        resolved = pipeline_manager.resolve("research")
+        pipeline = PipelineDefinition.model_validate(resolved["pipeline"])
+    pipeline_plan = compile_research_pipeline(pipeline)
+    pipeline_summary = {
+        "pipeline_id": pipeline.pipeline_id,
+        "pipeline_version": pipeline.version,
+        "pipeline_hash": pipeline_plan.pipeline_hash,
+        "name": pipeline.name,
+        "purpose": pipeline.purpose,
+        "resolved_pipeline": pipeline.model_dump(mode="json"),
+    }
 
     def update(stage: str, current: int, total: int, detail: str = "") -> None:
         if progress:
