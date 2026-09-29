@@ -373,6 +373,13 @@ function defaults(url: URL, method: string, role: Role): unknown {
   if (path === "/api/stores/derrida_primary/records")
     return { count: STORE_RECORDS.length, records: STORE_RECORDS };
   if (path === "/api/annotations") return { annotations: [] };
+  if (path === "/api/system/data-retention")
+    return {
+      policy: { default: { mode: "keep", value: null }, stores: {} },
+      evaluated_at: "2026-03-01T12:00:00Z",
+      applied: false,
+      stores: [],
+    };
   if (path === "/api/system/data")
     return {
       databases: [
