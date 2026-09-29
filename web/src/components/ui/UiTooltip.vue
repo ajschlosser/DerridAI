@@ -16,11 +16,13 @@ const {
   label = "",
   placement = "top",
   triggerMode = "icon",
+  contentFocusable = true,
 } = defineProps<{
   text: string;
   label?: string;
   placement?: "top" | "bottom";
   triggerMode?: "icon" | "content";
+  contentFocusable?: boolean;
 }>();
 
 const id = `${useId()}-tooltip`;
@@ -92,8 +94,8 @@ onBeforeUnmount(hide);
       :aria-label="label || text"
       :aria-describedby="id"
       :aria-expanded="open ? 'true' : undefined"
-      @focus="show"
-      @blur="hide"
+      @focusin="show"
+      @focusout="hide"
       @click="toggle"
     >
       <span aria-hidden="true">i</span>
@@ -102,7 +104,7 @@ onBeforeUnmount(hide);
       v-else
       ref="trigger"
       class="ui-tooltip-anchor"
-      tabindex="0"
+      :tabindex="contentFocusable ? 0 : undefined"
       :aria-label="label || undefined"
       :aria-describedby="id"
       :aria-expanded="open ? 'true' : undefined"
