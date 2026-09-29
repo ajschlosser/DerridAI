@@ -5,12 +5,19 @@
 // authoritative state over REST either way; the socket only says *when* to read.
 import { LEGACY_VIEW_POLL_MS, VIEW_FALLBACK_POLL_MS, realtime as defaultRealtime } from "./index";
 import type { RealtimeClient } from "./client";
+import type { RealtimeEvent } from "./protocol";
 
 export interface FollowOptions {
   /** Realtime topic, e.g. `job:<id>` or `corpus-build:<id>`. */
   topic: string;
   /** Re-read the resource over REST. */
   refresh: () => Promise<unknown> | unknown;
+  /**
+   * Optional event reducer for views that can apply bounded realtime payloads directly.
+   * Return false when the event was fully handled and no authoritative read is needed.
+   * Resync and fallback polling still call refresh regardless.
+   */
+  onEvent?: (event: RealtimeEvent) => boolean | void;
   /** REST poll interval used only while the socket is not live (defaults to followFallbackMs). */
   fallbackMs?: number;
   /** Stop following once this returns true (checked after each refresh). */
@@ -84,7 +91,10 @@ export function followResource(options: FollowOptions): () => void {
     }, delay);
   }
 
-  const unsubscribe = client.subscribe(options.topic, () => request());
+  const unsubscribe = client.subscribe(options.topic, (event) => {
+    if (options.onEvent?.(event) === false) return;
+    request();
+  });
   const offResync = client.onResync(() => request());
   const offStatus = client.onStatus(() => schedule());
 
