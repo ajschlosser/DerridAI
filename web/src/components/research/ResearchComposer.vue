@@ -191,10 +191,10 @@ function pickHistory(item: Record<string, unknown>) {
 
     <fieldset class="research-compose-context" :disabled="!canConfigure">
       <legend class="sr-only">{{ i18n.t("research.context") }}</legend>
-      <div class="research-context-action research-pipeline-context">
+      <div class="research-pipeline-action research-pipeline-context">
         <span>{{ i18n.t("research.pipeline_chain", "Pipeline chain") }}</span>
         <button
-          class="btn research-context-action-button"
+          class="btn research-pipeline-action-button"
           type="button"
           :disabled="!canConfigure"
           @click="emit('pipelineSettings')"
@@ -342,21 +342,25 @@ function pickHistory(item: Record<string, unknown>) {
 </template>
 
 <style scoped>
-.research-context-action {
+.research-context-action,
+.research-pipeline-action {
   display: grid;
   gap: 6px;
   align-content: start;
 }
-.research-context-action > span {
+.research-context-action > span,
+.research-pipeline-action > span {
   color: var(--text-primary);
   font-size: 0.8125rem;
   font-weight: 700;
 }
-.research-context-action-button {
+.research-context-action-button,
+.research-pipeline-action-button {
   justify-content: flex-start;
   min-height: var(--control-height);
 }
-.research-context-action small {
+.research-context-action small,
+.research-pipeline-action small {
   color: var(--text-tertiary);
   font-size: 0.75rem;
   line-height: 1.35;
