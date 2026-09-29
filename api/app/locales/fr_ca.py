@@ -3691,6 +3691,7 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'pdf_corpus.rerun_family': 'Relancer',
  'pdf_corpus.rerun_metadata': 'Relancer les métadonnées',
  'pdf_corpus.rerun_metadata_help': 'Réévaluez uniquement ce Record avec la famille de métadonnées sélectionnée.',
+ 'pdf_corpus.metadata_rerun_consequence': 'Relancer, remettre en file ou enrichir de nouveau peut remplacer ou ajouter des propositions de métadonnées dérivées pour cette fiche. L’autorité de révision humaine et la piste d’audit demeurent explicites.',
  'pdf_corpus.resolve_metadata_before_accept': 'Résolvez les champs de métadonnées signalés avant d’accepter cette '
                                               'fiche.',
  'pdf_corpus.resolve_metadata_before_accept_fields': 'Confirmez {fields} avant d’accepter cette fiche.',
