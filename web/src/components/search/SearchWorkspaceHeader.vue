@@ -3,6 +3,7 @@
 import { computed } from "vue";
 import AppIcon from "../AppIcon.vue";
 import UiPageHeader from "../ui/UiPageHeader.vue";
+import UiTooltip from "../ui/UiTooltip.vue";
 import { useI18nStore } from "../../stores/i18n";
 import { useDisabledReason } from "../../composables/useDisabledReason";
 import type { SearchScope } from "../../types/search";
@@ -55,12 +56,29 @@ const loadedDisabledReason = useDisabledReason(loadedDisabled, loadedUnavailable
     <template #meta>
       <div class="search-scope-row">
         <div class="search-scope-switch" role="group" :aria-label="i18n.t('search.scope')">
+          <UiTooltip
+            v-if="loadedDisabledReason"
+            :text="loadedDisabledReason"
+            trigger-mode="content"
+            placement="bottom"
+          >
+            <button
+              type="button"
+              :class="{ active: scope === 'loaded' }"
+              :aria-pressed="scope === 'loaded'"
+              :disabled="loadedDisabled"
+              @click="emit('update:scope', 'loaded')"
+            >
+              <AppIcon name="list" />
+              <span>{{ i18n.t("search.loaded_records") }}</span>
+              <small>{{ Number(totalLoaded || 0).toLocaleString(i18n.locale) }}</small>
+            </button>
+          </UiTooltip>
           <button
+            v-else
             type="button"
             :class="{ active: scope === 'loaded' }"
             :aria-pressed="scope === 'loaded'"
-            :disabled="loadedDisabled"
-            :title="loadedDisabledReason || undefined"
             @click="emit('update:scope', 'loaded')"
           >
             <AppIcon name="list" />
