@@ -68,7 +68,7 @@ const benchmark = {
   },
   corpus: fixedCase.corpus_snapshot,
   retrieval_config: {},
-  model_config: {},
+  model_identity: {},
   left_pipeline: { pipeline_hash: "left-hash" },
   right_pipeline: { pipeline_hash: "right-hash" },
   comparison: {
