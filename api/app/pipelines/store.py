@@ -127,7 +127,7 @@ class PipelineStore:
         limit: int = 100,
         offset: int = 0,
     ) -> list[ResearchPipelineBenchmarkRun]:
-        return self.benchmarks.list(
+        return self.benchmarks.list_benchmarks(
             case_id=case_id,
             limit=limit,
             offset=offset,
