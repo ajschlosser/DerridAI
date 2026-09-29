@@ -7,6 +7,7 @@ from app.retrieval_selection import (
     cosine_similarity,
     distance_to_relevance,
     mmr_select,
+    source_aware_select,
 )
 
 
@@ -54,3 +55,47 @@ def test_mmr_preserves_relevance_and_emits_separate_objective() -> None:
     assert selected[0]["relevance"] == 1.0
     assert "mmr_score" in selected[0]
     assert "_mmr_vector" not in selected[0]
+
+
+def test_source_aware_selection_avoids_adjacent_duplicate_context() -> None:
+    candidates = [
+        {
+            "id": "a",
+            "score": 1.0,
+            "record": {
+                "source_document_id": "s1",
+                "work": "W",
+                "page_start": 10,
+                "text": "alpha beta gamma delta epsilon",
+            },
+        },
+        {
+            "id": "b",
+            "score": 0.98,
+            "record": {
+                "source_document_id": "s1",
+                "work": "W",
+                "page_start": 11,
+                "text": "alpha beta gamma delta zeta",
+            },
+        },
+        {
+            "id": "c",
+            "score": 0.85,
+            "record": {
+                "source_document_id": "s2",
+                "work": "Other",
+                "page_start": 40,
+                "text": "difference trace supplement writing",
+            },
+        },
+    ]
+
+    selected = source_aware_select(
+        candidates,
+        limit=2,
+        relevance=lambda row: float(row["score"]),
+    )
+
+    assert [row["id"] for row in selected] == ["a", "c"]
+    assert "diversity_score" in selected[1]
