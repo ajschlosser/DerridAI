@@ -774,6 +774,41 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
             },
         ],
     ),
+    _pipeline(
+        pipeline_id="metadata.prefill.current",
+        version=1,
+        name="Metadata pre-fill — reviewed precedents",
+        purpose="metadata_prefill",
+        status="active",
+        entry_stage_ids=["retrieve"],
+        notes=(
+            "Each source span of a new Record queries reviewed metadata exemplars "
+            "(positive and confirmed-absence, other builds only). Distances become "
+            "similarity as 1 / (1 + distance). Up to three hints per field surface "
+            "at similarity 0.72 or above. Pre-filling a value additionally needs two "
+            "agreeing earlier Records at mean similarity 0.88 and no rival within "
+            "0.05; those rules are DerridAI policy, not pipeline settings."
+        ),
+        stages=[
+            {
+                "id": "retrieve",
+                "strategy": "retrieve.metadata_exemplars",
+                "config": {"fetch_k": 8},
+                "next": ["normalize"],
+            },
+            {
+                "id": "normalize",
+                "strategy": "normalize.collection_relevance",
+                "config": {"method": "inverse_distance"},
+                "next": ["hints"],
+            },
+            {
+                "id": "hints",
+                "strategy": "select.memory_hints",
+                "config": {"limit": 3, "min_similarity": 0.72},
+            },
+        ],
+    ),
 )
 
 BUILT_IN_ASSIGNMENTS: tuple[PipelineAssignment, ...] = (
@@ -788,6 +823,13 @@ BUILT_IN_ASSIGNMENTS: tuple[PipelineAssignment, ...] = (
         feature="evidence_suggestion.reviewer",
         pipeline_id="evidence.reviewer.current",
         pipeline_version=2,
+        source="built_in",
+        override_allowed=True,
+    ),
+    PipelineAssignment(
+        feature="metadata_prefill",
+        pipeline_id="metadata.prefill.current",
+        pipeline_version=1,
         source="built_in",
         override_allowed=True,
     ),

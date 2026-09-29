@@ -15,6 +15,9 @@ Rules (advisory, never authoritative):
 * Fields a human already owns, or that already hold a value, are never overwritten; confirmed absence is only
   ever a hint.
 * Failure to reach the embedding provider or the store is reported, never hidden and never fatal.
+
+Exemplar retrieval depth, distance-to-similarity conversion, and which hints surface are set by the
+assigned ``metadata_prefill`` pipeline. The rules above are domain policy and are not pipeline settings.
 """
 
 from __future__ import annotations
@@ -23,29 +26,28 @@ import json
 import logging
 import time
 from collections import defaultdict
+from datetime import UTC, datetime
 from typing import Any
 
 from .field_assertions import create_memory_assertion, current_assertion_by_name
+from .pipelines.metadata_prefill import (
+    PREFILL_FEATURE,
+    PrefillPlan,
+    build_prefill_trace,
+    resolve_prefill_plan,
+)
 from .source_embeddings import SourceEmbeddingProjection
 
 logger = logging.getLogger(__name__)
 
+# Domain policy: the evidentiary bar for writing a value into a record.
 MIN_AGREE = 2
 OBVIOUS_SIMILARITY = 0.88
-HINT_SIMILARITY = 0.72
 CONFLICT_MARGIN = 0.05
-FETCH_K = 8
+# Resource bounds enforced by the server.
 MAX_SPANS = 3000
 MIN_SPAN_CHARS = 20
 BATCH = 48
-MAX_HINTS_PER_FIELD = 3
-
-
-def _similarity(distance: Any) -> float:
-    try:
-        return 1.0 / (1.0 + max(0.0, float(distance)))
-    except (TypeError, ValueError):
-        return 0.0
 
 
 def _key(value: Any) -> str:
@@ -86,8 +88,13 @@ def _profile(schema: Any, field: str) -> Any:
         return None
 
 
-def _decide(groups: dict[str, dict[str, Any]], min_similarity: float) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
-    """(the value to pre-fill or None, hint rows best-first) from value groups."""
+def _decide(
+    groups: dict[str, dict[str, Any]], min_similarity: float, plan: PrefillPlan
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    """(the value to pre-fill or None, hint rows best-first) from value groups.
+
+    Hint selection follows the pipeline; the pre-fill decision is domain policy.
+    """
     ranked = sorted(
         groups.values(),
         key=lambda g: (g["support"], sum(g["sims"]) / len(g["sims"]), g["best"]),
@@ -98,8 +105,8 @@ def _decide(groups: dict[str, dict[str, Any]], min_similarity: float) -> tuple[d
             "value": g["value"], "similarity": round(g["best"], 3), "support": g["support"],
             "exemplar_ids": g["exemplar_ids"][:5], "span_block_id": g["span"], "absence": g["absence"],
         }
-        for g in ranked if g["best"] >= max(HINT_SIMILARITY, min_similarity)
-    ][:MAX_HINTS_PER_FIELD]
+        for g in ranked if g["best"] >= max(plan.hint_min_similarity, min_similarity)
+    ][: plan.hint_limit]
     if not ranked:
         return None, hints
     top = ranked[0]
@@ -124,6 +131,10 @@ def prefill_records(
     """Pre-fill ``records`` in place. Returns a summary; never raises."""
     started = time.monotonic()
     summary: dict[str, Any] = {"status": "ok", "spans": 0, "prefilled": 0, "hinted": 0, "truncated": False, "error": ""}
+    plan: PrefillPlan | None = None
+    resolved_hash = ""
+    observations: dict[str, dict[str, Any]] = {}
+    trace_started = datetime.now(UTC)
     try:
         text_by_block = {
             str(b.get("block_id") or b.get("source_unit_id")): str(b.get("text") or "").strip()
@@ -159,7 +170,11 @@ def prefill_records(
         if not int(collection.count()):
             summary["status"] = "empty"
             return summary
+        plan, resolved_hash = resolve_prefill_plan()
+        trace_started = datetime.now(UTC)
         provider, model = index.store._embedding_spec(collection)
+        retrieve_started = time.monotonic()
+        observations[plan.retrieve_stage_id] = {"status": "running", "input_count": len(texts)}
         source_projection = SourceEmbeddingProjection(index.store)
         source_blocks_by_document: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for block in blocks:
@@ -204,6 +219,8 @@ def prefill_records(
         ]}
         # per record -> field -> value key -> group
         found: dict[int, dict[str, dict[str, dict[str, Any]]]] = defaultdict(lambda: defaultdict(dict))
+        candidate_rows = 0
+        similarities: list[float] = []
         for start in range(0, len(texts), BATCH):
             if time.monotonic() - started > time_budget:
                 summary["truncated"] = True
@@ -211,7 +228,7 @@ def prefill_records(
             batch = texts[start:start + BATCH]
             vectors = [query_vectors[text] for text in batch]
             payload = collection.query(
-                query_embeddings=vectors, n_results=FETCH_K, where=where, include=["metadatas", "distances"],
+                query_embeddings=vectors, n_results=plan.fetch_k, where=where, include=["metadatas", "distances"],
             )
             # Chroma may return numpy arrays; evaluating them with `or []`
             # raises "truth value of an array is ambiguous".
@@ -227,7 +244,9 @@ def prefill_records(
                 for exemplar_id, meta, distance in zip(ids, metas, distances):
                     if not isinstance(meta, dict):
                         continue
-                    similarity = _similarity(distance)
+                    candidate_rows += 1
+                    similarity = plan.similarity(distance)
+                    similarities.append(similarity)
                     field = str(meta.get("field_name") or "")
                     absence = str(meta.get("kind") or "") == "absence"
                     try:
@@ -250,13 +269,38 @@ def prefill_records(
                         group["exemplar_ids"].append(str(exemplar_id))
                         if similarity > group["best"]:
                             group["best"], group["span"] = similarity, block_id
+        observations[plan.retrieve_stage_id] = {
+            "elapsed_seconds": time.monotonic() - retrieve_started,
+            "input_count": len(texts),
+            "output_count": candidate_rows,
+            "parameters": {"fetch_k": plan.fetch_k, "batch": BATCH, "filter_fields": ["field_name", "kind", "scope_id"]},
+            "provider": provider,
+            "model": model,
+            "collection": str(getattr(collection, "name", "") or "") or None,
+            "warnings": ["Stopped at the pre-fill time budget or span cap."] if summary["truncated"] else [],
+        }
+        observations[plan.normalize_stage_id] = {
+            "input_count": candidate_rows,
+            "output_count": candidate_rows,
+            "parameters": {"method": plan.normalization},
+            "warnings": ["Normalization runs inside the retrieval loop; its time is included in retrieval."],
+            "score_summary": (
+                {"score_type": "similarity", "count": len(similarities), "min": round(min(similarities), 4),
+                 "max": round(max(similarities), 4)}
+                if similarities else {}
+            ),
+        }
+        hints_started = time.monotonic()
+        group_count = hint_count = 0
         for record_index, by_field in found.items():
             record = records[record_index]
             for field, groups in by_field.items():
                 for group in groups.values():
                     group["support"] = len(group["sources"])
                 profile = _profile(schema, field)
-                choice, hints = _decide(groups, float(getattr(profile, "min_similarity", 0.0) or 0.0))
+                choice, hints = _decide(groups, float(getattr(profile, "min_similarity", 0.0) or 0.0), plan)
+                group_count += len(groups)
+                hint_count += len(hints)
                 if hints:
                     record.setdefault("memory_hints", {})[field] = hints
                     summary["hinted"] += 1
@@ -279,10 +323,53 @@ def prefill_records(
                 record[field] = choice["value"]
                 record.setdefault("metadata_evidence", {})[field] = evidence
                 summary["prefilled"] += 1
+        observations[plan.hints_stage_id] = {
+            "elapsed_seconds": time.monotonic() - hints_started,
+            "input_count": group_count,
+            "output_count": hint_count,
+            "parameters": {"limit": plan.hint_limit, "min_similarity": plan.hint_min_similarity},
+        }
     except Exception as exc:  # unreachable store or embedder: report it, never block the build
         logger.warning("Metadata-memory pre-fill unavailable", exc_info=True)
         summary.update(status="unavailable", error=f"{type(exc).__name__}: {exc}"[:300])
+        for observation in observations.values():
+            if observation.get("status") == "running":
+                observation.update(status="failed", fallback_reason=summary["error"])
+    if plan is not None:
+        summary["pipeline"] = _record_trace(plan, resolved_hash, trace_started, observations, summary)
     return summary
+
+
+def _record_trace(
+    plan: PrefillPlan,
+    resolved_hash: str,
+    started_at: datetime,
+    observations: dict[str, dict[str, Any]],
+    summary: dict[str, Any],
+) -> dict[str, Any]:
+    """Persist one trace for the build and return the identity the build summary keeps."""
+    from .pipelines.store import pipeline_store
+
+    trace = build_prefill_trace(
+        plan,
+        resolved_hash=resolved_hash,
+        started_at=started_at,
+        finished_at=datetime.now(UTC),
+        observations=observations,
+        status="failed" if summary["status"] == "unavailable" else "completed",
+    )
+    identity: dict[str, Any] = {
+        "feature": PREFILL_FEATURE,
+        "pipeline_id": plan.pipeline.pipeline_id,
+        "pipeline_version": plan.pipeline.version,
+        "pipeline_hash": resolved_hash,
+        "trace_id": trace.run_id,
+    }
+    try:
+        pipeline_store.put_run(trace)
+    except Exception:  # noqa: BLE001 - telemetry must never block the build
+        identity["trace_warning"] = "Pipeline trace persistence failed."
+    return identity
 
 
 def _can_fill(record: dict[str, Any], field: str, schema: Any) -> bool:

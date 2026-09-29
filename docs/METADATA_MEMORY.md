@@ -83,6 +83,14 @@ records the configured provider/model, candidate and reranked counts, mode,
 fallback reason when applicable, and timing. The deterministic hybrid fallback
 remains the supported behavior for fixed inputs and existing deployments.
 
+## Metadata pre-fill
+
+Before enrichment, each source span of a new Record can query reviewed exemplars from other builds (positive values and confirmed absences). The assigned `metadata_prefill` pipeline (built-in `metadata.prefill.current@1`) controls the computational part: how many exemplars each span retrieves (`fetch_k`, 8), how distance becomes similarity (`1 / (1 + distance)`, the only method pre-fill accepts because its thresholds were calibrated against it), and which advisory hints surface (up to 3 per field at similarity 0.72 or above, never below the field's own `min_similarity`).
+
+Whether a value is actually pre-filled is DerridAI policy, not a pipeline setting: at least two distinct earlier Records must agree at mean similarity 0.88 with no rival value within 0.05; the value must be valid for the schema; confirmed absence is only ever a hint; reviewed or already-present values are never overwritten; confidence is capped at 0.9; and authority stays unreviewed. Span, batch, and time limits are server bounds.
+
+Each build records one pipeline trace (spans queried, exemplars returned, similarity range, hints kept, embedding provider/model) and keeps the pipeline identity in its `memory_prefill` summary. An unavailable embedder, store, or pipeline assignment is reported there and the build continues without pre-fill.
+
 ## Separation from other memory
 
 Do not conflate these systems:
