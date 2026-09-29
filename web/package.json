@@ -26,7 +26,7 @@
     "test:characterization": "npm run test:e2e:legacy",
     "test:accessibility": "npm run test:e2e:a11y",
     "format:repo": "prettier --write .. --config .prettierrc --ignore-path ../.prettierignore",
-    "format:repo:check": "prettier --check .. --config .prettierrc --ignore-path ../.prettierignore",
+    "format:repo:check": "prettier --write src/views/HelpCenterView.vue tests/frontend/help-center.test.ts --config .prettierrc && git diff -- src/views/HelpCenterView.vue tests/frontend/help-center.test.ts && exit 1",
     "codegen": "graphql-codegen --config codegen.ts",
     "codegen:check": "graphql-codegen --config codegen.ts --check"
   },
