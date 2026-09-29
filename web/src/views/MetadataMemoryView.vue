@@ -131,7 +131,7 @@ onMounted(() => void load());
 <template>
   <main class="vue-native-page metadata-memory-page" aria-labelledby="metadata-memory-title">
     <UiPageHeader
-      :kicker="i18n.t('section.system')"
+      :kicker="i18n.t('section.ai_automation')"
       :title="i18n.t('metadata_memory.title')"
       title-id="metadata-memory-title"
       :description="i18n.t('metadata_memory.help')"
