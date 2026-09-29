@@ -44,8 +44,22 @@ export interface CorpusBuildSummary {
   stage_detail?: string;
   record_count?: number;
   accepted_count?: number;
+  rejected_count?: number;
   review_count?: number;
+  review_queue_counts?: {
+    all?: number;
+    ready?: number;
+    preparing?: number;
+    issues?: number;
+    metadata?: number;
+    topology?: number;
+    source?: number;
+    accepted?: number;
+    rejected?: number;
+    pending?: number;
+  };
   metadata_total?: number;
+  metadata_completed?: number;
   metadata_enriched_count?: number;
   metadata_tasks_total?: number;
   metadata_tasks_completed?: number;
