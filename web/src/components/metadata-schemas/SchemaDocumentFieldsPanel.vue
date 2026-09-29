@@ -1,6 +1,5 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-/* eslint-disable vue/no-mutating-props -- the parent hands over its draft on purpose; these components edit it in place and the parent tracks dirtiness by comparing the whole draft. */
 import { computed } from "vue";
 import { useSchemaCopy } from "../../composables/useSchemaCopy";
 import {
