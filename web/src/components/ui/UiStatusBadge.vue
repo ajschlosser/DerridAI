@@ -15,7 +15,6 @@ withDefaults(
   <UiTooltip
     v-if="help"
     :text="help"
-    :label="`${label}: ${help}`"
     placement="bottom"
     trigger-mode="content"
   >
