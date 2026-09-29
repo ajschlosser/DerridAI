@@ -214,25 +214,109 @@ def select_prior_responses(
     system_store: Any,
     index_factory: Callable[[], ResponseMemoryIndex],
     limit: int = RESPONSE_LIMIT,
+    plan: MemoryPipelinePlan | None = None,
 ) -> dict[str, Any]:
-    """Eligible prior responses similar to ``query``, re-joined to authority."""
+    """Eligible prior responses similar to the query, re-joined to authority."""
+
     warnings: list[str] = []
+    observations: dict[str, dict[str, Any]] = {}
+    selection_limit = max(1, int(plan.selection_limit if plan is not None else limit))
+    semantic_limit = max(1, int(plan.fetch_k if plan is not None else limit))
+    minimum = float(plan.min_similarity if plan is not None else MIN_SIMILARITY)
+    fallback_limit = max(
+        1,
+        int(plan.fallback_fetch_k if plan is not None else limit),
+    )
+    retrieve_stage = plan.retrieve_stage_id if plan is not None else "retrieve"
+    select_stage = plan.select_stage_id if plan is not None else "select"
+
+    semantic_started = time.perf_counter()
     try:
         index = index_factory()
         index.sync(system_store)
         pairs = []
-        for hit in index.similar(query, owner=owner, limit=limit, min_similarity=MIN_SIMILARITY):
+        for hit in index.similar(
+            query,
+            owner=owner,
+            limit=semantic_limit,
+            min_similarity=minimum,
+        ):
             row = system_store.get_response_memory(hit["response_id"], owner=owner)
-            if row and not ineligibility(row):  # stale projection rows are never surfaced
+            if row and not ineligibility(row):
                 pairs.append((row, hit["similarity"]))
+        observations[retrieve_stage] = {
+            "status": "completed",
+            "elapsed_seconds": time.perf_counter() - semantic_started,
+            "input_count": 1,
+            "output_count": len(pairs),
+            "parameters": {
+                "fetch_k": semantic_limit,
+                "min_similarity": minimum,
+            },
+        }
         mode = "semantic"
-    except Exception as exc:  # noqa: BLE001 - fall back visibly rather than drop the channel
-        warnings.append(f"Semantic response memory unavailable; used lexical matching instead: {str(exc)[:200]}")
-        pool = [
-            row for row in system_store.list_response_memory(owner=owner, limit=_LEXICAL_POOL) if not ineligibility(row)
-        ]
-        pairs = _lexical(query, pool, "question", limit)
-        mode = "lexical_fallback"
+    except Exception as exc:  # noqa: BLE001 - advisory memory must degrade visibly
+        failure_kind = classify_memory_failure(exc)
+        status = {
+            "timeout": "timed_out",
+            "unavailable": "unavailable",
+            "error": "failed",
+        }[failure_kind]
+        observations[retrieve_stage] = {
+            "status": status,
+            "elapsed_seconds": time.perf_counter() - semantic_started,
+            "input_count": 1,
+            "output_count": 0,
+            "parameters": {
+                "fetch_k": semantic_limit,
+                "min_similarity": minimum,
+            },
+            "fallback_reason": str(exc)[:300],
+        }
+        fallback_target = (
+            plan.fallback_for(failure_kind)
+            if plan is not None
+            else "legacy_lexical_fallback"
+        )
+        configured_fallback = (
+            plan is None
+            or (
+                plan.lexical_fallback_stage_id is not None
+                and fallback_target == plan.lexical_fallback_stage_id
+            )
+        )
+        if configured_fallback:
+            fallback_started = time.perf_counter()
+            warnings.append(
+                "Semantic response memory unavailable; used configured lexical "
+                f"matching instead: {str(exc)[:200]}"
+            )
+            pool = [
+                row
+                for row in system_store.list_response_memory(
+                    owner=owner,
+                    limit=_LEXICAL_POOL,
+                )
+                if not ineligibility(row)
+            ]
+            pairs = _lexical(query, pool, "question", fallback_limit)
+            if plan is not None and plan.lexical_fallback_stage_id is not None:
+                observations[plan.lexical_fallback_stage_id] = {
+                    "status": "completed",
+                    "elapsed_seconds": time.perf_counter() - fallback_started,
+                    "input_count": len(pool),
+                    "output_count": len(pairs),
+                    "parameters": {"fetch_k": fallback_limit},
+                }
+            mode = "lexical_fallback"
+        else:
+            warnings.append(
+                "Semantic response memory failed and this pipeline has no configured "
+                f"{failure_kind} fallback: {str(exc)[:200]}"
+            )
+            pairs = []
+            mode = f"semantic_{failure_kind}"
+
     items = [
         {
             "response_id": str(row.get("response_id") or ""),
@@ -241,10 +325,20 @@ def select_prior_responses(
             "similarity": similarity,
             "grade": row.get("latest_grade") or {},
         }
-        for row, similarity in pairs[:limit]
+        for row, similarity in pairs[:selection_limit]
     ]
-    return {"mode": mode, "items": items, "warnings": warnings}
-
+    observations[select_stage] = {
+        "status": "completed",
+        "input_count": len(pairs),
+        "output_count": len(items),
+        "parameters": {"limit": selection_limit},
+    }
+    return {
+        "mode": mode,
+        "items": items,
+        "warnings": warnings,
+        "observations": observations,
+    }
 
 def _evidence_records(evidence: Sequence[Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
