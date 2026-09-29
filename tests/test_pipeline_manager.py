@@ -1,6 +1,8 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 from app.pipelines.defaults import built_in_pipeline
 from app.pipelines.manager import PipelineManager
@@ -97,3 +99,27 @@ def test_custom_definition_cannot_shadow_code_owned_builtin(tmp_path) -> None:
 
     with pytest.raises(ValueError, match="code-owned"):
         manager.save_definition(collision, actor="admin")
+
+
+
+def test_catalog_hides_legacy_custom_collision_with_builtin(tmp_path) -> None:
+    manager = _manager(tmp_path)
+    source = built_in_pipeline("research.current", 1)
+    assert source is not None
+    legacy_collision = source.model_copy(
+        update={
+            "built_in": False,
+            "created_at": datetime.now(UTC),
+            "created_by": "legacy",
+        }
+    )
+    manager.store.put_definition(legacy_collision)
+
+    matches = [
+        item
+        for item in manager.list_definitions(purpose="research")
+        if item.pipeline_id == "research.current" and item.version == 1
+    ]
+
+    assert len(matches) == 1
+    assert matches[0].built_in is True
