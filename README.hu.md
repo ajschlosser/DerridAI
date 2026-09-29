@@ -57,13 +57,12 @@ A normatív cELF 1.0 specifikációt és a DerridAI nem normatív white paperét
 
 ### Futásidejű szolgáltatások
 
-| Szolgáltatás | Stack | Szerep |
-| --- | --- | --- |
-| `web` | Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js, nginx | Böngészős alkalmazás; proxyzza az `/api/` útvonalat; REST-et, GraphQL-t és realtime értesítéseket használ. A Storybook opcionális dev profil. |
-| `api` | Python 3.12, FastAPI, Strawberry GraphQL, ChromaDB kliens, PyMuPDF, sentence-transformers, spaCy | Autoritatív alkalmazási határ az auth, forrás/korpusz, cELF-olvasások, proveniencia, RAG, pipeline-ok, jobok és rendszerállapot számára. |
-| `document-nlp` | BookNLP worker | Opcionális, izolált angol Document Intelligence kiegészítés. Korlátozott, ellenőrzött szöveget kap és nincs korpuszautorítása. |
-| `chroma` | Chroma szerver | Opcionális HTTP-profil. Az embedded `PersistentClient` az alapértelmezés; mindkét mód származtatott keresési/vektorprojekciókat tárol. |
-| `ollama` | Ollama | Opcionális helyi profil. A DerridAI használhat a hoston futó Ollamát vagy bármely konfigurált OpenAI-kompatibilis endpointot. |
+
+- `web` — Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js és nginx. Böngészős alkalmazás; proxyzza az `/api/` útvonalat, és REST-et, GraphQL-t valamint realtime értesítéseket használ. A Storybook opcionális fejlesztői profil.
+- `api` — Python 3.12, FastAPI, Strawberry GraphQL, ChromaDB kliens, PyMuPDF, sentence-transformers és spaCy. Autoritatív alkalmazási határ a hitelesítés, forrás/korpusz műveletek, cELF-olvasások, proveniencia, RAG, pipeline-ok, jobok és rendszerállapot számára.
+- `document-nlp` — opcionális izolált BookNLP worker angol Document Intelligence céljára. Korlátozott, ellenőrzött szöveget kap, és nincs korpuszautorítása.
+- `chroma` — opcionális HTTP Chroma szerver. Az embedded `PersistentClient` az alapértelmezés; mindkét mód származtatott keresési/vektorprojekciókat tárol.
+- `ollama` — opcionális helyi Ollama szolgáltatás. A DerridAI használhat a hoston már futó Ollamát vagy bármely konfigurált OpenAI-kompatibilis endpointot.
 
 Az alapértelmezett Compose stack a `web` és `api` szolgáltatást indítja; a többi opcionális profil vagy külső provider.
 
