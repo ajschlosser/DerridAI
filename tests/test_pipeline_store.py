@@ -120,3 +120,32 @@ def test_pipeline_store_snapshot_restores_config_and_history(tmp_path) -> None:
 
     assert second.get_definition("custom.fast", 1) is not None
     assert second.get_assignment("research") is not None
+
+
+
+def test_invalid_snapshot_does_not_destroy_existing_pipeline_state(tmp_path) -> None:
+    store = PipelineStore(tmp_path / "system.sqlite3")
+    store.put_definition(_definition())
+    before = store.snapshot()
+
+    broken = {
+        **before,
+        "stages": [
+            {
+                "run_id": "missing-run",
+                "payload": {
+                    "stage_id": "retrieve",
+                    "strategy_id": "retrieve.lexical_bm25",
+                    "status": "completed",
+                },
+            }
+        ],
+    }
+
+    with pytest.raises(ValueError, match="unknown run"):
+        store.restore_snapshot(broken)
+
+    restored = store.get_definition("custom.fast", 1)
+    assert restored is not None
+    assert restored.name == "Custom fast"
+    assert store.snapshot() == before
