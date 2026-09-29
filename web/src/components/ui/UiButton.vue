@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import AppIcon from "../AppIcon.vue";
+import UiTooltip from "./UiTooltip.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -33,10 +35,55 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{ click: [event: MouseEvent] }>();
+const tooltipText = computed(() =>
+  props.disabled && props.disabledReason
+    ? props.disabledReason
+    : props.iconOnly && props.label
+      ? props.label
+      : "",
+);
+const tooltipLabel = computed(() =>
+  props.disabled && props.disabledReason && props.label
+    ? `${props.label}: ${props.disabledReason}`
+    : "",
+);
 </script>
 
 <template>
-  <span class="ui-button-wrap" :data-tooltip="props.disabled ? props.disabledReason : ''">
+  <UiTooltip
+    v-if="tooltipText"
+    :text="tooltipText"
+    :label="tooltipLabel || undefined"
+    placement="bottom"
+    trigger-mode="content"
+    :content-focusable="props.disabled"
+  >
+    <span class="ui-button-wrap">
+      <button
+        class="ui-button"
+        :class="[
+          `variant-${props.variant}`,
+          `size-${props.size}`,
+          props.buttonClass,
+          { 'icon-only': props.iconOnly },
+        ]"
+        :type="props.type"
+        :disabled="props.disabled"
+        :aria-disabled="props.disabled || undefined"
+        :aria-pressed="props.pressed"
+        :aria-expanded="props.expanded"
+        :aria-label="props.iconOnly ? props.label : undefined"
+        @click="emit('click', $event)"
+      >
+        <AppIcon v-if="props.icon" :name="props.icon" aria-hidden="true" />
+        <span v-if="!props.iconOnly"><slot>{{ props.label }}</slot></span>
+        <slot v-else name="icon-label" />
+        <span v-if="props.count" class="ui-button-count" aria-hidden="true">{{ props.count }}</span>
+        <span v-if="props.count" class="sr-only">{{ props.count }}</span>
+      </button>
+    </span>
+  </UiTooltip>
+  <span v-else class="ui-button-wrap">
     <button
       class="ui-button"
       :class="[
@@ -51,13 +98,10 @@ const emit = defineEmits<{ click: [event: MouseEvent] }>();
       :aria-pressed="props.pressed"
       :aria-expanded="props.expanded"
       :aria-label="props.iconOnly ? props.label : undefined"
-      :title="props.disabled ? props.disabledReason : props.iconOnly ? props.label : undefined"
       @click="emit('click', $event)"
     >
       <AppIcon v-if="props.icon" :name="props.icon" aria-hidden="true" />
-      <span v-if="!props.iconOnly"
-        ><slot>{{ props.label }}</slot></span
-      >
+      <span v-if="!props.iconOnly"><slot>{{ props.label }}</slot></span>
       <slot v-else name="icon-label" />
       <span v-if="props.count" class="ui-button-count" aria-hidden="true">{{ props.count }}</span>
       <span v-if="props.count" class="sr-only">{{ props.count }}</span>
