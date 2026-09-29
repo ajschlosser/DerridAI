@@ -88,7 +88,7 @@ function stageDetail(stage: PipelineStageTrace) {
 
           <p v-if="stageDetail(stage)" class="trace-meta">{{ stageDetail(stage) }}</p>
           <div
-            v-if="stage.input_count !== null || stage.output_count !== null"
+            v-if="stage.input_count != null || stage.output_count != null"
             class="trace-counts"
           >
             <span>
