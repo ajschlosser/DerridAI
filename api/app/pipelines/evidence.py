@@ -554,6 +554,23 @@ def execute_reviewer_evidence_pipeline(
                 "fallback_reason": "Support validation produced usable evidence candidates.",
             }
 
+    provenance_started = time.perf_counter()
+    provenance_input_count = len(items)
+    items, provenance_rejected = _provenance_rows(
+        source_document_id,
+        blocks,
+        items,
+    )
+    observations[plan.provenance_stage_id] = {
+        "elapsed_seconds": time.perf_counter() - provenance_started,
+        "input_count": provenance_input_count,
+        "output_count": len(items),
+        "parameters": {
+            "validator": "current_source_unit_membership",
+            "source_document_id_present": bool(source_document_id),
+        },
+    }
+
     effective_limit = max(1, int(limit))
     if plan.selection_limit is not None:
         effective_limit = min(effective_limit, max(1, plan.selection_limit))
@@ -582,6 +599,10 @@ def execute_reviewer_evidence_pipeline(
     selected_ids = {str(item.get("block_id") or "") for item in selected}
     decisions = [
         *(_candidate_decision(item, "rejected_support") for item in support_rejected),
+        *(
+            _candidate_decision(item, "rejected_provenance")
+            for item in provenance_rejected
+        ),
         *(
             _candidate_decision(
                 item,
