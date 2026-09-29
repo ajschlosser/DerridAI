@@ -6,6 +6,7 @@ import type { ProviderProfile } from "../api/system";
 import UiButton from "./ui/UiButton.vue";
 import UiStatusBadge from "./ui/UiStatusBadge.vue";
 import UiTabs from "./ui/UiTabs.vue";
+import UiTooltip from "./ui/UiTooltip.vue";
 import SchemaFieldsTable from "./metadata-schemas/SchemaFieldsTable.vue";
 import SchemaDocumentFieldsPanel from "./metadata-schemas/SchemaDocumentFieldsPanel.vue";
 import SchemaGroupsPanel from "./metadata-schemas/SchemaGroupsPanel.vue";
@@ -288,9 +289,11 @@ defineExpose({ select, draft });
             :label="t('unsaved_changes', 'Unsaved changes')"
           />
           <UiStatusBadge v-else tone="success" :label="t('saved_state', 'Saved')" />
-          <span class="schema-version" :title="t('version_help')">
-            {{ t("version", "Schema version") }}: <b>v{{ draft.schema_version || "1.0.0" }}</b>
-          </span>
+          <UiTooltip :text="t('version_help')" trigger-mode="content" placement="bottom">
+            <span class="schema-version">
+              {{ t("version", "Schema version") }}: <b>v{{ draft.schema_version || "1.0.0" }}</b>
+            </span>
+          </UiTooltip>
         </div>
         <div class="schema-actions">
           <UiButton
