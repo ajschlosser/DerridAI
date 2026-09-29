@@ -197,7 +197,6 @@ const hasResults = computed(() => matchCount.value > 0);
         </section>
 
         <section
-          v-if="glossary.length || !query"
           id="help-glossary"
           class="help-major-section"
           aria-labelledby="help-glossary-heading"
