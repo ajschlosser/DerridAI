@@ -5,6 +5,7 @@ import { useI18nStore } from "../stores/i18n";
 import AppIcon from "./AppIcon.vue";
 import CorpusFieldOwnershipBadge from "./CorpusFieldOwnershipBadge.vue";
 import UiCombobox from "./ui/UiCombobox.vue";
+import UiTooltip from "./ui/UiTooltip.vue";
 import { normalizeMetadataFieldValue } from "../domain/metadataFieldRegistry";
 import {
   groupOptionsBySuggestion,
@@ -611,15 +612,21 @@ const traceRows = computed(() => {
           {{ saving ? i18n.t("pdf_corpus.saving_decision") : i18n.t(confirmLabelKey)
           }}<kbd aria-hidden="true">{{ i18n.t("pdf_corpus.shortcut.confirm_field") }}</kbd>
         </button>
-        <button
-          type="button"
-          class="btn small"
-          :disabled="busy"
-          :title="i18n.t('pdf_corpus.confirm_no_value')"
-          @click="emit('noValue')"
+        <UiTooltip
+          :text="i18n.t('pdf_corpus.confirm_no_value')"
+          trigger-mode="content"
+          :content-focusable="Boolean(busy)"
+          placement="bottom"
         >
-          {{ i18n.t("pdf_corpus.no_value_short") }}
-        </button>
+          <button
+            type="button"
+            class="btn small"
+            :disabled="busy"
+            @click="emit('noValue')"
+          >
+            {{ i18n.t("pdf_corpus.no_value_short") }}
+          </button>
+        </UiTooltip>
         <button v-if="!open" type="button" class="btn small quiet" @click="cancelEdit">
           {{ i18n.t("ui.cancel") }}
         </button>
@@ -640,42 +647,62 @@ const traceRows = computed(() => {
       </div>
       <div class="field-tools">
         <template v-if="textSelectable">
+          <UiTooltip
+            :text="i18n.t('pdf_corpus.select_from_text_help')"
+            trigger-mode="content"
+            :content-focusable="Boolean(busy)"
+            placement="bottom"
+          >
+            <button
+              type="button"
+              class="link-button"
+              :disabled="busy"
+              @click="selectFromText"
+            >
+              {{ i18n.t("pdf_corpus.select_from_text") }}
+            </button>
+          </UiTooltip></template
+        >
+        <UiTooltip
+          :text="i18n.t('pdf_corpus.select_all_evidence_help')"
+          trigger-mode="content"
+          :content-focusable="false"
+          placement="bottom"
+        >
+          <button type="button" class="link-button" @click="selectWholeRecord">
+            {{ i18n.t("pdf_corpus.select_all_evidence") }}
+          </button>
+        </UiTooltip>
+        <UiTooltip
+          :text="i18n.t('pdf_corpus.own_knowledge_help')"
+          trigger-mode="content"
+          :content-focusable="false"
+          placement="bottom"
+        >
           <button
             type="button"
             class="link-button"
-            :disabled="busy"
-            :title="i18n.t('pdf_corpus.select_from_text_help')"
-            @click="selectFromText"
+            :aria-pressed="citeSelf"
+            @click="citeSelf = !citeSelf"
           >
-            {{ i18n.t("pdf_corpus.select_from_text") }}
-          </button></template
+            {{ i18n.t("pdf_corpus.own_knowledge_toggle") }}
+          </button>
+        </UiTooltip>
+        <UiTooltip
+          :text="i18n.t('pdf_corpus.browse_evidence_help')"
+          trigger-mode="content"
+          :content-focusable="!canSave"
+          placement="bottom"
         >
-        <button
-          type="button"
-          class="link-button"
-          :title="i18n.t('pdf_corpus.select_all_evidence_help')"
-          @click="selectWholeRecord"
-        >
-          {{ i18n.t("pdf_corpus.select_all_evidence") }}
-        </button>
-        <button
-          type="button"
-          class="link-button"
-          :aria-pressed="citeSelf"
-          :title="i18n.t('pdf_corpus.own_knowledge_help')"
-          @click="citeSelf = !citeSelf"
-        >
-          {{ i18n.t("pdf_corpus.own_knowledge_toggle") }}
-        </button>
-        <button
-          type="button"
-          class="link-button"
-          :disabled="!canSave"
-          :title="i18n.t('pdf_corpus.browse_evidence_help')"
-          @click="browseOtherRecords"
-        >
-          {{ i18n.t("pdf_corpus.browse_evidence") }}
-        </button>
+          <button
+            type="button"
+            class="link-button"
+            :disabled="!canSave"
+            @click="browseOtherRecords"
+          >
+            {{ i18n.t("pdf_corpus.browse_evidence") }}
+          </button>
+        </UiTooltip>
         <button type="button" class="link-button" @click="emit('source')">
           {{ i18n.t("pdf_corpus.view_evidence") }}
         </button>
@@ -689,9 +716,10 @@ const traceRows = computed(() => {
             ? i18n.t("pdf_corpus.llm_value_auto_resolved")
             : i18n.t("pdf_corpus.llm_suggestion_prefilled")
         }}</span>
-        <span v-if="status?.llm_assessed === true || status?.llm_checked === true">{{
-          i18n.t("pdf_corpus.llm_field_assessed")
-        }}</span>
+        <span v-if="status?.llm_assessed === true || status?.llm_checked === true" class="field-meta-help">
+          {{ i18n.t("pdf_corpus.llm_field_assessed") }}
+          <UiTooltip :text="i18n.t('pdf_corpus.llm_field_assessed_help')" placement="bottom" />
+        </span>
         <span v-else-if="status?.llm_value_returned === true">{{
           i18n.t("pdf_corpus.llm_value_without_assessment")
         }}</span>
@@ -706,7 +734,10 @@ const traceRows = computed(() => {
             value: display(resolvedValue),
           })
         }}</span>
-        <span>{{ confidenceLabel }}</span>
+        <span class="field-meta-help">
+          {{ confidenceLabel }}
+          <UiTooltip :text="i18n.t('pdf_corpus.confidence_help')" placement="bottom" />
+        </span>
         <span v-if="calibratedAcceptance && calibratedAcceptance.reviewed >= 3">{{
           i18n.tf("pdf_corpus.calibrated_acceptance", {
             percent: Math.round(calibratedAcceptance.acceptanceRate * 100),
@@ -723,19 +754,31 @@ const traceRows = computed(() => {
         </summary>
         <dl class="assertion-facts">
           <div v-if="status?.derivation_method">
-            <dt>{{ i18n.t("pdf_corpus.assertion_derivation", "Derivation") }}</dt>
+            <dt class="assertion-term">
+              <span>{{ i18n.t("pdf_corpus.assertion_derivation", "Derivation") }}</span>
+              <UiTooltip :text="i18n.t('pdf_corpus.assertion_derivation_help')" placement="bottom" />
+            </dt>
             <dd>{{ derivationLabel(status.derivation_method) }}</dd>
           </div>
           <div v-if="status?.evaluation_status">
-            <dt>{{ i18n.t("pdf_corpus.assertion_evaluation", "Evaluation") }}</dt>
+            <dt class="assertion-term">
+              <span>{{ i18n.t("pdf_corpus.assertion_evaluation", "Evaluation") }}</span>
+              <UiTooltip :text="i18n.t('pdf_corpus.assertion_evaluation_help')" placement="bottom" />
+            </dt>
             <dd>{{ humanizeToken(status.evaluation_status) }}</dd>
           </div>
           <div v-if="status?.authority_status">
-            <dt>{{ i18n.t("pdf_corpus.assertion_authority", "Authority") }}</dt>
+            <dt class="assertion-term">
+              <span>{{ i18n.t("pdf_corpus.assertion_authority", "Authority") }}</span>
+              <UiTooltip :text="i18n.t('pdf_corpus.assertion_authority_help')" placement="bottom" />
+            </dt>
             <dd>{{ humanizeToken(status.authority_status) }}</dd>
           </div>
           <div v-if="status?.value_status">
-            <dt>{{ i18n.t("pdf_corpus.assertion_value_state", "Value state") }}</dt>
+            <dt class="assertion-term">
+              <span>{{ i18n.t("pdf_corpus.assertion_value_state", "Value state") }}</span>
+              <UiTooltip :text="i18n.t('pdf_corpus.assertion_value_state_help')" placement="bottom" />
+            </dt>
             <dd>{{ humanizeToken(status.value_status) }}</dd>
           </div>
           <div v-if="status?.model">
@@ -747,7 +790,10 @@ const traceRows = computed(() => {
             <dd>{{ status.actor }}</dd>
           </div>
           <div v-if="status?.record_revision">
-            <dt>{{ i18n.t("pdf_corpus.assertion_revision", "Record revision") }}</dt>
+            <dt class="assertion-term">
+              <span>{{ i18n.t("pdf_corpus.assertion_revision", "Record revision") }}</span>
+              <UiTooltip :text="i18n.t('pdf_corpus.assertion_revision_help')" placement="bottom" />
+            </dt>
             <dd>{{ status.record_revision }}</dd>
           </div>
           <div v-if="status?.created_at">
@@ -1048,6 +1094,12 @@ const traceRows = computed(() => {
   gap: 6px;
   align-items: center;
   min-height: 36px;
+}
+.field-meta-help,
+.assertion-term {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 .field-meta {
   display: flex;
