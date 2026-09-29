@@ -57,13 +57,12 @@ Vedere [SPECIFICATION.md](SPECIFICATION.md) per la specifica normativa cELF 1.0 
 
 ### Servizi runtime
 
-| Servizio | Stack | Ruolo |
-| --- | --- | --- |
-| `web` | Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js, nginx | Applicazione browser; proxy di `/api/`; usa REST, GraphQL e notifiche realtime. Storybook è un profilo di sviluppo opzionale. |
-| `api` | Python 3.12, FastAPI, Strawberry GraphQL, client ChromaDB, PyMuPDF, sentence-transformers, spaCy | Confine applicativo autoritativo per auth, sorgenti/corpus, letture cELF, provenienza, RAG, pipeline, job e stato di sistema. |
-| `document-nlp` | worker BookNLP | Potenziamento Document Intelligence opzionale e isolato per l'inglese. Riceve testo revisionato e limitato e non ha autorità sul corpus. |
-| `chroma` | server Chroma | Profilo HTTP opzionale. `PersistentClient` embedded resta il default; entrambe le modalità memorizzano proiezioni di ricerca/vettoriali derivate. |
-| `ollama` | Ollama | Profilo locale opzionale. DerridAI può usare in alternativa Ollama sull'host o qualunque endpoint compatibile OpenAI configurato. |
+
+- `web` — Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js e nginx. È l’applicazione browser; fa da proxy a `/api/` e usa REST, GraphQL e notifiche realtime. Storybook è un profilo di sviluppo opzionale.
+- `api` — Python 3.12, FastAPI, Strawberry GraphQL, client ChromaDB, PyMuPDF, sentence-transformers e spaCy. È il confine applicativo autoritativo per autenticazione, fonti/corpus, letture cELF, provenienza, RAG, pipeline, job e stato di sistema.
+- `document-nlp` — worker BookNLP opzionale e isolato per Document Intelligence in inglese. Riceve testo revisionato e limitato e non ha autorità sul corpus.
+- `chroma` — server HTTP Chroma opzionale. `PersistentClient` embedded resta il default; entrambe le modalità memorizzano proiezioni di ricerca/vettoriali derivate.
+- `ollama` — servizio Ollama locale opzionale. DerridAI può usare in alternativa Ollama già in esecuzione sull’host o qualunque endpoint compatibile OpenAI configurato.
 
 Lo stack Compose predefinito avvia `web` e `api`; gli altri servizi sono profili opzionali o provider esterni.
 
