@@ -18,6 +18,9 @@ const props = withDefaults(
     preset: string;
     evidenceCount: number;
     promptMetadata: ResearchPromptMetadataPolicy;
+    pipelineName?: string;
+    pipelineVersion?: number | null;
+    pipelineOverride?: boolean;
     stores: ResearchStore[];
     profiles: ResearchProfile[];
     history: Array<Record<string, unknown>>;
@@ -27,7 +30,16 @@ const props = withDefaults(
     canManageRuns?: boolean;
     disabledReason?: string;
   }>(),
-  { busy: false, canRun: true, canConfigure: true, canManageRuns: true, disabledReason: "" },
+  {
+    busy: false,
+    canRun: true,
+    canConfigure: true,
+    canManageRuns: true,
+    disabledReason: "",
+    pipelineName: "",
+    pipelineVersion: null,
+    pipelineOverride: false,
+  },
 );
 const emit = defineEmits<{
   "update:prompt": [value: string];
@@ -38,6 +50,7 @@ const emit = defineEmits<{
   "update:preset": [value: string];
   run: [];
   settings: [];
+  pipelineSettings: [];
   promptMetadata: [];
   runs: [];
   history: [item: Record<string, unknown>];
@@ -178,6 +191,29 @@ function pickHistory(item: Record<string, unknown>) {
 
     <fieldset class="research-compose-context" :disabled="!canConfigure">
       <legend class="sr-only">{{ i18n.t("research.context") }}</legend>
+      <div class="research-context-action research-pipeline-context">
+        <span>{{ i18n.t("research.pipeline_chain", "Pipeline chain") }}</span>
+        <button
+          class="btn research-context-action-button"
+          type="button"
+          :disabled="!canConfigure"
+          @click="emit('pipelineSettings')"
+        >
+          <AppIcon name="compare" />
+          {{
+            pipelineName
+              ? `${pipelineName}${pipelineVersion ? ` · v${pipelineVersion}` : ""}`
+              : i18n.t("research.pipeline_system_default", "System default")
+          }}
+        </button>
+        <small>
+          {{
+            pipelineOverride
+              ? i18n.t("research.pipeline_override_badge", "Per-run override")
+              : i18n.t("research.pipeline_system_assignment_badge", "System assignment")
+          }}
+        </small>
+      </div>
       <label>
         <span>{{ i18n.t("research.corpus") }}</span>
         <select
