@@ -63,7 +63,11 @@ _CORPUS_SUMMARY_KEYS = (
     "finished_at",
 )
 TERMINAL_JOB_STATUSES = frozenset({"completed", "failed", "cancelled", "interrupted"})
-_METADATA_KEYS = tuple(key for key in _CORPUS_SUMMARY_KEYS if key.startswith("metadata_tasks_"))
+_METADATA_KEYS = (
+    "metadata_total",
+    "metadata_enriched_count",
+    *(key for key in _CORPUS_SUMMARY_KEYS if key.startswith("metadata_tasks_")),
+)
 
 METADATA_NOTE_EVENTS = {
     "record_started": "corpus.record_started",
