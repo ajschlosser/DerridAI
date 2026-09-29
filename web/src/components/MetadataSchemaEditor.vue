@@ -41,7 +41,9 @@ const isNew = ref(false);
 const tab = ref("fields");
 
 const builtin = computed(
-  () => !isNew.value && summaries.value.some((item) => item.id === selectedId.value && item.builtin),
+  () =>
+    !isNew.value &&
+    summaries.value.some((item) => item.id === selectedId.value && item.builtin),
 );
 const dirty = computed(() => JSON.stringify(draft.value) !== savedHash.value);
 const readonly = computed(() => builtin.value || busy.value);
