@@ -57,11 +57,7 @@ function targets() {
             class="control"
             :value="stage[fallback.key] || ''"
             @change="
-              emit(
-                'updateFallback',
-                fallback.key,
-                ($event.target as HTMLSelectElement).value,
-              )
+              emit('updateFallback', fallback.key, ($event.target as HTMLSelectElement).value)
             "
           >
             <option value="">{{ t("pipelines.no_fallback", "No fallback") }}</option>
