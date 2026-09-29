@@ -297,6 +297,7 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
             {
                 "id": "retrieve",
                 "strategy": "retrieve.metadata_exemplars",
+                "config": {"fetch_k": 16},
                 "next": ["scope"],
             },
             {
@@ -313,6 +314,11 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
             {
                 "id": "rerank",
                 "strategy": "rerank.cross_encoder",
+                "config": {
+                    "top_k": 8,
+                    "model": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+                    "timeout_seconds": 15.0,
+                },
                 "on_unavailable": "quotas",
                 "on_timeout": "quotas",
                 "on_error": "quotas",
@@ -326,11 +332,13 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
             {
                 "id": "mmr",
                 "strategy": "select.mmr",
+                "config": {"lambda_mult": 0.72},
                 "next": ["pack"],
             },
             {
                 "id": "pack",
                 "strategy": "pack.metadata_precedents",
+                "config": {"char_budget": 4800},
             },
         ],
     ),

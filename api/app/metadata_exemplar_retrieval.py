@@ -752,6 +752,9 @@ class ChromaMetadataExemplarIndex:
         current_values: dict[str, str] | None = None,
         packet_char_budget: int = DEFAULT_PACKET_CHAR_BUDGET,
         fetch_k: int = DEFAULT_FETCH_K,
+        semantic_weight: float = 0.8,
+        lexical_weight: float = 0.2,
+        mmr_lambda: float = DEFAULT_MMR_LAMBDA,
         exclude_record_id: str = "",
         cross_encoder_enabled: bool | None = None,
         cross_encoder_top_k: int | None = None,
@@ -767,6 +770,14 @@ class ChromaMetadataExemplarIndex:
             if str(item.get("metadata_exemplar_id") or "")
         }
         ordered_fields = list(dict.fromkeys(str(field) for field in fields if str(field)))
+        semantic_weight = max(0.0, float(semantic_weight))
+        lexical_weight = max(0.0, float(lexical_weight))
+        weight_total = semantic_weight + lexical_weight
+        if weight_total <= 0:
+            raise ValueError("Semantic and lexical metadata weights cannot both be zero.")
+        semantic_weight /= weight_total
+        lexical_weight /= weight_total
+        mmr_lambda = max(0.0, min(1.0, float(mmr_lambda)))
         if self._disabled_reason:
             return self._lexical_fallback_result(
                 started_total=started_total,
@@ -874,7 +885,10 @@ class ChromaMetadataExemplarIndex:
                         "semantic_score": semantic_similarity,
                         "lexical_score": lexical_similarity,
                         "distance_metric": distance_metric,
-                        "hybrid_score": (semantic_similarity * 0.8) + (lexical_similarity * 0.2),
+                        "hybrid_score": (
+                            (semantic_similarity * semantic_weight)
+                            + (lexical_similarity * lexical_weight)
+                        ),
                     })
                 return field, candidates, len(candidates)
 
@@ -952,7 +966,13 @@ class ChromaMetadataExemplarIndex:
                             if (str(canonical[row["id"]].get("kind") or "positive") == "correction") == is_correction
                         )
                         if remaining > 0:
-                            selected.extend(_mmr([row for row in pool if row["match_tier"] == tier], remaining))
+                            selected.extend(
+                                _mmr(
+                                    [row for row in pool if row["match_tier"] == tier],
+                                    remaining,
+                                    lambda_mult=mmr_lambda,
+                                )
+                            )
                 if selected:
                     selected_raw[field] = selected
 
@@ -996,6 +1016,11 @@ class ChromaMetadataExemplarIndex:
                     "examples_used": used,
                     "packet_chars": packet_chars,
                     "fields_served": sorted(packet),
+                    "fetch_k": int(fetch_k),
+                    "semantic_weight": semantic_weight,
+                    "lexical_weight": lexical_weight,
+                    "mmr_lambda": mmr_lambda,
+                    "packet_char_budget": int(packet_char_budget),
                     "sync": sync_stats,
                     "total_ms": _elapsed_ms(started_total),
                 },
