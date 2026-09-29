@@ -265,7 +265,7 @@ def nonfiction_schema() -> MetadataSchema:
             "topics",
             "Topics",
             "list",
-            "entities",
+            "indexing",
             "lists the record's materially developed topics using short precise noun phrases. Prefer substantive coverage over keyword frequency and exclude "
             "incidental mentions.",
             pos_tags=("ADJ", "NOUN", "PROPN"),
@@ -276,7 +276,7 @@ def nonfiction_schema() -> MetadataSchema:
             "persons",
             "Persons",
             "list",
-            "entities",
+            "indexing",
             "lists people materially discussed, quoted, studied, or otherwise relevant in this record. Use canonical names when the text supports them; "
             "exclude purely grammatical pronouns whose referent cannot be resolved.",
             pos_tags=("PROPN",),
@@ -287,7 +287,7 @@ def nonfiction_schema() -> MetadataSchema:
             "organizations",
             "Organizations",
             "list",
-            "entities",
+            "indexing",
             "lists organizations, institutions, companies, agencies, movements, or organized bodies materially relevant in this record. Do not treat generic "
             "institutional nouns as named organizations.",
             pos_tags=("PROPN", "NOUN"),
@@ -298,7 +298,7 @@ def nonfiction_schema() -> MetadataSchema:
             "places",
             "Places",
             "list",
-            "entities",
+            "indexing",
             "lists geographic, geopolitical, or facility locations materially relevant in this record. Prefer the most specific text-supported place name and "
             "exclude places used only in incidental examples or publication addresses unless substantively relevant.",
             pos_tags=("PROPN", "NOUN"),
@@ -309,7 +309,7 @@ def nonfiction_schema() -> MetadataSchema:
             "dates",
             "Dates and periods",
             "list",
-            "entities",
+            "indexing",
             "lists dates, years, eras, periods, or time intervals that materially anchor claims, events, evidence, or chronology in this record. Keep the "
             "source's precision; do not turn approximate periods into exact dates.",
             pos_tags=("NUM", "NOUN", "PROPN"),
@@ -320,7 +320,7 @@ def nonfiction_schema() -> MetadataSchema:
             "events",
             "Events",
             "list",
-            "entities",
+            "indexing",
             "lists named or clearly delimited real-world events materially discussed in this record. Use concise canonical labels when available and do not "
             "convert every action into an event entity.",
             pos_tags=("PROPN", "NOUN"),
@@ -331,7 +331,7 @@ def nonfiction_schema() -> MetadataSchema:
             "works_referenced",
             "Works referenced",
             "list",
-            "entities",
+            "indexing",
             "lists books, articles, reports, laws, media works, titled datasets, or other identifiable works materially referenced in this record. Prefer the "
             "title as given and do not invent bibliographic details.",
             pos_tags=("PROPN", "NOUN"),
@@ -342,7 +342,7 @@ def nonfiction_schema() -> MetadataSchema:
             "laws_or_policies",
             "Laws and policies",
             "list",
-            "entities",
+            "indexing",
             "lists named laws, regulations, court decisions, standards, treaties, policies, programs, or formal rules materially discussed in this record. "
             "Use the source's name and jurisdiction when available; do not infer legal authority from ordinary recommendations.",
             pos_tags=("PROPN", "NOUN"),
@@ -442,7 +442,7 @@ def nonfiction_schema() -> MetadataSchema:
                 footer=PROFILE_FOOTER,
             ),
             SchemaGroup(
-                key="entities",
+                key="indexing",
                 label="Topics and entities",
                 intro=(
                     "Infer conservative semantic indexing for this non-fiction record: topics, people, organizations, places, dates, events, works, laws, "
