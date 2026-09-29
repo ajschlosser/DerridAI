@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import re
+import uuid
 from typing import TYPE_CHECKING, Any
 
 from . import experiment
@@ -338,7 +339,9 @@ class EditorialMemoryMixin:
         # metadata schema. The schema still owns field eligibility, similarity
         # floors, analogy fields, and positive/correction quotas.
         metadata_pipeline_plan = None
+        metadata_pipeline_definition = None
         metadata_pipeline_info: dict[str, Any] = {}
+        metadata_pipeline_trace: dict[str, Any] | None = None
         if use_progressive:
             try:
                 from .pipelines.manager import pipeline_manager
@@ -354,6 +357,7 @@ class EditorialMemoryMixin:
                 metadata_pipeline_plan = compile_metadata_precedent_pipeline(
                     resolved_definition
                 )
+                metadata_pipeline_definition = resolved_definition
                 metadata_pipeline_info = {
                     "pipeline_id": resolved_definition.pipeline_id,
                     "pipeline_version": resolved_definition.version,
@@ -470,6 +474,37 @@ class EditorialMemoryMixin:
                     **metadata_pipeline_info,
                     **dict(semantic.get("telemetry") or {}),
                 }
+                if (
+                    metadata_pipeline_definition is not None
+                    and metadata_pipeline_info.get("pipeline_hash")
+                ):
+                    try:
+                        from .pipelines.metadata_precedent_tracing import (
+                            build_metadata_precedent_trace,
+                        )
+                        from .pipelines.store import pipeline_store
+
+                        trace = build_metadata_precedent_trace(
+                            run_id=(
+                                f"metadata-precedents-{build_id}-"
+                                f"{str(current_record.get('record_id') or 'record')}-"
+                                f"{uuid.uuid4().hex[:12]}"
+                            ),
+                            pipeline=metadata_pipeline_definition,
+                            resolved_hash=str(
+                                metadata_pipeline_info["pipeline_hash"]
+                            ),
+                            telemetry=retrieval_telemetry,
+                        )
+                        pipeline_store.put_run(trace)
+                        metadata_pipeline_trace = trace.model_dump(mode="json")
+                        retrieval_telemetry["pipeline_run_id"] = trace.run_id
+                    except Exception as exc:  # noqa: BLE001 - trace persistence is advisory
+                        self._append_warning(
+                            build_id,
+                            "Metadata precedent retrieval completed, but its pipeline "
+                            f"trace could not be persisted ({type(exc).__name__}: {exc}).",
+                        )
                 if isinstance(semantic.get("examples"), dict):
                     # Semantic evidence-bound precedents supersede lexical ordering
                     # only for fields where the vector index found valid current
@@ -508,6 +543,7 @@ class EditorialMemoryMixin:
             "examples": examples,
             "example_token_estimate": example_token_estimate,
             "progressive_retrieval": retrieval_telemetry,
+            "pipeline_trace": metadata_pipeline_trace,
             "pass_learning": learn_from_pass([row for row in rows if str(row.get("record_id") or "") != exclude_record_id]),
         }
         if include_canonical:
