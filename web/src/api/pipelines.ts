@@ -91,9 +91,7 @@ export const pipelinesApi = {
       body: JSON.stringify(body),
     }),
 
-  benchmarkRuns: (
-    filters: { benchmarkId?: string; limit?: number; offset?: number } = {},
-  ) => {
+  benchmarkRuns: (filters: { benchmarkId?: string; limit?: number; offset?: number } = {}) => {
     const query = new URLSearchParams();
     if (filters.benchmarkId) query.set("benchmark_id", filters.benchmarkId);
     query.set("limit", String(filters.limit ?? 100));
