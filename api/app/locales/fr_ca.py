@@ -4143,8 +4143,8 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'pdf_corpus.stage.structure': 'structure du document',
  'pdf_corpus.stage_budgets': 'Budgets de sortie structurée',
  'pdf_corpus.stage_budgets_help': 'Des réponses plus petites et bornées sont plus fiables avec les modèles locaux. '
- 'pdf_corpus.stage_output_budget_help': 'Nombre maximal de jetons de sortie générés pour cette étape. Ce réglage n’augmente ni l’entrée ni la fenêtre de contexte de l’étape.',
                                   'Augmentez un budget seulement si une sortie validée est tronquée.',
+ 'pdf_corpus.stage_output_budget_help': 'Nombre maximal de jetons de sortie générés pour cette étape. Ce réglage n’augmente ni l’entrée ni la fenêtre de contexte de l’étape.',
  'pdf_corpus.stage_help.published': 'Le corpus révisé a été finalisé au format JSONL. La provenance de construction '
                                     'est regroupée sous corpus_build_details dans chaque fiche publiée.',
  'pdf_corpus.stage_help.reconciling': 'Finalisation de la topologie. Les classifications faibles, omises, incertaines '
