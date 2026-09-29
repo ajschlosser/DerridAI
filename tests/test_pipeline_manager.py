@@ -123,3 +123,51 @@ def test_catalog_hides_legacy_custom_collision_with_builtin(tmp_path) -> None:
 
     assert len(matches) == 1
     assert matches[0].built_in is True
+
+
+
+def test_prepare_clone_uses_authoritative_next_version_for_builtin(tmp_path) -> None:
+    manager = _manager(tmp_path)
+    source = built_in_pipeline("research.current", 1)
+    assert source is not None
+
+    first = manager.prepare_clone(source.pipeline_id, source.version)
+    assert first.pipeline_id == "research.current.custom"
+    assert first.version == 1
+    assert first.status == "draft"
+    assert first.built_in is False
+    assert first.derived_from == "research.current@1"
+    assert first.created_at is None
+    assert first.created_by is None
+
+    manager.save_definition(first, actor="admin")
+    second = manager.prepare_clone(source.pipeline_id, source.version)
+
+    assert second.pipeline_id == first.pipeline_id
+    assert second.version == 2
+    assert second.derived_from == "research.current@1"
+
+
+def test_prepare_clone_of_custom_pipeline_creates_next_immutable_version(tmp_path) -> None:
+    manager = _manager(tmp_path)
+    source = built_in_pipeline("research.current", 1)
+    assert source is not None
+    custom = source.model_copy(
+        update={
+            "pipeline_id": "research.academic",
+            "version": 4,
+            "name": "Research — academic",
+            "status": "draft",
+            "built_in": False,
+            "derived_from": "research.current@1",
+        }
+    )
+    saved = manager.save_definition(custom, actor="admin")
+
+    clone = manager.prepare_clone(saved.pipeline_id, saved.version)
+
+    assert clone.pipeline_id == "research.academic"
+    assert clone.version == 5
+    assert clone.name == "Research — academic"
+    assert clone.status == "draft"
+    assert clone.derived_from == "research.academic@4"
