@@ -18,8 +18,52 @@ def _result(pipeline_id: str, ids: list[str], *, elapsed: float = 0.1):
         },
         "elapsed_seconds": elapsed,
         "warnings": [],
-        "retrieval": {"raw_count": len(ids), "reranked_count": len(ids)},
-        "stages": [{"name": "retrieval", "seconds": elapsed, "detail": {}}],
+        "retrieval": {
+            "raw_count": len(ids),
+            "reranked_count": len(ids),
+            "query_decomposition": False,
+        },
+        "diagnostics": {
+            "candidate_retention": "complete_for_comparison",
+            "pre_rerank": [
+                {
+                    "record_id": record_id,
+                    "rank": rank,
+                    "relevance": 1.0 - (rank / 20),
+                    "rrf_score": 1 / (60 + rank),
+                    "rerank_score": None,
+                    "retrieval_hits": [{"search_type": "lexical", "rank": rank}],
+                }
+                for rank, record_id in enumerate(ids, start=1)
+            ],
+            "post_rerank": [
+                {
+                    "record_id": record_id,
+                    "rank": rank,
+                    "relevance": 1.0 - (rank / 20),
+                    "rrf_score": 1 / (60 + rank),
+                    "rerank_score": 1.0 - (rank / 10),
+                    "retrieval_hits": [{"search_type": "lexical", "rank": rank}],
+                }
+                for rank, record_id in enumerate(ids, start=1)
+            ],
+            "post_selection": [
+                {"record_id": record_id, "rank": rank}
+                for rank, record_id in enumerate(ids, start=1)
+            ],
+            "context_characters": 500 + len(ids),
+        },
+        "stages": [
+            {"name": "retrieval", "seconds": elapsed, "detail": {}},
+            {
+                "name": "rerank",
+                "seconds": elapsed / 2,
+                "detail": {
+                    "requested_mode": "none",
+                    "cross_encoder_model": None,
+                },
+            },
+        ],
         "evidence": [
             {
                 "record": {
@@ -53,6 +97,11 @@ def test_research_comparison_reports_overlap_and_rank_changes_without_source_tex
     assert summary["shared_count"] == 2
     assert summary["union_count"] == 4
     assert summary["jaccard_overlap"] == pytest.approx(0.5)
+    assert summary["candidate_overlap"]["jaccard_overlap"] == pytest.approx(0.5)
+    assert compared["left"]["candidate_retention"] == "complete_for_comparison"
+    assert compared["left"]["candidates"]["pre_rerank"]["count"] == 3
+    assert compared["left"]["candidates"]["pre_rerank"]["scores"]["rrf_score"]["count"] == 3
+    assert compared["left"]["context_characters"] == 503
     assert summary["rank_changes"] == [
         {"record_id": "r1", "left_rank": 1, "right_rank": 2, "rank_delta": 1},
         {"record_id": "r2", "left_rank": 2, "right_rank": 1, "rank_delta": -1},
@@ -120,5 +169,8 @@ def test_research_dry_run_stops_before_generation(monkeypatch) -> None:
     assert result["dry_run"] is True
     assert result["answer"] == ""
     assert result["memory"]["mode"] == "skipped_for_non_persistent_dry_run"
+    assert result["diagnostics"]["candidate_retention"] == "complete_for_comparison"
+    assert result["diagnostics"]["pre_rerank"][0]["record_id"] == "r1"
+    assert "text" not in result["diagnostics"]["pre_rerank"][0]
     assert [item["record"]["record_id"] for item in result["evidence"]] == ["r1"]
     assert all(stage["name"] != "generation" for stage in result["stages"])
