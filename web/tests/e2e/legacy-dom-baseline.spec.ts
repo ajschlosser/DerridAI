@@ -1,6 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { createHash } from "node:crypto";
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 import { FAQ_RECORDS, mockBackend, type Fixtures, type Role } from "./support/mock-backend";
 
 // Characterization baseline for the views that the legacy runtime still renders as HTML strings.
@@ -690,6 +691,34 @@ const jobFixtures = (payload: { jobs: Array<{ id: string }> }): Fixtures => ({
   "/api/jobs": payload,
   ...Object.fromEntries(payload.jobs.map((job) => [`/api/jobs/${job.id}`, job])),
 });
+
+const DOCK_WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
+
+async function exerciseDockedOperations(page: Page) {
+  await expect(page.locator("html")).toHaveAttribute("data-operations-dock-mode", "docked");
+  const summary = page.locator(".operations-docked-summary");
+  const stack = page.locator("#operationProgressStack");
+  await expect(summary).toBeVisible({ timeout: 8_000 });
+  await expect(summary).toHaveAttribute("aria-expanded", "false");
+
+  await summary.click();
+  await expect(summary).toHaveAttribute("aria-expanded", "true", { timeout: 2_000 });
+  await expect(stack).toBeVisible();
+
+  for (const selector of [".operations-docked-summary", "#operationProgressStack"]) {
+    const scan = await new AxeBuilder({ page }).include(selector).withTags(DOCK_WCAG_TAGS).analyze();
+    expect(
+      scan.violations.map(
+        (violation) =>
+          `${violation.id}: ${violation.nodes.map((node) => node.target.join(" ")).join(", ")}`,
+      ),
+    ).toEqual([]);
+  }
+
+  await summary.dblclick();
+  await expect(page.locator("html")).toHaveAttribute("data-operations-dock-mode", "floating");
+  await expect(stack).toBeVisible();
+}
 
 const scenarios: Scenario[] = [
   // The dashboard is the one view still drawn by the runtime through RuntimeSurface.
@@ -1457,9 +1486,15 @@ const scenarios: Scenario[] = [
     load: true,
     target: "dock",
     fixtures: liveJobs(),
-    steps: async (page) => {
-      await page.waitForTimeout(800);
-    },
+    steps: exerciseDockedOperations,
+  },
+  {
+    name: "jobs-dock-running-dark",
+    load: true,
+    scheme: "dark",
+    target: "dock",
+    fixtures: liveJobs(),
+    steps: exerciseDockedOperations,
   },
   // Backup and restore are started from Settings; the runtime does the work and reports it in a toast.
   { name: "backup-section", nav: "Settings", load: true, steps: inBackupSection },
