@@ -95,9 +95,27 @@ export const HELP_SECTIONS: HelpSection[] = [
  * Redirect-only compatibility routes are intentionally omitted.
  */
 export const HELP_PAGE_GUIDES: HelpPageGuideDefinition[] = [
-  { id: "dashboard", routeName: "home", path: "/", group: "overview", capability: "page.dashboard" },
-  { id: "search", routeName: "global", path: "/search", group: "corpora", capability: "page.search" },
-  { id: "research", routeName: "rag", path: "/rag", group: "research", capability: "page.research" },
+  {
+    id: "dashboard",
+    routeName: "home",
+    path: "/",
+    group: "overview",
+    capability: "page.dashboard",
+  },
+  {
+    id: "search",
+    routeName: "global",
+    path: "/search",
+    group: "corpora",
+    capability: "page.search",
+  },
+  {
+    id: "research",
+    routeName: "rag",
+    path: "/rag",
+    group: "research",
+    capability: "page.research",
+  },
   {
     id: "response_library",
     routeName: "faq",
@@ -115,7 +133,13 @@ export const HELP_PAGE_GUIDES: HelpPageGuideDefinition[] = [
     capability: "page.records",
     adminOnly: true,
   },
-  { id: "record", routeName: "record", path: "/record", group: "corpora", capability: "page.record" },
+  {
+    id: "record",
+    routeName: "record",
+    path: "/record",
+    group: "corpora",
+    capability: "page.record",
+  },
   {
     id: "relationships",
     routeName: "relationships",
@@ -137,7 +161,13 @@ export const HELP_PAGE_GUIDES: HelpPageGuideDefinition[] = [
     group: "corpora",
     capability: "page.semantic_map",
   },
-  { id: "compare", routeName: "compare", path: "/compare", group: "corpora", capability: "page.compare" },
+  {
+    id: "compare",
+    routeName: "compare",
+    path: "/compare",
+    group: "corpora",
+    capability: "page.compare",
+  },
   {
     id: "corpus_data",
     routeName: "vector",
@@ -272,7 +302,13 @@ export const HELP_PAGE_GUIDES: HelpPageGuideDefinition[] = [
     capability: "page.languages",
     adminOnly: true,
   },
-  { id: "operations", routeName: "operations", path: "/operations", group: "system", adminOnly: true },
+  {
+    id: "operations",
+    routeName: "operations",
+    path: "/operations",
+    group: "system",
+    adminOnly: true,
+  },
   { id: "help", routeName: "help", path: "/help", group: "support" },
 ];
 
@@ -418,7 +454,7 @@ export function visibleGlossary(
           entry.definition,
           entry.practical,
           t(`help.glossary.category.${entry.category}`),
-          ...entry.aliases,
+          ...(entry.aliases ?? []),
         ],
         needle,
       ),
