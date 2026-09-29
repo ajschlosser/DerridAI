@@ -128,7 +128,9 @@ function formatCount(value: number | null | undefined) {
             </thead>
             <tbody>
               <tr v-for="row in metrics.features" :key="row.feature">
-                <td><code>{{ row.feature }}</code></td>
+                <td>
+                  <code>{{ row.feature }}</code>
+                </td>
                 <td>{{ formatCount(row.run_count) }}</td>
                 <td>{{ formatCount(row.fallback_run_count) }}</td>
                 <td>{{ formatCount(row.failed_count) }}</td>
