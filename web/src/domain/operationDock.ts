@@ -57,6 +57,9 @@ export function createOperationDock(deps: Deps) {
   // The legacy code queries the page freely; untyped, as it was written.
   const document: Any = globalThis.document;
   let operationDockResizeWired = false;
+  function operationDockIsDocked() {
+    return document.documentElement?.dataset?.operationsDockMode === "docked";
+  }
   function toast(message: Any, { tone = "auto", duration = null } = {}) {
     let el = document.querySelector("#toast");
     if (!el) {
@@ -203,7 +206,7 @@ export function createOperationDock(deps: Deps) {
     if (!handle || handle.dataset.dragWired) return;
     handle.dataset.dragWired = "1";
     handle.addEventListener("pointerdown", (event: Any) => {
-      if (event.button !== 0 || event.target.closest("button")) return;
+      if (operationDockIsDocked() || event.button !== 0 || event.target.closest("button")) return;
       event.preventDefault();
       const rect = stack.getBoundingClientRect();
       const startX = event.clientX,
@@ -275,6 +278,7 @@ export function createOperationDock(deps: Deps) {
         }
         return;
       }
+      if (operationDockIsDocked()) return;
       if (
         !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key) ||
         event.target.closest("button")
@@ -316,7 +320,7 @@ export function createOperationDock(deps: Deps) {
       stack.dataset.surface = state.operationToastsMinimized ? "glass" : "overlay";
       stack.setAttribute("role", "complementary");
       stack.setAttribute("aria-label", title);
-      stack.innerHTML = `<div class="operation-stack-toolbar" data-operation-drag tabindex="0" role="group" aria-label="${esc(dragHelp)}" title="${esc(dragHelp)}"><span class="operation-drag-grip" aria-hidden="true"></span><button type="button" class="operation-dock-toggle" id="operationStackToggle" aria-expanded="${state.operationToastsMinimized ? "false" : "true"}" aria-controls="operationStackItems" aria-label="${esc(state.operationToastsMinimized ? tr("operations.expand") : tr("operations.collapse"))}"><span class="operation-dock-dot" aria-hidden="true"></span><span class="operation-dock-copy"><b class="operation-dock-title">${esc(title)}</b><span id="operationStackCount"></span></span><span class="operation-dock-chevron" aria-hidden="true"></span></button><button type="button" class="btn tiny operation-dock-clear" id="operationStackClearFinished" hidden>${esc(tr("operations.clear_finished"))}</button></div><div id="operationStackLive" class="sr-only" aria-live="polite"></div><div id="operationStackItems" class="operation-stack-items"></div>`;
+      stack.innerHTML = `<div class="operation-stack-toolbar" data-operation-drag tabindex="0" role="group" aria-label="${esc(dragHelp)}" title="${esc(dragHelp)}"><span class="operation-drag-grip" aria-hidden="true"></span><button type="button" class="operation-dock-toggle" id="operationStackToggle" aria-expanded="${state.operationToastsMinimized ? "false" : "true"}" aria-controls="operationStackItems" aria-label="${esc(state.operationToastsMinimized ? tr("operations.expand") : tr("operations.collapse"))}"><span class="operation-dock-dot" aria-hidden="true"></span><span class="operation-dock-copy"><b class="operation-dock-title">${esc(title)}</b><span id="operationStackCount"></span></span><span class="operation-dock-chevron" aria-hidden="true"></span></button><button type="button" class="btn tiny operation-dock-clear" id="operationStackClearFinished" hidden>${esc(tr("operations.clear_finished"))}</button></div><div id="operationStackLive" class="sr-only" aria-live="polite"></div><div id="operationStackItems" class="operation-stack-items" tabindex="0" aria-label="${esc(title)}"></div>`;
       document.body.appendChild(stack);
       wireOperationStackDrag(stack);
       applyOperationStackPosition(stack);
