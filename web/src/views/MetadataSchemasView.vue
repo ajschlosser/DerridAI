@@ -24,7 +24,7 @@ onMounted(() => refreshProviders());
 <template>
   <main class="vue-native-page schemas-page" aria-labelledby="schemas-page-title">
     <UiPageHeader
-      :kicker="i18n.t('section.system')"
+      :kicker="i18n.t('section.corpus_management')"
       :title="i18n.t('schemas.manage_title')"
       title-id="schemas-page-title"
       :description="i18n.t('schemas.manage_help')"
