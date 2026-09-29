@@ -239,9 +239,11 @@ class PipelineService:
         """
 
         issues: list[PipelineValidationIssue] = []
-        properties = schema.get("properties") if isinstance(schema, dict) else None
+        properties = schema.get("properties") if isinstance(schema, dict) else {}
+        if properties is None:
+            properties = {}
         if not isinstance(properties, dict):
-            return issues
+            properties = {}
         unknown = sorted(set(config) - set(properties) - {"optional"})
         for key in unknown:
             issues.append(
