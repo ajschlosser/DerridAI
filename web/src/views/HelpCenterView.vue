@@ -40,7 +40,13 @@ const groupOrder: HelpPageGroup[] = [
   "support",
 ];
 
-const glossaryCategories: HelpGlossaryCategory[] = ["all", "ai", "retrieval", "provenance", "storage"];
+const glossaryCategories: HelpGlossaryCategory[] = [
+  "all",
+  "ai",
+  "retrieval",
+  "provenance",
+  "storage",
+];
 
 const pageGuides = computed(() =>
   visiblePageGuides(
@@ -60,9 +66,9 @@ const pageGroups = computed(() =>
     .filter((group) => group.guides.length),
 );
 const conceptGlossary = computed(() =>
-  visibleGlossary(query.value, glossaryCategory.value, (key, fallback) => i18n.t(key, fallback)).filter(
-    (entry) => entry.category !== "parameters",
-  ),
+  visibleGlossary(query.value, glossaryCategory.value, (key, fallback) =>
+    i18n.t(key, fallback),
+  ).filter((entry) => entry.category !== "parameters"),
 );
 const parameterGlossary = computed(() =>
   visibleGlossary(query.value, "parameters", (key, fallback) => i18n.t(key, fallback)),
