@@ -9,6 +9,8 @@ import type {
   PipelineRunTrace,
   ResearchPipelineBenchmarkCase,
   ResearchPipelineBenchmarkCaseCreate,
+  ResearchPipelineBenchmarkCase,
+  ResearchPipelineBenchmarkCaseCreate,
   ResearchPipelineBenchmarkRequest,
   ResearchPipelineBenchmarkRun,
   ResearchPipelineComparisonRequest,
@@ -69,6 +71,34 @@ export const pipelinesApi = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+
+  createResearchBenchmarkCase: (body: ResearchPipelineBenchmarkCaseCreate) =>
+    apiRequest<{ case: ResearchPipelineBenchmarkCase }>(
+      "/api/system/pipelines/benchmarks/research/cases",
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
+
+  researchBenchmarkCases: (
+    filters: { caseId?: string; limit?: number; offset?: number } = {},
+  ) => {
+    const query = new URLSearchParams();
+    if (filters.caseId) query.set("case_id", filters.caseId);
+    query.set("limit", String(filters.limit ?? 100));
+    query.set("offset", String(filters.offset ?? 0));
+    return apiRequest<{
+      cases: ResearchPipelineBenchmarkCase[];
+      limit: number;
+      offset: number;
+    }>(`/api/system/pipelines/benchmarks/research/cases?${query}`);
+  },
+
+  researchBenchmarkCase: (caseId: string, version: number) =>
+    apiRequest<{ case: ResearchPipelineBenchmarkCase }>(
+      `/api/system/pipelines/benchmarks/research/cases/${encodeURIComponent(caseId)}/${version}`,
+    ),
 
   createResearchBenchmarkCase: (body: ResearchPipelineBenchmarkCaseCreate) =>
     apiRequest<{ case: ResearchPipelineBenchmarkCase }>(
