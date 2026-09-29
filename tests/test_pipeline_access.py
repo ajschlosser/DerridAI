@@ -112,3 +112,27 @@ def test_admin_can_explicitly_test_supported_draft_pipeline(tmp_path) -> None:
     )
 
     assert selected.status == "draft"
+
+
+def test_admin_cannot_execute_disabled_pipeline(tmp_path) -> None:
+    manager = _manager(tmp_path)
+    source = built_in_pipeline("research.current", 1)
+    assert source is not None
+    disabled = source.model_copy(
+        update={
+            "pipeline_id": "research.disabled",
+            "version": 1,
+            "name": "Disabled Research",
+            "status": "disabled",
+            "built_in": False,
+        }
+    )
+    manager.save_definition(disabled, actor="admin")
+
+    with pytest.raises(ValueError, match="Disabled Research pipelines"):
+        resolve_research_pipeline(
+            requested_id=disabled.pipeline_id,
+            requested_version=disabled.version,
+            is_admin=True,
+            manager=manager,
+        )
