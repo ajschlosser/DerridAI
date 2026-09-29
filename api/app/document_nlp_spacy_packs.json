@@ -157,10 +157,7 @@
     "url": "https://github.com/explosion/spacy-models/releases/download/ja_core_news_md-3.8.0/ja_core_news_md-3.8.0-py3-none-any.whl",
     "size": 42105500,
     "sha256": "17c3497539bd970546b75e36c274b3fa183511b6ef59a178017aa02dde3a090a",
-    "requires": [
-      "sudachipy !=0.6.1,>=0.5.2",
-      "sudachidict-core >=20211220"
-    ]
+    "requires": ["sudachipy !=0.6.1,>=0.5.2", "sudachidict-core >=20211220"]
   },
   {
     "language": "ko",
@@ -300,9 +297,6 @@
     "url": "https://github.com/explosion/spacy-models/releases/download/zh_core_web_md-3.8.0/zh_core_web_md-3.8.0-py3-none-any.whl",
     "size": 78021257,
     "sha256": "bcf300540fbd15b1b0aac358f327f2a31de8992b346162d5600f843514da0e98",
-    "requires": [
-      "spacy-pkuseg <2.0.0,>=1.0.0",
-      "spacy-pkuseg>=0.0.27"
-    ]
+    "requires": ["spacy-pkuseg <2.0.0,>=1.0.0", "spacy-pkuseg>=0.0.27"]
   }
 ]
