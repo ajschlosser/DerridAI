@@ -737,7 +737,11 @@ def _mmr_select(
         candidates,
         limit=k,
         lambda_mult=lambda_mult,
-        relevance=lambda candidate: _distance_similarity(candidate.get("distance")),
+        relevance=lambda candidate: float(
+            candidate.get("relevance")
+            if candidate.get("relevance") is not None
+            else _distance_similarity(candidate.get("distance"))
+        ),
         vector=lambda candidate: candidate.get("embedding"),
     )
 
@@ -767,7 +771,11 @@ def _lexical_rerank(query: str, docs: list[dict[str, Any]], top_n: int) -> list[
         tokens = _tokenize(text)
         overlap = len(q & tokens) / max(1, len(q))
         retrieval_bonus = 1.0 / (60.0 + index + 1.0)
-        similarity = _distance_similarity(item.get("distance"))
+        similarity = float(
+            item.get("relevance")
+            if item.get("relevance") is not None
+            else _distance_similarity(item.get("distance"))
+        )
         row = dict(item)
         row["rerank_score"] = overlap * 2.0 + similarity + retrieval_bonus
         scored.append(row)
@@ -1160,12 +1168,17 @@ def run_rag_pipeline(
                 "search_type": item.get("search_type"),
                 "rank": item.get("search_rank"),
             })
-            old_distance = dedup[logical].get("distance")
-            new_distance = item.get("distance")
-            if new_distance is not None and (
-                old_distance is None or new_distance < old_distance
+            # Distances from cosine, L2, and inner-product collections are
+            # not directly comparable. Prefer the best normalized relevance and
+            # carry the distance/metric that produced it for traceability.
+            old_relevance = dedup[logical].get("relevance")
+            new_relevance = item.get("relevance")
+            if new_relevance is not None and (
+                old_relevance is None or float(new_relevance) > float(old_relevance)
             ):
-                dedup[logical]["distance"] = new_distance
+                dedup[logical]["distance"] = item.get("distance")
+                dedup[logical]["distance_metric"] = item.get("distance_metric")
+                dedup[logical]["relevance"] = float(new_relevance)
 
     for item in selected_candidates:
         record = item["record"]
@@ -1180,7 +1193,11 @@ def run_rag_pipeline(
         dedup.values(),
         key=lambda item: (
             item.get("rrf_score", 0.0),
-            _distance_similarity(item.get("distance")),
+            float(
+                item.get("relevance")
+                if item.get("relevance") is not None
+                else _distance_similarity(item.get("distance"))
+            ),
         ),
         reverse=True,
     )
