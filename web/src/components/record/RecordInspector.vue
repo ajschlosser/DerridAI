@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { useI18nStore } from "../../stores/i18n";
 import RecordProvenance from "./RecordProvenance.vue";
 import RecordTraceabilityExplorer from "./RecordTraceabilityExplorer.vue";
@@ -8,6 +8,8 @@ import RecordAnnotations from "./RecordAnnotations.vue";
 import RecordPdfLinks from "./RecordPdfLinks.vue";
 import RecordHistoryTimeline from "./RecordHistoryTimeline.vue";
 import InspectorLayoutEditor from "./InspectorLayoutEditor.vue";
+import CorpusRecordSemanticMap from "../corpus-builder/CorpusRecordSemanticMap.vue";
+import { corpusBuildsApi } from "../../api/corpus";
 import type { RecordWorkspaceSnapshot } from "../../types/record";
 import type { DerridaiNormativeModel, ResearchObjectGraph } from "../../types/researchObjectGraph";
 import {
@@ -48,6 +50,7 @@ const tabs = computed(() => [
   ["provenance", i18n.t("record.tab_provenance")],
   ["traceability", i18n.t("record.tab_traceability", "Traceability")],
   ["indexing", i18n.t("record.tab_indexing")],
+  ["semantic", i18n.t("record.tab_semantic_map")],
   ["pdf", i18n.t("record.tab_pdf")],
   ["annotations", i18n.t("record.tab_annotations")],
   ["history", i18n.t("record.tab_history")],
@@ -131,6 +134,34 @@ async function activateTab(index: number) {
   const el = document.getElementById(tabId(tab.value));
   if (el instanceof HTMLButtonElement) el.focus();
 }
+// The semantic map reads build-scoped Document Intelligence; a published Record's
+// build_id is resolved through provenance recorded at publish time, not stored on
+// the record itself (see corpus_publication.serialize_public_record).
+const semanticBuildId = ref<string | null>(null);
+const semanticLoading = ref(false);
+const semanticChecked = ref("");
+async function resolveSemanticBuild(recordId: string) {
+  if (!recordId || semanticChecked.value === recordId) return;
+  semanticChecked.value = recordId;
+  semanticLoading.value = true;
+  semanticBuildId.value = null;
+  try {
+    const result = await corpusBuildsApi.recordSemanticMapBuild(recordId);
+    semanticBuildId.value = result.build_id || null;
+  } catch {
+    semanticBuildId.value = null;
+  } finally {
+    semanticLoading.value = false;
+  }
+}
+watch(
+  () => [tab.value, props.snapshot.record_id],
+  ([activeTab, recordId]) => {
+    if (activeTab === "semantic" && typeof recordId === "string")
+      void resolveSemanticBuild(recordId);
+  },
+  { immediate: true },
+);
 function onTabKeydown(event: KeyboardEvent, index: number) {
   if (event.key === "ArrowRight" || event.key === "ArrowDown") {
     event.preventDefault();
@@ -277,6 +308,26 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
           @change="(field, next) => emit('change', { [field]: next })"
         />
       </section>
+      <section
+        v-else-if="tab === 'semantic'"
+        :id="panelId('semantic')"
+        class="record-semantic-panel"
+        role="tabpanel"
+        :aria-labelledby="tabId('semantic')"
+      >
+        <p v-if="semanticLoading" class="record-semantic-status" role="status">
+          {{ i18n.t("ui.loading") }}
+        </p>
+        <p v-else-if="!semanticBuildId" class="record-semantic-status">
+          {{ i18n.t("record.semantic_map_unavailable") }}
+        </p>
+        <CorpusRecordSemanticMap
+          v-else
+          :build-id="semanticBuildId"
+          :record="{ record_id: String(snapshot.record_id || ''), text: String(record.text || '') }"
+          id-prefix="record-inspector"
+        />
+      </section>
       <RecordPdfLinks
         v-else-if="tab === 'pdf'"
         :id="panelId('pdf')"
@@ -417,6 +468,11 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
 .record-indexing-panel {
   display: grid;
   gap: 17px;
+}
+.record-semantic-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
 }
 .record-page-value {
   font-variant-numeric: tabular-nums;

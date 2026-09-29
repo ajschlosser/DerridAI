@@ -264,6 +264,20 @@ class SystemStore:
         with self._lock:
             return self.repository.list_claim_support_bindings_for_claims(claim_ids, owner=owner)
 
+    def set_record_build_provenance(
+        self, record_id: str, build_id: str, *, work: str | None = None
+    ) -> None:
+        with self._lock:
+            self.repository.set_record_build_provenance(record_id, build_id, work=work)
+
+    def get_record_build_id(self, record_id: str) -> str | None:
+        with self._lock:
+            return self.repository.get_record_build_id(record_id)
+
+    def list_build_ids_for_work(self, work: str) -> list[str]:
+        with self._lock:
+            return self.repository.list_build_ids_for_work(work)
+
     def embedding_defaults(self) -> dict[str, Any]:
         with self._lock:
             stored = self.repository.get_setting("embedding_defaults")
