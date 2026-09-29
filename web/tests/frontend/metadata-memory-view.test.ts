@@ -184,8 +184,10 @@ describe("Metadata memory page", () => {
     });
     await flushPromises();
 
-    expect((wrapper.get("input[type=search]").element as HTMLInputElement).value).toBe("levinas");
-    expect((wrapper.findAll("select")[0].element as HTMLSelectElement).value).toBe("position_holder");
+    const searchInput = wrapper.get("input[type=search]").element as HTMLInputElement;
+    const fieldSelect = wrapper.findAll("select")[0].element as HTMLSelectElement;
+    expect(searchInput.value).toBe("levinas");
+    expect(fieldSelect.value).toBe("position_holder");
     expect(metadataMemoryApi.list).toHaveBeenCalledWith(
       expect.objectContaining({
         q: "levinas",
