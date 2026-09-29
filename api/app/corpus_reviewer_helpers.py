@@ -116,6 +116,12 @@ def _operation_from_build(build: dict[str, Any]) -> dict[str, Any]:
     metadata_skipped = int(build.get("metadata_tasks_skipped") or 0)
     metadata_running = int(build.get("metadata_tasks_running") or 0)
     metadata_queued = int(build.get("metadata_tasks_queued") or 0)
+    queue_counts_raw = build.get("review_queue_counts") if isinstance(build.get("review_queue_counts"), dict) else {}
+    review_queue_counts = {
+        key: int(queue_counts_raw.get(key) or 0)
+        for key in ("all", "ready", "preparing", "issues", "metadata", "topology", "source", "accepted", "rejected", "pending")
+        if key in queue_counts_raw
+    }
     if raw_status in {"queued", "running"} and str(build.get("stage") or "") == "enriching" and metadata_total:
         settled = metadata_completed + metadata_failed + metadata_skipped
         metadata_stage_detail = (
@@ -151,8 +157,11 @@ def _operation_from_build(build: dict[str, Any]) -> dict[str, Any]:
         "build_id": build.get("build_id"),
         "record_count": int(build.get("record_count") or 0),
         "accepted_count": int(build.get("accepted_count") or 0),
+        "rejected_count": int(build.get("rejected_count") or 0),
         "review_count": int(build.get("needs_review_count") or 0),
+        "review_queue_counts": review_queue_counts,
         "metadata_total": int(build.get("metadata_total") or 0),
+        "metadata_completed": int(build.get("metadata_completed") or 0),
         "metadata_enriched_count": int(build.get("metadata_enriched_count") or 0),
         "metadata_tasks_total": metadata_total,
         "metadata_tasks_completed": metadata_completed,
