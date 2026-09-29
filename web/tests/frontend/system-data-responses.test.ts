@@ -3,10 +3,15 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { routerPush } = vi.hoisted(() => ({ routerPush: vi.fn() }));
+const { routerPush, routerReplace, routeQuery } = vi.hoisted(() => ({
+  routerPush: vi.fn(),
+  routerReplace: vi.fn(),
+  routeQuery: {} as Record<string, string>,
+}));
 
 vi.mock("vue-router", () => ({
-  useRouter: () => ({ push: routerPush }),
+  useRoute: () => ({ query: routeQuery }),
+  useRouter: () => ({ push: routerPush, replace: routerReplace }),
 }));
 
 vi.mock("../../src/runtime/runtimeBridge", () => ({
@@ -26,6 +31,8 @@ describe("System Data saved responses", () => {
     useI18nStore().dictionary = {};
     vi.restoreAllMocks();
     routerPush.mockReset();
+    routerReplace.mockReset();
+    for (const key of Object.keys(routeQuery)) delete routeQuery[key];
     vi.spyOn(systemApi, "responseCacheRecords").mockResolvedValue({
       exists: true,
       total: 1,
@@ -51,7 +58,23 @@ describe("System Data saved responses", () => {
     await flushPromises();
 
     expect(systemApi.responseCacheRecords).toHaveBeenLastCalledWith(25, 0, "différance");
+    expect(routerReplace).toHaveBeenLastCalledWith({
+      name: "system-data-responses",
+      query: { q: "différance", offset: undefined },
+    });
     expect(wrapper.text()).toContain("What is différance?");
+  });
+
+  it("restores response search and pagination from the URL", async () => {
+    routeQuery.q = "difference";
+    routeQuery.offset = "25";
+
+    const wrapper = mount(SystemDataResponses);
+    await flushPromises();
+
+    expect(wrapper.get('input[type="search"]').element.value).toBe("difference");
+    expect(systemApi.responseCacheRecords).toHaveBeenCalledWith(25, 25, "difference");
+    wrapper.unmount();
   });
 
   it("deep-links a row into the selected Response Library response", async () => {
