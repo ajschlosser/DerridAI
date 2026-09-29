@@ -142,7 +142,7 @@ DEFAULT_STRATEGIES = [
         output_type="candidate_set",
         deterministic=False,
         capabilities=["embedding", "chroma"],
-        config_schema={"type": "object", "properties": {"max_items": _integer(1, 100)}},
+        config_schema={"type": "object", "properties": {"fetch_k": _integer(1, 500)}},
     ),
     StrategySpec(
         strategy_id="retrieve.claim_memory",
