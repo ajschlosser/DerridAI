@@ -150,20 +150,20 @@ def _write_block_text(repo, text: str) -> None:
     path.write_text(json.dumps({**block, "text": text}) + "\n", encoding="utf-8")
 
 
-def test_accepting_an_unbound_value_runs_the_evidence_cascade_without_an_llm(tmp_path, monkeypatch):
-    from app import evidence_suggestions
+def test_accepting_an_unbound_value_runs_evidence_recovery_without_an_llm(tmp_path, monkeypatch):
+    from app.pipelines import evidence_recovery as evidence_pipeline
 
     remembered: list = []
     repo, build, manager = _manager(tmp_path, rec("r1", "b1"), monkeypatch, remembered)
     _write_block_text(repo, "Here Levinas argues that the face precedes ontology.")
     calls: list = []
-    real_cascade = evidence_suggestions.suggest_evidence_cascade
+    real_recovery = evidence_pipeline.execute_evidence_recovery
 
-    def spy(*args, **kwargs):
+    def spy(**kwargs):
         calls.append(kwargs)
-        return real_cascade(*args, **kwargs)
+        return real_recovery(**kwargs)
 
-    monkeypatch.setattr(evidence_suggestions, "suggest_evidence_cascade", spy)
+    monkeypatch.setattr(evidence_pipeline, "execute_evidence_recovery", spy)
 
     result = manager.apply_metadata_decisions(build["build_id"], "r1", {"position_holder": "Levinas"}, expected_revision=1)
 
@@ -171,6 +171,7 @@ def test_accepting_an_unbound_value_runs_the_evidence_cascade_without_an_llm(tmp
     assert calls[0]["llm_choice"] is None, "accepting a value must never spend a model call"
     entry = result["record"]["metadata_evidence"]["position_holder"]
     assert entry["block_ids"] == ["b1"]
+    assert entry["pipeline"]["feature"] == "evidence_recovery"
     # Advisory, exactly as during enrichment: never counted as reviewed evidence.
     assert entry["backfilled"] is True and entry["confidence"] is None
     saved = repo.get_record(build["build_id"], "r1")
@@ -179,13 +180,13 @@ def test_accepting_an_unbound_value_runs_the_evidence_cascade_without_an_llm(tmp
 
 
 def test_accepting_a_value_keeps_evidence_the_reviewer_already_bound(tmp_path, monkeypatch):
-    from app import evidence_suggestions
+    from app.pipelines import evidence_recovery as evidence_pipeline
 
     remembered: list = []
     repo, build, manager = _manager(tmp_path, rec("r1", "b1"), monkeypatch, remembered)
     monkeypatch.setattr(
-        evidence_suggestions, "suggest_evidence_cascade",
-        lambda *a, **k: pytest.fail("bound evidence must not be re-adjudicated"),
+        evidence_pipeline, "execute_evidence_recovery",
+        lambda **k: pytest.fail("bound evidence must not be re-adjudicated"),
     )
 
     result = manager.metadata_decision(

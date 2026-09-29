@@ -7046,6 +7046,7 @@
   "pipelines.pipeline_id": "Pipeline ID",
   "pipelines.purpose_claim_memory": "Claim memory",
   "pipelines.purpose_evidence": "Evidence suggestion",
+  "pipelines.purpose_evidence_recovery": "Evidence recovery",
   "pipelines.purpose_precedents": "Metadata precedents",
   "pipelines.purpose_research": "Research",
   "pipelines.purpose_response_memory": "Response memory",

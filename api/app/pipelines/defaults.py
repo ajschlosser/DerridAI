@@ -474,6 +474,122 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
             },
         ],
     ),
+    _pipeline(
+        pipeline_id="evidence.recovery.celf",
+        version=1,
+        name="Evidence recovery — cELF-compliant",
+        purpose="evidence_recovery",
+        status="active",
+        entry_stage_ids=["lexical"],
+        notes=(
+            "Direct text support first; only when no block is directly supported may "
+            "a closed-choice model pick among this Record's own source units, and that "
+            "pick is flagged when it has no text match. Similarity and cross-encoder "
+            "relevance never establish a suggestion, so this chain needs no embeddings "
+            "or reranking. Every result stays advisory and pending review."
+        ),
+        stages=[
+            {
+                "id": "lexical",
+                "strategy": "retrieve.lexical_bm25",
+                "config": {"min_score": 0.5},
+                "next": ["support"],
+                "on_empty": "llm_choice",
+            },
+            {
+                "id": "support",
+                "strategy": "validate.evidence_support",
+                "config": {"min_score": 0.5},
+                "next": ["provenance"],
+                "on_empty": "llm_choice",
+            },
+            {
+                "id": "llm_choice",
+                "strategy": "llm.closed_choice_evidence",
+                "next": ["provenance"],
+            },
+            {
+                "id": "provenance",
+                "strategy": "validate.provenance",
+                "next": ["select"],
+            },
+            {
+                "id": "select",
+                "strategy": "select.top_k",
+                "config": {"limit": 2},
+            },
+        ],
+    ),
+    _pipeline(
+        pipeline_id="evidence.recovery.cascade",
+        version=1,
+        name="Evidence recovery — legacy cascade (not cELF-compliant)",
+        purpose="evidence_recovery",
+        status="active",
+        entry_stage_ids=["query"],
+        notes=(
+            "The original first-hit cascade: direct text match; otherwise source-unit "
+            "similarity, then cross-encoder rerank (positive scores), then MMR when the "
+            "best similarity reaches 0.35; closed-choice model last. Each stage runs only "
+            "if the previous one found nothing. Cross-encoder and MMR results reach "
+            "selection without direct-support validation, so this chain is not "
+            "cELF-compliant. Results stay advisory and pending review."
+        ),
+        stages=[
+            {
+                "id": "query",
+                "strategy": "query.evidence_field",
+                "next": ["lexical"],
+            },
+            {
+                "id": "lexical",
+                "strategy": "retrieve.lexical_bm25",
+                "config": {"min_score": 0.5},
+                "next": ["provenance"],
+                "on_empty": "semantic",
+            },
+            {
+                "id": "semantic",
+                "strategy": "retrieve.source_cosine",
+                "next": ["rerank"],
+                "on_empty": "llm_choice",
+                "on_unavailable": "llm_choice",
+                "on_error": "llm_choice",
+            },
+            {
+                "id": "rerank",
+                "strategy": "rerank.cross_encoder",
+                "config": {"min_score": 0},
+                "next": ["provenance"],
+                "on_empty": "mmr",
+                "on_unavailable": "mmr",
+                "on_timeout": "mmr",
+                "on_error": "mmr",
+            },
+            {
+                "id": "mmr",
+                "strategy": "select.mmr",
+                "config": {"lambda_mult": 0.72, "limit": 2, "min_relevance": 0.35},
+                "next": ["provenance"],
+                "on_empty": "llm_choice",
+            },
+            {
+                "id": "llm_choice",
+                "strategy": "llm.closed_choice_evidence",
+                "next": ["provenance"],
+            },
+            {
+                "id": "provenance",
+                "strategy": "validate.provenance",
+                "next": ["select"],
+            },
+            {
+                "id": "select",
+                "strategy": "select.top_k",
+                "config": {"limit": 2},
+            },
+        ],
+    ),
 )
 
 BUILT_IN_ASSIGNMENTS: tuple[PipelineAssignment, ...] = (
@@ -488,6 +604,13 @@ BUILT_IN_ASSIGNMENTS: tuple[PipelineAssignment, ...] = (
         feature="evidence_suggestion.reviewer",
         pipeline_id="evidence.reviewer.current",
         pipeline_version=2,
+        source="built_in",
+        override_allowed=True,
+    ),
+    PipelineAssignment(
+        feature="evidence_recovery",
+        pipeline_id="evidence.recovery.cascade",
+        pipeline_version=1,
         source="built_in",
         override_allowed=True,
     ),

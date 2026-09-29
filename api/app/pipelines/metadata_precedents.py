@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .models import PipelineDefinition, PipelineStageDefinition
+from .registry import reject_unhonoured_config
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +80,8 @@ def compile_metadata_precedent_pipeline(
         raise ValueError(
             "Metadata-precedent adapter can only compile metadata_precedents pipelines."
         )
+
+    reject_unhonoured_config(pipeline, "metadata-precedent")
 
     supported = {
         "retrieve.metadata_exemplars",

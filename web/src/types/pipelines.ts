@@ -58,6 +58,8 @@ export type PipelineRuntimeSupport = {
   supported: boolean;
   adapter?: string | null;
   reason?: string | null;
+  /** Evidence recovery only: whether every path keeps the direct-support gate. */
+  celf_compliant?: boolean | null;
 };
 
 export type PipelineDefinition = {

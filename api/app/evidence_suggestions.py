@@ -13,7 +13,6 @@ import math
 import re
 import unicodedata
 from collections import Counter
-from collections.abc import Callable
 from difflib import SequenceMatcher
 from typing import Any
 
@@ -425,12 +424,12 @@ def validate_llm_choice(
     return out[: max(1, limit)]
 
 
-def _cascade_entry(picks: list[dict[str, Any]], method: str, reason: str) -> dict[str, Any]:
-    """The shape every cascade stage returns: advisory, untrusted, never auto-resolving.
+def advisory_evidence_entry(picks: list[dict[str, Any]], method: str, reason: str) -> dict[str, Any]:
+    """The shape automatic evidence recovery returns: advisory, untrusted, never auto-resolving.
 
     Confidence is always unreported and the entry is always marked ``backfilled``, exactly like
-    ``backfill_field_evidence`` (which this supersedes as the general case): both flags together keep a
-    cascade-bound field out of ``autofill()`` and always queued for human review, no matter which stage won.
+    ``backfill_field_evidence``: both flags together keep a recovered field out of ``autofill()``
+    and always queued for human review, whichever pipeline stage produced it.
     """
     return {
         "block_ids": [item["block_id"] for item in picks],
@@ -451,6 +450,8 @@ def _cascade_entry(picks: list[dict[str, Any]], method: str, reason: str) -> dic
                     "semantic_score",
                     "cross_encoder_score",
                     "mmr_score",
+                    "support_score",
+                    "lexical_support",
                 )
                 if key in item
             }
@@ -459,7 +460,7 @@ def _cascade_entry(picks: list[dict[str, Any]], method: str, reason: str) -> dic
     }
 
 
-def _mmr_select(
+def select_evidence_mmr(
     rows: list[dict[str, Any]], *, limit: int, lambda_mult: float = CASCADE_MMR_LAMBDA
 ) -> list[dict[str, Any]]:
     """Select evidence candidates while preserving relevance and MMR scores separately."""
@@ -471,116 +472,3 @@ def _mmr_select(
         relevance=lambda row: float(row.get("score") or 0.0),
         vector=lambda row: row.get("vector"),
     )
-
-def suggest_evidence_cascade(
-    value: Any,
-    blocks: list[dict[str, Any]],
-    *,
-    field: str,
-    field_metadata: Any,
-    source_document_id: str,
-    projection: Any,
-    provider: str | None = None,
-    model: str | None = None,
-    llm_choice: Callable[[str], dict[str, Any]] | None = None,
-    limit: int = CASCADE_MAX_BLOCKS,
-) -> dict[str, Any] | None:
-    """Ordered fallback for a value with no usable evidence: lexical -> cross-encoder rerank -> MMR/
-    similarity -> LLM. Only this record's own blocks are ever candidates (the caller supplies them).
-
-    Each stage is tried only when the one before it found nothing usable; the first stage to produce a
-    candidate wins. Every result comes back through ``_cascade_entry`` (advisory, unconfirmed). Returns
-    ``None`` when nothing at any stage supports the value, or there is nothing to search.
-    """
-    from .config import settings
-
-    if not blocks or not _flatten(value):
-        return None
-
-    lexical = suggest_evidence_blocks(value, blocks, limit=limit, min_score=BACKFILL_MIN_SCORE)
-    if lexical:
-        return _cascade_entry(
-            lexical, METHOD,
-            f"Suggested by the evidence cascade's deterministic match ({lexical[0]['reason']}).",
-        )
-
-    candidates: list[dict[str, Any]] = []
-    try:
-        query = semantic_query(field_metadata, value)
-        projection.sync(source_document_id, blocks, provider=provider, model=model, prune=False)
-        unit_ids = [str(b.get("source_unit_id") or b.get("block_id") or "") for b in blocks]
-        vectors = projection.embeddings_for(source_document_id, unit_ids, provider=provider, model=model)
-        query_vector = projection.embed_query(query, provider=provider, model=model)
-        for block in blocks:
-            block_id = str(block.get("block_id") or "")
-            unit_id = str(block.get("source_unit_id") or block_id)
-            vector = vectors.get(unit_id)
-            if block_id and vector:
-                candidates.append({
-                    "block_id": block_id, "text": str(block.get("text") or ""),
-                    "vector": vector, "score": _cosine(query_vector, vector),
-                })
-    except Exception:  # noqa: BLE001 - later stages must still be reachable
-        candidates = []
-    candidates.sort(key=lambda row: -row["score"])
-
-    if candidates and settings.metadata_cross_encoder_enabled:
-        from .cross_encoder import predict_scores
-
-        top = candidates[: max(1, settings.metadata_cross_encoder_top_k)]
-        scores, _telemetry = predict_scores(
-            [(query, row["text"]) for row in top],
-            model_name=settings.rag_cross_encoder_model,
-            timeout_seconds=settings.metadata_cross_encoder_timeout_seconds,
-        )
-        if scores:
-            ranked = sorted(zip(top, scores), key=lambda pair: -pair[1])
-            picks = [
-                {
-                    "block_id": row["block_id"],
-                    "score": round(float(score), 4),
-                    "semantic_score": round(float(row.get("score") or 0.0), 4),
-                    "cross_encoder_score": round(float(score), 4),
-                }
-                for row, score in ranked[:limit]
-                if score > 0
-            ]
-            if picks:
-                return _cascade_entry(
-                    picks, CROSS_ENCODER_METHOD,
-                    f"Suggested by the evidence cascade's cross-encoder rerank (top score {picks[0]['score']:.3f}).",
-                )
-
-    if candidates and candidates[0]["score"] >= SEMANTIC_MIN_SCORE:
-        selected = _mmr_select(candidates, limit=limit)
-        picks = [
-            {
-                "block_id": row["block_id"],
-                "score": round(float(row["score"]), 4),
-                "semantic_score": round(float(row["score"]), 4),
-                "mmr_score": round(float(row.get("mmr_score") or 0.0), 4),
-            }
-            for row in selected
-        ]
-        return _cascade_entry(
-            picks,
-            MMR_METHOD,
-            (
-                "Suggested by the evidence cascade's maximum marginal relevance "
-                f"selection (top semantic score {picks[0]['score']:.3f}; "
-                f"MMR objective {picks[0]['mmr_score']:.3f})."
-            ),
-        )
-
-    if llm_choice is not None:
-        try:
-            picks = validate_llm_choice(llm_choice(llm_prompt(field, value, blocks)), blocks, value, limit=limit)
-        except Exception:  # noqa: BLE001 - the cascade must never fail a build
-            picks = []
-        if picks:
-            return _cascade_entry(
-                picks, LLM_METHOD,
-                f"Suggested by the evidence cascade's model choice ({picks[0].get('reason') or 'no reason given'}).",
-            )
-
-    return None
