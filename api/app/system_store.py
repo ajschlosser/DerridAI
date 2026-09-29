@@ -595,21 +595,21 @@ class SystemStore:
         traces live in focused tables in the same database, so they are folded
         into the logical snapshot here rather than hidden from backup/restore.
         """
-        from .pipelines.store import pipeline_store
+        from .pipelines.store import PipelineStore
 
         with self._lock:
             payload = copy.deepcopy(self._read())
-        payload["pipelines"] = pipeline_store.snapshot()
+        payload["pipelines"] = PipelineStore(self.path).snapshot()
         return payload
 
     def reset_to_fresh_install(self) -> dict[str, Any]:
         """Restore shipped locales and drop operational configuration/history."""
-        from .pipelines.store import pipeline_store
+        from .pipelines.store import PipelineStore
 
         with self._lock:
             self._write(self._default())
         cleared_jobs = SQLiteJobRepository(self.path).clear_all()
-        cleared_pipelines = pipeline_store.clear_all()
+        cleared_pipelines = PipelineStore(self.path).clear_all()
         return {
             "languages": ["en-US", "fr-CA"],
             "profiles": 0,
@@ -620,7 +620,7 @@ class SystemStore:
 
     def restore_snapshot(self, payload: dict[str, Any]) -> None:
         """Restore server-owned configuration plus pipeline operational state."""
-        from .pipelines.store import pipeline_store
+        from .pipelines.store import PipelineStore
 
         if not isinstance(payload, dict):
             raise ValueError("System configuration backup is invalid.")
@@ -638,6 +638,7 @@ class SystemStore:
         # A full restore replaces, rather than merges, operational state. Older
         # backups predate pipeline tables and therefore restore an empty custom
         # pipeline layer while built-in definitions remain available from code.
+        pipeline_store = PipelineStore(self.path)
         if isinstance(pipeline_snapshot, dict):
             pipeline_store.restore_snapshot(pipeline_snapshot)
         else:
