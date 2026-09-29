@@ -1,10 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { ref } from "vue";
 import { defineStore } from "pinia";
-import {
-  SEMANTIC_MAP_PLACEMENTS,
-  type SemanticMapPlacement,
-} from "../domain/semanticMap";
+import { SEMANTIC_MAP_PLACEMENTS, type SemanticMapPlacement } from "../domain/semanticMap";
 
 const PLACEMENT_KEY = "derridai.semanticMap.placement";
 const ENABLED_KEY = "derridai.semanticMap.enabled";

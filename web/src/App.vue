@@ -200,41 +200,41 @@ const breadcrumbTitle = computed(() =>
   route.name === "semanticmap"
     ? i18n.t("nav.semantic_map")
     : route.name === "sources"
-    ? i18n.t("sources.title")
-    : route.name === "metadatamemory"
-      ? i18n.t("metadata_memory.title")
-      : route.name === "users"
-        ? i18n.t("nav.users")
-        : route.name === "roles"
-          ? i18n.t("nav.roles")
-          : route.name === "languages"
-            ? i18n.t("language.manage")
-            : route.name === "config"
-              ? i18n.t("nav.config")
-              : route.name === "compare"
-                ? i18n.t("nav.compare")
-                : route.name === "list"
-                  ? i18n.t("nav.records")
-                  : route.name === "works"
-                    ? i18n.t("nav.works")
-                    : s.value.context.title || i18n.t("nav.home"),
+      ? i18n.t("sources.title")
+      : route.name === "metadatamemory"
+        ? i18n.t("metadata_memory.title")
+        : route.name === "users"
+          ? i18n.t("nav.users")
+          : route.name === "roles"
+            ? i18n.t("nav.roles")
+            : route.name === "languages"
+              ? i18n.t("language.manage")
+              : route.name === "config"
+                ? i18n.t("nav.config")
+                : route.name === "compare"
+                  ? i18n.t("nav.compare")
+                  : route.name === "list"
+                    ? i18n.t("nav.records")
+                    : route.name === "works"
+                      ? i18n.t("nav.works")
+                      : s.value.context.title || i18n.t("nav.home"),
 );
 const breadcrumbMeta = computed(() =>
   route.name === "semanticmap"
     ? i18n.t("context.semanticmap.meta")
     : route.name === "sources"
-    ? i18n.t("sources.help_short")
-    : route.name === "metadatamemory"
-      ? i18n.t("metadata_memory.help")
-      : route.name === "config"
-        ? i18n.t("settings.page_help_short")
-        : route.name === "compare"
-          ? i18n.t("context.compare.meta")
-          : route.name === "list"
-            ? i18n.t("context.list.meta")
-            : ["users", "roles", "languages"].includes(String(route.name || ""))
-              ? ""
-              : s.value.context.meta,
+      ? i18n.t("sources.help_short")
+      : route.name === "metadatamemory"
+        ? i18n.t("metadata_memory.help")
+        : route.name === "config"
+          ? i18n.t("settings.page_help_short")
+          : route.name === "compare"
+            ? i18n.t("context.compare.meta")
+            : route.name === "list"
+              ? i18n.t("context.list.meta")
+              : ["users", "roles", "languages"].includes(String(route.name || ""))
+                ? ""
+                : s.value.context.meta,
 );
 const canBreadcrumbBack = computed(() => Boolean(nativeBackPath.value) || s.value.canGoBack);
 const canBreadcrumbForward = computed(
@@ -583,7 +583,9 @@ watch(
         class="shell-body"
         :class="{
           'with-semantic-map':
-            semanticMap.enabled && semanticMap.placement === 'sidebar' && route.name !== 'semanticmap',
+            semanticMap.enabled &&
+            semanticMap.placement === 'sidebar' &&
+            route.name !== 'semanticmap',
         }"
       >
         <div id="appContent" class="app-content-region" tabindex="-1"><RouterView /></div>

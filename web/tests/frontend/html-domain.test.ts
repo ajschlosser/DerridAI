@@ -24,6 +24,7 @@ describe("legacy HTML helpers", () => {
       "works",
       "global",
       "annotations",
+      "semanticmap",
       "pdf",
       "compare",
       "vector",

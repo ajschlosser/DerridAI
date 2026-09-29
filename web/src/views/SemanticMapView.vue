@@ -47,12 +47,7 @@ watch(
         )
       "
     />
-    <SemanticMapFrame
-      variant="page"
-      :sources="sources"
-      :focus-id="focusId"
-      :show-close="false"
-    />
+    <SemanticMapFrame variant="page" :sources="sources" :focus-id="focusId" :show-close="false" />
   </main>
 </template>
 

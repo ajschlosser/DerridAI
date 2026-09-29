@@ -77,12 +77,7 @@ onMounted(load);
     @close="onDialogClose"
     @cancel.prevent="map.disable()"
   >
-    <SemanticMapFrame
-      v-if="showModal"
-      variant="modal"
-      :sources="sources"
-      :focus-id="focusId"
-    />
+    <SemanticMapFrame v-if="showModal" variant="modal" :sources="sources" :focus-id="focusId" />
   </dialog>
 </template>
 

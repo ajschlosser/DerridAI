@@ -60,9 +60,7 @@ function kindLabel(kind: string) {
       <div>
         <h2>{{ i18n.t("semantic_map.title", "Semantic map") }}</h2>
         <p>
-          {{
-            i18n.tf("semantic_map.count", "{count} terms", { count: graph.nodes.length })
-          }}
+          {{ i18n.tf("semantic_map.count", "{count} terms", { count: graph.nodes.length }) }}
         </p>
       </div>
       <div class="semantic-map-toolbar-actions">
@@ -83,7 +81,11 @@ function kindLabel(kind: string) {
             {{ i18n.t(`semantic_map.placement.${item}`, placementLabel[item]) }}
           </button>
         </div>
-        <div class="semantic-map-zoom" role="group" :aria-label="i18n.t('semantic_map.zoom', 'Zoom')">
+        <div
+          class="semantic-map-zoom"
+          role="group"
+          :aria-label="i18n.t('semantic_map.zoom', 'Zoom')"
+        >
           <button type="button" @click="canvas?.zoomBy(1 / 1.15)">
             {{ i18n.t("semantic_map.zoom_out", "Zoom out") }}
           </button>

@@ -41,9 +41,9 @@ describe("semantic map layout", () => {
     expect(first.nodes.map((node) => node.label)).toEqual(
       expect.arrayContaining(["trace", "writing", "presence", "Rousseau", "Of Grammatology"]),
     );
-    expect(first.edges.some((edge) => edge.source.includes("trace") && edge.target.includes("writing"))).toBe(
-      true,
-    );
+    expect(
+      first.edges.some((edge) => edge.source.includes("trace") && edge.target.includes("writing")),
+    ).toBe(true);
     expect(first.nodes.map((node) => [node.id, node.x, node.y])).toEqual(
       second.nodes.map((node) => [node.id, node.x, node.y]),
     );
@@ -91,6 +91,8 @@ describe("SemanticMapFrame", () => {
     });
     const choices = wrapper.findAll("[role='radio']").map((button) => button.text());
     expect(choices).toEqual(["Sidebar", "Above the record", "Large dialog", "Dedicated view"]);
-    expect(wrapper.get("[role='radiogroup']").attributes("aria-label")).toBe("Where to show the map");
+    expect(wrapper.get("[role='radiogroup']").attributes("aria-label")).toBe(
+      "Where to show the map",
+    );
   });
 });

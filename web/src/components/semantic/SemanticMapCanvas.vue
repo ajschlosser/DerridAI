@@ -178,12 +178,7 @@ defineExpose({ zoomBy, resetView });
     </div>
   </div>
   <p v-else class="semantic-map-empty">
-    {{
-      i18n.t(
-        "semantic_map.empty",
-        "No concepts, topics, or persons are available to map yet.",
-      )
-    }}
+    {{ i18n.t("semantic_map.empty", "No concepts, topics, or persons are available to map yet.") }}
   </p>
 </template>
 

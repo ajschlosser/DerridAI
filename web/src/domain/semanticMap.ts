@@ -43,11 +43,7 @@ const MAX_NODES = 64;
 const MAX_TERMS_PER_RECORD = 5;
 
 export function termList(value: unknown): string[] {
-  const raw = Array.isArray(value)
-    ? value
-    : typeof value === "string"
-      ? value.split(/[;,]/)
-      : [];
+  const raw = Array.isArray(value) ? value : typeof value === "string" ? value.split(/[;,]/) : [];
   const seen = new Set<string>();
   const out: string[] = [];
   for (const item of raw) {
@@ -60,7 +56,9 @@ export function termList(value: unknown): string[] {
   return out;
 }
 
-export function slimSemanticSource(record: Record<string, unknown> | null | undefined): SemanticMapSource | null {
+export function slimSemanticSource(
+  record: Record<string, unknown> | null | undefined,
+): SemanticMapSource | null {
   if (!record || typeof record !== "object") return null;
   const concepts = termList(record.concepts);
   const topics = termList(record.topics);
@@ -138,7 +136,8 @@ export function buildSemanticMap(sources: SemanticMapSource[], focusId = ""): Se
   }
 
   const ranked = [...weights.entries()].sort(
-    (left, right) => right[1].weight - left[1].weight || left[1].label.localeCompare(right[1].label),
+    (left, right) =>
+      right[1].weight - left[1].weight || left[1].label.localeCompare(right[1].label),
   );
   const kept = new Set(ranked.slice(0, MAX_NODES).map(([id]) => id));
   const nodes = ranked
