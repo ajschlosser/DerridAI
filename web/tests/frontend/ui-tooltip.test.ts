@@ -37,6 +37,29 @@ describe("UiTooltip", () => {
     wrapper.unmount();
   });
 
+  it("supports compact slotted content as the focus, click, and touch-friendly trigger", async () => {
+    const ContentHost = {
+      components: { UiTooltip },
+      template: `<UiTooltip text="A reviewer decision is required." trigger-mode="content"><span class="status">Needs review</span></UiTooltip>`,
+    };
+    const wrapper = mount(ContentHost, { attachTo: document.body });
+    const trigger = wrapper.get(".ui-tooltip-anchor");
+    expect(trigger.attributes("tabindex")).toBe("0");
+    expect(trigger.attributes("aria-label")).toBeUndefined();
+
+    await trigger.trigger("focus");
+    await nextTick();
+    const bubble = document.querySelector<HTMLElement>('[role="tooltip"]')!;
+    expect(bubble.hidden).toBe(false);
+    expect(trigger.attributes("aria-describedby")).toBe(bubble.id);
+
+    await trigger.trigger("keydown", { key: "Escape" });
+    expect(bubble.hidden).toBe(true);
+    await trigger.trigger("click");
+    expect(bubble.hidden).toBe(false);
+    wrapper.unmount();
+  });
+
   it("stays inside the open dialog that contains it", async () => {
     const InDialog = {
       components: { UiTooltip },
