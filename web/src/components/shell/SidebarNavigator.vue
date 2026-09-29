@@ -13,17 +13,20 @@ const i18n = useI18nStore();
 const FAVORITES_KEY = "derridai.ui.navigationFavorites";
 const RECENTS_KEY = "derridai.ui.navigationRecents";
 const COLLAPSED_GROUPS_KEY = "derridai.ui.navigationCollapsedGroups";
+const DEFAULT_COLLAPSED_GROUPS = ["Corpus Management", "AI & Automation", "System"];
 const query = ref("");
 const favorites = ref<string[]>(loadIds(FAVORITES_KEY));
 const recents = ref<string[]>(loadIds(RECENTS_KEY));
-const collapsedGroups = ref<string[]>(loadIds(COLLAPSED_GROUPS_KEY));
+const collapsedGroups = ref<string[]>(loadIds(COLLAPSED_GROUPS_KEY, DEFAULT_COLLAPSED_GROUPS));
 
-function loadIds(key: string): string[] {
+function loadIds(key: string, fallback: string[] = []): string[] {
   try {
-    const parsed = JSON.parse(localStorage.getItem(key) || "[]");
-    return Array.isArray(parsed) ? parsed.map(String).slice(0, 12) : [];
+    const raw = localStorage.getItem(key);
+    if (raw === null) return [...fallback];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.map(String).slice(0, 12) : [...fallback];
   } catch {
-    return [];
+    return [...fallback];
   }
 }
 
@@ -62,13 +65,16 @@ const itemById = computed(() => new Map(allItems.value.map((item) => [item.id, i
 const favoriteItems = computed(() =>
   favorites.value
     .map((id) => itemById.value.get(id))
-    .filter((item): item is SidebarNavEntry => Boolean(item)),
+    .filter((item): item is SidebarNavEntry => Boolean(item) && item.id !== "home"),
 );
 const recentItems = computed(() =>
   recents.value
     .map((id) => itemById.value.get(id))
-    .filter((item): item is SidebarNavEntry => Boolean(item))
-    .slice(0, 4),
+    .filter(
+      (item): item is SidebarNavEntry =>
+        Boolean(item) && item.id !== "home" && !favorites.value.includes(item.id),
+    )
+    .slice(0, 3),
 );
 const filteredGroups = computed(() => {
   const needle = query.value.trim().toLocaleLowerCase();
@@ -119,37 +125,39 @@ function isFavorite(id: string) {
       />
     </label>
 
-    <section v-if="!collapsed && !query && favoriteItems.length" class="shell-nav-section quick">
-      <h2>{{ i18n.t("nav.favorites") }}</h2>
-      <div class="shell-nav-list">
-        <SidebarNavButton
-          v-for="item in favoriteItems"
-          :key="`favorite-${item.id}`"
-          :id="item.id"
-          :label="item.label"
-          :icon="item.icon"
-          :active="item.active"
-          :disabled-reason="item.disabledReason"
-          @navigate="navigate"
-        />
-      </div>
-    </section>
+    <div v-if="!collapsed && !query && (favoriteItems.length || recentItems.length)" class="shell-nav-shortcuts">
+      <section v-if="favoriteItems.length" class="shell-nav-section quick">
+        <h2>{{ i18n.t("nav.favorites") }}</h2>
+        <div class="shell-nav-list">
+          <SidebarNavButton
+            v-for="item in favoriteItems"
+            :key="`favorite-${item.id}`"
+            :id="item.id"
+            :label="item.label"
+            :icon="item.icon"
+            :active="item.active"
+            :disabled-reason="item.disabledReason"
+            @navigate="navigate"
+          />
+        </div>
+      </section>
 
-    <section v-if="!collapsed && !query && recentItems.length" class="shell-nav-section quick">
-      <h2>{{ i18n.t("nav.recent") }}</h2>
-      <div class="shell-nav-list">
-        <SidebarNavButton
-          v-for="item in recentItems"
-          :key="`recent-${item.id}`"
-          :id="item.id"
-          :label="item.label"
-          :icon="item.icon"
-          :active="item.active"
-          :disabled-reason="item.disabledReason"
-          @navigate="navigate"
-        />
-      </div>
-    </section>
+      <section v-if="recentItems.length" class="shell-nav-section quick">
+        <h2>{{ i18n.t("nav.recent") }}</h2>
+        <div class="shell-nav-list">
+          <SidebarNavButton
+            v-for="item in recentItems"
+            :key="`recent-${item.id}`"
+            :id="item.id"
+            :label="item.label"
+            :icon="item.icon"
+            :active="item.active"
+            :disabled-reason="item.disabledReason"
+            @navigate="navigate"
+          />
+        </div>
+      </section>
+    </div>
 
     <section
       v-for="group in filteredGroups"
@@ -209,164 +217,279 @@ function isFavorite(id: string) {
 
 <style scoped>
 .shell-navigation {
-  display: grid;
-  gap: 10px;
+  display: flex;
+  flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
-  padding: 0 2px 10px;
+  flex-direction: column;
+  gap: 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 2px 3px 12px;
+  font-family: var(--font-ui);
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted) 45%, transparent) transparent;
 }
+
 .shell-nav-search {
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
-  margin: 2px 4px 4px;
-  padding: 7px 9px;
+  gap: 9px;
+  min-height: 38px;
+  margin: 1px 2px 0;
+  padding: 0 10px;
   border: 1px solid var(--line);
   border-radius: 9px;
-  background: var(--card);
+  background: var(--surface-inset);
   color: var(--muted);
+  transition:
+    border-color var(--motion-fast, 120ms) var(--ease-standard, ease),
+    box-shadow var(--motion-fast, 120ms) var(--ease-standard, ease),
+    background-color var(--motion-fast, 120ms) var(--ease-standard, ease);
 }
+
+.shell-nav-search:focus-within {
+  border-color: color-mix(in srgb, var(--ui-accent) 48%, var(--line));
+  background: var(--card);
+  box-shadow: 0 0 0 3px var(--ui-accent-focus);
+}
+
 .shell-nav-search :deep(svg) {
   width: 16px;
   height: 16px;
 }
+
 .shell-nav-search input {
   min-width: 0;
+  min-height: 0;
+  height: 36px;
+  padding: 0;
   border: 0;
   outline: 0;
   background: transparent;
   color: var(--text);
-  font: inherit;
+  font-family: var(--font-ui);
   font-size: 0.8125rem;
 }
+
+.shell-nav-search input::placeholder {
+  color: var(--muted);
+  opacity: 0.9;
+}
+
+.shell-nav-shortcuts {
+  display: grid;
+  gap: 11px;
+  padding: 0 2px 2px;
+}
+
 .shell-nav-section {
   display: grid;
   gap: 4px;
 }
-.shell-nav-section + .shell-nav-section:not(.quick) {
-  padding-top: 7px;
-  border-top: 1px solid var(--line);
+
+.shell-nav-section.overview {
+  padding-bottom: 1px;
 }
+
+.shell-nav-section.quick {
+  gap: 3px;
+}
+
 .shell-nav-section.quick h2 {
   margin: 0;
-  padding: 0 10px;
+  padding: 0 9px;
   color: var(--text-tertiary);
-  font-size: 0.75rem;
-  font-weight: 750;
-  letter-spacing: 0.035em;
+  font-family: var(--font-ui);
+  font-size: 0.6875rem;
+  font-weight: var(--fw-semibold, 650);
+  letter-spacing: 0.075em;
+  line-height: 1.5;
   text-transform: uppercase;
 }
+
+.shell-nav-section.quick :deep(.nav-tooltip-wrap > button) {
+  min-height: 34px;
+  padding-block: 6px;
+  font-size: 0.78125rem;
+}
+
+.shell-nav-section.quick :deep(.nav-tooltip-wrap > button svg) {
+  width: 16px;
+  height: 16px;
+}
+
 .shell-nav-group-heading {
   margin: 0;
 }
+
 .shell-nav-group-toggle {
   display: flex;
-  min-height: 32px;
+  min-height: 28px;
+  width: 100%;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  width: 100%;
-  padding: 4px 8px 4px 10px;
+  padding: 3px 7px 3px 9px;
   border: 0;
   border-radius: 7px;
   background: transparent;
+  box-shadow: none;
   color: var(--muted);
-  font: inherit;
-  font-size: 0.75rem;
-  font-weight: 750;
-  letter-spacing: 0.035em;
+  font-family: var(--font-ui);
+  font-size: 0.6875rem;
+  font-weight: var(--fw-semibold, 650);
+  letter-spacing: 0.075em;
+  line-height: 1.25;
   text-align: left;
   text-transform: uppercase;
   cursor: pointer;
 }
+
 .shell-nav-group-toggle:hover,
 .shell-nav-group-toggle:focus-visible {
-  background: var(--soft);
-  color: var(--text);
+  background: var(--surface-hover);
+  color: var(--text-2);
 }
+
+.shell-nav-group-toggle > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .shell-nav-group-toggle :deep(svg) {
-  width: 14px;
-  height: 14px;
-  transition: transform 120ms ease;
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  transition: transform var(--motion-fast, 120ms) var(--ease-standard, ease);
 }
+
 .shell-nav-group-toggle[aria-expanded="false"] :deep(svg) {
   transform: rotate(-90deg);
 }
+
 .shell-nav-list {
   display: grid;
   gap: 1px;
 }
+
 .shell-nav-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 28px;
+  grid-template-columns: minmax(0, 1fr) 24px;
   align-items: center;
+  min-width: 0;
 }
+
 .shell-nav-row :deep(.nav-tooltip-wrap) {
   min-width: 0;
 }
-.shell-nav-row :deep(.nav-tooltip-wrap > button) {
-  width: 100%;
-}
+
 .shell-nav-favorite {
   display: grid;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 30px;
   place-items: center;
+  padding: 0;
   border: 0;
   border-radius: 7px;
   background: transparent;
+  box-shadow: none;
   color: var(--muted);
-  opacity: 0.35;
+  opacity: 0;
   cursor: pointer;
+  transition:
+    opacity var(--motion-fast, 120ms) var(--ease-standard, ease),
+    background-color var(--motion-fast, 120ms) var(--ease-standard, ease),
+    color var(--motion-fast, 120ms) var(--ease-standard, ease);
 }
+
 .shell-nav-row:hover .shell-nav-favorite,
 .shell-nav-favorite:focus-visible,
 .shell-nav-favorite.active {
+  opacity: 0.72;
+}
+
+.shell-nav-favorite:hover,
+.shell-nav-favorite:focus-visible {
+  background: var(--surface-hover);
+  color: var(--text);
   opacity: 1;
 }
+
 .shell-nav-favorite.active {
   color: var(--accent-fg);
+  opacity: 1;
 }
+
 .shell-nav-favorite :deep(svg) {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
 }
+
 .shell-nav-empty {
-  margin: 6px 10px;
+  margin: 4px 9px;
   color: var(--muted);
   font-size: 0.8125rem;
 }
+
 .shell-navigation.collapsed {
   gap: 6px;
   overflow-y: auto;
   overflow-x: visible;
   padding-inline: 0;
 }
+
 .shell-navigation.collapsed .shell-nav-section {
   gap: 2px;
 }
-.shell-navigation.collapsed .shell-nav-section + .shell-nav-section:not(.quick) {
-  padding-top: 5px;
-}
+
 .shell-navigation.collapsed .shell-nav-row {
   display: block;
 }
+
 .shell-navigation.collapsed :deep(.nav-tooltip-wrap > button) {
   justify-content: center;
   min-height: 40px;
   padding-inline: 8px;
+  box-shadow: none;
 }
+
+.shell-navigation.collapsed :deep(.nav-tooltip-wrap > button.active) {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-accent) 34%, transparent);
+}
+
 .shell-navigation.collapsed :deep(.nav-tooltip-wrap > button span) {
   display: none;
 }
+
 .shell-navigation.collapsed :deep(.nav-tooltip-wrap > button svg) {
   width: 18px;
   height: 18px;
 }
+
+@media (hover: none) {
+  .shell-nav-favorite {
+    opacity: 0.5;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .shell-nav-group-toggle :deep(svg) {
+  .shell-nav-search,
+  .shell-nav-group-toggle :deep(svg),
+  .shell-nav-favorite {
     transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .shell-nav-search {
+    border-color: CanvasText;
+  }
+
+  .shell-nav-favorite.active {
+    outline: 1px solid CanvasText;
   }
 }
 </style>
