@@ -7,18 +7,27 @@
 
 export type HelpTranslate = (key: string, fallback?: string) => string;
 
+export interface HelpQuestionDefinition {
+  id: string;
+  /**
+   * Reserve downstream-impact callouts for actions whose consequences are not
+   * already obvious from the answer. Explanatory FAQs should stay concise.
+   */
+  showImpact?: boolean;
+}
+
 export interface HelpSection {
   id: string;
   /** Corpus-review topics describe administrator-only workflows. */
   adminOnly?: boolean;
-  questions: string[];
+  questions: HelpQuestionDefinition[];
 }
 
 export interface HelpEntry {
   id: string;
   question: string;
   answer: string;
-  impact: string;
+  impact?: string;
 }
 
 export interface HelpPageGuideDefinition {
@@ -28,13 +37,15 @@ export interface HelpPageGuideDefinition {
   group: HelpPageGroup;
   adminOnly?: boolean;
   capability?: string;
+  /** Show a downstream-effects callout only when this page can persist or configure state. */
+  showImpact?: boolean;
 }
 
 export interface HelpPageGuide extends HelpPageGuideDefinition {
   title: string;
   summary: string;
   tasks: string;
-  impact: string;
+  impact?: string;
 }
 
 export type HelpPageGroup =
@@ -68,25 +79,70 @@ export interface HelpGlossaryEntry extends HelpGlossaryDefinition {
 }
 
 export const HELP_SECTIONS: HelpSection[] = [
-  { id: "basics", questions: ["what_is", "authoritative", "citations"] },
+  {
+    id: "basics",
+    questions: [{ id: "what_is" }, { id: "authoritative" }, { id: "citations" }],
+  },
+  {
+    id: "getting_started",
+    questions: [
+      { id: "search_vs_research" },
+      { id: "find_records" },
+      { id: "search_no_results" },
+      { id: "select_evidence", showImpact: true },
+    ],
+  },
+  {
+    id: "research",
+    questions: [
+      { id: "retrieval_modes" },
+      { id: "no_citations" },
+      { id: "rerun_answer" },
+      { id: "choose_model" },
+      { id: "cached_responses", showImpact: true },
+      { id: "cached_provenance", showImpact: true },
+      { id: "validate_claims", showImpact: true },
+      { id: "grading", showImpact: true },
+    ],
+  },
+  {
+    id: "troubleshooting",
+    questions: [{ id: "slow_run" }, { id: "model_unavailable" }],
+  },
+  {
+    id: "corpus_builder",
+    adminOnly: true,
+    questions: [
+      { id: "needs_review" },
+      { id: "confidence_not_reported" },
+      { id: "retry_vs_rerun", showImpact: true },
+      { id: "requeue_record", showImpact: true },
+      { id: "publish_visibility" },
+      { id: "failed_enrichment" },
+    ],
+  },
   {
     id: "review",
     adminOnly: true,
     questions: [
-      "confirm_value",
-      "evidence",
-      "no_value",
-      "save_all",
-      "second_opinion",
-      "precedents_panel",
-      "research_claims_panel",
-      "accept_record",
+      { id: "confirm_value", showImpact: true },
+      { id: "evidence", showImpact: true },
+      { id: "no_value", showImpact: true },
+      { id: "save_all", showImpact: true },
+      { id: "second_opinion", showImpact: true },
+      { id: "precedents_panel" },
+      { id: "research_claims_panel" },
+      { id: "accept_record", showImpact: true },
     ],
   },
-  { id: "memory", adminOnly: true, questions: ["retrieval_policy", "agree_on", "autofill"] },
   {
-    id: "research",
-    questions: ["cached_responses", "cached_provenance", "validate_claims", "grading"],
+    id: "memory",
+    adminOnly: true,
+    questions: [
+      { id: "retrieval_policy", showImpact: true },
+      { id: "agree_on", showImpact: true },
+      { id: "autofill" },
+    ],
   },
 ];
 
@@ -113,14 +169,14 @@ export const HELP_PAGE_GUIDES: HelpPageGuideDefinition[] = [
     id: "research",
     routeName: "rag",
     path: "/rag",
-    group: "research",
+    group: "research",\n    showImpact: true,
     capability: "page.research",
   },
   {
     id: "response_library",
     routeName: "faq",
     path: "/faq",
-    group: "research",
+    group: "research",\n    showImpact: true,
     capability: "page.faq",
     adminOnly: true,
   },
@@ -129,7 +185,7 @@ export const HELP_PAGE_GUIDES: HelpPageGuideDefinition[] = [
     id: "records",
     routeName: "list",
     path: "/records",
-    group: "corpora",
+    group: "corpora",\n    showImpact: true,
     capability: "page.records",
     adminOnly: true,
   },
@@ -137,7 +193,7 @@ export const HELP_PAGE_GUIDES: HelpPageGuideDefinition[] = [
     id: "record",
     routeName: "record",
     path: "/record",
-    group: "corpora",
+    group: "corpora",\n    showImpact: true,
     capability: "page.record",
   },
   {
@@ -151,7 +207,7 @@ export const HELP_PAGE_GUIDES: HelpPageGuideDefinition[] = [
     id: "annotations",
     routeName: "annotations",
     path: "/annotations",
-    group: "corpora",
+    group: "corpora",\n    showImpact: true,
     capability: "page.annotations",
   },
   {
@@ -172,14 +228,14 @@ export const HELP_PAGE_GUIDES: HelpPageGuideDefinition[] = [
     id: "corpus_data",
     routeName: "vector",
     path: "/databases",
-    group: "corpus_management",
+    group: "corpus_management",\n    showImpact: true,
     capability: "page.vector",
   },
   {
     id: "corpus_builder",
     routeName: "corpus-builder",
     path: "/corpus-builder",
-    group: "corpus_management",
+    group: "corpus_management",\n    showImpact: true,
     capability: "page.pdf",
     adminOnly: true,
   },
@@ -195,7 +251,7 @@ export const HELP_PAGE_GUIDES: HelpPageGuideDefinition[] = [
     id: "sources",
     routeName: "sources",
     path: "/sources",
-    group: "corpus_management",
+    group: "corpus_management",\n    showImpact: true,
     capability: "page.pdf",
     adminOnly: true,
   },
@@ -211,7 +267,7 @@ export const HELP_PAGE_GUIDES: HelpPageGuideDefinition[] = [
     id: "system_responses",
     routeName: "system-data-responses",
     path: "/system-data/responses",
-    group: "system",
+    group: "system",\n    showImpact: true,
     capability: "page.response_cache",
     adminOnly: true,
   },
@@ -243,7 +299,7 @@ export const HELP_PAGE_GUIDES: HelpPageGuideDefinition[] = [
     id: "pipelines",
     routeName: "pipelines",
     path: "/pipelines",
-    group: "ai_automation",
+    group: "ai_automation",\n    showImpact: true,
     capability: "page.response_cache",
     adminOnly: true,
   },
@@ -251,7 +307,7 @@ export const HELP_PAGE_GUIDES: HelpPageGuideDefinition[] = [
     id: "metadata_memory",
     routeName: "metadatamemory",
     path: "/metadata-memory",
-    group: "ai_automation",
+    group: "ai_automation",\n    showImpact: true,
     capability: "page.response_cache",
     adminOnly: true,
   },
@@ -259,7 +315,7 @@ export const HELP_PAGE_GUIDES: HelpPageGuideDefinition[] = [
     id: "providers",
     routeName: "providers",
     path: "/providers",
-    group: "ai_automation",
+    group: "ai_automation",\n    showImpact: true,
     capability: "page.providers",
     adminOnly: true,
   },
@@ -267,7 +323,7 @@ export const HELP_PAGE_GUIDES: HelpPageGuideDefinition[] = [
     id: "schemas",
     routeName: "schemas",
     path: "/schemas",
-    group: "corpus_management",
+    group: "corpus_management",\n    showImpact: true,
     capability: "page.schemas",
     adminOnly: true,
   },
@@ -275,14 +331,14 @@ export const HELP_PAGE_GUIDES: HelpPageGuideDefinition[] = [
     id: "settings",
     routeName: "settings-section",
     path: "/settings/workspace",
-    group: "system",
+    group: "system",\n    showImpact: true,
     capability: "page.settings",
   },
   {
     id: "users",
     routeName: "users",
     path: "/users",
-    group: "system",
+    group: "system",\n    showImpact: true,
     capability: "page.users",
     adminOnly: true,
   },
@@ -290,7 +346,7 @@ export const HELP_PAGE_GUIDES: HelpPageGuideDefinition[] = [
     id: "roles",
     routeName: "roles",
     path: "/roles",
-    group: "system",
+    group: "system",\n    showImpact: true,
     capability: "page.roles",
     adminOnly: true,
   },
@@ -298,7 +354,7 @@ export const HELP_PAGE_GUIDES: HelpPageGuideDefinition[] = [
     id: "languages",
     routeName: "languages",
     path: "/languages",
-    group: "system",
+    group: "system",\n    showImpact: true,
     capability: "page.languages",
     adminOnly: true,
   },
@@ -306,7 +362,7 @@ export const HELP_PAGE_GUIDES: HelpPageGuideDefinition[] = [
     id: "operations",
     routeName: "operations",
     path: "/operations",
-    group: "system",
+    group: "system",\n    showImpact: true,
     adminOnly: true,
   },
   { id: "help", routeName: "help", path: "/help", group: "support" },
@@ -390,11 +446,11 @@ export function visibleHelp(
       id: section.id,
       title: t(`help.section.${section.id}`),
       entries: section.questions
-        .map((id) => ({
-          id,
-          question: t(`help.q.${id}.question`),
-          answer: t(`help.q.${id}.answer`),
-          impact: t(`help.q.${id}.impact`),
+        .map((question) => ({
+          id: question.id,
+          question: t(`help.q.${question.id}.question`),
+          answer: t(`help.q.${question.id}.answer`),
+          impact: question.showImpact ? t(`help.q.${question.id}.impact`) : undefined,
         }))
         .filter((entry) => matchesNeedle([entry.question, entry.answer, entry.impact], needle)),
     }))
@@ -417,7 +473,7 @@ export function visiblePageGuides(
       title: t(`help.page.${guide.id}.title`),
       summary: t(`help.page.${guide.id}.summary`),
       tasks: t(`help.page.${guide.id}.tasks`),
-      impact: t(`help.page.${guide.id}.impact`),
+      impact: guide.showImpact ? t(`help.page.${guide.id}.impact`) : undefined,
     }))
     .filter((guide) =>
       matchesNeedle(
