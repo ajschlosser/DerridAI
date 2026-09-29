@@ -67,27 +67,11 @@ function assigned(pipeline: PipelineDefinition) {
         <span aria-hidden="true">·</span>
         {{ pipelineDefinitionStatusLabel(pipeline.status, t) }}
       </span>
-      <span v-if="pipeline.built_in" class="choice-badge badge-with-help">
+      <span v-if="pipeline.built_in" class="choice-badge">
         {{ t("pipelines.built_in", "Built in") }}
-        <UiTooltip
-          :text="
-            t(
-              'pipelines.built_in_help',
-              'This definition ships with DerridAI and is owned by the application code. It cannot be overwritten; clone it to create an editable custom version.',
-            )
-          "
-        />
       </span>
-      <span v-if="assigned(pipeline)" class="choice-badge active badge-with-help">
+      <span v-if="assigned(pipeline)" class="choice-badge active">
         {{ t("pipelines.assigned", "Assigned") }}
-        <UiTooltip
-          :text="
-            t(
-              'pipelines.assigned_help',
-              'This exact version is currently selected as the system default for at least one feature.',
-            )
-          "
-        />
       </span>
     </button>
   </aside>
@@ -112,8 +96,7 @@ function assigned(pipeline: PipelineDefinition) {
   color: var(--muted);
   font-size: 0.78rem;
 }
-.heading-with-help,
-.badge-with-help {
+.heading-with-help {
   display: inline-flex;
   align-items: center;
   gap: 2px;
