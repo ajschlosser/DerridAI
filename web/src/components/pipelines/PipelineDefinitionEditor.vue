@@ -2,11 +2,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18nStore } from "../../stores/i18n";
-import type {
-  PipelineDefinition,
-  PipelineStage,
-  PipelineStrategy,
-} from "../../types/pipelines";
+import type { PipelineDefinition, PipelineStage, PipelineStrategy } from "../../types/pipelines";
 
 const props = defineProps<{
   modelValue: PipelineDefinition;
@@ -130,7 +126,11 @@ function addStage() {
     props.strategies[0];
   if (!strategy) return;
   const used = new Set(next.stages.map((stage) => stage.id));
-  const stem = strategy.strategy_id.split(".").pop()?.replace(/[^a-z0-9_]+/gi, "_") || "stage";
+  const stem =
+    strategy.strategy_id
+      .split(".")
+      .pop()
+      ?.replace(/[^a-z0-9_]+/gi, "_") || "stage";
   let suffix = next.stages.length + 1;
   let id = stem;
   while (used.has(id)) id = `${stem}_${suffix++}`;
@@ -315,7 +315,9 @@ function updateConfig(
               <select
                 class="control"
                 :value="stage.strategy"
-                @change="updateStageStrategy(stageIndex, ($event.target as HTMLSelectElement).value)"
+                @change="
+                  updateStageStrategy(stageIndex, ($event.target as HTMLSelectElement).value)
+                "
               >
                 <optgroup
                   v-for="group in strategiesByFamily"
@@ -338,7 +340,9 @@ function updateConfig(
               <input
                 type="checkbox"
                 :checked="stage.enabled"
-                @change="toggleStageEnabled(stageIndex, ($event.target as HTMLInputElement).checked)"
+                @change="
+                  toggleStageEnabled(stageIndex, ($event.target as HTMLInputElement).checked)
+                "
               />
               <span>{{ t("pipelines.enabled", "Enabled") }}</span>
             </label>
@@ -412,11 +416,7 @@ function updateConfig(
                     type="checkbox"
                     :checked="stage.next.includes(target.id)"
                     @change="
-                      toggleNext(
-                        stageIndex,
-                        target.id,
-                        ($event.target as HTMLInputElement).checked,
-                      )
+                      toggleNext(stageIndex, target.id, ($event.target as HTMLInputElement).checked)
                     "
                   />
                   <code>{{ target.id }}</code>
@@ -428,10 +428,7 @@ function updateConfig(
             </div>
 
             <div class="fallback-grid">
-              <label
-                v-for="fallback in fallbackOptions"
-                :key="fallback.key"
-              >
+              <label v-for="fallback in fallbackOptions" :key="fallback.key">
                 <span>{{ fallback.label() }}</span>
                 <select
                   class="control"
@@ -470,12 +467,7 @@ function updateConfig(
               :max="typeof rule.maximum === 'number' ? rule.maximum : undefined"
               :value="configValue(stage, key, rule)"
               @input="
-                updateConfig(
-                  stageIndex,
-                  key,
-                  ($event.target as HTMLInputElement).value,
-                  rule,
-                )
+                updateConfig(stageIndex, key, ($event.target as HTMLInputElement).value, rule)
               "
             />
             <select
@@ -499,12 +491,7 @@ function updateConfig(
               class="control"
               :value="String(configValue(stage, key, rule))"
               @input="
-                updateConfig(
-                  stageIndex,
-                  key,
-                  ($event.target as HTMLInputElement).value,
-                  rule,
-                )
+                updateConfig(stageIndex, key, ($event.target as HTMLInputElement).value, rule)
               "
             />
           </label>
