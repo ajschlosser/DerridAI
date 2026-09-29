@@ -23,13 +23,13 @@ export const pipelinesApi = {
     }),
 
   createDefinition: (pipeline: PipelineDefinition) =>
-    apiRequest<{ pipeline: PipelineDefinition; validation: PipelineValidationResponse["validation"] }>(
-      "/api/system/pipelines/definitions",
-      {
-        method: "POST",
-        body: JSON.stringify(pipeline),
-      },
-    ),
+    apiRequest<{
+      pipeline: PipelineDefinition;
+      validation: PipelineValidationResponse["validation"];
+    }>("/api/system/pipelines/definitions", {
+      method: "POST",
+      body: JSON.stringify(pipeline),
+    }),
 
   setAssignment: (assignment: PipelineAssignment) =>
     apiRequest<{ assignment: PipelineAssignment }>(
