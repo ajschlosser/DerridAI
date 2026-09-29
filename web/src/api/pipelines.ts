@@ -5,6 +5,7 @@ import type {
   PipelineAssignment,
   PipelineCatalog,
   PipelineDefinition,
+  PipelineOperationalMetrics,
   PipelineRunTrace,
   PipelineValidationResponse,
   ResearchPipelineOptions,
@@ -56,6 +57,14 @@ export const pipelinesApi = {
     apiRequest<Record<string, unknown>>(
       `/api/system/pipelines/resolved/${encodeURIComponent(feature)}`,
     ),
+
+  metrics: (filters: { feature?: string; owner?: string; limit?: number } = {}) => {
+    const query = new URLSearchParams();
+    if (filters.feature) query.set("feature", filters.feature);
+    if (filters.owner) query.set("owner", filters.owner);
+    query.set("limit", String(filters.limit ?? 250));
+    return apiRequest<PipelineOperationalMetrics>(`/api/system/pipelines/metrics?${query}`);
+  },
 
   runs: (filters: { feature?: string; owner?: string; limit?: number; offset?: number } = {}) => {
     const query = new URLSearchParams();
