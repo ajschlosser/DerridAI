@@ -1001,6 +1001,51 @@
 </section>
 </div>
 <div id="settings-section-system" role="tabpanel" aria-labelledby="settings-nav-system" style="">
+<section class="ui-card settings-section" aria-labelledby="settings-heading-language-packs">
+<header class="settings-section-head">
+<div>
+<p class="settings-kicker">Server operation</p>
+<h2 id="settings-heading-language-packs">Language packs</h2>
+<p class="settings-section-copy">Language models for Document Intelligence: spaCy for any language (with a multilingual fallback) and BookNLP for richer English analysis. Installing downloads the pack's pinned files from their published source and checks each SHA-256; corpus builds never download models.</p>
+</div>
+</header>
+<div class="settings-section-body">
+<div class="nlp-packs">
+<label class="nlp-packs-field nlp-packs-filter">
+<span>Filter by language or model</span>
+<input class="control" type="search">
+</label>
+<table class="nlp-packs-table">
+<caption class="sr-only">Language packs</caption>
+<thead>
+<tr>
+<th scope="col">Language</th>
+<th scope="col">Source</th>
+<th scope="col">Download</th>
+<th scope="col">Status</th>
+<th scope="col">Actions</th>
+</tr>
+</thead>
+<tbody>
+</tbody>
+</table>
+<details class="nlp-packs-add">
+<summary>Add a language pack</summary>
+<p id="nlp-packs-add-help" class="nlp-packs-sub">Paste a pack definition as JSON: pack_id, language (ISO 639 code), engine, label, source_url, license, and files with role (entity, coref or quote), filename, https url, sha256 and size. A pack for a language BookNLP itself does not support needs its own worker (DOCUMENT_NLP_BASE_URL_&lt;LANG&gt;).</p>
+<label class="nlp-packs-field">
+<span>Pack definition (JSON)</span>
+<textarea class="control" rows="8" spellcheck="false" aria-describedby="nlp-packs-add-help">
+</textarea>
+</label>
+<span class="ui-button-wrap" data-tooltip="">
+<button class="ui-button variant-default size-default" type="button" disabled="" aria-disabled="true" title="">
+<span>Add to catalog</span>
+</button>
+</span>
+</details>
+</div>
+</div>
+</section>
 <section class="ui-card settings-section" aria-labelledby="settings-heading-backup">
 <header class="settings-section-head">
 <div>
