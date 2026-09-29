@@ -1,0 +1,40 @@
+name: Tooltip format helper
+
+on:
+  push:
+    branches:
+      - task/tooltips-help
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: web
+        run: npm ci --no-audit --no-fund
+      - name: Apply repository formatting
+        working-directory: web
+        run: npm run format:repo
+      - name: Package formatted files
+        shell: bash
+        run: |
+          git diff --name-only > /tmp/formatted-files.txt
+          tar -czf /tmp/formatted-files.tar.gz -T /tmp/formatted-files.txt
+          cp /tmp/formatted-files.txt /tmp/format-files.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tooltips-prettier
+          path: |
+            /tmp/formatted-files.tar.gz
+            /tmp/format-files.txt
+          if-no-files-found: error
+          retention-days: 1
