@@ -6,10 +6,10 @@ import { useI18nStore } from "../../stores/i18n";
 // Explains how the three System Data surfaces over the same memory differ, so an
 // administrator knows which one to open for auditing, index debugging, or backlog checks.
 const i18n = useI18nStore();
-const examplesTo = { path: "/system-data", query: { section: "metadata" } };
+const examplesTo = { name: "system-data-metadata" };
 const outboxTo = {
-  path: "/system-data",
-  query: { section: "databases", table: "semantic_memory_outbox" },
+  name: "system-data-databases",
+  query: { table: "semantic_memory_outbox" },
 };
 </script>
 
