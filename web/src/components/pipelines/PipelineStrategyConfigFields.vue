@@ -54,12 +54,7 @@ function configValue(key: string, rule: Record<string, unknown>) {
         class="control"
         :value="String(configValue(key, rule))"
         @change="
-          emit(
-            'updateConfig',
-            key,
-            ($event.target as HTMLSelectElement).value === 'true',
-            rule,
-          )
+          emit('updateConfig', key, ($event.target as HTMLSelectElement).value === 'true', rule)
         "
       >
         <option value="true">{{ t("common.yes", "Yes") }}</option>
