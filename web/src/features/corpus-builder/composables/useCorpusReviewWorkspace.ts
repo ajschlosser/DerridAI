@@ -1,7 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { computed, nextTick, ref, watch } from "vue";
 
-export type ReviewInspectorTab = "metadata" | "evidence" | "source";
+export type ReviewInspectorTab = "metadata" | "evidence" | "source" | "semantic";
 export type ReviewWorkspaceMode = "record" | "metadata" | "source";
 
 export type ReviewViewport = {
@@ -108,7 +108,7 @@ export function useCorpusReviewWorkspace() {
   }
 
   function reviewInspectorKeydown(event: KeyboardEvent) {
-    const tabs: ReviewInspectorTab[] = ["metadata", "evidence", "source"];
+    const tabs: ReviewInspectorTab[] = ["metadata", "evidence", "source", "semantic"];
     const current = tabs.indexOf(reviewInspectorTab.value);
     let next = current;
     if (event.key === "ArrowRight") next = (current + 1) % tabs.length;

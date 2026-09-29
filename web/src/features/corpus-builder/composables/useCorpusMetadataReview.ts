@@ -36,7 +36,7 @@ interface CorpusMetadataReviewOptions {
   applyRecordToQueue: (record: CorpusRecord) => void;
   busy: Ref<string>;
   selectedEvidenceField: Ref<string>;
-  reviewInspectorTab: Ref<"metadata" | "evidence" | "source">;
+  reviewInspectorTab: Ref<"metadata" | "evidence" | "source" | "semantic">;
   selectedPdfPage: Ref<number>;
   sourceBlocks: Ref<SourceBlock[]>;
   selectedReviewIds: Ref<Set<string>>;

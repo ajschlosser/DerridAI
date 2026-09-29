@@ -8,6 +8,10 @@ not evidence of a role; a person named in a passage is not thereby its speaker,
 quoted speaker or position holder. Candidates guide the LLM prompt and let a
 proposed value be checked against the text; they never populate or confirm a field.
 
+The same pass keeps a bounded record-level ``terms`` layer (named entities plus
+proper-noun and noun runs) for the Record semantic map. Terms are navigation aids:
+exact spans with their tag, never metadata values or evidence.
+
 Models resolve in order: a configured/installed package (``SPACY_MODEL_<LANG>``), an
 administrator-installed spaCy language pack, then the multilingual ``xx`` entity
 model, whose use is named in the reported model. If none loads, annotation is
@@ -24,9 +28,13 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-ANNOTATION_VERSION = 1
+ANNOTATION_VERSION = 2
 MAX_TEXT_CHARS = 20000
 MAX_CANDIDATES_PER_FIELD = 12
+MAX_TERMS = 60
+# Universal POS runs kept as record terms. Function words are never dropped from the
+# text; they only end a run, so a term is always an exact contiguous span.
+TERM_POS_TAGS = ("PROPN", "NOUN")
 # The large pipelines recognise philosophers' names markedly better than the small
 # ones (measured on a Rousseau/Hobbes/Derrida sample); override per language with
 # SPACY_MODEL_EN / _FR / _DE, for example to a smaller model on constrained hosts.
@@ -175,12 +183,37 @@ def field_candidates(doc: Any, text: str, *, pos_tags: list[str], ner_tags: list
     return ordered[:MAX_CANDIDATES_PER_FIELD]
 
 
+def record_terms(doc: Any, text: str) -> list[dict[str, Any]]:
+    """Bounded NER and POS-run term spans for one record; every span is text[start:end]."""
+    found: dict[tuple[int, int], dict[str, Any]] = {}
+    for ent in doc.ents:
+        label = _LABEL_ALIASES.get(ent.label_, ent.label_)
+        found[(ent.start_char, ent.end_char)] = {
+            "start": ent.start_char, "end": ent.end_char, "text": text[ent.start_char:ent.end_char],
+            "source": "ner", "tag": label,
+        }
+    covered = [(start, end) for start, end in found]
+    for tag in TERM_POS_TAGS:
+        for run in _pos_runs(doc, {tag}):
+            key = (run["start"], run["end"])
+            surface = text[run["start"]:run["end"]]
+            # Named entities already describe these characters more specifically.
+            if key in found or any(start <= key[0] and key[1] <= end for start, end in covered):
+                continue
+            if len(surface.strip()) < 3 or not any(char.isalpha() for char in surface):
+                continue
+            found[key] = {**run, "text": surface, "source": "pos"}
+    ordered = sorted(found.values(), key=lambda item: item["start"])
+    return ordered[:MAX_TERMS]
+
+
 def annotate_record(record: dict[str, Any], schema: Any, *, language: str = "") -> dict[str, Any]:
-    """Compute NLP candidates for the schema fields that declare POS/NER tags.
+    """Compute NLP candidates for tagged schema fields and the record-level term layer.
 
     Returns (and stores on ``record["nlp_candidates"]``) a dict with ``status``
-    (``ok`` | ``unavailable`` | ``skipped``), the model name, and per-field candidates.
-    Derived, rebuildable data: it is recomputed whenever the record text changes.
+    (``ok`` | ``unavailable`` | ``skipped``), the model name, per-field candidates,
+    and ``terms``. Derived, rebuildable data: it is recomputed whenever the record
+    text changes.
     """
     text = str(record.get("text") or "")
     fields = [f for f in getattr(schema, "fields", []) if getattr(f, "pos_tags", None) or getattr(f, "ner_tags", None)]
@@ -188,9 +221,9 @@ def annotate_record(record: dict[str, Any], schema: Any, *, language: str = "") 
     code = language_code(language) or next((c for c in (language_code(v) for v in languages) if c), "")
     result: dict[str, Any] = {
         "version": ANNOTATION_VERSION, "status": "skipped", "language": code, "model": "", "fields": {},
-        "text_sha256": text_digest(text),
+        "terms": [], "text_sha256": text_digest(text),
     }
-    if not fields or not text.strip():
+    if not text.strip():
         record["nlp_candidates"] = result
         return result
     if not code:
@@ -210,9 +243,19 @@ def annotate_record(record: dict[str, Any], schema: Any, *, language: str = "") 
         candidates = field_candidates(doc, bounded, pos_tags=list(field.pos_tags), ner_tags=list(field.ner_tags))
         if candidates:
             result["fields"][field.name] = candidates
+    result["terms"] = record_terms(doc, bounded)
     record["nlp_candidates"] = result
     return result
 
+
+def current_terms(record: dict[str, Any]) -> list[dict[str, Any]] | None:
+    """The record's term layer if it was computed from the current text, else None."""
+    data = record.get("nlp_candidates")
+    if not isinstance(data, dict) or data.get("status") != "ok" or "terms" not in data:
+        return None
+    if data.get("text_sha256") != text_digest(str(record.get("text") or "")):
+        return None
+    return [item for item in data.get("terms") or [] if isinstance(item, dict)]
 
 def prompt_hints(record: dict[str, Any], field_names: list[str]) -> dict[str, list[str]]:
     """Candidate surface forms for the given fields, for a prompt. Empty when not ok."""
