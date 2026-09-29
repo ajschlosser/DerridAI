@@ -69,6 +69,70 @@ export function pipelineStageFamilyLabel(family: string | null | undefined, t: P
   return labels[value] || value || t("pipelines.family_unknown", "Unknown");
 }
 
+export function pipelineStageFamilyHelp(
+  family: string | null | undefined,
+  t: PipelineTranslator,
+) {
+  const value = String(family || "");
+  const help: Record<string, string> = {
+    query_transform: t(
+      "pipelines.family_query_transform_help",
+      "Prepares the research question before searching. It may preserve the question as written or derive a more structured search representation.",
+    ),
+    candidate_generation: t(
+      "pipelines.family_candidate_generation_help",
+      "Finds possible records or passages worth considering. These are candidates, not yet claims that DerridAI has accepted as evidence.",
+    ),
+    filter: t(
+      "pipelines.family_filter_help",
+      "Removes candidates that fall outside the required scope, schema, language, or other explicit constraints.",
+    ),
+    normalization: t(
+      "pipelines.family_normalization_help",
+      "Translates scores from different retrieval systems into a more comparable relevance meaning before they are combined.",
+    ),
+    fusion: t(
+      "pipelines.family_fusion_help",
+      "Combines two or more ranked candidate lists into one ranking while preserving where each candidate came from.",
+    ),
+    rerank: t(
+      "pipelines.family_rerank_help",
+      "Reorders an existing candidate set using a stronger or more focused relevance method. It does not normally search the whole corpus again.",
+    ),
+    support_validation: t(
+      "pipelines.family_support_validation_help",
+      "Checks whether evidence, provenance, citation, or support requirements are satisfied before the result is trusted or passed onward.",
+    ),
+    diversity: t(
+      "pipelines.family_diversity_help",
+      "Balances relevance with breadth so the final evidence is not needlessly repetitive or concentrated in one source.",
+    ),
+    selection: t(
+      "pipelines.family_selection_help",
+      "Keeps a bounded subset of candidates according to an already established order, quota, or selection rule.",
+    ),
+    context_pack: t(
+      "pipelines.family_context_pack_help",
+      "Assembles selected evidence into the bounded, citation-aware context that a later model step can read.",
+    ),
+    llm: t(
+      "pipelines.family_llm_help",
+      "Calls a generative language model for a bounded task such as answering, structured extraction, or closed-choice selection.",
+    ),
+    evaluation: t(
+      "pipelines.family_evaluation_help",
+      "Assesses a completed result after the main generation step, for example by grading an answer against its evidence.",
+    ),
+  };
+  return (
+    help[value] ||
+    t(
+      "pipelines.family_unknown_help",
+      "This label groups stages that perform a similar kind of operation.",
+    )
+  );
+}
+
 export function pipelineEdgeKindLabel(kind: string, t: PipelineTranslator) {
   const labels: Record<string, string> = {
     next: t("pipelines.then", "then"),
