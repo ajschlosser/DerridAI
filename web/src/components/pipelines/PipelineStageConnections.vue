@@ -1,6 +1,7 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { useI18nStore } from "../../stores/i18n";
+import UiTooltip from "../ui/UiTooltip.vue";
 import type { PipelineStage } from "../../types/pipelines";
 
 type FallbackKey = "on_empty" | "on_unavailable" | "on_timeout" | "on_error";
@@ -31,10 +32,30 @@ function targets() {
 
 <template>
   <fieldset class="edge-editor">
-    <legend>{{ t("pipelines.connections", "Connections") }}</legend>
+    <legend>
+      {{ t("pipelines.connections", "Connections") }}
+      <UiTooltip
+        :text="
+          t(
+            'pipelines.connections_help',
+            'Connections say what should happen after this stage. “Next stages” are the normal route. Fallbacks are alternate routes used only when a specific problem occurs.',
+          )
+        "
+      />
+    </legend>
     <div class="edge-grid">
       <div class="next-targets">
-        <span class="edge-label">{{ t("pipelines.next_stages", "Next stages") }}</span>
+        <span class="edge-label label-with-help">
+          {{ t("pipelines.next_stages", "Next stages") }}
+          <UiTooltip
+            :text="
+              t(
+                'pipelines.next_stages_help',
+                'These are the stages DerridAI should run next when this step completes normally. In graph terminology, each checked item creates a directed edge.',
+              )
+            "
+          />
+        </span>
         <div class="edge-target-list">
           <label v-for="target in targets()" :key="target.id">
             <input
@@ -52,7 +73,32 @@ function targets() {
 
       <div class="fallback-grid">
         <label v-for="fallback in fallbackOptions" :key="fallback.key">
-          <span>{{ fallback.label() }}</span>
+          <span class="label-with-help">
+            {{ fallback.label() }}
+            <UiTooltip
+              :text="
+                fallback.key === 'on_empty'
+                  ? t(
+                      'pipelines.on_empty_help',
+                      'Use this alternate route when the stage completes but produces no usable items.',
+                    )
+                  : fallback.key === 'on_unavailable'
+                    ? t(
+                        'pipelines.on_unavailable_help',
+                        'Use this alternate route when the required model, service, dependency, or capability is not available.',
+                      )
+                    : fallback.key === 'on_timeout'
+                      ? t(
+                          'pipelines.on_timeout_help',
+                          'Use this alternate route when the stage takes longer than its allowed time.',
+                        )
+                      : t(
+                          'pipelines.on_error_help',
+                          'Use this alternate route when the stage fails for another runtime error.',
+                        )
+              "
+            />
+          </span>
           <select
             class="control"
             :value="stage[fallback.key] || ''"
@@ -84,6 +130,12 @@ function targets() {
   color: var(--muted);
   font-size: 0.75rem;
   font-weight: 800;
+}
+.edge-editor legend,
+.label-with-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
 .edge-grid {
   display: grid;
