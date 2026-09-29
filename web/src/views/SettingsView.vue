@@ -19,6 +19,7 @@ import UiButton from "../components/ui/UiButton.vue";
 import UiDialog from "../components/ui/UiDialog.vue";
 import UiField from "../components/ui/UiField.vue";
 import UiHealthChip from "../components/ui/UiHealthChip.vue";
+import DocumentNlpLanguagePacks from "../components/settings/DocumentNlpLanguagePacks.vue";
 import SettingsNav from "../components/settings/SettingsNav.vue";
 import SettingsSaveState from "../components/settings/SettingsSaveState.vue";
 import SettingsSearch, { type SettingsSearchHit } from "../components/settings/SettingsSearch.vue";
@@ -1494,6 +1495,14 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
           role="tabpanel"
           aria-labelledby="settings-nav-system"
         >
+          <SettingsSection
+            section-id="language-packs"
+            :title="i18n.t('settings.nlp_packs_title')"
+            :description="i18n.t('settings.nlp_packs_help')"
+            :persistence="persistKind('backend')"
+          >
+            <DocumentNlpLanguagePacks />
+          </SettingsSection>
           <SettingsSection
             section-id="backup"
             :title="i18n.t('settings.backup')"

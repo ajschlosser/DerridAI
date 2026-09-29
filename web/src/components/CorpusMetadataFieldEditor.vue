@@ -6,7 +6,11 @@ import AppIcon from "./AppIcon.vue";
 import CorpusFieldOwnershipBadge from "./CorpusFieldOwnershipBadge.vue";
 import UiCombobox from "./ui/UiCombobox.vue";
 import { normalizeMetadataFieldValue } from "../domain/metadataFieldRegistry";
-import { groupOptionsBySuggestion, suggestedValues } from "../domain/metadataSuggestion";
+import {
+  groupOptionsBySuggestion,
+  matchOption,
+  suggestedValues,
+} from "../domain/metadataSuggestion";
 import { useRecordTextSelection } from "../composables/useRecordTextSelection";
 import CorpusFieldSelectionPreview from "./CorpusFieldSelectionPreview.vue";
 import {
@@ -149,7 +153,13 @@ const resolvedValue = computed(() => {
 });
 function editableValue() {
   const value = unwrapMetadataValue(resolvedValue.value);
-  return Array.isArray(value) ? value.join(", ") : metadataValueText(value);
+  const text = Array.isArray(value) ? value.join(", ") : metadataValueText(value);
+  if (props.control !== "enum") return text;
+  // A <select> only shows a draft that is exactly one of its options. Map the value onto
+  // its option, and with no value preselect the model's suggestion (never a sealed one).
+  const options = props.options || [];
+  if (text) return matchOption(options, text) ?? text;
+  return props.status?.blind ? "" : (suggestedOptions.value[0] ?? "");
 }
 watch(
   () => [
@@ -159,6 +169,7 @@ watch(
     props.status?.llm_value,
     props.status?.prefilled_candidate,
     props.constraint?.value,
+    props.options,
   ],
   () => {
     if (!dirty.value) draft.value = editableValue();

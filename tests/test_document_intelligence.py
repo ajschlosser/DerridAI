@@ -137,3 +137,84 @@ def test_document_intelligence_stays_out_of_canonical_publication_records():
     public = serialize_public_record(record)
     assert "document_intelligence" not in public
     assert "nlp_candidates" not in public
+
+
+def test_explicit_booknlp_request_without_worker_is_unavailable_not_spacy(monkeypatch):
+    monkeypatch.delenv("DOCUMENT_NLP_BASE_URL", raising=False)
+    monkeypatch.setattr(di, "_spacy_document_annotations", lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("spaCy ran")))
+    records = [{"record_id": "r1", "text": "Derrida wrote this."}]
+    analysis = di.analyze_document(
+        records, source_document_id="doc", language="English",
+        request={"document_nlp_provider": "booknlp"},
+    )
+    assert (analysis["status"], analysis["provider"], analysis["reason"]) == (
+        "unavailable", "booknlp", "provider_not_configured",
+    )
+    assert analysis["warnings"]
+
+    monkeypatch.setenv("DOCUMENT_NLP_BASE_URL", "http://document-nlp:8090")
+    monkeypatch.delenv("DOCUMENT_NLP_BASE_URL_FR", raising=False)
+    french = di.analyze_document(
+        records, source_document_id="doc", language="French",
+        request={"document_nlp_provider": "booknlp"},
+    )
+    assert (french["status"], french["reason"]) == ("unavailable", "language_unsupported")
+
+
+def test_booknlp_requests_route_each_language_to_its_own_worker(monkeypatch):
+    calls: list[tuple[str, str]] = []
+
+    def fake_call(text, *, language, base_url, **_kwargs):
+        calls.append((language, base_url))
+        return {"provider": "booknlp", "entities": [], "entity_clusters": [], "quotations": []}
+
+    monkeypatch.setattr(di, "_call_booknlp", fake_call)
+    monkeypatch.setattr(di, "_spacy_document_annotations", lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("spaCy ran")))
+    monkeypatch.setenv("DOCUMENT_NLP_BASE_URL", "http://document-nlp:8090")
+    monkeypatch.setenv("DOCUMENT_NLP_BASE_URL_FR", "http://document-nlp-fr:8090")
+    records = [{"record_id": "r1", "text": "Derrida wrote this."}]
+
+    booknlp = {"document_nlp_provider": "booknlp"}
+    english = di.analyze_document(records, source_document_id="doc", language="English", request=booknlp)
+    french = di.analyze_document(records, source_document_id="doc", language="French", request=booknlp)
+
+    assert english["selected_provider"] == "booknlp"
+    assert (english["status"], french["status"]) == ("ok", "ok")
+    monkeypatch.setenv("DOCUMENT_NLP_BASE_URL_ES", "http://document-nlp-es:8090")
+    spanish = di.analyze_document(records, source_document_id="doc", language="es-MX", request=booknlp)
+    assert spanish["status"] == "ok"
+    assert calls == [
+        ("en", "http://document-nlp:8090"),
+        ("fr", "http://document-nlp-fr:8090"),
+        ("es", "http://document-nlp-es:8090"),
+    ]
+
+
+def test_generic_worker_serves_only_its_declared_languages(monkeypatch):
+    monkeypatch.setenv("DOCUMENT_NLP_BASE_URL", "http://document-nlp:8090")
+    monkeypatch.delenv("DOCUMENT_NLP_BASE_URL_DE", raising=False)
+    monkeypatch.delenv("DOCUMENT_NLP_LANGUAGES", raising=False)
+    assert di.booknlp_url_for("en") == "http://document-nlp:8090"
+    assert di.booknlp_url_for("de") == ""
+    monkeypatch.setenv("DOCUMENT_NLP_LANGUAGES", "en, de")
+    assert di.booknlp_url_for("de") == "http://document-nlp:8090"
+
+
+def test_automatic_is_the_default_and_uses_spacy_where_booknlp_has_no_worker(monkeypatch):
+    monkeypatch.setenv("DOCUMENT_NLP_BASE_URL", "http://document-nlp:8090")
+    monkeypatch.delenv("DOCUMENT_NLP_BASE_URL_IT", raising=False)
+    monkeypatch.delenv("DOCUMENT_NLP_LANGUAGES", raising=False)
+    monkeypatch.setattr(di, "_call_booknlp", lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("BookNLP called")))
+    monkeypatch.setattr(
+        di, "_spacy_document_annotations",
+        lambda text, language: {"status": "ok", "provider": "spacy", "entities": [], "entity_clusters": []},
+    )
+
+    italian = di.analyze_document(
+        [{"record_id": "r1", "text": "Machiavelli scrisse questo."}],
+        source_document_id="doc", language="Italian", request={},
+    )
+
+    assert italian["selected_provider"] == "auto"
+    assert (italian["status"], italian["provider"]) == ("ok", "spacy")
+    assert italian["warnings"] == []

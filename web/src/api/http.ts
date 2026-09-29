@@ -89,13 +89,17 @@ function fullDetail(payload: unknown, text: string, statusText: string): string 
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
-export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+/** `timeoutMs` overrides the default abort for requests known to do long synchronous work. */
+export async function apiRequest<T>(
+  path: string,
+  { timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS, ...init }: RequestInit & { timeoutMs?: number } = {},
+): Promise<T> {
   const method = String(init.method || "GET").toUpperCase();
   let response: Response;
   const hasOwnSignal = Boolean(init.signal);
   const timeoutController = hasOwnSignal ? null : new AbortController();
   const timeoutId = timeoutController
-    ? setTimeout(() => timeoutController.abort(), DEFAULT_REQUEST_TIMEOUT_MS)
+    ? setTimeout(() => timeoutController.abort(), timeoutMs)
     : null;
   try {
     const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
@@ -116,7 +120,7 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
       cause instanceof DOMException &&
       cause.name === "AbortError";
     const detail = timedOut
-      ? `timed out after ${DEFAULT_REQUEST_TIMEOUT_MS / 1000}s`
+      ? `timed out after ${timeoutMs / 1000}s`
       : cause instanceof Error
         ? cause.message
         : String(cause);

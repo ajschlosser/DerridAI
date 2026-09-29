@@ -68,6 +68,8 @@ describe("Corpus Builder provider configuration", () => {
       generation: { num_ctx: 8192, temperature: 0.1 },
       enrichment_mode: "fast",
       semantic_indexing: true,
+      // spaCy covers every language; BookNLP only enhances English when configured.
+      document_nlp_provider: "auto",
     });
   });
 

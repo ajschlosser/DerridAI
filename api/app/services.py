@@ -5,6 +5,7 @@ from .capture_store import CaptureStore
 from .chroma_store import ChromaStore
 from .config import settings
 from .job_capture import CaptureJobManager
+from .job_document_nlp import DocumentNlpPackJobManager
 from .job_llm import LLMJobManager
 from .job_rag import RAGJobManager
 from .job_tools import LLMToolJobManager
@@ -32,3 +33,5 @@ upsert_jobs = UpsertJobManager(store, max_workers=1)
 capture_store = CaptureStore()
 capture_service = CorpusCaptureService(capture_store)
 capture_jobs = CaptureJobManager(capture_service)
+# Administrator-installed Document Intelligence language packs.
+document_nlp_pack_jobs = DocumentNlpPackJobManager()

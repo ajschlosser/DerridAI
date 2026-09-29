@@ -20,6 +20,7 @@ from .routers.auth import router as auth_router
 from .routers.chroma import router as chroma_router
 from .routers.corpus import router as corpus_router
 from .routers.derridai import router as derridai_router
+from .routers.document_nlp import router as document_nlp_router
 from .routers.gutenberg import router as gutenberg_router
 from .routers.health import router as health_router
 from .routers.i18n import router as i18n_router
@@ -46,6 +47,7 @@ ROUTERS = (
     corpus_router,
     sources_router,
     derridai_router,
+    document_nlp_router,
     stores_router,
     # Read-only cELF query façade and the realtime notification plane sit beside
     # the REST command API; neither replaces it (docs/GRAPHQL.md, docs/REALTIME.md).

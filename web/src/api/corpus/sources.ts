@@ -17,6 +17,9 @@ import type {
 } from "./types";
 import { LEGACY_CORPUS_BASE, legacyCorpusUrl } from "./compatibility";
 
+/** Ingestion extracts text, OCRs scans and detects page numbers in one request; large scans take minutes. */
+const SOURCE_INGEST_TIMEOUT_MS = 15 * 60_000;
+
 /** Query string for the Sources list; multi-valued filters travel as comma-separated values. */
 export function sourceListQuery(params: SourceListQuery): string {
   const search = new URLSearchParams();
@@ -69,7 +72,11 @@ export const corpusSourcesApi = {
     if (pages.providerProfileId) body.append("provider_profile_id", pages.providerProfileId);
     for (const [key, value] of Object.entries(pages.connection || {}))
       if (value) body.append(key, String(value));
-    return apiRequest<PdfAsset>(legacyCorpusUrl("assets"), { method: "POST", body });
+    return apiRequest<PdfAsset>(legacyCorpusUrl("assets"), {
+      method: "POST",
+      body,
+      timeoutMs: SOURCE_INGEST_TIMEOUT_MS,
+    });
   },
   importUrl: (
     url: string,
@@ -78,6 +85,7 @@ export const corpusSourcesApi = {
   ) =>
     apiRequest<PdfAsset>(legacyCorpusUrl("assets/url"), {
       method: "POST",
+      timeoutMs: SOURCE_INGEST_TIMEOUT_MS,
       body: JSON.stringify({
         url,
         source_illegibility: sourceIllegibility,

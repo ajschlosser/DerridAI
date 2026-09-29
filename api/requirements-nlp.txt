@@ -6,3 +6,11 @@ spacy>=3.8,<4
 en_core_web_lg @ https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl
 fr_core_news_lg @ https://github.com/explosion/spacy-models/releases/download/fr_core_news_lg-3.8.0/fr_core_news_lg-3.8.0-py3-none-any.whl
 de_core_news_lg @ https://github.com/explosion/spacy-models/releases/download/de_core_news_lg-3.8.0/de_core_news_lg-3.8.0-py3-none-any.whl
+# Tokenizer/morphology dependencies declared by spaCy language packs installed on demand
+# (Settings -> System -> Language packs): Japanese (Sudachi) and Chinese (pkuseg). The model
+# packs themselves are downloaded and digest-verified by an administrator, not baked into the
+# image. Russian/Ukrainian packs also name pymorphy3, but only for the lemmatizer DerridAI
+# never loads, so it (and its GPL-3.0 Ukrainian dictionary) is deliberately not installed.
+sudachipy>=0.5.2,!=0.6.1
+sudachidict-core>=20211220
+spacy-pkuseg>=0.0.27

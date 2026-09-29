@@ -8,8 +8,10 @@ not evidence of a role; a person named in a passage is not thereby its speaker,
 quoted speaker or position holder. Candidates guide the LLM prompt and let a
 proposed value be checked against the text; they never populate or confirm a field.
 
-If a model for the record's language is not installed, annotation is reported as
-``unavailable`` (visible, not silently empty).
+Models resolve in order: a configured/installed package (``SPACY_MODEL_<LANG>``), an
+administrator-installed spaCy language pack, then the multilingual ``xx`` entity
+model, whose use is named in the reported model. If none loads, annotation is
+reported as ``unavailable`` (visible, not silently empty).
 """
 
 from __future__ import annotations
@@ -37,13 +39,58 @@ DEFAULT_MODELS = {
 _LABEL_ALIASES = {"PER": "PERSON"}
 _LABEL_SUPERSETS = {"LOC": {"LOC", "GPE", "FAC"}}
 
+# Language names seen in record metadata; any ISO 639 code is also accepted.
+_LANGUAGE_NAMES = {
+    "english": "en", "french": "fr", "français": "fr", "francais": "fr", "german": "de", "deutsch": "de",
+    "italian": "it", "italiano": "it", "spanish": "es", "español": "es", "espanol": "es",
+    "portuguese": "pt", "português": "pt", "dutch": "nl", "nederlands": "nl", "russian": "ru",
+    "polish": "pl", "catalan": "ca", "català": "ca", "danish": "da", "greek": "el", "finnish": "fi",
+    "croatian": "hr", "japanese": "ja", "korean": "ko", "lithuanian": "lt", "macedonian": "mk",
+    "norwegian": "nb", "romanian": "ro", "slovenian": "sl", "swedish": "sv", "ukrainian": "uk",
+    "chinese": "zh", "latin": "la", "hebrew": "he", "arabic": "ar", "czech": "cs", "hungarian": "hu",
+}
+# Multilingual named-entity pipeline used when a language has no model of its own.
+MULTILINGUAL = "xx"
+
 _lock = threading.Lock()
 _pipelines: dict[str, Any] = {}
+_loaded_names: dict[str, str] = {}
 _missing: set[str] = set()
 
 
 def _model_name(language: str) -> str | None:
-    return os.environ.get(f"SPACY_MODEL_{language.upper()}") or DEFAULT_MODELS.get(language)
+    """The model actually loaded for ``language`` or, before loading, the configured one."""
+    return _loaded_names.get(language) or (
+        os.environ.get(f"SPACY_MODEL_{language.upper()}") or DEFAULT_MODELS.get(language)
+    )
+
+
+def reset_pipelines() -> None:
+    """Forget loaded and missing pipelines, e.g. after a spaCy language pack is (un)installed."""
+    with _lock:
+        _pipelines.clear()
+        _loaded_names.clear()
+        _missing.clear()
+
+
+def _candidate_models(language: str) -> list[tuple[str, str]]:
+    """(load target, reported name) in priority order: configured package, installed pack, multilingual."""
+    from .document_nlp_packs import installed_spacy_model
+
+    out: list[tuple[str, str]] = []
+    configured = os.environ.get(f"SPACY_MODEL_{language.upper()}") or DEFAULT_MODELS.get(language)
+    if configured:
+        out.append((configured, configured))
+    pack = installed_spacy_model(language)
+    if pack:
+        out.append(pack)
+    if language != MULTILINGUAL:
+        fallback = installed_spacy_model(MULTILINGUAL)
+        out.append(
+            (fallback[0], f"{fallback[1]} (multilingual fallback)") if fallback
+            else ("xx_ent_wiki_sm", "xx_ent_wiki_sm (multilingual fallback)")
+        )
+    return out
 
 
 def text_digest(text: str) -> str:
@@ -54,9 +101,8 @@ def text_digest(text: str) -> str:
 def language_code(value: Any) -> str:
     """Two-letter code for a language name or tag, else ''."""
     text = str(value or "").strip().lower().replace("_", "-")
-    names = {"english": "en", "french": "fr", "français": "fr", "francais": "fr", "german": "de", "deutsch": "de"}
-    code = names.get(text) or text.split("-")[0]
-    return code if code in DEFAULT_MODELS else ""
+    code = _LANGUAGE_NAMES.get(text) or text.split("-")[0]
+    return code if code.isascii() and code.isalpha() and 2 <= len(code) <= 3 else ""
 
 
 def load_pipeline(language: str) -> Any | None:
@@ -65,21 +111,24 @@ def load_pipeline(language: str) -> Any | None:
         return _pipelines[language]
     if language in _missing:
         return None
-    name = _model_name(language)
     with _lock:
         if language in _pipelines:
             return _pipelines[language]
-        try:
-            import spacy
+        for target, name in _candidate_models(language):
+            try:
+                import spacy
 
-            # The parser and lemmatizer are not needed for tags/entities and cost time.
-            pipeline = spacy.load(name, exclude=["parser", "lemmatizer"])
-        except Exception as exc:  # missing package or model: report, don't guess
-            logger.warning("spaCy pipeline %r unavailable for %r: %s", name, language, exc)
-            _missing.add(language)
-            return None
-        _pipelines[language] = pipeline
-        return pipeline
+                # The parser and lemmatizer are not needed for tags/entities and cost time.
+                pipeline = spacy.load(target, exclude=["parser", "lemmatizer"])
+            except Exception as exc:  # missing package or model: try the next, never guess
+                logger.info("spaCy pipeline %r unavailable for %r: %s", name, language, exc)
+                continue
+            _pipelines[language] = pipeline
+            _loaded_names[language] = name
+            return pipeline
+        logger.warning("No spaCy pipeline is available for %r.", language)
+        _missing.add(language)
+        return None
 
 
 def _entity_matches(tag: str, label: str) -> bool:

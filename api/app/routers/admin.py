@@ -19,6 +19,7 @@ from ..config import APP_VERSION, settings
 from ..corpus_builder import pdf_corpus_builds, pdf_corpus_repository
 from ..services import (
     capture_jobs,
+    document_nlp_pack_jobs,
     llm_jobs,
     llm_tool_jobs,
     rag_jobs,
@@ -38,6 +39,7 @@ def _background_jobs_active() -> bool:
         or rag_jobs.active_count()
         or upsert_jobs.active_count()
         or capture_jobs.active_count()
+        or document_nlp_pack_jobs.active_count()
         or pdf_corpus_builds.active_count()
     )
 
@@ -660,7 +662,7 @@ def get_restored_current_pdf() -> FileResponse:
 
 @router.post("/api/admin/nuke")
 def nuke(response: Response) -> dict[str, Any]:
-    if llm_jobs.active_count() or llm_tool_jobs.active_count() or rag_jobs.active_count() or upsert_jobs.active_count() or capture_jobs.active_count() or pdf_corpus_builds.active_count():
+    if llm_jobs.active_count() or llm_tool_jobs.active_count() or rag_jobs.active_count() or upsert_jobs.active_count() or capture_jobs.active_count() or document_nlp_pack_jobs.active_count() or pdf_corpus_builds.active_count():
         raise HTTPException(
             status_code=409,
             detail=(
@@ -677,6 +679,7 @@ def nuke(response: Response) -> dict[str, Any]:
             + rag_jobs.clear_all()
             + upsert_jobs.clear_all()
             + capture_jobs.clear_all()
+            + document_nlp_pack_jobs.clear_all()
         )
         chroma_result = store.nuke()
         data_root = Path(settings.chroma_data_root).expanduser().resolve()

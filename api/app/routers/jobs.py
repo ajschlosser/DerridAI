@@ -21,7 +21,7 @@ from ..models import (
 )
 from ..provider_profile_options import profile_generation_options
 from ..researcher_view import sanitize_rag_job
-from ..services import capture_jobs, llm_jobs, llm_tool_jobs, rag_jobs, upsert_jobs
+from ..services import capture_jobs, document_nlp_pack_jobs, llm_jobs, llm_tool_jobs, rag_jobs, upsert_jobs
 from ..system_store import system_store
 
 router = APIRouter(tags=["jobs"])
@@ -181,13 +181,13 @@ def list_jobs(request: Request) -> dict[str, Any]:
     if user.role != "admin":
         jobs = [job for job in rag_jobs.list() if job.get("owner") == user.username]
     else:
-        jobs = llm_jobs.list() + llm_tool_jobs.list() + rag_jobs.list() + upsert_jobs.list() + capture_jobs.list() + pdf_corpus_builds.list_operations()
+        jobs = llm_jobs.list() + llm_tool_jobs.list() + rag_jobs.list() + upsert_jobs.list() + capture_jobs.list() + document_nlp_pack_jobs.list() + pdf_corpus_builds.list_operations()
     jobs.sort(key=lambda job: job.get("created_at", ""), reverse=True)
     return {"jobs": jobs}
 
 
 def _job_manager_for(job_id: str) -> Any:
-    for manager in (llm_jobs, llm_tool_jobs, rag_jobs, upsert_jobs, capture_jobs):
+    for manager in (llm_jobs, llm_tool_jobs, rag_jobs, upsert_jobs, capture_jobs, document_nlp_pack_jobs):
         try:
             manager.get(job_id)
             return manager
@@ -261,6 +261,7 @@ def clear_finished_jobs() -> dict[str, Any]:
             + rag_jobs.clear_finished()
             + upsert_jobs.clear_finished()
             + capture_jobs.clear_finished()
+            + document_nlp_pack_jobs.clear_finished()
             + pdf_corpus_builds.clear_finished()
         )
     }

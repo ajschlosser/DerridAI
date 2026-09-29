@@ -27,9 +27,9 @@ class TopicDecision:
 
 
 def _job_managers() -> tuple[Any, ...]:
-    from ..services import capture_jobs, llm_jobs, llm_tool_jobs, rag_jobs, upsert_jobs
+    from ..services import capture_jobs, document_nlp_pack_jobs, llm_jobs, llm_tool_jobs, rag_jobs, upsert_jobs
 
-    return (llm_jobs, llm_tool_jobs, rag_jobs, upsert_jobs, capture_jobs)
+    return (llm_jobs, llm_tool_jobs, rag_jobs, upsert_jobs, capture_jobs, document_nlp_pack_jobs)
 
 
 def find_job_summary(job_id: str) -> dict[str, Any] | None:
