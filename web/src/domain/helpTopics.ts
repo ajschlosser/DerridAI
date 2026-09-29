@@ -421,13 +421,7 @@ export function visiblePageGuides(
     }))
     .filter((guide) =>
       matchesNeedle(
-        [
-          guide.title,
-          guide.summary,
-          guide.tasks,
-          guide.impact,
-          t(`help.group.${guide.group}`),
-        ],
+        [guide.title, guide.summary, guide.tasks, guide.impact, t(`help.group.${guide.group}`)],
         needle,
       ),
     );
