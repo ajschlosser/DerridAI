@@ -95,7 +95,7 @@ def test_custom_evidence_pipeline_can_be_saved_and_assigned(tmp_path) -> None:
     assert manager.resolve("evidence_suggestion.reviewer")["pipeline"]["pipeline_id"] == "evidence.custom"
 
 
-def test_unmigrated_nonresearch_pipeline_is_inspectable_but_not_runtime_supported(tmp_path) -> None:
+def test_custom_metadata_precedent_pipeline_can_be_saved_and_assigned(tmp_path) -> None:
     manager = _manager(tmp_path)
     source = built_in_pipeline("metadata.precedents.current", 1)
     assert source is not None
@@ -104,6 +104,36 @@ def test_unmigrated_nonresearch_pipeline_is_inspectable_but_not_runtime_supporte
             "pipeline_id": "metadata.custom",
             "version": 1,
             "name": "Metadata custom",
+            "status": "active",
+            "built_in": False,
+        }
+    )
+
+    saved = manager.save_definition(custom, actor="admin")
+    support = manager.runtime_support(saved)
+    assigned = manager.assign(
+        PipelineAssignment(
+            feature="metadata_precedents",
+            pipeline_id=saved.pipeline_id,
+            pipeline_version=saved.version,
+            override_allowed=True,
+        )
+    )
+
+    assert support == {"supported": True, "adapter": "metadata_precedents"}
+    assert assigned.pipeline_id == "metadata.custom"
+    assert manager.resolve("metadata_precedents")["pipeline"]["pipeline_id"] == "metadata.custom"
+
+
+def test_unmigrated_memory_pipeline_is_inspectable_but_not_runtime_supported(tmp_path) -> None:
+    manager = _manager(tmp_path)
+    source = built_in_pipeline("memory.claim.current", 1)
+    assert source is not None
+    custom = source.model_copy(
+        update={
+            "pipeline_id": "memory.claim.custom",
+            "version": 1,
+            "name": "Claim memory custom",
             "status": "active",
             "built_in": False,
         }
