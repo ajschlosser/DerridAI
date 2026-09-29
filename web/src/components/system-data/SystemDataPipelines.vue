@@ -152,7 +152,7 @@ function beginClone() {
     .map((item) => Number(item.version || 0));
   const nextVersion = Math.max(0, ...versions) + 1;
   draft.value = {
-    ...structuredClone(source),
+    ...JSON.parse(JSON.stringify(source)),
     pipeline_id: proposedId,
     version: nextVersion,
     name: source.built_in ? `${source.name} — custom` : source.name,
