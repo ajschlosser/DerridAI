@@ -1,5 +1,5 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
-import type { PipelineDefinition } from "../types/pipelines";
+import type { PipelineDefinition, PipelineStrategy } from "../types/pipelines";
 
 export type PipelineTranslator = (key: string, fallback: string) => string;
 
@@ -79,4 +79,23 @@ export function pipelineEdgeKindLabel(kind: string, t: PipelineTranslator) {
     error: t("pipelines.on_error", "On error"),
   };
   return labels[kind] || kind;
+}
+
+
+export function pipelineStrategyLabel(
+  strategy: PipelineStrategy | null | undefined,
+  t: PipelineTranslator,
+) {
+  if (!strategy) return "";
+  return strategy.label_key ? t(strategy.label_key, strategy.label) : strategy.label;
+}
+
+export function pipelineStrategyDescription(
+  strategy: PipelineStrategy | null | undefined,
+  t: PipelineTranslator,
+) {
+  if (!strategy) return "";
+  return strategy.description_key
+    ? t(strategy.description_key, strategy.description)
+    : strategy.description;
 }
