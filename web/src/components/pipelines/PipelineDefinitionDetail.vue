@@ -179,7 +179,7 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
         {{
           t(
             "pipelines.how_to_read_chain_help",
-            "Read from the entry stage through each “then” connection. A fallback label marks an exception route. “Deterministic” stages use fixed program logic; “LLM” stages call a language model and can vary between runs.",
+            "Read from the entry stage through each “then” connection. A fallback label marks an exception route. “Deterministic” stages use fixed rules, “Learned model” stages use non-generative machine-learning models, and “LLM” stages call a generative language model.",
           )
         }}
       </span>
