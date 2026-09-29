@@ -933,6 +933,42 @@ def _selected_evidence_candidates(request: RAGRunRequest, store: ChromaStore) ->
     return resolved
 
 
+def _candidate_diagnostic(item: Mapping[str, Any], rank: int) -> dict[str, Any]:
+    """Bounded candidate lineage for non-persistent comparison/benchmark runs.
+
+    Source text and arbitrary Record metadata are intentionally excluded. The
+    retained fields are enough to compare membership, rank, retrieval route,
+    and stage-specific scores without copying the corpus into diagnostics.
+    """
+
+    record = item.get("record") if isinstance(item.get("record"), Mapping) else {}
+    return {
+        "record_id": str(
+            record.get("record_id")
+            or item.get("chroma_id")
+            or item.get("id")
+            or ""
+        ),
+        "rank": rank,
+        "collection": item.get("collection"),
+        "selected_evidence": bool(item.get("selected_evidence")),
+        "distance": item.get("distance"),
+        "distance_metric": item.get("distance_metric"),
+        "relevance": item.get("relevance"),
+        "rrf_score": item.get("rrf_score"),
+        "rerank_score": item.get("rerank_score"),
+        "retrieval_hits": list(item.get("retrieval_hits") or []),
+    }
+
+
+def _candidate_diagnostics(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        diagnostic
+        for rank, item in enumerate(rows, start=1)
+        if (diagnostic := _candidate_diagnostic(item, rank))["record_id"]
+    ]
+
+
 def _scope_rag_candidates(
     rows: list[dict[str, Any]],
     collection: dict[str, Any],
@@ -1281,6 +1317,9 @@ def run_rag_pipeline(
         ),
         reverse=True,
     )
+    pre_rerank_diagnostics = (
+        _candidate_diagnostics(deduped) if stop_after_context else []
+    )
     update("deduplicate", 1, 1, f"{len(deduped)} unique records after rank fusion")
     stages.append({
         "name": "retrieval",
@@ -1496,6 +1535,9 @@ def run_rag_pipeline(
             "reranker_telemetry": rerank_telemetry,
         },
     })
+    post_rerank_diagnostics = (
+        _candidate_diagnostics(reranked) if stop_after_context else []
+    )
     update("rerank", 1, 1, f"{len(reranked)} records after relevance reranking")
     check_cancel()
 
@@ -1559,6 +1601,9 @@ def run_rag_pipeline(
         check_cancel()
 
     # Step 5: build compact evidence context.
+    post_selection_diagnostics = (
+        _candidate_diagnostics(reranked) if stop_after_context else []
+    )
     stage_start = time.perf_counter()
     reranked, insufficient_records = partition_sufficient_records(reranked)
     if insufficient_records:
@@ -1653,6 +1698,13 @@ def run_rag_pipeline(
             "pipeline": pipeline_summary,
             "elapsed_seconds": time.perf_counter() - started,
             "retrieval": retrieval_summary,
+            "diagnostics": {
+                "candidate_retention": "complete_for_comparison",
+                "pre_rerank": pre_rerank_diagnostics,
+                "post_rerank": post_rerank_diagnostics,
+                "post_selection": post_selection_diagnostics,
+                "context_characters": len(retrieval_context),
+            },
             "memory": {
                 "mode": "skipped_for_non_persistent_dry_run",
                 "warnings": [],
