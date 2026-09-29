@@ -5,6 +5,7 @@ import * as runtime from "../runtime/runtime.js";
 import { fullCitation } from "../domain/citations";
 import { highlight } from "../domain/recordFormatting";
 import AppIcon from "./AppIcon.vue";
+import UiTooltip from "./ui/UiTooltip.vue";
 import { useI18nStore } from "../stores/i18n";
 import { corpusState } from "../state/workspaceState";
 import { createPdfExplorerCopy } from "../domain/pdfExplorerCopy";
@@ -472,20 +473,24 @@ onBeforeUnmount(() => {
           </div>
           <div class="pdf-command-divider"></div>
           <div class="pdf-view-actions">
-            <button
-              class="btn small icon-only"
-              id="pdfRotateLeft"
-              :title="copy.rotateLeft"
-              @click="rotateLeft"
-              v-text="'↶'"
-            ></button>
-            <button
-              class="btn small icon-only"
-              id="pdfRotateRight"
-              :title="copy.rotateRight"
-              @click="rotateRight"
-              v-text="'↷'"
-            ></button>
+            <UiTooltip :text="copy.rotateLeft" trigger-mode="content" :content-focusable="false" placement="bottom">
+              <button
+                class="btn small icon-only"
+                id="pdfRotateLeft"
+                :aria-label="copy.rotateLeft"
+                @click="rotateLeft"
+                v-text="'↶'"
+              ></button>
+            </UiTooltip>
+            <UiTooltip :text="copy.rotateRight" trigger-mode="content" :content-focusable="false" placement="bottom">
+              <button
+                class="btn small icon-only"
+                id="pdfRotateRight"
+                :aria-label="copy.rotateRight"
+                @click="rotateRight"
+                v-text="'↷'"
+              ></button>
+            </UiTooltip>
             <span class="note">{{
               state.pdf.rotation ? copy.rotationAmount(state.pdf.rotation) : copy.upright
             }}</span>
