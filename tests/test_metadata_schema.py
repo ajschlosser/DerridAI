@@ -13,6 +13,13 @@ from app.corpus_metadata import (
     REVIEW_METADATA_FIELDS,
 )
 from app.metadata_schema import MetadataSchema, SchemaField, SchemaGroup
+from app.metadata_schema_profiles import (
+    BUILTIN_SCHEMA_IDS,
+    FICTION_SCHEMA_ID,
+    NONFICTION_SCHEMA_ID,
+    fiction_schema,
+    nonfiction_schema,
+)
 
 LEGACY = json.loads((Path(__file__).parent / "fixtures" / "legacy_prompts.json").read_text(encoding="utf-8"))
 CONTEXT = "<<CONTEXT>>\n"
@@ -116,6 +123,83 @@ def test_the_built_in_schema_describes_the_same_fields_as_the_code_does_today():
     assert schema.attribution_fields() == set(ATTRIBUTION_EVIDENCE_FIELDS)
     assert set(schema.review_fields()) == set(REVIEW_METADATA_FIELDS)
     assert schema.review_fields()[:3] == list(ms.CORE_FIELDS)
+
+
+@pytest.mark.parametrize(
+    ("factory", "schema_id", "field_namespace", "required_fields", "corpus_fields"),
+    [
+        (
+            fiction_schema,
+            FICTION_SCHEMA_ID,
+            "fiction",
+            {
+                "narrator",
+                "point_of_view",
+                "focalizers",
+                "characters_present",
+                "character_relationships",
+                "locations",
+                "setting_time",
+                "events",
+                "dialogue_speakers",
+                "themes",
+                "motifs",
+                "symbols",
+                "tone",
+                "literary_devices",
+            },
+            {"fiction_form", "fiction_genres"},
+        ),
+        (
+            nonfiction_schema,
+            NONFICTION_SCHEMA_ID,
+            "nonfiction",
+            {
+                "claim",
+                "claim_type",
+                "position_holder",
+                "evidence_items",
+                "sources_cited",
+                "statistics",
+                "methods_or_procedures",
+                "persons",
+                "organizations",
+                "places",
+                "dates",
+                "works_referenced",
+                "laws_or_policies",
+                "section_function",
+                "recommendations",
+                "conclusions",
+            },
+            {"nonfiction_genre", "subject_domains", "intended_audience"},
+        ),
+    ],
+)
+def test_domain_builtin_profiles_are_traceable_guided_and_schema_driven(
+    factory, schema_id, field_namespace, required_fields, corpus_fields
+):
+    schema = factory()
+    by_name = schema.by_name()
+
+    assert schema.id == schema_id
+    assert schema.group("discourse")
+    assert required_fields <= set(by_name)
+    assert corpus_fields <= set(by_name)
+    assert all(by_name[name].scope == "corpus" for name in corpus_fields)
+
+    for field in schema.fields:
+        assert field.instruction.strip(), field.name
+        assert field.evidence is True, field.name
+        assert field.assess is True, field.name
+        assert field.field_id.startswith(f"derridai.profile.{field_namespace}."), field.name
+
+    prompts = {
+        group.key: ms.build_group_prompt(schema, group.key, base_context=CONTEXT)
+        for group in schema.groups
+    }
+    for field in schema.fields:
+        assert field.name in prompts[field.group]
 
 
 def test_default_schema_assigns_curated_pos_and_ner_hints_to_every_configurable_field():
@@ -305,14 +389,17 @@ from app.metadata_schema_store import (  # noqa: E402
 )
 
 
-def test_the_built_in_schema_is_always_first_and_cannot_be_changed_or_deleted(tmp_path):
+def test_builtin_schemas_are_first_and_cannot_be_changed_or_deleted(tmp_path):
     store = SchemaStore(tmp_path)
     listing = store.list()
-    assert listing[0]["id"] == "default" and listing[0]["builtin"] is True and listing[0]["field_count"] >= 20
-    with pytest.raises(SchemaLocked):
-        store.save(custom(), "default")
-    with pytest.raises(SchemaLocked):
-        store.delete("default")
+    assert [item["id"] for item in listing[:3]] == ["default", "derridai-fiction", "derridai-nonfiction"]
+    assert all(item["builtin"] is True for item in listing[:3])
+    assert listing[0]["field_count"] >= 20
+    for schema_id in BUILTIN_SCHEMA_IDS:
+        with pytest.raises(SchemaLocked):
+            store.save(custom(), schema_id)
+        with pytest.raises(SchemaLocked):
+            store.delete(schema_id)
 
 
 def test_saving_gives_a_unique_id_and_survives_a_reload(tmp_path):
@@ -362,7 +449,7 @@ def test_a_damaged_file_does_not_hide_the_others(tmp_path):
     store = SchemaStore(tmp_path)
     store.save(custom())
     (store.dir / "broken.json").write_text("{not json")
-    assert [s["id"] for s in store.list()] == ["default", "reading-notes"]
+    assert [s["id"] for s in store.list()] == ["default", "derridai-fiction", "derridai-nonfiction", "reading-notes"]
 
 
 def test_the_api_lists_saves_exports_imports_and_deletes(tmp_path, monkeypatch):
@@ -397,7 +484,7 @@ def test_the_api_lists_saves_exports_imports_and_deletes(tmp_path, monkeypatch):
             return created, listing, exported, imported, bad, locked, gone, missing
 
     created, listing, exported, imported, bad, locked, gone, missing = asyncio.run(run())
-    assert created["id"] == "reading-notes" and [s["id"] for s in listing] == ["default", "reading-notes"]
+    assert created["id"] == "reading-notes" and [s["id"] for s in listing] == ["default", "derridai-fiction", "derridai-nonfiction", "reading-notes"]
     assert "attachment" in exported.headers["content-disposition"] and imported.json()["id"] == "reading-notes-2"
     assert bad.status_code == 422 and locked.status_code == 422 and gone.status_code == 200 and missing.status_code == 404
 

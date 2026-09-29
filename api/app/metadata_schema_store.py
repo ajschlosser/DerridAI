@@ -1,8 +1,8 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 """Where saved metadata schemas live: one JSON file each, next to the corpus builds.
 
-The built-in schema is not a file. It is always listed first, cannot be changed or deleted, and is what a build uses
-when no other is chosen.
+Built-in schemas are not files. The historical scholarly default is always listed first and remains the fallback when
+no other profile is chosen. All built-ins are read-only; users can duplicate them into editable saved schemas.
 """
 
 from __future__ import annotations
@@ -15,13 +15,8 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from .metadata_schema import (
-    DEFAULT_SCHEMA_ID,
-    MetadataSchema,
-    default_schema,
-    export_schema,
-    import_schema,
-)
+from .metadata_schema import DEFAULT_SCHEMA_ID, MetadataSchema, export_schema, import_schema
+from .metadata_schema_profiles import BUILTIN_SCHEMA_IDS, builtin_schema, builtin_schemas
 
 
 class SchemaNotFound(KeyError):
@@ -48,37 +43,48 @@ class SchemaStore:
         return self.dir / f"{schema_id}.json"
 
     def get(self, schema_id: str) -> MetadataSchema:
-        if schema_id == DEFAULT_SCHEMA_ID:
-            return default_schema()
+        built_in = builtin_schema(schema_id)
+        if built_in is not None:
+            return built_in
         try:
             return MetadataSchema.model_validate({**json.loads(self._path(schema_id).read_text(encoding="utf-8")), "id": schema_id})
         except (OSError, ValueError) as exc:
             raise SchemaNotFound(schema_id) from exc
 
     def list(self) -> list[dict[str, Any]]:
-        schemas = [default_schema()]
+        schemas = list(builtin_schemas())
         for path in sorted(self.dir.glob("*.json")):
+            if path.stem in BUILTIN_SCHEMA_IDS:
+                continue  # built-ins cannot be shadowed by stale or manually copied files
             try:
                 schemas.append(self.get(path.stem))
             except SchemaNotFound:
                 continue  # a damaged file must not hide the others
         return [
-            {"id": s.id, "name": s.name, "description": s.description, "schema_version": s.schema_version, "builtin": s.id == DEFAULT_SCHEMA_ID,
-             "field_count": len(s.field_names()), "groups": [g.label for g in s.groups], "hash": s.content_hash()}
+            {
+                "id": s.id,
+                "name": s.name,
+                "description": s.description,
+                "schema_version": s.schema_version,
+                "builtin": s.id in BUILTIN_SCHEMA_IDS,
+                "field_count": len(s.field_names()),
+                "groups": [g.label for g in s.groups],
+                "hash": s.content_hash(),
+            }
             for s in schemas
         ]
 
     def save(self, schema: MetadataSchema, schema_id: str | None = None) -> MetadataSchema:
-        """Create a schema (a new id) or replace an existing saved one. The built-in one cannot be replaced."""
+        """Create a schema (a new id) or replace an existing saved one. Built-in profiles cannot be replaced."""
         with self._lock:
-            if schema_id == DEFAULT_SCHEMA_ID:
-                raise SchemaLocked("The built-in schema cannot be changed. Duplicate it and edit the copy.")
+            if schema_id in BUILTIN_SCHEMA_IDS:
+                raise SchemaLocked("Built-in schemas cannot be changed. Duplicate the profile and edit the copy.")
             creating = schema_id is None
             if creating:
                 base = _slug(schema.name)
-                schema_id = base if base != DEFAULT_SCHEMA_ID else "schema"
+                schema_id = "schema" if base == DEFAULT_SCHEMA_ID else base
                 n = 2
-                while self._path(schema_id).exists() or schema_id == DEFAULT_SCHEMA_ID:
+                while self._path(schema_id).exists() or schema_id in BUILTIN_SCHEMA_IDS:
                     schema_id = f"{base}-{n}"
                     n += 1
             else:
@@ -116,8 +122,8 @@ class SchemaStore:
         return f"{major}.{minor}.{patch + 1}"
 
     def delete(self, schema_id: str) -> None:
-        if schema_id == DEFAULT_SCHEMA_ID:
-            raise SchemaLocked("The built-in schema cannot be deleted.")
+        if schema_id in BUILTIN_SCHEMA_IDS:
+            raise SchemaLocked("Built-in schemas cannot be deleted.")
         path = self._path(schema_id)
         if not path.exists():
             raise SchemaNotFound(schema_id)

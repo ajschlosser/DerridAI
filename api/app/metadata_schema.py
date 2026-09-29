@@ -6,9 +6,11 @@ field's type, its allowed values and the instruction the model receives. The thr
 depends on (region type, primary text, discourse role) are the locked core: every schema has them, in the "discourse"
 group, and a schema cannot change or remove them. Everything else is the schema's to define.
 
-The built-in schema, `default_schema()`, describes exactly the fields and instructions DerridAI has always used, so
-choosing it changes nothing. A build takes a copy of its schema when it starts and never reads the saved one again, so
-editing or deleting a saved schema cannot alter a build that used it.
+The historical built-in schema, `default_schema()`, describes exactly the fields and instructions DerridAI has always
+used, so choosing it changes nothing. Additional built-in domain profiles are registered in
+`metadata_schema_profiles`; they use this same generic contract rather than adding domain-specific runtime branches.
+A build takes a copy of its schema when it starts and never reads the saved one again, so editing or deleting a saved
+schema cannot alter a build that used it.
 
 Schemas are exported as one JSON file with a format version and a content hash, and imported through the same
 validation as anything typed into an editor.
