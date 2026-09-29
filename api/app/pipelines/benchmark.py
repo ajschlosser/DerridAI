@@ -161,9 +161,11 @@ def benchmark_corpus_snapshot(
     """Capture the source plus relevant derived-language collection manifests."""
 
     lister = getattr(store, "list_stores", None)
-    if not callable(lister):
-        raise ValueError("The configured corpus store cannot enumerate collections.")
-    rows = [item for item in lister() if isinstance(item, dict)]
+    rows = (
+        [item for item in lister() if isinstance(item, dict)]
+        if callable(lister)
+        else []
+    )
     source = next(
         (
             item
