@@ -63,13 +63,13 @@ defineProps<{
 .tooltip-infobox p {
   margin: 4px 0 8px;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   line-height: 1.4;
 }
 .tooltip-infobox table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
 }
 .tooltip-infobox th,
 .tooltip-infobox td {
