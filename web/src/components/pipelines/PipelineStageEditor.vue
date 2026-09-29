@@ -311,7 +311,7 @@ const strategiesByFamily = computed(() => {
   gap: 5px;
 }
 .strategy-io code {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
 }
 .stage-toolbar {
   display: flex;
