@@ -278,7 +278,7 @@ const routes: RouteRecordRaw[] = [
       const section = allowed.has(requested) ? requested : "overview";
       const query = { ...to.query };
       delete query.section;
-      return { name: `system-data-${section}`, query };
+      return { name: section === "pipelines" ? "pipelines" : `system-data-${section}`, query };
     },
   },
   systemDataRoute(
