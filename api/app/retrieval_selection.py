@@ -10,9 +10,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any, TypeVar
-
-Candidate = TypeVar("Candidate", bound=Mapping[str, Any])
+from typing import Any
 
 
 def cosine_similarity(left: Any, right: Any) -> float:
@@ -77,7 +75,7 @@ def distance_to_relevance(distance: Any, metric: str | None = None) -> float:
     return 1.0 / (1.0 + max(0.0, value))
 
 
-def mmr_select(
+def mmr_select[Candidate: Mapping[str, Any]](
     candidates: Sequence[Candidate],
     *,
     limit: int,
@@ -130,7 +128,7 @@ def mmr_select(
     return selected
 
 
-def source_aware_select(
+def source_aware_select[Candidate: Mapping[str, Any]](
     candidates: Sequence[Candidate],
     *,
     limit: int,
