@@ -141,6 +141,36 @@ export function createResearchWorkspace(deps: Deps) {
           profiles[0]
         )?.id || "";
     }
+
+    let pipelineVisibility: Loose = {
+      assignment: null,
+      override_allowed: false,
+      pipelines: [],
+    };
+    try {
+      pipelineVisibility = await api("/api/system/pipelines/research-options");
+      const configuredId = String(state.ragConfig.pipeline_id || "").trim();
+      const configuredVersion = Number(state.ragConfig.pipeline_version || 0);
+      if (
+        configuredId &&
+        !((pipelineVisibility.pipelines || []) as Loose[]).some(
+          (pipeline: Loose) =>
+            String(pipeline.pipeline_id || "") === configuredId &&
+            Number(pipeline.version || 0) === configuredVersion,
+        )
+      ) {
+        // Remove an override that is no longer visible or authorized. Keeping
+        // it in browser preferences would make a later Research run fail for a
+        // pipeline the user can no longer select.
+        state.ragConfig.pipeline_id = "";
+        state.ragConfig.pipeline_version = null;
+      }
+    } catch (error) {
+      // Research remains available with server-side assignment resolution even
+      // if the visibility endpoint is temporarily unavailable.
+      console.warn("Could not load Research pipeline visibility", error);
+    }
+
     persistPrefs();
     return {
       config: researchConfigForUi(),
@@ -162,6 +192,14 @@ export function createResearchWorkspace(deps: Deps) {
               .filter(Boolean)
           : [],
       history: cloneAuditValue(state.ragConfig.history || []),
+      pipeline_assignment:
+        pipelineVisibility.assignment && typeof pipelineVisibility.assignment === "object"
+          ? cloneAuditValue(pipelineVisibility.assignment)
+          : null,
+      pipeline_options: Array.isArray(pipelineVisibility.pipelines)
+        ? cloneAuditValue(pipelineVisibility.pipelines)
+        : [],
+      pipeline_override_allowed: Boolean(pipelineVisibility.override_allowed),
       can_run: hasCapability("rag.run"),
       can_select_evidence: hasCapability("evidence.select"),
       can_manage_jobs: !isResearcher() || hasCapability("rag.jobs.own"),
