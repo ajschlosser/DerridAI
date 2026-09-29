@@ -246,10 +246,23 @@ class PipelineService:
         for key in unknown:
             issues.append(
                 PipelineValidationIssue(
-                    level="warning",
+                    level="error",
                     code="unknown_config_key",
                     stage_id=stage_id,
-                    message=f"Configuration key {key!r} is not declared by this strategy.",
+                    message=(
+                        f"Configuration key {key!r} is not declared by this strategy. "
+                        "Unknown settings are rejected because silently ignoring them "
+                        "would make the saved pipeline differ from runtime behavior."
+                    ),
+                )
+            )
+        if "optional" in config and not isinstance(config["optional"], bool):
+            issues.append(
+                PipelineValidationIssue(
+                    level="error",
+                    code="invalid_optional_flag",
+                    stage_id=stage_id,
+                    message="Configuration 'optional' must be boolean.",
                 )
             )
 
