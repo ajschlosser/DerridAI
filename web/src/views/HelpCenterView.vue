@@ -39,8 +39,11 @@ const glossaryCategories: HelpGlossaryCategory[] = [
 ];
 
 const pageGuides = computed(() =>
-  visiblePageGuides(auth.isAdmin, (capability) => auth.can(capability), query.value, (key, fallback) =>
-    i18n.t(key, fallback),
+  visiblePageGuides(
+    auth.isAdmin,
+    (capability) => auth.can(capability),
+    query.value,
+    (key, fallback) => i18n.t(key, fallback),
   ),
 );
 const pageGroups = computed(() =>
@@ -61,7 +64,9 @@ const sections = computed(() =>
 const questionCount = computed(() =>
   sections.value.reduce((total, section) => total + section.entries.length, 0),
 );
-const matchCount = computed(() => pageGuides.value.length + glossary.value.length + questionCount.value);
+const matchCount = computed(
+  () => pageGuides.value.length + glossary.value.length + questionCount.value,
+);
 const hasResults = computed(() => matchCount.value > 0);
 </script>
 
