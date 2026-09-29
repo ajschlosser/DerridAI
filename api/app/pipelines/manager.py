@@ -82,6 +82,70 @@ class PipelineManager:
         ]
         return [*defaults, *custom]
 
+    def prepare_clone(
+        self,
+        pipeline_id: str,
+        version: int,
+    ) -> PipelineDefinition:
+        """Return a safe editable draft derived from an immutable definition.
+
+        Clone identity/version selection is server-owned rather than inferred
+        from a possibly stale browser catalog. This avoids collisions with
+        hidden legacy rows, built-ins, or versions created in another session.
+        """
+
+        source = self.get_definition(pipeline_id, version)
+        if source is None:
+            raise KeyError(f"{pipeline_id}@{version}")
+
+        target_id = (
+            f"{source.pipeline_id}.custom"
+            if source.built_in
+            else source.pipeline_id
+        )
+        # Do not generate an ID that is itself code-owned. This is uncommon,
+        # but makes cloning deterministic even if a future built-in happens to
+        # use the conventional ".custom" suffix.
+        if source.built_in:
+            stem = target_id
+            suffix = 2
+            while any(
+                item.pipeline_id == target_id
+                for item in BUILT_IN_PIPELINES
+            ):
+                target_id = f"{stem}.{suffix}"
+                suffix += 1
+
+        versions = [
+            item.version
+            for item in BUILT_IN_PIPELINES
+            if item.pipeline_id == target_id
+        ]
+        versions.extend(
+            item.version
+            for item in self.store.list_definitions()
+            if item.pipeline_id == target_id
+        )
+        next_version = max([0, *versions]) + 1
+
+        return source.model_copy(
+            deep=True,
+            update={
+                "pipeline_id": target_id,
+                "version": next_version,
+                "name": (
+                    f"{source.name} — custom"
+                    if source.built_in
+                    else source.name
+                ),
+                "status": "draft",
+                "built_in": False,
+                "derived_from": f"{source.pipeline_id}@{source.version}",
+                "created_at": None,
+                "created_by": None,
+            },
+        )
+
     def save_definition(
         self,
         definition: PipelineDefinition,
