@@ -13,7 +13,7 @@ from typing import Any
 
 from ..models import RAGRunRequest
 from .models import PipelineDefinition, PipelineRunTrace, PipelineStageTrace
-from .research import compile_research_pipeline
+from .research import classify_cross_encoder_failure, compile_research_pipeline
 from .trace_safety import (
     MAX_TRACE_STRING,
     parse_trace_datetime,
@@ -266,6 +266,10 @@ def build_research_trace(
         or rerank_telemetry.get("fallback_condition")
         or ""
     ) or None
+    if fallback_condition is None and rerank_telemetry.get("fallback_reason"):
+        fallback_condition = classify_cross_encoder_failure(
+            str(rerank_telemetry.get("fallback_reason") or "")
+        )
     if active_rerank_stage_id is None:
         telemetry_mode = str(rerank_telemetry.get("mode") or "")
         if telemetry_mode == "cross_encoder":
