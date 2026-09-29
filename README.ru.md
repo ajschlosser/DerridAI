@@ -57,13 +57,12 @@ SourceDocument
 
 ### Сервисы выполнения
 
-| Сервис | Стек | Роль |
-| --- | --- | --- |
-| `web` | Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js, nginx | Браузерное приложение; проксирует `/api/`; использует REST, GraphQL и realtime-уведомления. Storybook — опциональный dev-профиль. |
-| `api` | Python 3.12, FastAPI, Strawberry GraphQL, ChromaDB client, PyMuPDF, sentence-transformers, spaCy | Авторитетная граница приложения для auth, источников/корпуса, cELF reads, provenance, RAG, pipelines, jobs и системного состояния. |
-| `document-nlp` | BookNLP worker | Опциональный изолированный английский модуль Document Intelligence. Получает ограниченный проверенный текст и не имеет авторитета над корпусом. |
-| `chroma` | Chroma server | Опциональный HTTP-профиль. Embedded `PersistentClient` остаётся режимом по умолчанию; оба режима хранят производные поисковые/векторные проекции. |
-| `ollama` | Ollama | Опциональный локальный профиль. DerridAI также может использовать Ollama на хосте или любой настроенный OpenAI-compatible endpoint. |
+
+- `web` — Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js и nginx. Браузерное приложение; проксирует `/api/` и использует REST, GraphQL и realtime-уведомления. Storybook — опциональный dev-профиль.
+- `api` — Python 3.12, FastAPI, Strawberry GraphQL, ChromaDB client, PyMuPDF, sentence-transformers и spaCy. Авторитетная граница приложения для authentication, источников/corpus, cELF reads, provenance, RAG, pipelines, jobs и состояния системы.
+- `document-nlp` — опциональный изолированный BookNLP worker для английского Document Intelligence. Получает ограниченный проверенный текст и не имеет авторитета над corpus.
+- `chroma` — опциональный HTTP Chroma server. Embedded `PersistentClient` остаётся режимом по умолчанию; оба режима хранят производные поисковые/векторные projections.
+- `ollama` — опциональный локальный Ollama service. DerridAI также может использовать Ollama, уже работающий на host, или любой настроенный OpenAI-compatible endpoint.
 
 Стандартный Compose запускает `web` и `api`; остальные сервисы — опциональные профили или внешние провайдеры.
 
