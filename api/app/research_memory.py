@@ -372,35 +372,144 @@ def select_prior_claims(
     system_store: Any,
     index_factory: Callable[[], ClaimMemoryIndex],
     limit: int = CLAIM_LIMIT,
+    plan: MemoryPipelinePlan | None = None,
 ) -> dict[str, Any]:
-    """Validated claims similar to ``query`` with their support checked against ``evidence``."""
+    """Validated claims similar to the query with support checked against evidence."""
+
     warnings: list[str] = []
+    observations: dict[str, dict[str, Any]] = {}
+    selection_limit = max(1, int(plan.selection_limit if plan is not None else limit))
+    semantic_limit = max(1, int(plan.fetch_k if plan is not None else limit))
+    minimum = float(plan.min_similarity if plan is not None else MIN_SIMILARITY)
+    fallback_limit = max(
+        1,
+        int(plan.fallback_fetch_k if plan is not None else limit),
+    )
+    retrieve_stage = plan.retrieve_stage_id if plan is not None else "retrieve"
+    select_stage = plan.select_stage_id if plan is not None else "select"
+
+    semantic_started = time.perf_counter()
     try:
         index = index_factory()
         index.ensure_current(system_store)
         found = similar_validated_claims(
-            index, system_store, {"claim_id": "", "claim_text": query},
-            owner=owner, limit=limit, min_similarity=MIN_SIMILARITY,
+            index,
+            system_store,
+            {"claim_id": "", "claim_text": query},
+            owner=owner,
+            limit=semantic_limit,
+            min_similarity=minimum,
         )["items"]
+        observations[retrieve_stage] = {
+            "status": "completed",
+            "elapsed_seconds": time.perf_counter() - semantic_started,
+            "input_count": 1,
+            "output_count": len(found),
+            "parameters": {
+                "fetch_k": semantic_limit,
+                "min_similarity": minimum,
+            },
+        }
         mode = "semantic"
-    except Exception as exc:  # noqa: BLE001 - fall back visibly rather than drop the channel
-        warnings.append(f"Semantic claim memory unavailable; used lexical matching instead: {str(exc)[:200]}")
-        pool = system_store.list_generated_claims(owner=owner, validation_status="validated", limit=_LEXICAL_POOL)
-        found = []
-        for claim, similarity in _lexical(query, pool, "claim_text", limit):
-            entry = derive_entry(
-                claim, system_store.list_claim_support_bindings(str(claim.get("claim_id") or ""), owner=owner)
+    except Exception as exc:  # noqa: BLE001 - advisory memory must degrade visibly
+        failure_kind = classify_memory_failure(exc)
+        status = {
+            "timeout": "timed_out",
+            "unavailable": "unavailable",
+            "error": "failed",
+        }[failure_kind]
+        observations[retrieve_stage] = {
+            "status": status,
+            "elapsed_seconds": time.perf_counter() - semantic_started,
+            "input_count": 1,
+            "output_count": 0,
+            "parameters": {
+                "fetch_k": semantic_limit,
+                "min_similarity": minimum,
+            },
+            "fallback_reason": str(exc)[:300],
+        }
+        fallback_target = (
+            plan.fallback_for(failure_kind)
+            if plan is not None
+            else "legacy_lexical_fallback"
+        )
+        configured_fallback = (
+            plan is None
+            or (
+                plan.lexical_fallback_stage_id is not None
+                and fallback_target == plan.lexical_fallback_stage_id
             )
-            if entry is not None:
-                found.append({**entry, "similarity": similarity, "advisory": True})
-        mode = "lexical_fallback"
+        )
+        if configured_fallback:
+            fallback_started = time.perf_counter()
+            warnings.append(
+                "Semantic claim memory unavailable; used configured lexical "
+                f"matching instead: {str(exc)[:200]}"
+            )
+            pool = system_store.list_generated_claims(
+                owner=owner,
+                validation_status="validated",
+                limit=_LEXICAL_POOL,
+            )
+            found = []
+            for claim, similarity in _lexical(
+                query,
+                pool,
+                "claim_text",
+                fallback_limit,
+            ):
+                entry = derive_entry(
+                    claim,
+                    system_store.list_claim_support_bindings(
+                        str(claim.get("claim_id") or ""),
+                        owner=owner,
+                    ),
+                )
+                if entry is not None:
+                    found.append(
+                        {**entry, "similarity": similarity, "advisory": True}
+                    )
+            if plan is not None and plan.lexical_fallback_stage_id is not None:
+                observations[plan.lexical_fallback_stage_id] = {
+                    "status": "completed",
+                    "elapsed_seconds": time.perf_counter() - fallback_started,
+                    "input_count": len(pool),
+                    "output_count": len(found),
+                    "parameters": {"fetch_k": fallback_limit},
+                }
+            mode = "lexical_fallback"
+        else:
+            warnings.append(
+                "Semantic claim memory failed and this pipeline has no configured "
+                f"{failure_kind} fallback: {str(exc)[:200]}"
+            )
+            found = []
+            mode = f"semantic_{failure_kind}"
+
     in_evidence = _evidence_records(evidence)
     items = [
-        {**item, "support": [_support_status(support, in_evidence) for support in item.get("support") or []]}
-        for item in found[:limit]
+        {
+            **item,
+            "support": [
+                _support_status(support, in_evidence)
+                for support in item.get("support") or []
+            ],
+        }
+        for item in found[:selection_limit]
     ]
-    return {"mode": mode, "items": items, "warnings": warnings}
-
+    observations[select_stage] = {
+        "status": "completed",
+        "input_count": len(found),
+        "output_count": len(items),
+        "parameters": {"limit": selection_limit},
+    }
+    return {
+        "mode": mode,
+        "items": items,
+        "warnings": warnings,
+        "observations": observations,
+    }
 
 def _grade_label(grade: dict[str, Any]) -> str:
     score = grade.get("overall")
