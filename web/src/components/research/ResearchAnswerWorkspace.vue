@@ -6,6 +6,7 @@ import type { ResearchDraftState } from "../../features/research/useResearchDraf
 import type { ResearchJob, ResearchResult } from "../../types/research";
 import ResearchClaimReviewPanel from "./ResearchClaimReviewPanel.vue";
 import { researchJobDetail } from "./researchI18n";
+import { parseResearchAnswer, segmentResearchAnswer } from "./researchAnswerFormatting";
 
 const props = withDefaults(
   defineProps<{
@@ -26,76 +27,12 @@ const emit = defineEmits<{
   evidence: [index: number];
 }>();
 const i18n = useI18nStore();
-type AnswerBlock = {
-  kind: "heading" | "paragraph" | "ordered" | "unordered";
-  text?: string;
-  items?: string[];
-};
-function cleanInline(value: string) {
-  return value.replace(/^\*\*(.+?)\*\*$/, "$1").trim();
-}
-function parseBodyBlock(value: string): AnswerBlock[] {
-  const block = value.trim();
-  if (!block) return [];
-  const heading = block.match(/^#{1,4}\s+(.+)$/s);
-  if (heading) return [{ kind: "heading", text: cleanInline(heading[1]) }];
-  const lines = block
-    .split(/\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  if (lines.length && lines.every((line) => /^\d+[.)]\s+/.test(line)))
-    return [{ kind: "ordered", items: lines.map((line) => line.replace(/^\d+[.)]\s+/, "")) }];
-  if (lines.length && lines.every((line) => /^[-*•]\s+/.test(line)))
-    return [{ kind: "unordered", items: lines.map((line) => line.replace(/^[-*•]\s+/, "")) }];
-  return [{ kind: "paragraph", text: block }];
-}
-const answerBlocks = computed<AnswerBlock[]>(() => {
-  const source = String(props.result?.answer || "").trim();
-  if (!source) return [];
-  const output: AnswerBlock[] = [];
-  for (const raw of source.split(/\n{2,}/)) {
-    const block = raw.trim();
-    if (!block) continue;
-    const cited = block.match(/^\*\*Works Cited\*\*\s*(.*)$/is);
-    if (cited) {
-      output.push({ kind: "heading", text: i18n.t("research.works_cited") });
-      if (cited[1]?.trim()) output.push(...parseBodyBlock(cited[1]));
-      continue;
-    }
-    output.push(...parseBodyBlock(block));
-  }
-  return output;
-});
+const answerBlocks = computed(() =>
+  parseResearchAnswer(String(props.result?.answer || ""), i18n.t("research.works_cited")),
+);
 
-type TextSegment = { text: string; evidenceIndex?: number; bold?: boolean };
-function splitBold(text: string): TextSegment[] {
-  const segments: TextSegment[] = [];
-  const pattern = /\*\*(.+?)\*\*/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(text))) {
-    if (match.index > lastIndex) segments.push({ text: text.slice(lastIndex, match.index) });
-    if (match[1]) segments.push({ text: match[1], bold: true });
-    lastIndex = match.index + match[0].length;
-  }
-  if (lastIndex < text.length) segments.push({ text: text.slice(lastIndex) });
-  return segments.length ? segments : [{ text }];
-}
-function citedSegments(value: string): TextSegment[] {
-  const citations = (props.result?.evidence || [])
-    .map((item, index) => ({ citation: String(item.inline_citation || "").trim(), index }))
-    .filter((item) => item.citation)
-    .sort((a, b) => b.citation.length - a.citation.length);
-  if (!citations.length) return splitBold(value);
-  const escaped = citations.map((item) => item.citation.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-  const pattern = new RegExp(`(${escaped.join("|")})`, "g");
-  return value
-    .split(pattern)
-    .filter(Boolean)
-    .flatMap((text) => {
-      const match = citations.find((item) => item.citation === text);
-      return match ? [{ text, evidenceIndex: match.index }] : splitBold(text);
-    });
+function citedSegments(value: string) {
+  return segmentResearchAnswer(value, props.result?.evidence || []);
 }
 const runDetail = computed(() =>
   props.job
@@ -257,17 +194,24 @@ const statusLabel = computed(() => {
   letter-spacing: 0.06em;
 }
 .research-answer-prose {
-  max-width: 960px;
-  padding: 28px 34px 36px;
+  max-width: min(78ch, 100%);
+  padding: 30px 36px 38px;
   color: var(--text);
-  font:
-    15.5px/1.75 Georgia,
-    "Times New Roman",
-    serif;
+  font-family: var(--font-reading);
+  font-size: 1rem;
+  font-weight: var(--fw-regular);
+  line-height: 1.74;
+  font-variant-ligatures: common-ligatures;
+  text-rendering: optimizeLegibility;
 }
 .research-answer-prose p {
-  margin: 0 0 1.2em;
-  white-space: pre-line;
+  margin: 0 0 1.28em;
+}
+.research-answer-prose strong {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  font-weight: var(--fw-bold);
 }
 .research-answer-prose h3 {
   margin: 1.8em 0 0.55em;
@@ -377,12 +321,12 @@ const statusLabel = computed(() => {
   border-radius: 5px;
   background: var(--ui-accent-soft);
   color: var(--accent-fg);
-  font:
-    700 0.9em/1.2 system-ui,
-    -apple-system,
-    "Segoe UI",
-    sans-serif;
-  vertical-align: baseline;
+  font: inherit;
+  font-family: inherit;
+  font-size: 0.94em;
+  font-weight: var(--fw-semibold);
+  line-height: 1.25;
+  vertical-align: 0.02em;
   cursor: pointer;
 }
 .research-inline-citation:hover {
