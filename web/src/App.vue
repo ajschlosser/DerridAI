@@ -16,6 +16,7 @@ import NavigationCommandPalette from "./components/shell/NavigationCommandPalett
 import SidebarStatus from "./components/shell/SidebarStatus.vue";
 import SidebarUtilityNav from "./components/shell/SidebarUtilityNav.vue";
 import AppIcon from "./components/AppIcon.vue";
+import UiTooltip from "./components/ui/UiTooltip.vue";
 import { useMatchMedia } from "./composables/useMatchMedia";
 import { useSemanticMapStore } from "./stores/semanticMap";
 import type { SidebarNavEntry, SidebarNavGroup } from "./components/shell/sidebarNav";
@@ -553,16 +554,22 @@ watch(
 
     <section class="workspace shell-workspace">
       <header class="topbar shell-topbar">
-        <button
-          ref="mobileNavTrigger"
-          class="mobile-navigation-trigger"
-          type="button"
-          :aria-label="i18n.t('nav.open_navigation')"
-          :title="i18n.t('nav.open_navigation')"
-          @click="openMobileNavigation"
+        <UiTooltip
+          :text="i18n.t('nav.open_navigation')"
+          trigger-mode="content"
+          :content-focusable="false"
+          placement="bottom"
         >
-          <AppIcon name="list" aria-hidden="true" />
-        </button>
+          <button
+            ref="mobileNavTrigger"
+            class="mobile-navigation-trigger"
+            type="button"
+            :aria-label="i18n.t('nav.open_navigation')"
+            @click="openMobileNavigation"
+          >
+            <AppIcon name="list" aria-hidden="true" />
+          </button>
+        </UiTooltip>
         <CommandSearch
           v-model="topSearch"
           shortcut=""
@@ -570,15 +577,21 @@ watch(
           @submit="submitTopSearch"
         />
         <div class="shell-top-actions">
-          <button
-            class="shell-command-palette-button"
-            type="button"
-            :title="i18n.t('nav.command_palette')"
-            :aria-label="i18n.t('nav.command_palette')"
-            @click="commandPalette?.open()"
+          <UiTooltip
+            :text="i18n.t('nav.command_palette')"
+            trigger-mode="content"
+            :content-focusable="false"
+            placement="bottom"
           >
-            {{ i18n.t("nav.command_palette") }} <kbd>{{ commandShortcut }}</kbd>
-          </button>
+            <button
+              class="shell-command-palette-button"
+              type="button"
+              :aria-label="i18n.t('nav.command_palette')"
+              @click="commandPalette?.open()"
+            >
+              {{ i18n.t("nav.command_palette") }} <kbd>{{ commandShortcut }}</kbd>
+            </button>
+          </UiTooltip>
           <input
             id="fileInput"
             type="file"
@@ -605,28 +618,40 @@ watch(
       </header>
       <nav class="vue-breadcrumb shell-breadcrumb" :aria-label="i18n.t('ui.navigation_history')">
         <div class="breadcrumb-nav">
-          <button
-            class="breadcrumb-nav-button"
-            type="button"
-            :disabled="!canBreadcrumbBack"
-            :title="breadcrumbBackLabel"
-            :aria-label="i18n.t('ui.back')"
-            @click="goBreadcrumbBack"
+          <UiTooltip
+            :text="breadcrumbBackLabel"
+            trigger-mode="content"
+            :content-focusable="!canBreadcrumbBack"
+            placement="bottom"
           >
-            <span aria-hidden="true">←</span>
-            <span class="breadcrumb-button-label">{{ i18n.t("ui.back") }}</span>
-          </button>
-          <button
-            class="breadcrumb-nav-button"
-            type="button"
-            :disabled="!canBreadcrumbForward"
-            :title="breadcrumbForwardLabel"
-            :aria-label="i18n.t('ui.forward')"
-            @click="goBreadcrumbForward"
+            <button
+              class="breadcrumb-nav-button"
+              type="button"
+              :disabled="!canBreadcrumbBack"
+              :aria-label="i18n.t('ui.back')"
+              @click="goBreadcrumbBack"
+            >
+              <span aria-hidden="true">←</span>
+              <span class="breadcrumb-button-label">{{ i18n.t("ui.back") }}</span>
+            </button>
+          </UiTooltip>
+          <UiTooltip
+            :text="breadcrumbForwardLabel"
+            trigger-mode="content"
+            :content-focusable="!canBreadcrumbForward"
+            placement="bottom"
           >
-            <span class="breadcrumb-button-label">{{ i18n.t("ui.forward") }}</span>
-            <span aria-hidden="true">→</span>
-          </button>
+            <button
+              class="breadcrumb-nav-button"
+              type="button"
+              :disabled="!canBreadcrumbForward"
+              :aria-label="i18n.t('ui.forward')"
+              @click="goBreadcrumbForward"
+            >
+              <span class="breadcrumb-button-label">{{ i18n.t("ui.forward") }}</span>
+              <span aria-hidden="true">→</span>
+            </button>
+          </UiTooltip>
         </div>
         <div class="vue-breadcrumb-path">
           <RouterLink to="/">DerridAI</RouterLink>
