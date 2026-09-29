@@ -28,9 +28,7 @@ describe("Help Center", () => {
     const glossaryKeys = HELP_GLOSSARY.flatMap((entry) =>
       ["term", "definition", "practical"].map((part) => `help.glossary.${entry.id}.${part}`),
     );
-    expect(
-      [...questionKeys, ...pageKeys, ...glossaryKeys].filter((key) => !copy[key]),
-    ).toEqual([]);
+    expect([...questionKeys, ...pageKeys, ...glossaryKeys].filter((key) => !copy[key])).toEqual([]);
   });
 
   it("keeps a guide for every route that renders an application page", () => {
