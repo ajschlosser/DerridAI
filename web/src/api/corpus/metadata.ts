@@ -16,9 +16,14 @@ export interface EvidenceSuggestion {
   semantic_method?: string;
   semantic_reason?: string;
   semantic_status?: "available" | "fallback" | "no_match";
+  cross_encoder_score?: number | null;
+  support_score?: number | null;
+  support_status?: string | null;
   signals?: {
     lexical?: { score?: number | null; method?: string; reason?: string; status?: string };
     semantic?: { score?: number | null; method?: string; reason?: string; status?: string };
+    cross_encoder?: { score?: number | null; method?: string; reason?: string; status?: string };
+    support?: { score?: number | null; method?: string; reason?: string; status?: string };
   };
   /** LLM choices only: whether a deterministic text match also supports the block. */
   lexical_support?: boolean;
@@ -27,6 +32,12 @@ export interface EvidenceSuggestion {
 export interface EvidenceSuggestionStatus {
   semantic?: "available" | "fallback";
   reason?: string;
+  pipeline_id?: string;
+  pipeline_version?: number;
+  pipeline_hash?: string;
+  trace_id?: string;
+  preview?: boolean;
+  trace_warning?: string;
 }
 
 export interface EvidenceSuggestionsResponse {
@@ -113,10 +124,21 @@ const recordUrl = (buildId: string, recordId: string) =>
   `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}`;
 
 export const corpusMetadataApi = {
-  suggestEvidence: (buildId: string, recordId: string, field: string) =>
-    apiRequest<EvidenceSuggestionsResponse>(
-      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/evidence-suggestions?field=${encodeURIComponent(field)}`,
-    ),
+  suggestEvidence: (
+    buildId: string,
+    recordId: string,
+    field: string,
+    pipeline?: { pipelineId: string; version: number } | null,
+  ) => {
+    const query = new URLSearchParams({ field });
+    if (pipeline?.pipelineId) {
+      query.set("pipeline_id", pipeline.pipelineId);
+      query.set("pipeline_version", String(pipeline.version));
+    }
+    return apiRequest<EvidenceSuggestionsResponse>(
+      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/evidence-suggestions?${query}`,
+    );
+  },
   suggestEvidenceLlm: (
     buildId: string,
     recordId: string,
