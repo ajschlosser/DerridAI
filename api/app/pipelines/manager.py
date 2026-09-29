@@ -41,7 +41,15 @@ class PipelineManager:
             for item in BUILT_IN_PIPELINES
             if purpose is None or item.purpose == purpose
         ]
-        custom = self.store.list_definitions(purpose=purpose)
+        built_in_keys = {
+            (item.pipeline_id, item.version)
+            for item in built_ins
+        }
+        custom = [
+            item
+            for item in self.store.list_definitions(purpose=purpose)
+            if (item.pipeline_id, item.version) not in built_in_keys
+        ]
         return [*built_ins, *custom]
 
     def get_definition(
