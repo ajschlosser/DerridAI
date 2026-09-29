@@ -5950,7 +5950,7 @@ EN_US: dict[str, str] = {'common.apply': 'Apply',
                             'metadata.',
  'works.need_review': 'need review',
  'works.no_catalogue_match': 'No catalogue match',
- 'works.no_indexed_values': 'No populated metadata values yet.',
+ 'works.no_indexed_values': 'This metric cannot be calculated from the loaded records yet. Add or enrich the metadata field used by this chart, then refresh the Works view.',
  'works.no_indexed_values_help': 'This card counts non-empty values from loaded records. Enrich or edit records to '
                                  'fill this field.',
  'works.no_metadata_changes': 'No metadata changes were proposed.',
