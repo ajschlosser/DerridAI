@@ -291,7 +291,6 @@ describe("System Data Pipeline Studio", () => {
     expect(wrapper.text()).toContain("Stage settings");
   });
 
-
   it("asks the server for the next version when cloning a saved custom pipeline", async () => {
     const wrapper = mount(SystemDataPipelines);
     await flushPromises();
