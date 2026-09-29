@@ -671,6 +671,7 @@ class ChromaMetadataExemplarIndex:
         packet_char_budget: int,
         exclude_record_id: str,
         reason: str,
+        fallback_kind: str = "unavailable",
     ) -> dict[str, Any]:
         raw = _fallback_candidates(
             canonical=canonical,
@@ -723,6 +724,7 @@ class ChromaMetadataExemplarIndex:
             "examples": packet,
             "telemetry": {
                 "fallback_reason": reason,
+                "fallback_kind": fallback_kind,
                 "fallback_mode": "lexical",
                 "ranking": "lexical_overlap",
                 "candidates_considered": min(len(canonical), MAX_FALLBACK_CANDIDATES),
@@ -793,6 +795,7 @@ class ChromaMetadataExemplarIndex:
                 packet_char_budget=packet_char_budget,
                 exclude_record_id=exclude_record_id,
                 reason=self._disabled_reason,
+                fallback_kind="unavailable",
             )
         if not canonical or not str(query_text or "").strip() or not ordered_fields:
             return {
@@ -1041,4 +1044,11 @@ class ChromaMetadataExemplarIndex:
                 packet_char_budget=packet_char_budget,
                 exclude_record_id=exclude_record_id,
                 reason=self._disabled_reason,
+                fallback_kind=(
+                    "timeout"
+                    if isinstance(exc, TimeoutError)
+                    else "unavailable"
+                    if isinstance(exc, (ImportError, ModuleNotFoundError))
+                    else "error"
+                ),
             )
