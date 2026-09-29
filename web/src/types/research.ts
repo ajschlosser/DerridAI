@@ -1,3 +1,5 @@
+import type { PipelineAssignment, PipelineDefinition, PipelineRunTrace } from "./pipelines";
+
 export type ResearchStore = {
   name: string;
   count: number;
@@ -131,6 +133,15 @@ export type ResearchResult = {
   auto_grade_model?: string;
   rag_request?: Record<string, unknown>;
   claim_provenance?: ResearchClaimProvenance | null;
+  pipeline?: {
+    pipeline_id?: string;
+    pipeline_version?: number;
+    pipeline_hash?: string;
+    name?: string;
+    purpose?: string;
+    resolved_pipeline?: Record<string, unknown>;
+  } | null;
+  pipeline_trace?: PipelineRunTrace | null;
 };
 
 export type ResearchJob = {
@@ -205,6 +216,9 @@ export type ResearchWorkspaceSnapshot = {
   selected_evidence: ResearchEvidenceSelection[];
   jobs: ResearchJob[];
   history: Array<Record<string, unknown>>;
+  pipeline_assignment: PipelineAssignment | null;
+  pipeline_options: Array<PipelineDefinition & { assigned?: boolean }>;
+  pipeline_override_allowed: boolean;
   can_run: boolean;
   can_select_evidence: boolean;
   can_manage_jobs: boolean;
