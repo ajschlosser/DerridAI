@@ -72,19 +72,9 @@ const strategiesByFamily = computed(() => {
           <select
             class="control"
             :value="stage.strategy"
-            @change="
-              emit(
-                'updateStrategy',
-                stageIndex,
-                ($event.target as HTMLSelectElement).value,
-              )
-            "
+            @change="emit('updateStrategy', stageIndex, ($event.target as HTMLSelectElement).value)"
           >
-            <optgroup
-              v-for="group in strategiesByFamily"
-              :key="group.family"
-              :label="group.family"
-            >
+            <optgroup v-for="group in strategiesByFamily" :key="group.family" :label="group.family">
               <option
                 v-for="option in group.strategies"
                 :key="option.strategy_id"
@@ -102,13 +92,7 @@ const strategiesByFamily = computed(() => {
           <input
             type="checkbox"
             :checked="stage.enabled"
-            @change="
-              emit(
-                'updateEnabled',
-                stageIndex,
-                ($event.target as HTMLInputElement).checked,
-              )
-            "
+            @change="emit('updateEnabled', stageIndex, ($event.target as HTMLInputElement).checked)"
           />
           <span>{{ t("pipelines.enabled", "Enabled") }}</span>
         </label>
@@ -170,9 +154,7 @@ const strategiesByFamily = computed(() => {
       :stage="stage"
       :stages="stages"
       @toggle-next="(targetId, checked) => emit('toggleNext', stageIndex, targetId, checked)"
-      @update-fallback="
-        (key, target) => emit('updateFallback', stageIndex, key, target)
-      "
+      @update-fallback="(key, target) => emit('updateFallback', stageIndex, key, target)"
     />
 
     <PipelineStrategyConfigFields
