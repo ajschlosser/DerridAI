@@ -17,7 +17,11 @@ from .cross_encoder import predict_scores
 from .models import OllamaTouchupOptions, RAGPromptMetadataPolicy, RAGRunRequest
 from .pipelines.manager import pipeline_manager
 from .pipelines.models import PipelineDefinition
-from .pipelines.research import compile_research_pipeline
+from .pipelines.research import (
+    classify_cross_encoder_failure,
+    compile_research_pipeline,
+    resolve_research_runtime_settings,
+)
 from .record_types import EvidenceItem, QueryDecomposition, RetrievalCandidate
 from .research_memory import ResponseMemoryIndex, memory_guidance
 from .retrieval_selection import (
@@ -799,13 +803,13 @@ def _cross_encoder_rerank(
     top_n: int,
     model_name: str,
     *,
-    allow_lexical_fallback: bool = True,
-) -> tuple[list[dict[str, Any]], str | None, dict[str, Any]]:
-    """Rerank a bounded candidate set and report the strategy that actually ran.
+    timeout_seconds: float | None,
+) -> tuple[list[dict[str, Any]] | None, str | None, dict[str, Any]]:
+    """Attempt CrossEncoder reranking without inventing a fallback path.
 
-    Cross-encoder availability is an operational condition, not a reason to hide
-    a path change. The returned telemetry therefore records whether the model
-    reranker completed or whether the explicit lexical fallback was used.
+    Fallback routing belongs to the selected pipeline graph. This helper reports
+    the operational failure; run_rag_pipeline then follows the configured
+    on_unavailable/on_timeout/on_error edge.
     """
 
     scores, telemetry = predict_scores(
@@ -814,22 +818,15 @@ def _cross_encoder_rerank(
             for item in docs
         ],
         model_name=model_name,
-        timeout_seconds=settings.ollama_timeout_seconds,
+        timeout_seconds=timeout_seconds,
     )
     if scores is None:
         reason = str(telemetry.get("fallback_reason") or "unavailable")
-        if allow_lexical_fallback:
-            fallback = _lexical_rerank(query, docs, top_n)
-            return fallback, (
-                f"Cross-encoder fallback ({reason}); used lexical/vector fallback."
-            ), {**telemetry, "mode": "lexical_fallback", "fallback_reason": reason}
-
-        fallback = [dict(item) for item in docs[:top_n]]
-        for item in fallback:
-            item["rerank_score"] = item.get("rrf_score", 0.0)
-        return fallback, (
-            f"Cross-encoder unavailable ({reason}); retained fused retrieval order."
-        ), {**telemetry, "mode": "none", "fallback_reason": reason}
+        return None, f"Cross-encoder unavailable ({reason}).", {
+            **telemetry,
+            "mode": "unavailable",
+            "fallback_reason": reason,
+        }
 
     ranked = []
     for item, score in zip(docs, scores):
@@ -988,6 +985,10 @@ def run_rag_pipeline(
         resolved = pipeline_manager.resolve("research")
         pipeline = PipelineDefinition.model_validate(resolved["pipeline"])
     pipeline_plan = compile_research_pipeline(pipeline)
+    runtime_settings = resolve_research_runtime_settings(
+        pipeline_plan,
+        request.model_dump(mode="python"),
+    )
     pipeline_summary = {
         "pipeline_id": pipeline.pipeline_id,
         "pipeline_version": pipeline.version,
@@ -1037,7 +1038,7 @@ def run_rag_pipeline(
             prompt=decomposition_prompt,
             options=request.generation,
             json_mode=True,
-            max_tokens=request.query_decomposition_num_predict,
+            max_tokens=runtime_settings.query_decomposition_num_predict,
             cancelled=cancelled,
         )
         try:
@@ -1120,7 +1121,8 @@ def run_rag_pipeline(
         )
 
     retrieve_k = max(1, int(request.k))
-    fetch_k = max(retrieve_k, request.fetch_k)
+    semantic_fetch_k = max(retrieve_k, runtime_settings.semantic_fetch_k)
+    lexical_fetch_k = max(retrieve_k, runtime_settings.lexical_fetch_k)
     raw_results: list[dict[str, Any]] = []
     total_units = len(collections) * max(1, len(effective_search_types))
     unit = 0
@@ -1144,7 +1146,7 @@ def run_rag_pipeline(
                     store.semantic_candidates(
                         collection["name"],
                         query,
-                        min(fetch_k, max(1, collection["count"])),
+                        min(semantic_fetch_k, max(1, collection["count"])),
                     ),
                     collection,
                     locale_codes,
@@ -1187,7 +1189,7 @@ def run_rag_pipeline(
                 store.lexical_search(
                     collection["name"],
                     query,
-                    min(fetch_k, max(1, collection["count"])),
+                    min(lexical_fetch_k, max(1, collection["count"])),
                 ),
                 collection,
                 locale_codes,
@@ -1209,8 +1211,8 @@ def run_rag_pipeline(
             )
             mmr = _mmr_select(
                 semantic_candidates,
-                k=retrieve_k,
-                lambda_mult=request.lambda_mult,
+                k=min(retrieve_k, runtime_settings.retrieval_mmr_limit),
+                lambda_mult=runtime_settings.retrieval_mmr_lambda,
             )
             for rank, candidate in enumerate(mmr, start=1):
                 row = dict(candidate)
@@ -1227,7 +1229,7 @@ def run_rag_pipeline(
             record.get("record_id")
             or item.get("id")
         )
-        rrf = 1.0 / (float(request.rrf_k) + float(item.get("search_rank") or 1))
+        rrf = 1.0 / (float(runtime_settings.rrf_k) + float(item.get("search_rank") or 1))
         if logical not in dedup:
             row = dict(item)
             row["rrf_score"] = rrf
@@ -1302,15 +1304,20 @@ def run_rag_pipeline(
     })
     check_cancel()
 
-    # Step 4: rerank.
+    # Step 4: rerank and follow only fallback edges declared by the pipeline.
     stage_start = time.perf_counter()
 
-    effective_reranker = request.reranker
-    if effective_reranker == "cross_encoder" and not pipeline_plan.cross_encoder_available:
-        effective_reranker = (
-            "lexical" if pipeline_plan.lexical_rerank_available else "none"
-        )
-    if effective_reranker == "lexical" and not pipeline_plan.lexical_rerank_available:
+    requested_reranker = request.reranker
+    if requested_reranker == "cross_encoder" and pipeline_plan.cross_encoder_available:
+        effective_reranker = "cross_encoder"
+    elif requested_reranker == "lexical" and pipeline_plan.lexical_rerank_available:
+        effective_reranker = "lexical"
+    elif (
+        requested_reranker == "cross_encoder"
+        and pipeline_plan.rerank_strategy == "rerank.lexical_fallback"
+    ):
+        effective_reranker = "lexical"
+    else:
         effective_reranker = "none"
 
     update("rerank", 0, 1, effective_reranker)
@@ -1319,14 +1326,10 @@ def run_rag_pipeline(
         + "\n"
         + query_metadata["prompt_query_fr"]
     ).strip()
-    # rerank_top_n is the final evidence-record budget. When the selected
-    # pipeline has a post-rerank diversity stage, relevance reranking keeps a
-    # modestly wider pool so diversity can choose a different source rather than
-    # merely reorder the already-truncated final K.
     requested_top_n = (
         len(deduped)
         if request.skip_retrieval
-        else max(1, int(request.rerank_top_n))
+        else runtime_settings.rerank_top_n
     )
     selected_pool = [item for item in deduped if item.get("selected_evidence")]
     retrieved_pool = [item for item in deduped if not item.get("selected_evidence")]
@@ -1344,8 +1347,11 @@ def run_rag_pipeline(
             remaining_slots * 3 if post_diversity != "none" else remaining_slots,
         ),
     )
+    diversity_slots = min(remaining_slots, runtime_settings.diversity_limit)
 
     rerank_telemetry: dict[str, Any] = {"mode": effective_reranker}
+    active_rerank_stage_id: str | None = None
+    fallback_condition: str | None = None
 
     if request.skip_retrieval:
         reranked = selected_pool or deduped
@@ -1366,21 +1372,95 @@ def run_rag_pipeline(
         reranked_retrieved = []
         if rerank_pool_limit and retrieved_pool:
             if effective_reranker == "cross_encoder":
-                reranked_retrieved, rerank_warning, rerank_telemetry = _cross_encoder_rerank(
+                active_rerank_stage_id = pipeline_plan.rerank_stage_id
+                attempted, rerank_warning, rerank_telemetry = _cross_encoder_rerank(
                     rerank_query,
                     retrieved_pool,
                     rerank_pool_limit,
-                    request.cross_encoder_model,
-                    allow_lexical_fallback=pipeline_plan.lexical_rerank_available,
+                    runtime_settings.cross_encoder_model,
+                    timeout_seconds=(
+                        runtime_settings.cross_encoder_timeout_seconds
+                        if runtime_settings.cross_encoder_timeout_seconds is not None
+                        else settings.ollama_timeout_seconds
+                    ),
                 )
-                actual_rerank_mode = str(rerank_telemetry.get("mode") or "cross_encoder")
-                if actual_rerank_mode == "lexical_fallback":
-                    effective_reranker = "lexical"
-                elif actual_rerank_mode == "none":
-                    effective_reranker = "none"
-                if rerank_warning:
-                    warnings.append(rerank_warning)
+                if attempted is not None:
+                    reranked_retrieved = attempted
+                else:
+                    reason = str(
+                        rerank_telemetry.get("fallback_reason") or "unavailable"
+                    )
+                    fallback_condition = classify_cross_encoder_failure(reason)
+                    fallback = pipeline_plan.rerank_fallback(fallback_condition)
+                    if fallback and fallback[1] == "rerank.lexical_fallback":
+                        active_rerank_stage_id = fallback[0]
+                        effective_reranker = "lexical"
+                        reranked_retrieved = _lexical_rerank(
+                            rerank_query,
+                            retrieved_pool,
+                            rerank_pool_limit,
+                        )
+                        rerank_telemetry = {
+                            **rerank_telemetry,
+                            "mode": "lexical_fallback",
+                            "fallback_condition": fallback_condition,
+                            "fallback_stage_id": fallback[0],
+                        }
+                        warnings.append(
+                            f"Cross-encoder fallback ({reason}); followed "
+                            f"{fallback_condition} edge to lexical/vector fallback."
+                        )
+                    elif fallback and fallback[1] == "select.top_k":
+                        active_rerank_stage_id = fallback[0]
+                        effective_reranker = "none"
+                        fallback_limit = max(
+                            1,
+                            int(
+                                pipeline_plan.config_value(
+                                    fallback[0],
+                                    "limit",
+                                    rerank_pool_limit,
+                                )
+                            ),
+                        )
+                        reranked_retrieved = [
+                            dict(item)
+                            for item in retrieved_pool[
+                                : min(rerank_pool_limit, fallback_limit)
+                            ]
+                        ]
+                        for item in reranked_retrieved:
+                            item["rerank_score"] = item.get("rrf_score", 0.0)
+                        rerank_telemetry = {
+                            **rerank_telemetry,
+                            "mode": "top_k_fallback",
+                            "fallback_condition": fallback_condition,
+                            "fallback_stage_id": fallback[0],
+                        }
+                        warnings.append(
+                            f"Cross-encoder fallback ({reason}); followed "
+                            f"{fallback_condition} edge to deterministic top-K."
+                        )
+                    else:
+                        effective_reranker = "none"
+                        reranked_retrieved = [
+                            dict(item) for item in retrieved_pool[:rerank_pool_limit]
+                        ]
+                        for item in reranked_retrieved:
+                            item["rerank_score"] = item.get("rrf_score", 0.0)
+                        rerank_telemetry = {
+                            **rerank_telemetry,
+                            "mode": "none",
+                            "fallback_condition": fallback_condition,
+                        }
+                        if rerank_warning:
+                            warnings.append(
+                                rerank_warning
+                                + f" No {fallback_condition} fallback edge is configured; "
+                                "retained fused retrieval order."
+                            )
             elif effective_reranker == "lexical":
+                active_rerank_stage_id = pipeline_plan.lexical_rerank_stage_id
                 reranked_retrieved = _lexical_rerank(
                     rerank_query,
                     retrieved_pool,
@@ -1400,13 +1480,15 @@ def run_rag_pipeline(
         "seconds": time.perf_counter() - stage_start,
         "detail": {
             "mode": effective_reranker,
-            "requested_mode": request.reranker,
+            "requested_mode": requested_reranker,
             "requested_top_n": requested_top_n,
             "rerank_pool_count": len(reranked_retrieved),
             "selected_evidence_pinned": len(selected_pool),
+            "active_stage_id": active_rerank_stage_id,
+            "fallback_condition": fallback_condition,
             "cross_encoder_model": (
-                request.cross_encoder_model
-                if request.reranker == "cross_encoder"
+                runtime_settings.cross_encoder_model
+                if requested_reranker == "cross_encoder"
                 else None
             ),
             "reranker_telemetry": rerank_telemetry,
@@ -1415,12 +1497,16 @@ def run_rag_pipeline(
     update("rerank", 1, 1, f"{len(reranked)} records after relevance reranking")
     check_cancel()
 
-    if not request.skip_retrieval and post_diversity != "none" and remaining_slots:
+    if (
+        not request.skip_retrieval
+        and post_diversity != "none"
+        and diversity_slots
+    ):
         diversity_started = time.perf_counter()
         if post_diversity == "source_aware":
             diversified = source_aware_select(
                 reranked_retrieved,
-                limit=remaining_slots,
+                limit=diversity_slots,
                 relevance=lambda item: float(
                     item.get("rerank_score")
                     if item.get("rerank_score") is not None
@@ -1428,9 +1514,6 @@ def run_rag_pipeline(
                 ),
             )
         else:
-            # Cross-encoder scores are not calibrated to the [0,1] scale used by
-            # cosine diversity. Convert rerank order to a bounded rank relevance
-            # before applying post-rerank MMR so lambda remains interpretable.
             ranked_for_diversity: list[dict[str, Any]] = []
             denominator = max(1, len(reranked_retrieved) - 1)
             for index, item in enumerate(reranked_retrieved):
@@ -1439,8 +1522,8 @@ def run_rag_pipeline(
                 ranked_for_diversity.append(row)
             diversified = mmr_select(
                 ranked_for_diversity,
-                limit=remaining_slots,
-                lambda_mult=request.lambda_mult,
+                limit=diversity_slots,
+                lambda_mult=runtime_settings.diversity_lambda,
                 relevance=lambda item: float(item.get("_diversity_relevance") or 0.0),
                 vector=lambda item: item.get("embedding"),
             )
@@ -1453,12 +1536,16 @@ def run_rag_pipeline(
             "seconds": time.perf_counter() - diversity_started,
             "detail": {
                 "mode": post_diversity,
+                "stage_id": pipeline_plan.diversity_stage_id,
                 "input_count": len(reranked_retrieved),
                 "output_count": len(diversified),
                 "selected_evidence_pinned": len(selected_ranked),
                 "lambda_mult": (
-                    request.lambda_mult if post_diversity == "mmr" else None
+                    runtime_settings.diversity_lambda
+                    if post_diversity == "mmr"
+                    else None
                 ),
+                "limit": diversity_slots,
             },
         })
         update(
@@ -1482,8 +1569,8 @@ def run_rag_pipeline(
         )
     retrieval_context, works, evidence = _context_string(
         reranked,
-        record_char_limit=request.evidence_record_char_limit,
-        total_char_limit=request.evidence_total_char_limit,
+        record_char_limit=runtime_settings.evidence_record_char_limit,
+        total_char_limit=runtime_settings.evidence_total_char_limit,
         prompt_metadata=request.prompt_metadata,
     )
     sufficiency_issues = evidence_sufficiency_issues(evidence)
@@ -1614,21 +1701,25 @@ def run_rag_pipeline(
             "available_search_types": sorted(available_search_types),
             "post_rerank_diversity": pipeline_plan.post_rerank_diversity,
             "k": request.k,
-            "fetch_k": request.fetch_k,
-            "lambda_mult": request.lambda_mult,
-            "rrf_k": request.rrf_k,
+            "fetch_k": max(semantic_fetch_k, lexical_fetch_k),
+            "semantic_fetch_k": semantic_fetch_k,
+            "lexical_fetch_k": lexical_fetch_k,
+            "lambda_mult": runtime_settings.retrieval_mmr_lambda,
+            "retrieval_mmr_lambda": runtime_settings.retrieval_mmr_lambda,
+            "diversity_lambda": runtime_settings.diversity_lambda,
+            "rrf_k": runtime_settings.rrf_k,
             "reranker": effective_reranker,
             "requested_reranker": request.reranker,
-            "rerank_top_n": request.rerank_top_n,
+            "rerank_top_n": runtime_settings.rerank_top_n,
             "effective_rerank_top_n": len(reranked),
             "query_decomposition": effective_query_decomposition,
             "requested_query_decomposition": request.query_decomposition,
-            "query_decomposition_num_predict": request.query_decomposition_num_predict,
+            "query_decomposition_num_predict": runtime_settings.query_decomposition_num_predict,
             "skip_retrieval": request.skip_retrieval,
             "selected_evidence_count": len(selected_candidates),
             "response_language": request.response_language,
-            "evidence_record_char_limit": request.evidence_record_char_limit,
-            "evidence_total_char_limit": request.evidence_total_char_limit,
+            "evidence_record_char_limit": runtime_settings.evidence_record_char_limit,
+            "evidence_total_char_limit": runtime_settings.evidence_total_char_limit,
             "evidence_sufficiency": {"passed": True, "issues": []},
         },
         "memory": memory_detail,
