@@ -34,6 +34,16 @@ vi.mock("../../src/runtime/runtime.js", () => ({
   __v_raw: undefined,
 }));
 
+const router = vi.hoisted(() => ({
+  route: { query: {} as Record<string, string> },
+  replace: vi.fn(),
+}));
+
+vi.mock("vue-router", () => ({
+  useRoute: () => router.route,
+  useRouter: () => ({ replace: router.replace }),
+}));
+
 import LanguagesView from "../../src/views/LanguagesView.vue";
 
 const TERMS = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel"];
@@ -68,6 +78,7 @@ describe("researcher text policy card", () => {
     api.runtime.getProviderProfilesForUi.mockReset();
     api.runtime.getProviderProfilesForUi.mockReturnValue([]);
     api.runtime.getDefaultProviderProfileId.mockReturnValue("");
+    router.replace.mockReset();
   });
 
   it("keeps the card to two columns, with the term badges inside the copy column", async () => {

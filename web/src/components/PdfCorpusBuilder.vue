@@ -1781,7 +1781,7 @@ async function chooseBuild(build: CorpusBuild) {
   if (buildRunning.value) startPolling();
 }
 async function openPdfExplorer() {
-  await router.replace({ query: { ...route.query, mode: "explorer" } });
+  await router.push({ name: "source-explorer", query: route.query });
 }
 async function reanalyzeDocument() {
   if (!currentBuild.value) return;
@@ -3271,7 +3271,7 @@ defineExpose({
                   </button>
                 </div>
                 <div
-                  v-show="reviewWorkspaceMode === 'record'"
+                  v-if="reviewWorkspaceMode === 'record' && selectedRecord"
                   class="review-inspector-tabs"
                   role="tablist"
                   :aria-label="i18n.t('pdf_corpus.review_detail_views')"

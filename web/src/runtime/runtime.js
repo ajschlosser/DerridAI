@@ -1118,27 +1118,27 @@ function currentContext() {
       "Workspace, vector stores, review activity, and corpus statistics",
     ],
     list: [
-      "Corpus",
+      "Corpora",
       f?.name || "Records",
       f ? `${f.records.length.toLocaleString()} ${tr("dynamic.records")}` : "Open a JSONL file",
     ],
-    works: ["Corpus", "Works", "Cross-file work overview"],
-    global: ["Corpus", "Global Search", "Search and filter every loaded record"],
+    works: ["Corpora", "Works", "Cross-file work overview"],
+    global: ["Corpora", "Global Search", "Search and filter every loaded record"],
     annotations: [
-      "Corpus",
+      "Corpora",
       "Annotations",
       "Review annotations by work or in recent-activity order",
     ],
-    semanticmap: ["Corpus", "Semantic map", "Concepts, topics, and persons that occur together"],
+    semanticmap: ["Corpora", "Semantic map", "Concepts, topics, and persons that occur together"],
     pdf: [
-      "Tools",
+      "Corpus Management",
       state.pdf.title || "Corpus Builder",
       state.pdf.name
         ? `${state.pdf.name} · page ${state.pdf.page}`
         : "Build, monitor, and review auditable corpus records",
     ],
-    compare: ["Tools", "Record Comparison", "Inspect field and text differences"],
-    vector: ["Storage", "Vector Stores", "Persistent local ChromaDB collections"],
+    compare: ["Corpora", "Record Comparison", "Inspect field and text differences"],
+    vector: ["Corpus Management", "Corpus Data", "Persistent local ChromaDB collections"],
     rag: [
       "Research",
       "Research",
@@ -1155,7 +1155,7 @@ function currentContext() {
       "Inspect application storage, trace derived metadata, and manage saved research responses.",
     ],
     providers: [
-      "System",
+      "AI & Automation",
       "LLM Providers",
       "Create, configure, test, warm, and reuse LLM provider profiles across every LLM workflow",
     ],
@@ -2759,7 +2759,7 @@ function translatedNavLabel(item) {
     vector: "nav.vector",
     rag: "nav.rag",
     faq: "nav.faq",
-    responsecache: "nav.cache",
+    responsecache: "runtime.system_data",
     providers: "nav.providers",
     schemas: "nav.schemas",
     config: "nav.config",
@@ -2769,9 +2769,13 @@ function translatedNavLabel(item) {
 function translatedSectionLabel(section) {
   const keys = {
     Overview: "section.overview",
-    Corpus: "section.corpus",
+    Corpus: "section.corpora",
+    Corpora: "section.corpora",
     Research: "section.research",
-    Tools: "section.tools",
+    Tools: "section.corpus_management",
+    Build: "section.corpus_management",
+    "Corpus Management": "section.corpus_management",
+    "AI & Automation": "section.ai_automation",
     System: "section.system",
   };
   return keys[section] ? tr(keys[section], section) : section;
@@ -3324,6 +3328,8 @@ export {
   setShellRefreshHook,
   setUrlSyncHook,
   pauseRuntime,
+  refreshJobs,
+  unmountOperationsPanel,
   viewPathMap,
   pathViewMap,
   bootstrapRuntime,

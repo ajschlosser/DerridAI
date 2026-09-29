@@ -205,7 +205,7 @@ onMounted(async () => {
   <main class="compare-page" aria-labelledby="compare-title">
     <p class="sr-only" aria-live="polite">{{ liveMessage }}</p>
     <UiPageHeader
-      :kicker="t('section.tools', 'Tools')"
+      :kicker="t('section.corpora', 'Corpora')"
       :title="t('nav.compare', 'Compare')"
       title-id="compare-title"
       :description="

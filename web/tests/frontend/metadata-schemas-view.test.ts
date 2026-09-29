@@ -18,6 +18,7 @@ describe("Metadata schemas page", () => {
     vi.restoreAllMocks();
     useI18nStore().dictionary = {
       "section.system": "System",
+      "section.corpus_management": "Corpus Management",
       "schemas.manage_title": "Metadata schemas",
       "schemas.manage_help": "Define the fields on JSONL records.",
     };
@@ -44,11 +45,11 @@ describe("Metadata schemas page", () => {
     } as never);
   });
 
-  it("hosts the schema editor on a System page", async () => {
+  it("hosts the schema editor in Corpus Management", async () => {
     const wrapper = mount(MetadataSchemasView, { attachTo: document.body });
     await flushPromises();
     expect(wrapper.get("#schemas-page-title").text()).toBe("Metadata schemas");
-    expect(wrapper.text()).toContain("System");
+    expect(wrapper.text()).toContain("Corpus Management");
     expect(wrapper.find(".schema-editor").exists()).toBe(true);
     wrapper.unmount();
   });
