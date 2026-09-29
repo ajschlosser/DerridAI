@@ -283,6 +283,43 @@ describe("PdfCorpusBuilder characterization", () => {
     wrapper.unmount();
   });
 
+  it("returns to the record split view when fixing a validation issue found from a full-screen workspace mode", async () => {
+    pdfCorpusApi.listBuilds.mockResolvedValue({
+      items: [reviewBuild],
+      total: 1,
+      offset: 0,
+      limit: 100,
+    });
+    const wrapper = await mountBuilder();
+    const exposed = wrapper.vm as unknown as {
+      reviewWorkspaceMode: string;
+      setReviewWorkspaceMode: (mode: string) => void;
+      fixValidationIssue: (issue: {
+        code?: string;
+        record_id?: string;
+        field?: string;
+        reason?: string;
+      }) => Promise<void>;
+    };
+
+    // The reviewer left the split "record" view in a full-screen Source workspace on
+    // whatever record they last reviewed. The metadata/evidence panels only render in
+    // "record" mode, so fixing a validation finding must force it back, or the
+    // reviewer lands on the target record with no visible way to see the problem.
+    exposed.setReviewWorkspaceMode("source");
+    expect(exposed.reviewWorkspaceMode).toBe("source");
+
+    await exposed.fixValidationIssue({
+      code: "metadata_evidence",
+      record_id: "record-1",
+      field: "speaker",
+      reason: "no valid source block",
+    });
+
+    expect(exposed.reviewWorkspaceMode).toBe("record");
+    wrapper.unmount();
+  });
+
   it("shows acceptance immediately while authoritative review persistence is pending", async () => {
     pdfCorpusApi.listBuilds.mockResolvedValue({
       items: [reviewBuild],

@@ -6,7 +6,10 @@ DerridAI's live canonical FieldAssertion model.  The compact representation is
 lossless for the declared contract:
 
 * unresolved assertions are retained;
-* assertion-backed root projections are removed;
+* root materialized values (the flat, human-/tool-readable projection of each
+  field's current assertion) are kept alongside the full assertion history,
+  so a consumer that never learns the FieldAssertion model can still read a
+  scholarly corpus export directly;
 * repeated evidence on superseding assertions is replaced by a pointer to the
   preceding assertion when the evidence is byte-for-byte semantically equal;
 * nullable/empty payload members are omitted except where cELF Core requires
@@ -148,16 +151,6 @@ def _assertion_buckets(record: Mapping[str, Any]) -> dict[str, list[dict[str, An
         bucket = [item for item in raw_bucket if isinstance(item, dict)]
         result[str(raw_field_id)] = bucket
     return result
-
-
-def _assertion_projection_names(record: Mapping[str, Any]) -> set[str]:
-    names: set[str] = set()
-    for bucket in _assertion_buckets(record).values():
-        for assertion in bucket:
-            name = str(assertion.get("field_name") or "").strip()
-            if name:
-                names.add(name)
-    return names
 
 
 def _resolve_bucket_evidence(
@@ -420,13 +413,11 @@ def compact_public_record(
         if schema_errors:
             raise LedgerValidationError("; ".join(schema_errors[:12]))
 
-    # The root materialized values are a read-model projection.  The complete
-    # assertion history and current-field selector remain canonical in the
-    # archival ledger.
+    # The root materialized values are kept: a consumer that only reads flat
+    # fields (an external tool, a human opening the file) must still see the
+    # corpus's scholarly metadata. The full assertion history and
+    # current-field selector remain canonical alongside them.
     compact = copy.deepcopy(public)
-    for field_name in _assertion_projection_names(compact):
-        compact.pop(field_name, None)
-
     compact = deduplicate_assertion_evidence(compact)
     compact = sparse_json(compact)
 

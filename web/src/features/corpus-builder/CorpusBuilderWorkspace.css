@@ -2019,6 +2019,15 @@ summary:focus-visible {
   display: inline-flex;
   gap: var(--space-2, 8px);
 }
+.fix-banner-progress {
+  display: inline-block;
+  padding: 0.05em 0.5em;
+  border-radius: 999px;
+  background: var(--tone-info-border);
+  color: var(--tone-info-bg);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+}
 
 /* The LLM touch-up notice is informational, not a warning, and its explanation must stay readable: it wraps. */
 .review-frame .review-reason.touchup-review-notice {

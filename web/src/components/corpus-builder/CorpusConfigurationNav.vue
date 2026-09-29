@@ -160,8 +160,8 @@ function onTabKeydown(event: KeyboardEvent, id: CorpusConfigurationSection) {
   height: 1.15rem;
   place-items: center;
   border-radius: 999px;
-  background: var(--tone-success-bg);
-  color: var(--tone-success-fg);
+  background: var(--tone-ok-bg);
+  color: var(--tone-ok-fg);
   font-size: var(--fs-xs);
 }
 @media (forced-colors: active) {

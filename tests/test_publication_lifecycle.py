@@ -17,6 +17,7 @@ sys.modules.setdefault("chromadb", types.SimpleNamespace())
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"api"))
 from app import corpus_builder as cb
+from app.corpus_segmentation import _apply_manifest_metadata
 from app.derridai_ledger import iter_jsonl_zst
 from app.field_assertions import create_model_assertion, reset_fields_for_evaluation
 
@@ -62,6 +63,32 @@ def test_publication_emits_clean_scholarly_records_and_finishes_progress(tmp_pat
     assert refreshed["stage"]=="ready"
     assert refreshed["publication_status"]=="published"
     assert refreshed["progress"]==1.0
+
+def test_publication_keeps_document_level_manifest_metadata(tmp_path:Path):
+    """Work/author/etc. inherited from the reviewed document manifest survive to the export.
+
+    These fields are resolved through the FieldAssertion system (like any other
+    scholarly field), so the published row must keep their materialized root value
+    rather than only the internal assertion bookkeeping: a consumer that opens the
+    downloaded JSONL directly, without implementing FieldAssertion resolution, must
+    still see the work title and author.
+    """
+    repo=cb.PdfCorpusRepository(tmp_path/"repo")
+    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
+    build=_install_publishable(repo)
+    manifest={"title":"Of Grammatology","document_author":"Jacques Derrida"}
+    build["manifest"]=manifest
+    repo.save_build(build)
+    records=repo.load_records(build["build_id"])
+    record=records[0]
+    _apply_manifest_metadata(record,manifest)
+    repo.save_records(build["build_id"],[record])
+    publication=manager.publish(build["build_id"])
+    path = repo.publication_path(publication["publication_id"])
+    row = next(iter_jsonl_zst(path, rehydrate_evidence=False))
+    assert row["work"]=="Of Grammatology"
+    assert row["document_title"]=="Of Grammatology"
+    assert row["document_author"]=="Jacques Derrida"
 
 def test_review_status_progress_tracks_complete_pipeline(tmp_path:Path):
     """Records still pending review put the build in "awaiting_review" at 90-100% progress."""
