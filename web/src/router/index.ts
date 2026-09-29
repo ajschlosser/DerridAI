@@ -278,6 +278,7 @@ const routes: RouteRecordRaw[] = [
       const section = allowed.has(requested) ? requested : "overview";
       const query = { ...to.query };
       delete query.section;
+      if (section === "pipelines") return { name: "pipelines", query };
       return { name: `system-data-${section}`, query };
     },
   },
