@@ -232,7 +232,11 @@ describe("Corpus Builder lifecycle controller", () => {
           stage: "enriching",
           progress: 0.5,
           record_count: 2,
+          accepted_count: 0,
+          rejected_count: 0,
+          review_queue_counts: { all: 2, ready: 1, issues: 1, pending: 2 },
           metadata_total: 2,
+          metadata_completed: 1,
           metadata_enriched_count: 1,
           metadata_tasks_total: 6,
           metadata_tasks_completed: 3,
@@ -247,8 +251,10 @@ describe("Corpus Builder lifecycle controller", () => {
     expect(corpusBuilderApi.build).not.toHaveBeenCalled();
     expect(state.currentBuild.value?.progress).toBe(0.5);
     expect(state.currentBuild.value?.metadata_enriched_count).toBe(1);
+    expect(state.currentBuild.value?.metadata_completed).toBe(1);
     expect(state.currentBuild.value?.metadata_tasks_completed).toBe(3);
     expect(state.currentBuild.value?.needs_review_count).toBe(1);
+    expect(state.currentBuild.value?.review_queue_counts?.issues).toBe(1);
 
     state.controller.stopPolling();
   });
