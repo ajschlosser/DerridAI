@@ -73,6 +73,20 @@ def test_hints_go_stale_when_the_text_changes(fake_pipeline):
     assert nlp.prompt_hints(record, ["position_holder"]) == {}
 
 
+def test_record_terms_are_exact_spans_computed_without_tagged_fields(fake_pipeline):
+    record = {"text": TEXT, "region_language": ["English"]}
+    result = nlp.annotate_record(record, NS(fields=[]))
+    assert result["status"] == "ok" and result["fields"] == {}
+    # Entities win over the PROPN run covering the same characters.
+    assert [(t["text"], t["source"], t["tag"]) for t in result["terms"]] == [
+        ("Rousseau", "ner", "PERSON"),
+        ("Geneva", "ner", "GPE"),
+    ]
+    assert nlp.current_terms(record) == result["terms"]
+    record["text"] = TEXT + " again"
+    assert nlp.current_terms(record) is None
+
+
 def test_missing_model_is_reported_not_silently_empty(monkeypatch):
     monkeypatch.setattr(nlp, "load_pipeline", lambda language: None)
     record = {"text": TEXT, "region_language": ["fr"]}
@@ -83,7 +97,7 @@ def test_missing_model_is_reported_not_silently_empty(monkeypatch):
 
 def test_unsupported_language_and_untagged_schemas_are_skipped():
     assert nlp.annotate_record({"text": TEXT, "region_language": ["Klingon"]}, SCHEMA)["reason"] == "language_not_supported"
-    assert nlp.annotate_record({"text": TEXT}, NS(fields=[NS(name="x", pos_tags=[], ner_tags=[])]))["status"] == "skipped"
+    assert nlp.annotate_record({"text": " "}, NS(fields=[NS(name="x", pos_tags=[], ner_tags=[])]))["status"] == "skipped"
     assert nlp.language_code("Français") == "fr" and nlp.language_code("en-US") == "en"
 
 

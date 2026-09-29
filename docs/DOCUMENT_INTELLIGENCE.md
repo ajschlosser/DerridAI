@@ -183,6 +183,15 @@ paged entity index, and explicit `candidate_*`/`truncated_*` counts. Relations
 keep `relation_kind`, `authority_status`, supporting fields, and evidence-reference
 counts.
 
+Record-centred projections of the same graph support per-Record maps and graph walks:
+
+```text
+GET /api/pdf/corpus-builds/{build_id}/records/{record_id}/semantic-map
+GET /api/pdf/corpus-builds/{build_id}/semantic-content-graph/nodes/{node_id}
+```
+
+Both rebuild from the same reviewer-presented Records without persisting anything and are bounded (local and neighbour nodes, adjacent relations, linked Records, per-node Record lists).
+
 ## Metadata enrichment
 
 Whole-document annotations are added to metadata prompts only through bounded hints. Typical hints include:
@@ -235,6 +244,18 @@ A semantic edge carries the authority state, supporting field identities, Record
 
 The `target` field is polymorphic. The graph reuses an already-resolved person/work/entity node with the same canonical label before falling back to a concept node.
 
+## Record semantic maps
+
+`api/app/record_semantic_map.py` projects the Semantic Content Graph around one Record or one node.
+
+A **Record map** contains the Record's local nodes (nodes whose Record coverage includes it, plus endpoints of relations it supports), its in-Record relations, bounded outward relations to neighbouring nodes, and **linked Records**. Linked Records are ranked deterministically by shared nodes weighted by inverse Record frequency, with a shared semantic relation weighted above a node and plain POS terms weighted below entities. The map also returns the Record's annotation mentions as exact offsets into the current Record text, with the layer (`entity`, `quotation`, `ner`, `pos`) and tag that produced each.
+
+A **node neighbourhood** contains the node, its adjacent relations (semantic first), its neighbours, and every Record in which it occurs or takes part in a relation.
+
+The Record-level **POS/NER term layer** is stored in `nlp_candidates.terms` by `nlp_annotations.annotate_record`: named entities plus proper-noun and noun runs, bounded per Record and bound to the Record-text digest. It is computed whenever a spaCy pipeline for the Record language is installed, whether or not a schema field declares POS/NER tags. Terms whose surface form matches an existing node label or alias join that node; the rest become `term` (POS) or entity-type nodes that link Records only by shared surface form. Terms are navigation aids and never metadata values, prompt authority, or evidence; `nlp_candidates` remains excluded from publication.
+
+Each layer reports `ok`, `stale` (Record text changed after annotation, or the document run is stale), `missing` (not analysed yet), or `unavailable`. Stale or missing layers contribute no mentions or term nodes.
+
 ## Fiction workflow
 
 With the **Fiction / characters** profile, PERSON coreference clusters become Character nodes. The review surface provides a searchable complete character/entity index and an interactive graph.
@@ -265,6 +286,8 @@ It provides:
 - a stale-analysis warning and explicit **Reanalyse document** action after reviewed-text changes.
 
 The diagram renders at most 250 entities from the bounded view and reports what it omitted; the paged index remains the complete route to every entity.
+
+Each Record's inspector also has a **Semantic map** tab that shows the Record map, its annotated text, and its linked Records, and lets the reviewer walk node → node and node → Record across the corpus with a back-tracking exploration path.
 
 ## Publication and interoperability
 

@@ -276,6 +276,91 @@ export interface SemanticContentGraphEdge {
   count?: number;
 }
 
+/** A graph node as it appears in a Record map or node walk. */
+export interface RecordSemanticMapNode extends SemanticContentGraphNode {
+  /** True when the node occurs in (or takes part in a relation of) the mapped Record. */
+  local?: boolean;
+  record_count?: number;
+  /** POS/NER tags for nodes created from the Record term layer. */
+  tags?: string[];
+}
+
+export interface RecordSemanticMapEdge extends SemanticContentGraphEdge {
+  /** True when the mapped Record supports this relation; false when it leads elsewhere. */
+  in_record?: boolean;
+}
+
+/** An exact span of the current Record text; `layer` names the annotation that produced it. */
+export interface RecordSemanticMention {
+  start: number;
+  end: number;
+  text: string;
+  layer: "entity" | "quotation" | "ner" | "pos" | string;
+  tag?: string;
+  mention_type?: string;
+  speaker?: string;
+  node_id?: string;
+}
+
+export interface SemanticNodeRef {
+  id: string;
+  label: string;
+  type: string;
+}
+
+export interface RecordSemanticLinkedRecord {
+  record_id: string;
+  preview: string;
+  score: number;
+  shared_node_count: number;
+  shared_nodes: SemanticNodeRef[];
+  shared_relation_ids: string[];
+}
+
+export type SemanticLayerStatus = "ok" | "stale" | "missing" | "unavailable" | string;
+
+export interface RecordSemanticMap {
+  version: number;
+  kind: "record_semantic_map" | string;
+  record_id: string;
+  record_revision: number;
+  record_text_sha256: string;
+  layers: {
+    document_intelligence: {
+      status: SemanticLayerStatus;
+      provider?: string | null;
+      model?: string | null;
+      profile?: string | null;
+    };
+    terms: { status: SemanticLayerStatus };
+  };
+  mentions: RecordSemanticMention[];
+  nodes: RecordSemanticMapNode[];
+  edges: RecordSemanticMapEdge[];
+  linked_records: RecordSemanticLinkedRecord[];
+  summary: {
+    local_nodes: number;
+    shown_local_nodes: number;
+    neighbor_nodes: number;
+    in_record_edges: number;
+    outward_edges: number;
+    linked_records: number;
+  };
+  epistemic_note?: string;
+}
+
+export interface SemanticNodeNeighborhood {
+  version: number;
+  kind: "semantic_node_neighborhood" | string;
+  node: RecordSemanticMapNode;
+  nodes: RecordSemanticMapNode[];
+  edges: SemanticContentGraphEdge[];
+  total_edges: number;
+  records: Array<{ record_id: string; preview: string }>;
+  total_records: number;
+  epistemic_note?: string;
+}
+
 export interface SemanticContentGraph {
   version: number;
   kind: "semantic_content_graph" | string;

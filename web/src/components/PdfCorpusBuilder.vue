@@ -95,6 +95,7 @@ import RecordContextReader from "./corpus-builder/RecordContextReader.vue";
 import MovableRecordModal from "./corpus-builder/MovableRecordModal.vue";
 import CorpusEnrichmentConfiguration from "./corpus-builder/CorpusEnrichmentConfiguration.vue";
 import CorpusSemanticGraphPanel from "./corpus-builder/CorpusSemanticGraphPanel.vue";
+import CorpusRecordSemanticMap from "./corpus-builder/CorpusRecordSemanticMap.vue";
 import CorpusMetadataConfiguration from "./corpus-builder/CorpusMetadataConfiguration.vue";
 import CorpusAdvancedConfiguration from "./corpus-builder/CorpusAdvancedConfiguration.vue";
 import { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
@@ -3270,6 +3271,19 @@ defineExpose({
                   >
                     {{ i18n.t("pdf_corpus.source_tab") }}
                   </button>
+                  <button
+                    id="review-tab-semantic"
+                    data-review-tab="semantic"
+                    type="button"
+                    role="tab"
+                    aria-controls="review-panel-semantic"
+                    :aria-selected="reviewInspectorTab === 'semantic'"
+                    :tabindex="reviewInspectorTab === 'semantic' ? 0 : -1"
+                    @keydown="reviewInspectorKeydown"
+                    @click="reviewInspectorTab = 'semantic'"
+                  >
+                    {{ i18n.t("pdf_corpus.semantic_tab") }}
+                  </button>
                 </div>
                 <section
                   v-if="
@@ -3436,6 +3450,26 @@ defineExpose({
                   @set-evidence="setEvidenceBlocks"
                   @browse-external="openExternalEvidenceBrowser(selectedEvidenceField)"
                 />
+                <section
+                  v-else-if="
+                    selectedRecord &&
+                    reviewWorkspaceMode === 'record' &&
+                    reviewInspectorTab === 'semantic'
+                  "
+                  id="review-panel-semantic"
+                  class="review-inspector-panel"
+                  role="tabpanel"
+                  aria-labelledby="review-tab-semantic"
+                  tabindex="0"
+                >
+                  <CorpusRecordSemanticMap
+                    :build-id="currentBuild?.build_id || ''"
+                    :record="selectedRecord"
+                    :disabled="busy !== '' || buildRunning"
+                    @open-record="navigateToQueueRecord"
+                    @refreshed="refreshBuild"
+                  />
+                </section>
                 <CorpusReviewSourcePanel
                   v-else-if="
                     selectedRecord &&

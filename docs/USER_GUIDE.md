@@ -621,6 +621,16 @@ Observational relationships such as co-occurrence and dialogue proximity are dra
 
 For fiction, the index supplies the requested character list and the graph provides a character network without turning simple proximity into a literary claim. For scholarly/non-fiction text, the index supplies people, concepts, works, topics and other named entities, while existing fields such as `position_holder`, `target`, `stance`, `speaker`, `quoted_speaker`, `quoted_author`, and `quoted_work` contribute evidence-aware semantic edges.
 
+Every Record also has its own map. In Record Review (and in the focus view), open the Record's **Semantic map** tab to see:
+
+- the Record's **annotated text**, with Document Intelligence entities and quotations and the local spaCy **NER** entities and **POS** noun/proper-noun terms highlighted as exact spans with their tags; each layer can be hidden, and selecting a highlighted span walks to its node;
+- a diagram centred on the Record: the nodes it contains on the inner ring, the relations it supports, and fainter outward relations to nodes found in other Records;
+- the Record's nodes grouped by type, and **Linked records**, ranked by the nodes they share (rarer nodes count more; a shared semantic relation counts most), each with a short preview and the shared nodes.
+
+Select any node, shared node, or relation endpoint to **walk** to it: a node view lists its relations (semantic relations first, with their authority state) and every Record it occurs or takes part in. From there, **Explore map** walks into another Record's map and **Open in review** makes that Record the one under review. The exploration path above the map keeps each step, so **Back** or any earlier step returns along the walk. POS/NER terms that name an existing entity or concept join that node; other terms link Records only by the same surface form, and the diagram hides plain POS terms unless **Show POS terms in the diagram** is on. Like the build-wide map, a shared node or term is navigation, not evidence that two Records make the same claim.
+
+The POS/NER term layer is computed per Record when Document Intelligence runs (and when a Record is split or merged). Builds analysed before it existed show the layer as **Not analysed yet** until **Reanalyse document** is run; a Record whose text changed shows it as **Stale**.
+
 If reviewed text changes after analysis, the panel marks Document Intelligence **stale**. Select **Reanalyse document** to refresh text-bound annotations and the relationship map. Stale document annotations are not used to build the current graph.
 
 Records enriched before this behavior existed are not changed automatically. **Retry metadata** skips completed metadata families by design, so it will not repopulate them. To repopulate an affected record, use **Run metadata enrichment again** (or **Rerun** on a family) and choose **Discourse / attribution**; this clears only LLM-owned values in that family and keeps reviewer-owned, deterministic, and inherited values. Rebuilding also works.

@@ -4,9 +4,11 @@ import type {
   CorpusBuild,
   CorpusLlmTraceEntry,
   DocumentIntelligenceRun,
+  RecordSemanticMap,
   SemanticContentGraph,
   SemanticContentGraphView,
   SemanticGraphViewParams,
+  SemanticNodeNeighborhood,
 } from "./types";
 import { LEGACY_CORPUS_BASE, legacyCorpusUrl } from "./compatibility";
 
@@ -57,6 +59,14 @@ export const corpusBuildsApi = {
       init,
     );
   },
+  recordSemanticMap: (buildId: string, recordId: string) =>
+    apiRequest<RecordSemanticMap>(
+      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/semantic-map`,
+    ),
+  semanticGraphNode: (buildId: string, nodeId: string) =>
+    apiRequest<SemanticNodeNeighborhood>(
+      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/semantic-content-graph/nodes/${encodeURIComponent(nodeId)}`,
+    ),
   rerunDocumentIntelligence: (buildId: string) =>
     apiRequest<{
       document_intelligence: DocumentIntelligenceRun;
