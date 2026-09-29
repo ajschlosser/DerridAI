@@ -1002,7 +1002,10 @@ def run_rag_pipeline(
     stage_start = time.perf_counter()
     update("query_metadata", 0, 1, "Decomposing the research prompt")
     parsed_query: dict[str, Any] = {}
-    if request.query_decomposition:
+    effective_query_decomposition = (
+        request.query_decomposition and pipeline_plan.query_decomposition_available
+    )
+    if effective_query_decomposition:
         decomposition_prompt = QUERY_TEMPLATE.format(
             prompt=request.prompt,
             instructions=request.instructions or "",
@@ -1059,6 +1062,24 @@ def run_rag_pipeline(
     update("query_metadata", 1, 1, "Query decomposition complete")
     check_cancel()
 
+    available_search_types = pipeline_plan.available_search_types
+    effective_search_types = [
+        search_type
+        for search_type in request.search_types
+        if search_type in available_search_types
+    ]
+    if not effective_search_types and not request.skip_retrieval:
+        # The pipeline is the authoritative set of available retrieval stages.
+        # A stale client may submit only a route the selected chain no longer
+        # exposes, so fall back to the chain rather than silently retrieving zero.
+        effective_search_types = [
+            value
+            for value in ("similarity", "lexical", "mmr")
+            if value in available_search_types
+        ]
+    if not request.skip_retrieval and not effective_search_types:
+        raise ValueError("The selected Research pipeline has no usable retrieval route.")
+
     selected_candidates = _selected_evidence_candidates(request, store)
     if request.skip_retrieval and not selected_candidates:
         raise ValueError("Selected-evidence-only RAG requires at least one selected evidence record.")
@@ -1082,7 +1103,7 @@ def run_rag_pipeline(
     retrieve_k = max(1, int(request.k))
     fetch_k = max(retrieve_k, request.fetch_k)
     raw_results: list[dict[str, Any]] = []
-    total_units = len(collections) * max(1, len(request.search_types))
+    total_units = len(collections) * max(1, len(effective_search_types))
     unit = 0
 
     if request.skip_retrieval:
@@ -1098,7 +1119,7 @@ def run_rag_pipeline(
         )
 
         semantic_candidates: list[dict[str, Any]] = []
-        if {"similarity", "mmr"} & set(request.search_types):
+        if {"similarity", "mmr"} & set(effective_search_types):
             try:
                 semantic_candidates = _scope_rag_candidates(
                     store.semantic_candidates(
@@ -1112,7 +1133,7 @@ def run_rag_pipeline(
             except ValueError as exc:
                 # Precomputed-vector collections remain useful through the lexical
                 # route even though they cannot embed a new query.
-                if "lexical" not in request.search_types:
+                if "lexical" not in effective_search_types:
                     raise
                 update(
                     "retrieval",
@@ -1121,7 +1142,7 @@ def run_rag_pipeline(
                     f"Semantic route unavailable for {collection['name']}: {exc}",
                 )
 
-        if "similarity" in request.search_types:
+        if "similarity" in effective_search_types:
             unit += 1
             update(
                 "retrieval",
@@ -1135,7 +1156,7 @@ def run_rag_pipeline(
                 row["search_rank"] = rank
                 raw_results.append(row)
 
-        if "lexical" in request.search_types:
+        if "lexical" in effective_search_types:
             unit += 1
             update(
                 "retrieval",
@@ -1159,7 +1180,7 @@ def run_rag_pipeline(
                 row["search_rank"] = rank
                 raw_results.append(row)
 
-        if "mmr" in request.search_types:
+        if "mmr" in effective_search_types:
             unit += 1
             update(
                 "retrieval",
