@@ -3,6 +3,8 @@
 import { computed } from "vue";
 import AppIcon from "../AppIcon.vue";
 import {
+  pipelineConfigHelp,
+  pipelineConfigLabel,
   pipelineEdgeKindLabel,
   pipelineStageFamilyLabel,
   pipelineStrategyDescription,
@@ -10,6 +12,7 @@ import {
 } from "../../domain/pipelinePresentation";
 import { useI18nStore } from "../../stores/i18n";
 import type { PipelineDefinition, PipelineStage, PipelineStrategy } from "../../types/pipelines";
+import UiTooltip from "../ui/UiTooltip.vue";
 
 const props = defineProps<{
   pipeline: PipelineDefinition;
@@ -38,12 +41,7 @@ function outgoing(stage: PipelineStage) {
   return values;
 }
 function compactConfig(config: Record<string, unknown>) {
-  const entries = Object.entries(config || {});
-  if (!entries.length) return "";
-  return entries
-    .slice(0, 4)
-    .map(([key, value]) => `${key}=${String(value)}`)
-    .join(" · ");
+  return Object.entries(config || {}).slice(0, 4);
 }
 </script>
 
@@ -61,19 +59,44 @@ function compactConfig(config: Record<string, unknown>) {
           </div>
           <div class="stage-badges">
             <span class="badge">{{ pipelineStageFamilyLabel(strategy(stage)?.family, t) }}</span>
-            <span v-if="strategy(stage)?.invokes_llm" class="badge">
+            <span v-if="strategy(stage)?.invokes_llm" class="badge badge-with-help">
               <AppIcon name="spark" />
               {{ t("pipelines.llm", "LLM") }}
+              <UiTooltip
+                :text="
+                  t(
+                    'pipelines.invokes_llm_help',
+                    'This stage calls a configured language model. Its output may vary between runs, so DerridAI records the model and execution trace for auditability.',
+                  )
+                "
+              />
             </span>
-            <span v-else class="badge">{{ t("pipelines.deterministic", "Deterministic") }}</span>
+            <span v-else class="badge badge-with-help">
+              {{ t("pipelines.deterministic", "Deterministic") }}
+              <UiTooltip
+                :text="
+                  t(
+                    'pipelines.deterministic_help',
+                    'This stage follows fixed program logic rather than asking a language model to decide the result. The same inputs and configuration should produce the same result.',
+                  )
+                "
+              />
+            </span>
           </div>
         </div>
         <p v-if="strategy(stage)" class="stage-description">
           {{ pipelineStrategyDescription(strategy(stage), t) }}
         </p>
-        <p v-if="compactConfig(stage.config)" class="stage-config">
-          {{ compactConfig(stage.config) }}
-        </p>
+        <div v-if="compactConfig(stage.config).length" class="stage-config">
+          <span v-for="[key, value] in compactConfig(stage.config)" :key="key">
+            <strong>{{ pipelineConfigLabel(key, t) }}:</strong>
+            <code>{{ String(value) }}</code>
+            <UiTooltip
+              :text="pipelineConfigHelp(key, t)"
+              :label="t('pipelines.explain_setting', 'Explain this setting')"
+            />
+          </span>
+        </div>
         <div v-if="outgoing(stage).length" class="stage-edges">
           <span v-for="edge in outgoing(stage)" :key="`${edge.kind}:${edge.target}`">
             {{ pipelineEdgeKindLabel(edge.kind, t) }}
@@ -160,7 +183,24 @@ function compactConfig(config: Record<string, unknown>) {
   line-height: 1.45;
 }
 .stage-config {
-  font-family: var(--font-mono, ui-monospace, monospace);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.stage-config > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 6px;
+  border-radius: 7px;
+  background: var(--soft);
+}
+.stage-config code {
+  color: inherit;
+  font-size: 0.75rem;
+}
+.badge-with-help {
+  padding-inline-end: 3px;
 }
 .stage-edges {
   margin-top: 8px;
