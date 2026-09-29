@@ -137,7 +137,7 @@ function compactConfig(config: Record<string, unknown>) {
   border-radius: 999px;
   background: var(--soft);
   color: var(--muted);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 .badge :deep(svg) {
