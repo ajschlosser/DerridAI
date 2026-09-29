@@ -3,24 +3,29 @@
 import { nextTick, onBeforeUnmount, ref, useId } from "vue";
 
 /**
- * An "i" button that explains something. The explanation is rendered at the page level (or inside the open modal
- * dialog that contains the button, since a modal dialog sits above the page) with fixed coordinates, so no scrolling or
- * clipped pane, such as the review panes or the record viewer, can hide or cover it. It opens above or below as asked,
- * flips when there is no room, and stays inside the window.
+ * Accessible, page-level tooltip behavior. The default trigger is the shared
+ * information icon. `triggerMode="content"` makes the slotted content itself
+ * the focus/click/hover trigger, which is useful for compact status chips where
+ * adding a second icon would create unnecessary visual noise.
+ *
+ * Tooltip content is teleported to the page (or its containing open dialog) so
+ * scrolling and clipping panes cannot hide it.
  */
 const {
   text,
   label = "",
   placement = "top",
+  triggerMode = "icon",
 } = defineProps<{
   text: string;
   label?: string;
   placement?: "top" | "bottom";
+  triggerMode?: "icon" | "content";
 }>();
 
 const id = `${useId()}-tooltip`;
 const open = ref(false);
-const trigger = ref<HTMLButtonElement | null>(null);
+const trigger = ref<HTMLElement | null>(null);
 const bubble = ref<HTMLElement | null>(null);
 const target = ref<HTMLElement | string>("body");
 const side = ref<"top" | "bottom">(placement);
@@ -29,10 +34,10 @@ const GAP = 6;
 const MARGIN = 8;
 
 function place() {
-  const button = trigger.value;
+  const anchorElement = trigger.value;
   const content = bubble.value;
-  if (!button || !content) return;
-  const anchor = button.getBoundingClientRect();
+  if (!anchorElement || !content) return;
+  const anchor = anchorElement.getBoundingClientRect();
   const box = content.getBoundingClientRect();
   const above = anchor.top - GAP - box.height;
   const below = anchor.bottom + GAP;
@@ -78,8 +83,9 @@ onBeforeUnmount(hide);
 </script>
 
 <template>
-  <span class="ui-tooltip" @mouseenter="show" @mouseleave="hide" @keydown="onKeydown">
+  <span class="ui-tooltip" :data-trigger-mode="triggerMode" @mouseenter="show" @mouseleave="hide" @keydown="onKeydown">
     <button
+      v-if="triggerMode === 'icon'"
       ref="trigger"
       type="button"
       class="ui-tooltip-trigger"
@@ -92,6 +98,20 @@ onBeforeUnmount(hide);
     >
       <span aria-hidden="true">i</span>
     </button>
+    <span
+      v-else
+      ref="trigger"
+      class="ui-tooltip-anchor"
+      tabindex="0"
+      :aria-label="label || undefined"
+      :aria-describedby="id"
+      :aria-expanded="open ? 'true' : undefined"
+      @focus="show"
+      @blur="hide"
+      @click="toggle"
+    >
+      <slot />
+    </span>
     <Teleport :to="target">
       <span
         :id="id"
@@ -143,7 +163,14 @@ onBeforeUnmount(hide);
   background: var(--surface-hover, var(--soft));
   color: var(--text, currentColor);
 }
-.ui-tooltip-trigger:focus-visible {
+.ui-tooltip-anchor {
+  display: inline-flex;
+  min-inline-size: 0;
+  border-radius: inherit;
+  cursor: help;
+}
+.ui-tooltip-trigger:focus-visible,
+.ui-tooltip-anchor:focus-visible {
   outline: var(--focus-ring-width, 3px) solid var(--focus-ring);
   outline-offset: var(--focus-ring-offset, 2px);
 }
@@ -173,7 +200,8 @@ onBeforeUnmount(hide);
   .ui-tooltip-content {
     border-color: CanvasText;
   }
-  .ui-tooltip-trigger:focus-visible {
+  .ui-tooltip-trigger:focus-visible,
+  .ui-tooltip-anchor:focus-visible {
     outline-color: Highlight;
   }
 }
