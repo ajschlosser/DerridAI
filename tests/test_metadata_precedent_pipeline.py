@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import pytest
-
 from app.pipelines.defaults import built_in_pipeline
 from app.pipelines.metadata_precedents import compile_metadata_precedent_pipeline
 
