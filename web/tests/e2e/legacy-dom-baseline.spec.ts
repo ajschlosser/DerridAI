@@ -129,8 +129,9 @@ async function open(page: Page, scenario: Scenario) {
       // Target destination buttons, not same-named collapsible section headings. Some groups
       // use progressive disclosure, so reveal the owning group before activating a hidden target.
       const destination = page
-        .locator(".shell-sidebar .nav-tooltip-wrap")
-        .getByRole("button", { name: scenario.nav, exact: true })
+        .locator(
+          `.shell-sidebar .nav-tooltip-wrap button[aria-label=${JSON.stringify(scenario.nav)}]`,
+        )
         .first();
       if (!(await destination.isVisible())) {
         const section = destination.locator("xpath=ancestor::section[1]");
