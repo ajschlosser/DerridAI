@@ -50,9 +50,8 @@ describe("ResearchEvidencePanel links", () => {
     const expand = wrapper.get('.research-evidence-passage button[aria-expanded="false"]');
     await expand.trigger("click");
     expect(wrapper.get(".research-evidence-text").text()).toBe(longText);
-    expect(wrapper.get('.research-evidence-passage button[aria-expanded="true"]').exists()).toBe(
-      true,
-    );
+    const collapse = wrapper.get('.research-evidence-passage button[aria-expanded="true"]');
+    expect(collapse.attributes("aria-expanded")).toBe("true");
   });
 
   it("keeps secondary source details collapsed by default", () => {
@@ -75,5 +74,4 @@ describe("ResearchEvidencePanel links", () => {
     expect(disclosures[0].attributes("open")).toBeUndefined();
     expect(disclosures[0].text()).toContain("Derrida, Jacques. Test Work.");
   });
-
 });
