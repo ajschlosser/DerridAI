@@ -129,3 +129,25 @@ def test_metadata_precedent_pipeline_rejects_unsupported_fallback_route() -> Non
 
     with pytest.raises(ValueError, match="on_timeout"):
         compile_metadata_precedent_pipeline(custom)
+
+
+
+def test_metadata_precedent_pipeline_requires_explicit_reranker_fallbacks() -> None:
+    source = built_in_pipeline("metadata.precedents.current", 1)
+    assert source is not None
+    stages = [
+        stage.model_copy(update={"on_unavailable": None})
+        if stage.id == "rerank"
+        else stage
+        for stage in source.stages
+    ]
+    custom = source.model_copy(
+        update={
+            "pipeline_id": "metadata.precedents.missing-fallback",
+            "built_in": False,
+            "stages": stages,
+        }
+    )
+
+    with pytest.raises(ValueError, match="on_unavailable"):
+        compile_metadata_precedent_pipeline(custom)
