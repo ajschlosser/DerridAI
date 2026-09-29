@@ -10,7 +10,6 @@ model, so a stale vector row cannot silently become scholarly evidence.
 from __future__ import annotations
 
 import json
-import math
 import re
 import time
 from collections.abc import Iterable
@@ -24,6 +23,7 @@ from .metadata_exemplars import (
     PROMPT_CHARS_PER_TOKEN,
     prompt_example,
 )
+from .retrieval_selection import cosine_similarity, distance_to_relevance, mmr_select
 
 COLLECTION_NAME = "derridai_metadata_exemplars"
 COLLECTION_ROLE = "general"
@@ -200,27 +200,15 @@ def _fallback_candidates(
 
 
 def _cosine(a: Any, b: Any) -> float:
-    if a is None or b is None:
-        return 0.0
-    try:
-        left = list(a)
-        right = list(b)
-    except TypeError:
-        return 0.0
-    if not left or len(left) != len(right):
-        return 0.0
-    dot = sum(float(x) * float(y) for x, y in zip(left, right))
-    na = math.sqrt(sum(float(x) * float(x) for x in left))
-    nb = math.sqrt(sum(float(y) * float(y) for y in right))
-    return dot / (na * nb) if na and nb else 0.0
+    """Compatibility wrapper around the shared vector similarity primitive."""
+
+    return cosine_similarity(a, b)
 
 
-def _distance_similarity(value: Any) -> float:
-    try:
-        distance = max(0.0, float(value))
-    except (TypeError, ValueError):
-        return 0.0
-    return 1.0 / (1.0 + distance)
+def _distance_similarity(value: Any, metric: str | None = None) -> float:
+    """Normalize collection-native distance while preserving legacy callers."""
+
+    return distance_to_relevance(value, metric)
 
 
 def _mmr(
@@ -229,34 +217,22 @@ def _mmr(
     *,
     lambda_mult: float = DEFAULT_MMR_LAMBDA,
 ) -> list[dict[str, Any]]:
-    selected: list[dict[str, Any]] = []
-    remaining = list(candidates)
-    while remaining and len(selected) < max(0, int(limit)):
-        best_index = 0
-        best_score = -float("inf")
-        for index, candidate in enumerate(remaining):
-            distance = candidate.get("distance")
-            try:
-                numeric_distance = max(0.0, float(distance))
-            except (TypeError, ValueError):
-                numeric_distance = 1.0
-            relevance = float(candidate.get("hybrid_score") or (1.0 / (1.0 + numeric_distance)))
-            diversity = max(
-                (
-                    _cosine(candidate.get("embedding"), chosen.get("embedding"))
-                    for chosen in selected
-                ),
-                default=0.0,
-            )
-            score = lambda_mult * relevance - (1.0 - lambda_mult) * diversity
-            if score > best_score:
-                best_score = score
-                best_index = index
-        chosen = dict(remaining.pop(best_index))
-        chosen["mmr_score"] = best_score
-        selected.append(chosen)
-    return selected
+    """Select diverse precedents without overwriting their relevance scores."""
 
+    return mmr_select(
+        candidates,
+        limit=limit,
+        lambda_mult=lambda_mult,
+        relevance=lambda candidate: float(
+            candidate.get("hybrid_score")
+            if candidate.get("hybrid_score") is not None
+            else _distance_similarity(
+                candidate.get("distance"),
+                candidate.get("distance_metric"),
+            )
+        ),
+        vector=lambda candidate: candidate.get("embedding"),
+    )
 
 def _where(
     scope_id: str,
@@ -836,6 +812,10 @@ class ChromaMetadataExemplarIndex:
                 provider=provider,
                 model=model,
             )
+            distance_metric = None
+            metric_resolver = getattr(self.store, "_distance_metric", None)
+            if callable(metric_resolver):
+                distance_metric = metric_resolver(collection)
             query_ms = _elapsed_ms(query_started)
 
             search_started = time.monotonic()
@@ -873,12 +853,15 @@ class ChromaMetadataExemplarIndex:
                         continue
                     if exclude_record_id and str(exemplar.get("record_id") or "") == str(exclude_record_id):
                         continue
-                    if _distance_similarity(row.get("distance")) < floor:
+                    semantic_similarity = _distance_similarity(
+                        row.get("distance"),
+                        distance_metric,
+                    )
+                    if semantic_similarity < floor:
                         continue
                     tier, compared = match_tier(exemplar, current_values or {}, match_fields)
                     if tier == "differs":
                         continue  # declared analogy conditions contradict this precedent
-                    semantic_similarity = _distance_similarity(row.get("distance"))
                     lexical_similarity = _lexical_overlap(
                         query_text,
                         str(row.get("document") or (row.get("metadata") or {}).get("context_text") or ""),
@@ -888,7 +871,9 @@ class ChromaMetadataExemplarIndex:
                         **row,
                         "match_tier": tier,
                         "match_compared": compared,
+                        "semantic_score": semantic_similarity,
                         "lexical_score": lexical_similarity,
+                        "distance_metric": distance_metric,
                         "hybrid_score": (semantic_similarity * 0.8) + (lexical_similarity * 0.2),
                     })
                 return field, candidates, len(candidates)
@@ -978,12 +963,13 @@ class ChromaMetadataExemplarIndex:
                     exemplar = canonical.get(row["id"])
                     if exemplar is None:
                         continue
-                    distance = row.get("distance")
-                    try:
-                        similarity = 1.0 / (1.0 + max(0.0, float(distance)))
-                    except (TypeError, ValueError):
-                        similarity = None
-                    example = prompt_example(exemplar, similarity=similarity)
+                    similarity = row.get("semantic_score")
+                    if similarity is None:
+                        similarity = _distance_similarity(
+                            row.get("distance"),
+                            row.get("distance_metric"),
+                        )
+                    example = prompt_example(exemplar, similarity=float(similarity))
                     if row.get("match_compared"):
                         example["match"] = {"tier": row["match_tier"], "fields": row["match_compared"]}
                     rendered.setdefault(field, []).append(example)
