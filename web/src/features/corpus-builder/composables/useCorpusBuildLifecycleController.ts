@@ -9,7 +9,13 @@ import {
 import * as runtime from "../../../runtime/runtime.js";
 import { realtime } from "../../../realtime";
 import { followResource } from "../../../realtime/follow";
-import type { CorpusRecordEvent } from "../../../realtime/protocol";
+import type {
+  CorpusBuildEvent,
+  CorpusBuildSummary,
+  CorpusRecordEvent,
+  ModelActivityEvent,
+  RealtimeEvent,
+} from "../../../realtime/protocol";
 
 type MessageTone = "error" | "notice";
 
@@ -53,10 +59,46 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
   function syncBuildInRail(build: CorpusBuild) {
     const index = options.builds.value.findIndex((item) => item.build_id === build.build_id);
     if (index >= 0) {
-      options.builds.value.splice(index, 1, { ...options.builds.value[index], ...build });
+      // Preserve object identity so progress updates do not remount/repaint the build rail.
+      Object.assign(options.builds.value[index], build);
     } else {
       options.builds.value.unshift(build);
     }
+  }
+
+  function applyRealtimeBuildSummary(summary: CorpusBuildSummary) {
+    const build = options.currentBuild.value;
+    if (!build || build.build_id !== summary.id) return;
+    const patch: Partial<CorpusBuild> = {};
+    if (summary.raw_status !== undefined) patch.status = summary.raw_status as CorpusBuild["status"];
+    if (summary.stage !== undefined) patch.stage = summary.stage as CorpusBuild["stage"];
+    if (summary.progress !== undefined) patch.progress = summary.progress;
+    if (summary.record_count !== undefined) patch.record_count = summary.record_count;
+    if (summary.accepted_count !== undefined) patch.accepted_count = summary.accepted_count;
+    if (summary.review_count !== undefined) patch.needs_review_count = summary.review_count;
+    if (summary.metadata_total !== undefined) patch.metadata_total = summary.metadata_total;
+    if (summary.metadata_enriched_count !== undefined)
+      patch.metadata_enriched_count = summary.metadata_enriched_count;
+    if (summary.metadata_tasks_total !== undefined)
+      patch.metadata_tasks_total = summary.metadata_tasks_total;
+    if (summary.metadata_tasks_completed !== undefined)
+      patch.metadata_tasks_completed = summary.metadata_tasks_completed;
+    if (summary.metadata_tasks_failed !== undefined)
+      patch.metadata_tasks_failed = summary.metadata_tasks_failed;
+    if (summary.metadata_tasks_skipped !== undefined)
+      patch.metadata_tasks_skipped = summary.metadata_tasks_skipped;
+    if (summary.metadata_tasks_running !== undefined)
+      patch.metadata_tasks_running = summary.metadata_tasks_running;
+    if (summary.metadata_tasks_queued !== undefined)
+      patch.metadata_tasks_queued = summary.metadata_tasks_queued;
+    Object.assign(build, patch);
+    syncBuildInRail(build);
+  }
+
+  function applyRealtimeModelActivity(event: ModelActivityEvent) {
+    const build = options.currentBuild.value;
+    if (!build || build.build_id !== event.resource_id) return;
+    Object.assign(build, { llm_activity: { ...event.payload.activity } });
   }
 
   function registerBuildOperation(build: CorpusBuild) {
@@ -135,50 +177,75 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
   }
 
   /**
-   * Follow the selected running build. Its realtime `corpus-build:<id>` events trigger a refresh;
-   * REST polling runs only while the socket is unavailable. The name is kept for callers.
+   * Follow the selected build. Bounded WebSocket summaries are applied directly so counters,
+   * stages, model activity and per-record completion update without replacing the workspace.
+   * REST is reserved for reconnect/fallback reconciliation and one terminal authoritative read.
    */
   function startPolling() {
     stopPolling();
     const buildId = options.selectedBuildId.value;
     if (!buildId) return;
     let finished = false;
+    let terminalPending = false;
+
+    function handleRealtimeEvent(event: RealtimeEvent): boolean {
+      if (event.resource_id !== buildId) return false;
+      if (event.type.startsWith("corpus.") && "build" in event.payload) {
+        const wasRunning = buildRunning();
+        applyRealtimeBuildSummary((event as CorpusBuildEvent).payload.build);
+        if (wasRunning && !buildRunning()) {
+          terminalPending = true;
+          return true;
+        }
+        return false;
+      }
+      if (event.type === "llm.started" || event.type === "llm.progress" || event.type === "llm.completed") {
+        applyRealtimeModelActivity(event as ModelActivityEvent);
+        return false;
+      }
+      if (
+        event.type === "corpus.record_started" ||
+        event.type === "corpus.field_checked" ||
+        event.type === "corpus.record_completed"
+      ) {
+        if (event.type === "corpus.record_completed") {
+          const recordId = String((event as CorpusRecordEvent).payload.metadata.record_id || "");
+          if (recordId) {
+            void options.refreshRows([recordId]);
+            if (recordId === options.selectedRecordId.value) void options.refreshRecord(recordId);
+          }
+        }
+        return false;
+      }
+      // Text-free generation hints are consumed by the Model activity inspector.
+      if (event.type === "corpus.llm_progress") return false;
+      return true;
+    }
+
     const stopFollowingBuild = followResource({
       topic: `corpus-build:${buildId}`,
       minIntervalMs: 700,
-      // Model loading (llm_activity) changes without a build save; reconcile slowly while live.
-      reconcileMs: 15_000,
+      // Healthy sockets carry the visible progress. This slow read is only a safety
+      // reconciliation for state that is intentionally not present on the realtime plane.
+      reconcileMs: 30_000,
       isDone: () => finished,
+      onEvent: handleRealtimeEvent,
       refresh: async () => {
         if (!options.selectedBuildId.value) return;
-        // Build refresh owns build-state freshness only. PdfCorpusBuilder's build-state
-        // watcher is the single owner of incremental record hydration, so records are
-        // not re-read here on every event.
-        const wasRunning = buildRunning();
+        const wasRunning = buildRunning() || terminalPending;
         await refreshBuild();
         if (wasRunning && !buildRunning()) {
+          terminalPending = false;
           finished = true;
           await refreshBuilds();
-          // One terminal refresh is still useful because completion can settle queue
-          // membership without changing record_count/metadata_enriched_count.
+          // Completion can settle filtered queue membership; reconcile in place without
+          // resetting selection, scroll position, or the selected Record cache.
           await nextTick();
           await options.refreshRecords(false, options.selectedRecordId.value);
         }
       },
     });
-    // A completion event is emitted only after the enriched Record is durable.
-    // Refresh the row and the open full Record so metadata/evidence appear immediately.
-    const stopRecordEvents = realtime.subscribe(`corpus-build:${buildId}`, (event) => {
-      if (event.type !== "corpus.record_completed") return;
-      const recordId = String((event as CorpusRecordEvent).payload.metadata.record_id || "");
-      if (!recordId) return;
-      void options.refreshRows([recordId]);
-      if (recordId === options.selectedRecordId.value) void options.refreshRecord(recordId);
-    });
-    stopFollowing = () => {
-      stopFollowingBuild();
-      stopRecordEvents();
-    };
+    stopFollowing = stopFollowingBuild;
   }
 
   async function startBuild() {
