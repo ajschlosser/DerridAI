@@ -5,6 +5,8 @@ import AppIcon from "../AppIcon.vue";
 import {
   pipelineEdgeKindLabel,
   pipelineStageFamilyLabel,
+  pipelineStrategyDescription,
+  pipelineStrategyLabel,
 } from "../../domain/pipelinePresentation";
 import { useI18nStore } from "../../stores/i18n";
 import type { PipelineDefinition, PipelineStage, PipelineStrategy } from "../../types/pipelines";
@@ -52,7 +54,7 @@ function compactConfig(config: Record<string, unknown>) {
       <div class="stage-main">
         <div class="stage-title-row">
           <div>
-            <strong>{{ strategy(stage)?.label || stage.strategy }}</strong>
+            <strong>{{ strategy(stage) ? pipelineStrategyLabel(strategy(stage), t) : stage.strategy }}</strong>
             <code>{{ stage.id }}</code>
           </div>
           <div class="stage-badges">
@@ -64,8 +66,8 @@ function compactConfig(config: Record<string, unknown>) {
             <span v-else class="badge">{{ t("pipelines.deterministic", "Deterministic") }}</span>
           </div>
         </div>
-        <p v-if="strategy(stage)?.description" class="stage-description">
-          {{ strategy(stage)?.description }}
+        <p v-if="strategy(stage)" class="stage-description">
+          {{ pipelineStrategyDescription(strategy(stage), t) }}
         </p>
         <p v-if="compactConfig(stage.config)" class="stage-config">
           {{ compactConfig(stage.config) }}
