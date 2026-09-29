@@ -125,7 +125,10 @@ function isFavorite(id: string) {
       />
     </label>
 
-    <div v-if="!collapsed && !query && (favoriteItems.length || recentItems.length)" class="shell-nav-shortcuts">
+    <div
+      v-if="!collapsed && !query && (favoriteItems.length || recentItems.length)"
+      class="shell-nav-shortcuts"
+    >
       <section v-if="favoriteItems.length" class="shell-nav-section quick">
         <h2>{{ i18n.t("nav.favorites") }}</h2>
         <div class="shell-nav-list">
