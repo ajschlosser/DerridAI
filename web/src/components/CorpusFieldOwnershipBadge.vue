@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import UiStatusBadge from "./ui/UiStatusBadge.vue";
+import UiTooltip from "./ui/UiTooltip.vue";
 const props = defineProps<{
   status?: string;
   method?: string;
@@ -98,27 +99,40 @@ const verificationLabel = computed(() =>
 );
 </script>
 <template>
-  <span class="ownership-badges"
-    ><UiStatusBadge :label="sourceLabel" :help="sourceHelp" :tone="sourceTone" /><UiStatusBadge
-      v-if="sourceKind === 'llm' && verificationLabel"
-      :label="verificationLabel"
-      :help="
-        verificationKind === 'auto_resolved'
-          ? i18n.t('pdf_corpus.verification_help.auto')
-          : i18n.t('pdf_corpus.verification_help.pending')
-      "
-      :tone="verificationKind === 'auto_resolved' ? 'success' : 'warning'" /><UiStatusBadge
-      v-if="audit && sourceKind === 'llm'"
-      :label="i18n.t('pdf_corpus.ownership.spot_check')"
-      :help="i18n.t('pdf_corpus.ownership_help.spot_check')"
-      tone="warning"
-  /></span>
+  <span class="ownership-badges">
+    <span class="ownership-badge-with-help">
+      <UiStatusBadge :label="sourceLabel" :tone="sourceTone" />
+      <UiTooltip :text="sourceHelp" :label="`${sourceLabel}: ${sourceHelp}`" placement="bottom" />
+    </span>
+    <span v-if="sourceKind === 'llm' && verificationLabel" class="ownership-badge-with-help">
+      <UiStatusBadge
+        :label="verificationLabel"
+        :tone="verificationKind === 'auto_resolved' ? 'success' : 'warning'"
+      />
+      <UiTooltip
+        :text="
+          verificationKind === 'auto_resolved'
+            ? i18n.t('pdf_corpus.verification_help.auto')
+            : i18n.t('pdf_corpus.verification_help.pending')
+        "
+        placement="bottom"
+      />
+    </span>
+    <span v-if="audit && sourceKind === 'llm'" class="ownership-badge-with-help">
+      <UiStatusBadge :label="i18n.t('pdf_corpus.ownership.spot_check')" tone="warning" />
+      <UiTooltip :text="i18n.t('pdf_corpus.ownership_help.spot_check')" placement="bottom" />
+    </span>
+  </span>
 </template>
 <style scoped>
-.ownership-badges {
+.ownership-badges,
+.ownership-badge-with-help {
   display: inline-flex;
   flex-wrap: wrap;
   gap: 0.25rem;
   align-items: center;
+}
+.ownership-badge-with-help {
+  gap: 0.125rem;
 }
 </style>
