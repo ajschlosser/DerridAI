@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import pytest
 from app.pipelines.defaults import built_in_pipeline
+from app.pipelines.metadata_precedent_tracing import build_metadata_precedent_trace
 from app.pipelines.metadata_precedents import compile_metadata_precedent_pipeline
+from app.pipelines.service import pipeline_hash
 
 
 def test_builtin_metadata_precedent_pipeline_compiles_to_current_runtime_defaults() -> None:
@@ -19,6 +21,7 @@ def test_builtin_metadata_precedent_pipeline_compiles_to_current_runtime_default
     assert plan.quotas_stage_id == "quotas"
     assert plan.mmr_stage_id == "mmr"
     assert plan.pack_stage_id == "pack"
+    assert plan.lexical_fallback_stage_id == "lexical_fallback"
     assert plan.fetch_k == 16
     assert plan.semantic_weight == pytest.approx(0.8)
     assert plan.lexical_weight == pytest.approx(0.2)
@@ -150,3 +153,80 @@ def test_metadata_precedent_pipeline_requires_explicit_reranker_fallbacks() -> N
 
     with pytest.raises(ValueError, match="on_unavailable"):
         compile_metadata_precedent_pipeline(custom)
+
+
+
+def test_metadata_precedent_trace_binds_every_stage_to_resolved_definition() -> None:
+    pipeline = built_in_pipeline("metadata.precedents.current", 1)
+    assert pipeline is not None
+    trace = build_metadata_precedent_trace(
+        run_id="metadata-precedents-test",
+        pipeline=pipeline,
+        resolved_hash=pipeline_hash(pipeline),
+        telemetry={
+            "sync_ms": 1,
+            "query_ms": 2,
+            "search_ms": 3,
+            "rerank_ms": 4,
+            "select_ms": 2,
+            "total_ms": 12,
+            "examples_considered": 8,
+            "examples_used": 2,
+            "packet_chars": 900,
+            "fields_served": ["speaker"],
+            "fetch_k": 16,
+            "semantic_weight": 0.8,
+            "lexical_weight": 0.2,
+            "mmr_lambda": 0.72,
+            "packet_char_budget": 4800,
+            "embedding_provider": "ollama",
+            "embedding_model": "embed-model",
+            "reranking": {
+                "mode": "cross_encoder",
+                "provider": "sentence-transformers",
+                "model": "reranker",
+                "candidate_count": 8,
+                "reranked_count": 8,
+            },
+        },
+    )
+
+    defined = {stage.id for stage in pipeline.stages}
+    assert {stage.stage_id for stage in trace.stages} == defined
+    assert trace.feature == "metadata_precedents"
+    assert next(stage for stage in trace.stages if stage.stage_id == "retrieve").collection == (
+        "derridai_metadata_exemplars"
+    )
+    assert next(stage for stage in trace.stages if stage.stage_id == "rerank").status == "completed"
+    assert next(
+        stage for stage in trace.stages if stage.stage_id == "lexical_fallback"
+    ).status == "skipped"
+
+
+def test_metadata_precedent_trace_makes_lexical_fallback_visible() -> None:
+    pipeline = built_in_pipeline("metadata.precedents.current", 1)
+    assert pipeline is not None
+    trace = build_metadata_precedent_trace(
+        run_id="metadata-precedents-fallback",
+        pipeline=pipeline,
+        resolved_hash=pipeline_hash(pipeline),
+        telemetry={
+            "total_ms": 6,
+            "fallback_reason": "RuntimeError: embedding service offline",
+            "fallback_kind": "error",
+            "fallback_mode": "lexical",
+            "ranking": "lexical_overlap",
+            "candidates_considered": 5,
+            "examples_considered": 3,
+            "examples_used": 2,
+            "packet_chars": 700,
+            "fields_served": ["speaker"],
+        },
+    )
+
+    stages = {stage.stage_id: stage for stage in trace.stages}
+    assert stages["retrieve"].status == "failed"
+    assert stages["retrieve"].fallback_reason == "RuntimeError: embedding service offline"
+    assert stages["lexical_fallback"].status == "completed"
+    assert stages["scope"].status == "skipped"
+    assert stages["pack"].status == "skipped"
