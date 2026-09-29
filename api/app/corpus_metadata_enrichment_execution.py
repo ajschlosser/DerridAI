@@ -52,7 +52,6 @@ from .enrichment_ledger import (
 from .evidence_suggestions import (
     evidence_cascade_llm_enabled,
     evidence_mode,
-    suggest_evidence_cascade,
 )
 from .field_assertions import (
     current_assertion_by_name,
@@ -71,6 +70,10 @@ from .metadata_schema import (
     response_model_for,
 )
 from .nlp_annotations import prompt_hints
+from .pipelines.evidence_recovery import (
+    MISSING_SOURCE_DOCUMENT,
+    execute_evidence_recovery,
+)
 from .rag import _citation_strings
 from .run_guidance import find_guidance_matches, format_group_guidance
 from .source_embeddings import SourceEmbeddingProjection
@@ -1029,6 +1032,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             )
 
         evidence_llm_choice = _evidence_llm_choice if evidence_cascade_llm_enabled(request) else None
+        evidence_llm_skip_reason = "Closed-choice evidence selection is disabled for this build request."
         for field in sorted(evidence_required_fields):
             value = record.get(field)
             if value in (None, "", []):
@@ -1050,13 +1054,21 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                         "group_label": schema.group(field_group).label if field_group else "",
                         "instruction": schema.group(field_group).intro if field_group else "",
                     }
-                attached = suggest_evidence_cascade(
-                    value, source_blocks, field=field, field_metadata=field_metadata,
-                    source_document_id=source_document_id, projection=evidence_projection,
-                    llm_choice=evidence_llm_choice,
-                )
-                if attached:
-                    clean_evidence[field] = attached
+                try:
+                    recovery = execute_evidence_recovery(
+                        value=value, blocks=source_blocks, field=field, field_metadata=field_metadata,
+                        source_document_id=source_document_id, projection=evidence_projection,
+                        llm_choice=evidence_llm_choice, llm_skip_reason=evidence_llm_skip_reason,
+                    )
+                except Exception as exc:  # noqa: BLE001 - logged and left pending review, never silent
+                    logger.warning("Evidence recovery pipeline did not run for %s: %s", field, exc)
+                    review_reasons.append(f"{field} evidence recovery pipeline did not run: {exc}")
+                    recovery = None
+                if recovery is not None and recovery.status.get("skipped") == MISSING_SOURCE_DOCUMENT:
+                    logger.warning("%s", recovery.status["reason"])
+                    review_reasons.append(recovery.status["reason"])
+                if recovery is not None and recovery.entry:
+                    clean_evidence[field] = recovery.entry
             info = clean_evidence.get(field)
             if isinstance(info, dict) and info.get("backfilled"):
                 review_reasons.append(f"{field} evidence was suggested after the value and needs review")

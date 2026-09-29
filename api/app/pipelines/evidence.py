@@ -29,6 +29,7 @@ from ..evidence_suggestions import (
 )
 from .evidence_tracing import build_evidence_trace
 from .models import PipelineDefinition, PipelineRunTrace, PipelineStageDefinition
+from .registry import reject_unhonoured_config
 from .service import pipeline_hash
 
 
@@ -95,6 +96,7 @@ def compile_evidence_pipeline(pipeline: PipelineDefinition) -> EvidencePipelineP
 
     if pipeline.purpose != "evidence_suggestion":
         raise ValueError("Evidence adapter can only compile evidence_suggestion pipelines.")
+    reject_unhonoured_config(pipeline, "reviewer evidence")
 
     supported = {
         "query.evidence_field",

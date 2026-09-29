@@ -11,6 +11,7 @@ export function pipelinePurposeLabel(purpose: string, t: PipelineTranslator) {
   const labels: Record<string, string> = {
     research: t("pipelines.purpose_research", "Research"),
     evidence_suggestion: t("pipelines.purpose_evidence", "Evidence suggestion"),
+    evidence_recovery: t("pipelines.purpose_evidence_recovery", "Evidence recovery"),
     metadata_precedents: t("pipelines.purpose_precedents", "Metadata precedents"),
     claim_memory: t("pipelines.purpose_claim_memory", "Claim memory"),
     response_memory: t("pipelines.purpose_response_memory", "Response memory"),

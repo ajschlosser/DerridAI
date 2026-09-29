@@ -65,6 +65,7 @@ function featureForPurpose(purpose: string) {
   const map: Record<string, string> = {
     research: "research",
     evidence_suggestion: "evidence_suggestion.reviewer",
+    evidence_recovery: "evidence_recovery",
     metadata_precedents: "metadata_precedents",
     claim_memory: "claim_memory",
     response_memory: "response_memory",

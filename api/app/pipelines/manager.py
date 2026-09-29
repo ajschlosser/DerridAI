@@ -13,6 +13,7 @@ from .defaults import (
     built_in_pipeline,
 )
 from .evidence import compile_evidence_pipeline
+from .evidence_recovery import RECOVERY_FEATURE, compile_recovery_pipeline
 from .memory import compile_memory_pipeline
 from .metadata_precedents import compile_metadata_precedent_pipeline
 from .models import PipelineAssignment, PipelineDefinition
@@ -209,6 +210,8 @@ class PipelineManager:
             # valid graphs outside its supported subset remain inspectable but
             # cannot become an active assignment.
             compile_evidence_pipeline(pipeline)
+        elif assignment.feature == RECOVERY_FEATURE:
+            compile_recovery_pipeline(pipeline)
         elif assignment.feature == "metadata_precedents":
             compile_metadata_precedent_pipeline(pipeline)
         elif assignment.feature in {"claim_memory", "response_memory"}:
@@ -253,6 +256,14 @@ class PipelineManager:
             if pipeline.purpose == "evidence_suggestion":
                 compile_evidence_pipeline(pipeline)
                 return {"supported": True, "adapter": "evidence_suggestion"}
+            if pipeline.purpose == "evidence_recovery":
+                plan = compile_recovery_pipeline(pipeline)
+                return {
+                    "supported": True,
+                    "adapter": "evidence_recovery",
+                    "celf_compliant": plan.celf_compliant,
+                    "reason": plan.compliance_reason,
+                }
             if pipeline.purpose == "metadata_precedents":
                 compile_metadata_precedent_pipeline(pipeline)
                 return {"supported": True, "adapter": "metadata_precedents"}

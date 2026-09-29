@@ -356,6 +356,57 @@ describe("System Data Pipeline Studio", () => {
     );
   });
 
+  it("assigns an evidence-recovery pipeline and shows its cELF compliance", async () => {
+    const recoveryCatalog = structuredClone(catalog);
+    recoveryCatalog.pipelines.push({
+      ...structuredClone(catalog.pipelines[0]),
+      pipeline_id: "evidence.recovery.cascade",
+      name: "Evidence recovery — legacy cascade",
+      purpose: "evidence_recovery",
+      built_in: true,
+      runtime_support: {
+        supported: true,
+        adapter: "evidence_recovery",
+        celf_compliant: false,
+        reason: "Not cELF-compliant: candidates from 'mmr' reach the provenance gate.",
+      },
+    });
+    vi.spyOn(pipelinesApi, "catalog").mockResolvedValue(recoveryCatalog);
+    const assign = vi.spyOn(pipelinesApi, "setAssignment").mockResolvedValue({
+      assignment: {
+        feature: "evidence_recovery",
+        pipeline_id: "evidence.recovery.cascade",
+        pipeline_version: 1,
+        scope: "system",
+        scope_id: null,
+        override_allowed: false,
+        source: "system",
+      },
+    });
+
+    const { wrapper } = await mountStudio();
+    const choice = wrapper
+      .findAll(".pipeline-choice")
+      .find((item) => item.text().includes("legacy cascade"));
+    await choice!.trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Evidence recovery");
+    expect(wrapper.text()).toContain("Not cELF-compliant");
+    const activate = wrapper
+      .findAll(".detail-actions .btn")
+      .find((item) => item.text().includes("Make active"));
+    await activate!.trigger("click");
+    await flushPromises();
+
+    expect(assign).toHaveBeenCalledWith(
+      expect.objectContaining({
+        feature: "evidence_recovery",
+        pipeline_id: "evidence.recovery.cascade",
+      }),
+    );
+  });
+
   it("clones a definition into an immutable custom version editor", async () => {
     const { wrapper } = await mountStudio();
 
