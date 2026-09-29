@@ -1117,26 +1117,26 @@ function currentContext() {
       "Workspace, vector stores, review activity, and corpus statistics",
     ],
     list: [
-      "Corpus",
+      "Corpora",
       f?.name || "Records",
       f ? `${f.records.length.toLocaleString()} ${tr("dynamic.records")}` : "Open a JSONL file",
     ],
-    works: ["Corpus", "Works", "Cross-file work overview"],
-    global: ["Corpus", "Global Search", "Search and filter every loaded record"],
+    works: ["Corpora", "Works", "Cross-file work overview"],
+    global: ["Research", "Global Search", "Search and filter every loaded record"],
     annotations: [
-      "Corpus",
+      "Corpora",
       "Annotations",
       "Review annotations by work or in recent-activity order",
     ],
     pdf: [
-      "Tools",
+      "Build",
       state.pdf.title || "Corpus Builder",
       state.pdf.name
         ? `${state.pdf.name} · page ${state.pdf.page}`
         : "Build, monitor, and review auditable corpus records",
     ],
-    compare: ["Tools", "Record Comparison", "Inspect field and text differences"],
-    vector: ["Storage", "Vector Stores", "Persistent local ChromaDB collections"],
+    compare: ["Corpora", "Record Comparison", "Inspect field and text differences"],
+    vector: ["Corpora", "Corpus Data", "Persistent local ChromaDB collections"],
     rag: [
       "Research",
       "Research",
@@ -2722,7 +2722,7 @@ function translatedNavLabel(item) {
     vector: "nav.vector",
     rag: "nav.rag",
     faq: "nav.faq",
-    responsecache: "nav.cache",
+    responsecache: "runtime.system_data",
     providers: "nav.providers",
     schemas: "nav.schemas",
     config: "nav.config",
@@ -2732,9 +2732,11 @@ function translatedNavLabel(item) {
 function translatedSectionLabel(section) {
   const keys = {
     Overview: "section.overview",
-    Corpus: "section.corpus",
+    Corpus: "section.corpora",
+    Corpora: "section.corpora",
     Research: "section.research",
-    Tools: "section.tools",
+    Tools: "section.build",
+    Build: "section.build",
     System: "section.system",
   };
   return keys[section] ? tr(keys[section], section) : section;
