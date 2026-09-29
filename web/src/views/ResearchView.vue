@@ -77,6 +77,27 @@ let draftTimer: number | undefined;
 const selectedEvidence = computed(() => workspace.value?.selected_evidence || []);
 const profiles = computed(() => workspace.value?.profiles || []);
 const stores = computed(() => workspace.value?.stores || []);
+const effectivePipeline = computed(() => {
+  const options = workspace.value?.pipeline_options || [];
+  const configuredId = String(config.value?.pipeline_id || "").trim();
+  const configuredVersion = Number(config.value?.pipeline_version || 0);
+  if (configuredId) {
+    const explicit = options.find(
+      (pipeline) =>
+        pipeline.pipeline_id === configuredId && pipeline.version === configuredVersion,
+    );
+    if (explicit) return explicit;
+  }
+  const assignment = workspace.value?.pipeline_assignment;
+  return (
+    options.find(
+      (pipeline) =>
+        pipeline.pipeline_id === assignment?.pipeline_id &&
+        pipeline.version === assignment?.pipeline_version,
+    ) || null
+  );
+});
+const pipelineOverrideActive = computed(() => Boolean(String(config.value?.pipeline_id || "").trim()));
 const metadataFields = computed(() => {
   const fields = new Set<string>();
   const selectedStore = stores.value.find(
@@ -623,6 +644,9 @@ onBeforeUnmount(() => {
         :preset="preset"
         :evidence-count="selectedEvidence.length"
         :prompt-metadata="config.prompt_metadata"
+        :pipeline-name="effectivePipeline?.name || ''"
+        :pipeline-version="effectivePipeline?.version || null"
+        :pipeline-override="pipelineOverrideActive"
         :stores="stores"
         :profiles="profiles"
         :history="workspace.history || []"
@@ -637,6 +661,7 @@ onBeforeUnmount(() => {
         @update:preset="applyPreset"
         @run="runResearch"
         @settings="settingsDrawer?.open()"
+        @pipeline-settings="settingsDrawer?.open('pipeline')"
         @prompt-metadata="settingsDrawer?.open('evidence', true)"
         @runs="runsDrawer?.open()"
         @history="loadHistory"
