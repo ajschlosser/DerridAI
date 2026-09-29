@@ -3,11 +3,7 @@
 import { computed } from "vue";
 import AppIcon from "../AppIcon.vue";
 import { useI18nStore } from "../../stores/i18n";
-import type {
-  PipelineDefinition,
-  PipelineStage,
-  PipelineStrategy,
-} from "../../types/pipelines";
+import type { PipelineDefinition, PipelineStage, PipelineStrategy } from "../../types/pipelines";
 
 const props = defineProps<{
   pipeline: PipelineDefinition;
