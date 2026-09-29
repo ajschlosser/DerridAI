@@ -126,12 +126,7 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
           {{ assignment.feature }} · {{ assignment.pipeline_id }}@{{ assignment.pipeline_version }}
         </span>
       </div>
-      <button
-        class="btn"
-        type="button"
-        :disabled="assigning"
-        @click="emit('resetAssignment')"
-      >
+      <button class="btn" type="button" :disabled="assigning" @click="emit('resetAssignment')">
         {{ t("pipelines.restore_default", "Restore built-in default") }}
       </button>
     </footer>
