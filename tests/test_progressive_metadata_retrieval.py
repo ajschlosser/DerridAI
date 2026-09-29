@@ -376,6 +376,35 @@ def test_backend_failure_disables_repeated_semantic_attempts_but_returns_fallbac
 
 
 
+def test_backend_failure_can_decline_lexical_fallback_explicitly():
+    class BrokenClient:
+        def get_collection(self, *, name):
+            raise RuntimeError("vector backend unavailable")
+
+    class BrokenStore:
+        client = BrokenClient()
+
+    index = ChromaMetadataExemplarIndex(
+        BrokenStore(),
+        collection_name="test_metadata_exemplars",
+    )
+    result = index.retrieve(
+        scope_id="build-1",
+        query_text="Derrida",
+        exemplars=[exemplar("mex-one", "speaker", "Derrida", "Derrida speaks.")],
+        fields=["speaker"],
+        schema_id="schema",
+        schema_version="v1",
+        allow_lexical_fallback=False,
+    )
+
+    assert result["ok"] is False
+    assert result["examples"] == {}
+    assert result["telemetry"]["fallback_mode"] == "none"
+    assert result["telemetry"]["fallback_kind"] == "error"
+    assert "vector backend unavailable" in result["telemetry"]["fallback_reason"]
+
+
 def test_selective_sync_does_not_delete_omitted_record_keys():
     store = FakeStore()
     store.collection.rows["kept-omitted"] = {
