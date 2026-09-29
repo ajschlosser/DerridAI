@@ -11,7 +11,12 @@ from ..http_auth import request_user, require_admin
 from ..models import RAGRunRequest
 from ..pipelines.access import resolve_research_pipeline
 from ..pipelines.benchmark import (
+    BenchmarkCorpusDriftError,
+    ResearchPipelineBenchmarkCaseCreate,
     ResearchPipelineBenchmarkRequest,
+    assert_benchmark_corpus_unchanged,
+    benchmark_request_for_case,
+    build_research_benchmark_case,
     build_research_benchmark_run,
 )
 from ..pipelines.comparison import (
@@ -278,45 +283,113 @@ def compare_research_pipelines(
     return compare_research_dry_runs(left, right)
 
 
+@router.post("/benchmarks/research/cases")
+def create_research_pipeline_benchmark_case(
+    body: ResearchPipelineBenchmarkCaseCreate,
+    request: Request,
+) -> dict[str, Any]:
+    """Create one immutable retrieval-only benchmark fixture."""
+
+    user = require_admin(request)
+    try:
+        case = build_research_benchmark_case(
+            body,
+            store=store,
+            created_by=user.username,
+        )
+        pipeline_store.put_benchmark_case(case)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"case": case.model_dump(mode="json")}
+
+
+@router.get("/benchmarks/research/cases")
+def research_pipeline_benchmark_cases(
+    request: Request,
+    case_id: str = Query(default="", max_length=160),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> dict[str, Any]:
+    """List immutable benchmark case versions."""
+
+    require_admin(request)
+    rows = pipeline_store.list_benchmark_cases(
+        case_id=case_id or None,
+        limit=limit,
+        offset=offset,
+    )
+    return {
+        "cases": [row.model_dump(mode="json") for row in rows],
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@router.get("/benchmarks/research/cases/{case_id}/{version}")
+def research_pipeline_benchmark_case(
+    case_id: str,
+    version: int,
+    request: Request,
+) -> dict[str, Any]:
+    require_admin(request)
+    row = pipeline_store.get_benchmark_case(case_id, version)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Pipeline benchmark case not found.")
+    return {"case": row.model_dump(mode="json")}
+
+
 @router.post("/benchmarks/research")
 def run_research_pipeline_benchmark(
     body: ResearchPipelineBenchmarkRequest,
     request: Request,
 ) -> dict[str, Any]:
-    """Run and persist one fixed-case retrieval benchmark.
+    """Run two immutable Research pipelines against one saved fixed case.
 
-    The two pipeline executions remain non-persistent dry runs: they do not
-    create Research jobs, response memory, claim memory, or ordinary pipeline
-    traces. The benchmark result itself is persisted in the dedicated benchmark
-    store with fixed prompt/configuration and bounded candidate diagnostics.
+    The executions use the non-persistent retrieval path. They never create
+    Research jobs, response/claim memory, generated answers, grades, or ordinary
+    pipeline traces. Only the dedicated benchmark result is persisted.
     """
 
     user = require_admin(request)
-    _validate_research_retrieval_request(
-        body.request,
-        label="Research pipeline benchmark",
-    )
+    case = pipeline_store.get_benchmark_case(body.case_id, body.case_version)
+    if case is None:
+        raise HTTPException(status_code=404, detail="Pipeline benchmark case not found.")
+
     try:
+        assert_benchmark_corpus_unchanged(case, store=store)
+        left_request = benchmark_request_for_case(
+            case,
+            pipeline_id=body.left.pipeline_id,
+            pipeline_version=body.left.version,
+        )
+        right_request = benchmark_request_for_case(
+            case,
+            pipeline_id=body.right.pipeline_id,
+            pipeline_version=body.right.version,
+        )
         left = _execute_research_dry_run(
-            body.request,
+            left_request,
             pipeline_id=body.left.pipeline_id,
             version=body.left.version,
             owner=user.username,
         )
         right = _execute_research_dry_run(
-            body.request,
+            right_request,
             pipeline_id=body.right.pipeline_id,
             version=body.right.version,
             owner=user.username,
         )
         comparison = compare_research_dry_runs(left, right)
         benchmark = build_research_benchmark_run(
-            body,
+            case,
             comparison,
-            store=store,
+            left_result=left,
+            right_result=right,
             created_by=user.username,
         )
         pipeline_store.put_benchmark(benchmark)
+    except BenchmarkCorpusDriftError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
