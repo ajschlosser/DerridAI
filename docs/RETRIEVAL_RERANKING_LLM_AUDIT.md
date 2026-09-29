@@ -1308,26 +1308,26 @@ Example conceptual shape:
     {
       "id": "lexical",
       "strategy": "evidence.lexical",
-      "config": {"min_score": 0.5},
+      "config": { "min_score": 0.5 },
       "next": "semantic"
     },
     {
       "id": "semantic",
       "strategy": "retrieve.source_cosine",
-      "config": {"fetch_k": 24},
+      "config": { "fetch_k": 24 },
       "next": "rerank"
     },
     {
       "id": "rerank",
       "strategy": "rerank.cross_encoder",
-      "config": {"top_k": 8},
+      "config": { "top_k": 8 },
       "on_unavailable": "diversity",
       "next": "support"
     },
     {
       "id": "support",
       "strategy": "evidence.support_validator",
-      "config": {"min_score": 0.65},
+      "config": { "min_score": 0.65 },
       "on_empty": "llm_choice",
       "next": "select"
     }
