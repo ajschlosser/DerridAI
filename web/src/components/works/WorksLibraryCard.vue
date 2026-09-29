@@ -6,6 +6,7 @@ import MixedValueInspect from "./MixedValueInspect.vue";
 import type { WorksItem } from "../../types/works";
 import { statusTone } from "../../domain/status";
 import UiStatusBadge from "../ui/UiStatusBadge.vue";
+import UiTooltip from "../ui/UiTooltip.vue";
 
 const props = defineProps<{
   work: WorksItem;
@@ -88,21 +89,36 @@ function onCardClick(event: MouseEvent) {
           </div>
         </div>
         <div class="work-primary-actions">
+          <UiTooltip
+            v-if="!props.canSync && props.syncDisabledReason"
+            :text="props.syncDisabledReason"
+            trigger-mode="content"
+            placement="bottom"
+          >
+            <button type="button" class="btn small" :data-upsert-work="props.work.work" disabled>
+              <AppIcon name="database" aria-hidden="true" />{{ i18n.t("works.sync") }}
+            </button>
+          </UiTooltip>
           <button
+            v-else
             type="button"
             class="btn small"
             :data-upsert-work="props.work.work"
-            :disabled="!props.canSync"
-            :data-disabled-reason="props.canSync ? undefined : props.syncDisabledReason"
-            :title="props.canSync ? undefined : props.syncDisabledReason"
             @click.stop="emit('sync')"
           >
             <AppIcon name="database" aria-hidden="true" />{{ i18n.t("works.sync") }}
           </button>
           <details class="work-action-menu" @click.stop>
-            <summary class="btn small" :title="i18n.t('ui.more_actions')">
-              {{ i18n.t("ui.actions") }}
-            </summary>
+            <UiTooltip
+              :text="i18n.t('ui.more_actions')"
+              trigger-mode="content"
+              :content-focusable="false"
+              placement="bottom"
+            >
+              <summary class="btn small" :aria-label="i18n.t('ui.more_actions')">
+                {{ i18n.t("ui.actions") }}
+              </summary>
+            </UiTooltip>
             <div class="work-action-popover">
               <button
                 type="button"
