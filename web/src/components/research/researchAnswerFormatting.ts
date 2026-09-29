@@ -167,8 +167,7 @@ export function parseResearchAnswer(value: string, worksCitedLabel: string): Res
   if (!source) return [];
 
   const blocks: ResearchAnswerBlock[] = [];
-  const citedHeading =
-    /^(?:#{1,4}\s*)?(?:\*\*|__)?works\s+cited(?:\*\*|__)?\s*:?[ \t]*(.*)$/i;
+  const citedHeading = /^(?:#{1,4}\s*)?(?:\*\*|__)?works\s+cited(?:\*\*|__)?\s*:?[ \t]*(.*)$/i;
 
   for (const raw of source.split(/\n{2,}/)) {
     const block = raw.trim();
@@ -233,12 +232,9 @@ export function segmentResearchAnswer(
     const text = normalized.text.slice(start, end);
     if (!text) continue;
 
-    const citation = citationRanges.find(
-      (range) => start >= range.start && end <= range.end,
-    );
+    const citation = citationRanges.find((range) => start >= range.start && end <= range.end);
     const bold =
-      !citation &&
-      normalized.boldRanges.some((range) => start >= range.start && end <= range.end);
+      !citation && normalized.boldRanges.some((range) => start >= range.start && end <= range.end);
 
     const next: ResearchAnswerSegment = citation
       ? { text, evidenceIndex: citation.evidenceIndex }
