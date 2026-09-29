@@ -88,6 +88,11 @@ class PipelineManager:
                 "created_by": str(actor or "administrator"),
             }
         )
+        if built_in_pipeline(normalized.pipeline_id, normalized.version) is not None:
+            raise ValueError(
+                f"Pipeline {normalized.pipeline_id}@{normalized.version} is code-owned; "
+                "clone it under a different ID or create a new non-conflicting version."
+            )
         validation = self.service.validate(normalized)
         if not validation.valid:
             messages = "; ".join(
