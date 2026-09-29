@@ -3,7 +3,11 @@ import { computed, nextTick, ref, watch } from "vue";
 import AppIcon from "../AppIcon.vue";
 import PipelineStageList from "../pipelines/PipelineStageList.vue";
 import { useI18nStore } from "../../stores/i18n";
-import type { PipelineAssignment, PipelineDefinition, PipelineStrategy } from "../../types/pipelines";
+import type {
+  PipelineAssignment,
+  PipelineDefinition,
+  PipelineStrategy,
+} from "../../types/pipelines";
 import type {
   ResearchConfig,
   ResearchProfile,
@@ -11,25 +15,28 @@ import type {
 } from "../../types/research";
 
 type SettingsSection = "pipeline" | "retrieval" | "evidence" | "generation";
-const props = withDefaults(defineProps<{
-  config: ResearchConfig;
-  profiles: ResearchProfile[];
-  selectedProfileId: string;
-  generation: Record<string, unknown>;
-  model: string;
-  models: string[];
-  metadataFields: string[];
-  researcher: boolean;
-  pipelineOptions?: PipelineDefinition[];
-  pipelineStrategies?: PipelineStrategy[];
-  pipelineAssignment?: PipelineAssignment | null;
-  pipelineOverrideAllowed?: boolean;
-}>(), {
-  pipelineOptions: () => [],
-  pipelineStrategies: () => [],
-  pipelineAssignment: null,
-  pipelineOverrideAllowed: false,
-});
+const props = withDefaults(
+  defineProps<{
+    config: ResearchConfig;
+    profiles: ResearchProfile[];
+    selectedProfileId: string;
+    generation: Record<string, unknown>;
+    model: string;
+    models: string[];
+    metadataFields: string[];
+    researcher: boolean;
+    pipelineOptions?: PipelineDefinition[];
+    pipelineStrategies?: PipelineStrategy[];
+    pipelineAssignment?: PipelineAssignment | null;
+    pipelineOverrideAllowed?: boolean;
+  }>(),
+  {
+    pipelineOptions: () => [],
+    pipelineStrategies: () => [],
+    pipelineAssignment: null,
+    pipelineOverrideAllowed: false,
+  },
+);
 const emit = defineEmits<{
   apply: [
     payload: {
@@ -433,15 +440,14 @@ defineExpose({ open, close });
                   <h4>{{ selectedPipeline.name }}</h4>
                   <p>
                     <code>{{ selectedPipeline.pipeline_id }}@{{ selectedPipeline.version }}</code>
-                    <template v-if="selectedPipeline.notes"> · {{ selectedPipeline.notes }}</template>
+                    <template v-if="selectedPipeline.notes">
+                      · {{ selectedPipeline.notes }}</template
+                    >
                   </p>
                 </div>
                 <span class="pipeline-status-chip">{{ selectedPipeline.status }}</span>
               </div>
-              <PipelineStageList
-                :pipeline="selectedPipeline"
-                :strategies="pipelineStrategies"
-              />
+              <PipelineStageList :pipeline="selectedPipeline" :strategies="pipelineStrategies" />
             </div>
 
             <aside v-if="!researcher" class="research-settings-note">
