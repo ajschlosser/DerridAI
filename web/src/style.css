@@ -13707,16 +13707,23 @@ button {
   display: flex;
   gap: 6px;
   max-height: none;
+  margin: 0;
   overflow-x: auto;
   overflow-y: hidden;
   padding: 7px 8px 8px;
   border-bottom: 1px solid var(--line);
+  list-style: none;
   scroll-snap-type: x proximity;
   scrollbar-width: thin;
   overscroll-behavior-inline: contain;
 }
-.research-evidence-index button {
+.research-evidence-index > li {
   flex: 0 0 238px;
+  min-width: 0;
+  scroll-snap-align: start;
+}
+.research-evidence-index button {
+  width: 100%;
   min-width: 0;
   min-height: 48px;
   display: grid;
@@ -13730,7 +13737,6 @@ button {
   text-align: left;
   color: var(--text-2);
   cursor: pointer;
-  scroll-snap-align: start;
 }
 .research-evidence-index button:hover {
   border-color: var(--line);
