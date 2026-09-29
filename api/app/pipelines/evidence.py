@@ -204,7 +204,7 @@ def _support_rows(
     items: list[dict[str, Any]],
     *,
     min_score: float,
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     supported = {
         item["block_id"]: item
         for item in suggest_evidence_blocks(
@@ -215,6 +215,7 @@ def _support_rows(
         )
     }
     rows: list[dict[str, Any]] = []
+    rejected: list[dict[str, Any]] = []
     for item in items:
         block_id = str(item.get("block_id") or "")
         support = supported.get(block_id)
@@ -236,7 +237,34 @@ def _support_rows(
         row["signals"] = signals
         if support:
             rows.append(row)
-    return rows
+        else:
+            rejected.append(row)
+    return rows, rejected
+
+
+def _candidate_decision(item: dict[str, Any], decision: str) -> dict[str, Any]:
+    """Return bounded score/reason metadata without copying candidate source text."""
+
+    payload = {
+        "block_id": str(item.get("block_id") or ""),
+        "decision": decision,
+    }
+    for key in (
+        "score",
+        "retrieval_score",
+        "lexical_score",
+        "semantic_score",
+        "cross_encoder_score",
+        "support_score",
+        "support_status",
+    ):
+        if item.get(key) is not None:
+            payload[key] = item[key]
+    signals = item.get("signals") if isinstance(item.get("signals"), dict) else {}
+    support = signals.get("support") if isinstance(signals.get("support"), dict) else {}
+    if support.get("reason"):
+        payload["reason"] = str(support["reason"])[:500]
+    return payload
 
 
 def execute_reviewer_evidence_pipeline(
@@ -388,10 +416,11 @@ def execute_reviewer_evidence_pipeline(
                 "output_count": 0,
             }
 
+    support_rejected: list[dict[str, Any]] = []
     if plan.support_stage_id is not None:
         support_started = time.perf_counter()
         input_count = len(items)
-        items = _support_rows(
+        items, support_rejected = _support_rows(
             value,
             blocks,
             items,
@@ -468,10 +497,11 @@ def execute_reviewer_evidence_pipeline(
     if plan.selection_limit is not None:
         effective_limit = min(effective_limit, max(1, plan.selection_limit))
     select_started = time.perf_counter()
-    selected = items[:effective_limit]
+    eligible_items = list(items)
+    selected = eligible_items[:effective_limit]
     observations[plan.select_stage_id] = {
         "elapsed_seconds": time.perf_counter() - select_started,
-        "input_count": len(items),
+        "input_count": len(eligible_items),
         "output_count": len(selected),
         "parameters": {"limit": effective_limit},
         "score_summary": _score_summary(selected, "score"),
@@ -488,8 +518,23 @@ def execute_reviewer_evidence_pipeline(
         observations=observations,
         owner=owner,
     )
+    selected_ids = {str(item.get("block_id") or "") for item in selected}
+    decisions = [
+        *(_candidate_decision(item, "rejected_support") for item in support_rejected),
+        *(
+            _candidate_decision(
+                item,
+                "selected"
+                if str(item.get("block_id") or "") in selected_ids
+                else "not_selected_top_k",
+            )
+            for item in eligible_items
+        ),
+    ]
     status = {
         **retrieval_status,
+        "candidate_decision_count": len(decisions),
+        "candidate_decisions": decisions[:100],
         "pipeline_id": pipeline.pipeline_id,
         "pipeline_version": pipeline.version,
         "pipeline_hash": resolved,
