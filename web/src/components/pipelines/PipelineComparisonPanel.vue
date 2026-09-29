@@ -5,11 +5,7 @@ import { chromaApi } from "../../api/chroma";
 import { pipelinesApi } from "../../api/pipelines";
 import { pipelineKey } from "../../domain/pipelinePresentation";
 import { useI18nStore } from "../../stores/i18n";
-import type {
-  PipelineDefinition,
-  ResearchPipelineBenchmarkRun,
-  ResearchPipelineComparisonResult,
-} from "../../types/pipelines";
+import type { PipelineDefinition, ResearchPipelineComparisonResult } from "../../types/pipelines";
 import type { VectorCollection } from "../../types/vector";
 import UiTooltip from "../ui/UiTooltip.vue";
 
@@ -28,13 +24,8 @@ const collections = ref<VectorCollection[]>([]);
 const collectionsLoaded = ref(false);
 const collectionsLoading = ref(false);
 const running = ref(false);
-const benchmarking = ref(false);
 const error = ref("");
 const result = ref<ResearchPipelineComparisonResult | null>(null);
-const caseId = ref("");
-const caseVersion = ref(1);
-const benchmarkNotes = ref("");
-const benchmark = ref<ResearchPipelineBenchmarkRun | null>(null);
 
 const researchPipelines = computed(() =>
   props.pipelines.filter(
@@ -106,51 +97,6 @@ async function runComparison() {
     error.value = exc instanceof Error ? exc.message : String(exc);
   } finally {
     running.value = false;
-  }
-}
-
-
-async function runBenchmark() {
-  const left = definition(leftKey.value);
-  const right = definition(rightKey.value);
-  const fixedCaseId = caseId.value.trim();
-  if (
-    !left ||
-    !right ||
-    !prompt.value.trim() ||
-    !collection.value ||
-    !fixedCaseId ||
-    benchmarking.value
-  )
-    return;
-
-  benchmarking.value = true;
-  error.value = "";
-  benchmark.value = null;
-  try {
-    // Case creation is idempotent only when every fixed input and the current
-    // corpus/index fingerprint are unchanged. Reusing an ID/version after drift
-    // is rejected server-side rather than silently changing the benchmark.
-    await pipelinesApi.createResearchBenchmarkCase({
-      case_id: fixedCaseId,
-      version: caseVersion.value,
-      prompt: prompt.value.trim(),
-      source_collection: collection.value,
-      query_decomposition: false,
-      notes: benchmarkNotes.value.trim() || null,
-    });
-    const response = await pipelinesApi.runResearchBenchmark({
-      case_id: fixedCaseId,
-      case_version: caseVersion.value,
-      left: { pipeline_id: left.pipeline_id, version: left.version },
-      right: { pipeline_id: right.pipeline_id, version: right.version },
-    });
-    benchmark.value = response.benchmark;
-    result.value = response.benchmark.comparison;
-  } catch (exc) {
-    error.value = exc instanceof Error ? exc.message : String(exc);
-  } finally {
-    benchmarking.value = false;
   }
 }
 
@@ -282,111 +228,6 @@ function seconds(value: number | null | undefined) {
           }}
         </span>
       </div>
-
-
-      <section class="benchmark-card" aria-labelledby="pipeline-benchmark-title">
-        <div class="benchmark-copy">
-          <strong id="pipeline-benchmark-title">
-            {{ t("pipelines.benchmark_title", "Save a fixed retrieval benchmark") }}
-          </strong>
-          <p>
-            {{
-              t(
-                "pipelines.benchmark_help",
-                "Run the same retrieval-only comparison and persist the fixed question, corpus/index identity, immutable pipeline hashes, retrieval settings, model identifiers, and bounded comparison metrics. Credentials and source text are not saved.",
-              )
-            }}
-          </p>
-        </div>
-
-        <div class="benchmark-form">
-          <label>
-            <span>{{ t("pipelines.benchmark_case_id", "Case ID") }}</span>
-            <input
-              v-model="caseId"
-              type="text"
-              :placeholder="
-                t(
-                  'pipelines.benchmark_case_id_placeholder',
-                  'e.g. trace-definition-001',
-                )
-              "
-            />
-          </label>
-          <label>
-            <span>{{ t("pipelines.benchmark_case_version", "Case version") }}</span>
-            <input v-model.number="caseVersion" type="number" min="1" step="1" />
-          </label>
-          <label class="benchmark-notes">
-            <span>{{ t("pipelines.benchmark_notes", "Notes (optional)") }}</span>
-            <input
-              v-model="benchmarkNotes"
-              type="text"
-              :placeholder="
-                t(
-                  'pipelines.benchmark_notes_placeholder',
-                  'Describe the fixed case or ablation being tested.',
-                )
-              "
-            />
-          </label>
-        </div>
-
-        <div class="comparison-actions">
-          <button
-            class="btn"
-            type="button"
-            :disabled="
-              benchmarking ||
-              !caseId.trim() ||
-              !prompt.trim() ||
-              !collection ||
-              !leftKey ||
-              !rightKey ||
-              researchPipelines.length < 1
-            "
-            @click="runBenchmark"
-          >
-            {{
-              benchmarking
-                ? t("pipelines.benchmark_running", "Saving benchmark…")
-                : t("pipelines.benchmark_action", "Run and save benchmark")
-            }}
-          </button>
-          <span>
-            {{
-              t(
-                "pipelines.benchmark_persistence",
-                "Benchmark results are stored separately from Research jobs and operational pipeline traces.",
-              )
-            }}
-          </span>
-        </div>
-
-        <div v-if="benchmark" class="benchmark-result" role="status">
-          <div>
-            <span>{{ t("pipelines.benchmark_saved", "Saved benchmark") }}</span>
-            <strong>{{ benchmark.case_id }} · v{{ benchmark.case_version }}</strong>
-            <code>{{ benchmark.benchmark_run_id }}</code>
-          </div>
-          <div>
-            <span>{{ t("pipelines.benchmark_pipeline_hashes", "Pipeline hashes") }}</span>
-            <code>{{ benchmark.left_pipeline.pipeline_hash || "—" }}</code>
-            <code>{{ benchmark.right_pipeline.pipeline_hash || "—" }}</code>
-          </div>
-          <div>
-            <span>
-              {{ t("pipelines.benchmark_index_revision", "Corpus/index fingerprint") }}
-            </span>
-            <code>{{ benchmark.corpus.fingerprint }}</code>
-          </div>
-          <ul v-if="benchmark.reproducibility_warnings.length">
-            <li v-for="warning in benchmark.reproducibility_warnings" :key="warning">
-              {{ warning }}
-            </li>
-          </ul>
-        </div>
-      </section>
 
       <template v-if="result">
         <section class="comparison-overview" aria-labelledby="pipeline-comparison-result-title">
@@ -624,61 +465,6 @@ function seconds(value: number | null | undefined) {
   gap: 9px;
   flex-wrap: wrap;
 }
-
-.benchmark-card {
-  display: grid;
-  gap: 11px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--soft);
-}
-.benchmark-copy {
-  display: grid;
-  gap: 3px;
-}
-.benchmark-copy strong {
-  font-size: 0.82rem;
-}
-.benchmark-copy p,
-.benchmark-result span,
-.benchmark-result li {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.75rem;
-  line-height: 1.45;
-}
-.benchmark-form {
-  display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(120px, 0.3fr) minmax(240px, 1.4fr);
-  gap: 10px;
-}
-.benchmark-form label,
-.benchmark-result > div {
-  display: grid;
-  gap: 5px;
-}
-.benchmark-form label > span,
-.benchmark-result span {
-  font-weight: 750;
-}
-.benchmark-form input {
-  width: 100%;
-}
-.benchmark-result {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  padding-top: 2px;
-}
-.benchmark-result code {
-  overflow-wrap: anywhere;
-}
-.benchmark-result ul {
-  grid-column: 1 / -1;
-  margin: 0;
-  padding-left: 20px;
-}
 .comparison-overview {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -782,8 +568,6 @@ tbody tr:last-child td {
 }
 @media (max-width: 820px) {
   .comparison-form,
-  .benchmark-form,
-  .benchmark-result,
   .comparison-overview,
   .side-grid,
   .difference-grid {
