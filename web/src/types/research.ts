@@ -1,4 +1,4 @@
-import type { PipelineAssignment, PipelineDefinition, PipelineRunTrace } from "./pipelines";
+import type { PipelineAssignment, PipelineDefinition, PipelineRunTrace, PipelineStrategy } from "./pipelines";
 
 export type ResearchStore = {
   name: string;
@@ -218,6 +218,7 @@ export type ResearchWorkspaceSnapshot = {
   history: Array<Record<string, unknown>>;
   pipeline_assignment: PipelineAssignment | null;
   pipeline_options: Array<PipelineDefinition & { assigned?: boolean }>;
+  pipeline_strategies: PipelineStrategy[];
   pipeline_override_allowed: boolean;
   can_run: boolean;
   can_select_evidence: boolean;
