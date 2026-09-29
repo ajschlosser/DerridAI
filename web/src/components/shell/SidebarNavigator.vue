@@ -65,14 +65,14 @@ const itemById = computed(() => new Map(allItems.value.map((item) => [item.id, i
 const favoriteItems = computed(() =>
   favorites.value
     .map((id) => itemById.value.get(id))
-    .filter((item): item is SidebarNavEntry => Boolean(item) && item.id !== "home"),
+    .filter((item): item is SidebarNavEntry => item !== undefined && item.id !== "home"),
 );
 const recentItems = computed(() =>
   recents.value
     .map((id) => itemById.value.get(id))
     .filter(
       (item): item is SidebarNavEntry =>
-        Boolean(item) && item.id !== "home" && !favorites.value.includes(item.id),
+        item !== undefined && item.id !== "home" && !favorites.value.includes(item.id),
     )
     .slice(0, 3),
 );
