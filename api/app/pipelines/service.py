@@ -146,23 +146,34 @@ class PipelineService:
                 )
             )
 
-        # These are warnings rather than hard errors while legacy production
-        # paths are being migrated. Once every evidence path has a support gate,
-        # the migration can promote this to a required purpose contract.
         if pipeline.purpose == "evidence_suggestion":
-            families = {
-                strategy_specs[stage.id].family
-                for stage in pipeline.stages
-                if stage.id in strategy_specs and stage.enabled
+            enabled_strategies = {
+                stage.strategy for stage in pipeline.stages if stage.enabled
             }
-            if "support_validation" not in families:
+            gate_level = "error" if pipeline.status == "active" else "warning"
+            if "validate.evidence_support" not in enabled_strategies:
                 issues.append(
                     PipelineValidationIssue(
-                        level="warning",
+                        level=gate_level,
                         code="evidence_without_support_gate",
                         message=(
-                            "This evidence pipeline ranks candidates without an explicit "
-                            "support/provenance validation stage."
+                            "Evidence pipelines must validate direct proposition/value "
+                            "support before a candidate may be selected. Draft or disabled "
+                            "legacy chains may remain inspectable, but an active chain "
+                            "cannot omit this gate."
+                        ),
+                    )
+                )
+            if "validate.provenance" not in enabled_strategies:
+                issues.append(
+                    PipelineValidationIssue(
+                        level=gate_level,
+                        code="evidence_without_provenance_gate",
+                        message=(
+                            "Evidence pipelines must verify that selected candidates bind "
+                            "to real source units in the current source document before "
+                            "selection. Draft or disabled legacy chains may remain "
+                            "inspectable, but an active chain cannot omit this gate."
                         ),
                     )
                 )
