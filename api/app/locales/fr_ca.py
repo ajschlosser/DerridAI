@@ -6338,6 +6338,10 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'pdf_corpus.save_and_mark_reviewed': 'Enregistrer et marquer comme révisé',
  'pdf_corpus.metadata_enrichment_pending': 'Enrichissement par LLM en attente',
  'pdf_corpus.metadata_enrichment_pending_help': 'Cette notice est modifiable maintenant, mais l’enrichissement de ses métadonnées par LLM n’est pas encore terminé. Les indices de confiance et les suggestions apparaîtront à mesure que chaque famille de métadonnées sera traitée.',
+ 'pdf_corpus.metadata_pipeline_trace_title': 'Comment les précédents de métadonnées ont été repérés',
+ 'pdf_corpus.metadata_pipeline_trace_help': ('Cette trace d’audit montre le pipeline de repérage enregistré exact utilisé pour cette notice, y compris la recherche '
+                                             'sémantique, le reclassement, les replis, le nombre de candidats et les durées. Elle décrit comment des précédents '
+                                             'consultatifs ont été sélectionnés; elle ne leur confère pas d’autorité sur les métadonnées.'),
  'pdf_corpus.llm_suggestion_selected_short': 'Suggestion du LLM sélectionnée par défaut',
  'pdf_corpus.bulk_edit_eyebrow': 'Métadonnées des notices',
  'pdf_corpus.bulk_metadata_help_v481': 'Sélectionnez les champs à modifier, puis choisissez une valeur déjà présente dans le corpus ou saisissez-en une nouvelle. Les champs non sélectionnés restent inchangés.',
