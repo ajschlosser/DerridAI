@@ -56,6 +56,11 @@ const builtinSchema = (): MetadataSchema => ({
   id: "default",
   name: "DerridAI scholarly default",
 });
+const fictionBuiltinSchema = (): MetadataSchema => ({
+  ...schema(),
+  id: "derridai-fiction",
+  name: "Fiction",
+});
 
 describe("the review panel follows the build's schema", () => {
   beforeEach(() => setActivePinia(createPinia()));
@@ -132,6 +137,15 @@ describe("the schema editor", () => {
         hash: "a",
       },
       {
+        id: "derridai-fiction",
+        name: "Fiction",
+        description: "Narrative metadata",
+        builtin: true,
+        field_count: 26,
+        groups: [],
+        hash: "fiction",
+      },
+      {
         id: "notes",
         name: "Reading notes",
         description: "",
@@ -142,9 +156,11 @@ describe("the schema editor", () => {
       },
     ];
     vi.spyOn(metadataSchemasApi, "list").mockResolvedValue({ items: listing });
-    vi.spyOn(metadataSchemasApi, "get").mockImplementation(async (id: string) =>
-      id === "default" ? builtinSchema() : schema(),
-    );
+    vi.spyOn(metadataSchemasApi, "get").mockImplementation(async (id: string) => {
+      if (id === "default") return builtinSchema();
+      if (id === "derridai-fiction") return fictionBuiltinSchema();
+      return schema();
+    });
   });
   const mountEditor = async () => {
     const w = mount(MetadataSchemaEditor, { attachTo: document.body });
@@ -162,6 +178,17 @@ describe("the schema editor", () => {
     expect(w.text()).toContain("Locked core");
     for (const name of ["region_type", "primary_text", "discourse_role"])
       expect(w.text()).toContain(name);
+    expect(button(w, "Save schema").attributes("disabled")).toBeDefined();
+    expect(button(w, "Delete").attributes("disabled")).toBeDefined();
+    expect(w.get("fieldset").attributes("disabled")).toBeDefined();
+    w.unmount();
+  });
+
+  it("keeps every built-in profile read-only", async () => {
+    const w = await mountEditor();
+    const fiction = w.findAll("button.schema-name").find((item) => item.text() === "Fiction")!;
+    await fiction.trigger("click");
+    await flushPromises();
     expect(button(w, "Save schema").attributes("disabled")).toBeDefined();
     expect(button(w, "Delete").attributes("disabled")).toBeDefined();
     expect(w.get("fieldset").attributes("disabled")).toBeDefined();
