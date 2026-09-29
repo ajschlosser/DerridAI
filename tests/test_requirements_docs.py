@@ -21,7 +21,7 @@ REQ_DIR = ROOT / "docs" / "requirements"
 INDEX = REQ_DIR / "README.md"
 MATRIX = REQ_DIR / "TRACEABILITY_MATRIX.md"
 
-REQUIREMENT_ROW = re.compile(r"^\| \*\*(PRD-[A-Z0-9]+-\d+)\*\* \|")
+REQUIREMENT_ROW = re.compile(r"^\\|\\s+\\*\\*(PRD-[A-Z0-9]+-\\d+)\\*\\*\\s+\\|")
 GLOBAL_ID = re.compile(r"PRD-G-\d+")
 MARKDOWN_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 TOTAL_REQUIREMENTS = re.compile(r"Total requirements: \*\*(\d+)\*\*")
