@@ -14,6 +14,7 @@ import CorpusSourceIssuePanel from "./CorpusSourceIssuePanel.vue";
 import CorpusRecordDecisionDock from "./corpus-builder/CorpusRecordDecisionDock.vue";
 import CorpusReviewEvidencePanel from "./corpus-builder/CorpusReviewEvidencePanel.vue";
 import CorpusReviewSourcePanel from "./corpus-builder/CorpusReviewSourcePanel.vue";
+import CorpusRecordSemanticMap from "./corpus-builder/CorpusRecordSemanticMap.vue";
 import RecordContextReader from "./corpus-builder/RecordContextReader.vue";
 import MovableRecordModal from "./corpus-builder/MovableRecordModal.vue";
 
@@ -21,7 +22,7 @@ import MovableRecordModal from "./corpus-builder/MovableRecordModal.vue";
  * Focus View: the review workspace without the queue and chrome. It is a layout, not a second implementation: the
  * reader, metadata, evidence, source and decision dock are the same components the workspace uses.
  */
-type InspectorTab = "metadata" | "evidence" | "source";
+type InspectorTab = "metadata" | "evidence" | "source" | "semantic";
 const props = withDefaults(
   defineProps<{
     record: CorpusRecord;
@@ -169,7 +170,7 @@ const head = ref<InstanceType<typeof CorpusFocusHeader> | null>(null);
 const dock = ref<InstanceType<typeof CorpusRecordDecisionDock> | null>(null);
 const priorActive = ref<HTMLElement | null>(null);
 const recordPopoutOpen = ref(false);
-const tabOrder: InspectorTab[] = ["metadata", "evidence", "source"];
+const tabOrder: InspectorTab[] = ["metadata", "evidence", "source", "semantic"];
 const tab = computed(() => props.inspectorTab);
 
 const blockingLabel = computed(() =>
@@ -568,6 +569,22 @@ watch(
               @browse-external="emit('browseExternalEvidence', selectedEvidenceField)"
             />
           </template>
+
+          <section
+            v-else-if="tab === 'semantic'"
+            id="focus-panel-semantic"
+            class="focus-panel"
+            role="tabpanel"
+            aria-labelledby="focus-tab-semantic"
+          >
+            <CorpusRecordSemanticMap
+              id-prefix="focus"
+              :build-id="buildId"
+              :record="record"
+              :disabled="busy"
+              @open-record="emit('navigateRecord', $event)"
+            />
+          </section>
 
           <template v-else>
             <CorpusSourceIssuePanel

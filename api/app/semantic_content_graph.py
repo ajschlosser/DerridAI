@@ -29,6 +29,11 @@ def _node_id(kind: str, label: str) -> str:
     return f"{kind}:{_slug(label)}"
 
 
+def document_entity_node_id(cluster_id: str, label: str) -> str:
+    """Stable node ID for a Document Intelligence entity cluster."""
+    return f"document_entity:{_slug(str(cluster_id or '') + ':' + str(label or ''))}"
+
+
 def _values(value: Any) -> list[str]:
     if value in (None, "", []):
         return []
@@ -302,7 +307,7 @@ def build_semantic_content_graph(
             else "entity"
         )
         cluster_id = str(cluster.get("cluster_id") or "")
-        stable_id = f"document_entity:{_slug(cluster_id + ':' + label)}"
+        stable_id = document_entity_node_id(cluster_id, label)
         node_id = graph.node(
             kind,
             label,

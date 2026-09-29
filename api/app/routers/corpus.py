@@ -682,6 +682,24 @@ def get_pdf_corpus_semantic_content_graph(build_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="Corpus build not found") from exc
 
 
+@router.get("/api/pdf/corpus-builds/{build_id}/records/{record_id}/semantic-map")
+def get_pdf_corpus_record_semantic_map(build_id: str, record_id: str) -> dict[str, Any]:
+    """Reviewer-safe semantic map of one Record and the Records it shares nodes with."""
+    try:
+        return pdf_corpus_builds.record_semantic_map(build_id, record_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build or record not found") from exc
+
+
+@router.get("/api/pdf/corpus-builds/{build_id}/semantic-content-graph/nodes/{node_id}")
+def get_pdf_corpus_semantic_graph_node(build_id: str, node_id: str) -> dict[str, Any]:
+    """One semantic-graph node with its relations and Records, for graph walking."""
+    try:
+        return pdf_corpus_builds.semantic_graph_node(build_id, node_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build or graph node not found") from exc
+
+
 @router.post("/api/pdf/corpus-builds/{build_id}/document-intelligence/rerun")
 def rerun_pdf_corpus_document_intelligence(build_id: str) -> dict[str, Any]:
     """Refresh derived document NLP after text/topology review changes."""

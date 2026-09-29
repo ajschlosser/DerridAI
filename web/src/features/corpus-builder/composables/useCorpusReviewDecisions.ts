@@ -22,7 +22,7 @@ interface CorpusReviewDecisionsOptions {
   bulkActionFeedback: Ref<string>;
   busy: Ref<string>;
   focusView: Ref<boolean>;
-  reviewInspectorTab: Ref<"metadata" | "evidence" | "source">;
+  reviewInspectorTab: Ref<"metadata" | "evidence" | "source" | "semantic">;
   reviewLocked: ComputedRef<boolean>;
   selectedMetadataBlocked: ComputedRef<boolean>;
   readyCount: ComputedRef<number>;

@@ -73,7 +73,7 @@ describe("Corpus Builder focus review interactions", () => {
     wrapper.unmount();
   });
 
-  it("implements arrow-key tab navigation across metadata, evidence, and source", async () => {
+  it("implements arrow-key tab navigation across metadata, evidence, source, and semantic map", async () => {
     const wrapper = mount(CorpusRecordFocusReview, {
       attachTo: document.body,
       props: { record, inspectorTab: "metadata" },
@@ -87,6 +87,9 @@ describe("Corpus Builder focus review interactions", () => {
     expect(wrapper.get("#focus-tab-evidence").attributes("aria-selected")).toBe("true");
     expect(document.activeElement).toBe(wrapper.get("#focus-tab-evidence").element);
     await wrapper.get(".focus-tabs").trigger("keydown", { key: "End" });
+    expect(lastEmission(wrapper, "update:inspectorTab")).toEqual(["semantic"]);
+    await wrapper.setProps({ inspectorTab: "semantic" });
+    await wrapper.get(".focus-tabs").trigger("keydown", { key: "ArrowLeft" });
     expect(lastEmission(wrapper, "update:inspectorTab")).toEqual(["source"]);
     wrapper.unmount();
   });

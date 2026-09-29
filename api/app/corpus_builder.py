@@ -279,6 +279,7 @@ from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
 from .rag import _citation_strings, chat_complete
 from .run_guidance import find_guidance_matches
 from .semantic_content_graph import build_semantic_content_graph
+from .record_semantic_map import record_semantic_map, semantic_node_neighborhood
 from .sentence_boundaries import snap_boundaries_to_sentences
 from .source_embeddings import SourceEmbeddingProjection
 from .source_quality import assess_extracted_source, page_source_quality_report
@@ -1884,12 +1885,10 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             "current_text_sha256": current_sha256,
         }
 
-    def semantic_content_graph(self, build_id: str) -> dict[str, Any]:
-        """Rebuild the semantic-content graph against the current Record revisions.
-
-        Rebuilding on read keeps structural edits and human metadata corrections from
-        leaving a stale visualization.  The graph remains a derived projection.
-        """
+    def _current_semantic_graph(
+        self, build_id: str
+    ) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
+        """The graph, reviewer-presented Records, and annotation run, without persisting."""
         records = [json.loads(json.dumps(row)) for row in self.repo.load_records(build_id)]
         for row in records:
             _present_for_reviewer(row)
@@ -1904,6 +1903,25 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             graph_analysis,
             schema=self._schema_for(build_id),
         )
+        return graph, records, analysis
+
+    def record_semantic_map(self, build_id: str, record_id: str) -> dict[str, Any]:
+        """Semantic map centred on one Record, with its links to other Records."""
+        graph, records, analysis = self._current_semantic_graph(build_id)
+        return record_semantic_map(graph, records, record_id, analysis=analysis)
+
+    def semantic_graph_node(self, build_id: str, node_id: str) -> dict[str, Any]:
+        """One graph node's relations and Records, for walking the semantic map."""
+        graph, records, _ = self._current_semantic_graph(build_id)
+        return semantic_node_neighborhood(graph, records, node_id)
+
+    def semantic_content_graph(self, build_id: str) -> dict[str, Any]:
+        """Rebuild the semantic-content graph against the current Record revisions.
+
+        Rebuilding on read keeps structural edits and human metadata corrections from
+        leaving a stale visualization.  The graph remains a derived projection.
+        """
+        graph, _, _ = self._current_semantic_graph(build_id)
         self.repo.save_checkpoint(build_id, "semantic_content_graph", graph)
         build = self.repo.get_build(build_id)
         build["semantic_content_graph"] = graph.get("summary") or {}

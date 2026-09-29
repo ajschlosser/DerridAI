@@ -79,7 +79,9 @@ const meta = {
       const editingText = ref(Boolean(args.editingText));
       const textDraft = ref(String(args.textDraft ?? args.record?.text ?? ""));
       const resolveSourceIssues = ref(Boolean(args.resolveSourceIssues));
-      const inspectorTab = ref<"metadata" | "evidence" | "source">(args.inspectorTab ?? "metadata");
+      const inspectorTab = ref<"metadata" | "evidence" | "source" | "semantic">(
+        args.inspectorTab ?? "metadata",
+      );
       const showContext = ref(true);
       const beginTextEdit = (proposal = false) => {
         textDraft.value = proposal
