@@ -6,6 +6,7 @@ import { useI18nStore } from "../stores/i18n";
 import { useShellStore } from "../stores/shell";
 import AppIcon from "../components/AppIcon.vue";
 import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
+import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import CitationMenu from "../components/CitationMenu.vue";
 import SearchResultLayoutSwitcher from "../components/SearchResultLayoutSwitcher.vue";
 import SearchWorkspaceHeader from "../components/search/SearchWorkspaceHeader.vue";
@@ -612,8 +613,8 @@ onBeforeUnmount(() => {
     aria-labelledby="search-page-title"
     @wheel="forwardVerticalWheelToDocument"
   >
-    <div v-if="loading && !snapshot" class="search-page-loading" role="status">
-      <span class="spinner"></span>{{ i18n.t("search.loading") }}
+    <div v-if="loading && !snapshot" class="search-page-loading">
+      <UiLoadingState :label="i18n.t('search.loading')" />
     </div>
     <section v-else-if="error" class="search-page-error">
       <h1>{{ i18n.t("search.load_failed") }}</h1>
@@ -904,8 +905,8 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <div v-if="snapshot.loading" class="search-results-loading" role="status">
-            <span class="spinner"></span>{{ i18n.t("search.searching") }}
+          <div v-if="snapshot.loading" class="search-results-loading">
+            <UiLoadingState :label="i18n.t('search.searching')" />
           </div>
           <AccessibleEmptyState
             v-else-if="databaseMode && !snapshot.has_database"

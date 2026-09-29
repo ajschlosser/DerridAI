@@ -5,6 +5,7 @@ import * as runtime from "../runtime/runtime.js";
 import { useI18nStore } from "../stores/i18n";
 import { useShellStore } from "../stores/shell";
 import RecordWorkspaceHeader from "../components/record/RecordWorkspaceHeader.vue";
+import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import RecordReadingPane from "../components/record/RecordReadingPane.vue";
 import RecordInspector from "../components/record/RecordInspector.vue";
 import RecordEditSheet from "../components/record/RecordEditSheet.vue";
@@ -283,7 +284,7 @@ onBeforeUnmount(() => {
 <template>
   <main class="record-workspace-page" :aria-busy="loading">
     <div v-if="loading" class="record-workspace-loading">
-      <span></span><strong>{{ i18n.t("record.loading") }}</strong>
+      <UiLoadingState :label="i18n.t('record.loading')" />
     </div>
     <section v-else-if="error" class="record-workspace-empty">
       <h1>{{ i18n.t("record.load_failed") }}</h1>
