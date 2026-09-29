@@ -18,7 +18,7 @@ from .models import (
     PipelineRunTrace,
     PipelineStageTrace,
 )
-from .storage import PipelineDatabase
+from .storage import PipelineDatabase, dump_json
 from .trace_store import PipelineTraceStore
 
 
@@ -113,47 +113,237 @@ class PipelineStore:
             **self.traces.snapshot(),
         }
 
-    def restore_snapshot(self, payload: dict[str, Any]) -> None:
+    @staticmethod
+    def _validated_snapshot(
+        payload: dict[str, Any],
+    ) -> tuple[
+        list[PipelineDefinition],
+        list[PipelineAssignment],
+        list[PipelineRunTrace],
+        list[tuple[str, PipelineStageTrace]],
+    ]:
+        """Validate a complete backup before any persistent row is changed."""
+
         if not isinstance(payload, dict):
             raise ValueError("Pipeline backup is invalid.")
-        definitions = payload.get("definitions") or []
-        assignments = payload.get("assignments") or []
-        runs = payload.get("runs") or []
-        stages = payload.get("stages") or []
+        definition_rows = payload.get("definitions") or []
+        assignment_rows = payload.get("assignments") or []
+        run_rows = payload.get("runs") or []
+        stage_rows = payload.get("stages") or []
         if not all(
             isinstance(items, list)
-            for items in (definitions, assignments, runs, stages)
+            for items in (
+                definition_rows,
+                assignment_rows,
+                run_rows,
+                stage_rows,
+            )
         ):
             raise ValueError("Pipeline backup is invalid.")
 
-        # Trace rows reference their parent runs, and definitions/assignments are
-        # restored before history so no half-restored operational state leaks
-        # through if model validation rejects the backup.
-        self.traces.clear()
-        self.definitions.clear()
+        definitions: list[PipelineDefinition] = []
+        definition_keys: set[tuple[str, int]] = set()
+        for raw in definition_rows:
+            if not isinstance(raw, dict):
+                raise ValueError("Pipeline backup contains an invalid definition row.")
+            definition = PipelineDefinition.model_validate(raw)
+            if definition.built_in:
+                raise ValueError(
+                    "Pipeline backup cannot persist code-owned built-in definitions."
+                )
+            if definition.created_at is None:
+                raise ValueError(
+                    f"Pipeline {definition.pipeline_id}@{definition.version} "
+                    "is missing created_at."
+                )
+            key = (definition.pipeline_id, definition.version)
+            if key in definition_keys:
+                raise ValueError(
+                    f"Pipeline backup contains duplicate definition {key[0]}@{key[1]}."
+                )
+            definition_keys.add(key)
+            definitions.append(definition)
 
-        for raw in definitions:
-            if isinstance(raw, dict):
-                self.put_definition(PipelineDefinition.model_validate(raw))
-        for raw in assignments:
-            if isinstance(raw, dict):
-                self.put_assignment(
-                    PipelineAssignment.model_validate(raw),
-                    updated_at="restored",
+        assignments: list[PipelineAssignment] = []
+        assignment_keys: set[tuple[str, str, str]] = set()
+        for raw in assignment_rows:
+            if not isinstance(raw, dict):
+                raise ValueError("Pipeline backup contains an invalid assignment row.")
+            assignment = PipelineAssignment.model_validate(raw)
+            key = (
+                assignment.feature,
+                assignment.scope,
+                str(assignment.scope_id or ""),
+            )
+            if key in assignment_keys:
+                raise ValueError(
+                    "Pipeline backup contains duplicate assignment "
+                    f"{assignment.feature!r}/{assignment.scope!r}/{key[2]!r}."
                 )
-        for raw in runs:
-            if isinstance(raw, dict):
-                trace = PipelineRunTrace.model_validate({**raw, "stages": []})
-                self.put_run(trace)
-        for raw in stages:
+            assignment_keys.add(key)
+            assignments.append(assignment)
+
+        runs: list[PipelineRunTrace] = []
+        run_ids: set[str] = set()
+        for raw in run_rows:
+            if not isinstance(raw, dict):
+                raise ValueError("Pipeline backup contains an invalid run row.")
+            trace = PipelineRunTrace.model_validate({**raw, "stages": []})
+            if trace.run_id in run_ids:
+                raise ValueError(
+                    f"Pipeline backup contains duplicate run {trace.run_id!r}."
+                )
+            run_ids.add(trace.run_id)
+            runs.append(trace)
+
+        stages: list[tuple[str, PipelineStageTrace]] = []
+        stage_keys: set[tuple[str, str]] = set()
+        for raw in stage_rows:
             if not isinstance(raw, dict) or not isinstance(raw.get("payload"), dict):
-                continue
+                raise ValueError("Pipeline backup contains an invalid stage row.")
             run_id = str(raw.get("run_id") or "")
-            if run_id:
-                self.put_stage(
-                    run_id,
-                    PipelineStageTrace.model_validate(raw["payload"]),
+            if not run_id or run_id not in run_ids:
+                raise ValueError(
+                    f"Pipeline backup stage references unknown run {run_id!r}."
                 )
+            stage = PipelineStageTrace.model_validate(raw["payload"])
+            key = (run_id, stage.stage_id)
+            if key in stage_keys:
+                raise ValueError(
+                    "Pipeline backup contains duplicate stage "
+                    f"{stage.stage_id!r} for run {run_id!r}."
+                )
+            stage_keys.add(key)
+            stages.append((run_id, stage))
+
+        return definitions, assignments, runs, stages
+
+    def validate_snapshot(self, payload: dict[str, Any]) -> None:
+        """Validate a backup without mutating persistent state."""
+
+        self._validated_snapshot(payload)
+
+    def restore_snapshot(self, payload: dict[str, Any]) -> None:
+        """Atomically replace pipeline state with a validated backup.
+
+        Validation happens before the transaction starts. Definitions,
+        assignments, runs, and stage traces are then replaced through one SQLite
+        connection so any insertion failure rolls the whole restore back.
+        """
+
+        definitions, assignments, runs, stages = self._validated_snapshot(payload)
+
+        with self.database.lock, self.database.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                conn.execute("DELETE FROM pipeline_stage_runs")
+                conn.execute("DELETE FROM pipeline_runs")
+                conn.execute("DELETE FROM pipeline_assignments")
+                conn.execute("DELETE FROM pipeline_definitions")
+
+                for definition in definitions:
+                    data = definition.model_dump(mode="json")
+                    conn.execute(
+                        """
+                        INSERT INTO pipeline_definitions
+                            (pipeline_id,version,name,purpose,status,created_at,
+                             created_by,payload_json)
+                        VALUES(?,?,?,?,?,?,?,?)
+                        """,
+                        (
+                            definition.pipeline_id,
+                            definition.version,
+                            definition.name,
+                            definition.purpose,
+                            definition.status,
+                            str(data.get("created_at") or ""),
+                            definition.created_by,
+                            dump_json(data),
+                        ),
+                    )
+
+                for assignment in assignments:
+                    data = assignment.model_dump(mode="json")
+                    conn.execute(
+                        """
+                        INSERT INTO pipeline_assignments
+                            (feature,scope,scope_id,pipeline_id,pipeline_version,
+                             override_allowed,source,updated_at,payload_json)
+                        VALUES(?,?,?,?,?,?,?,?,?)
+                        """,
+                        (
+                            assignment.feature,
+                            assignment.scope,
+                            str(assignment.scope_id or ""),
+                            assignment.pipeline_id,
+                            assignment.pipeline_version,
+                            int(assignment.override_allowed),
+                            assignment.source,
+                            "restored",
+                            dump_json(data),
+                        ),
+                    )
+
+                for trace in runs:
+                    data = trace.model_copy(update={"stages": []}).model_dump(
+                        mode="json"
+                    )
+                    conn.execute(
+                        """
+                        INSERT INTO pipeline_runs
+                            (run_id,feature,pipeline_id,pipeline_version,owner,
+                             status,resolved_hash,started_at,finished_at,payload_json)
+                        VALUES(?,?,?,?,?,?,?,?,?,?)
+                        """,
+                        (
+                            trace.run_id,
+                            trace.feature,
+                            trace.pipeline_id,
+                            trace.pipeline_version,
+                            trace.owner,
+                            trace.status,
+                            trace.resolved_hash,
+                            trace.started_at.isoformat(),
+                            (
+                                trace.finished_at.isoformat()
+                                if trace.finished_at
+                                else None
+                            ),
+                            dump_json(data),
+                        ),
+                    )
+
+                for run_id, stage in stages:
+                    data = stage.model_dump(mode="json")
+                    conn.execute(
+                        """
+                        INSERT INTO pipeline_stage_runs
+                            (run_id,stage_id,strategy_id,status,started_at,
+                             finished_at,payload_json)
+                        VALUES(?,?,?,?,?,?,?)
+                        """,
+                        (
+                            run_id,
+                            stage.stage_id,
+                            stage.strategy_id,
+                            stage.status,
+                            (
+                                stage.started_at.isoformat()
+                                if stage.started_at
+                                else None
+                            ),
+                            (
+                                stage.finished_at.isoformat()
+                                if stage.finished_at
+                                else None
+                            ),
+                            dump_json(data),
+                        ),
+                    )
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
 
     def clear_all(self) -> dict[str, int]:
         return {
