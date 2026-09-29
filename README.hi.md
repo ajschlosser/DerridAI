@@ -57,7 +57,6 @@ Normative cELF 1.0 specification और non-normative DerridAI white paper क�
 
 ### Runtime services
 
-
 - `web` — Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js और nginx। यह browser application है; `/api/` को proxy करता है और REST, GraphQL तथा realtime notifications उपयोग करता है। Storybook optional development profile है।
 - `api` — Python 3.12, FastAPI, Strawberry GraphQL, ChromaDB client, PyMuPDF, sentence-transformers और spaCy। यह authentication, source/corpus operations, cELF reads, provenance, RAG, pipelines, jobs और system state के लिए authoritative application boundary है।
 - `document-nlp` — English Document Intelligence के लिए optional isolated BookNLP worker। यह bounded reviewed text प्राप्त करता है और corpus authority नहीं रखता।
