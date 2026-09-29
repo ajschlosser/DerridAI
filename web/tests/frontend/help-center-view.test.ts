@@ -63,7 +63,7 @@ describe("HelpCenterView URL state", () => {
     const { wrapper, router } = await mountView({ q: "breadcrumbs" });
     await flushPromises();
 
-    expect(wrapper.get("input[type=search]").element.value).toBe("breadcrumbs");
+    expect((wrapper.get("input[type=search]").element as HTMLInputElement).value).toBe("breadcrumbs");
     expect(wrapper.text()).toContain("How do breadcrumbs work?");
 
     await wrapper.get("input[type=search]").setValue("missing");
