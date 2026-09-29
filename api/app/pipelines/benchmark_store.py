@@ -162,7 +162,7 @@ class PipelineBenchmarkStore:
         except ValueError:
             return None
 
-    def list(
+    def list_benchmarks(
         self,
         *,
         case_id: str | None = None,
