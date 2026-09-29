@@ -124,6 +124,12 @@ export type PipelineCatalog = {
   assignments: PipelineAssignment[];
 };
 
+export type ResearchPipelineOptions = {
+  assignment: PipelineAssignment;
+  override_allowed: boolean;
+  pipelines: Array<PipelineDefinition & { assigned?: boolean }>;
+};
+
 export type PipelineValidationResponse = {
   validation: PipelineValidation;
   runtime_supported: boolean;
