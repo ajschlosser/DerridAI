@@ -57,7 +57,6 @@ See [SPECIFICATION.md](SPECIFICATION.md) for the normative cELF 1.0 specificatio
 
 ### Runtime services
 
-
 - `web` — Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js, and nginx. It is the browser application, proxies `/api/`, and consumes REST, GraphQL, and realtime notifications. Storybook is an opt-in development profile.
 - `api` — Python 3.12, FastAPI, Strawberry GraphQL, the ChromaDB client, PyMuPDF, sentence-transformers, and spaCy. It is the authoritative application boundary for authentication, source/corpus operations, cELF reads, provenance, RAG, pipelines, jobs, and system state.
 - `document-nlp` — an optional isolated BookNLP worker for English Document Intelligence. It receives bounded reviewed text and has no corpus authority.
