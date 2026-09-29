@@ -172,8 +172,8 @@ def test_benchmark_run_captures_exact_pipeline_and_reranker_identity() -> None:
     assert run.case_version == 3
     assert run.fixed_input["prompt"] == "What is the trace?"
     assert run.retrieval_config["k"] == 32
-    assert run.model_config["cross_encoder_model"] == "cross-encoder/test-model"
-    assert run.model_config["left_reranker"]["model_revision"] == "model-rev-1"
+    assert run.model_identity["cross_encoder_model"] == "cross-encoder/test-model"
+    assert run.model_identity["left_reranker"]["model_revision"] == "model-rev-1"
     assert run.left_pipeline["pipeline_hash"] == "hash-research.current"
     assert run.right_pipeline["pipeline_hash"] == "hash-research.balanced"
     assert run.left_pipeline["resolved_pipeline"]["pipeline_id"] == "research.current"
