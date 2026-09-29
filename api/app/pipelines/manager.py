@@ -164,6 +164,37 @@ class PipelineManager:
             "validation": validation.model_dump(mode="json"),
         }
 
+    def runtime_support(self, pipeline: PipelineDefinition) -> dict[str, Any]:
+        """Describe whether a saved graph can currently drive production code."""
+
+        try:
+            if pipeline.purpose == "research":
+                compile_research_pipeline(pipeline)
+                return {"supported": True, "adapter": "research"}
+            current_features = {
+                "evidence_suggestion": "evidence_suggestion.reviewer",
+                "metadata_precedents": "metadata_precedents",
+                "claim_memory": "claim_memory",
+                "response_memory": "response_memory",
+            }
+            feature = current_features.get(pipeline.purpose)
+            assignment = built_in_assignment(feature) if feature else None
+            if assignment and (
+                pipeline.pipeline_id,
+                pipeline.version,
+            ) == (assignment.pipeline_id, assignment.pipeline_version):
+                return {"supported": True, "adapter": pipeline.purpose}
+            return {
+                "supported": False,
+                "adapter": None,
+                "reason": (
+                    "This purpose is inspectable but custom execution has not "
+                    "yet been migrated to a configurable adapter."
+                ),
+            }
+        except ValueError as exc:
+            return {"supported": False, "adapter": None, "reason": str(exc)}
+
     def catalog(self) -> dict[str, Any]:
         return {
             "strategies": self.service.strategies(),
@@ -171,6 +202,7 @@ class PipelineManager:
                 {
                     **item.model_dump(mode="json"),
                     "validation": self.service.validate(item).model_dump(mode="json"),
+                    "runtime_support": self.runtime_support(item),
                 }
                 for item in self.list_definitions()
             ],
