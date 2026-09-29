@@ -9,6 +9,7 @@ import PipelineComparisonPanel from "../../src/components/pipelines/PipelineComp
 import { useI18nStore } from "../../src/stores/i18n";
 import type {
   PipelineDefinition,
+  ResearchPipelineBenchmarkCase,
   ResearchPipelineBenchmarkRun,
   ResearchPipelineComparisonResult,
 } from "../../src/types/pipelines";
@@ -193,23 +194,43 @@ const comparison: ResearchPipelineComparisonResult = {
   },
 };
 
+const benchmarkCase: ResearchPipelineBenchmarkCase = {
+  case_id: "trace-definition-001",
+  version: 2,
+  prompt: "What is the trace?",
+  source_collection: "corpus",
+  query_decomposition: false,
+  notes: "Fixed trace case",
+  corpus_snapshot: {
+    fingerprint: "a".repeat(64),
+    collections: [
+      {
+        name: "corpus",
+        count: 42,
+        source_snapshot_hash: "source-hash",
+        build_id: "build-123",
+        embedding_revision: "rev-7",
+      },
+    ],
+    limitations: [],
+  },
+  created_at: "2026-09-29T20:00:00Z",
+  created_by: "admin",
+};
+
 const benchmark: ResearchPipelineBenchmarkRun = {
   benchmark_run_id: "benchmark-123",
   case_id: "trace-definition-001",
   case_version: 2,
   mode: "retrieval_only",
-  created_at: "2026-09-29T20:00:00Z",
+  created_at: "2026-09-29T20:00:01Z",
   created_by: "admin",
-  notes: "Fixed trace case",
+  case_snapshot: benchmarkCase,
   fixed_input: {
     prompt: "What is the trace?",
     source_collection: "corpus",
   },
-  corpus: {
-    source_snapshot_hash: "source-hash",
-    build_id: "build-123",
-    embedding_revision: "rev-7",
-  },
+  corpus: benchmarkCase.corpus_snapshot,
   retrieval_config: { k: 64, reranker: "cross_encoder" },
   model_config: { cross_encoder_model: "cross-encoder/test" },
   left_pipeline: comparison.left.pipeline,
@@ -234,6 +255,9 @@ describe("PipelineComparisonPanel", () => {
       },
     ] as never);
     vi.spyOn(pipelinesApi, "compareResearch").mockResolvedValue(structuredClone(comparison));
+    vi.spyOn(pipelinesApi, "createResearchBenchmarkCase").mockResolvedValue({
+      case: structuredClone(benchmarkCase),
+    });
     vi.spyOn(pipelinesApi, "runResearchBenchmark").mockResolvedValue({
       benchmark: structuredClone(benchmark),
     });
@@ -306,21 +330,23 @@ describe("PipelineComparisonPanel", () => {
     await button!.trigger("click");
     await flushPromises();
 
+    expect(pipelinesApi.createResearchBenchmarkCase).toHaveBeenCalledWith({
+      case_id: "trace-definition-001",
+      version: 2,
+      prompt: "What is the trace?",
+      source_collection: "corpus",
+      query_decomposition: false,
+      notes: "Fixed trace case",
+    });
     expect(pipelinesApi.runResearchBenchmark).toHaveBeenCalledWith({
       case_id: "trace-definition-001",
       case_version: 2,
-      notes: "Fixed trace case",
-      request: {
-        prompt: "What is the trace?",
-        source_collection: "corpus",
-        query_decomposition: false,
-      },
       left: { pipeline_id: "research.current", version: 1 },
       right: { pipeline_id: "research.balanced", version: 1 },
     });
     expect(wrapper.text()).toContain("Saved benchmark");
     expect(wrapper.text()).toContain("benchmark-123");
-    expect(wrapper.text()).toContain("source-hash");
+    expect(wrapper.text()).toContain("a".repeat(64));
     expect(wrapper.text()).toContain("left");
     expect(wrapper.text()).toContain("right");
   });
