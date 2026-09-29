@@ -2,6 +2,7 @@
 <script setup lang="ts">
 import { useI18nStore } from "../../stores/i18n";
 import type { AnnotationWorkspaceItem } from "../../types/annotations";
+import UiTooltip from "../ui/UiTooltip.vue";
 
 const props = withDefaults(
   defineProps<{ annotation: AnnotationWorkspaceItem; removing?: boolean }>(),
@@ -26,14 +27,21 @@ function dateLabel(value: string | null) {
 
 <template>
   <article class="annotation-feed-item">
-    <button
-      class="annotation-open-record"
-      type="button"
-      :title="i18n.t('annotations.open_record')"
-      @click="emit('open', props.annotation)"
+    <UiTooltip
+      :text="i18n.t('annotations.open_record')"
+      trigger-mode="content"
+      :content-focusable="false"
+      placement="bottom"
     >
-      <span aria-hidden="true">↗</span>
-    </button>
+      <button
+        class="annotation-open-record"
+        type="button"
+        :aria-label="i18n.t('annotations.open_record')"
+        @click="emit('open', props.annotation)"
+      >
+        <span aria-hidden="true">↗</span>
+      </button>
+    </UiTooltip>
     <div class="annotation-feed-copy">
       <div class="annotation-feed-meta">
         <b>{{ props.annotation.record_id }}</b>
