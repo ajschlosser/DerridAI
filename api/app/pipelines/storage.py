@@ -130,7 +130,10 @@ class PipelineDatabase:
                     left_pipeline_version INTEGER NOT NULL,
                     right_pipeline_id TEXT NOT NULL,
                     right_pipeline_version INTEGER NOT NULL,
-                    payload_json TEXT NOT NULL
+                    payload_json TEXT NOT NULL,
+                    FOREIGN KEY (case_id, case_version)
+                        REFERENCES pipeline_benchmark_cases(case_id, version)
+                        ON DELETE RESTRICT
                 );
                 CREATE INDEX IF NOT EXISTS idx_pipeline_benchmarks_case_created
                     ON pipeline_benchmark_runs(case_id, case_version, created_at DESC);
