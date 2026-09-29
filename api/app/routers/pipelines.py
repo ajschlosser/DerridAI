@@ -10,6 +10,10 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from ..http_auth import request_user, require_admin
 from ..models import RAGRunRequest
 from ..pipelines.access import resolve_research_pipeline
+from ..pipelines.benchmark import (
+    ResearchPipelineBenchmarkRequest,
+    build_research_benchmark_run,
+)
 from ..pipelines.comparison import (
     ResearchPipelineComparisonRequest,
     compare_research_dry_runs,
@@ -22,6 +26,50 @@ from ..rag import run_rag_pipeline
 from ..services import store
 
 router = APIRouter(prefix="/api/system/pipelines", tags=["pipelines"])
+
+
+def _validate_research_retrieval_request(body: RAGRunRequest, *, label: str) -> None:
+    if body.skip_retrieval:
+        raise HTTPException(
+            status_code=422,
+            detail=f"{label} requires retrieval to be enabled.",
+        )
+    if not str(body.source_collection or "").strip():
+        raise HTTPException(
+            status_code=422,
+            detail=f"Select a source collection for {label.lower()}.",
+        )
+
+
+def _execute_research_dry_run(
+    request_body: RAGRunRequest,
+    *,
+    pipeline_id: str,
+    version: int,
+    owner: str,
+) -> dict[str, Any]:
+    selected = resolve_research_pipeline(
+        requested_id=pipeline_id,
+        requested_version=version,
+        is_admin=True,
+    )
+    payload = request_body.model_dump(mode="python")
+    payload.update(
+        {
+            "pipeline_id": selected.pipeline_id,
+            "pipeline_version": selected.version,
+            "auto_grade": False,
+            "use_prior_response_memory": False,
+            "use_prior_claim_memory": False,
+        }
+    )
+    comparison_request = RAGRunRequest.model_validate(payload)
+    return run_rag_pipeline(
+        comparison_request,
+        store,
+        owner=owner,
+        stop_after_context=True,
+    )
 
 
 @router.get("")
@@ -208,47 +256,105 @@ def compare_research_pipelines(
     """
 
     user = require_admin(request)
-    if body.request.skip_retrieval:
-        raise HTTPException(
-            status_code=422,
-            detail="Research pipeline comparison requires retrieval to be enabled.",
+    _validate_research_retrieval_request(
+        body.request,
+        label="Research pipeline comparison",
+    )
+    try:
+        left = _execute_research_dry_run(
+            body.request,
+            pipeline_id=body.left.pipeline_id,
+            version=body.left.version,
+            owner=user.username,
         )
-    if not str(body.request.source_collection or "").strip():
-        raise HTTPException(
-            status_code=422,
-            detail="Select a source collection for Research pipeline comparison.",
+        right = _execute_research_dry_run(
+            body.request,
+            pipeline_id=body.right.pipeline_id,
+            version=body.right.version,
+            owner=user.username,
         )
-
-    def execute(pipeline_id: str, version: int) -> dict[str, Any]:
-        try:
-            selected = resolve_research_pipeline(
-                requested_id=pipeline_id,
-                requested_version=version,
-                is_admin=True,
-            )
-            payload = body.request.model_dump(mode="python")
-            payload.update(
-                {
-                    "pipeline_id": selected.pipeline_id,
-                    "pipeline_version": selected.version,
-                    "auto_grade": False,
-                    "use_prior_response_memory": False,
-                    "use_prior_claim_memory": False,
-                }
-            )
-            comparison_request = RAGRunRequest.model_validate(payload)
-            return run_rag_pipeline(
-                comparison_request,
-                store,
-                owner=user.username,
-                stop_after_context=True,
-            )
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-    left = execute(body.left.pipeline_id, body.left.version)
-    right = execute(body.right.pipeline_id, body.right.version)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return compare_research_dry_runs(left, right)
+
+
+@router.post("/benchmarks/research")
+def run_research_pipeline_benchmark(
+    body: ResearchPipelineBenchmarkRequest,
+    request: Request,
+) -> dict[str, Any]:
+    """Run and persist one fixed-case retrieval benchmark.
+
+    The two pipeline executions remain non-persistent dry runs: they do not
+    create Research jobs, response memory, claim memory, or ordinary pipeline
+    traces. The benchmark result itself is persisted in the dedicated benchmark
+    store with fixed prompt/configuration and bounded candidate diagnostics.
+    """
+
+    user = require_admin(request)
+    _validate_research_retrieval_request(
+        body.request,
+        label="Research pipeline benchmark",
+    )
+    try:
+        left = _execute_research_dry_run(
+            body.request,
+            pipeline_id=body.left.pipeline_id,
+            version=body.left.version,
+            owner=user.username,
+        )
+        right = _execute_research_dry_run(
+            body.request,
+            pipeline_id=body.right.pipeline_id,
+            version=body.right.version,
+            owner=user.username,
+        )
+        comparison = compare_research_dry_runs(left, right)
+        benchmark = build_research_benchmark_run(
+            body,
+            comparison,
+            store=store,
+            created_by=user.username,
+        )
+        pipeline_store.put_benchmark(benchmark)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return {"benchmark": benchmark.model_dump(mode="json")}
+
+
+@router.get("/benchmarks")
+def pipeline_benchmarks(
+    request: Request,
+    case_id: str = Query(default="", max_length=160),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> dict[str, Any]:
+    """List persisted benchmark results without mixing them into run traces."""
+
+    require_admin(request)
+    rows = pipeline_store.list_benchmarks(
+        case_id=case_id or None,
+        limit=limit,
+        offset=offset,
+    )
+    return {
+        "benchmarks": [row.model_dump(mode="json") for row in rows],
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@router.get("/benchmarks/{benchmark_run_id}")
+def pipeline_benchmark(
+    benchmark_run_id: str,
+    request: Request,
+) -> dict[str, Any]:
+    require_admin(request)
+    row = pipeline_store.get_benchmark(benchmark_run_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Pipeline benchmark not found.")
+    return {"benchmark": row.model_dump(mode="json")}
 
 
 @router.get("/metrics")
