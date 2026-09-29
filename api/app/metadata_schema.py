@@ -657,11 +657,53 @@ _INDEXING_FOOTER = (
 )
 
 
+# Curated lexical candidate hints for every configurable field in the built-in
+# scholarly schema. These are candidate-generation hints only: matching a POS or
+# entity tag never establishes a metadata value, discourse role, or evidence
+# binding. Empty tuples are intentional for fields whose value is a classification
+# inferred from the passage rather than a surface form. The locked core fields
+# (region_type, primary_text, discourse_role) are likewise classifications and do
+# not participate in schema-configured lexical candidate generation.
+_DEFAULT_SCHEMA_NLP_HINTS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
+    "region_author": (("PROPN",), ("PERSON", "ORG")),
+    "speaker": (("PRON", "PROPN", "NOUN"), ("PERSON", "ORG", "NORP")),
+    "position_holder": (("PRON", "PROPN", "NOUN"), ("PERSON", "ORG", "NORP")),
+    "target": (
+        ("PROPN", "NOUN"),
+        ("PERSON", "ORG", "NORP", "GPE", "LOC", "EVENT", "LAW", "LANGUAGE", "WORK_OF_ART"),
+    ),
+    "stance": ((), ()),
+    "proposition_status": ((), ()),
+    "claim_scope": (("ADJ", "NOUN", "PROPN"), ()),
+    "semantic_function": ((), ()),
+    "is_direct_quote": ((), ()),
+    "quoted_speaker": (("PRON", "PROPN", "NOUN"), ("PERSON", "ORG", "NORP")),
+    "quoted_author": (("PROPN",), ("PERSON", "ORG")),
+    "quoted_work": (("PROPN", "NOUN"), ("WORK_OF_ART", "LAW")),
+    "quoted_position_holder": (("PRON", "PROPN", "NOUN"), ("PERSON", "ORG", "NORP")),
+    "quoted_addressee": (("PRON", "PROPN", "NOUN"), ("PERSON", "ORG", "NORP")),
+    "quoted_referent": (
+        ("PRON", "PROPN", "NOUN"),
+        ("PERSON", "ORG", "NORP", "GPE", "LOC", "EVENT", "LAW", "LANGUAGE", "WORK_OF_ART"),
+    ),
+    "quotation_chain": (("PROPN",), ("PERSON", "ORG", "WORK_OF_ART")),
+    "topics": (
+        ("ADJ", "NOUN", "PROPN"),
+        ("EVENT", "GPE", "LOC", "NORP", "ORG", "LANGUAGE", "LAW"),
+    ),
+    "concepts": (("ADJ", "NOUN", "PROPN"), ()),
+    "persons": (("PROPN",), ("PERSON",)),
+    "works_referenced": (("PROPN", "NOUN"), ("WORK_OF_ART", "LAW")),
+}
+
+
 def _f(name: str, label: str, type_: FieldType, group: str, **kw: Any) -> SchemaField:
+    pos_tags, ner_tags = _DEFAULT_SCHEMA_NLP_HINTS[name]
     return SchemaField(
         name=name, label=label, type=type_, group=group,
         semantic_compatibility_id=SEMANTIC_COMPATIBILITY_IDS.get(name),
-        evidence=name in ATTRIBUTION_EVIDENCE_FIELDS, review=name in REVIEW_METADATA_FIELDS, **kw,
+        evidence=name in ATTRIBUTION_EVIDENCE_FIELDS, review=name in REVIEW_METADATA_FIELDS,
+        pos_tags=list(pos_tags), ner_tags=list(ner_tags), **kw,
     )
 
 
@@ -688,7 +730,7 @@ def default_schema() -> MetadataSchema:
             ("topics", "Topics"), ("concepts", "Concepts"), ("persons", "Persons"), ("works_referenced", "Works referenced"))],
     ]
     return MetadataSchema(
-        id=DEFAULT_SCHEMA_ID, name="DerridAI scholarly default",
+        id=DEFAULT_SCHEMA_ID, schema_version="1.1.0", name="DerridAI scholarly default",
         description="Discourse and attribution, quotation relations, and semantic indexing: the fields DerridAI has always produced.",
         groups=[
             SchemaGroup(key="discourse", label="Discourse and attribution", intro=_DISCOURSE_INTRO, fields_heading="Hybrid classification fields are constrained:",
