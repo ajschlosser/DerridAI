@@ -103,4 +103,14 @@ describe("pipeline relational diagrams", () => {
       diagram.edges.find((edge) => edge.from === "dense" && edge.kind === "next")?.traversed,
     ).toBe(false);
   });
+
+  it("supports a vertical orientation without changing graph relationships", () => {
+    const diagram = layoutPipelineDiagram(stages, ["dense"], null, "vertical");
+    const dense = diagram.nodes.find((node) => node.id === "dense")!;
+    const rerank = diagram.nodes.find((node) => node.id === "rerank")!;
+
+    expect(rerank.y).toBeGreaterThan(dense.y);
+    expect(diagram.edges.some((edge) => edge.from === "dense" && edge.to === "rerank")).toBe(true);
+    expect(diagram.height).toBeGreaterThan(diagram.width / 2);
+  });
 });
