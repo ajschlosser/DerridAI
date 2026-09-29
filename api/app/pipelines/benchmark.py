@@ -117,7 +117,7 @@ class ResearchPipelineBenchmarkRun(BaseModel):
     fixed_input: dict[str, Any]
     corpus: dict[str, Any]
     retrieval_config: dict[str, Any]
-    model_config: dict[str, Any]
+    model_identity: dict[str, Any]
     left_pipeline: dict[str, Any]
     right_pipeline: dict[str, Any]
     comparison: dict[str, Any]
@@ -448,7 +448,7 @@ def build_research_benchmark_run(
             "evidence_record_char_limit": case.evidence_record_char_limit,
             "evidence_total_char_limit": case.evidence_total_char_limit,
         },
-        model_config={
+        model_identity={
             "query_transform_model": None,
             "generation_model": None,
             "grader_model": None,
