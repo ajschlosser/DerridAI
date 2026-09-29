@@ -15,8 +15,17 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from .metadata_schema import DEFAULT_SCHEMA_ID, MetadataSchema, export_schema, import_schema
-from .metadata_schema_profiles import BUILTIN_SCHEMA_IDS, builtin_schema, builtin_schemas
+from .metadata_schema import (
+    DEFAULT_SCHEMA_ID,
+    MetadataSchema,
+    export_schema,
+    import_schema,
+)
+from .metadata_schema_profiles import (
+    BUILTIN_SCHEMA_IDS,
+    builtin_schema,
+    builtin_schemas,
+)
 
 
 class SchemaNotFound(KeyError):
