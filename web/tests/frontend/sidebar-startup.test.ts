@@ -281,7 +281,9 @@ describe("sidebar at sign-in", () => {
 
     expect(pageLabels(wrapper)).toContain("Compare");
     expect(pageLabels(wrapper)).not.toContain("Corpus Builder");
-    expect(wrapper.findAll(".shell-nav-section h2").map((node) => node.text())).toContain("Corpora");
+    expect(wrapper.findAll(".shell-nav-section h2").map((node) => node.text())).toContain(
+      "Corpora",
+    );
   });
 
   it("remembers collapsed groups while keeping the active group expanded", async () => {
