@@ -273,3 +273,40 @@ export type ResearchPipelineComparisonRequest = {
   left: { pipeline_id: string; version: number };
   right: { pipeline_id: string; version: number };
 };
+
+
+export type ResearchPipelineBenchmarkRequest = {
+  case_id: string;
+  case_version: number;
+  notes?: string | null;
+  request: {
+    prompt: string;
+    instructions?: string | null;
+    source_collection: string;
+    query_decomposition?: boolean;
+  };
+  left: { pipeline_id: string; version: number };
+  right: { pipeline_id: string; version: number };
+};
+
+export type ResearchPipelineBenchmarkRun = {
+  benchmark_run_id: string;
+  case_id: string;
+  case_version: number;
+  mode: "retrieval_only";
+  created_at: string;
+  created_by?: string | null;
+  notes?: string | null;
+  fixed_input: {
+    prompt: string;
+    instructions?: string | null;
+    source_collection: string;
+  };
+  corpus: Record<string, unknown>;
+  retrieval_config: Record<string, unknown>;
+  model_config: Record<string, unknown>;
+  left_pipeline: ResearchPipelineComparisonSide["pipeline"];
+  right_pipeline: ResearchPipelineComparisonSide["pipeline"];
+  comparison: ResearchPipelineComparisonResult;
+  reproducibility_warnings: string[];
+};
