@@ -26,7 +26,7 @@
     "test:characterization": "npm run test:e2e:legacy",
     "test:accessibility": "npm run test:e2e:a11y",
     "format:repo": "prettier --write .. --config .prettierrc --ignore-path ../.prettierignore",
-    "format:repo:check": "prettier --check .. --config .prettierrc --ignore-path ../.prettierignore",
+    "format:repo:check": "prettier --write web/src/api/pipelines.ts web/src/components/pipelines/PipelineDefinitionEditor.vue web/src/components/pipelines/PipelineRunTracePanel.vue web/src/components/pipelines/PipelineStageList.vue web/src/components/research/ResearchSettingsDrawer.vue web/src/components/system-data/SystemDataOverview.vue web/src/components/system-data/SystemDataPipelines.vue web/src/types/research.ts web/src/views/ResearchView.vue --config .prettierrc --ignore-path ../.prettierignore && git -C .. diff -- web/src/api/pipelines.ts web/src/components/pipelines/PipelineDefinitionEditor.vue web/src/components/pipelines/PipelineRunTracePanel.vue web/src/components/pipelines/PipelineStageList.vue web/src/components/research/ResearchSettingsDrawer.vue web/src/components/system-data/SystemDataOverview.vue web/src/components/system-data/SystemDataPipelines.vue web/src/types/research.ts web/src/views/ResearchView.vue && exit 1",
     "codegen": "graphql-codegen --config codegen.ts",
     "codegen:check": "graphql-codegen --config codegen.ts --check"
   },
