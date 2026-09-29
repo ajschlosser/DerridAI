@@ -40,7 +40,10 @@ async function mountView(query: Record<string, string> = {}) {
     "help.title": "Help center",
     "help.intro": "Learn how DerridAI works.",
     "help.search": "Search help",
-    "help.result_count": "{count} results",
+    "help.results_found": "{count} matches",
+    "help.expand_all": "Expand all",
+    "help.collapse_all": "Collapse all",
+    "help.clear_search": "Clear search",
     "help.no_results": "No results for {query}",
     "help.impact_heading": "What this changes",
   };
@@ -74,5 +77,24 @@ describe("HelpCenterView URL state", () => {
 
     expect(router.currentRoute.value.query.q).toBe("missing");
     expect(wrapper.text()).toContain("No results");
+  });
+
+  it("highlights matches, expands all, and clears the search from the field", async () => {
+    const { wrapper, router } = await mountView({ q: "bread" });
+    await flushPromises();
+
+    expect(wrapper.get("mark").text()).toBe("bread");
+    expect(wrapper.get("#help-search-status").text()).toBe("1 matches");
+    expect((wrapper.get("details").element as HTMLDetailsElement).open).toBe(true);
+
+    await wrapper.get(".help-search-clear").trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.query.q).toBeUndefined();
+    expect(wrapper.find("mark").exists()).toBe(false);
+    expect((wrapper.get("details").element as HTMLDetailsElement).open).toBe(false);
+
+    await wrapper.get(".help-toggle-all").trigger("click");
+    expect((wrapper.get("details").element as HTMLDetailsElement).open).toBe(true);
   });
 });
