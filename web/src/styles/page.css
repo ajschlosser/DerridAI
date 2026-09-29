@@ -32,7 +32,10 @@
 }
 
 /* Leave room only for the floating operations dock. The top-bar dock is part of shell chrome. */
-html[data-operations-dock-mode="floating"] body:has(#operationProgressStack.minimized) #appContent > * {
+html[data-operations-dock-mode="floating"]
+  body:has(#operationProgressStack.minimized)
+  #appContent
+  > * {
   padding-bottom: 72px;
 }
 html[data-operations-dock-mode="floating"]
