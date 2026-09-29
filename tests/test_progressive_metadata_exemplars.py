@@ -470,6 +470,21 @@ def test_editorial_memory_semantic_retrieval_uses_bound_canonical_exemplars():
     assert memory["progressive_retrieval"]["pipeline_id"] == "metadata.precedents.current"
     assert memory["progressive_retrieval"]["pipeline_version"] == 1
     assert memory["progressive_retrieval"]["pipeline_hash"]
+    assert memory["progressive_retrieval"]["pipeline_run_id"]
+    assert memory["pipeline_trace"]["run_id"] == memory["progressive_retrieval"]["pipeline_run_id"]
+    assert memory["pipeline_trace"]["pipeline_id"] == "metadata.precedents.current"
+    assert {
+        stage["stage_id"] for stage in memory["pipeline_trace"]["stages"]
+    } == {
+        "retrieve",
+        "lexical_fallback",
+        "scope",
+        "hybrid",
+        "rerank",
+        "quotas",
+        "mmr",
+        "pack",
+    }
 
 
 def test_editorial_memory_can_disable_progressive_retrieval_for_ablation():
