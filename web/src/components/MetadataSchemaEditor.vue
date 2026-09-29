@@ -128,8 +128,9 @@ async function newSchema() {
     true,
   );
   savedHash.value = "";
+  // Unsaved drafts are deliberately transient. Keep the URL bound to the last
+  // durable schema until this draft is saved.
   selectedId.value = "";
-  emit("selection", "");
   tab.value = "fields";
 }
 function duplicate() {
@@ -139,8 +140,8 @@ function duplicate() {
     true,
   );
   savedHash.value = ""; // a copy is unsaved
+  // Do not put unsaved draft identity into the shareable route.
   selectedId.value = "";
-  emit("selection", "");
 }
 async function save() {
   const schema = draft.value;
