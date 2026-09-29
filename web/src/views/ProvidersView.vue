@@ -159,7 +159,7 @@ onMounted(() => {
 <template>
   <main class="vue-native-page providers-page" aria-labelledby="providers-page-title">
     <UiPageHeader
-      :kicker="i18n.t('section.system')"
+      :kicker="i18n.t('section.ai_automation')"
       :title="i18n.t('providers.title')"
       title-id="providers-page-title"
       :description="i18n.t('providers.description')"
