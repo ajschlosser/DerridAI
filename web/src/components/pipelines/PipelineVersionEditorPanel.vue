@@ -1,6 +1,7 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import AppIcon from "../AppIcon.vue";
+import UiTooltip from "../ui/UiTooltip.vue";
 import PipelineDefinitionEditor from "./PipelineDefinitionEditor.vue";
 import { useI18nStore } from "../../stores/i18n";
 import type {
@@ -34,6 +35,14 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
         <h3 id="pipeline-editor-title">
           {{ t("pipelines.configure_clone", "Configure cloned pipeline") }}
         </h3>
+        <p class="editor-subtitle">
+          {{
+            t(
+              "pipelines.configure_clone_help",
+              "Edit the copy below. Validation checks whether the graph is internally coherent and whether the current runtime knows how to execute it. Saving does not activate it.",
+            )
+          }}
+        </p>
       </div>
       <button class="btn" type="button" @click="emit('cancel')">
         {{ t("common.cancel", "Cancel") }}
@@ -75,15 +84,35 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
     </div>
 
     <footer class="editor-actions">
-      <button class="btn" type="button" :disabled="saving" @click="emit('validate')">
-        {{ t("pipelines.validate", "Validate") }}
-      </button>
-      <button class="btn primary" type="button" :disabled="saving" @click="emit('save')">
-        <AppIcon name="check" />
-        {{
-          saving ? t("pipelines.saving", "Saving…") : t("pipelines.save_version", "Save version")
-        }}
-      </button>
+      <span class="action-with-help">
+        <button class="btn" type="button" :disabled="saving" @click="emit('validate')">
+          {{ t("pipelines.validate", "Validate") }}
+        </button>
+        <UiTooltip
+          :text="
+            t(
+              'pipelines.validate_help',
+              'Validation is a dry check. It does not run the pipeline against your corpus and does not save anything. It checks graph structure, registered strategy settings, and current runtime support.',
+            )
+          "
+        />
+      </span>
+      <span class="action-with-help">
+        <button class="btn primary" type="button" :disabled="saving" @click="emit('save')">
+          <AppIcon name="check" />
+          {{
+            saving ? t("pipelines.saving", "Saving…") : t("pipelines.save_version", "Save version")
+          }}
+        </button>
+        <UiTooltip
+          :text="
+            t(
+              'pipelines.save_version_help',
+              'Saving creates a new immutable pipeline version for auditability. It does not replace the source version and does not make the new version the system default.',
+            )
+          "
+        />
+      </span>
     </footer>
   </section>
 </template>
@@ -115,6 +144,13 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
   margin: 0;
   font-size: 1rem;
 }
+.editor-subtitle {
+  max-width: 760px;
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
 .validation-result {
   display: grid;
   gap: 4px;
@@ -137,6 +173,11 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 7px;
+}
+.action-with-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
 .editor-actions :deep(svg) {
   width: 15px;
