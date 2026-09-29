@@ -5,10 +5,7 @@ import { chromaApi } from "../../api/chroma";
 import { pipelinesApi } from "../../api/pipelines";
 import { pipelineKey } from "../../domain/pipelinePresentation";
 import { useI18nStore } from "../../stores/i18n";
-import type {
-  PipelineDefinition,
-  ResearchPipelineComparisonResult,
-} from "../../types/pipelines";
+import type { PipelineDefinition, ResearchPipelineComparisonResult } from "../../types/pipelines";
 import type { VectorCollection } from "../../types/vector";
 import UiTooltip from "../ui/UiTooltip.vue";
 
@@ -286,15 +283,10 @@ function seconds(value: number | null | undefined) {
 
         <div class="side-grid">
           <section>
-            <h4>
-              {{ result.left.pipeline.name }} · v{{ result.left.pipeline.pipeline_version }}
-            </h4>
+            <h4>{{ result.left.pipeline.name }} · v{{ result.left.pipeline.pipeline_version }}</h4>
             <p>
               {{
-                t(
-                  "pipelines.compare_flow",
-                  "Candidates: pre-rerank → reranked → final evidence",
-                )
+                t("pipelines.compare_flow", "Candidates: pre-rerank → reranked → final evidence")
               }}
               <strong>
                 {{ result.left.candidates.pre_rerank.count }}
@@ -328,10 +320,7 @@ function seconds(value: number | null | undefined) {
             </h4>
             <p>
               {{
-                t(
-                  "pipelines.compare_flow",
-                  "Candidates: pre-rerank → reranked → final evidence",
-                )
+                t("pipelines.compare_flow", "Candidates: pre-rerank → reranked → final evidence")
               }}
               <strong>
                 {{ result.right.candidates.pre_rerank.count }}
@@ -395,7 +384,9 @@ function seconds(value: number | null | undefined) {
               </thead>
               <tbody>
                 <tr v-for="row in result.comparison.rank_changes" :key="row.record_id">
-                  <td><code>{{ row.record_id }}</code></td>
+                  <td>
+                    <code>{{ row.record_id }}</code>
+                  </td>
                   <td>{{ row.left_rank }}</td>
                   <td>{{ row.right_rank }}</td>
                   <td>{{ row.rank_delta > 0 ? `+${row.rank_delta}` : row.rank_delta }}</td>
