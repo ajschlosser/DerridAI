@@ -40,6 +40,14 @@ The branch has now been synchronized with `master` at `db0eeb9daae3d8847fd119299
 
 The next priority remains the repository-wide native-title / disabled-reason audit, followed by Corpus Builder and Record Review.
 
+### Completion update — 2026-09-29
+
+The finishing pass has now covered the shared tooltip contract, major native-title and disabled-reason dependencies, Corpus Builder sizing/source/review surfaces, Record review and attribution semantics, Search, Records, Works, Semantic Map, Operations, Sources, Languages, Users/Roles, System Data, provider selection, Pipeline Studio, and supporting shell controls.
+
+The branch is synchronized with current `master` at `d56ec6596647400c16409724bb4b3ecb76abf983` by merge commit `92e48ea3711da708d8b529393c3b9f5dcee39832`. en-US and fr-CA have exact key parity, and the generated frontend English defaults have been refreshed from the merged locale dictionary.
+
+The implementation is ready for the repository CI gate. Any remaining native `title` uses should be limited to non-help metadata/truncation affordances rather than being the primary way a major workflow communicates a definition, disabled reason, or decision consequence.
+
 ## Files currently changed on the branch
 
 The current branch differs from `master` in these files:
