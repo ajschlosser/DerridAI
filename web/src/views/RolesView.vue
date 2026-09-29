@@ -1,7 +1,7 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { onBeforeRouteLeave, useRouter } from "vue-router";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 import {
   authApi,
   type AuthUser,
@@ -28,11 +28,12 @@ import type { SaveStatus } from "../domain/settings";
 type ConfirmKind = "delete" | "leave" | "switch";
 
 const i18n = useI18nStore();
+const route = useRoute();
 const router = useRouter();
 const roles = ref<RoleDefinition[]>([]);
 const capabilities = ref<CapabilityDefinition[]>([]);
 const users = ref<AuthUser[]>([]);
-const selectedRole = ref<UserRole>("researcher");
+const selectedRole = ref<UserRole>(String(route.query.role || "researcher"));
 const permissions = ref<string[]>([]);
 const loading = ref(true);
 const dataCurrent = ref(false);
@@ -45,7 +46,7 @@ const createOpen = ref(false);
 const roleName = ref("");
 const roleDescription = ref("");
 const cloneFrom = ref<UserRole>("researcher");
-const permissionFilter = ref("");
+const permissionFilter = ref(String(route.query.q || ""));
 const confirm = ref<{ kind: ConfirmKind; title: string; message: string } | null>(null);
 const pendingRole = ref<UserRole>("");
 const routeGuardResolve = ref<((allow: boolean) => void) | null>(null);
@@ -126,13 +127,25 @@ function assignedCountLabel(count: number) {
   return i18n.tf("roles.accounts_many", { count });
 }
 
-function applyRole(id: UserRole) {
+function syncRouteState() {
+  void router.replace({
+    name: "roles",
+    query: {
+      ...route.query,
+      role: selectedRole.value || undefined,
+      q: permissionFilter.value || undefined,
+    },
+  });
+}
+
+function applyRole(id: UserRole, resetFilter = true) {
   selectedRole.value = id;
   permissions.value = expandPermissions(
     roles.value.find((item) => item.id === id)?.permissions || [],
     capabilityIds.value,
   );
-  permissionFilter.value = "";
+  if (resetFilter) permissionFilter.value = "";
+  syncRouteState();
 }
 
 async function refresh(preferred?: string) {
@@ -339,9 +352,20 @@ onBeforeRouteLeave(() => {
   });
 });
 
+watch(permissionFilter, () => syncRouteState());
+watch(
+  () => route.query.role,
+  (value) => {
+    const requested = String(value || "");
+    if (!requested || requested === selectedRole.value || !roles.value.some((item) => item.id === requested))
+      return;
+    requestSelect(requested);
+  },
+);
+
 onMounted(() => {
   window.addEventListener("beforeunload", onBeforeUnload);
-  void refresh();
+  void refresh(String(route.query.role || ""));
 });
 onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload));
 </script>
