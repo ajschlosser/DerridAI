@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
@@ -35,6 +36,7 @@ from .metadata_exemplar_retrieval import (
     _bounded_query_text,
     _distance_similarity,
 )
+from .pipelines.memory import MemoryPipelinePlan, classify_memory_failure
 
 COLLECTION_NAME = "derridai_response_memory"
 PROJECTION = "response_memory"
