@@ -7,6 +7,7 @@ import {
   pipelinePurposeLabel,
 } from "../../domain/pipelinePresentation";
 import type { PipelineAssignment, PipelineDefinition } from "../../types/pipelines";
+import UiTooltip from "../ui/UiTooltip.vue";
 
 const props = defineProps<{
   pipelines: PipelineDefinition[];
@@ -32,7 +33,17 @@ function assigned(pipeline: PipelineDefinition) {
 <template>
   <aside class="pipeline-browser" :aria-label="t('pipelines.definitions', 'Pipeline definitions')">
     <div class="browser-heading">
-      <strong>{{ t("pipelines.definitions", "Pipeline definitions") }}</strong>
+      <strong class="heading-with-help">
+        {{ t("pipelines.definitions", "Pipeline definitions") }}
+        <UiTooltip
+          :text="
+            t(
+              'pipelines.definitions_help',
+              'Each row is one immutable pipeline version. Several rows can share the same pipeline ID because version history is preserved rather than overwritten.',
+            )
+          "
+        />
+      </strong>
       <span :aria-label="t('pipelines.definition_count', 'Pipeline definition count')">
         {{ pipelines.length }}
       </span>
@@ -56,11 +67,27 @@ function assigned(pipeline: PipelineDefinition) {
         <span aria-hidden="true">·</span>
         {{ pipelineDefinitionStatusLabel(pipeline.status, t) }}
       </span>
-      <span v-if="pipeline.built_in" class="choice-badge">
+      <span v-if="pipeline.built_in" class="choice-badge badge-with-help">
         {{ t("pipelines.built_in", "Built in") }}
+        <UiTooltip
+          :text="
+            t(
+              'pipelines.built_in_help',
+              'This definition ships with DerridAI and is owned by the application code. It cannot be overwritten; clone it to create an editable custom version.',
+            )
+          "
+        />
       </span>
-      <span v-if="assigned(pipeline)" class="choice-badge active">
+      <span v-if="assigned(pipeline)" class="choice-badge active badge-with-help">
         {{ t("pipelines.assigned", "Assigned") }}
+        <UiTooltip
+          :text="
+            t(
+              'pipelines.assigned_help',
+              'This exact version is currently selected as the system default for at least one feature.',
+            )
+          "
+        />
       </span>
     </button>
   </aside>
@@ -84,6 +111,12 @@ function assigned(pipeline: PipelineDefinition) {
 .browser-heading span {
   color: var(--muted);
   font-size: 0.78rem;
+}
+.heading-with-help,
+.badge-with-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
 .pipeline-choice {
   position: relative;
