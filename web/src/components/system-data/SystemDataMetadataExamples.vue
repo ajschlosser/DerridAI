@@ -23,6 +23,7 @@ const page = ref<SystemMetadataExemplarPage>({
 });
 const loading = ref(false);
 const error = ref("");
+const requestedOffset = ref(Math.max(0, Number(route.query.offset) || 0));
 const detail = ref<SystemMetadataExemplar | null>(null);
 const filters = ref({
   field: String(route.query.field || ""),
@@ -62,6 +63,7 @@ function syncRoute(offset: number, push = false) {
 }
 
 async function load(offset = 0, updateRoute = true, push = false) {
+  requestedOffset.value = offset;
   if (updateRoute) syncRoute(offset, push);
   loading.value = true;
   error.value = "";
@@ -116,7 +118,7 @@ watch(
       record_id: String(record || ""),
     };
     const offset = Math.max(0, Number(nextOffset) || 0);
-    if (JSON.stringify(next) === JSON.stringify(filters.value) && offset === page.value.offset)
+    if (JSON.stringify(next) === JSON.stringify(filters.value) && offset === requestedOffset.value)
       return;
     filters.value = next;
     detail.value = null;
