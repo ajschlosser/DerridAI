@@ -74,8 +74,13 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
     if (summary.progress !== undefined) patch.progress = summary.progress;
     if (summary.record_count !== undefined) patch.record_count = summary.record_count;
     if (summary.accepted_count !== undefined) patch.accepted_count = summary.accepted_count;
+    if (summary.rejected_count !== undefined) patch.rejected_count = summary.rejected_count;
     if (summary.review_count !== undefined) patch.needs_review_count = summary.review_count;
+    if (summary.review_queue_counts !== undefined)
+      patch.review_queue_counts = { ...summary.review_queue_counts };
     if (summary.metadata_total !== undefined) patch.metadata_total = summary.metadata_total;
+    if (summary.metadata_completed !== undefined)
+      patch.metadata_completed = summary.metadata_completed;
     if (summary.metadata_enriched_count !== undefined)
       patch.metadata_enriched_count = summary.metadata_enriched_count;
     if (summary.metadata_tasks_total !== undefined)
