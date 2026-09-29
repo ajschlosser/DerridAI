@@ -183,7 +183,7 @@ def _operation_from_build(build: dict[str, Any]) -> dict[str, Any]:
         "finished_at": build.get("finished_at"),
         "cancel_requested": bool(build.get("cancel_requested")),
         "fatal_error": build.get("error"),
-        "href": f"/pdf?mode=builder&build={build.get('build_id')}",
+        "href": f"/corpus-builder?build={build.get('build_id')}",
     }
 
 

@@ -104,11 +104,12 @@ async function mountView(role: "admin" | "researcher", query: Record<string, str
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: "/settings", name: "config", component: SettingsView },
+      { path: "/settings/:section", name: "settings-section", component: SettingsView },
       { path: "/", name: "home", component: { template: "<div>home</div>" } },
     ],
   });
-  await router.push({ path: "/settings", query });
+  const { section = "workspace", ...restQuery } = query;
+  await router.push({ name: "settings-section", params: { section }, query: restQuery });
   await router.isReady();
   const wrapper = mount(
     { template: "<RouterView />" },
@@ -263,6 +264,6 @@ describe("SettingsView", () => {
     cancel?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await pending.catch(() => undefined);
     await flushPromises();
-    expect(router.currentRoute.value.path).toBe("/settings");
+    expect(router.currentRoute.value.path).toBe("/settings/workspace");
   });
 });

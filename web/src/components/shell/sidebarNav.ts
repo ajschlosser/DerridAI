@@ -6,3 +6,9 @@ export interface SidebarNavEntry {
   active: boolean;
   disabledReason?: string;
 }
+
+export interface SidebarNavGroup {
+  id?: string;
+  section: string;
+  items: SidebarNavEntry[];
+}
