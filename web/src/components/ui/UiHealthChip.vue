@@ -1,5 +1,7 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
+import UiTooltip from "./UiTooltip.vue";
+
 withDefaults(
   defineProps<{
     available?: boolean;
@@ -10,10 +12,21 @@ withDefaults(
 );
 </script>
 <template>
-  <span class="ui-health-chip" :data-available="available ? 'true' : 'false'" :title="detail">
+  <UiTooltip
+    v-if="detail"
+    :text="detail"
+    :label="`${label}: ${detail}`"
+    placement="bottom"
+    trigger-mode="content"
+  >
+    <span class="ui-health-chip" :data-available="available ? 'true' : 'false'">
+      <span class="ui-health-dot" aria-hidden="true"></span>
+      <span>{{ label }}</span>
+    </span>
+  </UiTooltip>
+  <span v-else class="ui-health-chip" :data-available="available ? 'true' : 'false'">
     <span class="ui-health-dot" aria-hidden="true"></span>
     <span>{{ label }}</span>
-    <span v-if="detail" class="sr-only"> — {{ detail }}</span>
   </span>
 </template>
 <style scoped>
