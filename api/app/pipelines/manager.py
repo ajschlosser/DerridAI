@@ -13,6 +13,7 @@ from .defaults import (
     built_in_pipeline,
 )
 from .evidence import compile_evidence_pipeline
+from .memory import compile_memory_pipeline
 from .metadata_precedents import compile_metadata_precedent_pipeline
 from .models import PipelineAssignment, PipelineDefinition
 from .research import compile_research_pipeline
@@ -210,21 +211,10 @@ class PipelineManager:
             compile_evidence_pipeline(pipeline)
         elif assignment.feature == "metadata_precedents":
             compile_metadata_precedent_pipeline(pipeline)
-        elif assignment.feature not in {
-            "claim_memory",
-            "response_memory",
-        }:
-            raise ValueError(f"Pipeline feature {assignment.feature!r} is not supported.")
+        elif assignment.feature in {"claim_memory", "response_memory"}:
+            compile_memory_pipeline(pipeline)
         else:
-            current = built_in_assignment(assignment.feature)
-            if current is None or (
-                assignment.pipeline_id,
-                assignment.pipeline_version,
-            ) != (current.pipeline_id, current.pipeline_version):
-                raise ValueError(
-                    f"Custom {assignment.feature!r} execution is not wired yet; "
-                    "the current built-in assignment remains authoritative."
-                )
+            raise ValueError(f"Pipeline feature {assignment.feature!r} is not supported.")
 
         normalized = assignment.model_copy(update={"source": actor_source})
         return self.store.put_assignment(
@@ -266,24 +256,13 @@ class PipelineManager:
             if pipeline.purpose == "metadata_precedents":
                 compile_metadata_precedent_pipeline(pipeline)
                 return {"supported": True, "adapter": "metadata_precedents"}
-            current_features = {
-                "claim_memory": "claim_memory",
-                "response_memory": "response_memory",
-            }
-            feature = current_features.get(pipeline.purpose)
-            assignment = built_in_assignment(feature) if feature else None
-            if assignment and (
-                pipeline.pipeline_id,
-                pipeline.version,
-            ) == (assignment.pipeline_id, assignment.pipeline_version):
+            if pipeline.purpose in {"claim_memory", "response_memory"}:
+                compile_memory_pipeline(pipeline)
                 return {"supported": True, "adapter": pipeline.purpose}
             return {
                 "supported": False,
                 "adapter": None,
-                "reason": (
-                    "This purpose is inspectable but custom execution has not "
-                    "yet been migrated to a configurable adapter."
-                ),
+                "reason": "This pipeline purpose does not have a runtime adapter.",
             }
         except ValueError as exc:
             return {"supported": False, "adapter": None, "reason": str(exc)}
