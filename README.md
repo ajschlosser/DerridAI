@@ -2,6 +2,8 @@
 
 # DerridAI
 
+![DerridAI logo](https://repository-images.githubusercontent.com/1336867942/1ef2d928-ee57-480e-addb-5caf6acc1754)
+
 DerridAI is a local-first Docker application for building, auditing, and querying scholarly corpora of philosophical texts. It ingests PDF, text/RTF/DOCX, image, audio, URL, and Project Gutenberg sources into provenance-preserving scholarly records; supports human/LLM review and evidence-bound metadata enrichment; builds derived ChromaDB search projections; and runs an evidence-grounded retrieval-augmented generation (RAG) pipeline over the result.
 
 Current version: **0.80.7 — Exeter** ([release notes](docs/notes/0.80.7.md)).
