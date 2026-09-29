@@ -71,7 +71,7 @@ function build(id = "build-1") {
   } as any;
 }
 
-function setup(requestedBuildId = "") {
+function setup(requestedBuildId = "", documentMetadata: Record<string, string> = {}) {
   const builds = ref<any[]>([]);
   const buildsTotal = ref(0);
   const selectedBuildId = ref("");
@@ -119,6 +119,7 @@ function setup(requestedBuildId = "") {
     metadataIssueCount,
     requestedBuildId: () => requestedBuildId,
     runGuidancePayload: () => ({ speaker: "Derrida" }),
+    documentMetadataPayload: () => documentMetadata,
     applyBuildRequest,
     setMessage,
     resetReviewForBuildStart,
@@ -195,6 +196,19 @@ describe("Corpus Builder lifecycle controller", () => {
     expect(runtime.registerExternalJob).toHaveBeenCalledTimes(1);
     expect(state.setMessage).toHaveBeenCalledWith("pdf_corpus.build_started");
 
+    state.controller.stopPolling();
+  });
+
+  it("sends reviewer-supplied document fields only when there are any", async () => {
+    corpusBuilderApi.createBuild.mockResolvedValue(build("build-new"));
+    corpusBuilderApi.listBuilds.mockResolvedValue({ items: [build("build-new")], total: 1 });
+    const state = setup("", { document_author: "Jacques Derrida" });
+
+    await state.controller.startBuild();
+
+    expect(corpusBuilderApi.createBuild).toHaveBeenCalledWith(
+      expect.objectContaining({ document_metadata: { document_author: "Jacques Derrida" } }),
+    );
     state.controller.stopPolling();
   });
 

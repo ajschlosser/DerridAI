@@ -724,12 +724,16 @@ def _apply_manifest_metadata(record: dict[str, Any], manifest: dict[str, Any]) -
         if isinstance(manifest.get("deterministic_ingest"), dict) else None
     ) or {}
 
+    reviewer_supplied = manifest.get("reviewer_supplied") if isinstance(manifest.get("reviewer_supplied"), dict) else {}
+
     def origin_note(key: str | None, value: Any) -> str:
         """Say where an inherited value first came from when a tagger or pattern proposed it.
 
         Only while the manifest still holds the value the ingest proposed: a value a reviewer
         edited is theirs and carries no automatic origin.
         """
+        if key and key in reviewer_supplied and str(reviewer_supplied[key]) == str(value):
+            return " Origin: supplied by the reviewer before segmentation because it was not detected in the source."
         info = applied_at_ingest.get(key or "") if key else None
         if not isinstance(info, dict) or str(info.get("value")) != str(value):
             return ""

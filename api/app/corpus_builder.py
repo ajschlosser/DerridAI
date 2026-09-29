@@ -2863,6 +2863,11 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             if isinstance(request.get("work_metadata"), dict) and request["work_metadata"]:
                 # Reviewer-supplied, work-wide values travel with the manifest, so they survive resume and edits.
                 manifest = {**manifest, "work_metadata": dict(request["work_metadata"])}
+            supplied = request.get("document_metadata")
+            if isinstance(supplied, dict) and supplied:
+                # Supplied because detection on source load could not find them: the reviewer's values outrank
+                # model and catalog inference, and are recorded so inherited assertions can say where they came from.
+                manifest = {**manifest, **supplied, "reviewer_supplied": dict(supplied)}
             self.repo.save_checkpoint(build_id, "manifest", manifest)
         current_manifest_revision = int(self.repo.get_build(build_id).get("manifest_revision") or 1)
         self._update(build_id, stage="document_review", progress=max(float(build.get("progress") or 0), 0.12), manifest=manifest, manifest_revision=current_manifest_revision)
