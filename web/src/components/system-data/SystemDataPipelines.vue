@@ -676,7 +676,7 @@ onMounted(load);
 .choice-top small,
 .choice-meta {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
 }
 .choice-badge {
   justify-self: start;
@@ -685,7 +685,7 @@ onMounted(load);
   border: 1px solid var(--line);
   border-radius: 999px;
   color: var(--muted);
-  font-size: 0.66rem;
+  font-size: 0.75rem;
   font-weight: 750;
 }
 .choice-badge.active {
@@ -699,7 +699,7 @@ onMounted(load);
 .detail-kicker {
   margin-bottom: 3px;
   color: var(--muted);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -738,7 +738,7 @@ onMounted(load);
 }
 .health-strip span {
   color: var(--muted);
-  font-size: 0.68rem;
+  font-size: 0.75rem;
 }
 .health-strip strong {
   font-size: 0.78rem;
@@ -782,7 +782,7 @@ onMounted(load);
 }
 .assignment-footer span {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
 }
 .editor-card,
 .trace-workspace {
@@ -848,11 +848,11 @@ onMounted(load);
   text-align: right;
 }
 .run-list strong {
-  font-size: 0.73rem;
+  font-size: 0.75rem;
 }
 .run-list small {
   color: var(--muted);
-  font-size: 0.66rem;
+  font-size: 0.75rem;
 }
 .empty-state {
   display: flex;
