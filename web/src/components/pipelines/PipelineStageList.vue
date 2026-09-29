@@ -2,6 +2,10 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import AppIcon from "../AppIcon.vue";
+import {
+  pipelineEdgeKindLabel,
+  pipelineStageFamilyLabel,
+} from "../../domain/pipelinePresentation";
 import { useI18nStore } from "../../stores/i18n";
 import type { PipelineDefinition, PipelineStage, PipelineStrategy } from "../../types/pipelines";
 
@@ -52,7 +56,7 @@ function compactConfig(config: Record<string, unknown>) {
             <code>{{ stage.id }}</code>
           </div>
           <div class="stage-badges">
-            <span class="badge">{{ strategy(stage)?.family || "unknown" }}</span>
+            <span class="badge">{{ pipelineStageFamilyLabel(strategy(stage)?.family, t) }}</span>
             <span v-if="strategy(stage)?.invokes_llm" class="badge">
               <AppIcon name="spark" />
               {{ t("pipelines.llm", "LLM") }}
@@ -68,7 +72,7 @@ function compactConfig(config: Record<string, unknown>) {
         </p>
         <div v-if="outgoing(stage).length" class="stage-edges">
           <span v-for="edge in outgoing(stage)" :key="`${edge.kind}:${edge.target}`">
-            {{ edge.kind === "next" ? t("pipelines.then", "then") : edge.kind }}
+            {{ pipelineEdgeKindLabel(edge.kind, t) }}
             <code>{{ edge.target }}</code>
           </span>
         </div>
