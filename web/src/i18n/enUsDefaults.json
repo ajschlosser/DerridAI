@@ -6895,6 +6895,8 @@
   "pipelines.config.lexical_weight.help": "How strongly the combined precedent score should depend on lexical similarity: overlap in words or phrases. Semantic and word-match weights are treated as relative weights and normalized together.",
   "pipelines.config.min_score.label": "Minimum support score",
   "pipelines.config.min_score.help": "The lowest support score a candidate may have and still pass this validation stage.",
+  "pipelines.config.min_similarity.label": "Minimum similarity",
+  "pipelines.config.min_similarity.help": "Technical name: min_similarity. Candidates below this semantic-similarity threshold are not allowed through the retrieval stage. Raising it makes memory more selective; lowering it admits looser analogies.",
   "pipelines.config.generic_help": "This is a server-declared technical setting for the selected strategy. Changing it changes how this stage behaves; validation checks its allowed type and range before the pipeline can be used.",
   "pipelines.data_type.query_help": "A research question or search expression before candidate passages have been retrieved.",
   "pipelines.data_type.candidate_set_help": "A working list of possible records or passages. Later stages can reorder, filter, validate, or reduce this list.",
