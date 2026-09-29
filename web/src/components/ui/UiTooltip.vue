@@ -114,8 +114,8 @@ onBeforeUnmount(hide);
       :aria-label="label || undefined"
       :aria-describedby="id"
       :aria-expanded="open ? 'true' : undefined"
-      @focusin="show"
-      @focusout="hide"
+      @focus.capture="show"
+      @blur.capture="hide"
       @click="toggle"
     >
       <slot />
