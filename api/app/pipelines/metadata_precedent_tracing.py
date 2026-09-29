@@ -46,10 +46,13 @@ def build_metadata_precedent_trace(
 
     fallback_reason = str(telemetry.get("fallback_reason") or "")
     fallback_kind = str(telemetry.get("fallback_kind") or "")
-    retrieval_fell_back = bool(fallback_reason and telemetry.get("fallback_mode") == "lexical")
+    retrieval_failed = bool(fallback_reason)
+    retrieval_fell_back = bool(
+        fallback_reason and telemetry.get("fallback_mode") == "lexical"
+    )
 
     retrieve_status = "completed"
-    if retrieval_fell_back:
+    if retrieval_failed:
         retrieve_status = {
             "timeout": "timed_out",
             "unavailable": "unavailable",
@@ -93,8 +96,8 @@ def build_metadata_precedent_trace(
         )
     )
 
-    if retrieval_fell_back:
-        if plan.lexical_fallback_stage_id is not None:
+    if retrieval_failed:
+        if retrieval_fell_back and plan.lexical_fallback_stage_id is not None:
             fallback = by_id[plan.lexical_fallback_stage_id]
             stages.append(
                 trace_stage(
@@ -129,7 +132,11 @@ def build_metadata_precedent_trace(
                 trace_stage(
                     stage.id,
                     stage.strategy,
-                    fallback_reason="semantic retrieval used lexical fallback path",
+                    fallback_reason=(
+                        "semantic retrieval used lexical fallback path"
+                        if retrieval_fell_back
+                        else "semantic retrieval failed and no fallback path was configured"
+                    ),
                     status="skipped",
                 )
             )
