@@ -57,13 +57,12 @@ Voir [SPECIFICATION.md](SPECIFICATION.md) pour la spécification normative cELF 
 
 ### Services d’exécution
 
-| Service | Pile | Rôle |
-| --- | --- | --- |
-| `web` | Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js, nginx | Application navigateur; proxifie `/api/`; consomme REST, GraphQL et les notifications temps réel. Storybook est un profil de développement facultatif. |
-| `api` | Python 3.12, FastAPI, Strawberry GraphQL, client ChromaDB, PyMuPDF, sentence-transformers, spaCy | Frontière applicative faisant autorité pour auth, opérations source/corpus, lectures cELF, provenance, RAG, pipelines, jobs et état système. |
-| `document-nlp` | worker BookNLP | Amélioration facultative et isolée de Document Intelligence en anglais. Reçoit du texte révisé borné et n’a aucune autorité sur le corpus. |
-| `chroma` | serveur Chroma | Profil HTTP facultatif. `PersistentClient` embarqué reste le mode par défaut; les deux modes stockent des projections de recherche/vectorielles dérivées. |
-| `ollama` | Ollama | Profil local facultatif. DerridAI peut aussi utiliser Ollama sur l’hôte ou tout endpoint compatible OpenAI configuré. |
+
+- `web` — Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js et nginx. C’est l’application navigateur; elle proxifie `/api/` et consomme REST, GraphQL et les notifications temps réel. Storybook est un profil de développement facultatif.
+- `api` — Python 3.12, FastAPI, Strawberry GraphQL, le client ChromaDB, PyMuPDF, sentence-transformers et spaCy. C’est la frontière applicative faisant autorité pour l’authentification, les opérations source/corpus, les lectures cELF, la provenance, RAG, les pipelines, les jobs et l’état système.
+- `document-nlp` — worker BookNLP facultatif et isolé pour Document Intelligence en anglais. Il reçoit du texte révisé borné et n’a aucune autorité sur le corpus.
+- `chroma` — serveur HTTP Chroma facultatif. `PersistentClient` embarqué reste le mode par défaut; les deux modes stockent des projections de recherche/vectorielles dérivées.
+- `ollama` — service Ollama local facultatif. DerridAI peut aussi utiliser Ollama déjà actif sur l’hôte ou tout endpoint compatible OpenAI configuré.
 
 La pile Compose par défaut démarre `web` et `api`; les autres services sont des profils facultatifs ou des fournisseurs externes.
 
