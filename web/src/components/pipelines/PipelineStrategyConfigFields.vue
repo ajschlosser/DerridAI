@@ -1,10 +1,7 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { computed } from "vue";
-import {
-  pipelineConfigHelp,
-  pipelineConfigLabel,
-} from "../../domain/pipelinePresentation";
+import { pipelineConfigHelp, pipelineConfigLabel } from "../../domain/pipelinePresentation";
 import { useI18nStore } from "../../stores/i18n";
 import UiTooltip from "../ui/UiTooltip.vue";
 import type { PipelineStage, PipelineStrategy } from "../../types/pipelines";
