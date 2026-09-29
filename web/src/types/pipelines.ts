@@ -139,7 +139,6 @@ export type PipelineValidationResponse = {
   runtime_error?: string | null;
 };
 
-
 export type PipelineFeatureMetrics = {
   feature: string;
   run_count: number;
