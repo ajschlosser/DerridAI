@@ -38,7 +38,11 @@ def resolve_research_pipeline(
         raise ValueError(f"Research pipeline {requested_id}{suffix} was not found.")
 
     compile_research_pipeline(selected)
+    if selected.status == "disabled":
+        raise ValueError("Disabled Research pipelines cannot execute.")
     if is_admin:
+        # Administrators may explicitly test draft versions, but "disabled"
+        # remains an execution stop rather than a UI-only label.
         return selected
 
     same_as_assignment = (
