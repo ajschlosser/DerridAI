@@ -298,7 +298,14 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
                 "id": "retrieve",
                 "strategy": "retrieve.metadata_exemplars",
                 "config": {"fetch_k": 16},
+                "on_unavailable": "lexical_fallback",
+                "on_timeout": "lexical_fallback",
+                "on_error": "lexical_fallback",
                 "next": ["scope"],
+            },
+            {
+                "id": "lexical_fallback",
+                "strategy": "fallback.metadata_precedents_lexical",
             },
             {
                 "id": "scope",

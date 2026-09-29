@@ -23,6 +23,7 @@ class MetadataPrecedentPipelinePlan:
     quotas_stage_id: str
     mmr_stage_id: str
     pack_stage_id: str
+    lexical_fallback_stage_id: str | None = None
     rerank_stage_id: str | None = None
     fetch_k: int | None = None
     semantic_weight: float = 0.8
@@ -87,6 +88,7 @@ def compile_metadata_precedent_pipeline(
         "select.metadata_quotas",
         "select.mmr",
         "pack.metadata_precedents",
+        "fallback.metadata_precedents_lexical",
     }
     enabled = [stage for stage in pipeline.stages if stage.enabled]
     unsupported = sorted({stage.strategy for stage in enabled} - supported)
@@ -104,6 +106,10 @@ def compile_metadata_precedent_pipeline(
     quotas = _one(by_strategy, "select.metadata_quotas", required=True)
     mmr = _one(by_strategy, "select.mmr", required=True)
     pack = _one(by_strategy, "pack.metadata_precedents", required=True)
+    lexical_fallback = _one(
+        by_strategy,
+        "fallback.metadata_precedents_lexical",
+    )
     assert retrieve is not None
     assert scope is not None
     assert hybrid is not None
@@ -115,6 +121,29 @@ def compile_metadata_precedent_pipeline(
         raise ValueError(
             "Metadata-precedent retrieval stage must be the sole pipeline entry."
         )
+
+    fallback_targets = {
+        edge: getattr(retrieve, edge)
+        for edge in ("on_unavailable", "on_timeout", "on_error")
+    }
+    configured_fallbacks = {target for target in fallback_targets.values() if target}
+    if lexical_fallback is None:
+        if configured_fallbacks:
+            raise ValueError(
+                "Metadata retrieval defines fallback edges but has no registered "
+                "lexical fallback stage."
+            )
+    else:
+        if configured_fallbacks != {lexical_fallback.id}:
+            raise ValueError(
+                "Metadata retrieval unavailable/timeout/error fallbacks must all "
+                "target the explicit lexical fallback stage."
+            )
+        if lexical_fallback.edge_targets():
+            raise ValueError(
+                "Metadata lexical fallback is terminal because it returns the "
+                "already bounded precedent packet."
+            )
 
     _require_next(retrieve, scope.id)
     _require_next(scope, hybrid.id)
@@ -157,6 +186,9 @@ def compile_metadata_precedent_pipeline(
         quotas_stage_id=quotas.id,
         mmr_stage_id=mmr.id,
         pack_stage_id=pack.id,
+        lexical_fallback_stage_id=(
+            lexical_fallback.id if lexical_fallback is not None else None
+        ),
         fetch_k=(
             int(retrieve.config["fetch_k"])
             if "fetch_k" in retrieve.config
