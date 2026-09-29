@@ -3,7 +3,11 @@
 import { computed } from "vue";
 import PipelineStageConnections from "./PipelineStageConnections.vue";
 import PipelineStrategyConfigFields from "./PipelineStrategyConfigFields.vue";
-import { pipelineStageFamilyLabel } from "../../domain/pipelinePresentation";
+import {
+  pipelineStageFamilyLabel,
+  pipelineStrategyDescription,
+  pipelineStrategyLabel,
+} from "../../domain/pipelinePresentation";
 import { useI18nStore } from "../../stores/i18n";
 import type { PipelineStage, PipelineStrategy } from "../../types/pipelines";
 
@@ -50,7 +54,9 @@ const strategiesByFamily = computed(() => {
   }
   return [...groups.entries()].map(([family, strategies]) => ({
     family,
-    strategies: [...strategies].sort((a, b) => a.label.localeCompare(b.label)),
+    strategies: [...strategies].sort((a, b) =>
+      pipelineStrategyLabel(a, t).localeCompare(pipelineStrategyLabel(b, t), i18n.locale),
+    ),
   }));
 });
 </script>
@@ -81,7 +87,7 @@ const strategiesByFamily = computed(() => {
                 :key="option.strategy_id"
                 :value="option.strategy_id"
               >
-                {{ option.label }}
+                {{ pipelineStrategyLabel(option, t) }}
               </option>
             </optgroup>
           </select>
@@ -137,10 +143,10 @@ const strategiesByFamily = computed(() => {
 
     <div class="strategy-summary">
       <div>
-        <strong>{{ strategy?.label || stage.strategy }}</strong>
+        <strong>{{ strategy ? pipelineStrategyLabel(strategy, t) : stage.strategy }}</strong>
         <span>{{ pipelineStageFamilyLabel(strategy?.family, t) }}</span>
       </div>
-      <p v-if="strategy?.description">{{ strategy.description }}</p>
+      <p v-if="strategy">{{ pipelineStrategyDescription(strategy, t) }}</p>
       <small v-if="strategy">
         {{ strategy.input_type }}
         <span aria-hidden="true">→</span>
