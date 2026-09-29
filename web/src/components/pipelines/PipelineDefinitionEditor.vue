@@ -525,7 +525,7 @@ function updateConfig(
 .config-grid label > span,
 .notes-field > span {
   color: var(--muted);
-  font-size: 0.74rem;
+  font-size: 0.75rem;
   font-weight: 750;
 }
 .identity-name {
@@ -587,7 +587,7 @@ function updateConfig(
 .fallback-grid label > span,
 .edge-label {
   color: var(--muted);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 750;
 }
 .stage-toolbar {
@@ -606,7 +606,7 @@ function updateConfig(
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--card);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 .stage-toggle input {
@@ -634,13 +634,13 @@ function updateConfig(
   color: var(--muted);
 }
 .strategy-summary > div span {
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 .strategy-summary p,
 .strategy-summary small {
   margin: 0;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   line-height: 1.4;
 }
 .edge-editor {
@@ -653,7 +653,7 @@ function updateConfig(
 .edge-editor legend {
   padding: 0 5px;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 800;
 }
 .edge-grid {
@@ -679,14 +679,14 @@ function updateConfig(
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--soft);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
 }
 .edge-target-list code {
   overflow-wrap: anywhere;
 }
 .edge-target-list small {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
 }
 .fallback-grid {
   display: grid;
@@ -703,11 +703,11 @@ function updateConfig(
 .stage-settings-heading code {
   margin-top: 2px;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
 }
 .stage-settings-heading > span {
   color: var(--muted);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 .no-config {
