@@ -6980,7 +6980,7 @@
   "pipelines.benchmark_persistence": "Benchmark results are stored separately from Research jobs and operational pipeline traces.",
   "pipelines.benchmark_saved": "Saved benchmark",
   "pipelines.benchmark_pipeline_hashes": "Pipeline hashes",
-  "pipelines.benchmark_index_revision": "Index revision",
+  "pipelines.benchmark_index_revision": "Corpus/index fingerprint",
   "pipelines.active_assignment": "Active assignment",
   "pipelines.add_stage": "Add stage",
   "pipelines.connections": "Connections",
