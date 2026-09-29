@@ -4,21 +4,23 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
 
 // The runtime's bootstrap (IndexedDB restore, provider fetch, health, jobs) can take seconds.
-// The sidebar must be complete from the moment a user signs in, not after that finishes.
+// Navigation must be complete from the moment a user signs in, not after that finishes.
 const NAV = [
   ["home", "Home", "Overview"],
-  ["global", "Search", "Corpus"],
-  ["works", "Works", "Corpus"],
-  ["record", "Record View", "Corpus"],
+  ["global", "Search", "Research"],
   ["rag", "Research", "Research"],
-  ["annotations", "Annotations", "Corpus"],
-  ["config", "Settings", "System"],
-  ["list", "Records", "Corpus"],
-  ["pdf", "Corpus Builder", "Tools"],
-  ["compare", "Compare", "Tools"],
-  ["vector", "Corpus Data", "Tools"],
   ["faq", "Response Library", "Research"],
+  ["works", "Works", "Corpora"],
+  ["list", "Records", "Corpora"],
+  ["record", "Record View", "Corpora"],
+  ["annotations", "Annotations", "Corpora"],
+  ["compare", "Compare", "Corpora"],
+  ["vector", "Corpus Data", "Corpora"],
+  ["pdf", "Corpus Builder", "Build"],
+  ["responsecache", "System Data", "System"],
   ["providers", "LLM Providers", "System"],
+  ["schemas", "Metadata schemas", "System"],
+  ["config", "Settings", "System"],
 ].map(([id, label, section]) => ({ id, label, icon: "record", section }));
 
 const runtime = vi.hoisted(() => ({
@@ -29,8 +31,10 @@ const runtime = vi.hoisted(() => ({
   setShellRefreshHook: vi.fn(),
   setUrlSyncHook: vi.fn(),
   pauseRuntime: vi.fn(),
-  triggerOperations: vi.fn(),
   navigateView: vi.fn(),
+  triggerBack: vi.fn(),
+  triggerForward: vi.fn(),
+  toggleSidebar: vi.fn(),
   state: {},
 }));
 vi.mock("../../src/runtime/runtime.js", () => ({
@@ -47,6 +51,53 @@ import { useAuthStore } from "../../src/stores/auth";
 import { useI18nStore } from "../../src/stores/i18n";
 import { useShellStore } from "../../src/stores/shell";
 
+function testRouter() {
+  const page = { template: "<div/>" };
+  return createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      {
+        path: "/",
+        name: "home",
+        component: page,
+        meta: {
+          navId: "home",
+          navSection: "Overview",
+          titleKey: "nav.home",
+          titleFallback: "Home",
+        },
+      },
+      {
+        path: "/system-data/overview",
+        name: "system-data-overview",
+        component: page,
+        meta: {
+          navId: "responsecache",
+          navSection: "System",
+          titleKey: "runtime.system_overview",
+          titleFallback: "Overview",
+          breadcrumbParentKey: "runtime.system_data",
+          breadcrumbParentFallback: "System Data",
+        },
+      },
+      {
+        path: "/system-data/pipelines",
+        name: "system-data-pipelines",
+        component: page,
+        meta: {
+          navId: "responsecache",
+          navSection: "System",
+          titleKey: "pipelines.title",
+          titleFallback: "Pipeline Studio",
+          breadcrumbParentKey: "runtime.system_data",
+          breadcrumbParentFallback: "System Data",
+        },
+      },
+      { path: "/:rest(.*)*", component: page },
+    ],
+  });
+}
+
 async function signIn(role: "admin" | "researcher" = "admin") {
   const pinia = createPinia();
   setActivePinia(pinia);
@@ -54,10 +105,7 @@ async function signIn(role: "admin" | "researcher" = "admin") {
   const i18n = useI18nStore();
   i18n.languages = [{ code: "en-US", name: "English", flag: "🇺🇸" }] as never;
   auth.initialized = true;
-  const router = createRouter({
-    history: createMemoryHistory(),
-    routes: [{ path: "/:rest(.*)*", component: { template: "<div/>" } }],
-  });
+  const router = testRouter();
   await router.push("/");
   await router.isReady();
   const wrapper = mount(App, { global: { plugins: [pinia, router], stubs: { RouterView: true } } });
@@ -68,13 +116,12 @@ async function signIn(role: "admin" | "researcher" = "admin") {
     capabilities: role === "admin" ? [] : ["page.research", "page.search"],
   } as never;
   await flushPromises();
-  return { wrapper, auth, shell: useShellStore() };
+  return { wrapper, auth, shell: useShellStore(), router };
 }
 
-const sidebarLabels = (wrapper: ReturnType<typeof mount>) => ({
-  primary: wrapper.findAll(".shell-primary-nav button").map((b) => b.text()),
-  more: wrapper.findAll(".shell-more-tools-list button").map((b) => b.text()),
-});
+const pageButtons = (wrapper: ReturnType<typeof mount>) =>
+  wrapper.findAll(".shell-nav-row .nav-tooltip-wrap > button");
+const pageLabels = (wrapper: ReturnType<typeof mount>) => pageButtons(wrapper).map((b) => b.text());
 
 describe("sidebar at sign-in", () => {
   beforeEach(() => {
@@ -85,35 +132,43 @@ describe("sidebar at sign-in", () => {
     runtime.bootstrapRuntime.mockReturnValue(new Promise(() => {})); // never finishes
   });
 
-  it("is complete before the runtime bootstrap finishes, with no Operations click", async () => {
+  it("is complete and intent-grouped before the runtime bootstrap finishes", async () => {
     const { wrapper, shell } = await signIn();
 
     expect(runtime.bootstrapRuntime).toHaveBeenCalled();
     expect(shell.ready).toBe(false);
-    const { primary, more } = sidebarLabels(wrapper);
-    expect(primary).toContain("Home");
-    expect(primary).toContain("Research");
-    expect(more).toEqual(
+    const labels = pageLabels(wrapper);
+    expect(labels).toEqual(
       expect.arrayContaining([
+        "Home",
+        "Search",
+        "Research",
+        "Works",
         "Records",
-        "Corpus Builder",
         "Compare",
         "Corpus Data",
-        "Response Library",
+        "Corpus Builder",
+        "System Data",
         "LLM Providers",
-      ]),
-    );
-    expect(more).toEqual(
-      expect.arrayContaining([
+        "Settings",
         "Users & roles",
         "Roles & permissions",
         "Manage languages",
         "Metadata memory",
+        "Operations",
       ]),
+    );
+    expect(labels).not.toContain("Record View");
+
+    const headings = wrapper.findAll(".shell-nav-section h2").map((node) => node.text());
+    expect(headings).toEqual(expect.arrayContaining(["Research", "Corpora", "Build", "System"]));
+    const compare = pageButtons(wrapper).find((button) => button.text() === "Compare");
+    expect(compare?.element.closest(".shell-nav-section")?.querySelector("h2")?.textContent).toBe(
+      "Corpora",
     );
   });
 
-  it("forgets the menu on sign-out so the next user never sees a stale or partial one", async () => {
+  it("forgets the menu on sign-out so the next user never sees stale navigation", async () => {
     const { auth, shell } = await signIn();
     expect(shell.navReady).toBe(true);
     auth.user = null;
@@ -129,59 +184,86 @@ describe("sidebar at sign-in", () => {
     useI18nStore().languages = [{ code: "en-US", name: "English", flag: "🇺🇸" }] as never;
     auth.initialized = true;
     auth.user = { id: 1, username: "u", role: "admin", capabilities: [] } as never;
-    const router = createRouter({
-      history: createMemoryHistory(),
-      routes: [{ path: "/:rest(.*)*", component: { template: "<div/>" } }],
-    });
+    const router = testRouter();
     await router.push("/");
     await router.isReady();
     const wrapper = mount(App, {
       global: { plugins: [pinia, router], stubs: { RouterView: true } },
     });
     await flushPromises();
-    expect(sidebarLabels(wrapper).more).toContain("Corpus Builder");
+    expect(pageLabels(wrapper)).toContain("Corpus Builder");
     expect(runtime.bootstrapRuntime).toHaveBeenCalled();
   });
 
-  it("opens More tools by default for administrators", async () => {
-    const { wrapper } = await signIn("admin");
-    expect((wrapper.get(".shell-more-tools").element as HTMLDetailsElement).open).toBe(true);
-  });
+  it("renders route-aware clickable breadcrumbs for nested workspaces", async () => {
+    const { wrapper, router } = await signIn("admin");
+    await router.push("/system-data/pipelines");
+    await flushPromises();
 
-  it("remembers a user's choice to close More tools", async () => {
-    const first = await signIn("admin");
-    const details = first.wrapper.get(".shell-more-tools").element as HTMLDetailsElement;
-    details.open = false;
-    await first.wrapper.get(".shell-more-tools").trigger("toggle");
-    expect(localStorage.getItem("derridai.ui.moreToolsOpen")).toBe("0");
+    const crumbs = wrapper.find(".vue-breadcrumb-path");
+    expect(crumbs.text()).toContain("DerridAI");
+    expect(crumbs.text()).toContain("System");
+    expect(crumbs.text()).toContain("System Data");
+    expect(crumbs.text()).toContain("Pipeline Studio");
 
-    const second = await signIn("admin");
-    expect((second.wrapper.get(".shell-more-tools").element as HTMLDetailsElement).open).toBe(
-      false,
+    const links = crumbs.findAll("a").map((link) => ({
+      text: link.text(),
+      href: link.attributes("href"),
+    }));
+    expect(links).toEqual(
+      expect.arrayContaining([
+        { text: "DerridAI", href: "/" },
+        { text: "System", href: "/system-data/overview" },
+        { text: "System Data", href: "/system-data/overview" },
+      ]),
+    );
+    expect(pageButtons(wrapper).find((button) => button.text() === "System Data")?.attributes("aria-current")).toBe(
+      "page",
     );
   });
 
-  it("does not store a preference when the menu opens by default", async () => {
-    await signIn("admin");
-    expect(localStorage.getItem("derridai.ui.moreToolsOpen")).toBeNull();
+  it("filters navigation without hiding its information architecture", async () => {
+    const { wrapper } = await signIn("admin");
+    const input = wrapper.get(".shell-nav-search input");
+    await input.setValue("compare");
+
+    expect(pageLabels(wrapper)).toContain("Compare");
+    expect(pageLabels(wrapper)).not.toContain("Corpus Builder");
+    expect(wrapper.findAll(".shell-nav-section h2").map((node) => node.text())).toContain("Corpora");
   });
 
-  it("marks the active nav item for assistive tech and gives every item an accessible name", async () => {
+  it("persists favorites and recent destinations as optional navigation shortcuts", async () => {
+    const { wrapper } = await signIn("admin");
+    const compareRow = wrapper
+      .findAll(".shell-nav-row")
+      .find((row) => row.find(".nav-tooltip-wrap > button").text() === "Compare");
+    expect(compareRow).toBeTruthy();
+
+    await compareRow!.get(".shell-nav-favorite").trigger("click");
+    expect(JSON.parse(localStorage.getItem("derridai.ui.navigationFavorites") || "[]")).toContain(
+      "compare",
+    );
+
+    await compareRow!.get(".nav-tooltip-wrap > button").trigger("click");
+    expect(JSON.parse(localStorage.getItem("derridai.ui.navigationRecents") || "[]")[0]).toBe(
+      "compare",
+    );
+  });
+
+  it("marks the route-active item for assistive tech and labels page controls", async () => {
     const { wrapper } = await signIn();
-    const buttons = wrapper.findAll(".shell-primary-nav button");
-    const home = buttons.find((b) => b.text() === "Home");
-    const research = buttons.find((b) => b.text() === "Research");
+    const home = pageButtons(wrapper).find((button) => button.text() === "Home");
+    const research = pageButtons(wrapper).find((button) => button.text() === "Research");
     expect(home?.attributes("aria-current")).toBe("page");
     expect(research?.attributes("aria-current")).toBeUndefined();
-    for (const button of buttons) expect(button.attributes("aria-label")).toBe(button.text());
+    for (const button of pageButtons(wrapper)) expect(button.attributes("aria-label")).toBeTruthy();
   });
 
-  it("keeps the collapse toggle and more-tools disclosure operable by assistive tech", async () => {
+  it("keeps the collapse toggle and navigation filter operable by assistive tech", async () => {
     const { wrapper } = await signIn();
     const toggle = wrapper.get(".sidebar-toggle");
     expect(toggle.attributes("aria-label")).toBeTruthy();
     expect(toggle.attributes("aria-pressed")).toBe("false");
-    const summary = wrapper.get(".shell-more-tools summary");
-    expect(summary.attributes("aria-expanded")).toBe("true");
+    expect(wrapper.get(".shell-nav-search input").attributes("type")).toBe("search");
   });
 });
