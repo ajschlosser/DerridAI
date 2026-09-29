@@ -19,6 +19,7 @@ import UiButton from "../components/ui/UiButton.vue";
 import UiDialog from "../components/ui/UiDialog.vue";
 import UiField from "../components/ui/UiField.vue";
 import UiHealthChip from "../components/ui/UiHealthChip.vue";
+import DataRetentionSettings from "../components/settings/DataRetentionSettings.vue";
 import DocumentNlpLanguagePacks from "../components/settings/DocumentNlpLanguagePacks.vue";
 import SettingsNav from "../components/settings/SettingsNav.vue";
 import SettingsSaveState from "../components/settings/SettingsSaveState.vue";
@@ -1508,6 +1509,14 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
             :persistence="persistKind('backend')"
           >
             <DocumentNlpLanguagePacks />
+          </SettingsSection>
+          <SettingsSection
+            section-id="data-retention"
+            :title="i18n.t('settings.retention_title')"
+            :description="i18n.t('settings.retention_help')"
+            :persistence="persistKind('backend')"
+          >
+            <DataRetentionSettings />
           </SettingsSection>
           <SettingsSection
             section-id="backup"

@@ -201,10 +201,56 @@ export interface SystemMetadataExemplarFilters {
   record_id?: string;
 }
 
+export type RetentionMode = "inherit" | "keep" | "max_age_days" | "max_size_gb";
+
+export type RetentionRule = { mode: RetentionMode; value: number | null };
+
+export type RetentionPolicy = { default: RetentionRule; stores: Record<string, RetentionRule> };
+
+export type RetentionStore = {
+  store_id: string;
+  kind: "pipeline_traces" | "pipeline_benchmark_runs" | "job_history" | "response_cache";
+  feature: string | null;
+  rule: RetentionRule;
+  effective_rule: RetentionRule;
+  count?: number;
+  bytes?: number;
+  pinned_count?: number;
+  oldest_at?: string | null;
+  remove_count?: number;
+  remove_bytes?: number;
+  removed_count?: number;
+  warnings?: string[];
+  error?: string;
+};
+
+export type RetentionOverview = {
+  policy: RetentionPolicy;
+  evaluated_at: string;
+  applied: boolean;
+  stores: RetentionStore[];
+};
+
 export const systemApi = {
   researcherProviders: () =>
     apiRequest<{ profiles: ProviderProfile[] }>("/api/system/researcher-providers"),
   embeddingDefaults: () => apiRequest<SystemEmbeddingDefaults>("/api/system/embedding-defaults"),
+  dataRetention: () => apiRequest<RetentionOverview>("/api/system/data-retention"),
+  setDataRetention: (policy: RetentionPolicy) =>
+    apiRequest<RetentionOverview>("/api/system/data-retention", {
+      method: "PUT",
+      body: JSON.stringify(policy),
+    }),
+  applyDataRetention: (storeIds: string[] | null = null) =>
+    apiRequest<RetentionOverview>("/api/system/data-retention/apply", {
+      method: "POST",
+      body: JSON.stringify({ store_ids: storeIds }),
+    }),
+  reclaimDataRetentionSpace: () =>
+    apiRequest<{ bytes_before: number; bytes_after: number }>(
+      "/api/system/data-retention/reclaim",
+      { method: "POST" },
+    ),
   audioTranscription: () => apiRequest<SystemAudioTranscription>("/api/system/audio-transcription"),
   setAudioTranscription: (payload: {
     base_url: string;
