@@ -274,8 +274,7 @@ export function createNavigation(deps: Deps) {
       ["/corpus-builder", "/source-explorer"].includes(location.pathname)
     ) {
       path = location.pathname;
-    }
-    else if (state.view === "config" && location.pathname.startsWith("/settings/")) {
+    } else if (state.view === "config" && location.pathname.startsWith("/settings/")) {
       path = location.pathname;
     } else if (
       state.view === "responsecache" &&

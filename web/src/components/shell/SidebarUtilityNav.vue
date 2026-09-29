@@ -10,7 +10,11 @@ const i18n = useI18nStore();
 </script>
 
 <template>
-  <nav class="shell-utility-nav" :class="{ collapsed }" :aria-label="i18n.t('nav.utility_navigation')">
+  <nav
+    class="shell-utility-nav"
+    :class="{ collapsed }"
+    :aria-label="i18n.t('nav.utility_navigation')"
+  >
     <SidebarNavButton
       v-for="item in items"
       :key="item.id"

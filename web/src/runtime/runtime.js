@@ -1129,11 +1129,7 @@ function currentContext() {
       "Annotations",
       "Review annotations by work or in recent-activity order",
     ],
-    semanticmap: [
-      "Corpora",
-      "Semantic map",
-      "Concepts, topics, and persons that occur together",
-    ],
+    semanticmap: ["Corpora", "Semantic map", "Concepts, topics, and persons that occur together"],
     pdf: [
       "Corpus Management",
       state.pdf.title || "Corpus Builder",

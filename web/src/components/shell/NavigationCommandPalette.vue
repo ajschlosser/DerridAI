@@ -76,24 +76,14 @@ defineExpose({ open, close });
         <kbd>Esc</kbd>
       </label>
       <div class="navigation-command-results">
-        <button
-          v-for="item in matches"
-          :key="item.id"
-          type="button"
-          @click="navigate(item.id)"
-        >
+        <button v-for="item in matches" :key="item.id" type="button" @click="navigate(item.id)">
           <AppIcon :name="item.icon" aria-hidden="true" />
           <span>
             <b>{{ item.label }}</b>
             <small>{{ item.section }}</small>
           </span>
         </button>
-        <button
-          v-if="query.trim()"
-          type="button"
-          class="navigation-command-search"
-          @click="search"
-        >
+        <button v-if="query.trim()" type="button" class="navigation-command-search" @click="search">
           <AppIcon name="search" aria-hidden="true" />
           <span>
             <b>{{ i18n.tf("nav.search_corpus_for", { query: query.trim() }) }}</b>
