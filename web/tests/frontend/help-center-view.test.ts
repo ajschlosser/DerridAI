@@ -5,6 +5,8 @@ import { createMemoryHistory, createRouter } from "vue-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../src/domain/helpTopics", () => ({
+  visiblePageGuides: () => [],
+  visibleGlossary: () => [],
   visibleHelp: (_isAdmin: boolean, query: string) => {
     if (query && !"breadcrumbs".includes(query.toLowerCase())) return [];
     return [
