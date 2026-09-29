@@ -40,6 +40,28 @@ describe("followResource", () => {
     expect(refresh).toHaveBeenCalledTimes(2);
   });
 
+  it("lets a view consume live payloads without triggering a REST refresh", async () => {
+    const client = liveClient();
+    const refresh = vi.fn(async () => {});
+    const onEvent = vi.fn(() => false);
+    followResource({ client, topic: "job:a", refresh, onEvent, fallbackMs: 1000 });
+
+    MockSocket.instances[0].frame(jobEvent(1, 1, { id: "a", completed: 1 }));
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(onEvent).toHaveBeenCalledTimes(1);
+    expect(refresh).not.toHaveBeenCalled();
+
+    // A transport failure still falls back to the authoritative read path.
+    MockSocket.instances[0].serverClose(1006);
+    for (let i = 0; i < 3; i += 1) {
+      MockSocket.instances[MockSocket.instances.length - 1].serverClose(1006);
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
   it("polls over REST while the socket is unavailable, then stops when done", async () => {
     const client = liveClient();
     let done = false;
