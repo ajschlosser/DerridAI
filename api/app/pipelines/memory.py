@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from .models import PipelineDefinition, PipelineRunTrace, PipelineStageDefinition
 from .trace_safety import trace_stage
@@ -33,16 +33,18 @@ class MemoryPipelinePlan:
     selection_limit: int = 1
     fallback_fetch_k: int = 1
 
-    def fallback_for(self, failure_kind: str) -> str | None:
-        """Return the configured fallback target for one classified failure."""
-
-        return getattr(self, f"fallback_{failure_kind}", None)  # type: ignore[arg-type]
-
-    # These properties are filled dynamically by compile_memory_pipeline so the
-    # dataclass keeps the runtime-facing shape compact and explicit.
     fallback_unavailable: str | None = None
     fallback_timeout: str | None = None
     fallback_error: str | None = None
+
+    def fallback_for(self, failure_kind: str) -> str | None:
+        """Return the configured fallback target for one classified failure."""
+
+        return {
+            "unavailable": self.fallback_unavailable,
+            "timeout": self.fallback_timeout,
+            "error": self.fallback_error,
+        }.get(failure_kind)
 
 
 def _enabled_by_strategy(
@@ -149,7 +151,7 @@ def compile_memory_pipeline(pipeline: PipelineDefinition) -> MemoryPipelinePlan:
     min_similarity = float(retrieve.config.get("min_similarity", 0.5))
 
     return MemoryPipelinePlan(
-        purpose=pipeline.purpose,
+        purpose=cast(MemoryPurpose, pipeline.purpose),
         retrieve_stage_id=retrieve.id,
         select_stage_id=select.id,
         lexical_fallback_stage_id=lexical.id if lexical else None,
