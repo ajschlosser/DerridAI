@@ -7,6 +7,10 @@ import type {
   PipelineDefinition,
   PipelineOperationalMetrics,
   PipelineRunTrace,
+  ResearchBenchmarkCase,
+  ResearchBenchmarkCaseCreate,
+  ResearchBenchmarkRun,
+  ResearchBenchmarkRunRequest,
   ResearchPipelineComparisonRequest,
   ResearchPipelineComparisonResult,
   PipelineValidationResponse,
@@ -65,6 +69,39 @@ export const pipelinesApi = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+
+  benchmarkCases: (filters: { limit?: number; offset?: number } = {}) => {
+    const query = new URLSearchParams();
+    query.set("limit", String(filters.limit ?? 100));
+    query.set("offset", String(filters.offset ?? 0));
+    return apiRequest<{ cases: ResearchBenchmarkCase[]; limit: number; offset: number }>(
+      `/api/system/pipelines/benchmarks/cases?${query}`,
+    );
+  },
+
+  createBenchmarkCase: (body: ResearchBenchmarkCaseCreate) =>
+    apiRequest<{ case: ResearchBenchmarkCase }>("/api/system/pipelines/benchmarks/cases", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  runBenchmark: (body: ResearchBenchmarkRunRequest) =>
+    apiRequest<{ run: ResearchBenchmarkRun }>("/api/system/pipelines/benchmarks/run", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  benchmarkRuns: (
+    filters: { benchmarkId?: string; limit?: number; offset?: number } = {},
+  ) => {
+    const query = new URLSearchParams();
+    if (filters.benchmarkId) query.set("benchmark_id", filters.benchmarkId);
+    query.set("limit", String(filters.limit ?? 100));
+    query.set("offset", String(filters.offset ?? 0));
+    return apiRequest<{ runs: ResearchBenchmarkRun[]; limit: number; offset: number }>(
+      `/api/system/pipelines/benchmarks/runs?${query}`,
+    );
+  },
 
   metrics: (filters: { feature?: string; owner?: string; limit?: number } = {}) => {
     const query = new URLSearchParams();
