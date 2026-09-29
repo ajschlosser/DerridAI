@@ -27,6 +27,6 @@ defineExpose({ focus });
       :placeholder="placeholder"
       type="search"
       autocomplete="off"
-    /><kbd>{{ shortcut }}</kbd>
+    /><kbd v-if="shortcut">{{ shortcut }}</kbd>
   </form>
 </template>
