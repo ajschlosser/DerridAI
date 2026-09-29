@@ -168,6 +168,12 @@ async function rawMarkup(
             : page.locator("main").first();
   const html = await locator.evaluate((el) => {
     const copy = el.cloneNode(true) as HTMLElement;
+    // These legacy snapshots characterize backup/restore states. Data retention is a separate
+    // Vue workspace with dedicated component coverage, so keep it from invalidating all six
+    // backup snapshots whenever its independent UI changes.
+    copy
+      .querySelectorAll('[aria-labelledby="settings-heading-data-retention"]')
+      .forEach((section) => section.remove());
     copy.querySelectorAll(".disabled-control-tooltip").forEach((wrap) => {
       const tip = wrap.getAttribute("data-tooltip");
       wrap.querySelectorAll("[title]").forEach((node) => {
