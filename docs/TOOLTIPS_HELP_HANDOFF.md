@@ -45,7 +45,7 @@ The finishing pass has now covered the shared tooltip contract, major native-tit
 
 The branch is synchronized with current `master` at `d56ec6596647400c16409724bb4b3ecb76abf983` by merge commit `92e48ea3711da708d8b529393c3b9f5dcee39832`. en-US and fr-CA have exact key parity, and the generated frontend English defaults have been refreshed from the merged locale dictionary.
 
-The implementation is ready for the repository CI gate. Any remaining native `title` uses should be limited to non-help metadata/truncation affordances rather than being the primary way a major workflow communicates a definition, disabled reason, or decision consequence.
+Repository-wide Prettier formatting has been applied. The implementation is ready for the repository CI gate. Any remaining native `title` uses should be limited to non-help metadata/truncation affordances rather than being the primary way a major workflow communicates a definition, disabled reason, or decision consequence.
 
 ## Files currently changed on the branch
 
