@@ -3,7 +3,15 @@ from __future__ import annotations
 
 import pytest
 from app.models import RAGRunRequest
-from app.pipelines.comparison import compare_research_dry_runs
+from app.pipelines.comparison import (
+    ResearchPipelineBenchmarkCase,
+    ResearchPipelineBenchmarkRequest,
+    PipelineVersionRef,
+    aggregate_research_benchmark,
+    benchmark_case_result,
+    compare_research_dry_runs,
+    expected_record_coverage,
+)
 from app.rag import run_rag_pipeline
 
 
@@ -174,3 +182,77 @@ def test_research_dry_run_stops_before_generation(monkeypatch) -> None:
     assert "text" not in result["diagnostics"]["pre_rerank"][0]
     assert [item["record"]["record_id"] for item in result["evidence"]] == ["r1"]
     assert all(stage["name"] != "generation" for stage in result["stages"])
+
+
+
+def test_expected_record_coverage_is_review_grounded_and_ordered() -> None:
+    coverage = expected_record_coverage(
+        ["r2", "r4", "r1"],
+        ["r1", "r2", "r3", "r2"],
+    )
+
+    assert coverage == {
+        "expected_count": 3,
+        "matched_count": 2,
+        "matched_record_ids": ["r1", "r2"],
+        "coverage": pytest.approx(2 / 3),
+    }
+
+
+def test_benchmark_case_and_aggregate_remain_descriptive() -> None:
+    case = ResearchPipelineBenchmarkCase(
+        case_id="trace",
+        label="Trace benchmark",
+        request=RAGRunRequest(
+            prompt="What is the trace?",
+            source_collection="corpus",
+            query_decomposition=False,
+        ),
+        expected_record_ids=["r1", "r3"],
+    )
+    first = benchmark_case_result(
+        case,
+        _result("research.a", ["r1", "r2"], elapsed=0.2),
+        _result("research.b", ["r2", "r3"], elapsed=0.4),
+    )
+    failed = {
+        "case_id": "failed",
+        "label": "Unavailable corpus",
+        "status": "failed",
+        "expected_record_ids": [],
+        "left_error": "missing corpus",
+        "right_error": "missing corpus",
+    }
+
+    aggregate = aggregate_research_benchmark([first, failed])
+
+    assert first["status"] == "completed"
+    assert first["expected_coverage"]["left"]["final_evidence"]["coverage"] == pytest.approx(0.5)
+    assert first["expected_coverage"]["right"]["final_evidence"]["coverage"] == pytest.approx(0.5)
+    assert aggregate["case_count"] == 2
+    assert aggregate["completed_case_count"] == 1
+    assert aggregate["failed_case_count"] == 1
+    assert aggregate["mean_candidate_overlap"] == pytest.approx(1 / 3)
+    assert aggregate["mean_final_evidence_overlap"] == pytest.approx(1 / 3)
+    assert aggregate["left"]["mean_elapsed_seconds"] == pytest.approx(0.2)
+    assert aggregate["right"]["mean_elapsed_seconds"] == pytest.approx(0.4)
+    assert "winner" not in aggregate
+    assert "better" not in aggregate
+
+
+def test_benchmark_request_requires_unique_case_ids() -> None:
+    case = ResearchPipelineBenchmarkCase(
+        case_id="same",
+        request=RAGRunRequest(
+            prompt="What is the trace?",
+            source_collection="corpus",
+            query_decomposition=False,
+        ),
+    )
+
+    with pytest.raises(ValueError, match="case IDs must be unique"):
+        ResearchPipelineBenchmarkRequest(
+            cases=[case, case.model_copy(deep=True)],
+            left=PipelineVersionRef(pipeline_id="research.a", version=1),
+            right=PipelineVersionRef(pipeline_id="research.b", version=1),
+        )
