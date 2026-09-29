@@ -732,6 +732,23 @@ def get_pdf_corpus_record_semantic_map(build_id: str, record_id: str) -> dict[st
         raise HTTPException(status_code=404, detail="Corpus build or record not found") from exc
 
 
+@router.get("/api/records/{record_id}/semantic-map-build")
+def get_record_semantic_map_build(record_id: str) -> dict[str, Any]:
+    """Resolve the build whose Document Intelligence covers a published Record.
+
+    A published Record never carries `build_id` (it is stripped at publication);
+    this looks up the provenance recorded when the build was published so the
+    reviewer-safe semantic map endpoints above can still be reached by record_id.
+    """
+    return {"build_id": system_store.get_record_build_id(record_id)}
+
+
+@router.get("/api/works/{work}/semantic-map-builds")
+def get_work_semantic_map_builds(work: str) -> dict[str, Any]:
+    """Resolve the build(s) whose Document Intelligence covers a Work's Records."""
+    return {"build_ids": system_store.list_build_ids_for_work(work)}
+
+
 @router.get("/api/pdf/corpus-builds/{build_id}/semantic-content-graph/nodes/{node_id}")
 def get_pdf_corpus_semantic_graph_node(build_id: str, node_id: str) -> dict[str, Any]:
     """One semantic-graph node with its relations and Records, for graph walking."""

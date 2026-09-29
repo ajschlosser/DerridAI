@@ -354,6 +354,27 @@ function neighborOf(edge: SemanticContentGraphEdge) {
 function recordPreview(recordId: string) {
   return previews.value[recordId] || "";
 }
+
+// --- pan & zoom -------------------------------------------------------------------------------------------------
+const zoom = ref(1);
+function setZoom(next: number) {
+  zoom.value = Math.max(0.5, Math.min(4, next));
+}
+function resetZoom() {
+  zoom.value = 1;
+}
+watch(current, resetZoom);
+const viewBox = computed(() => {
+  const w = SIZE.width / zoom.value;
+  const h = SIZE.height / zoom.value;
+  const x = (SIZE.width - w) / 2;
+  const y = (SIZE.height - h) / 2;
+  return `${x} ${y} ${w} ${h}`;
+});
+function onWheel(event: WheelEvent) {
+  event.preventDefault();
+  setZoom(zoom.value * (event.deltaY < 0 ? 1.15 : 1 / 1.15));
+}
 </script>
 
 <template>
@@ -525,11 +546,12 @@ function recordPreview(recordId: string) {
     <div v-if="diagram.nodes.length > 1" class="semantic-map-canvas-wrap">
       <svg
         class="semantic-map-canvas"
-        :viewBox="`0 0 ${SIZE.width} ${SIZE.height}`"
+        :viewBox="viewBox"
         role="group"
         :aria-label="
           i18n.tf('pdf_corpus.semantic_map_accessible_label', { label: diagram.centerLabel })
         "
+        @wheel="onWheel"
       >
         <g aria-hidden="true">
           <line
@@ -569,7 +591,7 @@ function recordPreview(recordId: string) {
             height="20"
             rx="4"
           />
-          <circle v-else :r="node.ring === 'center' ? 12 : node.ring === 'inner' ? 8 : 6" />
+          <circle v-else :r="node.ring === 'center' ? 10 : node.ring === 'inner' ? 6 : 4.5" />
           <text
             :x="node.ring === 'center' ? 0 : 11"
             :y="node.ring === 'center' ? 28 : 4"
@@ -597,6 +619,35 @@ function recordPreview(recordId: string) {
           <input v-model="includeTerms" type="checkbox" />
           {{ i18n.t("pdf_corpus.semantic_map_include_terms") }}
         </label>
+        <span class="semantic-map-zoom">
+          <button
+            type="button"
+            class="btn small"
+            :title="i18n.t('pdf_corpus.semantic_graph_zoom_out')"
+            :aria-label="i18n.t('pdf_corpus.semantic_graph_zoom_out')"
+            @click="setZoom(zoom / 1.25)"
+          >
+            −
+          </button>
+          <button
+            type="button"
+            class="btn small"
+            :title="i18n.t('pdf_corpus.semantic_graph_zoom_fit')"
+            :aria-label="i18n.t('pdf_corpus.semantic_graph_zoom_fit')"
+            @click="resetZoom"
+          >
+            {{ Math.round(zoom * 100) }}%
+          </button>
+          <button
+            type="button"
+            class="btn small"
+            :title="i18n.t('pdf_corpus.semantic_graph_zoom_in')"
+            :aria-label="i18n.t('pdf_corpus.semantic_graph_zoom_in')"
+            @click="setZoom(zoom * 1.25)"
+          >
+            +
+          </button>
+        </span>
       </div>
     </div>
     <p
@@ -1045,6 +1096,15 @@ button.mention:focus-visible,
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+.semantic-map-zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-inline-start: auto;
+}
+.semantic-map-zoom button {
+  min-width: 2.5em;
 }
 .legend-line {
   display: inline-block;

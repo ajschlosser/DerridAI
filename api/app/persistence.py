@@ -221,6 +221,15 @@ class SQLiteRepositoryBase:
                     ON claim_support_bindings(claim_id, created_at);
                 CREATE INDEX IF NOT EXISTS idx_claim_support_record
                     ON claim_support_bindings(record_id, created_at);
+
+                CREATE TABLE IF NOT EXISTS record_build_provenance (
+                    record_id TEXT PRIMARY KEY,
+                    build_id TEXT NOT NULL,
+                    work TEXT,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_record_build_provenance_work
+                    ON record_build_provenance(work, updated_at DESC);
                 """
             )
             self._ensure_column(conn, "languages", "content_policy_json", "TEXT")
@@ -955,6 +964,49 @@ class SQLiteSystemRepository(SQLiteRepositoryBase):
             if isinstance(value, dict):
                 grouped.setdefault(str(row["claim_id"]), []).append(value)
         return grouped
+
+    def set_record_build_provenance(
+        self, record_id: str, build_id: str, *, work: str | None = None
+    ) -> None:
+        """Remember which build a published Record's Document Intelligence lives in.
+
+        This is derived provenance, not the canonical record: the published Record
+        itself never carries `build_id` (see corpus_publication.serialize_public_record).
+        Republishing the same record_id from a newer build overwrites the mapping.
+        """
+        record_id = str(record_id or "").strip()
+        build_id = str(build_id or "").strip()
+        if not record_id or not build_id:
+            return
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO record_build_provenance(record_id, build_id, work, updated_at)
+                VALUES(?,?,?,?)
+                ON CONFLICT(record_id) DO UPDATE SET
+                    build_id=excluded.build_id, work=excluded.work, updated_at=excluded.updated_at
+                """,
+                (record_id, build_id, str(work or "").strip() or None, _iso_now()),
+            )
+
+    def get_record_build_id(self, record_id: str) -> str | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT build_id FROM record_build_provenance WHERE record_id=?",
+                (str(record_id or "").strip(),),
+            ).fetchone()
+        return str(row["build_id"]) if row else None
+
+    def list_build_ids_for_work(self, work: str) -> list[str]:
+        work = str(work or "").strip()
+        if not work:
+            return []
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT build_id FROM record_build_provenance WHERE work=? ORDER BY build_id",
+                (work,),
+            ).fetchall()
+        return [str(row["build_id"]) for row in rows]
 
     def list_languages(self) -> dict[str, dict[str, Any]]:
         with self._lock, self._connect() as conn:

@@ -72,7 +72,7 @@ export function layoutGraph(
     });
   const maxWeight = Math.max(1, ...links.map((link) => link[2]));
 
-  const k = Math.sqrt((width * height) / count) * 0.75;
+  const k = Math.sqrt((width * height) / count) * 1.35;
   const iterations = options.iterations ?? Math.max(60, Math.min(260, 24000 / count));
   let temperature = Math.min(width, height) / 8;
   const cooling = temperature / (iterations + 1);
@@ -156,5 +156,5 @@ export function layoutGraph(
 /** Radius from mentions, on a square-root scale so area tracks frequency. */
 export function nodeRadius(mentions: number, maxMentions: number): number {
   const ratio = Math.sqrt(Math.max(0, mentions)) / Math.sqrt(Math.max(1, maxMentions));
-  return Math.round((5 + ratio * 17) * 10) / 10;
+  return Math.round((3.5 + ratio * 10) * 10) / 10;
 }

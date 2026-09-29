@@ -11,6 +11,8 @@ import WorksWorkspaceHeader from "../components/works/WorksWorkspaceHeader.vue";
 import { useWorksWorkspace } from "../composables/useWorksWorkspace";
 import * as runtime from "../runtime/runtime.js";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
+import CorpusSemanticGraphPanel from "../components/corpus-builder/CorpusSemanticGraphPanel.vue";
+import { corpusBuildsApi } from "../api/corpus";
 
 const auth = useAuthStore();
 const i18n = useI18nStore();
@@ -97,6 +99,37 @@ function selectWork(work: string) {
   works.setOverview(work);
   requestAnimationFrame(() => window.scrollTo(0, y));
   decorate();
+}
+
+// --- semantic map dialog ----------------------------------------------------------------------------------------
+const semanticMapDialog = ref<HTMLDialogElement | null>(null);
+const semanticMapWork = ref("");
+const semanticMapBuildId = ref("");
+const semanticMapExtraBuilds = ref(0);
+const semanticMapLoading = ref(false);
+const semanticMapError = ref(false);
+
+async function openWorkSemanticMap(work: string) {
+  semanticMapWork.value = work;
+  semanticMapBuildId.value = "";
+  semanticMapExtraBuilds.value = 0;
+  semanticMapError.value = false;
+  semanticMapLoading.value = true;
+  semanticMapDialog.value?.showModal();
+  try {
+    const result = await corpusBuildsApi.workSemanticMapBuilds(work);
+    const [first, ...rest] = result.build_ids;
+    semanticMapBuildId.value = first || "";
+    semanticMapExtraBuilds.value = rest.length;
+    semanticMapError.value = !first;
+  } catch {
+    semanticMapError.value = true;
+  } finally {
+    semanticMapLoading.value = false;
+  }
+}
+function closeWorkSemanticMap() {
+  semanticMapDialog.value?.close();
 }
 
 async function changeStore(name: string) {
@@ -281,6 +314,7 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
           @records="works.searchRecords(work.work)"
           @flagged="works.searchRecords(work.work, true)"
           @inspect="works.inspectMixed(work.work, $event)"
+          @semantic-map="openWorkSemanticMap(work.work)"
         />
         <button
           v-if="showAddCard"
@@ -375,5 +409,27 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
         </div>
       </section>
     </template>
+
+    <dialog
+      ref="semanticMapDialog"
+      class="works-semantic-map-dialog"
+      :aria-label="i18n.tf('works.semantic_map_dialog_title', { work: semanticMapWork })"
+      @cancel.prevent="closeWorkSemanticMap"
+    >
+      <header>
+        <h2>{{ i18n.tf("works.semantic_map_dialog_title", { work: semanticMapWork }) }}</h2>
+        <button type="button" :aria-label="i18n.t('ui.close')" @click="closeWorkSemanticMap">
+          ×
+        </button>
+      </header>
+      <p v-if="semanticMapLoading" role="status">{{ i18n.t("ui.loading") }}</p>
+      <p v-else-if="semanticMapError">{{ i18n.t("works.semantic_map_unavailable") }}</p>
+      <template v-else-if="semanticMapBuildId">
+        <p v-if="semanticMapExtraBuilds" class="note">
+          {{ i18n.tf("works.semantic_map_multiple_builds", { count: semanticMapExtraBuilds }) }}
+        </p>
+        <CorpusSemanticGraphPanel :build-id="semanticMapBuildId" />
+      </template>
+    </dialog>
   </main>
 </template>
