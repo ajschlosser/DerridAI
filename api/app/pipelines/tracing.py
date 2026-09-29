@@ -5,7 +5,8 @@ Feature adapters live in focused modules. This compatibility surface keeps
 callers stable while avoiding a single trace-construction monolith.
 """
 
+from .evidence_tracing import build_evidence_trace
 from .research_tracing import build_research_trace
 from .trace_safety import sanitize_trace_value
 
-__all__ = ["build_research_trace", "sanitize_trace_value"]
+__all__ = ["build_evidence_trace", "build_research_trace", "sanitize_trace_value"]
