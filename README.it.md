@@ -57,7 +57,6 @@ Vedere [SPECIFICATION.md](SPECIFICATION.md) per la specifica normativa cELF 1.0 
 
 ### Servizi runtime
 
-
 - `web` — Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js e nginx. È l’applicazione browser; fa da proxy a `/api/` e usa REST, GraphQL e notifiche realtime. Storybook è un profilo di sviluppo opzionale.
 - `api` — Python 3.12, FastAPI, Strawberry GraphQL, client ChromaDB, PyMuPDF, sentence-transformers e spaCy. È il confine applicativo autoritativo per autenticazione, fonti/corpus, letture cELF, provenienza, RAG, pipeline, job e stato di sistema.
 - `document-nlp` — worker BookNLP opzionale e isolato per Document Intelligence in inglese. Riceve testo revisionato e limitato e non ha autorità sul corpus.
