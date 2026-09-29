@@ -264,6 +264,7 @@ describe("System Data Pipeline Studio", () => {
       runs: [structuredClone(trace)],
       limit: 30,
       offset: 0,
+      total: 1,
     });
     vi.spyOn(pipelinesApi, "metrics").mockResolvedValue(structuredClone(metrics));
     vi.spyOn(pipelinesApi, "cloneDraft").mockImplementation(async (pipelineId, version) => {
@@ -295,14 +296,19 @@ describe("System Data Pipeline Studio", () => {
     expect(wrapper.text()).toContain("Pipeline Studio");
     expect(wrapper.text()).toContain("Research — current production chain");
     expect(wrapper.text()).toContain("Chroma semantic similarity");
+    expect(wrapper.text()).toContain("Pipeline diagram");
+    expect(wrapper.text()).toContain("Active assignment");
+
+    await wrapper.find("#pipeline-tab-operations").trigger("click");
     expect(wrapper.text()).toContain("Test and compare Research pipelines");
     expect(wrapper.text()).toContain("Benchmark Research pipelines");
     expect(wrapper.text()).toContain("Operational health");
     expect(wrapper.text()).toContain("95th-percentile run time");
     expect(wrapper.text()).toContain("Stage strategy health");
-    expect(wrapper.text()).toContain("Recent executions");
+
+    await wrapper.find("#pipeline-tab-executions").trigger("click");
+    expect(wrapper.text()).toContain("Execution history");
     expect(wrapper.text()).toContain("retrieve.chroma_similarity");
-    expect(wrapper.text()).toContain("Active assignment");
   });
 
   it("keeps selected definitions and traces in the URL", async () => {
@@ -361,14 +367,14 @@ describe("System Data Pipeline Studio", () => {
     recoveryCatalog.pipelines.push({
       ...structuredClone(catalog.pipelines[0]),
       pipeline_id: "evidence.recovery.cascade",
-      name: "Evidence recovery — legacy cascade",
+      name: "Evidence recovery — relevance cascade (non-cELF-guaranteed)",
       purpose: "evidence_recovery",
       built_in: true,
       runtime_support: {
         supported: true,
         adapter: "evidence_recovery",
         celf_compliant: false,
-        reason: "Not cELF-compliant: candidates from 'mmr' reach the provenance gate.",
+        reason: "Non-cELF-guaranteed: candidates from 'mmr' reach the provenance gate.",
       },
     });
     vi.spyOn(pipelinesApi, "catalog").mockResolvedValue(recoveryCatalog);
@@ -387,12 +393,12 @@ describe("System Data Pipeline Studio", () => {
     const { wrapper } = await mountStudio();
     const choice = wrapper
       .findAll(".pipeline-choice")
-      .find((item) => item.text().includes("legacy cascade"));
+      .find((item) => item.text().includes("relevance cascade"));
     await choice!.trigger("click");
     await flushPromises();
 
     expect(wrapper.text()).toContain("Evidence recovery");
-    expect(wrapper.text()).toContain("Not cELF-compliant");
+    expect(wrapper.text()).toContain("Non-cELF-guaranteed");
     const activate = wrapper
       .findAll(".detail-actions .btn")
       .find((item) => item.text().includes("Make active"));
@@ -446,5 +452,28 @@ describe("System Data Pipeline Studio", () => {
     expect((idInput!.element as HTMLInputElement).value).toBe("research.custom");
     const versionInput = inputs.find((input) => input.attributes("type") === "number");
     expect((versionInput!.element as HTMLInputElement).value).toBe("3");
+  });
+
+  it("filters execution history and deletes one trace", async () => {
+    const deleteRun = vi.spyOn(pipelinesApi, "deleteRun").mockResolvedValue({
+      deleted: true,
+      run_id: "rag-1",
+    });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const { wrapper } = await mountStudio();
+
+    await wrapper.find("#pipeline-tab-executions").trigger("click");
+    const query = wrapper.find('.trace-filters input[type="search"]');
+    await query.setValue("rag-1");
+    await wrapper.find(".trace-filters").trigger("submit");
+    await flushPromises();
+
+    expect(pipelinesApi.runs).toHaveBeenCalledWith(
+      expect.objectContaining({ query: "rag-1", limit: 25, offset: 0 }),
+    );
+
+    await wrapper.find(".row-delete").trigger("click");
+    await flushPromises();
+    expect(deleteRun).toHaveBeenCalledWith("rag-1");
   });
 });

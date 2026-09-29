@@ -4,6 +4,7 @@ from __future__ import annotations
 from .capture_store import CaptureStore
 from .chroma_store import ChromaStore
 from .config import settings
+from .data_retention import RetentionScheduler, RetentionService
 from .job_capture import CaptureJobManager
 from .job_document_nlp import DocumentNlpPackJobManager
 from .job_llm import LLMJobManager
@@ -35,3 +36,37 @@ capture_service = CorpusCaptureService(capture_store)
 capture_jobs = CaptureJobManager(capture_service)
 # Administrator-installed Document Intelligence language packs.
 document_nlp_pack_jobs = DocumentNlpPackJobManager()
+
+
+def _response_cache_collection():
+    """The Response Library collection, or None before the first saved response."""
+    try:
+        return store.client.get_collection(name=store._RESPONSE_CACHE_STORAGE)
+    except Exception as exc:
+        if store._is_missing_collection_error(exc):
+            return None
+        raise
+
+
+def _known_trace_features() -> list[str]:
+    from .pipelines.defaults import BUILT_IN_ASSIGNMENTS
+
+    return [assignment.feature for assignment in BUILT_IN_ASSIGNMENTS]
+
+
+def _retention_service() -> RetentionService:
+    from .persistence import system_repository
+    from .pipelines.store import pipeline_store
+
+    return RetentionService(
+        settings_repository=system_repository,
+        pipeline_database=pipeline_store.database,
+        job_managers=lambda: [llm_jobs, llm_tool_jobs, rag_jobs, upsert_jobs, capture_jobs, document_nlp_pack_jobs],
+        response_cache_collection=_response_cache_collection,
+        known_trace_features=_known_trace_features,
+    )
+
+
+# Operational-data retention: configured in Settings, applied hourly and on demand.
+retention_service = _retention_service()
+retention_scheduler = RetentionScheduler(lambda: retention_service)

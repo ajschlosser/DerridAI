@@ -51,7 +51,11 @@ const meta = {
   component: PipelineExecutionHistory,
   args: {
     runs,
+    pipelines: [],
     selectedRunId: runs[0].run_id,
+    total: runs.length,
+    limit: 25,
+    offset: 0,
   },
 } satisfies Meta<typeof PipelineExecutionHistory>;
 

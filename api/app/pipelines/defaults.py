@@ -523,7 +523,7 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
     _pipeline(
         pipeline_id="evidence.recovery.cascade",
         version=1,
-        name="Evidence recovery — legacy cascade (not cELF-compliant)",
+        name="Evidence recovery — relevance cascade (non-cELF-guaranteed)",
         purpose="evidence_recovery",
         status="active",
         entry_stage_ids=["query"],
@@ -531,9 +531,9 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
             "The original first-hit cascade: direct text match; otherwise source-unit "
             "similarity, then cross-encoder rerank (positive scores), then MMR when the "
             "best similarity reaches 0.35; closed-choice model last. Each stage runs only "
-            "if the previous one found nothing. Cross-encoder and MMR results reach "
-            "selection without direct-support validation, so this chain is not "
-            "cELF-compliant. Results stay advisory and pending review."
+            "if the previous one found nothing. Cross-encoder and MMR results remain "
+            "relevance suggestions without a direct-support guarantee. They stay "
+            "advisory and pending review until a reviewer binds and validates direct evidence."
         ),
         stages=[
             {

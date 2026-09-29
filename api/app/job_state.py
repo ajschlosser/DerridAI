@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import re
 import threading
 import time
@@ -207,6 +208,19 @@ class PersistentJobStateMixin:
         with self._lock:
             job = self._jobs.get(job_id)
             return job_realtime_summary(job) if job is not None else None
+
+    def job_footprints(self) -> list[tuple[str, str, int, bool]]:
+        """(id, created_at, stored bytes, active) for every job, for data retention."""
+        with self._lock:
+            return [
+                (
+                    str(job_id),
+                    str(job.get("created_at") or ""),
+                    len(json.dumps(job, ensure_ascii=False, separators=(",", ":"), default=str).encode()),
+                    str(job.get("status") or "") in {"queued", "running", "cancelling"},
+                )
+                for job_id, job in self._jobs.items()
+            ]
 
     def clear_all(self) -> int:
         """Drop in-memory and durable history for this manager."""

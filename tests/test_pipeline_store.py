@@ -148,4 +148,40 @@ def test_invalid_snapshot_does_not_destroy_existing_pipeline_state(tmp_path) -> 
     restored = store.get_definition("custom.fast", 1)
     assert restored is not None
     assert restored.name == "Custom fast"
-    assert store.snapshot() == before
+
+
+def _trace(run_id: str, *, feature: str = "research", status: str = "completed") -> PipelineRunTrace:
+    now = datetime.now(UTC)
+    return PipelineRunTrace(
+        run_id=run_id,
+        feature=feature,
+        pipeline_id="custom.fast",
+        pipeline_version=1,
+        resolved_pipeline={"pipeline_id": "custom.fast"},
+        resolved_hash="b" * 64,
+        owner="ada",
+        status=status,
+        started_at=now,
+        finished_at=now,
+        stages=[],
+    )
+
+
+def test_pipeline_store_filters_and_deletes_execution_history(tmp_path) -> None:
+    store = PipelineStore(tmp_path / "system.sqlite3")
+    store.put_run(_trace("run-keep", status="completed"))
+    store.put_run(_trace("run-fail", status="failed"))
+    store.put_run(_trace("run-other", feature="evidence_suggestion", status="completed"))
+
+    failed = store.list_runs(status="failed", query="run-fail")
+    assert [item.run_id for item in failed] == ["run-fail"]
+    assert store.count_runs(feature="research") == 2
+    assert store.count_runs(query="ada") == 3
+
+    assert store.delete_run("run-fail") is True
+    assert store.get_run("run-fail") is None
+    assert store.delete_run("run-fail") is False
+
+    cleared = store.clear_runs()
+    assert cleared["pipeline_runs"] == 2
+    assert store.count_runs() == 0

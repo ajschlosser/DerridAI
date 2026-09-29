@@ -9,6 +9,7 @@ import RecordPdfLinks from "./RecordPdfLinks.vue";
 import RecordHistoryTimeline from "./RecordHistoryTimeline.vue";
 import InspectorLayoutEditor from "./InspectorLayoutEditor.vue";
 import CorpusRecordSemanticMap from "../corpus-builder/CorpusRecordSemanticMap.vue";
+import UiLoadingState from "../ui/UiLoadingState.vue";
 import { corpusBuildsApi } from "../../api/corpus";
 import type { RecordWorkspaceSnapshot } from "../../types/record";
 import type { DerridaiNormativeModel, ResearchObjectGraph } from "../../types/researchObjectGraph";
@@ -315,9 +316,7 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
         role="tabpanel"
         :aria-labelledby="tabId('semantic')"
       >
-        <p v-if="semanticLoading" class="record-semantic-status" role="status">
-          {{ i18n.t("ui.loading") }}
-        </p>
+        <UiLoadingState v-if="semanticLoading" :label="i18n.t('ui.loading')" />
         <p v-else-if="!semanticBuildId" class="record-semantic-status">
           {{ i18n.t("record.semantic_map_unavailable") }}
         </p>

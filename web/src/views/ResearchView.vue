@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
+import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import ResearchComposer from "../components/research/ResearchComposer.vue";
 import ResearchResultPresentation from "../components/research/ResearchResultPresentation.vue";
 import ResearchSettingsDrawer from "../components/research/ResearchSettingsDrawer.vue";
@@ -589,8 +590,8 @@ onBeforeUnmount(() => {
 
 <template>
   <main class="vue-native-page research-native-page" aria-labelledby="research-page-title">
-    <div v-if="loading && !workspace" class="research-loading" role="status">
-      <span class="spinner"></span>{{ i18n.t("research.loading_workspace") }}
+    <div v-if="loading && !workspace" class="research-loading">
+      <UiLoadingState :label="i18n.t('research.loading_workspace')" />
     </div>
     <AccessibleEmptyState
       v-else-if="noDatabase"

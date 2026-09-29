@@ -316,6 +316,16 @@ export const SETTINGS_FIELDS: SettingsFieldIndex[] = [
     labelFallback: "Desktop notifications",
   },
   {
+    id: "data-retention",
+    section: "system",
+    labelKey: "settings.retention_title",
+    labelFallback: "Data retention",
+    helpKey: "settings.retention_help",
+    helpFallback:
+      "Choose how long DerridAI keeps operational history: pipeline traces, benchmark results, finished jobs, and saved Research responses.",
+    keywords: ["retention", "expire", "traces", "job history", "disk space", "gigabytes"],
+  },
+  {
     id: "backup",
     section: "system",
     labelKey: "settings.backup",
