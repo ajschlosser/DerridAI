@@ -264,6 +264,7 @@ describe("System Data Pipeline Studio", () => {
       runs: [structuredClone(trace)],
       limit: 30,
       offset: 0,
+      total: 1,
     });
     vi.spyOn(pipelinesApi, "metrics").mockResolvedValue(structuredClone(metrics));
     vi.spyOn(pipelinesApi, "cloneDraft").mockImplementation(async (pipelineId, version) => {

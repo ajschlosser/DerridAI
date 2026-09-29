@@ -81,7 +81,11 @@ function assigned(pipeline: PipelineDefinition) {
       <div class="filter-row">
         <label>
           <span class="sr-only">{{ t("pipelines.filter_purpose", "Purpose") }}</span>
-          <select v-model="purpose" class="control" :aria-label="t('pipelines.filter_purpose', 'Purpose')">
+          <select
+            v-model="purpose"
+            class="control"
+            :aria-label="t('pipelines.filter_purpose', 'Purpose')"
+          >
             <option value="">{{ t("pipelines.filter_all", "All") }}</option>
             <option v-for="item in purposes" :key="item" :value="item">
               {{ pipelinePurposeLabel(item, t) }}
@@ -90,7 +94,11 @@ function assigned(pipeline: PipelineDefinition) {
         </label>
         <label>
           <span class="sr-only">{{ t("pipelines.filter_status", "Status") }}</span>
-          <select v-model="status" class="control" :aria-label="t('pipelines.filter_status', 'Status')">
+          <select
+            v-model="status"
+            class="control"
+            :aria-label="t('pipelines.filter_status', 'Status')"
+          >
             <option value="">{{ t("pipelines.filter_all", "All") }}</option>
             <option value="active">{{ t("pipelines.status_active", "Active") }}</option>
             <option value="draft">{{ t("pipelines.status_draft", "Draft") }}</option>

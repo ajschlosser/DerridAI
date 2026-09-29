@@ -15,41 +15,30 @@ def _like_term(value: str) -> str:
     return f"%{escaped}%"
 
 
-def _run_filter_clause(
+def _run_filter_params(
     *,
     feature: str | None,
     owner: str | None,
     pipeline_id: str | None,
     status: str | None,
     query: str | None,
-) -> tuple[str, list[Any]]:
-    clauses: list[str] = []
-    params: list[Any] = []
-    if feature:
-        clauses.append("feature=?")
-        params.append(feature)
-    if owner:
-        clauses.append("owner=?")
-        params.append(owner)
-    if pipeline_id:
-        clauses.append("pipeline_id=?")
-        params.append(pipeline_id)
-    if status:
-        clauses.append("status=?")
-        params.append(status)
-    text = str(query or "").strip()
-    if text:
-        like = _like_term(text)
-        clauses.append(
-            "("
-            "run_id LIKE ? ESCAPE '\\' OR pipeline_id LIKE ? ESCAPE '\\' "
-            "OR feature LIKE ? ESCAPE '\\' OR IFNULL(owner, '') LIKE ? ESCAPE '\\'"
-            ")"
-        )
-        params.extend((like, like, like, like))
-    if not clauses:
-        return "", params
-    return "WHERE " + " AND ".join(clauses), params
+) -> tuple[Any, ...]:
+    like = _like_term(str(query).strip()) if str(query or "").strip() else None
+    return (
+        feature,
+        feature,
+        owner,
+        owner,
+        pipeline_id,
+        pipeline_id,
+        status,
+        status,
+        like,
+        like,
+        like,
+        like,
+        like,
+    )
 
 
 class PipelineTraceStore:
@@ -173,7 +162,7 @@ class PipelineTraceStore:
     ) -> list[PipelineRunTrace]:
         page_limit = max(1, min(500, int(limit)))
         page_offset = max(0, int(offset))
-        where, params = _run_filter_clause(
+        params = _run_filter_params(
             feature=feature,
             owner=owner,
             pipeline_id=pipeline_id,
@@ -182,10 +171,20 @@ class PipelineTraceStore:
         )
         with self.database.lock, self.database.connect() as conn:
             rows = conn.execute(
-                f"""
+                """
                 SELECT run_id
                 FROM pipeline_runs
-                {where}
+                WHERE (? IS NULL OR feature=?)
+                  AND (? IS NULL OR owner=?)
+                  AND (? IS NULL OR pipeline_id=?)
+                  AND (? IS NULL OR status=?)
+                  AND (
+                    ? IS NULL
+                    OR run_id LIKE ? ESCAPE '\\'
+                    OR pipeline_id LIKE ? ESCAPE '\\'
+                    OR feature LIKE ? ESCAPE '\\'
+                    OR IFNULL(owner, '') LIKE ? ESCAPE '\\'
+                  )
                 ORDER BY started_at DESC
                 LIMIT ? OFFSET ?
                 """,
@@ -206,7 +205,7 @@ class PipelineTraceStore:
         status: str | None = None,
         query: str | None = None,
     ) -> int:
-        where, params = _run_filter_clause(
+        params = _run_filter_params(
             feature=feature,
             owner=owner,
             pipeline_id=pipeline_id,
@@ -215,7 +214,21 @@ class PipelineTraceStore:
         )
         with self.database.lock, self.database.connect() as conn:
             row = conn.execute(
-                f"SELECT COUNT(*) FROM pipeline_runs {where}",
+                """
+                SELECT COUNT(*)
+                FROM pipeline_runs
+                WHERE (? IS NULL OR feature=?)
+                  AND (? IS NULL OR owner=?)
+                  AND (? IS NULL OR pipeline_id=?)
+                  AND (? IS NULL OR status=?)
+                  AND (
+                    ? IS NULL
+                    OR run_id LIKE ? ESCAPE '\\'
+                    OR pipeline_id LIKE ? ESCAPE '\\'
+                    OR feature LIKE ? ESCAPE '\\'
+                    OR IFNULL(owner, '') LIKE ? ESCAPE '\\'
+                  )
+                """,
                 params,
             ).fetchone()
         return int(row[0] if row is not None else 0)
