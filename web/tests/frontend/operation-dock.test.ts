@@ -1,5 +1,5 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createOperationDock } from "../../src/domain/operationDock";
 import { fitDockInViewport } from "../../src/domain/operationsDock";
 
@@ -17,6 +17,11 @@ function setup(html: string, state: Record<string, unknown> = {}) {
   );
   return createOperationDock(deps as never);
 }
+
+afterEach(() => {
+  delete document.documentElement.dataset.operationsDockMode;
+  document.body.innerHTML = "";
+});
 
 describe("operation dock summary", () => {
   it("counts the failed cards when every card has failed", () => {
@@ -55,6 +60,17 @@ describe("operation dock placement", () => {
     globalThis.removeEventListener("derridai:operation-mode-toggle", listener);
     expect(listener).toHaveBeenCalledTimes(2);
     dock.setOperationDockMinimized(true);
+  });
+
+  it("does not start a drag while the operations stack is docked", () => {
+    document.documentElement.dataset.operationsDockMode = "docked";
+    const dock = setup("");
+    document.querySelector("#operationProgressStack")?.remove();
+    dock.progressStack();
+    const stack = document.querySelector<HTMLElement>("#operationProgressStack")!;
+    const toolbar = stack.querySelector<HTMLElement>("[data-operation-drag]")!;
+    toolbar.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0 }));
+    expect(stack.classList.contains("is-dragging")).toBe(false);
   });
 
   it("slides an expanded dock back on screen when it would overflow the right or bottom edge", () => {
