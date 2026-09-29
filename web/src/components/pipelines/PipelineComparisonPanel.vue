@@ -113,12 +113,13 @@ async function runComparison() {
 async function runBenchmark() {
   const left = definition(leftKey.value);
   const right = definition(rightKey.value);
+  const fixedCaseId = caseId.value.trim();
   if (
     !left ||
     !right ||
     !prompt.value.trim() ||
     !collection.value ||
-    !caseId.value.trim() ||
+    !fixedCaseId ||
     benchmarking.value
   )
     return;
@@ -127,15 +128,20 @@ async function runBenchmark() {
   error.value = "";
   benchmark.value = null;
   try {
-    const response = await pipelinesApi.runResearchBenchmark({
-      case_id: caseId.value.trim(),
-      case_version: caseVersion.value,
+    // Case creation is idempotent only when every fixed input and the current
+    // corpus/index fingerprint are unchanged. Reusing an ID/version after drift
+    // is rejected server-side rather than silently changing the benchmark.
+    await pipelinesApi.createResearchBenchmarkCase({
+      case_id: fixedCaseId,
+      version: caseVersion.value,
+      prompt: prompt.value.trim(),
+      source_collection: collection.value,
+      query_decomposition: false,
       notes: benchmarkNotes.value.trim() || null,
-      request: {
-        prompt: prompt.value.trim(),
-        source_collection: collection.value,
-        query_decomposition: false,
-      },
+    });
+    const response = await pipelinesApi.runResearchBenchmark({
+      case_id: fixedCaseId,
+      case_version: caseVersion.value,
       left: { pipeline_id: left.pipeline_id, version: left.version },
       right: { pipeline_id: right.pipeline_id, version: right.version },
     });
@@ -369,17 +375,10 @@ function seconds(value: number | null | undefined) {
             <code>{{ benchmark.right_pipeline.pipeline_hash || "—" }}</code>
           </div>
           <div>
-            <span>{{ t("pipelines.benchmark_index_revision", "Index revision") }}</span>
-            <code>
-              {{
-                String(
-                  benchmark.corpus.source_snapshot_hash ||
-                    benchmark.corpus.build_id ||
-                    benchmark.corpus.embedding_revision ||
-                    "—",
-                )
-              }}
-            </code>
+            <span>
+              {{ t("pipelines.benchmark_index_revision", "Corpus/index fingerprint") }}
+            </span>
+            <code>{{ benchmark.corpus.fingerprint }}</code>
           </div>
           <ul v-if="benchmark.reproducibility_warnings.length">
             <li v-for="warning in benchmark.reproducibility_warnings" :key="warning">
