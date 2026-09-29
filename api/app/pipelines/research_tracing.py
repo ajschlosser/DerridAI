@@ -281,12 +281,6 @@ def build_research_trace(
         or rerank_detail.get("requested_mode")
         or "none"
     )
-    effective_reranker = str(
-        retrieval.get("reranker")
-        or rerank_detail.get("mode")
-        or "none"
-    )
-
     if plan.rerank_stage_id:
         primary_active = active_rerank_stage_id == plan.rerank_stage_id
         primary_attempted = (
