@@ -96,9 +96,13 @@ async function mountBuilder() {
   useI18nStore().dictionary = {};
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: "/pdf", component: { template: "<div />" } }],
+    routes: [
+      { path: "/corpus-builder", name: "corpus-builder", component: { template: "<div />" } },
+      { path: "/source-explorer", name: "source-explorer", component: { template: "<div />" } },
+      { path: "/schemas", name: "schemas", component: { template: "<div />" } },
+    ],
   });
-  await router.push("/pdf?mode=builder");
+  await router.push("/corpus-builder");
   await router.isReady();
   const wrapper = shallowMount(PdfCorpusBuilder, {
     attachTo: document.body,
