@@ -9,6 +9,7 @@ from typing import Any
 from .defaults import BUILT_IN_ASSIGNMENTS, BUILT_IN_PIPELINES, built_in_assignment, built_in_pipeline
 from .models import PipelineAssignment, PipelineDefinition
 from .service import PipelineService, pipeline_hash, pipeline_service
+from .research import compile_research_pipeline
 from .store import PipelineStore, pipeline_store
 
 
@@ -107,6 +108,30 @@ class PipelineManager:
         validation = self.service.validate(pipeline)
         if not validation.valid:
             raise ValueError("Cannot assign an invalid pipeline.")
+
+        if assignment.feature == "research":
+            # Compiling is the runtime-support check: an administrator can save
+            # experimental graphs, but only graphs the explicit Research adapter
+            # understands may become active execution configuration.
+            compile_research_pipeline(pipeline)
+        elif assignment.feature not in {
+            "evidence_suggestion.reviewer",
+            "metadata_precedents",
+            "claim_memory",
+            "response_memory",
+        }:
+            raise ValueError(f"Pipeline feature {assignment.feature!r} is not supported.")
+        else:
+            current = built_in_assignment(assignment.feature)
+            if current is None or (
+                assignment.pipeline_id,
+                assignment.pipeline_version,
+            ) != (current.pipeline_id, current.pipeline_version):
+                raise ValueError(
+                    f"Custom {assignment.feature!r} execution is not wired yet; "
+                    "the current built-in assignment remains authoritative."
+                )
+
         normalized = assignment.model_copy(update={"source": actor_source})
         return self.store.put_assignment(
             normalized,
