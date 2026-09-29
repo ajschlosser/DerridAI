@@ -5,23 +5,23 @@ import { createMemoryHistory, createRouter } from "vue-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../src/domain/helpTopics", () => ({
-  visibleHelp: (_isAdmin: boolean, query: string) => [
-    {
-      id: "navigation",
-      title: "Navigation",
-      entries:
-        query && !"breadcrumbs".includes(query.toLowerCase())
-          ? []
-          : [
-            {
-              id: "breadcrumbs",
-              question: "How do breadcrumbs work?",
-              answer: "They reflect the current route.",
-              impact: "Copied URLs reopen the same workspace.",
-              },
-            ],
-    },
-  ].filter((section) => section.entries.length),
+  visibleHelp: (_isAdmin: boolean, query: string) => {
+    if (query && !"breadcrumbs".includes(query.toLowerCase())) return [];
+    return [
+      {
+        id: "navigation",
+        title: "Navigation",
+        entries: [
+          {
+            id: "breadcrumbs",
+            question: "How do breadcrumbs work?",
+            answer: "They reflect the current route.",
+            impact: "Copied URLs reopen the same workspace.",
+          },
+        ],
+      },
+    ];
+  },
 }));
 
 import HelpCenterView from "../../src/views/HelpCenterView.vue";
