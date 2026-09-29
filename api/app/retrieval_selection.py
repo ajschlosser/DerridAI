@@ -128,3 +128,101 @@ def mmr_select(
     for chosen in selected:
         chosen.pop("_mmr_vector", None)
     return selected
+
+
+def source_aware_select(
+    candidates: Sequence[Candidate],
+    *,
+    limit: int,
+    relevance: Callable[[Candidate], float],
+) -> list[dict[str, Any]]:
+    """Greedily pack relevant candidates while penalizing redundant source context.
+
+    This selector is intentionally metadata-aware rather than another embedding
+    similarity heuristic. It favors different source documents/works and avoids
+    filling a context packet with adjacent or text-duplicate Records from the
+    same passage. User-selected evidence remains pinned by callers before this
+    selector is applied.
+    """
+
+    bounded_limit = max(0, int(limit))
+    if bounded_limit == 0 or not candidates:
+        return []
+
+    remaining: list[Candidate] = list(candidates)
+    raw_relevance = [float(relevance(item)) for item in remaining]
+    minimum = min(raw_relevance)
+    maximum = max(raw_relevance)
+
+    def normalized(value: float) -> float:
+        if maximum <= minimum:
+            return 1.0
+        return (value - minimum) / (maximum - minimum)
+
+    def record_of(item: Mapping[str, Any]) -> Mapping[str, Any]:
+        record = item.get("record")
+        return record if isinstance(record, Mapping) else item
+
+    def text_terms(item: Mapping[str, Any]) -> set[str]:
+        record = record_of(item)
+        text = str(record.get("text") or "").casefold()
+        return {token for token in text.split() if len(token) > 3}
+
+    def redundancy(candidate: Mapping[str, Any], selected: Mapping[str, Any]) -> float:
+        left = record_of(candidate)
+        right = record_of(selected)
+        penalty = 0.0
+
+        left_source = str(
+            left.get("source_document_id")
+            or left.get("source_asset_id")
+            or ""
+        )
+        right_source = str(
+            right.get("source_document_id")
+            or right.get("source_asset_id")
+            or ""
+        )
+        if left_source and left_source == right_source:
+            penalty += 0.28
+
+        left_work = str(left.get("work") or "")
+        right_work = str(right.get("work") or "")
+        if left_work and left_work == right_work:
+            penalty += 0.12
+
+        try:
+            left_page = int(left.get("page_start"))
+            right_page = int(right.get("page_start"))
+        except (TypeError, ValueError):
+            left_page = right_page = -10000
+        if left_source and left_source == right_source and abs(left_page - right_page) <= 1:
+            penalty += 0.30
+
+        left_terms = text_terms(candidate)
+        right_terms = text_terms(selected)
+        if left_terms and right_terms:
+            overlap = len(left_terms & right_terms) / max(1, min(len(left_terms), len(right_terms)))
+            penalty += min(0.30, overlap * 0.30)
+
+        return min(0.85, penalty)
+
+    selected: list[dict[str, Any]] = []
+    while remaining and len(selected) < bounded_limit:
+        best_index = 0
+        best_score = -float("inf")
+        for index, candidate in enumerate(remaining):
+            rel = normalized(float(relevance(candidate)))
+            duplicate_penalty = max(
+                (redundancy(candidate, chosen) for chosen in selected),
+                default=0.0,
+            )
+            objective = rel - duplicate_penalty
+            if objective > best_score:
+                best_score = objective
+                best_index = index
+        chosen = dict(remaining.pop(best_index))
+        chosen["diversity_score"] = best_score
+        selected.append(chosen)
+
+    return selected
