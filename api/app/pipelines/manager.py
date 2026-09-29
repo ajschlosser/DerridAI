@@ -113,6 +113,11 @@ class PipelineManager:
         validation = self.service.validate(pipeline)
         if not validation.valid:
             raise ValueError("Cannot assign an invalid pipeline.")
+        if pipeline.status != "active":
+            raise ValueError(
+                "Only active pipeline versions may be assigned system-wide. "
+                "Draft versions remain available to administrators for explicit test runs."
+            )
 
         if assignment.feature == "research":
             # Compiling is the runtime-support check: an administrator can save
