@@ -125,24 +125,52 @@ def test_custom_metadata_precedent_pipeline_can_be_saved_and_assigned(tmp_path) 
     assert manager.resolve("metadata_precedents")["pipeline"]["pipeline_id"] == "metadata.custom"
 
 
-def test_unmigrated_memory_pipeline_is_inspectable_but_not_runtime_supported(tmp_path) -> None:
+@pytest.mark.parametrize(
+    ("pipeline_id", "feature", "custom_id", "adapter"),
+    [
+        ("memory.claim.current", "claim_memory", "memory.claim.custom", "claim_memory"),
+        (
+            "memory.response.current",
+            "response_memory",
+            "memory.response.custom",
+            "response_memory",
+        ),
+    ],
+)
+def test_custom_memory_pipeline_can_be_saved_and_assigned(
+    tmp_path,
+    pipeline_id,
+    feature,
+    custom_id,
+    adapter,
+) -> None:
     manager = _manager(tmp_path)
-    source = built_in_pipeline("memory.claim.current", 1)
+    source = built_in_pipeline(pipeline_id, 1)
     assert source is not None
     custom = source.model_copy(
         update={
-            "pipeline_id": "memory.claim.custom",
+            "pipeline_id": custom_id,
             "version": 1,
-            "name": "Claim memory custom",
+            "name": f"{feature} custom",
             "status": "active",
             "built_in": False,
         }
     )
 
-    support = manager.runtime_support(custom)
+    saved = manager.save_definition(custom, actor="admin")
+    support = manager.runtime_support(saved)
+    assigned = manager.assign(
+        PipelineAssignment(
+            feature=feature,
+            pipeline_id=saved.pipeline_id,
+            pipeline_version=saved.version,
+            override_allowed=False,
+        )
+    )
 
-    assert support["supported"] is False
-    assert "not yet been migrated" in support["reason"]
+    assert support == {"supported": True, "adapter": adapter}
+    assert assigned.pipeline_id == custom_id
+    assert manager.resolve(feature)["pipeline"]["pipeline_id"] == custom_id
 
 
 def test_custom_definition_cannot_shadow_code_owned_builtin(tmp_path) -> None:
