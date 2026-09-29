@@ -40,14 +40,7 @@ const groupOrder: HelpPageGroup[] = [
   "support",
 ];
 
-const glossaryCategories: HelpGlossaryCategory[] = [
-  "all",
-  "ai",
-  "retrieval",
-  "parameters",
-  "provenance",
-  "storage",
-];
+const glossaryCategories: HelpGlossaryCategory[] = ["all", "ai", "retrieval", "provenance", "storage"];
 
 const pageGuides = computed(() =>
   visiblePageGuides(
@@ -66,9 +59,15 @@ const pageGroups = computed(() =>
     }))
     .filter((group) => group.guides.length),
 );
-const glossary = computed(() =>
-  visibleGlossary(query.value, glossaryCategory.value, (key, fallback) => i18n.t(key, fallback)),
+const conceptGlossary = computed(() =>
+  visibleGlossary(query.value, glossaryCategory.value, (key, fallback) => i18n.t(key, fallback)).filter(
+    (entry) => entry.category !== "parameters",
+  ),
 );
+const parameterGlossary = computed(() =>
+  visibleGlossary(query.value, "parameters", (key, fallback) => i18n.t(key, fallback)),
+);
+const glossary = computed(() => [...conceptGlossary.value, ...parameterGlossary.value]);
 const sections = computed(() =>
   visibleHelp(auth.isAdmin, query.value, (key, fallback) => i18n.t(key, fallback)),
 );
@@ -82,7 +81,6 @@ const hasResults = computed(() => matchCount.value > 0);
 const searching = computed(() => Boolean(query.value.trim()));
 
 const guideKeys = computed(() => pageGuides.value.map((guide) => `page:${guide.id}`));
-const termKeys = computed(() => glossary.value.map((entry) => `term:${entry.id}`));
 const questionKeys = computed(() =>
   sections.value.flatMap((section) => section.entries.map((entry) => `q:${entry.id}`)),
 );
@@ -165,10 +163,10 @@ watch(
 
 // While searching, matches open so the reader sees why they matched; clearing the search resets.
 watch(
-  [searching, guideKeys, termKeys, questionKeys],
+  [searching, guideKeys, questionKeys],
   ([active], [wasActive]) => {
     if (active) {
-      openKeys.value = new Set([...guideKeys.value, ...termKeys.value, ...questionKeys.value]);
+      openKeys.value = new Set([...guideKeys.value, ...questionKeys.value]);
     } else if (wasActive) {
       openKeys.value = new Set();
     }
@@ -207,10 +205,7 @@ function onGlobalKeydown(event: KeyboardEvent) {
 function openFromHash() {
   const id = decodeURIComponent(route.hash.replace(/^#/, ""));
   if (!id) return;
-  const prefixes: [string, string][] = [
-    ["help-page-", "page:"],
-    ["help-term-", "term:"],
-  ];
+  const prefixes: [string, string][] = [["help-page-", "page:"]];
   for (const [prefix, key] of prefixes) {
     if (id.startsWith(prefix))
       openKeys.value = new Set(openKeys.value).add(key + id.slice(prefix.length));
@@ -222,7 +217,7 @@ onMounted(() => {
   document.addEventListener("keydown", onGlobalKeydown);
   observeSections();
   if (searching.value) {
-    openKeys.value = new Set([...guideKeys.value, ...termKeys.value, ...questionKeys.value]);
+    openKeys.value = new Set([...guideKeys.value, ...questionKeys.value]);
   }
   openFromHash();
 });
@@ -362,7 +357,7 @@ onBeforeUnmount(() => {
                       <h4>{{ i18n.t("help.use_page_to") }}</h4>
                       <p><HelpHighlight :text="guide.tasks" :query="query" /></p>
                     </div>
-                    <div>
+                    <div v-if="guide.impact">
                       <h4>{{ i18n.t("help.impact_heading") }}</h4>
                       <p><HelpHighlight :text="guide.impact" :query="query" /></p>
                     </div>
@@ -389,61 +384,97 @@ onBeforeUnmount(() => {
               <h2 id="help-glossary-heading">{{ i18n.t("help.glossary_title") }}</h2>
               <p>{{ i18n.t("help.glossary_intro") }}</p>
             </div>
-            <button
-              v-if="glossary.length"
-              type="button"
-              class="help-toggle-all"
-              @click="toggleAll(termKeys)"
-            >
-              {{ i18n.t(allOpen(termKeys) ? "help.collapse_all" : "help.expand_all") }}
-            </button>
           </header>
 
-          <div class="help-filter-row" role="group" :aria-label="i18n.t('help.glossary_filter')">
-            <button
-              v-for="category in glossaryCategories"
-              :key="category"
-              type="button"
-              class="help-filter"
-              :class="{ active: glossaryCategory === category }"
-              :aria-pressed="glossaryCategory === category"
-              @click="glossaryCategory = category"
-            >
-              {{ i18n.t(`help.glossary.category.${category}`) }}
-            </button>
-          </div>
+          <section v-if="conceptGlossary.length || !searching" class="help-glossary-subsection">
+            <header class="help-subsection-heading">
+              <div>
+                <h3>{{ i18n.t("help.glossary_concepts") }}</h3>
+                <p>{{ i18n.t("help.glossary_concepts_help") }}</p>
+              </div>
+            </header>
+
+            <div class="help-filter-row" role="group" :aria-label="i18n.t('help.glossary_filter')">
+              <button
+                v-for="category in glossaryCategories"
+                :key="category"
+                type="button"
+                class="help-filter"
+                :class="{ active: glossaryCategory === category }"
+                :aria-pressed="glossaryCategory === category"
+                @click="glossaryCategory = category"
+              >
+                {{ i18n.t(`help.glossary.category.${category}`) }}
+              </button>
+            </div>
+
+            <p v-if="!conceptGlossary.length" class="help-filter-empty">
+              {{ i18n.t("help.glossary_no_results") }}
+            </p>
+
+            <div class="help-glossary-grid">
+              <article
+                v-for="entry in conceptGlossary"
+                :id="`help-term-${entry.id}`"
+                :key="entry.id"
+                class="help-glossary-entry"
+              >
+                <header class="help-glossary-term">
+                  <span :class="{ 'help-code-term': entry.code }">
+                    <HelpHighlight :text="entry.term" :query="query" />
+                  </span>
+                  <span class="help-category-badge">
+                    {{ i18n.t(`help.glossary.category.${entry.category}`) }}
+                  </span>
+                </header>
+                <p class="help-glossary-definition">
+                  <HelpHighlight :text="entry.definition" :query="query" />
+                </p>
+                <p class="help-practical-inline">
+                  <strong>{{ i18n.t("help.in_practice") }}</strong>
+                  <span><HelpHighlight :text="entry.practical" :query="query" /></span>
+                </p>
+              </article>
+            </div>
+          </section>
+
+          <section v-if="parameterGlossary.length" class="help-glossary-subsection">
+            <header class="help-subsection-heading">
+              <div>
+                <h3>{{ i18n.t("help.parameter_reference") }}</h3>
+                <p>{{ i18n.t("help.parameter_reference_help") }}</p>
+              </div>
+              <span class="help-subsection-count">{{ parameterGlossary.length }}</span>
+            </header>
+
+            <div class="help-parameter-list">
+              <article
+                v-for="entry in parameterGlossary"
+                :id="`help-term-${entry.id}`"
+                :key="entry.id"
+                class="help-parameter-entry"
+              >
+                <div class="help-parameter-name">
+                  <code v-if="entry.code"><HelpHighlight :text="entry.term" :query="query" /></code>
+                  <strong v-else><HelpHighlight :text="entry.term" :query="query" /></strong>
+                </div>
+                <dl>
+                  <div>
+                    <dt>{{ i18n.t("help.parameter_controls") }}</dt>
+                    <dd><HelpHighlight :text="entry.definition" :query="query" /></dd>
+                  </div>
+                  <div>
+                    <dt>{{ i18n.t("help.parameter_effect") }}</dt>
+                    <dd><HelpHighlight :text="entry.practical" :query="query" /></dd>
+                  </div>
+                </dl>
+              </article>
+            </div>
+          </section>
 
           <p v-if="!glossary.length" class="help-filter-empty">
             {{ i18n.t("help.glossary_no_results") }}
           </p>
-
-          <div class="help-glossary-grid">
-            <details
-              v-for="entry in glossary"
-              :id="`help-term-${entry.id}`"
-              :key="entry.id"
-              class="help-glossary-entry"
-              :open="isOpen(`term:${entry.id}`)"
-              @toggle="onToggle(`term:${entry.id}`, $event)"
-            >
-              <summary>
-                <span :class="{ 'help-code-term': entry.code }">
-                  <HelpHighlight :text="entry.term" :query="query" />
-                </span>
-                <span class="help-category-badge">
-                  {{ i18n.t(`help.glossary.category.${entry.category}`) }}
-                </span>
-                <AppIcon name="chevron-down" aria-hidden="true" />
-              </summary>
-              <div class="help-glossary-body">
-                <p><HelpHighlight :text="entry.definition" :query="query" /></p>
-                <div class="help-practical">
-                  <strong>{{ i18n.t("help.in_practice") }}</strong>
-                  <span><HelpHighlight :text="entry.practical" :query="query" /></span>
-                </div>
-              </div>
-            </details>
-          </div>
         </section>
 
         <section
@@ -487,7 +518,7 @@ onBeforeUnmount(() => {
               </summary>
               <div class="help-entry-body">
                 <p><HelpHighlight :text="entry.answer" :query="query" /></p>
-                <div class="help-impact">
+                <div v-if="entry.impact" class="help-impact">
                   <strong>{{ i18n.t("help.impact_heading") }}</strong>
                   <span><HelpHighlight :text="entry.impact" :query="query" /></span>
                 </div>
@@ -509,15 +540,11 @@ onBeforeUnmount(() => {
   padding-block-end: var(--space-7);
 }
 
-/* Search is the primary entry point, so it sits directly under the title and stays reachable. */
+/* Keep search visually integrated with the page. Only the input owns a surface. */
 .help-search-bar {
-  position: sticky;
-  inset-block-start: 0;
-  z-index: 5;
   display: grid;
   gap: 6px;
-  padding-block: var(--space-2);
-  background: var(--surface-page, var(--bg, #fff));
+  padding-block-end: var(--space-2);
 }
 
 .help-search {
@@ -692,7 +719,6 @@ onBeforeUnmount(() => {
 .help-filter:focus-visible,
 .help-open-page:focus-visible,
 .help-guide-card summary:focus-visible,
-.help-glossary-entry summary:focus-visible,
 .help-entry summary:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: var(--focus-ring-offset);
@@ -792,8 +818,52 @@ onBeforeUnmount(() => {
   align-items: start;
 }
 
+.help-glossary-subsection {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.help-subsection-heading {
+  display: flex;
+  gap: var(--space-3);
+  align-items: end;
+  justify-content: space-between;
+}
+
+.help-subsection-heading > div {
+  display: grid;
+  gap: 3px;
+}
+
+.help-subsection-heading h3,
+.help-subsection-heading p {
+  margin: 0;
+}
+
+.help-subsection-heading h3 {
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+
+.help-subsection-heading p {
+  max-inline-size: var(--measure);
+  color: var(--text-tertiary);
+  font-size: 0.875rem;
+  line-height: var(--lh-normal);
+}
+
+.help-subsection-count {
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-inset);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: var(--fw-bold);
+}
+
 .help-guide-card,
 .help-glossary-entry,
+.help-parameter-entry,
 .help-entry {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-card);
@@ -808,19 +878,18 @@ onBeforeUnmount(() => {
 
 .help-guide-card:hover,
 .help-glossary-entry:hover,
+.help-parameter-entry:hover,
 .help-entry:hover {
   border-color: var(--border-strong);
 }
 
 .help-guide-card summary,
-.help-glossary-entry summary,
 .help-entry summary {
   list-style: none;
   cursor: pointer;
 }
 
 .help-guide-card summary::-webkit-details-marker,
-.help-glossary-entry summary::-webkit-details-marker,
 .help-entry summary::-webkit-details-marker {
   display: none;
 }
@@ -834,7 +903,6 @@ onBeforeUnmount(() => {
 }
 
 .help-guide-card summary:hover,
-.help-glossary-entry summary:hover,
 .help-entry summary:hover {
   background: var(--surface-hover);
 }
@@ -856,7 +924,6 @@ onBeforeUnmount(() => {
 }
 
 .help-guide-card summary :deep(svg),
-.help-glossary-entry summary :deep(svg),
 .help-entry summary :deep(svg) {
   inline-size: 16px;
   block-size: 16px;
@@ -866,7 +933,6 @@ onBeforeUnmount(() => {
 }
 
 .help-guide-card details[open] summary :deep(svg),
-.help-glossary-entry[open] summary :deep(svg),
 .help-entry[open] summary :deep(svg) {
   transform: rotate(180deg);
 }
@@ -953,23 +1019,24 @@ onBeforeUnmount(() => {
   color: var(--accent-fg);
 }
 
-.help-glossary-entry {
+.help-glossary-entry,
+.help-parameter-entry {
   scroll-margin-block-start: 5rem;
 }
 
-.help-glossary-entry summary {
+.help-glossary-entry {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 8px;
-  align-items: center;
-  padding: 12px 14px;
-  color: var(--text-primary);
-  font-weight: var(--fw-bold);
+  padding: 13px 14px 14px;
 }
 
-.help-glossary-entry summary :deep(svg),
-.help-entry summary :deep(svg) {
-  margin-block-start: 0;
+.help-glossary-term {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text-primary);
+  font-weight: var(--fw-bold);
 }
 
 .help-category-badge {
@@ -982,11 +1049,81 @@ onBeforeUnmount(() => {
   letter-spacing: 0.02em;
 }
 
-.help-code-term {
+.help-code-term,
+.help-parameter-name code {
   font-family: var(--font-mono);
 }
 
-.help-glossary-body,
+.help-glossary-definition,
+.help-practical-inline {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  line-height: var(--lh-normal);
+}
+
+.help-practical-inline {
+  display: grid;
+  gap: 2px;
+  padding-block-start: 8px;
+  border-block-start: 1px solid var(--border-subtle);
+  color: var(--text-tertiary);
+}
+
+.help-practical-inline strong {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.help-parameter-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.help-parameter-entry {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.35fr) minmax(0, 1fr);
+  gap: var(--space-3);
+  padding: 13px 14px;
+}
+
+.help-parameter-name {
+  color: var(--text-primary);
+}
+
+.help-parameter-name code {
+  font-size: 0.875rem;
+  font-weight: var(--fw-bold);
+}
+
+.help-parameter-entry dl,
+.help-parameter-entry dl > div {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+}
+
+.help-parameter-entry dl {
+  gap: 10px;
+}
+
+.help-parameter-entry dt {
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.help-parameter-entry dd {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  line-height: var(--lh-normal);
+}
+
 .help-entry-body {
   display: grid;
   gap: var(--space-2);
@@ -994,7 +1131,6 @@ onBeforeUnmount(() => {
   border-block-start: 1px solid var(--border-subtle);
 }
 
-.help-glossary-body > p,
 .help-entry-body > p {
   margin: 0;
   max-inline-size: var(--measure);
@@ -1003,7 +1139,6 @@ onBeforeUnmount(() => {
   line-height: var(--lh-normal);
 }
 
-.help-practical,
 .help-impact {
   display: grid;
   gap: 3px;
@@ -1015,7 +1150,6 @@ onBeforeUnmount(() => {
   line-height: var(--lh-normal);
 }
 
-.help-practical strong,
 .help-impact strong {
   color: var(--text-primary);
 }
@@ -1072,10 +1206,10 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr;
   }
 
-  /* The contents rail becomes a compact, sticky jump bar beneath the search. */
+  /* The contents rail becomes a compact jump bar on smaller screens. */
   .help-toc {
-    position: sticky;
-    inset-block-start: 4.25rem;
+    position: static;
+    inset-block-start: auto;
     z-index: 4;
     padding-block: 4px;
     background: var(--surface-page, var(--bg, #fff));
@@ -1112,13 +1246,14 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr;
   }
 
+  .help-parameter-entry {
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+  }
+
   .help-section-heading {
     align-items: start;
     flex-wrap: wrap;
-  }
-
-  .help-glossary-entry summary {
-    grid-template-columns: minmax(0, 1fr) auto;
   }
 
   .help-category-badge {
@@ -1128,7 +1263,6 @@ onBeforeUnmount(() => {
 
 @media (prefers-reduced-motion: reduce) {
   .help-guide-card summary :deep(svg),
-  .help-glossary-entry summary :deep(svg),
   .help-entry summary :deep(svg) {
     transition: none;
   }
