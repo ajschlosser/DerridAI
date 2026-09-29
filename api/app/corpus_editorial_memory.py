@@ -464,6 +464,10 @@ class EditorialMemoryMixin:
                         if metadata_pipeline_plan is not None
                         else None
                     ),
+                    allow_lexical_fallback=bool(
+                        metadata_pipeline_plan
+                        and metadata_pipeline_plan.lexical_fallback_stage_id
+                    ),
                     exclude_record_id=exclude_record_id,
                 )
                 if retrieval_fields
@@ -506,12 +510,22 @@ class EditorialMemoryMixin:
                             f"trace could not be persisted ({type(exc).__name__}: {exc}).",
                         )
                 if isinstance(semantic.get("examples"), dict):
-                    # Semantic evidence-bound precedents supersede lexical ordering
-                    # only for fields where the vector index found valid current
-                    # canonical exemplars. Other fields retain the deterministic fallback.
-                    for field, items in semantic["examples"].items():
-                        if isinstance(items, list) and items:
-                            examples[str(field)] = items
+                    if (
+                        semantic.get("ok") is False
+                        and metadata_pipeline_plan is not None
+                        and metadata_pipeline_plan.lexical_fallback_stage_id is None
+                    ):
+                        # A custom pipeline may deliberately omit lexical degradation.
+                        # In that case do not silently retain the deterministic precedent
+                        # packet assembled before semantic retrieval.
+                        examples = {}
+                    else:
+                        # Semantic evidence-bound precedents supersede lexical ordering
+                        # only for fields where the vector index found valid current
+                        # canonical exemplars. Other fields retain the deterministic fallback.
+                        for field, items in semantic["examples"].items():
+                            if isinstance(items, list) and items:
+                                examples[str(field)] = items
                     examples = budget_prompt_examples(
                         examples,
                         **prompt_budget_kwargs,
