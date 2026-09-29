@@ -1028,7 +1028,7 @@ defineExpose({ open, close });
   border-radius: 999px;
   background: var(--soft);
   color: var(--muted);
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 750;
 }
 .research-settings-note {
