@@ -57,7 +57,17 @@ test("the end of a long record can be scrolled fully into view above the decisio
     ...CORPUS_RECORDS.slice(0, 5),
   ]);
   const pane = page.locator(".record-review-pane");
-  await pane.evaluate((el) => (el.scrollTop = el.scrollHeight));
+  // The selected Record can finish hydrating after the review grid first becomes visible.
+  // Keep driving the pane to its current end until it is actually scrollable, rather than
+  // racing the asynchronous content/layout update with a single early scroll assignment.
+  await expect
+    .poll(async () =>
+      pane.evaluate((el) => {
+        el.scrollTop = el.scrollHeight;
+        return el.scrollTop;
+      }),
+    )
+    .toBeGreaterThan(0);
   const last = await page.locator(".record-primary-text").evaluate((el) => {
     const r = el.getBoundingClientRect();
     const dock = document.querySelector(".record-decision-dock")!.getBoundingClientRect();
