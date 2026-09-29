@@ -136,21 +136,6 @@ def summarize_research_dry_run(result: dict[str, Any]) -> dict[str, Any]:
     post_selection = [
         row for row in diagnostics.get("post_selection") or [] if isinstance(row, dict)
     ]
-    rerank_stage = next(
-        (stage for stage in stages if stage["name"] == "rerank"),
-        None,
-    )
-    rerank_detail = (
-        rerank_stage["detail"]
-        if isinstance(rerank_stage, dict)
-        and isinstance(rerank_stage.get("detail"), dict)
-        else {}
-    )
-    cross_encoder_attempted = bool(
-        rerank_detail.get("requested_mode") == "cross_encoder"
-        and rerank_detail.get("cross_encoder_model")
-        and any(not bool(row.get("selected_evidence")) for row in pre_rerank)
-    )
     return {
         "pipeline": {
             key: pipeline.get(key)
@@ -167,10 +152,10 @@ def summarize_research_dry_run(result: dict[str, Any]) -> dict[str, Any]:
         },
         "context_characters": diagnostics.get("context_characters"),
         "resource_use": {
-            "query_transform_model_calls": (
-                1 if bool(retrieval.get("query_decomposition")) else 0
+            "query_transform_model_calls": int(
+                retrieval.get("query_transform_model_calls") or 0
             ),
-            "cross_encoder_calls": 1 if cross_encoder_attempted else 0,
+            "cross_encoder_calls": int(retrieval.get("cross_encoder_calls") or 0),
         },
         "evidence": evidence_rows,
         "stages": stages,
