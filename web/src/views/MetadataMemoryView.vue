@@ -1,6 +1,7 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { metadataMemoryApi, type MetadataMemoryPayload } from "../api/metadataMemory";
 import MetadataMemoryRelations from "../components/metadata-memory/MetadataMemoryRelations.vue";
 import MetadataMemoryTable from "../components/metadata-memory/MetadataMemoryTable.vue";
@@ -11,16 +12,18 @@ import UiTooltip from "../components/ui/UiTooltip.vue";
 import { useI18nStore } from "../stores/i18n";
 
 const i18n = useI18nStore();
+const route = useRoute();
+const router = useRouter();
 const pageSize = 50;
 const searchDebounceMs = 300;
 const loading = ref(false);
 const error = ref("");
-const offset = ref(0);
-const query = ref("");
-const field = ref("");
-const kind = ref("");
-const buildId = ref("");
-const language = ref("");
+const offset = ref(Math.max(0, Number(route.query.offset) || 0));
+const query = ref(String(route.query.q || ""));
+const field = ref(String(route.query.field || ""));
+const kind = ref(String(route.query.kind || ""));
+const buildId = ref(String(route.query.build || ""));
+const language = ref(String(route.query.language || ""));
 const payload = ref<MetadataMemoryPayload>({
   items: [],
   total: 0,
@@ -36,6 +39,7 @@ const payload = ref<MetadataMemoryPayload>({
 // Only the newest request may update the page, so slow earlier responses cannot overwrite it.
 let requestSeq = 0;
 let searchTimer: number | undefined;
+let applyingRouteState = false;
 
 const pageStart = computed(() => (payload.value.total ? offset.value + 1 : 0));
 const pageEnd = computed(() => Math.min(offset.value + pageSize, payload.value.total));
@@ -96,9 +100,27 @@ async function load() {
   }
 }
 
+function syncRoute(nextOffset = offset.value, push = false) {
+  const location = {
+    name: "metadatamemory",
+    query: {
+      ...route.query,
+      q: query.value.trim() || undefined,
+      field: field.value || undefined,
+      kind: kind.value || undefined,
+      build: buildId.value || undefined,
+      language: language.value || undefined,
+      offset: nextOffset > 0 ? String(nextOffset) : undefined,
+    },
+  };
+  const navigate = push ? router.push : router.replace;
+  void navigate(location);
+}
+
 function applyFilters() {
   window.clearTimeout(searchTimer);
   offset.value = 0;
+  syncRoute(0);
   void load();
 }
 
@@ -115,15 +137,58 @@ function clearFilters() {
 
 function goTo(next: number) {
   offset.value = next;
+  syncRoute(next, true);
   void load();
 }
 
 // Selects apply immediately; free text waits for a pause in typing.
-watch([field, kind, buildId, language], applyFilters);
+watch([field, kind, buildId, language], () => {
+  if (!applyingRouteState) applyFilters();
+});
 watch(query, () => {
+  if (applyingRouteState) return;
   window.clearTimeout(searchTimer);
   searchTimer = window.setTimeout(applyFilters, searchDebounceMs);
 });
+watch(
+  () => [
+    route.query.q,
+    route.query.field,
+    route.query.kind,
+    route.query.build,
+    route.query.language,
+    route.query.offset,
+  ],
+  ([q, nextField, nextKind, nextBuild, nextLanguage, nextOffset]) => {
+    const state = {
+      q: String(q || ""),
+      field: String(nextField || ""),
+      kind: String(nextKind || ""),
+      build: String(nextBuild || ""),
+      language: String(nextLanguage || ""),
+      offset: Math.max(0, Number(nextOffset) || 0),
+    };
+    if (
+      state.q === query.value &&
+      state.field === field.value &&
+      state.kind === kind.value &&
+      state.build === buildId.value &&
+      state.language === language.value &&
+      state.offset === offset.value
+    )
+      return;
+    applyingRouteState = true;
+    query.value = state.q;
+    field.value = state.field;
+    kind.value = state.kind;
+    buildId.value = state.build;
+    language.value = state.language;
+    offset.value = state.offset;
+    applyingRouteState = false;
+    window.clearTimeout(searchTimer);
+    void load();
+  },
+);
 onBeforeUnmount(() => window.clearTimeout(searchTimer));
 onMounted(() => void load());
 </script>
