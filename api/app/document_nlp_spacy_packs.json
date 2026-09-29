@@ -1,308 +1,308 @@
 [
- {
-  "language": "ca",
-  "tier": "md",
-  "model": "ca_core_news_md",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/ca_core_news_md-3.8.0/ca_core_news_md-3.8.0-py3-none-any.whl",
-  "size": 49218061,
-  "sha256": "c5fb452714d51312aa7052e94148b0a0fd0efa6ffdadf24b64484a745df9bdfc",
-  "requires": []
- },
- {
-  "language": "ca",
-  "tier": "lg",
-  "model": "ca_core_news_lg",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/ca_core_news_lg-3.8.0/ca_core_news_lg-3.8.0-py3-none-any.whl",
-  "size": 574014041,
-  "sha256": "6cee39a577ebee3a170154efdd67b7d8c290e6cfd5b8c6a243dff3fbbee14766",
-  "requires": []
- },
- {
-  "language": "da",
-  "tier": "md",
-  "model": "da_core_news_md",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/da_core_news_md-3.8.0/da_core_news_md-3.8.0-py3-none-any.whl",
-  "size": 42185382,
-  "sha256": "884380bf67bc587a8ddb829781a275f8dae488093cb457d346cc0808ea2eb355",
-  "requires": []
- },
- {
-  "language": "da",
-  "tier": "lg",
-  "model": "da_core_news_lg",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/da_core_news_lg-3.8.0/da_core_news_lg-3.8.0-py3-none-any.whl",
-  "size": 567077511,
-  "sha256": "a3a7184f775c6b5da6fcfebad4fe6819c588b8a405936d023c56f554a5811ec7",
-  "requires": []
- },
- {
-  "language": "de",
-  "tier": "md",
-  "model": "de_core_news_md",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/de_core_news_md-3.8.0/de_core_news_md-3.8.0-py3-none-any.whl",
-  "size": 44398316,
-  "sha256": "b903f59220f1e76dd672acdaa7fa454d6703fe056c5ccd6457820e70874116d0",
-  "requires": []
- },
- {
-  "language": "de",
-  "tier": "lg",
-  "model": "de_core_news_lg",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/de_core_news_lg-3.8.0/de_core_news_lg-3.8.0-py3-none-any.whl",
-  "size": 567843151,
-  "sha256": "36fda650e476b54d5e87803635e36dadd1e8e034c4b5962088586d684f4c9fed",
-  "requires": []
- },
- {
-  "language": "el",
-  "tier": "md",
-  "model": "el_core_news_md",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/el_core_news_md-3.8.0/el_core_news_md-3.8.0-py3-none-any.whl",
-  "size": 42956931,
-  "sha256": "a18bdd6d2b81de37eeac2d05f7feada51c54bcda76f910a3feeef1bd34a7b296",
-  "requires": []
- },
- {
-  "language": "el",
-  "tier": "lg",
-  "model": "el_core_news_lg",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/el_core_news_lg-3.8.0/el_core_news_lg-3.8.0-py3-none-any.whl",
-  "size": 568630235,
-  "sha256": "3bf603778bda163a1770f66aadf6b9b1030d9ecb3cbdb24d690c060bbf4d598c",
-  "requires": []
- },
- {
-  "language": "en",
-  "tier": "md",
-  "model": "en_core_web_md",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/en_core_web_md-3.8.0/en_core_web_md-3.8.0-py3-none-any.whl",
-  "size": 33480380,
-  "sha256": "5e6329fe3fecedb1d1a02c3ea2172ee0fede6cea6e4aefb6a02d832dba78a310",
-  "requires": []
- },
- {
-  "language": "en",
-  "tier": "lg",
-  "model": "en_core_web_lg",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl",
-  "size": 400658291,
-  "sha256": "293e9547a655b25499198ab15a525b05b9407a75f10255e405e8c3854329ab63",
-  "requires": []
- },
- {
-  "language": "es",
-  "tier": "md",
-  "model": "es_core_news_md",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/es_core_news_md-3.8.0/es_core_news_md-3.8.0-py3-none-any.whl",
-  "size": 42284033,
-  "sha256": "478b8bb3f3e8eb149192f7d80e7cd64f990b7e9bccbc5329df41a57e86326be2",
-  "requires": []
- },
- {
-  "language": "fi",
-  "tier": "md",
-  "model": "fi_core_news_md",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/fi_core_news_md-3.8.0/fi_core_news_md-3.8.0-py3-none-any.whl",
-  "size": 68522623,
-  "sha256": "4037fca013fb9d0e5ffca0fdc77cc6a8965bf2c566e763c63a73e4765772bc9f",
-  "requires": []
- },
- {
-  "language": "fr",
-  "tier": "md",
-  "model": "fr_core_news_md",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/fr_core_news_md-3.8.0/fr_core_news_md-3.8.0-py3-none-any.whl",
-  "size": 45836173,
-  "sha256": "8a70d090a54ef77525c3ffa6a6195b9d365f2cf369ae1cd84ede93f3d709079e",
-  "requires": []
- },
- {
-  "language": "hr",
-  "tier": "md",
-  "model": "hr_core_news_md",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/hr_core_news_md-3.8.0/hr_core_news_md-3.8.0-py3-none-any.whl",
-  "size": 67533611,
-  "sha256": "241a53f12c5f489c95f5ca4b2e7b3015464950d2feeac4a8be588815c9251f3e",
-  "requires": []
- },
- {
-  "language": "it",
-  "tier": "md",
-  "model": "it_core_news_md",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/it_core_news_md-3.8.0/it_core_news_md-3.8.0-py3-none-any.whl",
-  "size": 42389964,
-  "sha256": "a731d2d8e7c5a7093ac42f88774ea2a2ad3d5809959eedee65632b3533f804ec",
-  "requires": []
- },
- {
-  "language": "ja",
-  "tier": "md",
-  "model": "ja_core_news_md",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/ja_core_news_md-3.8.0/ja_core_news_md-3.8.0-py3-none-any.whl",
-  "size": 42105500,
-  "sha256": "17c3497539bd970546b75e36c274b3fa183511b6ef59a178017aa02dde3a090a",
-  "requires": [
-   "sudachipy !=0.6.1,>=0.5.2",
-   "sudachidict-core >=20211220"
-  ]
- },
- {
-  "language": "ko",
-  "tier": "md",
-  "model": "ko_core_news_md",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/ko_core_news_md-3.8.0/ko_core_news_md-3.8.0-py3-none-any.whl",
-  "size": 69046876,
-  "sha256": "f3a412f328cd3a19daeac74611d22fa7af3eb952333a8fb82de1dd46ac4cf488",
-  "requires": []
- },
- {
-  "language": "lt",
-  "tier": "md",
-  "model": "lt_core_news_md",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/lt_core_news_md-3.8.0/lt_core_news_md-3.8.0-py3-none-any.whl",
-  "size": 42640188,
-  "sha256": "d03f5334c3bdc252aa10841a7dd2cb83ebb23ab8e8866869320165f4e523fbc2",
-  "requires": []
- },
- {
-  "language": "mk",
-  "tier": "md",
-  "model": "mk_core_news_md",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/mk_core_news_md-3.8.0/mk_core_news_md-3.8.0-py3-none-any.whl",
-  "size": 44979964,
-  "sha256": "23300360bc56902b8b2d9ac92af028744a80e1112d029dcc9a2fa730c6bb74c7",
-  "requires": []
- },
- {
-  "language": "nb",
-  "tier": "md",
-  "model": "nb_core_news_md",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/nb_core_news_md-3.8.0/nb_core_news_md-3.8.0-py3-none-any.whl",
-  "size": 42326426,
-  "sha256": "c38bf491c9fa3f94fa8cf50ce6aa7068a47e81be465e27fbab6330077db5995e",
-  "requires": []
- },
- {
-  "language": "nl",
-  "tier": "md",
-  "model": "nl_core_news_md",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/nl_core_news_md-3.8.0/nl_core_news_md-3.8.0-py3-none-any.whl",
-  "size": 42753148,
-  "sha256": "8969da865bb746189783c40197a7e2c082adda73b7fc0d9a364a5e644ff54e68",
-  "requires": []
- },
- {
-  "language": "pl",
-  "tier": "md",
-  "model": "pl_core_news_md",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/pl_core_news_md-3.8.0/pl_core_news_md-3.8.0-py3-none-any.whl",
-  "size": 49492508,
-  "sha256": "4f433a556880c0b7ef01970e7c612c0e30103b893e6d26ed54672d8e056ad9b1",
-  "requires": []
- },
- {
-  "language": "pt",
-  "tier": "md",
-  "model": "pt_core_news_md",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/pt_core_news_md-3.8.0/pt_core_news_md-3.8.0-py3-none-any.whl",
-  "size": 42372276,
-  "sha256": "54382cda034e41f3ec605ceeb924cd6cfdbced00a65f7afa12218520ba7008c5",
-  "requires": []
- },
- {
-  "language": "ro",
-  "tier": "md",
-  "model": "ro_core_news_md",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/ro_core_news_md-3.8.0/ro_core_news_md-3.8.0-py3-none-any.whl",
-  "size": 42466242,
-  "sha256": "e8606efe3732c84a629c7a586d9d6ec2fb197d787513b3033903d56496dc9db1",
-  "requires": []
- },
- {
-  "language": "ru",
-  "tier": "md",
-  "model": "ru_core_news_md",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/ru_core_news_md-3.8.0/ru_core_news_md-3.8.0-py3-none-any.whl",
-  "size": 41884158,
-  "sha256": "43f456d40e4b70726874e01ce01fce32f50089ba98a2660292e9a6c63a06ebe9",
-  "requires": []
- },
- {
-  "language": "sl",
-  "tier": "md",
-  "model": "sl_core_news_md",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/sl_core_news_md-3.8.0/sl_core_news_md-3.8.0-py3-none-any.whl",
-  "size": 68014093,
-  "sha256": "5f1000c8bdc00044f69c25f6be0747778e6377ee13c236821caeb5ed8f9c932e",
-  "requires": []
- },
- {
-  "language": "sv",
-  "tier": "md",
-  "model": "sv_core_news_md",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/sv_core_news_md-3.8.0/sv_core_news_md-3.8.0-py3-none-any.whl",
-  "size": 67098284,
-  "sha256": "f5e719fcf728bd5552daf70f278aba08113ce939714a070dd97f02a2aa2903bc",
-  "requires": []
- },
- {
-  "language": "uk",
-  "tier": "md",
-  "model": "uk_core_news_md",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/uk_core_news_md-3.8.0/uk_core_news_md-3.8.0-py3-none-any.whl",
-  "size": 69127361,
-  "sha256": "583c65ab55d6bdbe3b3ebe86978bf4f6a8aab0b6778ea8c4c5ab529722abaafd",
-  "requires": []
- },
- {
-  "language": "xx",
-  "tier": "sm",
-  "model": "xx_ent_wiki_sm",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/xx_ent_wiki_sm-3.8.0/xx_ent_wiki_sm-3.8.0-py3-none-any.whl",
-  "size": 11099251,
-  "sha256": "6f3c4b853852ea9e9d2dc76cc950dddb10a7e4c42d813308caefe6c5e8be2f0a",
-  "requires": []
- },
- {
-  "language": "zh",
-  "tier": "md",
-  "model": "zh_core_web_md",
-  "version": "3.8.0",
-  "url": "https://github.com/explosion/spacy-models/releases/download/zh_core_web_md-3.8.0/zh_core_web_md-3.8.0-py3-none-any.whl",
-  "size": 78021257,
-  "sha256": "bcf300540fbd15b1b0aac358f327f2a31de8992b346162d5600f843514da0e98",
-  "requires": [
-   "spacy-pkuseg <2.0.0,>=1.0.0",
-   "spacy-pkuseg>=0.0.27"
-  ]
- }
+  {
+    "language": "ca",
+    "tier": "md",
+    "model": "ca_core_news_md",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/ca_core_news_md-3.8.0/ca_core_news_md-3.8.0-py3-none-any.whl",
+    "size": 49218061,
+    "sha256": "c5fb452714d51312aa7052e94148b0a0fd0efa6ffdadf24b64484a745df9bdfc",
+    "requires": []
+  },
+  {
+    "language": "ca",
+    "tier": "lg",
+    "model": "ca_core_news_lg",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/ca_core_news_lg-3.8.0/ca_core_news_lg-3.8.0-py3-none-any.whl",
+    "size": 574014041,
+    "sha256": "6cee39a577ebee3a170154efdd67b7d8c290e6cfd5b8c6a243dff3fbbee14766",
+    "requires": []
+  },
+  {
+    "language": "da",
+    "tier": "md",
+    "model": "da_core_news_md",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/da_core_news_md-3.8.0/da_core_news_md-3.8.0-py3-none-any.whl",
+    "size": 42185382,
+    "sha256": "884380bf67bc587a8ddb829781a275f8dae488093cb457d346cc0808ea2eb355",
+    "requires": []
+  },
+  {
+    "language": "da",
+    "tier": "lg",
+    "model": "da_core_news_lg",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/da_core_news_lg-3.8.0/da_core_news_lg-3.8.0-py3-none-any.whl",
+    "size": 567077511,
+    "sha256": "a3a7184f775c6b5da6fcfebad4fe6819c588b8a405936d023c56f554a5811ec7",
+    "requires": []
+  },
+  {
+    "language": "de",
+    "tier": "md",
+    "model": "de_core_news_md",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/de_core_news_md-3.8.0/de_core_news_md-3.8.0-py3-none-any.whl",
+    "size": 44398316,
+    "sha256": "b903f59220f1e76dd672acdaa7fa454d6703fe056c5ccd6457820e70874116d0",
+    "requires": []
+  },
+  {
+    "language": "de",
+    "tier": "lg",
+    "model": "de_core_news_lg",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/de_core_news_lg-3.8.0/de_core_news_lg-3.8.0-py3-none-any.whl",
+    "size": 567843151,
+    "sha256": "36fda650e476b54d5e87803635e36dadd1e8e034c4b5962088586d684f4c9fed",
+    "requires": []
+  },
+  {
+    "language": "el",
+    "tier": "md",
+    "model": "el_core_news_md",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/el_core_news_md-3.8.0/el_core_news_md-3.8.0-py3-none-any.whl",
+    "size": 42956931,
+    "sha256": "a18bdd6d2b81de37eeac2d05f7feada51c54bcda76f910a3feeef1bd34a7b296",
+    "requires": []
+  },
+  {
+    "language": "el",
+    "tier": "lg",
+    "model": "el_core_news_lg",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/el_core_news_lg-3.8.0/el_core_news_lg-3.8.0-py3-none-any.whl",
+    "size": 568630235,
+    "sha256": "3bf603778bda163a1770f66aadf6b9b1030d9ecb3cbdb24d690c060bbf4d598c",
+    "requires": []
+  },
+  {
+    "language": "en",
+    "tier": "md",
+    "model": "en_core_web_md",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/en_core_web_md-3.8.0/en_core_web_md-3.8.0-py3-none-any.whl",
+    "size": 33480380,
+    "sha256": "5e6329fe3fecedb1d1a02c3ea2172ee0fede6cea6e4aefb6a02d832dba78a310",
+    "requires": []
+  },
+  {
+    "language": "en",
+    "tier": "lg",
+    "model": "en_core_web_lg",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl",
+    "size": 400658291,
+    "sha256": "293e9547a655b25499198ab15a525b05b9407a75f10255e405e8c3854329ab63",
+    "requires": []
+  },
+  {
+    "language": "es",
+    "tier": "md",
+    "model": "es_core_news_md",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/es_core_news_md-3.8.0/es_core_news_md-3.8.0-py3-none-any.whl",
+    "size": 42284033,
+    "sha256": "478b8bb3f3e8eb149192f7d80e7cd64f990b7e9bccbc5329df41a57e86326be2",
+    "requires": []
+  },
+  {
+    "language": "fi",
+    "tier": "md",
+    "model": "fi_core_news_md",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/fi_core_news_md-3.8.0/fi_core_news_md-3.8.0-py3-none-any.whl",
+    "size": 68522623,
+    "sha256": "4037fca013fb9d0e5ffca0fdc77cc6a8965bf2c566e763c63a73e4765772bc9f",
+    "requires": []
+  },
+  {
+    "language": "fr",
+    "tier": "md",
+    "model": "fr_core_news_md",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/fr_core_news_md-3.8.0/fr_core_news_md-3.8.0-py3-none-any.whl",
+    "size": 45836173,
+    "sha256": "8a70d090a54ef77525c3ffa6a6195b9d365f2cf369ae1cd84ede93f3d709079e",
+    "requires": []
+  },
+  {
+    "language": "hr",
+    "tier": "md",
+    "model": "hr_core_news_md",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/hr_core_news_md-3.8.0/hr_core_news_md-3.8.0-py3-none-any.whl",
+    "size": 67533611,
+    "sha256": "241a53f12c5f489c95f5ca4b2e7b3015464950d2feeac4a8be588815c9251f3e",
+    "requires": []
+  },
+  {
+    "language": "it",
+    "tier": "md",
+    "model": "it_core_news_md",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/it_core_news_md-3.8.0/it_core_news_md-3.8.0-py3-none-any.whl",
+    "size": 42389964,
+    "sha256": "a731d2d8e7c5a7093ac42f88774ea2a2ad3d5809959eedee65632b3533f804ec",
+    "requires": []
+  },
+  {
+    "language": "ja",
+    "tier": "md",
+    "model": "ja_core_news_md",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/ja_core_news_md-3.8.0/ja_core_news_md-3.8.0-py3-none-any.whl",
+    "size": 42105500,
+    "sha256": "17c3497539bd970546b75e36c274b3fa183511b6ef59a178017aa02dde3a090a",
+    "requires": [
+      "sudachipy !=0.6.1,>=0.5.2",
+      "sudachidict-core >=20211220"
+    ]
+  },
+  {
+    "language": "ko",
+    "tier": "md",
+    "model": "ko_core_news_md",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/ko_core_news_md-3.8.0/ko_core_news_md-3.8.0-py3-none-any.whl",
+    "size": 69046876,
+    "sha256": "f3a412f328cd3a19daeac74611d22fa7af3eb952333a8fb82de1dd46ac4cf488",
+    "requires": []
+  },
+  {
+    "language": "lt",
+    "tier": "md",
+    "model": "lt_core_news_md",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/lt_core_news_md-3.8.0/lt_core_news_md-3.8.0-py3-none-any.whl",
+    "size": 42640188,
+    "sha256": "d03f5334c3bdc252aa10841a7dd2cb83ebb23ab8e8866869320165f4e523fbc2",
+    "requires": []
+  },
+  {
+    "language": "mk",
+    "tier": "md",
+    "model": "mk_core_news_md",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/mk_core_news_md-3.8.0/mk_core_news_md-3.8.0-py3-none-any.whl",
+    "size": 44979964,
+    "sha256": "23300360bc56902b8b2d9ac92af028744a80e1112d029dcc9a2fa730c6bb74c7",
+    "requires": []
+  },
+  {
+    "language": "nb",
+    "tier": "md",
+    "model": "nb_core_news_md",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/nb_core_news_md-3.8.0/nb_core_news_md-3.8.0-py3-none-any.whl",
+    "size": 42326426,
+    "sha256": "c38bf491c9fa3f94fa8cf50ce6aa7068a47e81be465e27fbab6330077db5995e",
+    "requires": []
+  },
+  {
+    "language": "nl",
+    "tier": "md",
+    "model": "nl_core_news_md",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/nl_core_news_md-3.8.0/nl_core_news_md-3.8.0-py3-none-any.whl",
+    "size": 42753148,
+    "sha256": "8969da865bb746189783c40197a7e2c082adda73b7fc0d9a364a5e644ff54e68",
+    "requires": []
+  },
+  {
+    "language": "pl",
+    "tier": "md",
+    "model": "pl_core_news_md",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/pl_core_news_md-3.8.0/pl_core_news_md-3.8.0-py3-none-any.whl",
+    "size": 49492508,
+    "sha256": "4f433a556880c0b7ef01970e7c612c0e30103b893e6d26ed54672d8e056ad9b1",
+    "requires": []
+  },
+  {
+    "language": "pt",
+    "tier": "md",
+    "model": "pt_core_news_md",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/pt_core_news_md-3.8.0/pt_core_news_md-3.8.0-py3-none-any.whl",
+    "size": 42372276,
+    "sha256": "54382cda034e41f3ec605ceeb924cd6cfdbced00a65f7afa12218520ba7008c5",
+    "requires": []
+  },
+  {
+    "language": "ro",
+    "tier": "md",
+    "model": "ro_core_news_md",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/ro_core_news_md-3.8.0/ro_core_news_md-3.8.0-py3-none-any.whl",
+    "size": 42466242,
+    "sha256": "e8606efe3732c84a629c7a586d9d6ec2fb197d787513b3033903d56496dc9db1",
+    "requires": []
+  },
+  {
+    "language": "ru",
+    "tier": "md",
+    "model": "ru_core_news_md",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/ru_core_news_md-3.8.0/ru_core_news_md-3.8.0-py3-none-any.whl",
+    "size": 41884158,
+    "sha256": "43f456d40e4b70726874e01ce01fce32f50089ba98a2660292e9a6c63a06ebe9",
+    "requires": []
+  },
+  {
+    "language": "sl",
+    "tier": "md",
+    "model": "sl_core_news_md",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/sl_core_news_md-3.8.0/sl_core_news_md-3.8.0-py3-none-any.whl",
+    "size": 68014093,
+    "sha256": "5f1000c8bdc00044f69c25f6be0747778e6377ee13c236821caeb5ed8f9c932e",
+    "requires": []
+  },
+  {
+    "language": "sv",
+    "tier": "md",
+    "model": "sv_core_news_md",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/sv_core_news_md-3.8.0/sv_core_news_md-3.8.0-py3-none-any.whl",
+    "size": 67098284,
+    "sha256": "f5e719fcf728bd5552daf70f278aba08113ce939714a070dd97f02a2aa2903bc",
+    "requires": []
+  },
+  {
+    "language": "uk",
+    "tier": "md",
+    "model": "uk_core_news_md",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/uk_core_news_md-3.8.0/uk_core_news_md-3.8.0-py3-none-any.whl",
+    "size": 69127361,
+    "sha256": "583c65ab55d6bdbe3b3ebe86978bf4f6a8aab0b6778ea8c4c5ab529722abaafd",
+    "requires": []
+  },
+  {
+    "language": "xx",
+    "tier": "sm",
+    "model": "xx_ent_wiki_sm",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/xx_ent_wiki_sm-3.8.0/xx_ent_wiki_sm-3.8.0-py3-none-any.whl",
+    "size": 11099251,
+    "sha256": "6f3c4b853852ea9e9d2dc76cc950dddb10a7e4c42d813308caefe6c5e8be2f0a",
+    "requires": []
+  },
+  {
+    "language": "zh",
+    "tier": "md",
+    "model": "zh_core_web_md",
+    "version": "3.8.0",
+    "url": "https://github.com/explosion/spacy-models/releases/download/zh_core_web_md-3.8.0/zh_core_web_md-3.8.0-py3-none-any.whl",
+    "size": 78021257,
+    "sha256": "bcf300540fbd15b1b0aac358f327f2a31de8992b346162d5600f843514da0e98",
+    "requires": [
+      "spacy-pkuseg <2.0.0,>=1.0.0",
+      "spacy-pkuseg>=0.0.27"
+    ]
+  }
 ]

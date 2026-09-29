@@ -421,11 +421,20 @@ def install_pack(
         done += count
         progress(done, total, detail)
 
+    def progress_for(detail: str) -> Callable[[int], None]:
+        def report(count: int) -> None:
+            advance(count, detail)
+
+        return report
+
     try:
         for item in entry["files"]:
             _download(
-                item, staging / item["filename"], cancelled=cancelled,
-                progress=lambda count, name=item["filename"]: advance(count, name), opener=opener,
+                item,
+                staging / item["filename"],
+                cancelled=cancelled,
+                progress=progress_for(str(item["filename"])),
+                opener=opener,
             )
         files = {item["role"]: f"{entry['pack_id']}/{item['filename']}" for item in entry["files"]}
         model_name = ""
