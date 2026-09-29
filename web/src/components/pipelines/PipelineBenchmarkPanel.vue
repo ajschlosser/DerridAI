@@ -267,11 +267,7 @@ function seconds(value: number | null | undefined) {
               class="btn"
               type="button"
               :disabled="
-                creating ||
-                !caseId.trim() ||
-                caseVersion < 1 ||
-                !prompt.trim() ||
-                !collection
+                creating || !caseId.trim() || caseVersion < 1 || !prompt.trim() || !collection
               "
               @click="createCase"
             >
@@ -314,7 +310,11 @@ function seconds(value: number | null | undefined) {
                 <option value="" disabled>
                   {{ t("pipelines.benchmark_choose_case", "Choose a saved case") }}
                 </option>
-                <option v-for="item in cases" :key="benchmarkCaseKey(item)" :value="benchmarkCaseKey(item)">
+                <option
+                  v-for="item in cases"
+                  :key="benchmarkCaseKey(item)"
+                  :value="benchmarkCaseKey(item)"
+                >
                   {{ item.case_id }} · v{{ item.version }} · {{ item.source_collection }}
                 </option>
               </select>
@@ -351,7 +351,9 @@ function seconds(value: number | null | undefined) {
               <strong>{{ selectedCase.prompt }}</strong>
             </div>
             <div>
-              <span>{{ t("pipelines.benchmark_corpus_fingerprint", "Corpus/index fingerprint") }}</span>
+              <span>{{
+                t("pipelines.benchmark_corpus_fingerprint", "Corpus/index fingerprint")
+              }}</span>
               <code>{{ selectedCase.corpus_snapshot.fingerprint }}</code>
             </div>
             <div>
@@ -407,7 +409,9 @@ function seconds(value: number | null | undefined) {
           <div class="metrics">
             <div>
               <span>{{ t("pipelines.compare_candidate_overlap", "Candidate-pool overlap") }}</span>
-              <strong>{{ percent(benchmark.comparison.comparison.candidate_overlap.jaccard_overlap) }}</strong>
+              <strong>{{
+                percent(benchmark.comparison.comparison.candidate_overlap.jaccard_overlap)
+              }}</strong>
             </div>
             <div>
               <span>{{ t("pipelines.compare_overlap", "Final evidence overlap") }}</span>
