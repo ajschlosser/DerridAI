@@ -304,7 +304,7 @@ function isFavorite(id: string) {
   padding: 0 9px;
   color: var(--text-tertiary);
   font-family: var(--font-ui);
-  font-size: 0.6875rem;
+  font-size: var(--fs-xs);
   font-weight: var(--fw-semibold, 650);
   letter-spacing: 0.075em;
   line-height: 1.5;
@@ -340,7 +340,7 @@ function isFavorite(id: string) {
   box-shadow: none;
   color: var(--muted);
   font-family: var(--font-ui);
-  font-size: 0.6875rem;
+  font-size: var(--fs-xs);
   font-weight: var(--fw-semibold, 650);
   letter-spacing: 0.075em;
   line-height: 1.25;

@@ -872,7 +872,13 @@ Compare is a Vue-native two-column workspace at **Tools → Compare**. Each colu
 
 ## Help center
 
-The **?** button in the top bar opens a short help dialog; **Open the help center** leads to a searchable page of questions and answers. Each answer ends with **What this changes later**, describing the downstream effect of the decision. Researchers see the general and Research topics; administrators also see Record review and metadata-memory topics.
+The **?** button in the top bar opens a short help dialog; **Open the help center** opens the full Help Center. It now has three coordinated ways to find an answer:
+
+- **Guides for every page** — every application route that renders a page has a Help Center guide explaining what that page is for, its main tasks, and what actions there affect elsewhere. The list follows the same role and capability boundaries as the application, so administrator-only workspaces are not advertised to users who cannot open them.
+- **Plain-language glossary** — technical concepts used by Search, Research, Corpus Builder, Pipeline Studio, metadata memory, and vector storage are defined for non-technical academic users. The glossary covers LLMs and providers, embeddings, RAG, semantic and lexical search, MMR, reranking, cross-encoders, reciprocal-rank fusion, `top_k`, `fetch_k`, MMR lambda, evidence budgets, provenance, FieldAssertion, SourceSpan, Chroma, derived indexes, cached responses, and related terminology. Parameter entries explain the practical trade-off of changing the value rather than only expanding the abbreviation.
+- **Common workflow questions** — the existing decision-focused answers remain available. Each ends with **What this changes later**, describing the downstream effect of the decision on review, evidence, calibration, memory, publication, or Research.
+
+One search box searches page titles and descriptions, page tasks and downstream effects, glossary terms and definitions (including common aliases such as “cross-encoder” and “nucleus sampling”), and the detailed workflow questions. Glossary category filters narrow the results to AI & models, retrieval & ranking, parameters, evidence & provenance, or storage & indexes. Search result counts are announced to assistive technology, the page has keyboard-visible focus states, and the layout collapses to one column on smaller screens.
 
 ## Settings
 
