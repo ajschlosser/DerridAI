@@ -157,8 +157,8 @@ def compile_metadata_precedent_pipeline(
         mmr_stage_id=mmr.id,
         pack_stage_id=pack.id,
         fetch_k=(
-            int(retrieve.config["max_items"])
-            if "max_items" in retrieve.config
+            int(retrieve.config["fetch_k"])
+            if "fetch_k" in retrieve.config
             else None
         ),
         semantic_weight=semantic_weight,
