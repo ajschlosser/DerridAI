@@ -45,7 +45,10 @@ describe("Help Center", () => {
   });
 
   it("offers a substantial workflow FAQ without exposing admin-only guidance to researchers", () => {
-    const questionCount = HELP_SECTIONS.reduce((total, section) => total + section.questions.length, 0);
+    const questionCount = HELP_SECTIONS.reduce(
+      (total, section) => total + section.questions.length,
+      0,
+    );
     expect(questionCount).toBeGreaterThanOrEqual(30);
 
     const commonIds = visibleHelp(false, "", t).flatMap((section) =>
@@ -55,7 +58,6 @@ describe("Help Center", () => {
     expect(commonIds).toContain("retrieval_modes");
     expect(commonIds).toContain("slow_run");
     expect(commonIds).not.toContain("needs_review");
-
 
     const researcherQuestions = visibleHelp(false, "", t).map((section) => section.id);
     const adminQuestions = visibleHelp(true, "", t).map((section) => section.id);
