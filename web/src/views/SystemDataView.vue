@@ -17,33 +17,60 @@ const route = useRoute();
 const router = useRouter();
 const i18n = useI18nStore();
 
-const sections: Array<{ id: Section; labelKey: string; fallback: string; icon: string }> = [
-  { id: "overview", labelKey: "runtime.system_overview", fallback: "Overview", icon: "dashboard" },
-  { id: "responses", labelKey: "runtime.system_responses", fallback: "Responses", icon: "record" },
+const sections: Array<{
+  id: Section;
+  routeName: string;
+  labelKey: string;
+  fallback: string;
+  icon: string;
+}> = [
+  {
+    id: "overview",
+    routeName: "system-data-overview",
+    labelKey: "runtime.system_overview",
+    fallback: "Overview",
+    icon: "dashboard",
+  },
+  {
+    id: "responses",
+    routeName: "system-data-responses",
+    labelKey: "runtime.system_responses",
+    fallback: "Responses",
+    icon: "record",
+  },
   {
     id: "metadata",
+    routeName: "system-data-metadata",
     labelKey: "runtime.system_metadata_examples",
     fallback: "Metadata examples",
     icon: "spark",
   },
   {
     id: "pipelines",
+    routeName: "system-data-pipelines",
     labelKey: "pipelines.title",
     fallback: "Pipeline Studio",
     icon: "compare",
   },
   {
     id: "databases",
+    routeName: "system-data-databases",
     labelKey: "runtime.system_databases",
     fallback: "Databases",
     icon: "database",
   },
-  { id: "advanced", labelKey: "runtime.system_advanced", fallback: "Advanced", icon: "gear" },
+  {
+    id: "advanced",
+    routeName: "system-data-advanced",
+    labelKey: "runtime.system_advanced",
+    fallback: "Advanced",
+    icon: "gear",
+  },
 ];
 
 const activeSection = computed<Section>(() => {
-  const requested = String(route.query.section || "overview");
-  return sections.some((item) => item.id === requested) ? (requested as Section) : "overview";
+  const match = sections.find((item) => item.routeName === String(route.name || ""));
+  return match?.id || "overview";
 });
 const activeComponent = computed(
   () =>
@@ -62,7 +89,9 @@ function t(key: string, fallback: string) {
 }
 
 function setSection(section: Section) {
-  void router.push({ path: "/system-data", query: { ...route.query, section } });
+  const target = sections.find((item) => item.id === section);
+  if (!target || target.routeName === route.name) return;
+  void router.push({ name: target.routeName, query: route.query });
 }
 </script>
 
