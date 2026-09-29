@@ -809,6 +809,46 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
             },
         ],
     ),
+    _pipeline(
+        pipeline_id="precedent.remap.current",
+        version=1,
+        name="Precedent evidence remapping — current Record",
+        purpose="precedent_evidence_remap",
+        status="active",
+        entry_stage_ids=["semantic"],
+        notes=(
+            "Ranks the current Record's own source units against a reviewed "
+            "precedent's evidence text by embedding similarity, falling back to "
+            "word overlap when no embedding service is available or it fails. "
+            "Only source units of the current Record can be candidates, and the "
+            "three best per precedent are kept. Candidates are advisory and bind "
+            "nothing."
+        ),
+        stages=[
+            {
+                "id": "semantic",
+                "strategy": "retrieve.source_cosine",
+                "next": ["provenance"],
+                "on_unavailable": "lexical",
+                "on_error": "lexical",
+            },
+            {
+                "id": "lexical",
+                "strategy": "retrieve.token_overlap",
+                "next": ["provenance"],
+            },
+            {
+                "id": "provenance",
+                "strategy": "validate.provenance",
+                "next": ["select"],
+            },
+            {
+                "id": "select",
+                "strategy": "select.top_k",
+                "config": {"limit": 3},
+            },
+        ],
+    ),
 )
 
 BUILT_IN_ASSIGNMENTS: tuple[PipelineAssignment, ...] = (
@@ -823,6 +863,13 @@ BUILT_IN_ASSIGNMENTS: tuple[PipelineAssignment, ...] = (
         feature="evidence_suggestion.reviewer",
         pipeline_id="evidence.reviewer.current",
         pipeline_version=2,
+        source="built_in",
+        override_allowed=True,
+    ),
+    PipelineAssignment(
+        feature="precedent_evidence_remap",
+        pipeline_id="precedent.remap.current",
+        pipeline_version=1,
         source="built_in",
         override_allowed=True,
     ),

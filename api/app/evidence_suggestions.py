@@ -335,54 +335,49 @@ def _cosine(left: list[float], right: list[float]) -> float:
     return dot / norm if norm else 0.0
 
 
-def rank_blocks_for_texts(
-    queries: list[str],
-    blocks: list[dict[str, Any]],
-    *,
-    embed: Any = None,
-    limit: int = 3,
-) -> tuple[list[list[dict[str, Any]]], str]:
-    """Rank the record's blocks against each query text (a precedent's reviewed evidence).
+def semantic_block_scores(
+    queries: list[str], blocks: list[dict[str, Any]], embed: Any
+) -> list[list[float]]:
+    """Cosine of each query text against each block. Raises when the embedder fails or is incomplete.
 
-    The query is only a search key: its text is never copied into the result. Each candidate names one
-    of ``blocks`` by ID with its score and method. ``embed`` (texts -> vectors) gives semantic ranking;
-    without it, or if it fails, a conservative token-overlap score is used and the method says so.
-    Returns one ranked list per query, and the method used.
+    Queries are a precedent's reviewed evidence and serve only as search keys; their text is
+    never copied into any result.
     """
-    if not queries or not blocks:
-        return [[] for _ in queries], PRECEDENT_LEXICAL_METHOD
-    scores: list[list[float]] | None = None
-    method = PRECEDENT_SEMANTIC_METHOD
-    if embed is not None:
-        try:
-            vectors = embed([*queries, *(str(block["text"]) for block in blocks)])
-            if len(vectors) == len(queries) + len(blocks):
-                query_vectors = [list(map(float, v)) for v in vectors[: len(queries)]]
-                block_vectors = [list(map(float, v)) for v in vectors[len(queries):]]
-                scores = [[_cosine(q, b) for b in block_vectors] for q in query_vectors]
-        except Exception:  # noqa: BLE001 - ranking is advisory; lexical ranking below stays available
-            scores = None
-    if scores is None:
-        method = PRECEDENT_LEXICAL_METHOD
-        block_tokens = [set(_tokens(str(block["text"]))) for block in blocks]
-        scores = []
-        for query in queries:
-            wanted = set(_tokens(query))
-            scores.append([
-                (len(wanted & toks) / len(wanted | toks)) if (wanted | toks) else 0.0 for toks in block_tokens
-            ])
+    vectors = embed([*queries, *(str(block["text"]) for block in blocks)])
+    if len(vectors) != len(queries) + len(blocks):
+        raise ValueError("The embedder returned the wrong number of vectors.")
+    query_vectors = [list(map(float, v)) for v in vectors[: len(queries)]]
+    block_vectors = [list(map(float, v)) for v in vectors[len(queries):]]
+    return [[_cosine(q, b) for b in block_vectors] for q in query_vectors]
+
+
+def lexical_block_scores(queries: list[str], blocks: list[dict[str, Any]]) -> list[list[float]]:
+    """Conservative word-overlap (Jaccard) score of each query text against each block."""
+    block_tokens = [set(_tokens(str(block["text"]))) for block in blocks]
+    scores = []
+    for query in queries:
+        wanted = set(_tokens(query))
+        scores.append([
+            (len(wanted & toks) / len(wanted | toks)) if (wanted | toks) else 0.0 for toks in block_tokens
+        ])
+    return scores
+
+
+def ranked_block_candidates(
+    scores: list[list[float]], blocks: list[dict[str, Any]], *, method: str, min_score: float = 0.0
+) -> list[list[dict[str, Any]]]:
+    """Per query, every block scoring above zero and at least ``min_score``, best first, without its text."""
     ranked: list[list[dict[str, Any]]] = []
     for row in scores:
-        order = sorted(range(len(blocks)), key=lambda index: (-row[index], index))
         picks = []
-        for index in order[: max(0, int(limit))]:
+        for index in sorted(range(len(blocks)), key=lambda index: (-row[index], index)):
             score = max(0.0, min(1.0, row[index]))
-            if score <= 0:
+            if score <= 0 or score < min_score:
                 continue
             unit = {key: value for key, value in blocks[index].items() if key != "text"}
             picks.append({**unit, "score": round(score, 4), "method": method})
         ranked.append(picks)
-    return ranked, method
+    return ranked
 
 
 LLM_METHOD = "llm-evidence-choice-v1"

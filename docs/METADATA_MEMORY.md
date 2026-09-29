@@ -91,6 +91,10 @@ Whether a value is actually pre-filled is DerridAI policy, not a pipeline settin
 
 Each build records one pipeline trace (spans queried, exemplars returned, similarity range, hints kept, embedding provider/model) and keeps the pipeline identity in its `memory_prefill` summary. An unavailable embedder, store, or pipeline assignment is reported there and the build continues without pre-fill.
 
+## Candidate source units for a precedent
+
+When the reviewer's precedents panel shows a precedent, DerridAI ranks the current Record's own source units against that precedent's reviewed evidence so the reviewer can check where this Record may support the same value. The assigned `precedent_evidence_remap` pipeline (built-in `precedent.remap.current@1`) runs embedding similarity, falls back to word overlap when no embedding service is available or it fails, passes a provenance gate that admits only source units of the current Record, and keeps the three best. Candidates are advisory: they never bind evidence, never carry the precedent's text or source identity, and are re-checked against the Record's current source units when read. Enrichment records one pipeline trace per Record (`candidate_pipeline` on the kept cache); a live panel search records one per request.
+
 ## Separation from other memory
 
 Do not conflate these systems:

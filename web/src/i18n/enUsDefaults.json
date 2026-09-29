@@ -7049,6 +7049,7 @@
   "pipelines.purpose_evidence_recovery": "Evidence recovery",
   "pipelines.purpose_store_search": "Vector Store search",
   "pipelines.purpose_metadata_prefill": "Metadata pre-fill",
+  "pipelines.purpose_precedent_remap": "Precedent evidence remapping",
   "pipelines.purpose_precedents": "Metadata precedents",
   "pipelines.purpose_research": "Research",
   "pipelines.purpose_response_memory": "Response memory",
