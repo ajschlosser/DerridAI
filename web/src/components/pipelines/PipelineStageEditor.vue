@@ -169,7 +169,10 @@ const strategiesByFamily = computed(() => {
     <PipelineStageConnections
       :stage="stage"
       :stages="stages"
-      @toggle-next="emit('toggleNext', stageIndex, $event, $event)"
+      @toggle-next="(targetId, checked) => emit('toggleNext', stageIndex, targetId, checked)"
+      @update-fallback="
+        (key, target) => emit('updateFallback', stageIndex, key, target)
+      "
     />
 
     <PipelineStrategyConfigFields
