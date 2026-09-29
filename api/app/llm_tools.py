@@ -871,6 +871,7 @@ def run_rag_grade(
         f"[{item.get('evidence_id', f'E{index}')}] "
         f"{(item.get('record') or {}).get('work', '')} "
         f"{item.get('inline_citation', '')}\n"
+        f"document_author={(item.get('record') or {}).get('document_author', '')}\n"
         f"{str((item.get('record') or {}).get('text', ''))[:3500]}"
         for index, item in enumerate(evidence)
     )
@@ -892,8 +893,10 @@ interpretive_usefulness. Each category must contain an integer `score` from 0-10
 and a concise `analysis` explaining the score against the supplied evidence. Also
 include `overall` as an object with `score` and `analysis`, plus top-level
 `strengths`, `weaknesses`, `unsupported_or_risky_claims`, `summary`, and
-`analysis`. Preserve source-role distinctions: distinguish Derrida's claims from
-quoted, attributed, reconstructed, questioned, criticized, or endorsed positions."""
+`analysis`. Use document_author from each evidence item, when present, as the
+source-document author; never substitute a default author. Preserve source-role
+distinctions: distinguish the source author's claims from quoted, attributed,
+reconstructed, questioned, criticized, or endorsed positions."""
     raw = chat_complete(
         provider=body.provider, model=_model_for(body.provider, body.model),
         base_url=body.base_url, api_key=body.api_key, prompt=prompt,
