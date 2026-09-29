@@ -396,6 +396,7 @@ class MetadataEnrichmentExecutionMixin:
                 and editorial_examples[field]
             }
             return f"""Document manifest: {json.dumps(manifest, ensure_ascii=False)}
+When document_author is present in the manifest, use it as source-document authorship context. Do not substitute a default author when it is absent, and do not infer that document_author is the speaker or position holder without evidence in this record.
 Build-local editorial conventions confirmed on at least two other records (advisory context only; do not copy unless supported here): {json.dumps(editorial_context, ensure_ascii=False)}
 Relevant human-confirmed examples for fields in THIS metadata family (few-shot guidance only; source evidence in THIS record remains authoritative): {json.dumps(relevant_examples, ensure_ascii=False)}
 If a retrieved example has kind="correction", its value is the human-supported classification and rejected_value is a known prior model mistake. Treat rejected_value as a negative precedent only; never copy or prefer it because it appears in the example.
