@@ -93,3 +93,35 @@ def test_builtin_resolution_exposes_assignment_pipeline_and_validation() -> None
     assert result["pipeline"]["purpose"] == "research"
     assert result["validation"]["valid"] is True
     assert len(result["pipeline_hash"]) == 64
+
+
+
+def test_pipeline_validator_rejects_unknown_config_keys() -> None:
+    service = PipelineService()
+    pipeline = PipelineDefinition.model_validate(
+        {
+            "pipeline_id": "bad-config",
+            "version": 1,
+            "name": "Bad config",
+            "purpose": "test",
+            "entry_stage_ids": ["retrieve"],
+            "stages": [
+                {
+                    "id": "retrieve",
+                    "strategy": "retrieve.lexical_bm25",
+                    "config": {"fetch_kk": 25},
+                    "next": ["select"],
+                },
+                {
+                    "id": "select",
+                    "strategy": "select.top_k",
+                    "config": {"limit": 5},
+                },
+            ],
+        }
+    )
+
+    result = service.validate(pipeline)
+
+    assert result.valid is False
+    assert any(issue.code == "unknown_config_key" for issue in result.issues)
