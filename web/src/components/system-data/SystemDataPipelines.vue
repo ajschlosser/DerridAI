@@ -117,7 +117,10 @@ async function load() {
     ]);
     catalog.value = nextCatalog;
     runs.value = tracePage.runs || [];
-    if (!selectedKey.value || !nextCatalog.pipelines.some((item) => keyFor(item) === selectedKey.value)) {
+    if (
+      !selectedKey.value ||
+      !nextCatalog.pipelines.some((item) => keyFor(item) === selectedKey.value)
+    ) {
       const assignedResearch = nextCatalog.assignments.find((item) => item.feature === "research");
       const preferred = nextCatalog.pipelines.find(
         (item) =>
@@ -386,10 +389,7 @@ onMounted(load);
             </div>
           </div>
 
-          <p
-            v-if="selectedPipeline.runtime_support?.reason"
-            class="support-note"
-          >
+          <p v-if="selectedPipeline.runtime_support?.reason" class="support-note">
             <AppIcon name="help" />
             {{ selectedPipeline.runtime_support.reason }}
           </p>
@@ -418,11 +418,17 @@ onMounted(load);
             <div>
               <strong>{{ t("pipelines.custom_assignment", "Custom system assignment") }}</strong>
               <span>
-                {{ selectedAssignment.feature }} ·
-                {{ selectedAssignment.pipeline_id }}@{{ selectedAssignment.pipeline_version }}
+                {{ selectedAssignment.feature }} · {{ selectedAssignment.pipeline_id }}@{{
+                  selectedAssignment.pipeline_version
+                }}
               </span>
             </div>
-            <button class="btn" type="button" :disabled="assigning" @click="resetSelectedAssignment">
+            <button
+              class="btn"
+              type="button"
+              :disabled="assigning"
+              @click="resetSelectedAssignment"
+            >
               {{ t("pipelines.restore_default", "Restore built-in default") }}
             </button>
           </footer>
@@ -432,7 +438,9 @@ onMounted(load);
       <section v-if="draft" class="editor-card" aria-labelledby="pipeline-editor-title">
         <header class="editor-heading">
           <div>
-            <div class="detail-kicker">{{ t("pipelines.new_version", "New pipeline version") }}</div>
+            <div class="detail-kicker">
+              {{ t("pipelines.new_version", "New pipeline version") }}
+            </div>
             <h3 id="pipeline-editor-title">
               {{ t("pipelines.configure_clone", "Configure cloned pipeline") }}
             </h3>
@@ -455,11 +463,17 @@ onMounted(load);
           <span v-if="!validation.runtime_supported">
             {{
               validation.runtime_error ||
-              t("pipelines.not_runtime_supported", "This graph is not executable by the current adapter.")
+              t(
+                "pipelines.not_runtime_supported",
+                "This graph is not executable by the current adapter.",
+              )
             }}
           </span>
           <ul v-if="validation.validation.issues.length">
-            <li v-for="issue in validation.validation.issues" :key="`${issue.code}:${issue.stage_id || ''}`">
+            <li
+              v-for="issue in validation.validation.issues"
+              :key="`${issue.code}:${issue.stage_id || ''}`"
+            >
               {{ issue.message }}
             </li>
           </ul>
@@ -471,7 +485,11 @@ onMounted(load);
           </button>
           <button class="btn primary" type="button" :disabled="saving" @click="saveDraft">
             <AppIcon name="check" />
-            {{ saving ? t("pipelines.saving", "Saving…") : t("pipelines.save_version", "Save version") }}
+            {{
+              saving
+                ? t("pipelines.saving", "Saving…")
+                : t("pipelines.save_version", "Save version")
+            }}
           </button>
         </footer>
       </section>
@@ -492,7 +510,11 @@ onMounted(load);
         </header>
 
         <div v-if="runs.length" class="trace-grid">
-          <div class="run-list" role="list" :aria-label="t('pipelines.recent_runs', 'Recent executions')">
+          <div
+            class="run-list"
+            role="list"
+            :aria-label="t('pipelines.recent_runs', 'Recent executions')"
+          >
             <button
               v-for="run in runs"
               :key="run.run_id"
