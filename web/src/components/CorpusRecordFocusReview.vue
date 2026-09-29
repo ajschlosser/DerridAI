@@ -6,6 +6,7 @@ import type { CorpusRecord, SourceBlock } from "../api/pdfCorpus";
 import type { MetadataSchema } from "../api/metadataSchemas";
 import type { ProviderProfile } from "../api/system";
 import AppIcon from "./AppIcon.vue";
+import UiTooltip from "./ui/UiTooltip.vue";
 import type { CorpusActionMenuItem } from "./CorpusActionMenu.vue";
 import CorpusMetadataResolutionPanel from "./CorpusMetadataResolutionPanel.vue";
 import CorpusReviewQueueContext from "./CorpusReviewQueueContext.vue";
@@ -335,16 +336,22 @@ watch(
             </h3>
           </div>
           <div class="heading-actions">
-            <button
+            <UiTooltip
               v-if="record.source_quality_issues?.length"
-              class="source-warn-icon"
-              type="button"
-              :aria-label="i18n.t('pdf_corpus.source_warning_icon')"
-              :title="i18n.t('pdf_corpus.source_warning_icon')"
-              @click="emit('openSourceIssue')"
+              :text="i18n.t('pdf_corpus.source_warning_icon')"
+              trigger-mode="content"
+              :content-focusable="false"
+              placement="bottom"
             >
-              <AppIcon name="warning" />
-            </button>
+              <button
+                class="source-warn-icon"
+                type="button"
+                :aria-label="i18n.t('pdf_corpus.source_warning_icon')"
+                @click="emit('openSourceIssue')"
+              >
+                <AppIcon name="warning" />
+              </button>
+            </UiTooltip>
             <label v-if="!editingText" class="context-toggle">
               <input
                 type="checkbox"
@@ -362,16 +369,22 @@ watch(
               >
                 {{ i18n.t("pdf_corpus.clean_text") }}
               </button>
-              <button
-                class="btn small primary"
-                type="button"
-                :disabled="busy || !String(textDraft || '').trim()"
-                aria-keyshortcuts="Control+S Meta+S"
-                :title="i18n.t('pdf_corpus.save_reviewed_text') + ' (Ctrl/Cmd S)'"
-                @click="requestSaveText"
+              <UiTooltip
+                :text="i18n.t('pdf_corpus.save_reviewed_text') + ' (Ctrl/Cmd S)'"
+                trigger-mode="content"
+                :content-focusable="Boolean(busy || !String(textDraft || '').trim())"
+                placement="bottom"
               >
-                {{ i18n.t("ui.save") }}
-              </button>
+                <button
+                  class="btn small primary"
+                  type="button"
+                  :disabled="busy || !String(textDraft || '').trim()"
+                  aria-keyshortcuts="Control+S Meta+S"
+                  @click="requestSaveText"
+                >
+                  {{ i18n.t("ui.save") }}
+                </button>
+              </UiTooltip>
               <button
                 class="btn small"
                 type="button"
