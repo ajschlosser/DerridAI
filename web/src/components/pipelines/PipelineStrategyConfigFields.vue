@@ -1,7 +1,9 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { computed } from "vue";
+import { pipelineConfigHelp, pipelineConfigLabel } from "../../domain/pipelinePresentation";
 import { useI18nStore } from "../../stores/i18n";
+import UiTooltip from "../ui/UiTooltip.vue";
 import type { PipelineStage, PipelineStrategy } from "../../types/pipelines";
 
 const props = defineProps<{
@@ -38,7 +40,13 @@ function configValue(key: string, rule: Record<string, unknown>) {
 <template>
   <div v-if="configProperties.length" class="config-grid">
     <label v-for="[key, rule] in configProperties" :key="key">
-      <span>{{ key }}</span>
+      <span class="config-label">
+        {{ pipelineConfigLabel(key, t) }}
+        <UiTooltip
+          :text="pipelineConfigHelp(key, t)"
+          :label="t('pipelines.explain_setting', 'Explain this setting')"
+        />
+      </span>
       <input
         v-if="rule.type === 'number' || rule.type === 'integer'"
         class="control"
@@ -87,6 +95,11 @@ function configValue(key: string, rule: Record<string, unknown>) {
   color: var(--muted);
   font-size: 0.75rem;
   font-weight: 750;
+}
+.config-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
 .no-config {
   margin: 0;

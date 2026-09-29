@@ -22,6 +22,12 @@ export const pipelinesApi = {
       body: JSON.stringify(pipeline),
     }),
 
+  cloneDraft: (pipelineId: string, version: number) =>
+    apiRequest<{ pipeline: PipelineDefinition }>(
+      `/api/system/pipelines/definitions/${encodeURIComponent(pipelineId)}/${version}/clone-draft`,
+      { method: "POST" },
+    ),
+
   createDefinition: (pipeline: PipelineDefinition) =>
     apiRequest<{
       pipeline: PipelineDefinition;

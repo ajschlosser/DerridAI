@@ -182,3 +182,58 @@ def test_research_trace_records_post_rerank_source_diversity() -> None:
     assert diversity.input_count == 36
     assert diversity.output_count == 12
     assert diversity.elapsed_ms == 20
+
+
+
+def test_research_trace_stage_ids_are_bound_to_resolved_definition() -> None:
+    source = built_in_pipeline("research.balanced", 1)
+    assert source is not None
+    payload = source.model_dump(mode="json")
+    rename = {stage["id"]: f"custom_{stage['id']}" for stage in payload["stages"]}
+    payload["pipeline_id"] = "research.renamed"
+    payload["built_in"] = False
+    payload["entry_stage_ids"] = [rename[item] for item in payload["entry_stage_ids"]]
+    for stage in payload["stages"]:
+        stage["id"] = rename[stage["id"]]
+        stage["next"] = [rename[item] for item in stage.get("next", [])]
+        for key in ("on_empty", "on_unavailable", "on_timeout", "on_error"):
+            if stage.get(key):
+                stage[key] = rename[stage[key]]
+    pipeline = type(source).model_validate(payload)
+
+    result = _result()
+    result["pipeline"] = {
+        "pipeline_id": pipeline.pipeline_id,
+        "pipeline_version": pipeline.version,
+        "pipeline_hash": pipeline_hash(pipeline),
+        "resolved_pipeline": pipeline.model_dump(mode="json"),
+    }
+    result["stages"][2]["detail"]["active_stage_id"] = rename["rerank_fallback"]
+    result["stages"][2]["detail"]["fallback_condition"] = "unavailable"
+
+    request = RAGRunRequest(
+        prompt="What is différance?",
+        source_collection="derrida_primary",
+        pipeline_id=pipeline.pipeline_id,
+        pipeline_version=pipeline.version,
+        reranker="cross_encoder",
+        use_prior_response_memory=True,
+        use_prior_claim_memory=True,
+    )
+
+    trace = build_research_trace(
+        run_id="rag-renamed",
+        owner="researcher",
+        request=request,
+        result=result,
+        started_at="2026-09-28T20:00:00+00:00",
+        finished_at="2026-09-28T20:00:04+00:00",
+    )
+
+    defined_ids = {stage.id for stage in pipeline.stages}
+    traced_ids = {stage.stage_id for stage in trace.stages}
+    assert traced_ids <= defined_ids
+    assert rename["rerank"] in traced_ids
+    assert rename["rerank_fallback"] in traced_ids
+    assert "response_memory" not in traced_ids
+    assert "claim_memory" not in traced_ids
