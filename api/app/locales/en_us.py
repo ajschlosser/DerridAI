@@ -3925,8 +3925,8 @@ EN_US: dict[str, str] = {'common.apply': 'Apply',
  'pdf_corpus.stage.structure': 'document structure',
  'pdf_corpus.stage_budgets': 'Structured-output budgets',
  'pdf_corpus.stage_budgets_help': 'Smaller bounded responses are more reliable with local models. Increase a stage '
- 'pdf_corpus.stage_output_budget_help': 'Maximum generated output tokens for this stage. It does not increase the stage’s input or context window.',
                                   'only when validated output is being truncated.',
+ 'pdf_corpus.stage_output_budget_help': 'Maximum generated output tokens for this stage. It does not increase the stage’s input or context window.',
  'pdf_corpus.stage_help.published': 'The reviewed corpus has been finalized as JSONL. Build provenance is namespaced '
                                     'under corpus_build_details on each published record.',
  'pdf_corpus.stage_help.reconciling': 'Finalizing topology. Weak, omitted, uncertain, or failed classifications '
