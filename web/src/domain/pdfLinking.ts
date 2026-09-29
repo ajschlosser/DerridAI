@@ -84,7 +84,7 @@ export function createPdfLinking(deps: Deps) {
   function openPdfExplorerWorkspace() {
     window.dispatchEvent(
       new CustomEvent("derridai:navigate-native", {
-        detail: { path: "/pdf?mode=explorer", runtimeView: "pdf" },
+        detail: { path: "/source-explorer", runtimeView: "pdf" },
       }),
     );
   }
