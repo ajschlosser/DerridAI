@@ -56,19 +56,13 @@ test("the end of a long record can be scrolled fully into view above the decisio
     { ...source, text: LONG, text_length: LONG.length },
     ...CORPUS_RECORDS.slice(0, 5),
   ]);
+  const primaryText = page.locator(".record-primary-text");
+  // Review data is hydrated in place instead of resetting/remounting the workspace.
+  // Wait for the full requested Record before measuring scroll geometry.
+  await expect(primaryText).toContainText("Sentence 60 of a very long record");
   const pane = page.locator(".record-review-pane");
-  // The selected Record can finish hydrating after the review grid first becomes visible.
-  // Keep driving the pane to its current end until it is actually scrollable, rather than
-  // racing the asynchronous content/layout update with a single early scroll assignment.
-  await expect
-    .poll(async () =>
-      pane.evaluate((el) => {
-        el.scrollTop = el.scrollHeight;
-        return el.scrollTop;
-      }),
-    )
-    .toBeGreaterThan(0);
-  const last = await page.locator(".record-primary-text").evaluate((el) => {
+  await pane.evaluate((el) => (el.scrollTop = el.scrollHeight));
+  const last = await primaryText.evaluate((el) => {
     const r = el.getBoundingClientRect();
     const dock = document.querySelector(".record-decision-dock")!.getBoundingClientRect();
     return { textBottom: r.bottom, dockTop: dock.top };
