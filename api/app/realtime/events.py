@@ -213,6 +213,8 @@ class RealtimeObserver:
             self._publish_metadata_note(note)
         for job_id, buffer in notes.generation.items():
             self._publish_generation(job_id, buffer)
+        for note in notes.corpus_generation:
+            self._publish_corpus_generation(note)
         for kind, summary in notes.activity.items():
             self._publish_background_activity(kind, summary)
 
@@ -298,6 +300,29 @@ class RealtimeObserver:
             resource_type="corpus_build",
             resource_id=build_id,
             payload={"metadata": payload},
+            topics=(f"corpus-build:{build_id}",),
+            audience=Audience(admin_only=True),
+        )
+
+    def _publish_corpus_generation(self, note: dict[str, Any]) -> None:
+        """Publish text-free model progress; raw Corpus Builder output never crosses WebSocket."""
+        build_id = str(note.get("build_id") or "")
+        call_id = str(note.get("call_id") or "")
+        if not build_id or not call_id:
+            return
+        self.broker.publish(
+            "corpus.llm_progress",
+            resource_type="corpus_build",
+            resource_id=build_id,
+            payload={
+                "generation": {
+                    "call_id": call_id,
+                    "seq": int(note.get("seq") or 0),
+                    "chars": int(note.get("chars") or 0),
+                    "gap": bool(note.get("gap")),
+                    "final": bool(note.get("final")),
+                },
+            },
             topics=(f"corpus-build:{build_id}",),
             audience=Audience(admin_only=True),
         )

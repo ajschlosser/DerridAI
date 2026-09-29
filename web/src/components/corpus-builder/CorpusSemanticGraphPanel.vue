@@ -1,14 +1,27 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+/**
+ * Semantic content map.
+ *
+ * A corpus graph can hold tens of thousands of entities. The panel never asks
+ * for the whole projection: it requests a bounded, ranked *view* (the overview
+ * or one entity's neighbourhood) and a paged index, and states plainly when
+ * the drawing is partial.
+ */
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import {
   corpusBuildsApi,
   type DocumentIntelligenceRun,
   type SemanticContentGraph,
-  type SemanticContentGraphEdge,
-  type SemanticContentGraphNode,
+  type SemanticContentGraphView,
+  type SemanticGraphViewEdge,
+  type SemanticGraphViewNode,
+  type SemanticGraphViewRelation,
+  type SemanticIndexSort,
+  type SemanticRelationKindFilter,
 } from "../../api/corpus";
 import { readDocumentIntelligence } from "../../features/corpus-builder/api/documentIntelligenceReads";
+import { layoutGraph, nodeRadius, type LayoutPoint } from "../../domain/semanticGraphLayout";
 import { useI18nStore } from "../../stores/i18n";
 
 const props = defineProps<{
@@ -19,115 +32,83 @@ const props = defineProps<{
 const emit = defineEmits<{ refreshed: [] }>();
 const i18n = useI18nStore();
 
-const graph = ref<SemanticContentGraph | null>(null);
+const WIDTH = 960;
+const HEIGHT = 560;
+const DENSITIES = [40, 80, 150, 250] as const;
+const INDEX_PAGE = 50;
+const LABEL_BUDGET = 18;
+const RELATION_OPTIONS: Array<{ kind: SemanticRelationKindFilter; key: string }> = [
+  { kind: "all", key: "pdf_corpus.semantic_graph_relations_all" },
+  { kind: "semantic", key: "pdf_corpus.semantic_graph_relations_semantic_short" },
+  { kind: "observational", key: "pdf_corpus.semantic_graph_relations_observational_short" },
+];
+
+const view = ref<SemanticContentGraphView | null>(null);
 const intelligence = ref<DocumentIntelligenceRun | null>(null);
 const loading = ref(false);
 const rerunning = ref(false);
 const error = ref("");
-const selectedType = ref("all");
+const opened = ref(false);
+
 const entityQuery = ref("");
+const debouncedQuery = ref("");
+const selectedTypes = ref<string[]>([]);
+const relationKind = ref<SemanticRelationKindFilter>("all");
+const density = ref<number>(80);
+const minMentions = ref(0);
+const focusId = ref("");
+const focusTrail = ref<Array<{ id: string; label: string }>>([]);
 const selectedNodeId = ref("");
+const hoveredNodeId = ref("");
+const showAllLabels = ref(false);
+const indexOffset = ref(0);
+const indexSort = ref<SemanticIndexSort>("mentions");
 
-const nodeTypes = computed(() => {
-  const values = new Set((graph.value?.nodes || []).map((node) => node.type).filter(Boolean));
-  return Array.from(values).sort();
-});
-
-const filteredNodes = computed(() => {
-  const query = entityQuery.value.trim().toLocaleLowerCase();
-  return (graph.value?.nodes || []).filter((node) => {
-    if (selectedType.value !== "all" && node.type !== selectedType.value) return false;
-    if (!query) return true;
-    return [node.label, ...(node.aliases || [])].some((value) =>
-      String(value || "")
-        .toLocaleLowerCase()
-        .includes(query),
-    );
-  });
-});
-const visibleNodes = computed(() => filteredNodes.value.slice(0, 36));
-
-const visibleNodeIds = computed(() => new Set(visibleNodes.value.map((node) => node.id)));
-const visibleEdges = computed(() =>
-  (graph.value?.edges || [])
-    .filter(
-      (edge) => visibleNodeIds.value.has(edge.source) && visibleNodeIds.value.has(edge.target),
-    )
-    .slice(0, 90),
-);
-
-type PositionedNode = SemanticContentGraphNode & { x: number; y: number };
-const positionedNodes = computed<PositionedNode[]>(() => {
-  const byType = new Map<string, SemanticContentGraphNode[]>();
-  for (const node of visibleNodes.value) {
-    const bucket = byType.get(node.type) || [];
-    bucket.push(node);
-    byType.set(node.type, bucket);
-  }
-  const groups = Array.from(byType.entries());
-  const width = 760;
-  return groups.flatMap(([type, nodes], column) => {
-    const x = groups.length <= 1 ? 450 : 70 + (column * width) / Math.max(1, groups.length - 1);
-    const height = 330;
-    return nodes.map((node, row) => ({
-      ...node,
-      x,
-      y: nodes.length <= 1 ? 215 : 50 + (row * height) / Math.max(1, nodes.length - 1),
-      type,
-    }));
-  });
-});
-const positions = computed(() => new Map(positionedNodes.value.map((node) => [node.id, node])));
-
-const selectedNode = computed(
-  () => graph.value?.nodes.find((node) => node.id === selectedNodeId.value) || null,
-);
-const selectedRelations = computed(() => {
-  if (!selectedNodeId.value) return [];
-  return (graph.value?.edges || [])
-    .filter((edge) => edge.source === selectedNodeId.value || edge.target === selectedNodeId.value)
-    .slice(0, 16);
-});
-
-function relationLabel(edge: SemanticContentGraphEdge) {
-  return String(edge.predicate || "").replaceAll("_", " ");
-}
-
-function featureText(values?: Array<{ label: string; count?: number }>) {
-  return (values || [])
-    .slice(0, 8)
-    .map((item) => (Number(item.count || 0) > 1 ? `${item.label} ×${item.count}` : item.label))
-    .join(" · ");
-}
-
-function observationVerbs(edge: SemanticContentGraphEdge) {
-  return Array.from(
-    new Set(
-      (edge.observations || []).map((item) => String(item.verb || "").trim()).filter(Boolean),
-    ),
-  )
-    .slice(0, 8)
-    .join(" · ");
-}
+let controller: AbortController | null = null;
+let queryTimer: ReturnType<typeof setTimeout> | null = null;
+let requestSeq = 0;
 
 async function load() {
-  if (!props.buildId || loading.value) return;
+  if (!props.buildId) return;
+  controller?.abort();
+  const own = new AbortController();
+  controller = own;
+  const seq = ++requestSeq;
   loading.value = true;
   error.value = "";
   try {
-    const [nextGraph, nextIntelligence] = await Promise.all([
-      corpusBuildsApi.semanticContentGraph(props.buildId),
-      readDocumentIntelligence(props.buildId).catch(() => null),
-    ]);
-    graph.value = nextGraph;
-    intelligence.value = nextIntelligence;
-    if (selectedNodeId.value && !nextGraph.nodes.some((node) => node.id === selectedNodeId.value))
-      selectedNodeId.value = "";
+    const next = await corpusBuildsApi.semanticContentGraphView(
+      props.buildId,
+      {
+        q: debouncedQuery.value.trim() || undefined,
+        types: selectedTypes.value.length ? selectedTypes.value : undefined,
+        relation_kind: relationKind.value,
+        focus: focusId.value || undefined,
+        node_limit: density.value,
+        edge_limit: Math.min(1200, density.value * 5),
+        min_mentions: minMentions.value || undefined,
+        index_offset: indexOffset.value,
+        index_limit: INDEX_PAGE,
+        index_sort: indexSort.value,
+      },
+      { signal: own.signal },
+    );
+    if (seq !== requestSeq) return;
+    view.value = next;
+    if (focusId.value && !next.focus) {
+      focusId.value = "";
+      focusTrail.value = [];
+    }
   } catch (exc) {
+    if (own.signal.aborted || seq !== requestSeq) return;
     error.value = exc instanceof Error ? exc.message : String(exc);
   } finally {
-    loading.value = false;
+    if (seq === requestSeq) loading.value = false;
   }
+}
+
+async function loadIntelligence() {
+  intelligence.value = await readDocumentIntelligence(props.buildId).catch(() => null);
 }
 
 async function rerun() {
@@ -137,8 +118,8 @@ async function rerun() {
   try {
     const result = await corpusBuildsApi.rerunDocumentIntelligence(props.buildId);
     intelligence.value = result.document_intelligence;
-    graph.value = result.semantic_content_graph;
     emit("refreshed");
+    await load();
   } catch (exc) {
     error.value = exc instanceof Error ? exc.message : String(exc);
   } finally {
@@ -147,19 +128,338 @@ async function rerun() {
 }
 
 function onToggle(event: Event) {
-  if ((event.currentTarget as HTMLDetailsElement).open && !graph.value) void load();
+  const open = (event.currentTarget as HTMLDetailsElement).open;
+  opened.value = open;
+  if (open && !view.value) {
+    void load();
+    void loadIntelligence();
+  }
 }
+
+watch(entityQuery, (value) => {
+  if (queryTimer) clearTimeout(queryTimer);
+  queryTimer = setTimeout(() => {
+    debouncedQuery.value = value;
+  }, 250);
+});
+
+watch([debouncedQuery, selectedTypes, relationKind, density, minMentions, indexSort], () => {
+  indexOffset.value = 0;
+  if (opened.value) void load();
+});
+watch([focusId, indexOffset], () => {
+  if (opened.value) void load();
+});
 
 watch(
   () => props.buildId,
   () => {
-    graph.value = null;
+    controller?.abort();
+    view.value = null;
     intelligence.value = null;
-    selectedNodeId.value = "";
-    selectedType.value = "all";
     entityQuery.value = "";
+    debouncedQuery.value = "";
+    selectedTypes.value = [];
+    relationKind.value = "all";
+    minMentions.value = 0;
+    focusId.value = "";
+    focusTrail.value = [];
+    selectedNodeId.value = "";
+    indexOffset.value = 0;
+    if (opened.value) {
+      void load();
+      void loadIntelligence();
+    }
   },
 );
+
+onBeforeUnmount(() => {
+  controller?.abort();
+  if (queryTimer) clearTimeout(queryTimer);
+});
+
+/* ---------- Types, colour and sizing ---------- */
+
+const typeFacets = computed(() => view.value?.facets.types || []);
+const typeHue = computed(() => {
+  const map = new Map<string, number>();
+  typeFacets.value.forEach((facet, i) => map.set(facet.type, (i % 6) + 1));
+  return map;
+});
+function hueClass(type: string) {
+  return `hue-${typeHue.value.get(type) || 6}`;
+}
+function toggleType(type: string) {
+  selectedTypes.value = selectedTypes.value.includes(type)
+    ? selectedTypes.value.filter((value) => value !== type)
+    : [...selectedTypes.value, type];
+}
+const hasFilters = computed(
+  () =>
+    Boolean(entityQuery.value) ||
+    selectedTypes.value.length > 0 ||
+    relationKind.value !== "all" ||
+    minMentions.value > 0,
+);
+function clearFilters() {
+  entityQuery.value = "";
+  debouncedQuery.value = "";
+  selectedTypes.value = [];
+  relationKind.value = "all";
+  minMentions.value = 0;
+}
+
+/* ---------- Layout ---------- */
+
+const nodes = computed<SemanticGraphViewNode[]>(() => view.value?.view.nodes || []);
+const edges = computed<SemanticGraphViewEdge[]>(() => view.value?.view.edges || []);
+const nodesById = computed(() => new Map(nodes.value.map((node) => [node.id, node])));
+const maxMentions = computed(() =>
+  Math.max(1, ...nodes.value.map((node) => node.mention_count || 0)),
+);
+const maxEdgeCount = computed(() => Math.max(1, ...edges.value.map((edge) => edge.count || 1)));
+
+const positions = computed<Map<string, LayoutPoint>>(() =>
+  layoutGraph(
+    nodes.value.map((node) => ({ id: node.id, weight: node.mention_count })),
+    edges.value.map((edge) => ({ source: edge.source, target: edge.target, weight: edge.count })),
+    { width: WIDTH, height: HEIGHT, pinned: view.value?.focus?.node.id },
+  ),
+);
+
+const adjacency = computed(() => {
+  const map = new Map<string, Set<string>>();
+  for (const edge of edges.value) {
+    if (!map.has(edge.source)) map.set(edge.source, new Set());
+    if (!map.has(edge.target)) map.set(edge.target, new Set());
+    map.get(edge.source)!.add(edge.target);
+    map.get(edge.target)!.add(edge.source);
+  }
+  return map;
+});
+
+/** Hover wins over selection for transient highlight; either dims unrelated nodes. */
+const highlightId = computed(() => hoveredNodeId.value || selectedNodeId.value);
+const highlightSet = computed(() => {
+  if (!highlightId.value || !nodesById.value.has(highlightId.value)) return null;
+  return new Set([highlightId.value, ...(adjacency.value.get(highlightId.value) || [])]);
+});
+
+const labelledIds = computed(() => {
+  if (showAllLabels.value) return new Set(nodes.value.map((node) => node.id));
+  const ids = new Set(nodes.value.slice(0, LABEL_BUDGET).map((node) => node.id));
+  if (view.value?.focus) ids.add(view.value.focus.node.id);
+  for (const id of highlightSet.value || []) ids.add(id);
+  return ids;
+});
+
+type DrawnNode = SemanticGraphViewNode & { x: number; y: number; r: number };
+const drawnNodes = computed<DrawnNode[]>(() =>
+  nodes.value
+    .map((node) => {
+      const point = positions.value.get(node.id) || { x: WIDTH / 2, y: HEIGHT / 2 };
+      return { ...node, ...point, r: nodeRadius(node.mention_count, maxMentions.value) };
+    })
+    // Paint small nodes last so they are never hidden under large ones.
+    .sort((a, b) => b.r - a.r),
+);
+
+function edgePath(edge: SemanticGraphViewEdge) {
+  const a = positions.value.get(edge.source);
+  const b = positions.value.get(edge.target);
+  if (!a || !b) return "";
+  // A slight curve separates reciprocal relations and reads better than straight spokes.
+  const mx = (a.x + b.x) / 2 + (b.y - a.y) * 0.08;
+  const my = (a.y + b.y) / 2 - (b.x - a.x) * 0.08;
+  return `M${a.x},${a.y} Q${mx},${my} ${b.x},${b.y}`;
+}
+function edgeWidth(edge: SemanticGraphViewEdge) {
+  return 0.75 + 2.25 * Math.sqrt((edge.count || 1) / maxEdgeCount.value);
+}
+function edgeActive(edge: SemanticGraphViewEdge) {
+  return (
+    !highlightId.value || edge.source === highlightId.value || edge.target === highlightId.value
+  );
+}
+
+/* ---------- Pan & zoom ---------- */
+
+const zoom = ref(1);
+const pan = ref({ x: 0, y: 0 });
+const svgEl = ref<SVGSVGElement | null>(null);
+let drag: { x: number; y: number; px: number; py: number; moved: boolean } | null = null;
+
+const viewBox = computed(() => {
+  const w = WIDTH / zoom.value;
+  const h = HEIGHT / zoom.value;
+  const x = (WIDTH - w) / 2 - pan.value.x;
+  const y = (HEIGHT - h) / 2 - pan.value.y;
+  return `${x} ${y} ${w} ${h}`;
+});
+function setZoom(next: number) {
+  zoom.value = Math.max(0.5, Math.min(6, next));
+}
+function fitView() {
+  zoom.value = 1;
+  pan.value = { x: 0, y: 0 };
+}
+function svgScale() {
+  const rect = svgEl.value?.getBoundingClientRect();
+  return rect && rect.width ? WIDTH / zoom.value / rect.width : 1;
+}
+function onWheel(event: WheelEvent) {
+  event.preventDefault();
+  setZoom(zoom.value * (event.deltaY < 0 ? 1.15 : 1 / 1.15));
+}
+function onPointerDown(event: PointerEvent) {
+  if (event.button !== 0) return;
+  drag = { x: event.clientX, y: event.clientY, px: pan.value.x, py: pan.value.y, moved: false };
+}
+function onPointerMove(event: PointerEvent) {
+  if (!drag) return;
+  const dx = event.clientX - drag.x;
+  const dy = event.clientY - drag.y;
+  if (!drag.moved && Math.hypot(dx, dy) < 4) return;
+  if (!drag.moved) (event.currentTarget as Element).setPointerCapture?.(event.pointerId);
+  drag.moved = true;
+  const scale = svgScale();
+  pan.value = { x: drag.px + dx * scale, y: drag.py + dy * scale };
+}
+function onPointerUp(event: PointerEvent) {
+  const wasDrag = drag?.moved;
+  drag = null;
+  (event.currentTarget as Element).releasePointerCapture?.(event.pointerId);
+  if (!wasDrag && event.target === svgEl.value) selectedNodeId.value = "";
+}
+function onCanvasKey(event: KeyboardEvent) {
+  const step = 40 / zoom.value;
+  const moves: Record<string, [number, number]> = {
+    ArrowLeft: [step, 0],
+    ArrowRight: [-step, 0],
+    ArrowUp: [0, step],
+    ArrowDown: [0, -step],
+  };
+  if (event.target !== event.currentTarget) return;
+  if (moves[event.key]) {
+    event.preventDefault();
+    const [dx, dy] = moves[event.key];
+    pan.value = { x: pan.value.x + dx, y: pan.value.y + dy };
+  } else if (event.key === "+" || event.key === "=") setZoom(zoom.value * 1.25);
+  else if (event.key === "-") setZoom(zoom.value / 1.25);
+  else if (event.key === "0") fitView();
+  else if (event.key === "Escape") selectedNodeId.value = "";
+}
+watch(view, (next, prev) => {
+  if (next?.query.focus !== prev?.query.focus) fitView();
+});
+
+/* ---------- Selection & focus ---------- */
+
+function selectNode(id: string) {
+  selectedNodeId.value = id;
+}
+function focusNode(id: string, label: string) {
+  if (!id || id === focusId.value) return;
+  const at = focusTrail.value.findIndex((item) => item.id === id);
+  focusTrail.value =
+    at >= 0 ? focusTrail.value.slice(0, at + 1) : [...focusTrail.value, { id, label }].slice(-6);
+  focusId.value = id;
+  selectedNodeId.value = id;
+  indexOffset.value = 0;
+}
+function backToOverview() {
+  focusId.value = "";
+  focusTrail.value = [];
+}
+
+const selectedNode = computed(() => {
+  if (!selectedNodeId.value) return null;
+  if (view.value?.focus?.node.id === selectedNodeId.value) return view.value.focus.node;
+  return (
+    nodesById.value.get(selectedNodeId.value) ||
+    view.value?.index.items.find((node) => node.id === selectedNodeId.value) ||
+    null
+  );
+});
+const focusDetail = computed(() =>
+  view.value?.focus && view.value.focus.node.id === selectedNodeId.value ? view.value.focus : null,
+);
+const selectedEdges = computed(() =>
+  selectedNodeId.value
+    ? edges.value.filter(
+        (edge) => edge.source === selectedNodeId.value || edge.target === selectedNodeId.value,
+      )
+    : [],
+);
+const relationGroups = computed(() => {
+  const relations = focusDetail.value?.relations || [];
+  return [
+    {
+      kind: "semantic",
+      title: i18n.t("pdf_corpus.semantic_graph_semantic_relations"),
+      items: relations.filter((rel) => rel.relation_kind === "semantic"),
+    },
+    {
+      kind: "observational",
+      title: i18n.t("pdf_corpus.semantic_graph_observational_relations"),
+      items: relations.filter((rel) => rel.relation_kind !== "semantic"),
+    },
+  ].filter((group) => group.items.length);
+});
+
+function relationLabel(predicate: string) {
+  return String(predicate || "").replaceAll("_", " ");
+}
+function authorityLabel(status: string) {
+  if (status === "human_confirmed")
+    return i18n.t("pdf_corpus.semantic_graph_authority_human_confirmed");
+  if (status === "disputed") return i18n.t("pdf_corpus.semantic_graph_authority_disputed");
+  return i18n.t("pdf_corpus.semantic_graph_authority_unreviewed");
+}
+function featureText(values?: Array<{ label: string; count?: number }>) {
+  return (values || [])
+    .slice(0, 8)
+    .map((item) => (Number(item.count || 0) > 1 ? `${item.label} ×${item.count}` : item.label))
+    .join(" · ");
+}
+function nodeAriaLabel(node: SemanticGraphViewNode) {
+  return `${node.label}, ${node.type}, ${i18n.tf("pdf_corpus.semantic_graph_mentions", {
+    count: node.mention_count,
+    records: node.record_count,
+  })}`;
+}
+function relationKey(rel: SemanticGraphViewRelation) {
+  return `${rel.id}:${rel.direction}`;
+}
+
+/* ---------- Status copy ---------- */
+
+const formatter = computed(() => new Intl.NumberFormat(i18n.locale || undefined));
+function n(value: number) {
+  return formatter.value.format(value || 0);
+}
+const showingText = computed(() => {
+  const v = view.value?.view;
+  if (!v) return "";
+  return i18n.tf("pdf_corpus.semantic_graph_showing", {
+    nodes: n(v.nodes.length),
+    total: n(v.candidate_nodes),
+    edges: n(v.edges.length),
+    edgeTotal: n(v.candidate_edges),
+  });
+});
+const truncated = computed(() =>
+  Boolean(view.value?.view.truncated_nodes || view.value?.view.truncated_edges),
+);
+const pageText = computed(() => {
+  const index = view.value?.index;
+  if (!index || !index.total) return "";
+  return i18n.tf("pdf_corpus.semantic_graph_page", {
+    start: n(index.offset + 1),
+    end: n(Math.min(index.total, index.offset + index.items.length)),
+    total: n(index.total),
+  });
+});
 </script>
 
 <template>
@@ -169,192 +469,466 @@ watch(
         <b>{{ i18n.t("pdf_corpus.semantic_graph_title") }}</b>
         <small>{{
           i18n.tf("pdf_corpus.semantic_graph_summary", {
-            nodes: props.summary?.nodes || 0,
-            edges: props.summary?.edges || 0,
+            nodes: n(props.summary?.nodes || 0),
+            edges: n(props.summary?.edges || 0),
           })
         }}</small>
       </span>
     </summary>
+
     <div class="semantic-graph-body">
-      <div class="semantic-graph-heading">
+      <header class="semantic-graph-heading">
         <div>
           <h3>{{ i18n.t("pdf_corpus.semantic_graph_heading") }}</h3>
           <p>{{ i18n.t("pdf_corpus.semantic_graph_help") }}</p>
         </div>
-        <div class="semantic-graph-actions">
-          <label for="semantic-graph-search">
-            <span>{{ i18n.t("pdf_corpus.semantic_graph_search") }}</span>
-            <input
-              id="semantic-graph-search"
-              v-model="entityQuery"
-              class="control"
-              type="search"
-              :placeholder="i18n.t('pdf_corpus.semantic_graph_search_placeholder')"
-            />
-          </label>
-          <label for="semantic-graph-type-filter">
-            <span>{{ i18n.t("pdf_corpus.semantic_graph_filter") }}</span>
-            <select id="semantic-graph-type-filter" v-model="selectedType" class="control">
-              <option value="all">{{ i18n.t("pdf_corpus.semantic_graph_all_types") }}</option>
-              <option v-for="type in nodeTypes" :key="type" :value="type">
-                {{ type }}
-              </option>
-            </select>
-          </label>
-          <button
-            v-if="intelligence?.stale"
-            class="btn secondary"
-            type="button"
-            :disabled="props.disabled || rerunning"
-            @click="rerun"
-          >
-            {{
-              rerunning
-                ? i18n.t("pdf_corpus.document_intelligence_rerunning")
-                : i18n.t("pdf_corpus.document_intelligence_rerun")
-            }}
-          </button>
-        </div>
-      </div>
+        <button
+          v-if="intelligence?.stale"
+          class="btn secondary"
+          type="button"
+          :disabled="props.disabled || rerunning"
+          @click="rerun"
+        >
+          {{
+            rerunning
+              ? i18n.t("pdf_corpus.document_intelligence_rerunning")
+              : i18n.t("pdf_corpus.document_intelligence_rerun")
+          }}
+        </button>
+      </header>
 
-      <p v-if="intelligence?.stale" class="graph-status warning" role="status">
+      <p v-if="intelligence?.stale" class="graph-banner warning" role="status">
         {{ i18n.t("pdf_corpus.document_intelligence_stale") }}
       </p>
-      <p v-if="loading" class="graph-status" role="status">
-        {{ i18n.t("ui.loading") }}
-      </p>
-      <p v-else-if="error" class="graph-status error" role="alert">{{ error }}</p>
-      <p v-else-if="graph && !graph.nodes.length" class="graph-status">
-        {{ i18n.t("pdf_corpus.semantic_graph_empty") }}
-      </p>
 
-      <div v-if="graph?.nodes.length" class="graph-layout">
-        <div class="graph-canvas-wrap">
-          <svg
-            class="graph-canvas"
-            viewBox="0 0 900 430"
-            role="img"
+      <!-- Filter toolbar -->
+      <div
+        class="graph-toolbar"
+        role="group"
+        :aria-label="i18n.t('pdf_corpus.semantic_graph_filter')"
+      >
+        <label class="toolbar-field search" for="semantic-graph-search">
+          <span>{{ i18n.t("pdf_corpus.semantic_graph_search") }}</span>
+          <input
+            id="semantic-graph-search"
+            v-model="entityQuery"
+            class="control"
+            type="search"
+            autocomplete="off"
+            :placeholder="i18n.t('pdf_corpus.semantic_graph_search_placeholder')"
+          />
+        </label>
+        <div class="toolbar-field">
+          <span id="semantic-graph-relations-label">{{
+            i18n.t("pdf_corpus.semantic_graph_relations_filter")
+          }}</span>
+          <div class="segmented" role="radiogroup" aria-labelledby="semantic-graph-relations-label">
+            <button
+              v-for="option in RELATION_OPTIONS"
+              :key="option.kind"
+              type="button"
+              role="radio"
+              :aria-checked="relationKind === option.kind"
+              :class="{ active: relationKind === option.kind }"
+              @click="relationKind = option.kind"
+            >
+              {{ i18n.t(option.key) }}
+            </button>
+          </div>
+        </div>
+        <label class="toolbar-field narrow" for="semantic-graph-min-mentions">
+          <span>{{ i18n.t("pdf_corpus.semantic_graph_min_mentions") }}</span>
+          <input
+            id="semantic-graph-min-mentions"
+            v-model.number="minMentions"
+            class="control"
+            type="number"
+            min="0"
+            step="1"
+            inputmode="numeric"
+          />
+        </label>
+        <label class="toolbar-field narrow" for="semantic-graph-density">
+          <span>{{ i18n.t("pdf_corpus.semantic_graph_density") }}</span>
+          <select id="semantic-graph-density" v-model.number="density" class="control">
+            <option v-for="value in DENSITIES" :key="value" :value="value">
+              {{ i18n.tf("pdf_corpus.semantic_graph_density_option", { count: value }) }}
+            </option>
+          </select>
+        </label>
+        <button v-if="hasFilters" class="btn ghost clear" type="button" @click="clearFilters">
+          {{ i18n.t("pdf_corpus.semantic_graph_clear_filters") }}
+        </button>
+      </div>
+
+      <div
+        v-if="typeFacets.length"
+        class="type-chips"
+        role="group"
+        :aria-label="i18n.t('pdf_corpus.semantic_graph_types')"
+      >
+        <button
+          v-for="facet in typeFacets"
+          :key="facet.type"
+          type="button"
+          :class="[
+            'type-chip',
+            hueClass(facet.type),
+            { active: selectedTypes.includes(facet.type) },
+          ]"
+          :aria-pressed="selectedTypes.includes(facet.type)"
+          @click="toggleType(facet.type)"
+        >
+          <i class="swatch" aria-hidden="true" />
+          <span>{{ facet.type }}</span>
+          <small>{{ n(facet.count) }}</small>
+        </button>
+      </div>
+
+      <!-- Breadcrumb + result status -->
+      <div class="graph-statusbar">
+        <nav :aria-label="i18n.t('pdf_corpus.semantic_graph_breadcrumb')" class="breadcrumb">
+          <ol>
+            <li>
+              <button v-if="focusId" type="button" class="crumb" @click="backToOverview">
+                {{ i18n.t("pdf_corpus.semantic_graph_overview") }}
+              </button>
+              <span v-else aria-current="page">{{
+                i18n.t("pdf_corpus.semantic_graph_overview")
+              }}</span>
+            </li>
+            <li v-for="(crumb, i) in focusTrail" :key="crumb.id">
+              <button
+                v-if="i < focusTrail.length - 1"
+                type="button"
+                class="crumb"
+                @click="focusNode(crumb.id, crumb.label)"
+              >
+                {{ crumb.label }}
+              </button>
+              <span v-else aria-current="page">{{ crumb.label }}</span>
+            </li>
+          </ol>
+        </nav>
+        <p class="result-count" role="status" aria-live="polite">
+          <span v-if="loading && view" class="spinner" aria-hidden="true" />
+          {{ loading && !view ? i18n.t("ui.loading") : showingText }}
+        </p>
+      </div>
+      <p v-if="truncated && !focusId" class="graph-banner info">
+        {{ i18n.t("pdf_corpus.semantic_graph_truncated_hint") }}
+      </p>
+      <p v-if="error" class="graph-banner error" role="alert">{{ error }}</p>
+
+      <div v-if="view" class="graph-layout">
+        <div class="graph-stage" :class="{ busy: loading }">
+          <div
+            class="graph-controls"
+            role="toolbar"
             :aria-label="i18n.t('pdf_corpus.semantic_graph_accessible_label')"
           >
-            <g class="graph-edges" aria-hidden="true">
-              <line
-                v-for="edge in visibleEdges"
-                :key="edge.id"
-                :x1="positions.get(edge.source)?.x"
-                :y1="positions.get(edge.source)?.y"
-                :x2="positions.get(edge.target)?.x"
-                :y2="positions.get(edge.target)?.y"
-                :class="['graph-edge', edge.relation_kind]"
-              >
-                <title>{{ relationLabel(edge) }}</title>
-              </line>
-            </g>
-            <g
-              v-for="node in positionedNodes"
-              :key="node.id"
-              :transform="`translate(${node.x}, ${node.y})`"
-              :class="['graph-node', { selected: node.id === selectedNodeId }]"
-              role="button"
-              tabindex="0"
-              :aria-label="`${node.label}, ${node.type}`"
-              @click="selectedNodeId = node.id"
-              @keydown.enter.prevent="selectedNodeId = node.id"
-              @keydown.space.prevent="selectedNodeId = node.id"
+            <button
+              type="button"
+              class="icon-btn"
+              :title="i18n.t('pdf_corpus.semantic_graph_zoom_in')"
+              :aria-label="i18n.t('pdf_corpus.semantic_graph_zoom_in')"
+              @click="setZoom(zoom * 1.25)"
             >
-              <circle r="8" />
-              <text x="13" y="4">{{ node.label.slice(0, 28) }}</text>
+              +
+            </button>
+            <button
+              type="button"
+              class="icon-btn"
+              :title="i18n.t('pdf_corpus.semantic_graph_zoom_out')"
+              :aria-label="i18n.t('pdf_corpus.semantic_graph_zoom_out')"
+              @click="setZoom(zoom / 1.25)"
+            >
+              −
+            </button>
+            <button
+              type="button"
+              class="icon-btn"
+              :title="i18n.t('pdf_corpus.semantic_graph_zoom_fit')"
+              :aria-label="i18n.t('pdf_corpus.semantic_graph_zoom_fit')"
+              @click="fitView"
+            >
+              ⤢
+            </button>
+            <label class="labels-toggle">
+              <input v-model="showAllLabels" type="checkbox" />
+              <span>{{ i18n.t("pdf_corpus.semantic_graph_labels_toggle") }}</span>
+            </label>
+          </div>
+
+          <p v-if="!nodes.length && !loading" class="graph-empty">
+            {{
+              hasFilters
+                ? i18n.t("pdf_corpus.semantic_graph_no_matches")
+                : i18n.t("pdf_corpus.semantic_graph_empty")
+            }}
+          </p>
+
+          <svg
+            v-else
+            ref="svgEl"
+            class="graph-canvas"
+            :viewBox="viewBox"
+            preserveAspectRatio="xMidYMid meet"
+            role="group"
+            tabindex="0"
+            :aria-label="i18n.t('pdf_corpus.semantic_graph_accessible_label')"
+            :aria-describedby="'semantic-graph-keyboard-help'"
+            @wheel="onWheel"
+            @pointerdown="onPointerDown"
+            @pointermove="onPointerMove"
+            @pointerup="onPointerUp"
+            @pointercancel="onPointerUp"
+            @keydown="onCanvasKey"
+          >
+            <g class="graph-edges" aria-hidden="true">
+              <path
+                v-for="edge in edges"
+                :key="edge.id"
+                :d="edgePath(edge)"
+                :stroke-width="edgeWidth(edge)"
+                :class="[
+                  'graph-edge',
+                  edge.relation_kind,
+                  edge.authority_status,
+                  { dim: !edgeActive(edge), lit: highlightId && edgeActive(edge) },
+                ]"
+              >
+                <title>
+                  {{ relationLabel(edge.predicate) }} · {{ authorityLabel(edge.authority_status) }}
+                </title>
+              </path>
+            </g>
+            <g class="graph-nodes">
+              <g
+                v-for="node in drawnNodes"
+                :key="node.id"
+                :transform="`translate(${node.x}, ${node.y})`"
+                :class="[
+                  'graph-node',
+                  hueClass(node.type),
+                  {
+                    selected: node.id === selectedNodeId,
+                    focus: node.id === view.focus?.node.id,
+                    dim: highlightSet && !highlightSet.has(node.id),
+                  },
+                ]"
+                role="button"
+                tabindex="0"
+                :aria-label="nodeAriaLabel(node)"
+                :aria-pressed="node.id === selectedNodeId"
+                @click.stop="selectNode(node.id)"
+                @dblclick.stop="focusNode(node.id, node.label)"
+                @pointerenter="hoveredNodeId = node.id"
+                @pointerleave="hoveredNodeId = ''"
+                @focus="hoveredNodeId = node.id"
+                @blur="hoveredNodeId = ''"
+                @keydown.enter.prevent="selectNode(node.id)"
+                @keydown.space.prevent="selectNode(node.id)"
+              >
+                <circle class="halo" :r="node.r + 5" />
+                <circle class="dot" :r="node.r" />
+                <text v-if="labelledIds.has(node.id)" class="label" :x="node.r + 5" y="4">
+                  {{ node.label.length > 32 ? `${node.label.slice(0, 31)}…` : node.label }}
+                </text>
+              </g>
             </g>
           </svg>
-          <div class="graph-legend" aria-hidden="true">
+
+          <footer class="graph-legend">
             <span
-              ><i class="legend-line semantic" />{{
+              v-for="facet in typeFacets.slice(0, 6)"
+              :key="facet.type"
+              :class="hueClass(facet.type)"
+            >
+              <i class="swatch" aria-hidden="true" />{{ facet.type }}
+            </span>
+            <span
+              ><i class="legend-line semantic" aria-hidden="true" />{{
                 i18n.t("pdf_corpus.semantic_graph_semantic")
               }}</span
             >
             <span
-              ><i class="legend-line observational" />{{
+              ><i class="legend-line observational" aria-hidden="true" />{{
                 i18n.t("pdf_corpus.semantic_graph_observational")
               }}</span
             >
-          </div>
+            <span
+              ><i class="legend-line disputed" aria-hidden="true" />{{
+                i18n.t("pdf_corpus.semantic_graph_legend_disputed")
+              }}</span
+            >
+            <span
+              ><i class="legend-size" aria-hidden="true" />{{
+                i18n.t("pdf_corpus.semantic_graph_legend_size")
+              }}</span
+            >
+          </footer>
+          <p id="semantic-graph-keyboard-help" class="graph-hint">
+            {{ i18n.t("pdf_corpus.semantic_graph_keyboard_help") }}
+          </p>
         </div>
 
         <aside class="graph-inspector" :aria-label="i18n.t('pdf_corpus.semantic_graph_inspector')">
           <template v-if="selectedNode">
-            <p class="graph-node-kind">{{ selectedNode.type }}</p>
+            <div class="inspector-head">
+              <p :class="['type-pill', hueClass(selectedNode.type)]">
+                <i class="swatch" aria-hidden="true" />{{ selectedNode.type }}
+              </p>
+              <button
+                type="button"
+                class="icon-btn small"
+                :aria-label="i18n.t('pdf_corpus.semantic_graph_clear_selection')"
+                :title="i18n.t('pdf_corpus.semantic_graph_clear_selection')"
+                @click="selectedNodeId = ''"
+              >
+                ×
+              </button>
+            </div>
             <h4>{{ selectedNode.label }}</h4>
             <p v-if="selectedNode.aliases?.length" class="graph-aliases">
               {{ selectedNode.aliases.join(" · ") }}
             </p>
-            <p>
-              {{
-                i18n.tf("pdf_corpus.semantic_graph_mentions", {
-                  count: selectedNode.mention_count || 0,
-                  records: selectedNode.record_ids?.length || 0,
-                })
-              }}
-            </p>
-            <div
-              v-if="selectedNode.character_profile"
-              class="character-profile"
-              :aria-label="i18n.t('pdf_corpus.semantic_graph_character_profile')"
+            <dl class="stat-row">
+              <div>
+                <dt>{{ i18n.t("pdf_corpus.semantic_graph_mentions_short") }}</dt>
+                <dd>{{ n(selectedNode.mention_count) }}</dd>
+              </div>
+              <div>
+                <dt>{{ i18n.t("pdf_corpus.semantic_graph_records_short") }}</dt>
+                <dd>{{ n(selectedNode.record_count) }}</dd>
+              </div>
+              <div>
+                <dt>{{ i18n.t("pdf_corpus.semantic_graph_connections_short") }}</dt>
+                <dd>{{ n(selectedNode.degree) }}</dd>
+              </div>
+            </dl>
+            <button
+              v-if="selectedNode.id !== focusId"
+              type="button"
+              class="btn primary focus-btn"
+              :aria-label="
+                i18n.tf('pdf_corpus.semantic_graph_focus_on', { label: selectedNode.label })
+              "
+              @click="focusNode(selectedNode.id, selectedNode.label)"
             >
+              {{ i18n.t("pdf_corpus.semantic_graph_focus_action") }}
+            </button>
+
+            <div v-if="focusDetail?.node.character_profile" class="character-profile">
               <h5>{{ i18n.t("pdf_corpus.semantic_graph_character_profile") }}</h5>
               <dl>
-                <template v-if="selectedNode.character_profile.actions_as_agent?.length">
+                <template v-if="focusDetail.node.character_profile.actions_as_agent?.length">
                   <dt>{{ i18n.t("pdf_corpus.semantic_graph_actions_agent") }}</dt>
-                  <dd>{{ featureText(selectedNode.character_profile.actions_as_agent) }}</dd>
+                  <dd>{{ featureText(focusDetail.node.character_profile.actions_as_agent) }}</dd>
                 </template>
-                <template v-if="selectedNode.character_profile.actions_as_patient?.length">
+                <template v-if="focusDetail.node.character_profile.actions_as_patient?.length">
                   <dt>{{ i18n.t("pdf_corpus.semantic_graph_actions_patient") }}</dt>
-                  <dd>{{ featureText(selectedNode.character_profile.actions_as_patient) }}</dd>
+                  <dd>{{ featureText(focusDetail.node.character_profile.actions_as_patient) }}</dd>
                 </template>
-                <template v-if="selectedNode.character_profile.possessions?.length">
+                <template v-if="focusDetail.node.character_profile.possessions?.length">
                   <dt>{{ i18n.t("pdf_corpus.semantic_graph_possessions") }}</dt>
-                  <dd>{{ featureText(selectedNode.character_profile.possessions) }}</dd>
+                  <dd>{{ featureText(focusDetail.node.character_profile.possessions) }}</dd>
                 </template>
-                <template v-if="selectedNode.character_profile.modifiers?.length">
+                <template v-if="focusDetail.node.character_profile.modifiers?.length">
                   <dt>{{ i18n.t("pdf_corpus.semantic_graph_modifiers") }}</dt>
-                  <dd>{{ featureText(selectedNode.character_profile.modifiers) }}</dd>
+                  <dd>{{ featureText(focusDetail.node.character_profile.modifiers) }}</dd>
                 </template>
               </dl>
               <small>{{ i18n.t("pdf_corpus.semantic_graph_character_profile_note") }}</small>
             </div>
-            <ul v-if="selectedRelations.length" class="relation-list">
-              <li v-for="edge in selectedRelations" :key="edge.id">
-                <b>{{ relationLabel(edge) }}</b>
-                <span>
-                  {{
-                    graph.nodes.find(
-                      (node) =>
-                        node.id === (edge.source === selectedNode?.id ? edge.target : edge.source),
-                    )?.label || ""
-                  }}
-                </span>
-                <small>{{
-                  edge.relation_kind === "semantic"
-                    ? i18n.t("pdf_corpus.semantic_graph_semantic")
-                    : i18n.t("pdf_corpus.semantic_graph_observational")
-                }}</small>
-                <small v-if="observationVerbs(edge)" class="relation-observation">
-                  {{
-                    i18n.tf("pdf_corpus.semantic_graph_observed_verbs", {
-                      verbs: observationVerbs(edge),
-                    })
-                  }}
-                </small>
+
+            <template v-if="focusDetail">
+              <p class="relations-count">
+                {{
+                  i18n.tf("pdf_corpus.semantic_graph_relations_count", {
+                    shown: n(focusDetail.relations.length),
+                    total: n(focusDetail.relations_total),
+                  })
+                }}
+              </p>
+              <section v-for="group in relationGroups" :key="group.kind" class="relation-group">
+                <h5>{{ group.title }}</h5>
+                <ul class="relation-list">
+                  <li v-for="rel in group.items" :key="relationKey(rel)">
+                    <div class="relation-line">
+                      <span class="predicate">
+                        <span aria-hidden="true">{{
+                          rel.direction === "outgoing" ? "→" : "←"
+                        }}</span>
+                        <span class="visually-hidden">{{
+                          rel.direction === "outgoing"
+                            ? i18n.t("pdf_corpus.semantic_graph_direction_outgoing")
+                            : i18n.t("pdf_corpus.semantic_graph_direction_incoming")
+                        }}</span>
+                        {{ relationLabel(rel.predicate) }}
+                      </span>
+                      <button
+                        type="button"
+                        :class="['entity-link', hueClass(rel.other_type)]"
+                        @click="focusNode(rel.other_id, rel.other_label)"
+                      >
+                        {{ rel.other_label }}
+                      </button>
+                    </div>
+                    <div class="relation-meta">
+                      <span
+                        v-if="rel.relation_kind === 'semantic'"
+                        :class="['badge', rel.authority_status]"
+                      >
+                        {{ authorityLabel(rel.authority_status) }}
+                      </span>
+                      <small>{{
+                        i18n.tf("pdf_corpus.semantic_graph_occurrences", {
+                          count: n(rel.count),
+                          records: n(rel.record_count),
+                        })
+                      }}</small>
+                      <small v-if="rel.evidence_ref_count">{{
+                        i18n.tf("pdf_corpus.semantic_graph_evidence_refs", {
+                          count: n(rel.evidence_ref_count),
+                        })
+                      }}</small>
+                      <small v-if="rel.observed_verbs.length">{{
+                        i18n.tf("pdf_corpus.semantic_graph_observed_verbs", {
+                          verbs: rel.observed_verbs.join(" · "),
+                        })
+                      }}</small>
+                    </div>
+                  </li>
+                </ul>
+              </section>
+            </template>
+            <ul v-else-if="selectedEdges.length" class="relation-list compact">
+              <li v-for="edge in selectedEdges.slice(0, 12)" :key="edge.id">
+                <div class="relation-line">
+                  <span class="predicate">{{ relationLabel(edge.predicate) }}</span>
+                  <button
+                    type="button"
+                    class="entity-link"
+                    @click="selectNode(edge.source === selectedNode.id ? edge.target : edge.source)"
+                  >
+                    {{
+                      nodesById.get(edge.source === selectedNode.id ? edge.target : edge.source)
+                        ?.label
+                    }}
+                  </button>
+                </div>
               </li>
             </ul>
           </template>
-          <p v-else>{{ i18n.t("pdf_corpus.semantic_graph_select_node") }}</p>
+          <div v-else class="inspector-empty">
+            <p>{{ i18n.t("pdf_corpus.semantic_graph_select_node") }}</p>
+          </div>
         </aside>
       </div>
 
-      <section
-        v-if="graph?.nodes.length"
-        class="entity-index"
-        aria-labelledby="semantic-graph-entity-index-title"
-      >
+      <!-- Paged entity index: the accessible, complete route to every entity -->
+      <section v-if="view" class="entity-index" aria-labelledby="semantic-graph-entity-index-title">
         <div class="entity-index-heading">
           <div>
             <h4 id="semantic-graph-entity-index-title">
@@ -363,12 +937,25 @@ watch(
             <p>
               {{
                 i18n.tf("pdf_corpus.semantic_graph_entity_index_count", {
-                  shown: filteredNodes.length,
-                  total: graph.nodes.length,
+                  shown: n(view.index.total),
+                  total: n(view.summary.nodes || 0),
                 })
               }}
             </p>
           </div>
+          <label class="toolbar-field narrow" for="semantic-graph-index-sort">
+            <span>{{ i18n.t("pdf_corpus.semantic_graph_sort") }}</span>
+            <select id="semantic-graph-index-sort" v-model="indexSort" class="control">
+              <option value="mentions">
+                {{ i18n.t("pdf_corpus.semantic_graph_sort_mentions") }}
+              </option>
+              <option value="degree">{{ i18n.t("pdf_corpus.semantic_graph_sort_degree") }}</option>
+              <option value="records">
+                {{ i18n.t("pdf_corpus.semantic_graph_sort_records") }}
+              </option>
+              <option value="label">{{ i18n.t("pdf_corpus.semantic_graph_sort_label") }}</option>
+            </select>
+          </label>
         </div>
         <div class="entity-index-table-wrap">
           <table class="entity-index-table">
@@ -376,29 +963,66 @@ watch(
               <tr>
                 <th scope="col">{{ i18n.t("pdf_corpus.semantic_graph_entity") }}</th>
                 <th scope="col">{{ i18n.t("pdf_corpus.semantic_graph_type") }}</th>
-                <th scope="col">{{ i18n.t("pdf_corpus.semantic_graph_mentions_short") }}</th>
-                <th scope="col">{{ i18n.t("pdf_corpus.semantic_graph_records_short") }}</th>
+                <th scope="col" class="num">
+                  {{ i18n.t("pdf_corpus.semantic_graph_mentions_short") }}
+                </th>
+                <th scope="col" class="num">
+                  {{ i18n.t("pdf_corpus.semantic_graph_records_short") }}
+                </th>
+                <th scope="col" class="num">
+                  {{ i18n.t("pdf_corpus.semantic_graph_connections_short") }}
+                </th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="node in filteredNodes" :key="node.id">
+              <tr
+                v-for="node in view.index.items"
+                :key="node.id"
+                :class="{ selected: node.id === selectedNodeId }"
+              >
                 <td>
-                  <button type="button" class="entity-link" @click="selectedNodeId = node.id">
+                  <button type="button" class="entity-link" @click="focusNode(node.id, node.label)">
                     {{ node.label }}
                   </button>
-                  <small v-if="node.aliases?.length">{{ node.aliases.join(" · ") }}</small>
+                  <small v-if="node.aliases?.length">{{
+                    node.aliases.slice(0, 4).join(" · ")
+                  }}</small>
                 </td>
-                <td>{{ node.type }}</td>
-                <td>{{ node.mention_count || 0 }}</td>
-                <td>{{ node.record_ids?.length || 0 }}</td>
+                <td>
+                  <span :class="['type-pill', hueClass(node.type)]"
+                    ><i class="swatch" aria-hidden="true" />{{ node.type }}</span
+                  >
+                </td>
+                <td class="num">{{ n(node.mention_count) }}</td>
+                <td class="num">{{ n(node.record_count) }}</td>
+                <td class="num">{{ n(node.degree) }}</td>
               </tr>
             </tbody>
           </table>
         </div>
+        <div v-if="view.index.total > INDEX_PAGE" class="pager">
+          <button
+            type="button"
+            class="btn secondary"
+            :disabled="indexOffset === 0 || loading"
+            @click="indexOffset = Math.max(0, indexOffset - INDEX_PAGE)"
+          >
+            {{ i18n.t("pdf_corpus.semantic_graph_prev_page") }}
+          </button>
+          <span>{{ pageText }}</span>
+          <button
+            type="button"
+            class="btn secondary"
+            :disabled="indexOffset + INDEX_PAGE >= view.index.total || loading"
+            @click="indexOffset += INDEX_PAGE"
+          >
+            {{ i18n.t("pdf_corpus.semantic_graph_next_page") }}
+          </button>
+        </div>
       </section>
 
-      <p v-if="graph?.epistemic_note" class="graph-epistemic-note">
-        {{ graph.epistemic_note }}
+      <p v-if="view?.epistemic_note" class="graph-epistemic-note">
+        {{ view.epistemic_note }}
       </p>
     </div>
   </details>
@@ -406,6 +1030,7 @@ watch(
 
 <style scoped>
 .semantic-graph-panel {
+  container-type: inline-size;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: var(--card);
@@ -427,7 +1052,9 @@ watch(
 .semantic-graph-heading p,
 .graph-aliases,
 .graph-epistemic-note,
-.graph-status {
+.graph-hint,
+.result-count,
+.relations-count {
   color: var(--muted);
 }
 .semantic-graph-body {
@@ -439,7 +1066,7 @@ watch(
   display: flex;
   justify-content: space-between;
   gap: var(--space-4);
-  align-items: end;
+  align-items: start;
 }
 .semantic-graph-heading h3,
 .semantic-graph-heading p,
@@ -447,70 +1074,377 @@ watch(
 .graph-inspector p {
   margin: 0;
 }
-.semantic-graph-actions {
-  display: flex;
-  gap: var(--space-2);
-  align-items: end;
+.semantic-graph-heading p {
+  max-width: 72ch;
+  margin-top: 2px;
 }
-.semantic-graph-actions label {
+
+/* Toolbar */
+.graph-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: end;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-inset);
+}
+.toolbar-field {
   display: grid;
   gap: 4px;
   font-size: var(--fs-xs);
   font-weight: var(--fw-semibold);
+  color: var(--muted);
 }
+.toolbar-field.search {
+  flex: 1 1 260px;
+}
+.toolbar-field.narrow .control {
+  width: 9rem;
+}
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--surface-raised);
+}
+.segmented button {
+  border: 0;
+  padding: 6px 12px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+}
+.segmented button + button {
+  border-inline-start: 1px solid var(--line);
+}
+.segmented button.active {
+  background: var(--surface-selected);
+  color: var(--accent-fg);
+}
+.segmented button:focus-visible,
+.type-chip:focus-visible,
+.icon-btn:focus-visible,
+.crumb:focus-visible,
+.entity-link:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.btn.clear {
+  align-self: end;
+}
+
+/* Categorical hues */
+.hue-1 {
+  --hue: var(--viz-cat-1);
+}
+.hue-2 {
+  --hue: var(--viz-cat-2);
+}
+.hue-3 {
+  --hue: var(--viz-cat-3);
+}
+.hue-4 {
+  --hue: var(--viz-cat-4);
+}
+.hue-5 {
+  --hue: var(--viz-cat-5);
+}
+.hue-6 {
+  --hue: var(--viz-cat-6);
+}
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--hue, var(--accent));
+  flex: none;
+}
+.type-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.type-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  text-transform: capitalize;
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--ease-standard);
+}
+.type-chip small {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.type-chip:hover {
+  background: var(--surface-hover);
+}
+.type-chip.active {
+  border-color: var(--hue);
+  background: var(--surface-selected);
+  box-shadow: inset 0 0 0 1px var(--hue);
+}
+.type-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  text-transform: capitalize;
+}
+
+/* Status bar */
+.graph-statusbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+.breadcrumb ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-sm, var(--fs-xs));
+}
+.breadcrumb li + li::before {
+  content: "›";
+  margin-inline-end: 4px;
+  color: var(--muted);
+}
+.breadcrumb [aria-current="page"] {
+  font-weight: var(--fw-semibold);
+}
+.crumb {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--accent-fg);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.result-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+.spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--accent-fg);
+  border-radius: 50%;
+  animation: spin 800ms linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.graph-banner {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid;
+  border-radius: var(--radius-md);
+  font-size: var(--fs-xs);
+}
+.graph-banner.info {
+  color: var(--tone-info-fg);
+  background: var(--tone-info-bg);
+  border-color: var(--tone-info-border);
+}
+.graph-banner.warning {
+  color: var(--tone-warn-fg);
+  background: var(--tone-warn-bg);
+  border-color: var(--tone-warn-border);
+}
+.graph-banner.error {
+  color: var(--tone-danger-fg);
+  background: var(--tone-danger-bg);
+  border-color: var(--tone-danger-border);
+}
+
+/* Stage */
 .graph-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.3fr);
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
   gap: var(--space-3);
-  min-height: 360px;
 }
-.graph-canvas-wrap {
+.graph-stage {
+  position: relative;
+  display: grid;
   min-width: 0;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: var(--surface-raised);
-  overflow: auto;
+  overflow: hidden;
+}
+.graph-stage.busy .graph-canvas {
+  opacity: 0.6;
+  transition: opacity var(--motion-base) var(--ease-standard);
+}
+.graph-controls {
+  position: absolute;
+  top: var(--space-2);
+  inset-inline-end: var(--space-2);
+  z-index: 1;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-overlay);
+  box-shadow: var(--elev-1, none);
+}
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.icon-btn:hover {
+  background: var(--surface-hover);
+}
+.icon-btn.small {
+  width: 24px;
+  height: 24px;
+}
+.labels-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-inline: 6px;
+  font-size: var(--fs-xs);
+  color: var(--muted);
 }
 .graph-canvas {
   display: block;
   width: 100%;
-  min-width: 720px;
+  aspect-ratio: 960 / 560;
   min-height: 360px;
+  max-height: 70vh;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.graph-canvas:active {
+  cursor: grabbing;
+}
+.graph-canvas:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+.graph-empty {
+  display: grid;
+  place-items: center;
+  min-height: 360px;
+  margin: 0;
+  color: var(--muted);
 }
 .graph-edge {
+  fill: none;
   stroke: var(--border-strong);
-  stroke-width: 1.25;
-  opacity: 0.65;
+  opacity: 0.5;
+  transition: opacity var(--motion-fast) var(--ease-standard);
+}
+.graph-edge.semantic {
+  stroke: var(--accent-fg);
+  opacity: 0.7;
 }
 .graph-edge.observational {
-  stroke-dasharray: 5 5;
-  opacity: 0.45;
+  stroke-dasharray: 4 4;
+  opacity: 0.35;
+}
+.graph-edge.disputed {
+  stroke: var(--tone-danger-border);
+  stroke-dasharray: 1 3;
+  opacity: 0.85;
+}
+.graph-edge.dim {
+  opacity: 0.06;
+}
+.graph-edge.lit {
+  opacity: 0.95;
 }
 .graph-node {
   cursor: pointer;
+  transition: opacity var(--motion-fast) var(--ease-standard);
 }
-.graph-node circle {
-  fill: var(--accent);
+.graph-node.dim {
+  opacity: 0.18;
+}
+.graph-node .dot {
+  fill: var(--hue, var(--accent));
   stroke: var(--surface-raised);
-  stroke-width: 2;
+  stroke-width: 1.5;
 }
-.graph-node text {
-  fill: var(--text);
-  font-size: var(--fs-xs);
-  font-weight: var(--fw-semibold);
+.graph-node .halo {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 3;
+}
+.graph-node.focus .halo {
+  stroke: var(--hue, var(--accent));
+  stroke-opacity: 0.45;
+}
+.graph-node.selected .halo,
+.graph-node:focus-visible .halo {
+  stroke: var(--focus-ring);
+  stroke-opacity: 1;
 }
 .graph-node:focus {
   outline: none;
 }
-.graph-node:focus circle,
-.graph-node.selected circle {
-  stroke: var(--focus-ring);
-  stroke-width: 4;
+.graph-node .label {
+  fill: var(--text);
+  font-size: 12px;
+  font-weight: var(--fw-semibold);
+  paint-order: stroke;
+  stroke: var(--surface-raised);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  pointer-events: none;
 }
 .graph-legend {
   display: flex;
-  gap: var(--space-3);
-  padding: 0 var(--space-3) var(--space-3);
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: var(--fs-xs);
 }
@@ -518,37 +1452,100 @@ watch(
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  text-transform: none;
 }
 .legend-line {
   display: inline-block;
-  width: 28px;
+  width: 24px;
   border-top: 2px solid var(--border-strong);
+}
+.legend-line.semantic {
+  border-top-color: var(--accent-fg);
 }
 .legend-line.observational {
   border-top-style: dashed;
 }
+.legend-line.disputed {
+  border-top: 2px dotted var(--tone-danger-border);
+}
+.legend-size {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--muted);
+  border-radius: 50%;
+  box-shadow:
+    inset 0 0 0 3px var(--surface-raised),
+    inset 0 0 0 5px var(--muted);
+}
+.graph-hint {
+  margin: 0;
+  padding: 0 var(--space-3) var(--space-2);
+  font-size: var(--fs-xs);
+}
+
+/* Inspector */
 .graph-inspector {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  max-height: 78vh;
+  overflow: auto;
   padding: var(--space-3);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: var(--surface-raised);
 }
-.graph-node-kind {
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+.inspector-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.inspector-empty {
+  display: grid;
+  place-items: center;
+  min-height: 200px;
+  color: var(--muted);
+  text-align: center;
+}
+.graph-inspector h4 {
+  font-size: var(--fs-lg, 1.125rem);
+  overflow-wrap: anywhere;
+}
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+  margin: var(--space-1, 4px) 0;
+}
+.stat-row div {
+  padding: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-inset);
+}
+.stat-row dt {
   font-size: var(--fs-xs);
   color: var(--muted);
+}
+.stat-row dd {
+  margin: 0;
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+}
+.focus-btn {
+  justify-self: start;
 }
 .character-profile {
   display: grid;
   gap: var(--space-2);
-  margin-top: var(--space-3);
   padding-top: var(--space-3);
   border-top: 1px solid var(--line);
 }
 .character-profile h5,
 .character-profile dl,
-.character-profile dd {
+.character-profile dd,
+.relation-group h5 {
   margin: 0;
 }
 .character-profile dl {
@@ -563,29 +1560,87 @@ watch(
 .character-profile dd {
   overflow-wrap: anywhere;
 }
-.character-profile small,
-.relation-observation {
+.character-profile small {
+  color: var(--muted);
+}
+.relations-count {
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-xs);
+}
+.relation-group {
+  display: grid;
+  gap: var(--space-1, 4px);
+}
+.relation-group h5 {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   color: var(--muted);
 }
 .relation-list {
   display: grid;
-  gap: var(--space-2);
-  margin: var(--space-3) 0 0;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
 .relation-list li {
   display: grid;
-  gap: 2px;
+  gap: 4px;
   padding-block: var(--space-2);
   border-top: 1px solid var(--line);
 }
-.relation-list small {
+.relation-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+}
+.predicate {
+  font-size: var(--fs-xs);
   color: var(--muted);
 }
+.relation-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: center;
+}
+.relation-meta small {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+.badge {
+  padding: 1px 8px;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--tone-warn-fg);
+  background: var(--tone-warn-bg);
+  border-color: var(--tone-warn-border);
+}
+.badge.human_confirmed {
+  color: var(--tone-ok-fg);
+  background: var(--tone-ok-bg);
+  border-color: var(--tone-ok-border);
+}
+.badge.disputed {
+  color: var(--tone-danger-fg);
+  background: var(--tone-danger-bg);
+  border-color: var(--tone-danger-border);
+}
+
+/* Entity index */
 .entity-index {
   display: grid;
   gap: var(--space-2);
+}
+.entity-index-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: var(--space-3);
 }
 .entity-index-heading h4,
 .entity-index-heading p {
@@ -597,7 +1652,7 @@ watch(
   font-size: var(--fs-xs);
 }
 .entity-index-table-wrap {
-  max-height: 360px;
+  max-height: 420px;
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
@@ -614,12 +1669,20 @@ watch(
   text-align: start;
   vertical-align: top;
 }
+.entity-index-table .num {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
 .entity-index-table th {
   position: sticky;
   top: 0;
   z-index: 1;
   background: var(--surface-raised);
   font-weight: var(--fw-semibold);
+}
+.entity-index-table tbody tr:hover,
+.entity-index-table tbody tr.selected {
+  background: var(--surface-hover);
 }
 .entity-index-table td:first-child {
   min-width: 220px;
@@ -633,34 +1696,58 @@ watch(
   border: 0;
   padding: 0;
   background: transparent;
-  color: var(--accent);
+  color: var(--accent-fg);
   font: inherit;
   font-weight: var(--fw-semibold);
   text-align: start;
   cursor: pointer;
 }
-.entity-link:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+.entity-link:hover {
+  text-decoration: underline;
+}
+.pager {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 .graph-epistemic-note {
   margin: 0;
   font-size: var(--fs-xs);
   line-height: var(--lh-body);
 }
-.graph-status.warning {
-  color: var(--tone-warn-fg);
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
-.graph-status.error {
-  color: var(--tone-danger-fg);
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+  .graph-edge,
+  .graph-node,
+  .type-chip {
+    transition: none;
+  }
 }
 @container (max-width: 820px) {
   .graph-layout {
     grid-template-columns: 1fr;
   }
-  .semantic-graph-heading {
+  .semantic-graph-heading,
+  .entity-index-heading {
     align-items: stretch;
     flex-direction: column;
+  }
+  .graph-inspector {
+    max-height: none;
   }
 }
 </style>

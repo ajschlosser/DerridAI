@@ -610,3 +610,273 @@ def build_semantic_content_graph(
             "Semantic edges preserve the authority and evidence state of the metadata that produced them."
         ),
     }
+
+
+# Bounded read model -------------------------------------------------------
+#
+# A corpus graph can hold tens of thousands of entities and far more
+# co-occurrence edges. Clients never receive the whole projection: they ask for
+# a filtered, ranked, size-capped *view* (an overview or one entity's
+# neighbourhood) plus a paged entity index. Truncation is always reported so a
+# reviewer is never led to believe a partial map is complete.
+
+VIEW_MAX_NODES = 250
+VIEW_MAX_EDGES = 1200
+INDEX_MAX_PAGE = 200
+FOCUS_MAX_RELATIONS = 200
+_INDEX_SORTS = {"mentions", "label", "degree", "records"}
+_RELATION_KINDS = {"all", "semantic", "observational"}
+
+
+def _clamp(value: Any, low: int, high: int, default: int) -> int:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(low, min(high, number))
+
+
+def _compact_node(node: dict[str, Any], degree: int) -> dict[str, Any]:
+    return {
+        "id": node["id"],
+        "type": node.get("type") or "entity",
+        "label": node.get("label") or "",
+        "aliases": list(node.get("aliases") or [])[:12],
+        "mention_count": int(node.get("mention_count") or 0),
+        "record_count": len(node.get("record_ids") or []),
+        "degree": degree,
+    }
+
+
+def _compact_edge(edge: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": edge["id"],
+        "source": edge["source"],
+        "target": edge["target"],
+        "predicate": edge.get("predicate") or "",
+        "relation_kind": edge.get("relation_kind") or "observational",
+        "authority_status": edge.get("authority_status") or "unreviewed",
+        "count": int(edge.get("count") or 0),
+    }
+
+
+def _matches(node: dict[str, Any], query: str) -> bool:
+    if not query:
+        return True
+    return any(
+        query in str(value or "").casefold()
+        for value in [node.get("label"), *(node.get("aliases") or [])]
+    )
+
+
+def semantic_content_graph_view(
+    graph: dict[str, Any],
+    *,
+    query: str = "",
+    types: list[str] | None = None,
+    relation_kind: str = "all",
+    focus: str = "",
+    node_limit: int = 80,
+    edge_limit: int = 400,
+    min_mentions: int = 0,
+    index_offset: int = 0,
+    index_limit: int = 50,
+    index_sort: str = "mentions",
+) -> dict[str, Any]:
+    """Return a bounded, ranked slice of ``graph`` suitable for interactive display.
+
+    * Overview (no ``focus``): the highest-ranked matching entities and the
+      strongest relations among them.
+    * Focus: the entity, its strongest neighbours, and its paged relations.
+
+    The full graph stays server-side; totals and ``truncated`` flags describe
+    what was left out.
+    """
+    node_limit = _clamp(node_limit, 1, VIEW_MAX_NODES, 80)
+    edge_limit = _clamp(edge_limit, 0, VIEW_MAX_EDGES, 400)
+    index_limit = _clamp(index_limit, 1, INDEX_MAX_PAGE, 50)
+    index_offset = max(0, _clamp(index_offset, 0, 10**9, 0))
+    min_mentions = max(0, _clamp(min_mentions, 0, 10**9, 0))
+    relation_kind = relation_kind if relation_kind in _RELATION_KINDS else "all"
+    index_sort = index_sort if index_sort in _INDEX_SORTS else "mentions"
+    wanted_types = {str(value) for value in (types or []) if str(value)}
+    needle = re.sub(r"\s+", " ", str(query or "")).strip().casefold()
+
+    all_nodes: list[dict[str, Any]] = [n for n in graph.get("nodes") or [] if isinstance(n, dict)]
+    nodes_by_id = {str(node.get("id")): node for node in all_nodes}
+    all_edges = [
+        edge
+        for edge in graph.get("edges") or []
+        if isinstance(edge, dict)
+        and edge.get("source") in nodes_by_id
+        and edge.get("target") in nodes_by_id
+    ]
+    kind_edges = [
+        edge
+        for edge in all_edges
+        if relation_kind == "all" or edge.get("relation_kind") == relation_kind
+    ]
+    degree: defaultdict[str, int] = defaultdict(int)
+    for edge in kind_edges:
+        degree[edge["source"]] += 1
+        degree[edge["target"]] += 1
+
+    type_counts: defaultdict[str, int] = defaultdict(int)
+    for node in all_nodes:
+        type_counts[str(node.get("type") or "entity")] += 1
+    predicate_counts: defaultdict[tuple[str, str], int] = defaultdict(int)
+    for edge in all_edges:
+        predicate_counts[(str(edge.get("relation_kind")), str(edge.get("predicate")))] += 1
+
+    def eligible(node: dict[str, Any]) -> bool:
+        if wanted_types and str(node.get("type") or "entity") not in wanted_types:
+            return False
+        if int(node.get("mention_count") or 0) < min_mentions:
+            return False
+        return _matches(node, needle)
+
+    matching = [node for node in all_nodes if eligible(node)]
+
+    def rank(node: dict[str, Any]) -> tuple[Any, ...]:
+        return (
+            -int(node.get("mention_count") or 0),
+            -degree.get(str(node["id"]), 0),
+            str(node.get("label") or "").casefold(),
+        )
+
+    def edge_rank(edge: dict[str, Any]) -> tuple[Any, ...]:
+        # Evidence-aware relations outrank computational observations at equal weight.
+        return (
+            -int(edge.get("count") or 0),
+            0 if edge.get("relation_kind") == "semantic" else 1,
+            str(edge.get("id") or ""),
+        )
+
+    focus_node = nodes_by_id.get(str(focus or "")) if focus else None
+    focus_payload: dict[str, Any] | None = None
+    if focus_node is not None:
+        focus_id = str(focus_node["id"])
+        incident = sorted(
+            (e for e in kind_edges if focus_id in (e["source"], e["target"])),
+            key=edge_rank,
+        )
+        neighbour_ids: list[str] = []
+        seen: set[str] = {focus_id}
+        for edge in incident:
+            other = edge["target"] if edge["source"] == focus_id else edge["source"]
+            if other in seen:
+                continue
+            node = nodes_by_id[other]
+            if wanted_types and str(node.get("type") or "entity") not in wanted_types:
+                continue
+            seen.add(other)
+            neighbour_ids.append(other)
+        shown_ids = [focus_id, *neighbour_ids[: node_limit - 1]]
+        candidate_total = 1 + len(neighbour_ids)
+        relations = []
+        for edge in incident[:FOCUS_MAX_RELATIONS]:
+            other = edge["target"] if edge["source"] == focus_id else edge["source"]
+            relations.append(
+                {
+                    **_compact_edge(edge),
+                    "direction": "outgoing" if edge["source"] == focus_id else "incoming",
+                    "other_id": other,
+                    "other_label": nodes_by_id[other].get("label") or "",
+                    "other_type": nodes_by_id[other].get("type") or "entity",
+                    "record_ids": list(edge.get("record_ids") or [])[:20],
+                    "record_count": len(edge.get("record_ids") or []),
+                    "supporting_fields": list(edge.get("supporting_fields") or []),
+                    "derivation_method": edge.get("derivation_method") or "",
+                    "evidence_ref_count": len(edge.get("evidence_refs") or []),
+                    "observed_verbs": list(
+                        dict.fromkeys(
+                            str(item.get("verb") or "").strip()
+                            for item in (edge.get("observations") or [])
+                            if isinstance(item, dict) and str(item.get("verb") or "").strip()
+                        )
+                    )[:8],
+                }
+            )
+        focus_payload = {
+            "node": {
+                **_compact_node(focus_node, degree.get(focus_id, 0)),
+                "aliases": list(focus_node.get("aliases") or []),
+                "derivation_method": focus_node.get("derivation_method") or "",
+                "record_ids": list(focus_node.get("record_ids") or [])[:50],
+                "character_profile": focus_node.get("character_profile"),
+            },
+            "relations": relations,
+            "relations_total": len(incident),
+        }
+    else:
+        focus_id = ""
+        shown_ids = [str(node["id"]) for node in sorted(matching, key=rank)[:node_limit]]
+        candidate_total = len(matching)
+
+    shown = set(shown_ids)
+    induced = sorted(
+        (e for e in kind_edges if e["source"] in shown and e["target"] in shown),
+        key=edge_rank,
+    )
+    if focus_id:
+        # Keep every spoke to the focus before any neighbour-to-neighbour edge.
+        induced.sort(key=lambda e: 0 if focus_id in (e["source"], e["target"]) else 1)
+    view_edges = induced[:edge_limit]
+
+    if index_sort == "label":
+        index_rows = sorted(matching, key=lambda n: str(n.get("label") or "").casefold())
+    elif index_sort == "degree":
+        index_rows = sorted(matching, key=lambda n: (-degree.get(str(n["id"]), 0), *rank(n)))
+    elif index_sort == "records":
+        index_rows = sorted(matching, key=lambda n: (-len(n.get("record_ids") or []), *rank(n)))
+    else:
+        index_rows = sorted(matching, key=rank)
+
+    return {
+        "version": 1,
+        "kind": "semantic_content_graph_view",
+        "profile": graph.get("profile"),
+        "records_digest": graph.get("records_digest"),
+        "summary": graph.get("summary") or {},
+        "epistemic_note": graph.get("epistemic_note") or "",
+        "facets": {
+            "types": [
+                {"type": key, "count": value}
+                for key, value in sorted(type_counts.items(), key=lambda kv: (-kv[1], kv[0]))
+            ],
+            "predicates": [
+                {"relation_kind": kind, "predicate": predicate, "count": value}
+                for (kind, predicate), value in sorted(
+                    predicate_counts.items(), key=lambda kv: (-kv[1], kv[0])
+                )[:40]
+            ],
+        },
+        "query": {
+            "query": needle,
+            "types": sorted(wanted_types),
+            "relation_kind": relation_kind,
+            "focus": focus_id,
+            "node_limit": node_limit,
+            "edge_limit": edge_limit,
+            "min_mentions": min_mentions,
+        },
+        "view": {
+            "nodes": [_compact_node(nodes_by_id[i], degree.get(i, 0)) for i in shown_ids],
+            "edges": [_compact_edge(edge) for edge in view_edges],
+            "candidate_nodes": candidate_total,
+            "candidate_edges": len(induced),
+            "truncated_nodes": candidate_total > len(shown_ids),
+            "truncated_edges": len(induced) > len(view_edges),
+        },
+        "focus": focus_payload,
+        "index": {
+            "items": [
+                _compact_node(n, degree.get(str(n["id"]), 0))
+                for n in index_rows[index_offset : index_offset + index_limit]
+            ],
+            "total": len(matching),
+            "offset": index_offset,
+            "limit": index_limit,
+            "sort": index_sort,
+        },
+    }

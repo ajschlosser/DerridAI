@@ -251,6 +251,8 @@ export const corpusMetadataApi = {
     confidence = 1,
     reason = "",
     expectedRevision?: number,
+    /** Spans cited from other records. The patch replaces the field's evidence, so send the ones to keep. */
+    externalBlockIds: string[] = [],
   ) =>
     apiRequest<CorpusRecord>(
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/evidence`,
@@ -262,6 +264,7 @@ export const corpusMetadataApi = {
           confidence,
           reason,
           expected_revision: expectedRevision,
+          external_block_ids: externalBlockIds,
         }),
       },
     ),

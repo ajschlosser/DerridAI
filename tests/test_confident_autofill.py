@@ -180,6 +180,62 @@ def test_null_confidence_populates_value_but_keeps_it_in_review(tmp_path: Path, 
     assert status["llm_checked"] is True
 
 
+
+def test_canonical_source_unit_ids_feed_evidence_prompt_and_deterministic_fallback(tmp_path: Path, monkeypatch):
+    """Evidence remains available when a Record carries canonical source_unit_ids only.
+
+    Regression: metadata enrichment still read the legacy source_block_ids key in two places.
+    Records using the canonical source_unit_ids therefore supplied no candidate blocks to the
+    prompt or evidence cascade, so valid proposals could complete with no evidence suggestion.
+    """
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = _install_minimal_build(repo)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    record = _record()
+    record["source_unit_ids"] = record.pop("source_block_ids")
+    prompts: list[str] = []
+
+    reply = _discourse_reply(
+        region_type="main_text",
+        primary_text=True,
+        discourse_role="analysis",
+        speaker="Derrida",
+    )
+    reply["field_evidence"] = {}
+    reply["field_assessments"]["speaker"] = {
+        "confidence": 0.95,
+        "needs_review": False,
+        "reason": "The name appears explicitly in the record.",
+        "outcome": "supported_value",
+    }
+
+    def fake(_request, prompt, *, response_model, max_tokens, schema_name, build_id=""):
+        prompts.append(prompt)
+        if schema_name == "derridai_record_discourse":
+            return reply
+        return {"metadata": {}, "field_evidence": {}, "field_assessments": {}, "review_reason": ""}
+
+    monkeypatch.setattr(manager, "_chat_json", fake)
+    manager._enrich_record(
+        record,
+        {},
+        {"provider": "ollama", "model": "test-model"},
+        build_id=build["build_id"],
+    )
+
+    assert any("[b1] Derrida discusses hospitality." in prompt for prompt in prompts)
+    evidence = record["metadata_evidence"]["speaker"]
+    assert evidence["block_ids"] == ["b1"]
+    assert evidence["method"] == "deterministic-lexical-v1"
+    assert evidence["backfilled"] is True
+
+    # Persistence must retain the valid source-unit binding for the reviewer-facing record.
+    repo.save_records(build["build_id"], [record])
+    restored = repo.load_records(build["build_id"])[0]
+    assert restored["source_unit_ids"] == ["b1"]
+    assert restored["metadata_evidence"]["speaker"]["block_ids"] == ["b1"]
+
+
 def test_deterministic_structure_is_corroborated_by_a_matching_llm_value(tmp_path: Path, monkeypatch):
     """A matching LLM value corroborates reviewer-defined region_type and primary_text.
 

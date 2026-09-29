@@ -78,6 +78,31 @@ describe("Corpus Builder build, review, and finish states", () => {
     expect(wrapper.find(".validation-details").exists()).toBe(true);
   });
 
+  it("reports the active metadata family and real task counts during enrichment", () => {
+    const wrapper = mount(CorpusBuildProgress, {
+      props: {
+        status: "running",
+        stage: "enriching",
+        progress: 0.72,
+        recordCount: 112,
+        reviewCount: 0,
+        acceptedCount: 0,
+        metadataActiveTasks: [{ record_id: "record-36", task: "quotation" }],
+        metadataTasksTotal: 336,
+        metadataTasksCompleted: 214,
+        metadataTasksFailed: 1,
+        metadataTasksSkipped: 2,
+        metadataTasksRunning: 3,
+        metadataTasksQueued: 116,
+      },
+    });
+    const operation = wrapper.get(".current-operation").text();
+    expect(operation).toContain("record-36");
+    expect(operation).toContain("quotation");
+    expect(operation).toContain("217/336");
+    expect(operation).toContain("3 active");
+  });
+
   it("surfaces recoverable build failures as alerts without hiding preserved warnings", () => {
     const wrapper = mount(CorpusBuildProgress, {
       props: {

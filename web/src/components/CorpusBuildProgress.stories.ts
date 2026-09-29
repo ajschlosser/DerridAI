@@ -14,6 +14,13 @@ const meta = {
     warnings: [],
     validation: null,
     llmMetrics: { calls: 81, retries: 3, structured_output_failures: 3, escalations: 0 },
+    metadataActiveTasks: [{ record_id: "record-0036", task: "quotation" }],
+    metadataTasksTotal: 561,
+    metadataTasksCompleted: 214,
+    metadataTasksFailed: 2,
+    metadataTasksSkipped: 7,
+    metadataTasksRunning: 3,
+    metadataTasksQueued: 335,
     segmentationTelemetry: {
       candidateCount: 54,
       deterministicSplits: 5,
@@ -32,6 +39,30 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Running: Story = {};
+export const SegmentingCandidates: Story = {
+  args: {
+    status: "running",
+    stage: "segmenting",
+    progress: 0.27,
+    recordCount: 0,
+    reviewCount: 0,
+    acceptedCount: 0,
+    boundaryCandidatesCompleted: 42,
+    segmentationTelemetry: {
+      candidateCount: 67,
+      deterministicSplits: 8,
+      deterministicKeeps: 22,
+      llmAdjudications: 12,
+      llmBatchCalls: 2,
+      llmSplits: 4,
+      llmKeeps: 8,
+      provisionalSplits: 0,
+      budgetSkipped: 0,
+      classifierFailures: 0,
+      reviewCount: 0,
+    },
+  },
+};
 export const NeedsReview: Story = {
   args: {
     status: "awaiting_review",

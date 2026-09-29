@@ -278,7 +278,13 @@ from .operation_events import note_corpus_build, note_record_metadata
 from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
 from .rag import _citation_strings, chat_complete
 from .run_guidance import find_guidance_matches
-from .semantic_content_graph import build_semantic_content_graph
+from .semantic_content_graph import (
+    _records_digest as _semantic_records_digest,
+)
+from .semantic_content_graph import (
+    build_semantic_content_graph,
+    semantic_content_graph_view,
+)
 from .sentence_boundaries import snap_boundaries_to_sentences
 from .source_embeddings import SourceEmbeddingProjection
 from .source_quality import assess_extracted_source, page_source_quality_report
@@ -1772,6 +1778,9 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         # in memory so a reviewer can hot-swap profiles for subsequently scheduled
         # metadata work while the public build manifest remains secret-free.
         self._runtime_requests: dict[str, dict[str, Any]] = {}
+        # Derived semantic graphs keyed by build and the exact inputs that produced
+        # them; bounded so large corpora do not accumulate in memory.
+        self._semantic_graph_cache: dict[str, tuple[tuple[Any, ...], dict[str, Any]]] = {}
         self._executor = ThreadPoolExecutor(max_workers=max(1, max_workers), thread_name_prefix="derridai-pdf-corpus")
         # Conventions confirmed independently in several builds; see enrichment_cycles.
         self._global_learning = GlobalLearningStore(self.repo.root / "global_learning.json")
@@ -1819,6 +1828,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             build["document_intelligence"] = {
                 "status": analysis.get("status"),
                 "profile": analysis.get("profile"),
+                "selected_provider": analysis.get("selected_provider"),
                 "provider": analysis.get("provider"),
                 "provider_version": analysis.get("provider_version"),
                 "model": analysis.get("model"),
@@ -1830,6 +1840,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                 "events": projection_counts.get("events", 0),
                 "model_artifacts": analysis.get("model_artifacts") or [],
                 "warnings": analysis.get("warnings") or [],
+                "reason": analysis.get("reason"),
                 "text_sha256": analysis.get("text_sha256"),
             }
             build["semantic_content_graph"] = semantic_graph.get("summary") or {}
@@ -1848,6 +1859,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             build["document_intelligence"] = {
                 "status": "unavailable",
                 "profile": str(request.get("document_intelligence_profile") or "scholarly"),
+                "selected_provider": str(request.get("document_nlp_provider") or "auto"),
                 "reason": str(exc),
             }
             self.repo.save_build(build)
@@ -1861,6 +1873,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         request = build.get("request") if isinstance(build.get("request"), dict) else {}
         self._run_document_intelligence(build_id, records, manifest, request)
         self.repo.save_records(build_id, records)
+        self._semantic_graph_cache.pop(build_id, None)
         graph = self.semantic_content_graph(build_id)
         return {
             "document_intelligence": self.document_intelligence(build_id),
@@ -1896,6 +1909,21 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             if analysis.get("stale")
             else analysis
         )
+        key = (
+            _semantic_records_digest(records),
+            analysis.get("text_sha256"),
+            analysis.get("provider"),
+            analysis.get("provider_version"),
+            analysis.get("version"),
+            len(analysis.get("entities") or []),
+            len(analysis.get("entity_clusters") or []),
+            len(analysis.get("characters") or []),
+            bool(analysis.get("stale")),
+            str(analysis.get("profile") or ""),
+        )
+        cached = self._semantic_graph_cache.get(build_id)
+        if cached is not None and cached[0] == key:
+            return cached[1]
         graph = build_semantic_content_graph(
             records,
             graph_analysis,
@@ -1905,7 +1933,16 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         build = self.repo.get_build(build_id)
         build["semantic_content_graph"] = graph.get("summary") or {}
         self.repo.save_build(build)
+        with self._lock:
+            self._semantic_graph_cache.pop(build_id, None)
+            self._semantic_graph_cache[build_id] = (key, graph)
+            while len(self._semantic_graph_cache) > 4:
+                self._semantic_graph_cache.pop(next(iter(self._semantic_graph_cache)))
         return graph
+
+    def semantic_content_graph_view(self, build_id: str, **params: Any) -> dict[str, Any]:
+        """Bounded, filterable slice of the current graph for interactive display."""
+        return semantic_content_graph_view(self.semantic_content_graph(build_id), **params)
 
     def _project_metadata_exemplars(
         self,
@@ -2249,22 +2286,58 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                         "quotation" if "record_quotation" in schema_name else
                         "indexing" if "record_indexing" in schema_name else "indexing"
                     )
-                    call_token = self._note_llm_call_start(build_id, metric_stage_of(schema_name), provider, model, base_url)
+                    call_token = self._note_llm_call_start(
+                        build_id, metric_stage_of(schema_name), provider, model, base_url
+                    )
+                    call_id = f"{build_id}:{call_token}" if build_id else ""
+                    rendered_prompt = prompt + retry_note
+                    effective_max_tokens = min(8192, max_tokens + ((attempt - 1) * 1024))
+                    if build_id:
+                        self._llm_trace_start(
+                            build_id,
+                            call_id=call_id,
+                            schema_name=schema_name,
+                            role=role,
+                            attempt=attempt,
+                            provider=provider,
+                            model=model,
+                            prompt=rendered_prompt,
+                            response_schema=schema,
+                            generation=generation,
+                            max_tokens=effective_max_tokens,
+                        )
+                    raw = ""
                     try:
-                        raw = self._with_transport_retry(build_id, chat_complete, 
+                        raw = self._with_transport_retry(
+                            build_id,
+                            chat_complete,
                             provider=provider,
                             model=model,
                             base_url=base_url,
                             api_key=api_key,
-                            prompt=prompt + retry_note,
+                            prompt=rendered_prompt,
                             options=generation,
                             json_mode=True,
                             json_schema=schema,
                             schema_name=schema_name,
-                            max_tokens=min(8192, max_tokens + ((attempt - 1) * 1024)),
+                            max_tokens=effective_max_tokens,
                             cancelled=(lambda: self._cancelled(build_id)) if build_id else None,
                             timeout_seconds=float(_stage_timeouts(request).get(timeout_key, 240)),
+                            on_delta=(
+                                (lambda piece, token=call_token: self._note_llm_call_delta(build_id, token, piece))
+                                if build_id
+                                else None
+                            ),
                         )
+                    except Exception as exc:
+                        if build_id:
+                            self._llm_trace_finish(
+                                build_id,
+                                call_id,
+                                raw_response=raw or None,
+                                error=f"{type(exc).__name__}: {exc}",
+                            )
+                        raise
                     finally:
                         self._note_llm_call_end(build_id, call_token)
                 except InterruptedError:
@@ -2287,10 +2360,24 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                 try:
                     value = _parse_json_robust(raw)
                     parsed = response_model.model_validate(value)
-                    return parsed.model_dump(mode="json")
+                    validated = parsed.model_dump(mode="json")
+                    if build_id:
+                        self._llm_trace_finish(
+                            build_id,
+                            call_id,
+                            raw_response=str(raw or ""),
+                            validated_response=validated,
+                        )
+                    return validated
                 except (ValueError, ValidationError) as exc:
                     failure = exc
                     if build_id:
+                        self._llm_trace_finish(
+                            build_id,
+                            call_id,
+                            raw_response=str(raw or ""),
+                            error=f"{type(exc).__name__}: {exc}",
+                        )
                         self._increment_metric(build_id, "structured_output_failures")
             all_failures.append(f"{role} {provider}/{model}: {failure}")
         raise ValueError(

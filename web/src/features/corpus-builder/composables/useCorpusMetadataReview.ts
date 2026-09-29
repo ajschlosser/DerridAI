@@ -173,10 +173,17 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
     );
   }
 
-  async function persistEvidence(field: string, blockIds: string[]) {
+  /**
+   * Save a field's cited spans. The server replaces the whole entry, so spans cited from other records are carried
+   * over unless `externalBlockIds` replaces them; editing the record's own spans must never drop them.
+   */
+  async function persistEvidence(field: string, blockIds: string[], externalBlockIds?: string[]) {
     if (!options.currentBuild.value || !options.selectedRecord.value) return;
     const viewport = options.captureReviewViewport();
     const existing = options.selectedRecord.value.metadata_evidence?.[field];
+    const externalIds = Array.from(
+      new Set((externalBlockIds ?? existing?.external_block_ids ?? []).map(String)),
+    );
     const buildId = options.currentBuild.value.build_id;
     const recordId = options.selectedRecord.value.record_id;
     const expectedRevision = Number(options.selectedRecord.value.record_revision || 1);
@@ -185,6 +192,7 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
       [field]: {
         ...(existing || {}),
         block_ids: blockIds,
+        external_block_ids: externalIds,
         confidence: existing?.confidence ?? 1,
         reason: existing?.reason || options.t("pdf_corpus.human_evidence_reason"),
       },
@@ -208,8 +216,18 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
         existing?.confidence ?? 1,
         existing?.reason || options.t("pdf_corpus.human_evidence_reason"),
         rebase ? undefined : expectedRevision,
+        externalIds,
       ),
     );
+  }
+
+  /** Replace the spans `field` cites from other records, keeping its own spans and its value unchanged. */
+  async function setExternalEvidenceBlocks(field: string, blockIds: string[]) {
+    if (!options.currentBuild.value || !options.selectedRecord.value || !field) return;
+    const own = (options.selectedRecord.value.metadata_evidence?.[field]?.block_ids || []).map(
+      String,
+    );
+    await persistEvidence(field, own, blockIds);
   }
 
   async function assignEvidenceBlock(field: string, blockId: string) {
@@ -664,6 +682,7 @@ export function useCorpusMetadataReview(options: CorpusMetadataReviewOptions) {
     assignEvidenceBlock,
     toggleEvidenceBlock,
     setEvidenceBlocks,
+    setExternalEvidenceBlocks,
     requeueCurrentRecord,
     resolveMetadataField,
     resolveMetadataSuggestions,

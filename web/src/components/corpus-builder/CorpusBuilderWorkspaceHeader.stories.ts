@@ -11,6 +11,9 @@ const meta = {
     status: "awaiting_review",
     recordCount: 84,
     acceptedCount: 31,
+    workspace: "review",
+    canBuild: true,
+    canReview: true,
   },
 } satisfies Meta<typeof CorpusBuilderWorkspaceHeader>;
 
@@ -27,6 +30,9 @@ export const EmptyWorkspace: Story = {
     status: "",
     recordCount: 0,
     acceptedCount: 0,
+    workspace: "setup",
+    canBuild: false,
+    canReview: false,
   },
 };
 
@@ -37,6 +43,9 @@ export const Published: Story = {
     status: "published",
     recordCount: 84,
     acceptedCount: 84,
+    workspace: "build",
+    canBuild: true,
+    canReview: true,
   },
 };
 

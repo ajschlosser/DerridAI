@@ -174,8 +174,10 @@ const pendingSet = computed(() => new Set(attentionFields.value));
 // without being opened. A field without kept precedents (or a failed request) loads its own when opened.
 const keptPrecedents = ref<Record<string, MetadataPrecedents>>({});
 watch(
-  () => [props.buildId, props.record.record_id, attentionFields.value.length > 0] as const,
-  async ([buildId, recordId, anyPending]) => {
+  // A primitive key: polling replaces the record object, which must not clear and refetch kept precedents.
+  () => JSON.stringify([props.buildId, props.record.record_id, attentionFields.value.length > 0]),
+  async (key) => {
+    const [buildId, recordId, anyPending] = JSON.parse(key) as [string, string, boolean];
     keptPrecedents.value = {};
     if (!buildId || !anyPending) return;
     try {

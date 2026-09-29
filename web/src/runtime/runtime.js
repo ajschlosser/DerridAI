@@ -1133,7 +1133,7 @@ function currentContext() {
       state.pdf.title || "Corpus Builder",
       state.pdf.name
         ? `${state.pdf.name} · page ${state.pdf.page}`
-        : "Build auditable records or inspect source PDFs",
+        : "Build, monitor, and review auditable corpus records",
     ],
     compare: ["Tools", "Record Comparison", "Inspect field and text differences"],
     vector: ["Storage", "Vector Stores", "Persistent local ChromaDB collections"],

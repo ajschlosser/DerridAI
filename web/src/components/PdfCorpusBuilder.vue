@@ -41,6 +41,8 @@ import CorpusBoundarySliceDialog from "./CorpusBoundarySliceDialog.vue";
 import CorpusEvidenceBrowserDialog from "./corpus-builder/CorpusEvidenceBrowserDialog.vue";
 import MetadataEnrichmentDialog from "./MetadataEnrichmentDialog.vue";
 import CorpusModelActivity from "./CorpusModelActivity.vue";
+import CorpusDocumentIntelligenceStatus from "./CorpusDocumentIntelligenceStatus.vue";
+import CorpusLlmActivityInspector from "./CorpusLlmActivityInspector.vue";
 import CorpusHandsFreeSettings from "./CorpusHandsFreeSettings.vue";
 import MetadataSchemaEditor from "./MetadataSchemaEditor.vue";
 import {
@@ -425,10 +427,44 @@ const {
   metadataRetryRunning,
   awaitingManifestReview,
   hasRecordTopology,
-  showBuildConfiguration,
   finishPhase,
-  showReviewWorkspace,
+  showReviewWorkspace: lifecycleShowReviewWorkspace,
 } = useCorpusBuildLifecycle(currentBuild, recordTotal, reviewQueue, reviewRequested);
+
+type CorpusWorkspaceMode = "setup" | "build" | "review";
+const requestedWorkspace = computed<CorpusWorkspaceMode | "">(() => {
+  const value = String(route.query.workspace || "");
+  return value === "setup" || value === "build" || value === "review" ? value : "";
+});
+const defaultWorkspace = computed<CorpusWorkspaceMode>(() => {
+  if (!currentBuild.value) return "setup";
+  return hasRecordTopology.value && lifecycleShowReviewWorkspace.value ? "review" : "build";
+});
+const workspaceMode = computed<CorpusWorkspaceMode>(() => {
+  const requested = requestedWorkspace.value;
+  if (requested === "setup") return "setup";
+  if (requested === "build" && currentBuild.value) return "build";
+  if (requested === "review" && hasRecordTopology.value) return "review";
+  return defaultWorkspace.value;
+});
+const showBuildConfiguration = computed(() => workspaceMode.value === "setup");
+const showReviewWorkspace = computed(
+  () =>
+    workspaceMode.value === "review" && hasRecordTopology.value && !awaitingManifestReview.value,
+);
+async function switchWorkspace(workspace: CorpusWorkspaceMode) {
+  if (workspace === "build" && !currentBuild.value) return;
+  if (workspace === "review" && !hasRecordTopology.value) return;
+  await router.push({
+    query: {
+      ...route.query,
+      workspace,
+      build: currentBuild.value?.build_id || route.query.build,
+      record: workspace === "review" ? route.query.record : undefined,
+      queue: workspace === "review" ? route.query.queue : undefined,
+    },
+  });
+}
 const {
   registerBuildOperation,
   syncBuildInRail,
@@ -436,7 +472,7 @@ const {
   refreshBuild,
   startPolling,
   stopPolling,
-  startBuild,
+  startBuild: startBuildOperation,
   resumeBuild,
   retryIncompleteMetadata,
   confirmManifest,
@@ -476,6 +512,10 @@ const {
   t: (key, fallback) => i18n.t(key, fallback),
   tf: (key, values) => i18n.tf(key, values),
 });
+async function startBuild() {
+  await startBuildOperation();
+  if (currentBuild.value) await switchWorkspace("build");
+}
 
 const { jsonlPreviewOpen, jsonlPreview, openJsonlPreview, publish } = useCorpusPublication({
   currentBuild,
@@ -503,6 +543,7 @@ const {
   saveMetadata,
   toggleEvidenceBlock,
   setEvidenceBlocks,
+  setExternalEvidenceBlocks,
   requeueCurrentRecord,
   resolveMetadataField,
   resolveMetadataSuggestions,
@@ -661,6 +702,7 @@ function returnToReadiness() {
   reviewRequested.value = false;
   reviewQueue.value = "all";
   recordQuery.value = "";
+  void switchWorkspace("build");
 }
 
 /** The reviewer answers from their own knowledge: the decision records them, not a source span, as the source. */
@@ -669,15 +711,23 @@ async function resolveMetadataWithHumanSource(field: string, value: unknown, not
 }
 
 /** The value being cited from outside this record, while the browser dialog is open. */
-const evidenceBrowser = ref<{ field: string; value: unknown } | null>(null);
+// From a field editor the chosen spans are saved with the value; from the Evidence tab (`evidenceOnly`) they replace
+// the field's other-record spans and leave its value alone.
+const evidenceBrowser = ref<{ field: string; value?: unknown; evidenceOnly?: boolean } | null>(
+  null,
+);
 function openEvidenceBrowser(field: string, value: unknown) {
   evidenceBrowser.value = { field, value };
+}
+function openExternalEvidenceBrowser(field: string) {
+  if (field) evidenceBrowser.value = { field, evidenceOnly: true };
 }
 async function confirmExternalEvidence(blockIds: string[]) {
   const target = evidenceBrowser.value;
   evidenceBrowser.value = null;
   if (!target) return;
-  await resolveMetadataField(target.field, target.value, "", { externalBlockIds: blockIds });
+  if (target.evidenceOnly) await setExternalEvidenceBlocks(target.field, blockIds);
+  else await resolveMetadataField(target.field, target.value, "", { externalBlockIds: blockIds });
 }
 
 const metadataFamilyOptions = computed(
@@ -1682,6 +1732,14 @@ async function chooseBuild(build: CorpusBuild) {
   hydratedMetadataCount.value = 0;
   reviewQueue.value = "all";
   reviewRequested.value = false;
+  await router.replace({
+    query: {
+      ...route.query,
+      build: build.build_id,
+      record: undefined,
+      queue: undefined,
+    },
+  });
   await refreshBuild();
   await nextTick();
   await refreshRecords(true);
@@ -1744,7 +1802,13 @@ function startNewBuildSetup() {
   sourceBlocks.value = [];
   bulkMetadataOpen.value = false;
   void router.replace({
-    query: { ...route.query, build: undefined, record: undefined, queue: undefined },
+    query: {
+      ...route.query,
+      workspace: "setup",
+      build: undefined,
+      record: undefined,
+      queue: undefined,
+    },
   });
 }
 function reviewShortcut(event: KeyboardEvent) {
@@ -1799,6 +1863,18 @@ watch([reviewQueue, recordQuery], () => {
   editingText.value = false;
   void refreshRecords(true);
 });
+watch([reviewRequested, reviewQueue], ([requested, queue], [wasRequested, wasQueue]) => {
+  if (!hasRecordTopology.value || workspaceMode.value === "review") return;
+  const explicitReviewNavigation =
+    (requested && !wasRequested) || (queue !== "all" && queue !== wasQueue);
+  if (explicitReviewNavigation) void switchWorkspace("review");
+});
+watch(
+  () => selectedAsset.value?.media_kind,
+  (mediaKind) => {
+    if (mediaKind && mediaKind !== "pdf") llmAssessTextNoise.value = false;
+  },
+);
 watch(selectedEvidenceField, (field) => {
   if (!field || !selectedRecord.value) return;
   const ids = allEvidenceBlockIds(selectedRecord.value.metadata_evidence?.[field]);
@@ -2018,7 +2094,11 @@ defineExpose({
       :status="currentBuild?.status || ''"
       :record-count="currentBuild?.record_count || 0"
       :accepted-count="currentBuild?.accepted_count || 0"
+      :workspace="workspaceMode"
+      :can-build="Boolean(currentBuild)"
+      :can-review="hasRecordTopology"
       :sticky="!showReviewWorkspace"
+      @workspace="switchWorkspace"
     >
       <template #actions>
         <CorpusBuildHistoryMenu
@@ -2089,6 +2169,7 @@ defineExpose({
     </div>
 
     <CorpusWorkflowStepper
+      v-if="workspaceMode !== 'setup' || !currentBuild"
       :stage="currentBuild?.stage || ''"
       :status="currentBuild?.status || ''"
       :published="Boolean(currentBuild?.publication)"
@@ -2100,11 +2181,11 @@ defineExpose({
       :can-publish="Boolean(currentBuild?.publication_readiness?.can_publish)"
     />
     <CorpusModelActivity
-      v-if="currentBuild && buildRunning"
+      v-if="currentBuild && buildRunning && workspaceMode !== 'setup'"
       :activity="currentBuild.llm_activity"
     />
     <CorpusInitializationDialog
-      v-if="currentBuild && buildRunning && !hasRecordTopology"
+      v-if="workspaceMode === 'build' && currentBuild && buildRunning && !hasRecordTopology"
       :build="currentBuild"
       :disabled="busy !== ''"
       @cancel="cancelBuild"
@@ -2264,6 +2345,7 @@ defineExpose({
         :document-intelligence-profile="documentIntelligenceProfile"
         :document-nlp-provider="documentNlpProvider"
         :document-nlp-include-events="documentNlpIncludeEvents"
+        :media-kind="selectedAsset?.media_kind || ''"
         :auto-clean-text="autoCleanText"
         :llm-touchup-during-enrichment="llmTouchupDuringEnrichment"
         :noise-unusable-threshold="noiseUnusableThreshold"
@@ -2407,7 +2489,7 @@ defineExpose({
     </details>
 
     <div
-      v-if="currentBuild || !showBuildConfiguration"
+      v-if="currentBuild && !showBuildConfiguration"
       class="builder-workspace"
       :class="{ 'review-mode': showReviewWorkspace }"
     >
@@ -2556,14 +2638,18 @@ defineExpose({
             @retry="retryIncompleteMetadata"
             @review="reviewMetadataRecord"
           />
-          <CorpusBuildTimeline
-            v-if="!awaitingManifestReview && !showReviewWorkspace"
-            :build="currentBuild"
-          />
-          <details v-if="!showReviewWorkspace" class="technical-details">
-            <summary>
-              {{ i18n.t("pdf_corpus.technical_details") }}
-            </summary>
+          <section
+            v-if="!showReviewWorkspace"
+            class="build-monitor"
+            :aria-label="i18n.t('pdf_corpus.build_monitor')"
+          >
+            <div class="build-monitor-heading">
+              <div>
+                <span class="eyebrow">{{ i18n.t("pdf_corpus.build_monitor") }}</span>
+                <h3>{{ i18n.t("pdf_corpus.build_monitor_title") }}</h3>
+              </div>
+              <small>{{ i18n.t("pdf_corpus.build_monitor_help") }}</small>
+            </div>
             <CorpusBuildProgress
               :status="currentBuild.publication ? 'published' : currentBuild.status"
               :stage="currentBuild.publication ? 'published' : currentBuild.stage"
@@ -2577,6 +2663,14 @@ defineExpose({
               :validation="currentBuild.validation || null"
               :llm-metrics="currentBuild.llm_metrics || null"
               :metadata-operation="currentBuild.metadata_operation || null"
+              :metadata-active-tasks="currentBuild.metadata_active_tasks || []"
+              :metadata-tasks-total="currentBuild.metadata_tasks_total || 0"
+              :metadata-tasks-completed="currentBuild.metadata_tasks_completed || 0"
+              :metadata-tasks-failed="currentBuild.metadata_tasks_failed || 0"
+              :metadata-tasks-skipped="currentBuild.metadata_tasks_skipped || 0"
+              :metadata-tasks-running="currentBuild.metadata_tasks_running || 0"
+              :metadata-tasks-queued="currentBuild.metadata_tasks_queued || 0"
+              :boundary-candidates-completed="currentBuild.boundary_candidates_completed || 0"
               :unresolved-count="
                 currentBuild.boundary_review_count ||
                 currentBuild.segmentation_unresolved_regions?.length ||
@@ -2598,7 +2692,14 @@ defineExpose({
                 reviewCount: currentBuild.boundary_review_count || 0,
               }"
             />
-          </details>
+            <CorpusDocumentIntelligenceStatus
+              v-if="currentBuild.document_intelligence"
+              :run="currentBuild.document_intelligence"
+              :requested-provider="String(currentBuild.request?.document_nlp_provider || 'auto')"
+            />
+            <CorpusLlmActivityInspector :build-id="currentBuild.build_id" />
+            <CorpusBuildTimeline v-if="!awaitingManifestReview" :build="currentBuild" />
+          </section>
           <section
             v-if="awaitingManifestReview"
             class="manifest-gate"
@@ -3333,6 +3434,7 @@ defineExpose({
                   @update:selected-field="selectedEvidenceField = $event"
                   @toggle-evidence="toggleEvidenceBlock"
                   @set-evidence="setEvidenceBlocks"
+                  @browse-external="openExternalEvidenceBrowser(selectedEvidenceField)"
                 />
                 <CorpusReviewSourcePanel
                   v-else-if="
@@ -3624,6 +3726,13 @@ defineExpose({
       :field-label="
         i18n.t(`record.${evidenceBrowser.field}`, evidenceBrowser.field.replaceAll('_', ' '))
       "
+      :initial-chosen="
+        evidenceBrowser.evidenceOnly
+          ? (
+              selectedRecord.metadata_evidence?.[evidenceBrowser.field]?.external_block_ids || []
+            ).map(String)
+          : []
+      "
       @close="evidenceBrowser = null"
       @confirm="confirmExternalEvidence"
     />
@@ -3729,6 +3838,7 @@ defineExpose({
         @select-evidence="selectedEvidenceField = $event"
         @toggle-evidence="toggleEvidenceBlock"
         @set-evidence="setEvidenceBlocks"
+        @browse-external-evidence="openExternalEvidenceBrowser"
         @navigate-record="navigateToQueueRecord"
     /></Teleport>
   </section>
