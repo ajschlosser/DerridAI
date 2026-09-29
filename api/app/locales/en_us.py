@@ -7619,8 +7619,11 @@ EN_US: dict[str, str] = {'common.apply': 'Apply',
                                  'Fallbacks are alternate routes used only when a specific problem occurs.'),
  'pipelines.definitions_help': ('Each row is one immutable pipeline version. Several rows can share the same pipeline ID because '
                                  'version history is preserved rather than overwritten.'),
- 'pipelines.deterministic_help': ('This stage follows fixed program logic rather than asking a language model to decide the result. '
+ 'pipelines.deterministic_help': ('This stage follows fixed program logic rather than using a learned model to score or generate a result. '
                                    'The same inputs and configuration should produce the same result.'),
+ 'pipelines.learned_model': 'Learned model',
+ 'pipelines.learned_model_help': ('This stage uses a statistical or machine-learning model, such as an embedding model or cross-encoder, '
+                                  'but it is not a generative language-model step. Results are model-based rather than purely rule-based.'),
  'pipelines.enabled_help': ('When disabled, this stage remains in the saved definition for reference but is not part of the executable graph.'),
  'pipelines.entry_stage_help': ('An entry stage is where execution starts. Most Research pipelines have one entry step, usually '
                                  'a query-analysis step; some graph types may allow more than one.'),
@@ -7631,7 +7634,8 @@ EN_US: dict[str, str] = {'common.apply': 'Apply',
                                       'and ranges, and other rules that can be checked before execution.'),
  'pipelines.how_to_read_chain': 'How to read this chain',
  'pipelines.how_to_read_chain_help': ('Read from the entry stage through each “then” connection. A fallback label marks an exception '
-                                       'route. “Deterministic” stages use fixed program logic; “LLM” stages call a language model and can vary between runs.'),
+                                       'route. “Deterministic” stages use fixed rules, “Learned model” stages use non-generative machine-learning '
+                                       'models, and “LLM” stages call a generative language model.'),
  'pipelines.invokes_llm_help': ('This stage calls a configured language model. Its output may vary between runs, so DerridAI records '
                                  'the model and execution trace for auditability.'),
  'pipelines.name_help': ('A human-readable title for administrators and researchers. Changing the name does not change the technical pipeline ID.'),
