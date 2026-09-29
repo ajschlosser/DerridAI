@@ -64,7 +64,10 @@ const activeJob = ref<ResearchJob | null>(null);
 const sessionJobIds = ref<Set<string>>(new Set());
 const activeEvidenceIndex = ref(0);
 const settingsDrawer = ref<{
-  open: (section?: "retrieval" | "evidence" | "generation", focusPromptMetadata?: boolean) => void;
+  open: (
+    section?: "pipeline" | "retrieval" | "evidence" | "generation",
+    focusPromptMetadata?: boolean,
+  ) => void;
 } | null>(null);
 const runsDrawer = ref<{ open: () => void; close: () => void } | null>(null);
 const researchDraft = useResearchDraft();
@@ -680,6 +683,10 @@ onBeforeUnmount(() => {
         :models="discoveredModels"
         :metadata-fields="metadataFields"
         :researcher="workspace.is_researcher"
+        :pipeline-options="workspace.pipeline_options"
+        :pipeline-strategies="workspace.pipeline_strategies"
+        :pipeline-assignment="workspace.pipeline_assignment"
+        :pipeline-override-allowed="workspace.pipeline_override_allowed"
         @apply="applySettings"
         @discover="discoverModels"
       />
