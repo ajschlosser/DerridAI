@@ -30,7 +30,13 @@ const mountPanel = (item: any) =>
       regionTypes: ["main_text", "front_matter", "back_matter"],
       discourseRoles: ["assertion", "analysis", "quotation"],
     },
-    global: { stubs: { CorpusMetadataFieldEditor: true, CorpusFieldOwnershipBadge: true } },
+    global: {
+      stubs: {
+        CorpusMetadataFieldEditor: true,
+        CorpusFieldOwnershipBadge: true,
+        PipelineRunTracePanel: true,
+      },
+    },
   });
 
 describe("Corpus Builder metadata resolution", () => {
@@ -67,6 +73,44 @@ describe("Corpus Builder metadata resolution", () => {
     expect(wrapper.get(".review-status").attributes("data-state")).toBe("processing");
     expect(wrapper.get(".review-status").text()).toContain("LLM enrichment pending");
     expect(wrapper.get(".enrichment-note").text()).toContain("editable now");
+  });
+
+  it("shows the exact metadata retrieval pipeline trace at the point of review", () => {
+    const wrapper = mountPanel(
+      record({
+        editorial_memory_used: {
+          pipeline_trace: {
+            run_id: "metadata-precedents-build-1-r-1-abc",
+            feature: "metadata_precedents",
+            pipeline_id: "metadata.precedents.current",
+            pipeline_version: 1,
+            resolved_pipeline: {},
+            resolved_hash: "hash",
+            status: "completed",
+            started_at: "2026-09-29T00:00:00Z",
+            finished_at: "2026-09-29T00:00:00Z",
+            total_elapsed_ms: 10,
+            warnings: [],
+            stages: [
+              {
+                stage_id: "retrieve",
+                strategy_id: "retrieve.metadata_exemplars",
+                strategy_version: 1,
+                status: "completed",
+                parameters: {},
+                warnings: [],
+                score_summary: {},
+              },
+            ],
+          },
+        },
+      }),
+    );
+
+    expect(wrapper.get(".metadata-pipeline-trace").text()).toContain(
+      "How metadata precedents were retrieved",
+    );
+    expect(wrapper.find("pipeline-run-trace-panel-stub").exists()).toBe(true);
   });
 
   it("separates inherited document metadata from record-level decisions", () => {
