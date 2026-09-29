@@ -81,3 +81,19 @@ def test_nonresearch_custom_pipeline_is_inspectable_but_not_runtime_supported(tm
 
     assert support["supported"] is False
     assert "not yet been migrated" in support["reason"]
+
+
+
+def test_custom_definition_cannot_shadow_code_owned_builtin(tmp_path) -> None:
+    manager = _manager(tmp_path)
+    source = built_in_pipeline("research.current", 1)
+    assert source is not None
+    collision = source.model_copy(
+        update={
+            "built_in": False,
+            "status": "draft",
+        }
+    )
+
+    with pytest.raises(ValueError, match="code-owned"):
+        manager.save_definition(collision, actor="admin")
