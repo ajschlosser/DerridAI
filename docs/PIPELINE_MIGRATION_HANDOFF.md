@@ -60,7 +60,7 @@ GitHub currently reports the PR as mergeable, but that is not a substitute for e
 
 The latest PR #281 quality-gate run is GitHub Actions run **2000** (`36614460202`) for head `cb340d420ef6bff582ab41d66c2138a0487c93ae`.
 
-At the time this handoff was written, every completed job was green:
+Run 2000 completed successfully. All jobs were green, including:
 
 - changes
 - format-check
@@ -74,8 +74,9 @@ At the time this handoff was written, every completed job was green:
 - frontend-e2e (2/2)
 - frontend-legacy (1/2)
 - frontend-legacy (2/2)
+- frontend-a11y
 
-The frontend WCAG/a11y job was still running. Recheck the final workflow result after the branch is synchronized with `master`; the pre-sync result should not be treated as final merge validation.
+This validates the comparison implementation on its pre-PR-#270 base. It is **not** final merge validation: rerun the full quality gates after synchronizing the branch with current `master`.
 
 ## 4. What has landed
 
