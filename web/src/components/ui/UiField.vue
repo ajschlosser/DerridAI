@@ -1,17 +1,28 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { computed, useId } from "vue";
+import UiTooltip from "./UiTooltip.vue";
 
 const props = withDefaults(
   defineProps<{
     label: string;
     hint?: string;
+    tooltip?: string;
+    tooltipLabel?: string;
     error?: string;
     wide?: boolean;
     required?: boolean;
     persistence?: string;
   }>(),
-  { hint: "", error: "", wide: false, required: false, persistence: "" },
+  {
+    hint: "",
+    tooltip: "",
+    tooltipLabel: "",
+    error: "",
+    wide: false,
+    required: false,
+    persistence: "",
+  },
 );
 
 const generatedId = useId();
@@ -27,6 +38,12 @@ const describedby = computed(
   <label class="ui-field" :class="{ wide, invalid: Boolean(error) }">
     <span class="ui-field-label">
       {{ label }}
+      <UiTooltip
+        v-if="tooltip"
+        :text="tooltip"
+        :label="tooltipLabel || `${label}: ${tooltip}`"
+        placement="bottom"
+      />
       <span v-if="required" class="ui-field-required" aria-hidden="true"> *</span>
       <span v-if="persistence" class="ui-field-persist">{{ persistence }}</span>
     </span>
