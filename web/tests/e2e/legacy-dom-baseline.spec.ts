@@ -126,12 +126,20 @@ async function open(page: Page, scenario: Scenario) {
       });
       await expect(page.locator("main.record-workspace-page")).toBeVisible();
     } else {
-      // Target destination buttons, not same-named collapsible section headings.
-      await page
-        .locator(".shell-sidebar .nav-tooltip-wrap")
-        .getByRole("button", { name: scenario.nav, exact: true })
-        .first()
-        .click();
+      // Target destination buttons, not same-named collapsible section headings. Some groups
+      // use progressive disclosure, so reveal the owning group before activating a hidden target.
+      const destination = page
+        .locator(
+          `.shell-sidebar .nav-tooltip-wrap button[aria-label=${JSON.stringify(scenario.nav)}]`,
+        )
+        .first();
+      if (!(await destination.isVisible())) {
+        const section = destination.locator("xpath=ancestor::section[1]");
+        const groupToggle = section.locator(".shell-nav-group-toggle");
+        if (await groupToggle.count()) await groupToggle.click();
+      }
+      await expect(destination).toBeVisible();
+      await destination.click();
     }
   }
   await page.waitForLoadState("networkidle");

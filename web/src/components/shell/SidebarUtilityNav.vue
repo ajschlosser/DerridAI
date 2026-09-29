@@ -32,20 +32,47 @@ const i18n = useI18nStore();
 .shell-utility-nav {
   display: grid;
   gap: 1px;
-  padding: 8px 2px 0;
+  flex: 0 0 auto;
+  margin-top: 4px;
+  padding: 9px 3px 0;
   border-top: 1px solid var(--line);
+  font-family: var(--font-ui);
 }
+
+.shell-utility-nav :deep(.nav-tooltip-wrap > button) {
+  min-height: 36px;
+  color: var(--muted);
+}
+
+.shell-utility-nav :deep(.nav-tooltip-wrap > button:hover),
+.shell-utility-nav :deep(.nav-tooltip-wrap > button:focus-visible) {
+  color: var(--text);
+}
+
+.shell-utility-nav :deep(.nav-tooltip-wrap > button.active) {
+  color: var(--accent-fg);
+}
+
 .shell-utility-nav.collapsed {
+  margin-top: 3px;
   padding-inline: 0;
 }
+
 .shell-utility-nav.collapsed :deep(.nav-tooltip-wrap > button) {
   justify-content: center;
   min-height: 40px;
   padding-inline: 8px;
+  box-shadow: none;
 }
+
+.shell-utility-nav.collapsed :deep(.nav-tooltip-wrap > button.active) {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-accent) 34%, transparent);
+}
+
 .shell-utility-nav.collapsed :deep(.nav-tooltip-wrap > button span) {
   display: none;
 }
+
 .shell-utility-nav.collapsed :deep(.nav-tooltip-wrap > button svg) {
   width: 18px;
   height: 18px;
