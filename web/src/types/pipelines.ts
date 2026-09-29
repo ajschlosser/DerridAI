@@ -19,7 +19,9 @@ export type PipelineStrategy = {
   version: number;
   family: PipelineStageFamily;
   label: string;
+  label_key?: string;
   description: string;
+  description_key?: string;
   input_type: string;
   output_type: string;
   deterministic: boolean;
