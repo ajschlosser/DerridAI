@@ -56,9 +56,11 @@ const emit = defineEmits<{
 }>();
 const i18n = useI18nStore();
 const metadataPipelineTrace = computed<PipelineRunTrace | null>(() => {
-  const memory = (props.record as unknown as {
-    editorial_memory_used?: { pipeline_trace?: unknown };
-  }).editorial_memory_used;
+  const memory = (
+    props.record as unknown as {
+      editorial_memory_used?: { pipeline_trace?: unknown };
+    }
+  ).editorial_memory_used;
   const trace = memory?.pipeline_trace;
   if (!trace || typeof trace !== "object") return null;
   const candidate = trace as Partial<PipelineRunTrace>;
