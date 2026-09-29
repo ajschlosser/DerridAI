@@ -43,7 +43,7 @@ function t(key: string, fallback: string) {
   return i18n.t(key, fallback);
 }
 function clonePipeline(): PipelineDefinition {
-  return structuredClone(props.modelValue);
+  return JSON.parse(JSON.stringify(props.modelValue)) as PipelineDefinition;
 }
 function updateRoot<K extends keyof PipelineDefinition>(key: K, value: PipelineDefinition[K]) {
   const next = clonePipeline();
