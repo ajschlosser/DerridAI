@@ -27,7 +27,9 @@ describe("apiRequest timeouts", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const quick = apiRequest<never>("/api/quick").catch((error: Error) => error);
-    const slow = apiRequest<never>("/api/slow", { timeoutMs: 120_000 }).catch((error: Error) => error);
+    const slow = apiRequest<never>("/api/slow", { timeoutMs: 120_000 }).catch(
+      (error: Error) => error,
+    );
     let slowSettled = false;
     void slow.then(() => (slowSettled = true));
 
