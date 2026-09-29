@@ -2,6 +2,7 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createMemoryHistory, createRouter } from "vue-router";
 
 import { pipelinesApi } from "../../src/api/pipelines";
 import SystemDataPipelines from "../../src/components/system-data/SystemDataPipelines.vue";
@@ -189,6 +190,26 @@ const trace: PipelineRunTrace = {
   ],
 };
 
+async function mountStudio(query: Record<string, string> = {}) {
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      {
+        path: "/pipelines",
+        name: "pipelines",
+        component: { template: "<div />" },
+      },
+    ],
+  });
+  await router.push({ name: "pipelines", query });
+  await router.isReady();
+  const wrapper = mount(SystemDataPipelines, {
+    global: { plugins: [router] },
+  });
+  await flushPromises();
+  return { wrapper, router };
+}
+
 describe("System Data Pipeline Studio", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -224,8 +245,7 @@ describe("System Data Pipeline Studio", () => {
   });
 
   it("shows assigned definitions and durable execution traces", async () => {
-    const wrapper = mount(SystemDataPipelines);
-    await flushPromises();
+    const { wrapper } = await mountStudio();
 
     expect(wrapper.text()).toContain("Pipeline Studio");
     expect(wrapper.text()).toContain("Research — current production chain");
@@ -233,6 +253,20 @@ describe("System Data Pipeline Studio", () => {
     expect(wrapper.text()).toContain("Recent executions");
     expect(wrapper.text()).toContain("retrieve.chroma_similarity");
     expect(wrapper.text()).toContain("Active assignment");
+  });
+
+  it("keeps selected definitions and traces in the URL", async () => {
+    const { wrapper, router } = await mountStudio();
+
+    const custom = wrapper
+      .findAll(".pipeline-choice")
+      .find((item) => item.text().includes("Research — custom"));
+    expect(custom).toBeTruthy();
+    await custom!.trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.query.pipeline).toBe(pipelineKey(catalog.pipelines[1]));
+    expect(router.currentRoute.value.query.run).toBe("rag-1");
   });
 
   it("assigns an active runtime-supported pipeline", async () => {
@@ -248,8 +282,7 @@ describe("System Data Pipeline Studio", () => {
       },
     });
 
-    const wrapper = mount(SystemDataPipelines);
-    await flushPromises();
+    const { wrapper } = await mountStudio();
 
     const custom = wrapper
       .findAll(".pipeline-choice")
@@ -274,8 +307,7 @@ describe("System Data Pipeline Studio", () => {
   });
 
   it("clones a definition into an immutable custom version editor", async () => {
-    const wrapper = mount(SystemDataPipelines);
-    await flushPromises();
+    const { wrapper } = await mountStudio();
 
     const clone = wrapper
       .findAll(".detail-actions .btn")
@@ -292,8 +324,7 @@ describe("System Data Pipeline Studio", () => {
   });
 
   it("asks the server for the next version when cloning a saved custom pipeline", async () => {
-    const wrapper = mount(SystemDataPipelines);
-    await flushPromises();
+    const { wrapper } = await mountStudio();
 
     const custom = wrapper
       .findAll(".pipeline-choice")
