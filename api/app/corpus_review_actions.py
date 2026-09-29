@@ -1196,23 +1196,39 @@ class ReviewActionsMixin:
         return self.suggest_evidence_result(build_id, record_id, field, limit=limit)["items"]
 
     def suggest_evidence_result(
-        self, build_id: str, record_id: str, field: str, limit: int = 5
+        self,
+        build_id: str,
+        record_id: str,
+        field: str,
+        limit: int = 5,
+        *,
+        pipeline_id: str | None = None,
+        pipeline_version: int | None = None,
     ) -> dict[str, Any]:
-        """Execute the assigned reviewer evidence pipeline and return advisory suggestions."""
+        """Run an advisory evidence pipeline without mutating corpus authority.
+
+        An explicit pipeline is a preview only: it does not change the system
+        assignment and suggestions remain unbound until a reviewer selects them.
+        """
+
+        from .pipelines.access import resolve_evidence_pipeline
         from .pipelines.evidence import execute_reviewer_evidence_pipeline
-        from .pipelines.manager import pipeline_manager
-        from .pipelines.models import PipelineDefinition
+        from .pipelines.service import pipeline_hash
         from .pipelines.store import pipeline_store
         from .source_embeddings import SourceEmbeddingProjection
 
         value, blocks = self._evidence_candidates(build_id, record_id, field)
         record = self.repo.get_record(build_id, record_id)
         projection = SourceEmbeddingProjection(self._progressive_metadata_index.store)
-        resolved = pipeline_manager.resolve("evidence_suggestion.reviewer")
-        pipeline = PipelineDefinition.model_validate(resolved["pipeline"])
+        pipeline = resolve_evidence_pipeline(
+            requested_id=pipeline_id,
+            requested_version=pipeline_version,
+            is_admin=True,
+        )
+        resolved_hash = pipeline_hash(pipeline)
         execution = execute_reviewer_evidence_pipeline(
             pipeline=pipeline,
-            resolved_hash=str(resolved.get("pipeline_hash") or ""),
+            resolved_hash=resolved_hash,
             value=value,
             blocks=blocks,
             field_metadata=self._evidence_field_metadata(build_id, field),
@@ -1220,7 +1236,10 @@ class ReviewActionsMixin:
             projection=projection,
             limit=limit,
         )
-        status = dict(execution.status)
+        status = {
+            **dict(execution.status),
+            "preview": bool(pipeline_id),
+        }
         try:
             pipeline_store.put_run(execution.trace)
         except Exception:  # noqa: BLE001 - telemetry must never block advisory review
