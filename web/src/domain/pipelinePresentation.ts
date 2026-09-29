@@ -50,8 +50,10 @@ export function formatPipelineDate(value: string | null | undefined, locale: str
   }).format(date);
 }
 
-
-export function pipelineStageFamilyLabel(family: string | null | undefined, t: PipelineTranslator) {
+export function pipelineStageFamilyLabel(
+  family: string | null | undefined,
+  t: PipelineTranslator,
+) {
   const value = String(family || "");
   const labels: Record<string, string> = {
     query_transform: t("pipelines.family_query_transform", "Query transform"),
@@ -80,7 +82,6 @@ export function pipelineEdgeKindLabel(kind: string, t: PipelineTranslator) {
   };
   return labels[kind] || kind;
 }
-
 
 export function pipelineStrategyLabel(
   strategy: PipelineStrategy | null | undefined,
