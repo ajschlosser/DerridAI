@@ -121,7 +121,7 @@ export function createOperationsPanelBridge(deps: Deps) {
     root.querySelector("#dashCorpusBuilder")?.addEventListener("click", () =>
       window.dispatchEvent(
         new CustomEvent("derridai:navigate-native", {
-          detail: { path: "/pdf?mode=builder", runtimeView: "pdf" },
+          detail: { path: "/corpus-builder", runtimeView: "pdf" },
         }),
       ),
     );
