@@ -289,6 +289,23 @@ defineExpose({ open, close });
       <div class="research-settings-studio-body">
         <nav class="research-settings-nav" :aria-label="i18n.t('research.expert_sections')">
           <button
+            data-settings-tab="pipeline"
+            type="button"
+            :class="{ active: activeSection === 'pipeline' }"
+            :aria-current="activeSection === 'pipeline' ? 'page' : undefined"
+            @click="activeSection = 'pipeline'"
+          >
+            <AppIcon name="compare" /><span
+              ><b>{{ i18n.t("research.pipeline_chain", "Pipeline chain") }}</b
+              ><small>{{
+                i18n.t(
+                  "research.pipeline_chain_nav_help",
+                  "Choose and inspect the executable strategy chain.",
+                )
+              }}</small></span
+            >
+          </button>
+          <button
             data-settings-tab="retrieval"
             type="button"
             :class="{ active: activeSection === 'retrieval' }"
@@ -332,13 +349,122 @@ defineExpose({ open, close });
 
         <main class="research-settings-panel" :aria-label="activeSectionTitle">
           <section
+            v-show="activeSection === 'pipeline'"
+            class="research-settings-page"
+            aria-labelledby="research-settings-pipeline-title"
+          >
+            <div class="research-settings-page-head">
+              <div>
+                <span class="section-label">01</span>
+                <h3 id="research-settings-pipeline-title">
+                  {{ i18n.t("research.pipeline_chain", "Pipeline chain") }}
+                </h3>
+                <p>
+                  {{
+                    i18n.t(
+                      "research.pipeline_chain_help",
+                      "Every run records the exact immutable pipeline version and the stages that actually executed.",
+                    )
+                  }}
+                </p>
+              </div>
+              <button class="research-text-action" type="button" @click="resetSection('pipeline')">
+                <AppIcon name="refresh" />{{ i18n.t("research.reset_section") }}
+              </button>
+            </div>
+
+            <fieldset class="research-settings-card pipeline-selection-card">
+              <legend>{{ i18n.t("research.pipeline_selection", "Execution chain") }}</legend>
+              <p>
+                {{
+                  i18n.t(
+                    "research.pipeline_selection_help",
+                    "Use the system assignment or select another authorized executable version for this run.",
+                  )
+                }}
+              </p>
+              <label class="pipeline-select-field">
+                <span>{{ i18n.t("research.pipeline_chain", "Pipeline chain") }}</span>
+                <select
+                  v-model="pipelineSelection"
+                  class="control"
+                  :disabled="!pipelineOverrideAllowed"
+                >
+                  <option value="">
+                    {{
+                      assignedPipeline
+                        ? `${i18n.t("research.pipeline_system_default", "System default")} · ${assignedPipeline.name} v${assignedPipeline.version}`
+                        : i18n.t("research.pipeline_system_default", "System default")
+                    }}
+                  </option>
+                  <option
+                    v-for="pipeline in pipelineOptions"
+                    :key="`${pipeline.pipeline_id}@${pipeline.version}`"
+                    :value="`${pipeline.pipeline_id}@${pipeline.version}`"
+                  >
+                    {{ pipeline.name }} · v{{ pipeline.version }} · {{ pipeline.status }}
+                  </option>
+                </select>
+                <small v-if="!pipelineOverrideAllowed">
+                  {{
+                    i18n.t(
+                      "research.pipeline_override_locked",
+                      "This role follows the system pipeline assignment.",
+                    )
+                  }}
+                </small>
+                <small v-else>
+                  {{
+                    i18n.t(
+                      "research.pipeline_override_allowed",
+                      "Authorized overrides apply only to this Research configuration; the resolved version is persisted with the run.",
+                    )
+                  }}
+                </small>
+              </label>
+            </fieldset>
+
+            <div v-if="selectedPipeline" class="pipeline-inspector-card">
+              <div class="pipeline-inspector-head">
+                <div>
+                  <span class="section-label">{{
+                    i18n.t("research.pipeline_effective", "Effective chain")
+                  }}</span>
+                  <h4>{{ selectedPipeline.name }}</h4>
+                  <p>
+                    <code>{{ selectedPipeline.pipeline_id }}@{{ selectedPipeline.version }}</code>
+                    <template v-if="selectedPipeline.notes"> · {{ selectedPipeline.notes }}</template>
+                  </p>
+                </div>
+                <span class="pipeline-status-chip">{{ selectedPipeline.status }}</span>
+              </div>
+              <PipelineStageList
+                :pipeline="selectedPipeline"
+                :strategies="pipelineStrategies"
+              />
+            </div>
+
+            <aside v-if="!researcher" class="research-settings-note">
+              <AppIcon name="gear" />
+              <p>
+                {{
+                  i18n.t(
+                    "research.pipeline_admin_note",
+                    "Administrators create, version, validate, and activate chains in System Data → Pipeline Studio.",
+                  )
+                }}
+              </p>
+            </aside>
+          </section>
+
+          <section
             v-show="activeSection === 'retrieval'"
             class="research-settings-page"
             aria-labelledby="research-settings-retrieval-title"
           >
             <div class="research-settings-page-head">
               <div>
-                <span class="section-label">01</span>
+                <span class="section-label">02</span>
                 <h3 id="research-settings-retrieval-title">{{ i18n.t("research.retrieval") }}</h3>
                 <p>{{ i18n.t("research.retrieval_expert_help") }}</p>
               </div>
@@ -493,7 +619,7 @@ defineExpose({ open, close });
           >
             <div class="research-settings-page-head">
               <div>
-                <span class="section-label">02</span>
+                <span class="section-label">03</span>
                 <h3 id="research-settings-evidence-title">
                   {{ i18n.t("research.evidence_citations") }}
                 </h3>
@@ -683,7 +809,7 @@ defineExpose({ open, close });
           >
             <div class="research-settings-page-head">
               <div>
-                <span class="section-label">03</span>
+                <span class="section-label">04</span>
                 <h3 id="research-settings-generation-title">{{ i18n.t("research.generation") }}</h3>
                 <p>
                   {{
