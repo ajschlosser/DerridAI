@@ -21,6 +21,19 @@ const i18n = useI18nStore();
 const strategyMap = computed(
   () => new Map(props.strategies.map((strategy) => [strategy.strategy_id, strategy])),
 );
+const stageIds = computed(() => props.modelValue.stages.map((stage) => stage.id));
+const strategiesByFamily = computed(() => {
+  const groups = new Map<string, PipelineStrategy[]>();
+  for (const strategy of props.strategies) {
+    const rows = groups.get(strategy.family) || [];
+    rows.push(strategy);
+    groups.set(strategy.family, rows);
+  }
+  return [...groups.entries()].map(([family, strategies]) => ({
+    family,
+    strategies: strategies.sort((a, b) => a.label.localeCompare(b.label)),
+  }));
+});
 
 function t(key: string, fallback: string) {
   return i18n.t(key, fallback);
@@ -31,6 +44,123 @@ function clonePipeline(): PipelineDefinition {
 function updateRoot<K extends keyof PipelineDefinition>(key: K, value: PipelineDefinition[K]) {
   const next = clonePipeline();
   next[key] = value;
+  emit("update:modelValue", next);
+}
+function replaceStageReference(value: string | null | undefined, from: string, to: string) {
+  return value === from ? to : value;
+}
+function updateStageId(stageIndex: number, value: string) {
+  const next = clonePipeline();
+  const stage = next.stages[stageIndex];
+  if (!stage) return;
+  const previous = stage.id;
+  const normalized = String(value || "").trim();
+  stage.id = normalized;
+  if (!previous || previous === normalized) {
+    emit("update:modelValue", next);
+    return;
+  }
+
+  next.entry_stage_ids = next.entry_stage_ids.map((id) => (id === previous ? normalized : id));
+  for (const row of next.stages) {
+    row.next = row.next.map((id) => (id === previous ? normalized : id));
+    row.on_empty = replaceStageReference(row.on_empty, previous, normalized);
+    row.on_unavailable = replaceStageReference(row.on_unavailable, previous, normalized);
+    row.on_timeout = replaceStageReference(row.on_timeout, previous, normalized);
+    row.on_error = replaceStageReference(row.on_error, previous, normalized);
+  }
+  emit("update:modelValue", next);
+}
+function updateStageStrategy(stageIndex: number, strategyId: string) {
+  const next = clonePipeline();
+  const stage = next.stages[stageIndex];
+  if (!stage) return;
+  stage.strategy = strategyId;
+  // Configuration is schema-owned by the strategy. Carrying arbitrary keys
+  // across a strategy switch is misleading and can alter runtime behavior.
+  stage.config = {};
+  emit("update:modelValue", next);
+}
+function toggleStageEnabled(stageIndex: number, enabled: boolean) {
+  const next = clonePipeline();
+  if (!next.stages[stageIndex]) return;
+  next.stages[stageIndex].enabled = enabled;
+  emit("update:modelValue", next);
+}
+function toggleEntry(stageId: string, checked: boolean) {
+  const next = clonePipeline();
+  const entries = new Set(next.entry_stage_ids);
+  if (checked) entries.add(stageId);
+  else if (entries.size > 1) entries.delete(stageId);
+  next.entry_stage_ids = [...entries];
+  emit("update:modelValue", next);
+}
+function toggleNext(stageIndex: number, targetId: string, checked: boolean) {
+  const next = clonePipeline();
+  const stage = next.stages[stageIndex];
+  if (!stage) return;
+  const edges = new Set(stage.next);
+  checked ? edges.add(targetId) : edges.delete(targetId);
+  stage.next = [...edges];
+  emit("update:modelValue", next);
+}
+function updateFallback(
+  stageIndex: number,
+  key: "on_empty" | "on_unavailable" | "on_timeout" | "on_error",
+  target: string,
+) {
+  const next = clonePipeline();
+  const stage = next.stages[stageIndex];
+  if (!stage) return;
+  stage[key] = target || null;
+  emit("update:modelValue", next);
+}
+function addStage() {
+  const next = clonePipeline();
+  const strategy = props.strategies[0];
+  if (!strategy) return;
+  const used = new Set(next.stages.map((stage) => stage.id));
+  const stem = strategy.strategy_id.split(".").pop()?.replace(/[^a-z0-9_]+/gi, "_") || "stage";
+  let suffix = next.stages.length + 1;
+  let id = stem;
+  while (used.has(id)) id = `${stem}_${suffix++}`;
+  next.stages.push({
+    id,
+    strategy: strategy.strategy_id,
+    enabled: true,
+    config: {},
+    next: [],
+    on_empty: null,
+    on_unavailable: null,
+    on_timeout: null,
+    on_error: null,
+  });
+  if (!next.entry_stage_ids.length) next.entry_stage_ids = [id];
+  emit("update:modelValue", next);
+}
+function removeStage(stageIndex: number) {
+  if (props.modelValue.stages.length <= 1) return;
+  const next = clonePipeline();
+  const [removed] = next.stages.splice(stageIndex, 1);
+  if (!removed) return;
+  next.entry_stage_ids = next.entry_stage_ids.filter((id) => id !== removed.id);
+  for (const stage of next.stages) {
+    stage.next = stage.next.filter((id) => id !== removed.id);
+    for (const key of ["on_empty", "on_unavailable", "on_timeout", "on_error"] as const) {
+      if (stage[key] === removed.id) stage[key] = null;
+    }
+  }
+  if (!next.entry_stage_ids.length && next.stages.length) {
+    next.entry_stage_ids = [next.stages[0].id];
+  }
+  emit("update:modelValue", next);
+}
+function moveStage(stageIndex: number, direction: -1 | 1) {
+  const target = stageIndex + direction;
+  if (target < 0 || target >= props.modelValue.stages.length) return;
+  const next = clonePipeline();
+  const [stage] = next.stages.splice(stageIndex, 1);
+  next.stages.splice(target, 0, stage);
   emit("update:modelValue", next);
 }
 function configProperties(stage: PipelineStage) {
