@@ -199,7 +199,9 @@ function moveStage(stageIndex: number, direction: -1 | 1) {
 <template>
   <div class="pipeline-editor">
     <div class="editor-intro">
-      <strong>{{ t("pipelines.clone_edit_intro_title", "You are creating a new immutable version") }}</strong>
+      <strong>{{
+        t("pipelines.clone_edit_intro_title", "You are creating a new immutable version")
+      }}</strong>
       <p>
         {{
           t(
