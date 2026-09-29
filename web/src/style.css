@@ -17116,7 +17116,8 @@ html[data-operations-dock-mode="docked"] #operationProgressStack .operation-drag
 }
 .operation-dock-toggle:focus-visible,
 .operation-dock-clear:focus-visible,
-.operation-stack-toolbar:focus-visible {
+.operation-stack-toolbar:focus-visible,
+.operation-stack-items:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: var(--focus-ring-offset);
 }
@@ -17127,7 +17128,8 @@ html[data-operations-dock-mode="docked"] #operationProgressStack .operation-drag
 @media (forced-colors: active) {
   .operation-dock-toggle:focus-visible,
   .operation-dock-clear:focus-visible,
-  .operation-stack-toolbar:focus-visible {
+  .operation-stack-toolbar:focus-visible,
+  .operation-stack-items:focus-visible {
     outline-color: Highlight;
   }
   .operation-progress-stack,
