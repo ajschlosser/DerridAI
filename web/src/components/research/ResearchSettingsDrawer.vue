@@ -67,6 +67,14 @@ const assignedPipeline = computed(
         pipeline.version === props.pipelineAssignment?.pipeline_version,
     ) || null,
 );
+const hasPipelineVisibility = computed(
+  () => props.pipelineOptions.length > 0 || props.pipelineAssignment !== null,
+);
+const settingsTitle = computed(() =>
+  hasPipelineVisibility.value
+    ? i18n.t("research.pipeline_options_with_chain", "Pipeline, retrieval, evidence & generation")
+    : i18n.t("research.pipeline_options"),
+);
 const selectedPipeline = computed(() => {
   const id = String(draft.value.pipeline_id || "").trim();
   const version = Number(draft.value.pipeline_version || 0);
@@ -143,7 +151,8 @@ function sync() {
 }
 function open(section: SettingsSection = "pipeline", focusPromptMetadata = false) {
   sync();
-  activeSection.value = section;
+  activeSection.value =
+    section === "pipeline" && !hasPipelineVisibility.value ? "retrieval" : section;
   isOpen.value = true;
   dialog.value?.showModal();
   void nextTick(() => {
@@ -270,7 +279,7 @@ defineExpose({ open, close });
       <header class="research-settings-studio-head">
         <div>
           <span class="section-label">{{ i18n.t("research.expert_settings") }}</span>
-          <h2 id="research-settings-title">{{ i18n.t("research.pipeline_options") }}</h2>
+          <h2 id="research-settings-title">{{ settingsTitle }}</h2>
           <p>{{ i18n.t("research.expert_help") }}</p>
         </div>
         <div class="research-settings-studio-head-actions">
@@ -296,6 +305,7 @@ defineExpose({ open, close });
       <div class="research-settings-studio-body">
         <nav class="research-settings-nav" :aria-label="i18n.t('research.expert_sections')">
           <button
+            v-if="hasPipelineVisibility"
             data-settings-tab="pipeline"
             type="button"
             :class="{ active: activeSection === 'pipeline' }"
@@ -356,6 +366,7 @@ defineExpose({ open, close });
 
         <main class="research-settings-panel" :aria-label="activeSectionTitle">
           <section
+            v-if="hasPipelineVisibility"
             v-show="activeSection === 'pipeline'"
             class="research-settings-page"
             aria-labelledby="research-settings-pipeline-title"
