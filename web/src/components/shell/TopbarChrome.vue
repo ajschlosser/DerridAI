@@ -41,6 +41,8 @@ const i18n = useI18nStore();
 const helpOpen = ref(false);
 const storedOperationsMode = localStorage.getItem("derridai.operations-dock-mode");
 const operationsDocked = ref(storedOperationsMode !== "floating");
+document.documentElement.dataset.operationsDockMode = operationsDocked.value ? "docked" : "floating";
+document.documentElement.dataset.operationsDockOpen = "false";
 const operationsVisible = ref(false);
 const operationsSummary = ref("");
 const operationsTone = ref("neutral");
@@ -182,9 +184,6 @@ function undockOperations(event: MouseEvent) {
   setOperationsMode("floating");
 }
 onMounted(() => {
-  document.documentElement.dataset.operationsDockMode = operationsDocked.value
-    ? "docked"
-    : "floating";
   setOperationsOpen(false);
   operationsModeHandler = toggleOperationsMode;
   globalThis.addEventListener("derridai:operation-mode-toggle", operationsModeHandler);
