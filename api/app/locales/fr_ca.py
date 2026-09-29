@@ -7891,6 +7891,153 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'capture.error.audio_provider_unavailable': 'Fournisseur de transcription audio indisponible',
  'capture.error.audio_transcription_failed': 'Échec de la transcription audio',
  'capture.error.unknown': 'Erreur',
+ 'pipelines.assign_help': ('Rendre une version active modifie l’affectation système de cette fonctionnalité. Cela ne '
+                           'réécrit pas les exécutions antérieures : chacune conserve la version exacte utilisée.'),
+ 'pipelines.assigned_help': 'Cette version exacte est actuellement la valeur système par défaut d’au moins une fonctionnalité.',
+ 'pipelines.built_in_help': ('Cette définition est fournie avec DerridAI et appartient au code de l’application. Elle ne peut '
+                             'pas être écrasée; clonez-la pour créer une version personnalisée modifiable.'),
+ 'pipelines.clone_edit_intro_title': 'Vous créez une nouvelle version immuable',
+ 'pipelines.clone_edit_intro': ('Le pipeline d’origine ne sera pas modifié. Donnez une identité à cette copie, vérifiez chaque '
+                                 'étape, validez le graphe, puis enregistrez-le. L’enregistrement crée une version historique; '
+                                 'l’activation est une action distincte.'),
+ 'pipelines.clone_help': ('Les pipelines intégrés et les versions enregistrées sont immuables. Cloner et modifier demande au '
+                           'serveur une nouvelle version brouillon sûre et laisse l’original intact. La copie ne sera utilisée '
+                           'par Recherche qu’après son enregistrement et son activation explicite.'),
+ 'pipelines.configure_clone_help': ('Modifiez la copie ci-dessous. La validation vérifie la cohérence interne du graphe et si '
+                                     'l’environnement actuel sait l’exécuter. L’enregistrement ne l’active pas.'),
+ 'pipelines.connections_help': ('Les connexions indiquent ce qui doit se passer après cette étape. Les « étapes suivantes » '
+                                 'forment le parcours normal; les replis sont des parcours de remplacement utilisés seulement '
+                                 'lorsqu’un problème précis survient.'),
+ 'pipelines.definitions_help': ('Chaque ligne représente une version immuable. Plusieurs lignes peuvent partager le même ID de '
+                                 'pipeline parce que l’historique des versions est conservé au lieu d’être écrasé.'),
+ 'pipelines.deterministic_help': ('Cette étape suit une logique de programme fixe plutôt que de demander à un modèle de langage '
+                                   'de décider du résultat. Les mêmes entrées et la même configuration devraient donner le même résultat.'),
+ 'pipelines.enabled_help': ('Lorsqu’elle est désactivée, l’étape demeure dans la définition enregistrée à titre de référence, '
+                             'mais ne fait pas partie du graphe exécutable.'),
+ 'pipelines.entry_stage_help': ('Une étape d’entrée est le point de départ de l’exécution. La plupart des pipelines de recherche '
+                                 'ont une seule entrée, souvent une étape d’analyse de la requête.'),
+ 'pipelines.explain_input_type': 'Expliquer ce type d’entrée',
+ 'pipelines.explain_output_type': 'Expliquer ce type de sortie',
+ 'pipelines.explain_setting': 'Expliquer ce paramètre',
+ 'pipelines.graph_validation_help': ('La validation vérifie la structure de la recette : ID d’étapes, connexions, types et plages '
+                                      'des paramètres, ainsi que les autres règles vérifiables avant l’exécution.'),
+ 'pipelines.how_to_read_chain': 'Comment lire cette chaîne',
+ 'pipelines.how_to_read_chain_help': ('Lisez depuis l’étape d’entrée en suivant chaque connexion « puis ». Une étiquette de repli '
+                                       'indique un parcours d’exception. Les étapes déterministes utilisent une logique fixe; '
+                                       'les étapes LLM appellent un modèle de langage et peuvent varier d’une exécution à l’autre.'),
+ 'pipelines.invokes_llm_help': ('Cette étape appelle un modèle de langage configuré. Sa sortie peut varier entre les exécutions; '
+                                 'DerridAI enregistre donc le modèle et la trace d’exécution pour l’audit.'),
+ 'pipelines.name_help': ('Titre lisible pour les administrateurs et les chercheurs. Modifier ce nom ne change pas l’ID technique '
+                         'du pipeline.'),
+ 'pipelines.next_stages_help': ('Étapes que DerridAI doit exécuter ensuite lorsque cette étape se termine normalement. En termes '
+                                 'de graphe, chaque choix crée une arête dirigée.'),
+ 'pipelines.notes_help': ('Utilisez les notes pour consigner la raison scientifique ou technique de cette version, par exemple '
+                          'un changement de profondeur de repérage ou l’ajout d’un repli.'),
+ 'pipelines.on_empty_help': 'Utilisez ce parcours si l’étape se termine sans produire d’éléments utilisables.',
+ 'pipelines.on_error_help': 'Utilisez ce parcours si l’étape échoue à cause d’une autre erreur d’exécution.',
+ 'pipelines.on_timeout_help': 'Utilisez ce parcours si l’étape dépasse le temps qui lui est accordé.',
+ 'pipelines.on_unavailable_help': ('Utilisez ce parcours si le modèle, le service, la dépendance ou la capacité nécessaire est '
+                                   'indisponible.'),
+ 'pipelines.pipeline_id_help': ('Nom technique stable utilisé par DerridAI et ses traces d’audit. Les versions d’un même pipeline '
+                                 'partagent cet ID; ce n’est pas le nom lisible affiché aux personnes.'),
+ 'pipelines.plain_intro_title': 'Un pipeline est la recette de recherche de DerridAI',
+ 'pipelines.plain_intro': ('Il s’agit d’une suite enregistrée d’étapes qui détermine comment DerridAI repère les passages '
+                           'candidats, les classe, vérifie leur provenance, prépare les preuves et, au besoin, demande à un modèle '
+                           'de langage de produire ou d’évaluer une réponse.'),
+ 'pipelines.preparing_clone': 'Préparation de la copie…',
+ 'pipelines.runtime_support_help': ('Un graphe peut être valide sur le plan structurel sans être exécutable par l’adaptateur actuel. '
+                                     '« Exécutable » signifie que DerridAI possède actuellement le code capable de réaliser cette '
+                                     'forme exacte de graphe.'),
+ 'pipelines.save_version_help': ('L’enregistrement crée une nouvelle version immuable pour l’audit. Il ne remplace pas la version '
+                                  'source et ne rend pas la nouvelle version active par défaut.'),
+ 'pipelines.stage_id_help': ('Nom interne court de cette étape. Les autres étapes utilisent ce nom lorsqu’elles y pointent. Le '
+                              'renommer ici met aussi à jour ces connexions.'),
+ 'pipelines.status_help': ('Brouillon : configuration modifiable qui ne peut pas encore devenir l’affectation système. Actif : '
+                           'version admissible à l’affectation. Désactivé : version conservée pour l’historique mais non sélectionnable.'),
+ 'pipelines.strategy_help': ('La stratégie est l’opération approuvée par le serveur que cette étape réalise, par exemple le '
+                             'repérage sémantique, le reclassement, la vérification de provenance ou la génération de réponse. '
+                             'Vous choisissez une opération enregistrée; vous n’écrivez pas de code exécutable.'),
+ 'pipelines.term_assignment': 'Affectation',
+ 'pipelines.term_assignment_help': ('Version utilisée par défaut par DerridAI pour une fonctionnalité. Enregistrer une nouvelle '
+                                     'version ne change pas l’affectation; l’activation est une étape explicite distincte.'),
+ 'pipelines.term_edge': 'Connexion / arête',
+ 'pipelines.term_edge_help': ('Direction d’une étape vers une autre. Les arêtes normales décrivent le parcours habituel; les '
+                               'arêtes de repli indiquent quoi faire si une étape est vide, indisponible, trop lente ou en erreur.'),
+ 'pipelines.term_stage': 'Étape',
+ 'pipelines.term_stage_help': ('Une opération de la recette, par exemple repérer des passages, les reclasser, vérifier leur '
+                                'provenance ou générer une réponse.'),
+ 'pipelines.term_strategy': 'Stratégie',
+ 'pipelines.term_strategy_help': ('Opération approuvée exécutée par une étape. Techniquement, il s’agit d’une implémentation '
+                                   'enregistrée côté serveur avec une entrée, une sortie et un schéma de configuration connus.'),
+ 'pipelines.term_trace': 'Trace d’exécution',
+ 'pipelines.term_trace_help': ('Journal d’audit de ce qui a réellement été exécuté : version exacte, parcours des étapes, replis, '
+                                'modèles, nombres de candidats et durées. Il distingue la recette prévue de l’historique réel.'),
+ 'pipelines.key_terms': 'Termes clés en langage courant',
+ 'pipelines.trace_elapsed_help': ('Durée mesurée de cette étape lorsque DerridAI peut l’attribuer séparément. Un tiret signifie '
+                                  'que la durée n’a pas été mesurée isolément.'),
+ 'pipelines.trace_input_help': ('Nombre d’éléments entrés dans cette étape lorsqu’un décompte est disponible. Il peut s’agir de '
+                                'notices candidates, de passages ou d’un autre type propre à l’étape.'),
+ 'pipelines.trace_output_help': ('Nombre d’éléments sortis de cette étape. Une sortie plus petite que l’entrée indique souvent '
+                                 'qu’un filtrage, un reclassement, une validation ou une sélection a réduit l’ensemble candidat.'),
+ 'pipelines.trace_plain_help': ('Voici l’historique de ce qui s’est réellement produit pendant l’exécution. Il ne s’agit pas '
+                                'seulement du plan enregistré : étapes ignorées, replis, modèles, décomptes et durées reflètent '
+                                'le comportement réel.'),
+ 'pipelines.trace_stage_id_help': ('L’ID d’étape identifie cette étape précise dans la version enregistrée et permet de relier '
+                                   'la trace d’exécution à la définition du pipeline.'),
+ 'pipelines.trace_strategy_help': 'L’ID de stratégie est le nom technique de l’opération enregistrée qui a été exécutée ici.',
+ 'pipelines.validate_help': ('La validation est un contrôle à blanc. Elle n’exécute pas le pipeline sur le corpus et n’enregistre '
+                             'rien. Elle vérifie la structure du graphe, les paramètres des stratégies et la prise en charge actuelle.'),
+ 'pipelines.version_help': ('Numéro de révision immuable. Une paire ID/version enregistrée ne peut jamais être écrasée, afin que '
+                            'les anciennes exécutions de recherche puissent toujours référencer leur configuration exacte.'),
+ 'pipelines.assignment_help': ('L’affectation est la version utilisée par défaut par DerridAI pour cette fonctionnalité. Les autres '
+                                'versions enregistrées restent disponibles pour l’historique, l’inspection et, lorsqu’autorisé, '
+                                'la sélection explicite pour une exécution.'),
+ 'pipelines.config.fetch_k.label': 'Taille du bassin de candidats',
+ 'pipelines.config.fetch_k.help': ('Nom technique : fetch_k. Nombre de correspondances possibles recueillies avant que les étapes '
+                                   'suivantes réduisent la liste. Un bassin plus grand peut améliorer le rappel, mais coûte plus de temps et de mémoire.'),
+ 'pipelines.config.lambda_mult.label': 'Pertinence ou variété',
+ 'pipelines.config.lambda_mult.help': ('Nom technique : lambda_mult. Règle l’équilibre entre pertinence et diversité. Une valeur '
+                                       'près de 1 favorise les passages les plus pertinents; une valeur plus basse laisse entrer plus de sources variées.'),
+ 'pipelines.config.limit.label': 'Nombre maximal d’éléments',
+ 'pipelines.config.limit.help': 'Nom technique : limit. Nombre maximal d’éléments que cette étape peut transmettre.',
+ 'pipelines.config.rrf_k.label': 'Constante de fusion des rangs',
+ 'pipelines.config.rrf_k.help': ('Nom technique : rrf_k. La fusion par rang réciproque combine plusieurs listes classées. Cette '
+                                 'constante règle l’importance des différences près du sommet; elle ne fixe pas le nombre de résultats.'),
+ 'pipelines.config.top_k.label': 'Éléments à conserver',
+ 'pipelines.config.top_k.help': ('Nom technique : top_k. Après le classement ou la notation, seul ce nombre de candidats est '
+                                 'conservé pour l’étape suivante.'),
+ 'pipelines.config.model.label': 'Modèle de reclassement',
+ 'pipelines.config.model.help': ('Identifiant technique du modèle utilisé ici. Un encodeur croisé lit ensemble la requête et '
+                                 'chaque candidat afin d’attribuer un score de pertinence à la paire.'),
+ 'pipelines.config.timeout_seconds.label': 'Délai maximal (secondes)',
+ 'pipelines.config.timeout_seconds.help': ('Temps pendant lequel DerridAI attend cette étape avant de la considérer comme expirée. '
+                                           'Un repli de délai peut alors prendre la relève.'),
+ 'pipelines.config.record_char_limit.label': 'Limite de texte par notice',
+ 'pipelines.config.record_char_limit.help': ('Nombre maximal de caractères pris dans une seule notice de preuve lors de la '
+                                             'construction du contexte du modèle, afin qu’une longue notice n’évince pas les autres.'),
+ 'pipelines.config.total_char_limit.label': 'Limite totale du texte probant',
+ 'pipelines.config.total_char_limit.help': ('Nombre maximal de caractères combinés dans le paquet de preuves envoyé au modèle '
+                                            'de génération de réponse.'),
+ 'pipelines.config.num_predict.label': 'Jetons maximaux pour l’analyse de la requête',
+ 'pipelines.config.num_predict.help': ('Nombre maximal de jetons que le modèle peut générer pour analyser ou décomposer la question '
+                                       'avant le repérage.'),
+ 'pipelines.config.semantic_weight.label': 'Poids du repérage sémantique',
+ 'pipelines.config.semantic_weight.help': ('Part du score combiné qui dépend de la similarité de sens, même si les mots employés '
+                                           'sont différents.'),
+ 'pipelines.config.lexical_weight.label': 'Poids de la correspondance des mots',
+ 'pipelines.config.lexical_weight.help': 'Part du score combiné qui dépend du chevauchement des mots ou des expressions.',
+ 'pipelines.config.min_score.label': 'Score minimal de soutien',
+ 'pipelines.config.min_score.help': 'Plus faible score de soutien qu’un candidat peut obtenir tout en franchissant cette validation.',
+ 'pipelines.config.generic_help': ('Paramètre technique déclaré par le serveur pour la stratégie choisie. Le modifier change le '
+                                   'comportement de cette étape; la validation vérifie le type et la plage permis.'),
+ 'pipelines.data_type.query_help': 'Question de recherche ou expression de recherche avant le repérage des passages candidats.',
+ 'pipelines.data_type.candidate_set_help': ('Liste de travail de notices ou passages possibles. Les étapes suivantes peuvent la '
+                                            'reclasser, la filtrer, la valider ou la réduire.'),
+ 'pipelines.data_type.context_packet_help': ('Paquet borné de preuves préparé pour un modèle de langage, avec le texte et la '
+                                             'provenance nécessaires à une génération sensible aux citations.'),
+ 'pipelines.data_type.model_output_help': 'Texte ou contenu structuré produit par un modèle de langage.',
+ 'pipelines.data_type.evaluation_help': 'Résultat de notation ou d’évaluation produit après la réponse principale.',
+ 'pipelines.data_type.generic_help': 'Forme technique des données transmises entre les étapes du pipeline.',
  'pipelines.active_assignment': 'Affectation active',
  'pipelines.add_stage': 'Ajouter une étape',
  'pipelines.connections': 'Connexions',
