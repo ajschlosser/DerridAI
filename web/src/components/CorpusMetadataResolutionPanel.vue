@@ -445,7 +445,12 @@ function displayValue(field: string) {
     </p>
     <details v-if="metadataPipelineTrace" class="metadata-pipeline-trace">
       <summary>
-        {{ i18n.t("pdf_corpus.metadata_pipeline_trace_title", "How metadata precedents were retrieved") }}
+        {{
+          i18n.t(
+            "pdf_corpus.metadata_pipeline_trace_title",
+            "How metadata precedents were retrieved",
+          )
+        }}
       </summary>
       <p>
         {{
