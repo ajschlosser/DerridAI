@@ -88,10 +88,13 @@ function collapseOperationsForDockedMode() {
 function syncOperations(detail?: OperationSummaryDetail) {
   const stack = document.querySelector<HTMLElement>("#operationProgressStack");
   if (detail) {
+    const firstDockedAppearance =
+      operationsDocked.value && detail.visible && !operationsVisible.value && Boolean(detail.expanded);
     operationsVisible.value = detail.visible;
     operationsSummary.value = [detail.title, detail.summary].filter(Boolean).join(" · ");
     operationsTone.value = detail.tone || "neutral";
-    setOperationsOpen(Boolean(detail.expanded));
+    setOperationsOpen(firstDockedAppearance ? false : Boolean(detail.expanded));
+    if (firstDockedAppearance) void nextTick(collapseOperationsForDockedMode);
     void nextTick(syncOperationsDockAnchor);
     return;
   }
