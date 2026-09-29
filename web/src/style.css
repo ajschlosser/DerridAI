@@ -17099,8 +17099,7 @@ html[data-operations-dock-mode="docked"][data-operations-dock-open="false"]
   #operationProgressStack {
   display: none !important;
 }
-html[data-operations-dock-mode="docked"][data-operations-dock-open="true"]
-  #operationProgressStack {
+html[data-operations-dock-mode="docked"][data-operations-dock-open="true"] #operationProgressStack {
   top: var(--operations-dock-anchor-top, 58px) !important;
   right: var(--operations-dock-anchor-right, 18px) !important;
   bottom: auto !important;
@@ -17110,9 +17109,7 @@ html[data-operations-dock-mode="docked"][data-operations-dock-open="true"]
   width: min(410px, calc(100vw - 36px));
   max-height: calc(100dvh - var(--operations-dock-anchor-top, 58px) - 8px) !important;
 }
-html[data-operations-dock-mode="docked"]
-  #operationProgressStack
-  .operation-stack-toolbar {
+html[data-operations-dock-mode="docked"] #operationProgressStack .operation-stack-toolbar {
   cursor: default;
   touch-action: auto;
 }
