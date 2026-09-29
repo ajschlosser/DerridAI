@@ -385,20 +385,27 @@ def compile_research_pipeline(pipeline: PipelineDefinition) -> ResearchPipelineP
     cross_encoder = _single_stage(by_strategy, "rerank.cross_encoder")
     lexical_rerank = _single_stage(by_strategy, "rerank.lexical_fallback")
     top_k_stages = by_strategy.get("select.top_k", [])
-    provenance = _single_stage(by_strategy, "validate.provenance", required=True)
-    context_pack = _single_stage(by_strategy, "pack.evidence_context", required=True)
-    generation = _single_stage(by_strategy, "llm.generate_answer", required=True)
+    provenance = _single_stage(by_strategy, "validate.provenance")
+    context_pack = _single_stage(by_strategy, "pack.evidence_context")
+    generation = _single_stage(by_strategy, "llm.generate_answer")
     citation_binding = _single_stage(
         by_strategy,
         "validate.citation_binding",
-        required=True,
     )
     evaluation = _single_stage(by_strategy, "llm.grade_rag")
 
-    assert provenance is not None
-    assert context_pack is not None
-    assert generation is not None
-    assert citation_binding is not None
+    if provenance is None:
+        raise ValueError(
+            "Research pipelines must include the deterministic provenance gate."
+        )
+    if context_pack is None:
+        raise ValueError("Research pipelines must include an evidence context packer.")
+    if generation is None:
+        raise ValueError("Research pipelines must include final answer generation.")
+    if citation_binding is None:
+        raise ValueError(
+            "Research pipelines must include deterministic citation binding."
+        )
 
     enabled_entries = [
         stage_id
