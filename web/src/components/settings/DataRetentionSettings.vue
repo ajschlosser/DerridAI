@@ -472,7 +472,8 @@ onMounted(load);
     </template>
 
     <UiDialog
-      :open="confirming === 'apply'"
+      v-if="confirming === 'apply'"
+      :open="true"
       :title="t('settings.retention_apply_title', 'Remove operational data now?')"
       @close="confirming = ''"
     >
@@ -494,7 +495,8 @@ onMounted(load);
       </template>
     </UiDialog>
     <UiDialog
-      :open="confirming === 'reclaim'"
+      v-if="confirming === 'reclaim'"
+      :open="true"
       :title="t('settings.retention_reclaim_title', 'Reclaim disk space?')"
       @close="confirming = ''"
     >
