@@ -159,6 +159,6 @@ describe("PipelineBenchmarkPanel", () => {
     expect(wrapper.text()).toContain("benchmark-1");
     expect(wrapper.text()).toContain("left-hash");
     expect(wrapper.text()).toContain("right-hash");
-    expect(wrapper.text()).toContain("does not declare a winner");
+    expect(wrapper.text()).toContain("do not declare a winner");
   });
 });
