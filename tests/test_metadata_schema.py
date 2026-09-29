@@ -118,6 +118,48 @@ def test_the_built_in_schema_describes_the_same_fields_as_the_code_does_today():
     assert schema.review_fields()[:3] == list(ms.CORE_FIELDS)
 
 
+def test_default_schema_assigns_curated_pos_and_ner_hints_to_every_configurable_field():
+    schema = ms.default_schema()
+    expected = {
+        "region_author": (["PROPN"], ["PERSON", "ORG"]),
+        "speaker": (["PRON", "PROPN", "NOUN"], ["PERSON", "ORG", "NORP"]),
+        "position_holder": (["PRON", "PROPN", "NOUN"], ["PERSON", "ORG", "NORP"]),
+        "target": (
+            ["PROPN", "NOUN"],
+            ["PERSON", "ORG", "NORP", "GPE", "LOC", "EVENT", "LAW", "LANGUAGE", "WORK_OF_ART"],
+        ),
+        "stance": ([], []),
+        "proposition_status": ([], []),
+        "claim_scope": (["ADJ", "NOUN", "PROPN"], []),
+        "semantic_function": ([], []),
+        "is_direct_quote": ([], []),
+        "quoted_speaker": (["PRON", "PROPN", "NOUN"], ["PERSON", "ORG", "NORP"]),
+        "quoted_author": (["PROPN"], ["PERSON", "ORG"]),
+        "quoted_work": (["PROPN", "NOUN"], ["WORK_OF_ART", "LAW"]),
+        "quoted_position_holder": (["PRON", "PROPN", "NOUN"], ["PERSON", "ORG", "NORP"]),
+        "quoted_addressee": (["PRON", "PROPN", "NOUN"], ["PERSON", "ORG", "NORP"]),
+        "quoted_referent": (
+            ["PRON", "PROPN", "NOUN"],
+            ["PERSON", "ORG", "NORP", "GPE", "LOC", "EVENT", "LAW", "LANGUAGE", "WORK_OF_ART"],
+        ),
+        "quotation_chain": (["PROPN"], ["PERSON", "ORG", "WORK_OF_ART"]),
+        "topics": (
+            ["ADJ", "NOUN", "PROPN"],
+            ["EVENT", "GPE", "LOC", "NORP", "ORG", "LANGUAGE", "LAW"],
+        ),
+        "concepts": (["ADJ", "NOUN", "PROPN"], []),
+        "persons": (["PROPN"], ["PERSON"]),
+        "works_referenced": (["PROPN", "NOUN"], ["WORK_OF_ART", "LAW"]),
+    }
+
+    assert schema.schema_version == "1.1.0"
+    assert set(schema.by_name()) == set(expected)
+    for name, (pos_tags, ner_tags) in expected.items():
+        field = schema.by_name()[name]
+        assert field.pos_tags == pos_tags, name
+        assert field.ner_tags == ner_tags, name
+
+
 def test_the_output_shape_is_generated_and_matches_the_hand_written_models():
     from app import corpus_builder as cb
 
