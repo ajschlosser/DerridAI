@@ -143,6 +143,7 @@ function clearSearch() {
 }
 
 watch(query, (value) => {
+  if (value.trim()) glossaryCategory.value = "all";
   if (applyingRouteState) return;
   void router.replace({
     name: "help",
