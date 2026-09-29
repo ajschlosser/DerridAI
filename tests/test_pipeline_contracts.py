@@ -1,9 +1,9 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
 from __future__ import annotations
 
-from api.app.pipelines.defaults import BUILT_IN_PIPELINES
-from api.app.pipelines.models import PipelineDefinition
-from api.app.pipelines.service import PipelineService, pipeline_hash
+from app.pipelines.defaults import BUILT_IN_PIPELINES
+from app.pipelines.models import PipelineDefinition
+from app.pipelines.service import PipelineService, pipeline_hash
 
 
 def test_built_in_pipeline_catalog_is_graph_valid() -> None:
