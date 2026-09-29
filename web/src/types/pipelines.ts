@@ -351,7 +351,7 @@ export type ResearchPipelineBenchmarkRun = {
   };
   corpus: ResearchPipelineBenchmarkCorpusSnapshot;
   retrieval_config: Record<string, unknown>;
-  model_config: Record<string, unknown>;
+  model_identity: Record<string, unknown>;
   left_pipeline: ResearchPipelineComparisonSide["pipeline"] & {
     resolved_pipeline?: Record<string, unknown> | null;
   };
