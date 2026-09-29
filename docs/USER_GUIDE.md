@@ -62,9 +62,9 @@ The `needs_review` historical chart reconstructs prior state from the current re
 
 ## Background operations
 
-Background operations are managed from Dashboard and also appear in a floating operations dock.
+Background operations are managed from Dashboard and also appear in the global operations dock. The dock is attached to the top bar by default whenever there is something to show.
 
-The dock appears only while there is something to show. It sits at the bottom-center of the page; drag it anywhere, and double-click the handle to recenter it. Collapse it to a status pill, or expand it to cancel work, open a result, or dismiss a finished item. Dismissing a finished operation — or using **Clear finished** on Dashboard or in the dock — removes it from both surfaces. While the dock is shown, the page keeps extra scroll room beneath the content so it does not permanently cover controls. The global operations dock still shows a corpus build as "N% overall" because that percentage blends several stages. Open Corpus Builder → **Build** for the detailed build monitor: it reports the current sub-operation plus real boundary or metadata-task counts when those stages have meaningful item totals.
+Click the docked status control to expand or collapse the operation stack without leaving the top bar. Double-click the docked control to undock it into floating mode; double-click the floating handle to dock it again. In floating mode, drag the handle to move the stack. The expanded stack lets you cancel work, open a result, dismiss a finished item, or use **Clear finished**; dismissals are reflected on Dashboard as well. Only the floating mode adds extra page scroll room so it cannot permanently cover controls. The global operations dock still shows a corpus build as "N% overall" because that percentage blends several stages. Open Corpus Builder → **Build** for the detailed build monitor: it reports the current sub-operation plus real boundary or metadata-task counts when those stages have meaningful item totals.
 
 ### The Operations panel
 
