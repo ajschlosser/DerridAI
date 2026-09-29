@@ -6,6 +6,7 @@ import type { CorpusLlmTraceEntry } from "../api/corpus";
 import { realtime } from "../realtime";
 import type { CorpusGenerationEvent } from "../realtime/protocol";
 import { useI18nStore } from "../stores/i18n";
+import UiLoadingState from "./ui/UiLoadingState.vue";
 
 const props = defineProps<{ buildId: string }>();
 const i18n = useI18nStore();
@@ -183,7 +184,7 @@ onBeforeUnmount(() => {
       <p class="provisional-note">
         {{ i18n.t("pdf_corpus.llm_inspector.provisional_note") }}
       </p>
-      <p v-if="loading" role="status">{{ i18n.t("ui.loading") }}</p>
+      <UiLoadingState v-if="loading" :label="i18n.t('ui.loading')" />
       <p v-else-if="error" role="alert">{{ error }}</p>
       <p v-else-if="!ordered.length">{{ i18n.t("pdf_corpus.llm_inspector.empty") }}</p>
       <article v-for="call in ordered" :key="call.call_id" class="llm-call">

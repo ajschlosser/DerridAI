@@ -11,6 +11,7 @@ import WorksWorkspaceHeader from "../components/works/WorksWorkspaceHeader.vue";
 import { useWorksWorkspace } from "../composables/useWorksWorkspace";
 import * as runtime from "../runtime/runtime.js";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
+import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import CorpusSemanticGraphPanel from "../components/corpus-builder/CorpusSemanticGraphPanel.vue";
 import { corpusBuildsApi } from "../api/corpus";
 
@@ -170,23 +171,12 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
 <template>
   <main ref="page" class="works-page" :aria-busy="loading">
     <section v-if="loading" class="card view-loading-card">
-      <div class="view-loading-copy">
-        <span class="spinner"></span>
-        <div>
-          <b>{{ loadingTitle }}</b>
-          <p>{{ loadingDetail }}</p>
-        </div>
-      </div>
-      <div class="progressive-loading" role="status" aria-live="polite">
-        <div class="progressive-loading-head">
-          <span class="spinner small-spinner"></span><b>Loading cards</b>
-        </div>
-        <div class="progressive-skeleton-grid">
-          <div class="progressive-skeleton-card"><i></i><i></i><i></i></div>
-          <div class="progressive-skeleton-card"><i></i><i></i><i></i></div>
-          <div class="progressive-skeleton-card"><i></i><i></i><i></i></div>
-        </div>
-      </div>
+      <UiLoadingState
+        :label="loadingTitle"
+        :detail="loadingDetail"
+        variant="skeleton"
+        :skeleton-count="3"
+      />
     </section>
 
     <div v-else-if="error" class="info error" role="alert">{{ error }}</div>
@@ -278,25 +268,16 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
       </div>
 
       <section id="worksGrid" class="works works-library-grid" :aria-label="i18n.t('nav.works')">
-        <div v-if="showSkeleton" class="progressive-loading" role="status" aria-live="polite">
-          <div class="progressive-loading-head">
-            <span class="spinner small-spinner"></span
-            ><b>{{
-              i18n.tf("works.loading_cards", {
-                count: snapshot.works.length.toLocaleString(i18n.locale),
-              })
-            }}</b>
-          </div>
-          <div class="progressive-skeleton-grid">
-            <div
-              v-for="index in Math.min(4, snapshot.works.length)"
-              :key="index"
-              class="progressive-skeleton-card"
-            >
-              <i></i><i></i><i></i>
-            </div>
-          </div>
-        </div>
+        <UiLoadingState
+          v-if="showSkeleton"
+          :label="
+            i18n.tf('works.loading_cards', {
+              count: snapshot.works.length.toLocaleString(i18n.locale),
+            })
+          "
+          variant="skeleton"
+          :skeleton-count="Math.min(4, snapshot.works.length)"
+        />
         <WorksLibraryCard
           v-for="work in visibleWorks"
           :key="work.work"
@@ -422,7 +403,7 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
           ×
         </button>
       </header>
-      <p v-if="semanticMapLoading" role="status">{{ i18n.t("ui.loading") }}</p>
+      <UiLoadingState v-if="semanticMapLoading" :label="i18n.t('ui.loading')" />
       <p v-else-if="semanticMapError">{{ i18n.t("works.semantic_map_unavailable") }}</p>
       <template v-else-if="semanticMapBuildId">
         <p v-if="semanticMapExtraBuilds" class="note">
