@@ -16,6 +16,7 @@ import SourceInspector from "./sources/SourceInspector.vue";
 import UiButton from "./ui/UiButton.vue";
 import UiCombobox from "./ui/UiCombobox.vue";
 import UiDialog from "./ui/UiDialog.vue";
+import UiTooltip from "./ui/UiTooltip.vue";
 import type { CorpusCapture } from "../api/corpus";
 const formats: Record<string, string> = {
   pdf: ".pdf",
@@ -540,11 +541,17 @@ onBeforeUnmount(() => {
               <dd>{{ selectedAsset.page_count }}</dd>
             </div>
             <div>
-              <dt>{{ i18n.t("pdf_corpus.source_stat_units") }}</dt>
+              <dt class="source-fact-label">
+                {{ i18n.t("pdf_corpus.source_stat_units") }}
+                <UiTooltip :text="i18n.t('pdf_corpus.source_units_help')" placement="bottom" />
+              </dt>
               <dd>{{ selectedAsset.block_count }}</dd>
             </div>
             <div v-if="hasPages(selectedAsset.media_kind)">
-              <dt>{{ i18n.t("pdf_corpus.source_stat_ocr") }}</dt>
+              <dt class="source-fact-label">
+                {{ i18n.t("pdf_corpus.source_stat_ocr") }}
+                <UiTooltip :text="i18n.t('pdf_corpus.source_ocr_pages_help')" placement="bottom" />
+              </dt>
               <dd>{{ selectedAsset.ocr_pages }}</dd>
             </div>
           </dl>
@@ -571,7 +578,10 @@ onBeforeUnmount(() => {
               </dd>
             </div>
             <div v-if="selectedAsset.deterministic_checked_at" class="check-row">
-              <dt>{{ i18n.t("pdf_corpus.deterministic_check") }}</dt>
+              <dt class="source-fact-label">
+                {{ i18n.t("pdf_corpus.deterministic_check") }}
+                <UiTooltip :text="i18n.t('pdf_corpus.deterministic_check_help')" placement="bottom" />
+              </dt>
               <dd>
                 <span
                   ><small>{{ i18n.t("pdf_corpus.initial_title", "Title") }}</small>
@@ -601,7 +611,6 @@ onBeforeUnmount(() => {
             />
             {{ pageDetectionText(selectedAsset.page_number_detection) }}
           </p>
-          <p class="source-facts-help">{{ i18n.t("pdf_corpus.source_facts_help") }}</p>
           <button type="button" class="btn primary continue" @click="emit('continue')">
             {{ i18n.t("pdf_corpus.source_continue") }}
             <span aria-hidden="true">→</span>
@@ -1272,6 +1281,11 @@ onBeforeUnmount(() => {
 .hash-copy svg {
   inline-size: 14px;
   block-size: 14px;
+}
+.source-fact-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 .source-facts-help {
   margin: 0;
