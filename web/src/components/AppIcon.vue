@@ -9,6 +9,7 @@ const paths: Record<string, string> = {
   books:
     '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
+  map: '<circle cx="6" cy="8" r="2.2"/><circle cx="16" cy="7" r="2.2"/><circle cx="12" cy="16" r="2.2"/><path d="M8 9.2 10.4 14M14.2 8.8 13 14"/>',
   pdf: '<path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M8.5 15h7M8.5 18h5"/>',
   compare: '<path d="M8 7h11M16 4l3 3-3 3M16 17H5M8 14l-3 3 3 3"/>',
   database:

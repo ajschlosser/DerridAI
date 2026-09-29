@@ -15,12 +15,15 @@ import SidebarMoreTools from "./components/shell/SidebarMoreTools.vue";
 import SidebarStatus from "./components/shell/SidebarStatus.vue";
 import type { SidebarNavEntry } from "./components/shell/sidebarNav";
 import * as runtime from "./runtime/runtime.js";
+import SemanticMapHost from "./components/semantic/SemanticMapHost.vue";
+import { useSemanticMapStore } from "./stores/semanticMap";
 
 const router = useRouter();
 const route = useRoute();
 const shell = useShellStore();
 const auth = useAuthStore();
 const i18n = useI18nStore();
+const semanticMap = useSemanticMapStore();
 const runtimeStarted = ref(false);
 const handlingAuthExpiry = ref(false);
 const topSearch = ref("");
@@ -47,6 +50,7 @@ const pageCapability: Record<string, string> = {
   works: "page.works",
   global: "page.search",
   annotations: "page.annotations",
+  semanticmap: "page.semantic_map",
   pdf: "page.pdf",
   sources: "page.pdf",
   compare: "page.compare",
@@ -193,40 +197,44 @@ const utilityNavItems = computed<SidebarNavEntry[]>(() =>
   })),
 );
 const breadcrumbTitle = computed(() =>
-  route.name === "sources"
-    ? i18n.t("sources.title")
-    : route.name === "metadatamemory"
-      ? i18n.t("metadata_memory.title")
-      : route.name === "users"
-        ? i18n.t("nav.users")
-        : route.name === "roles"
-          ? i18n.t("nav.roles")
-          : route.name === "languages"
-            ? i18n.t("language.manage")
-            : route.name === "config"
-              ? i18n.t("nav.config")
-              : route.name === "compare"
-                ? i18n.t("nav.compare")
-                : route.name === "list"
-                  ? i18n.t("nav.records")
-                  : route.name === "works"
-                    ? i18n.t("nav.works")
-                    : s.value.context.title || i18n.t("nav.home"),
+  route.name === "semanticmap"
+    ? i18n.t("nav.semantic_map")
+    : route.name === "sources"
+      ? i18n.t("sources.title")
+      : route.name === "metadatamemory"
+        ? i18n.t("metadata_memory.title")
+        : route.name === "users"
+          ? i18n.t("nav.users")
+          : route.name === "roles"
+            ? i18n.t("nav.roles")
+            : route.name === "languages"
+              ? i18n.t("language.manage")
+              : route.name === "config"
+                ? i18n.t("nav.config")
+                : route.name === "compare"
+                  ? i18n.t("nav.compare")
+                  : route.name === "list"
+                    ? i18n.t("nav.records")
+                    : route.name === "works"
+                      ? i18n.t("nav.works")
+                      : s.value.context.title || i18n.t("nav.home"),
 );
 const breadcrumbMeta = computed(() =>
-  route.name === "sources"
-    ? i18n.t("sources.help_short")
-    : route.name === "metadatamemory"
-      ? i18n.t("metadata_memory.help")
-      : route.name === "config"
-        ? i18n.t("settings.page_help_short")
-        : route.name === "compare"
-          ? i18n.t("context.compare.meta")
-          : route.name === "list"
-            ? i18n.t("context.list.meta")
-            : ["users", "roles", "languages"].includes(String(route.name || ""))
-              ? ""
-              : s.value.context.meta,
+  route.name === "semanticmap"
+    ? i18n.t("context.semanticmap.meta")
+    : route.name === "sources"
+      ? i18n.t("sources.help_short")
+      : route.name === "metadatamemory"
+        ? i18n.t("metadata_memory.help")
+        : route.name === "config"
+          ? i18n.t("settings.page_help_short")
+          : route.name === "compare"
+            ? i18n.t("context.compare.meta")
+            : route.name === "list"
+              ? i18n.t("context.list.meta")
+              : ["users", "roles", "languages"].includes(String(route.name || ""))
+                ? ""
+                : s.value.context.meta,
 );
 const canBreadcrumbBack = computed(() => Boolean(nativeBackPath.value) || s.value.canGoBack);
 const canBreadcrumbForward = computed(
@@ -346,8 +354,9 @@ function isNavActive(item: ShellNavItem) {
   if (item.id === "users") return route.name === "users";
   if (item.id === "roles") return route.name === "roles";
   if (item.id === "languages") return route.name === "languages";
+  if (item.id === "semanticmap") return route.name === "semanticmap";
   return (
-    !["metadatamemory", "sources", "users", "roles", "languages", "help"].includes(
+    !["metadatamemory", "sources", "users", "roles", "languages", "help", "semanticmap"].includes(
       String(route.name || ""),
     ) && s.value.view === item.id
   );
@@ -570,7 +579,18 @@ watch(
           ><span v-if="breadcrumbMeta" class="shell-breadcrumb-meta">{{ breadcrumbMeta }}</span>
         </div>
       </nav>
-      <div id="appContent" class="app-content-region" tabindex="-1"><RouterView /></div>
+      <div
+        class="shell-body"
+        :class="{
+          'with-semantic-map':
+            semanticMap.enabled &&
+            semanticMap.placement === 'sidebar' &&
+            route.name !== 'semanticmap',
+        }"
+      >
+        <div id="appContent" class="app-content-region" tabindex="-1"><RouterView /></div>
+        <SemanticMapHost />
+      </div>
     </section>
   </div>
   <LlmReviewWorkspace />
@@ -578,6 +598,16 @@ watch(
 </template>
 
 <style scoped>
+.shell-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.shell-body .app-content-region {
+  flex: 1;
+  min-width: 0;
+}
 .vue-breadcrumb {
   display: flex;
   align-items: center;
