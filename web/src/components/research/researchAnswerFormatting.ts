@@ -31,14 +31,14 @@ function looksLikeHeading(value: string) {
   return (
     text.length > 0 &&
     text.length <= 96 &&
-    text.split(/\\s+/).length <= 12 &&
-    !/[.!?][)"'’”\\]]?$/.test(text)
+    text.split(/\s+/).length <= 12 &&
+    !/[.!?][)"'’”\]]?$/.test(text)
   );
 }
 
 function normalizedParagraph(value: string) {
   const text = value
-    .split(/\\n/)
+    .split(/\n/)
     .map((line) => line.trim())
     .filter(Boolean)
     .join(" ")
@@ -56,15 +56,15 @@ function parseBodyBlock(value: string, worksCitedLabel: string): ResearchAnswerB
   if (!block) return [];
 
   const lines = block
-    .split(/\\n/)
+    .split(/\n/)
     .map((line) => line.trim())
     .filter(Boolean);
   if (!lines.length) return [];
 
-  const markdownHeading = lines[0].match(/^#{1,4}\\s+(.+)$/);
+  const markdownHeading = lines[0].match(/^#{1,4}\s+(.+)$/);
   if (markdownHeading) {
     const headingText = stripOuterStrong(markdownHeading[1]) ?? markdownHeading[1].trim();
-    const rest = lines.slice(1).join("\\n");
+    const rest = lines.slice(1).join("\n");
     return [
       { kind: "heading", text: headingText },
       ...(rest ? parseBodyBlock(rest, worksCitedLabel) : []),
@@ -73,27 +73,27 @@ function parseBodyBlock(value: string, worksCitedLabel: string): ResearchAnswerB
 
   const strongHeading = stripOuterStrong(lines[0]);
   if (strongHeading && looksLikeHeading(strongHeading)) {
-    const rest = lines.slice(1).join("\\n");
+    const rest = lines.slice(1).join("\n");
     return [
       { kind: "heading", text: strongHeading },
       ...(rest ? parseBodyBlock(rest, worksCitedLabel) : []),
     ];
   }
 
-  if (lines.every((line) => /^\\d+[.)]\\s+/.test(line))) {
+  if (lines.every((line) => /^\d+[.)]\s+/.test(line))) {
     return [
       {
         kind: "ordered",
-        items: lines.map((line) => normalizedListItem(line.replace(/^\\d+[.)]\\s+/, ""))),
+        items: lines.map((line) => normalizedListItem(line.replace(/^\d+[.)]\s+/, ""))),
       },
     ];
   }
 
-  if (lines.every((line) => /^[-*•]\\s+/.test(line))) {
+  if (lines.every((line) => /^[-*•]\s+/.test(line))) {
     return [
       {
         kind: "unordered",
-        items: lines.map((line) => normalizedListItem(line.replace(/^[-*•]\\s+/, ""))),
+        items: lines.map((line) => normalizedListItem(line.replace(/^[-*•]\s+/, ""))),
       },
     ];
   }
@@ -102,7 +102,7 @@ function parseBodyBlock(value: string, worksCitedLabel: string): ResearchAnswerB
 }
 
 function escapedPattern(value: string) {
-  return value.replace(/[.*+?^$()|[\\]\\\\{}]/g, "\\\\$&");
+  return value.replace(/[.*+?^$()|[\]\\{}]/g, "\\$&");
 }
 
 function normalizeStrongMarkup(value: string) {
@@ -165,15 +165,15 @@ export function parseResearchAnswer(
   worksCitedLabel: string,
 ): ResearchAnswerBlock[] {
   const source = String(value || "")
-    .replace(/\\r\\n?/g, "\\n")
+    .replace(/\r\n?/g, "\n")
     .trim();
   if (!source) return [];
 
   const blocks: ResearchAnswerBlock[] = [];
   const citedHeading =
-    /^(?:#{1,4}\\s*)?(?:\\*\\*|__)?works\\s+cited(?:\\*\\*|__)?\\s*:?[ \\t]*(.*)$/i;
+    /^(?:#{1,4}\s*)?(?:\*\*|__)?works\s+cited(?:\*\*|__)?\s*:?[ \t]*(.*)$/i;
 
-  for (const raw of source.split(/\\n{2,}/)) {
+  for (const raw of source.split(/\n{2,}/)) {
     const block = raw.trim();
     if (!block) continue;
     const cited = block.match(citedHeading);
