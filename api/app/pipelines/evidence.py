@@ -41,7 +41,8 @@ class EvidencePipelinePlan:
     lexical_stage_id: str
     select_stage_id: str
     rerank_stage_id: str | None = None
-    support_stage_id: str | None = None
+    support_stage_id: str
+    provenance_stage_id: str
     llm_stage_id: str | None = None
     selection_limit: int | None = None
     cross_encoder_top_k: int | None = None
@@ -101,6 +102,7 @@ def compile_evidence_pipeline(pipeline: PipelineDefinition) -> EvidencePipelineP
         "retrieve.lexical_bm25",
         "rerank.cross_encoder",
         "validate.evidence_support",
+        "validate.provenance",
         "llm.closed_choice_evidence",
         "select.top_k",
     }
@@ -118,38 +120,48 @@ def compile_evidence_pipeline(pipeline: PipelineDefinition) -> EvidencePipelineP
     lexical = _one(by_strategy, "retrieve.lexical_bm25", required=True)
     select = _one(by_strategy, "select.top_k", required=True)
     rerank = _one(by_strategy, "rerank.cross_encoder")
-    support = _one(by_strategy, "validate.evidence_support")
+    support = _one(by_strategy, "validate.evidence_support", required=True)
+    provenance = _one(by_strategy, "validate.provenance", required=True)
     llm = _one(by_strategy, "llm.closed_choice_evidence")
-    assert query is not None and semantic is not None and lexical is not None and select is not None
+    assert (
+        query is not None
+        and semantic is not None
+        and lexical is not None
+        and support is not None
+        and provenance is not None
+        and select is not None
+    )
 
     if pipeline.entry_stage_ids != [query.id]:
         raise ValueError("Evidence adapter requires the field-aware query stage as its sole entry stage.")
     _require_target(query, semantic.id)
     _require_target(query, lexical.id)
 
-    convergence = rerank.id if rerank is not None else support.id if support is not None else select.id
+    convergence = rerank.id if rerank is not None else support.id
     _require_target(semantic, convergence)
     _require_target(lexical, convergence)
 
     if rerank is not None:
-        next_target = support.id if support is not None else select.id
-        _require_target(rerank, next_target)
+        _require_target(rerank, support.id)
         for fallback_edge in ("on_unavailable", "on_timeout", "on_error"):
             fallback = getattr(rerank, fallback_edge)
-            if fallback is not None and fallback != next_target:
+            if fallback is not None and fallback != support.id:
                 raise ValueError(
-                    f"Evidence cross-encoder {fallback_edge} must continue to {next_target!r}."
+                    f"Evidence cross-encoder {fallback_edge} must continue to {support.id!r}."
                 )
 
-    if support is not None:
-        _require_target(support, select.id)
-        if llm is not None:
-            _require_target(support, llm.id, edge="on_empty")
-            _require_target(llm, select.id)
-        elif support.on_empty is not None:
-            raise ValueError("Evidence support on_empty references an unsupported fallback stage.")
-    elif llm is not None:
-        raise ValueError("Closed-choice evidence fallback requires an explicit support-validation stage.")
+    _require_target(support, provenance.id)
+    if llm is not None:
+        _require_target(support, llm.id, edge="on_empty")
+        _require_target(llm, provenance.id)
+    elif support.on_empty is not None:
+        raise ValueError("Evidence support on_empty references an unsupported fallback stage.")
+
+    _require_target(provenance, select.id)
+    if provenance.on_empty is not None:
+        raise ValueError(
+            "Evidence provenance validation may not bypass directly to another stage."
+        )
 
     if select.edge_targets():
         raise ValueError("Evidence top-K selection must be terminal in the current adapter.")
@@ -160,7 +172,8 @@ def compile_evidence_pipeline(pipeline: PipelineDefinition) -> EvidencePipelineP
         lexical_stage_id=lexical.id,
         select_stage_id=select.id,
         rerank_stage_id=rerank.id if rerank else None,
-        support_stage_id=support.id if support else None,
+        support_stage_id=support.id,
+        provenance_stage_id=provenance.id,
         llm_stage_id=llm.id if llm else None,
         selection_limit=(int(select.config["limit"]) if "limit" in select.config else None),
         cross_encoder_top_k=(
@@ -180,8 +193,6 @@ def compile_evidence_pipeline(pipeline: PipelineDefinition) -> EvidencePipelineP
         ),
         support_min_score=(
             float(support.config.get("min_score", BACKFILL_MIN_SCORE))
-            if support is not None
-            else BACKFILL_MIN_SCORE
         ),
     )
 
