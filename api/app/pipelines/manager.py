@@ -13,6 +13,7 @@ from .defaults import (
     built_in_pipeline,
 )
 from .evidence import compile_evidence_pipeline
+from .metadata_precedents import compile_metadata_precedent_pipeline
 from .models import PipelineAssignment, PipelineDefinition
 from .research import compile_research_pipeline
 from .service import PipelineService, pipeline_hash, pipeline_service
@@ -207,8 +208,9 @@ class PipelineManager:
             # valid graphs outside its supported subset remain inspectable but
             # cannot become an active assignment.
             compile_evidence_pipeline(pipeline)
+        elif assignment.feature == "metadata_precedents":
+            compile_metadata_precedent_pipeline(pipeline)
         elif assignment.feature not in {
-            "metadata_precedents",
             "claim_memory",
             "response_memory",
         }:
@@ -261,8 +263,10 @@ class PipelineManager:
             if pipeline.purpose == "evidence_suggestion":
                 compile_evidence_pipeline(pipeline)
                 return {"supported": True, "adapter": "evidence_suggestion"}
+            if pipeline.purpose == "metadata_precedents":
+                compile_metadata_precedent_pipeline(pipeline)
+                return {"supported": True, "adapter": "metadata_precedents"}
             current_features = {
-                "metadata_precedents": "metadata_precedents",
                 "claim_memory": "claim_memory",
                 "response_memory": "response_memory",
             }
