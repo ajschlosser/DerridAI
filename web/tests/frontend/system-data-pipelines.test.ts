@@ -295,7 +295,7 @@ describe("System Data Pipeline Studio", () => {
     expect(wrapper.text()).toContain("Pipeline Studio");
     expect(wrapper.text()).toContain("Research — current production chain");
     expect(wrapper.text()).toContain("Chroma semantic similarity");
-    expect(wrapper.text()).toContain("Test and compare Research pipelines");
+    expect(wrapper.text()).toContain("Test and compare Research pipelines");\n    expect(wrapper.text()).toContain("Benchmark Research pipelines");
     expect(wrapper.text()).toContain("Operational health");
     expect(wrapper.text()).toContain("95th-percentile run time");
     expect(wrapper.text()).toContain("Stage strategy health");
