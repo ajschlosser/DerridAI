@@ -28,6 +28,7 @@ const draft = ref<PipelineDefinition | null>(null);
 const validation = ref<PipelineValidationResponse | null>(null);
 const saving = ref(false);
 const assigning = ref(false);
+const cloning = ref(false);
 
 const t = (key: string, fallback: string) => i18n.t(key, fallback);
 
@@ -113,29 +114,21 @@ async function load() {
   }
 }
 
-function beginClone() {
+async function beginClone() {
   const source = selectedPipeline.value;
-  if (!source) return;
-  const proposedId = source.built_in ? `${source.pipeline_id}.custom` : source.pipeline_id;
-  const versions = pipelines.value
-    .filter((item) => item.pipeline_id === proposedId)
-    .map((item) => Number(item.version || 0));
-  const nextVersion = Math.max(0, ...versions) + 1;
+  if (!source || cloning.value) return;
 
-  draft.value = {
-    ...JSON.parse(JSON.stringify(source)),
-    pipeline_id: proposedId,
-    version: nextVersion,
-    name: source.built_in ? `${source.name} — custom` : source.name,
-    status: "draft",
-    built_in: false,
-    derived_from: pipelineKey(source),
-    created_at: null,
-    created_by: null,
-    validation: undefined,
-    runtime_support: undefined,
-  };
-  validation.value = null;
+  cloning.value = true;
+  error.value = "";
+  try {
+    const prepared = await pipelinesApi.cloneDraft(source.pipeline_id, source.version);
+    draft.value = prepared.pipeline;
+    validation.value = null;
+  } catch (exc) {
+    error.value = exc instanceof Error ? exc.message : String(exc);
+  } finally {
+    cloning.value = false;
+  }
 }
 
 async function validateDraft() {
@@ -253,6 +246,7 @@ onMounted(load);
           :assigned="isSelectedAssigned"
           :can-assign="canAssignSelected"
           :assigning="assigning"
+          :cloning="cloning"
           @clone="beginClone"
           @assign="assignSelected"
           @reset-assignment="resetSelectedAssignment"
