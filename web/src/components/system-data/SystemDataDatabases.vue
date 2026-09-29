@@ -302,13 +302,15 @@ watch(
               <thead>
                 <tr>
                   <th v-for="column in visibleColumns" :key="column.name">
-                    {{ column.name
-                    }}<span
+                    {{ column.name }}
+                    <UiTooltip
                       v-if="column.sensitive"
-                      class="sensitive-mark"
-                      :title="t('runtime.system_sensitive_redacted', 'Sensitive value redacted')"
-                      >●</span
+                      :text="t('runtime.system_sensitive_redacted', 'Sensitive value redacted')"
+                      trigger-mode="content"
+                      placement="bottom"
                     >
+                      <span class="sensitive-mark" aria-hidden="true">●</span>
+                    </UiTooltip>
                   </th>
                   <th>
                     <span class="sr-only">{{ t("common.actions", "Actions") }}</span>
