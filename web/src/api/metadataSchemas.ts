@@ -56,7 +56,6 @@ export interface SchemaGroup {
 /** A schema's policy for one DerridAI-owned bibliographic field (title, document_author, …). */
 export interface DocumentFieldPolicy {
   name: string;
-  prompt_at_intake: boolean;
   required_for: DocumentRequirement[];
 }
 export interface MetadataSchema {
@@ -109,20 +108,12 @@ export const DOCUMENT_FIELD_NAMES = [
   "document_is_translation",
   "document_type",
 ] as const;
-const DEFAULT_INTAKE = new Set([
-  "title",
-  "document_author",
-  "translator",
-  "edition",
-  "publication_year",
-]);
 const DEFAULT_REQUIRED = new Set(["title", "document_author"]);
 
 /** The server's default policies (metadata_schema.default_document_fields). */
 export function defaultDocumentFields(): DocumentFieldPolicy[] {
   return DOCUMENT_FIELD_NAMES.map((name) => ({
     name,
-    prompt_at_intake: DEFAULT_INTAKE.has(name),
     required_for: DEFAULT_REQUIRED.has(name) ? ["evidence", "publication"] : [],
   }));
 }

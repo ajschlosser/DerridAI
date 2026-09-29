@@ -16,9 +16,7 @@ const draft = (): MetadataSchema => ({
   description: "",
   groups: [],
   fields: [],
-  document_fields: completeDocumentFields([
-    { name: "translator", prompt_at_intake: true, required_for: ["publication"] },
-  ]),
+  document_fields: completeDocumentFields([{ name: "translator", required_for: ["publication"] }]),
 });
 
 describe("document field policies", () => {
@@ -26,26 +24,24 @@ describe("document field policies", () => {
 
   it("completes missing policies in canonical order and keeps given ones", () => {
     const policies = completeDocumentFields([
-      { name: "translator", prompt_at_intake: true, required_for: [] },
+      { name: "translator", required_for: ["publication"] },
     ]);
     expect(policies.map((p) => p.name)).toEqual([...DOCUMENT_FIELD_NAMES]);
-    expect(policies.find((p) => p.name === "translator")?.prompt_at_intake).toBe(true);
+    expect(policies.find((p) => p.name === "translator")?.required_for).toEqual(["publication"]);
     expect(policies.find((p) => p.name === "document_author")?.required_for).toEqual([
       "evidence",
       "publication",
     ]);
   });
 
-  it("edits intake prompting and requirements in the draft", async () => {
+  it("edits requirements in the draft", async () => {
     const schema = draft();
     const wrapper = mount(SchemaDocumentFieldsPanel, { props: { draft: schema, readonly: false } });
     const authorRow = wrapper.findAll("tbody tr")[DOCUMENT_FIELD_NAMES.indexOf("document_author")];
-    const [intake, evidence] = authorRow.findAll('input[type="checkbox"]');
-    await intake.setValue(false);
+    const [evidence] = authorRow.findAll('input[type="checkbox"]');
     await evidence.setValue(false);
     const author = schema.document_fields!.find((p) => p.name === "document_author")!;
     expect(author).toMatchObject({
-      prompt_at_intake: false,
       required_for: ["publication"],
     });
   });

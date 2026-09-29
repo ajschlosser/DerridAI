@@ -10,8 +10,8 @@ import {
   type MetadataSchema,
 } from "../../api/metadataSchemas";
 
-// Policy for the bibliographic fields DerridAI owns: which to ask for before segmentation and what a missing
-// value blocks. Each holds one value for the whole corpus. The fields themselves cannot be added or renamed.
+// Policy for the bibliographic fields DerridAI owns: what a missing value blocks. Each holds one value for the
+// whole corpus; values are detected on source load, and a person is asked only for required ones detection missed. The fields themselves cannot be added or renamed.
 const props = defineProps<{ draft: MetadataSchema; readonly: boolean }>();
 const { t } = useSchemaCopy();
 
@@ -41,7 +41,6 @@ function toggleRequirement(
         <thead>
           <tr>
             <th scope="col">{{ t("document_field", "Field") }}</th>
-            <th scope="col">{{ t("prompt_at_intake", "Ask at intake") }}</th>
             <th v-for="r in requirements" :key="r" scope="col">
               {{ t(`required_for_${r}`) }}
             </th>
@@ -52,14 +51,6 @@ function toggleRequirement(
             <th scope="row">
               {{ t(`document_field.${policy.name}`, policy.name) }} <code>{{ policy.name }}</code>
             </th>
-            <td>
-              <input
-                v-model="policy.prompt_at_intake"
-                type="checkbox"
-                :disabled="readonly"
-                :aria-label="`${t(`document_field.${policy.name}`, policy.name)}: ${t('prompt_at_intake', 'Ask at intake')}`"
-              />
-            </td>
             <td v-for="r in requirements" :key="r">
               <input
                 type="checkbox"

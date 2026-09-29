@@ -43,11 +43,11 @@ def test_format_1_file_imports_with_default_document_policies():
 
 def test_document_policies_are_completed_in_canonical_order_and_validated():
     schema = ms.MetadataSchema.model_validate(_body(document_fields=[
-        {"name": "translator", "prompt_at_intake": True, "required_for": ["publication", "publication"]},
+        {"name": "translator", "required_for": ["publication", "publication"]},
     ]))
     assert [p.name for p in schema.document_fields] == list(ms.DOCUMENT_FIELDS)
     translator = schema.document_policy("translator")
-    assert (translator.prompt_at_intake, translator.required_for) == (True, ["publication"])
+    assert translator.required_for == ["publication"]
     assert translator.field_id == "derridai.document.translator"
     # Omitted policies take the defaults, so the author is still required.
     assert "document_author" in schema.required_document_fields("publication")

@@ -102,13 +102,7 @@ DOCUMENT_FIELDS: dict[str, str] = {
         "document_is_translation", "document_type",
     )
 }
-_DEFAULT_DOCUMENT_POLICY: dict[str, dict[str, Any]] = {
-    "title": {"prompt_at_intake": True, "required_for": ["evidence", "publication"]},
-    "document_author": {"prompt_at_intake": True, "required_for": ["evidence", "publication"]},
-    "translator": {"prompt_at_intake": True},
-    "edition": {"prompt_at_intake": True},
-    "publication_year": {"prompt_at_intake": True},
-}
+_DEFAULT_REQUIRED_DOCUMENT_FIELDS = {"title", "document_author"}
 
 
 class RetrievalProfile(BaseModel):
@@ -262,15 +256,14 @@ class SchemaGroup(BaseModel):
 
 
 class DocumentFieldPolicy(BaseModel):
-    """A schema's policy for one DerridAI-owned bibliographic field: whether intake asks for it and what it blocks.
+    """A schema's policy for one DerridAI-owned bibliographic field: what a missing value blocks.
 
-    Document fields always hold one value for the whole corpus.
+    Document fields always hold one value for the whole corpus. Values are detected when a source loads; a person is
+    asked only for a required field detection could not fill.
     """
 
     model_config = ConfigDict(extra="forbid")
     name: str
-    # Shown in the intake step before segmentation, prefilled from catalog/model inference.
-    prompt_at_intake: bool = False
     required_for: list[DocumentRequirement] = Field(default_factory=list, max_length=2)
 
     @field_validator("name")
@@ -291,7 +284,10 @@ class DocumentFieldPolicy(BaseModel):
 
 
 def default_document_fields() -> list[DocumentFieldPolicy]:
-    return [DocumentFieldPolicy(name=name, **_DEFAULT_DOCUMENT_POLICY.get(name, {})) for name in DOCUMENT_FIELDS]
+    return [DocumentFieldPolicy(
+            name=name,
+            required_for=["evidence", "publication"] if name in _DEFAULT_REQUIRED_DOCUMENT_FIELDS else [],
+        ) for name in DOCUMENT_FIELDS]
 
 
 class MetadataSchema(BaseModel):
