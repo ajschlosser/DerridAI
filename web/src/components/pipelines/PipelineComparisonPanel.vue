@@ -290,7 +290,12 @@ function seconds(value: number | null | undefined) {
               {{ result.left.pipeline.name }} · v{{ result.left.pipeline.pipeline_version }}
             </h4>
             <p>
-              {{ t("pipelines.compare_flow", "Candidates: pre-rerank → reranked → final evidence") }}
+              {{
+                t(
+                  "pipelines.compare_flow",
+                  "Candidates: pre-rerank → reranked → final evidence",
+                )
+              }}
               <strong>
                 {{ result.left.candidates.pre_rerank.count }}
                 →
@@ -322,7 +327,12 @@ function seconds(value: number | null | undefined) {
               {{ result.right.pipeline.name }} · v{{ result.right.pipeline.pipeline_version }}
             </h4>
             <p>
-              {{ t("pipelines.compare_flow", "Candidates: pre-rerank → reranked → final evidence") }}
+              {{
+                t(
+                  "pipelines.compare_flow",
+                  "Candidates: pre-rerank → reranked → final evidence",
+                )
+              }}
               <strong>
                 {{ result.right.candidates.pre_rerank.count }}
                 →
