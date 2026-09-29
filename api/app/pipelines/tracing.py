@@ -86,7 +86,7 @@ def _stage(
         stage_id=stage_id,
         strategy_id=strategy_id,
         strategy_version=spec.version,
-        status=status,  # type: ignore[arg-type]
+        status=status,
         elapsed_ms=(
             max(0, int(float(elapsed_seconds) * 1000))
             if elapsed_seconds is not None
@@ -508,7 +508,7 @@ def build_research_trace(
         resolved_pipeline=sanitize_trace_value(resolved_pipeline),
         resolved_hash=resolved_hash,
         owner=owner,
-        status=status,  # type: ignore[arg-type]
+        status=status,
         started_at=started,
         finished_at=finished,
         total_elapsed_ms=(
