@@ -188,17 +188,17 @@ def build_research_trace(
 
     retrieval_stage = stage_payloads.get("retrieval") or {}
     retrieval_seconds = retrieval_stage.get("seconds")
-    per_route_seconds = (
-        float(retrieval_seconds) / max(1, len(search_types))
-        if retrieval_seconds is not None and search_types
-        else None
-    )
+    # Candidate routes currently execute inside one feature-level retrieval
+    # timer. Do not divide that aggregate duration between parallel branches:
+    # doing so would manufacture stage precision that the runtime did not
+    # measure. The aggregate is attached to rank fusion below until route-level
+    # timers are introduced.
     if "similarity" in search_types:
         trace_stages.append(
             _stage(
                 "semantic_retrieval",
                 "retrieve.chroma_similarity",
-                elapsed_seconds=per_route_seconds,
+                elapsed_seconds=None,
                 output_count=raw_count,
                 collection=collection_label,
                 parameters={
@@ -207,12 +207,36 @@ def build_research_trace(
                 },
             )
         )
+    resolved_stages = (
+        resolved_pipeline.get("stages")
+        if isinstance(resolved_pipeline.get("stages"), list)
+        else []
+    )
+    resolved_strategies = {
+        str(item.get("strategy") or "")
+        for item in resolved_stages
+        if isinstance(item, dict)
+    }
+    if (
+        "normalize.collection_relevance" in resolved_strategies
+        and {"similarity", "mmr"} & set(search_types)
+    ):
+        trace_stages.append(
+            _stage(
+                "normalize",
+                "normalize.collection_relevance",
+                input_count=raw_count,
+                output_count=raw_count,
+                collection=collection_label,
+                score_summary={"metric_aware": True},
+            )
+        )
     if "lexical" in search_types:
         trace_stages.append(
             _stage(
                 "lexical_retrieval",
                 "retrieve.lexical_bm25",
-                elapsed_seconds=per_route_seconds,
+                elapsed_seconds=None,
                 output_count=raw_count,
                 collection=collection_label,
                 parameters={
@@ -226,7 +250,7 @@ def build_research_trace(
             _stage(
                 "retrieval_mmr",
                 "select.mmr",
-                elapsed_seconds=per_route_seconds,
+                elapsed_seconds=None,
                 input_count=raw_count,
                 output_count=raw_count,
                 parameters={"lambda_mult": retrieval.get("lambda_mult")},
@@ -238,6 +262,7 @@ def build_research_trace(
             _stage(
                 "rank_fusion",
                 "fusion.rrf",
+                elapsed_seconds=retrieval_seconds,
                 input_count=raw_count,
                 output_count=deduplicated_count,
                 parameters={"rrf_k": retrieval.get("rrf_k")},
@@ -245,50 +270,109 @@ def build_research_trace(
         )
 
     rerank_stage = stage_payloads.get("rerank") or {}
+    rerank_detail = (
+        rerank_stage.get("detail")
+        if isinstance(rerank_stage.get("detail"), dict)
+        else {}
+    )
+    rerank_telemetry = (
+        rerank_detail.get("reranker_telemetry")
+        if isinstance(rerank_detail.get("reranker_telemetry"), dict)
+        else {}
+    )
     reranker = str(retrieval.get("reranker") or "none")
-    if reranker == "cross_encoder":
+    requested_reranker = str(retrieval.get("requested_reranker") or reranker)
+
+    if requested_reranker == "cross_encoder":
+        cross_encoder_completed = reranker == "cross_encoder"
+        fallback_reason = (
+            str(rerank_telemetry.get("fallback_reason") or "")
+            or next(
+                (
+                    str(warning)
+                    for warning in result.get("warnings") or []
+                    if "cross-encoder" in str(warning).casefold()
+                ),
+                "",
+            )
+        )
         trace_stages.append(
             _stage(
                 "rerank",
                 "rerank.cross_encoder",
-                elapsed_seconds=rerank_stage.get("seconds"),
-                input_count=deduplicated_count,
-                output_count=int(
-                    (rerank_stage.get("detail") or {}).get("rerank_pool_count")
-                    or reranked_count
+                elapsed_seconds=(
+                    rerank_stage.get("seconds")
+                    if cross_encoder_completed
+                    else rerank_telemetry.get("timing_ms", 0) / 1000
+                    if rerank_telemetry.get("timing_ms") is not None
+                    else None
                 ),
+                input_count=deduplicated_count,
+                output_count=(
+                    int(rerank_detail.get("rerank_pool_count") or reranked_count)
+                    if cross_encoder_completed
+                    else 0
+                ),
+                provider="sentence-transformers",
                 model=str(request.cross_encoder_model or "") or None,
                 parameters={
-                    "requested_reranker": retrieval.get("requested_reranker"),
+                    "requested_reranker": requested_reranker,
                     "top_n": retrieval.get("rerank_top_n"),
                 },
-                warnings=[
-                    warning
-                    for warning in result.get("warnings") or []
-                    if "Cross-encoder fallback" in str(warning)
-                ],
+                fallback_reason=fallback_reason or None,
+                status="completed" if cross_encoder_completed else "unavailable",
+                score_summary={
+                    key: rerank_telemetry[key]
+                    for key in ("candidate_count", "reranked_count", "timing_ms")
+                    if key in rerank_telemetry
+                },
             )
         )
-    elif reranker == "lexical":
+
+    if reranker == "lexical":
         trace_stages.append(
             _stage(
-                "rerank",
+                "rerank_fallback" if requested_reranker == "cross_encoder" else "rerank",
                 "rerank.lexical_fallback",
-                elapsed_seconds=rerank_stage.get("seconds"),
+                elapsed_seconds=(
+                    rerank_stage.get("seconds")
+                    if requested_reranker != "cross_encoder"
+                    else None
+                ),
                 input_count=deduplicated_count,
                 output_count=reranked_count,
-                parameters={"top_n": retrieval.get("rerank_top_n")},
+                parameters={
+                    "top_n": retrieval.get("rerank_top_n"),
+                    "fallback_from": (
+                        "rerank.cross_encoder"
+                        if requested_reranker == "cross_encoder"
+                        else None
+                    ),
+                },
             )
         )
+    elif reranker == "cross_encoder":
+        pass
     else:
         trace_stages.append(
             _stage(
                 "rerank_top_k",
                 "select.top_k",
-                elapsed_seconds=rerank_stage.get("seconds"),
+                elapsed_seconds=(
+                    rerank_stage.get("seconds")
+                    if requested_reranker != "cross_encoder"
+                    else None
+                ),
                 input_count=deduplicated_count,
                 output_count=reranked_count,
-                parameters={"limit": retrieval.get("rerank_top_n")},
+                parameters={
+                    "limit": retrieval.get("rerank_top_n"),
+                    "fallback_from": (
+                        "rerank.cross_encoder"
+                        if requested_reranker == "cross_encoder"
+                        else None
+                    ),
+                },
             )
         )
 
