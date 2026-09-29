@@ -49,7 +49,7 @@ describe("VectorBackendPanel", () => {
     });
     await flushPromises();
     await wrapper.get("#chroma-url").setValue("http://user:secret@chroma:8000");
-    await wrapper.get("button[type=button]").trigger("click");
+    await wrapper.get(".vector-backend-actions button[type=button]").trigger("click");
     expect(wrapper.text()).toContain("Do not put credentials");
     expect(wrapper.emitted("probe")).toBeUndefined();
   });
