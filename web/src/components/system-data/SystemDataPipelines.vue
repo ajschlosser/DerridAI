@@ -176,7 +176,10 @@ async function saveDraft() {
   try {
     const checked = await pipelinesApi.validate(draft.value);
     validation.value = checked;
-    if (!checked.validation.valid || !checked.runtime_supported) return;
+    // Runtime support gates activation/execution, not design work. Persisting a
+    // graph-valid draft lets administrators version future adapters without
+    // pretending the current runtime can execute them.
+    if (!checked.validation.valid) return;
     const saved = await pipelinesApi.createDefinition(draft.value);
     draft.value = null;
     await load();
