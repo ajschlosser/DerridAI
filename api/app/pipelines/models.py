@@ -81,7 +81,7 @@ class PipelineDefinition(BaseModel):
     created_by: str | None = Field(default=None, max_length=200)
 
     @model_validator(mode="after")
-    def validate_local_graph(self) -> "PipelineDefinition":
+    def validate_local_graph(self) -> PipelineDefinition:
         stage_ids = [stage.id for stage in self.stages]
         if len(stage_ids) != len(set(stage_ids)):
             raise ValueError("Pipeline stage IDs must be unique.")
