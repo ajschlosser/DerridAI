@@ -150,6 +150,14 @@ describe("Data retention settings", () => {
     wrapper.unmount();
   });
 
+  it("does not mount confirmation dialogs before they are opened", async () => {
+    const wrapper = mount(DataRetentionSettings, { attachTo: document.body });
+    await flushPromises();
+
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+    wrapper.unmount();
+  });
+
   it("says so when the saved policy removes nothing", async () => {
     const wrapper = mount(DataRetentionSettings);
     await flushPromises();
