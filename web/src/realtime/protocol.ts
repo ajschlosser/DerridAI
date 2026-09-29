@@ -43,7 +43,10 @@ export interface CorpusBuildSummary {
   stage?: string | null;
   stage_detail?: string;
   record_count?: number;
+  accepted_count?: number;
   review_count?: number;
+  metadata_total?: number;
+  metadata_enriched_count?: number;
   metadata_tasks_total?: number;
   metadata_tasks_completed?: number;
   metadata_tasks_failed?: number;
