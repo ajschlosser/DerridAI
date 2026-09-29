@@ -9,6 +9,7 @@ import {
 } from "../domain/metadataValues";
 import { computed, nextTick, ref, watch } from "vue";
 import type { CorpusRecord } from "../api/pdfCorpus";
+import type { PipelineRunTrace } from "../types/pipelines";
 import { useI18nStore } from "../stores/i18n";
 import { metadataConstraints } from "../domain/metadataConstraints";
 import { metadataFieldSpec, metadataSuggestions } from "../domain/metadataFieldRegistry";
@@ -23,6 +24,7 @@ import CorpusFieldOwnershipBadge from "./CorpusFieldOwnershipBadge.vue";
 import CorpusEnrichmentChanges from "./CorpusEnrichmentChanges.vue";
 import CorpusFieldPolicyBadges from "./CorpusFieldPolicyBadges.vue";
 import UiTooltip from "./ui/UiTooltip.vue";
+import PipelineRunTracePanel from "./pipelines/PipelineRunTracePanel.vue";
 
 const props = defineProps<{
   record: CorpusRecord;
@@ -53,6 +55,17 @@ const emit = defineEmits<{
   complete: [];
 }>();
 const i18n = useI18nStore();
+const metadataPipelineTrace = computed<PipelineRunTrace | null>(() => {
+  const memory = (props.record as unknown as {
+    editorial_memory_used?: { pipeline_trace?: unknown };
+  }).editorial_memory_used;
+  const trace = memory?.pipeline_trace;
+  if (!trace || typeof trace !== "object") return null;
+  const candidate = trace as Partial<PipelineRunTrace>;
+  return candidate.run_id && candidate.pipeline_id && Array.isArray(candidate.stages)
+    ? (trace as PipelineRunTrace)
+    : null;
+});
 const populatedOpen = ref(true);
 const requiredFields = new Set(["region_type", "primary_text", "discourse_role"]);
 const inheritedFieldSet = new Set([
@@ -430,6 +443,20 @@ function displayValue(field: string) {
     <p v-if="enrichmentPending" class="enrichment-note" role="status">
       {{ i18n.t("pdf_corpus.metadata_enrichment_pending_help") }}
     </p>
+    <details v-if="metadataPipelineTrace" class="metadata-pipeline-trace">
+      <summary>
+        {{ i18n.t("pdf_corpus.metadata_pipeline_trace_title", "How metadata precedents were retrieved") }}
+      </summary>
+      <p>
+        {{
+          i18n.t(
+            "pdf_corpus.metadata_pipeline_trace_help",
+            "This audit trace shows the exact saved retrieval pipeline used for this record, including semantic search, reranking, fallbacks, candidate counts, and timing. It describes how advisory precedents were selected; it does not make those precedents authoritative metadata.",
+          )
+        }}
+      </p>
+      <PipelineRunTracePanel :trace="metadataPipelineTrace" />
+    </details>
     <div v-if="llmSuggestionCount" class="suggestion-toolbar">
       <b>{{
         i18n.tf("pdf_corpus.llm_suggestions_ready", {
@@ -702,6 +729,25 @@ function displayValue(field: string) {
   padding: 8px 10px;
   border-radius: var(--radius-control);
   background: var(--surface-inset, var(--soft));
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+.metadata-pipeline-trace {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-inset, var(--soft));
+}
+.metadata-pipeline-trace > summary {
+  min-height: 32px;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+.metadata-pipeline-trace > p {
+  margin: 6px 0 10px;
+  color: var(--text-tertiary);
   font-size: var(--fs-sm);
   line-height: 1.5;
 }
