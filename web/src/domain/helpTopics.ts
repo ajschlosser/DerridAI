@@ -410,8 +410,7 @@ export function visiblePageGuides(
   const needle = query.trim().toLocaleLowerCase();
   return HELP_PAGE_GUIDES.filter(
     (guide) =>
-      (!guide.adminOnly || isAdmin) &&
-      (!guide.capability || isAdmin || can(guide.capability)),
+      (!guide.adminOnly || isAdmin) && (!guide.capability || isAdmin || can(guide.capability)),
   )
     .map((guide) => ({
       ...guide,
