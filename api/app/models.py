@@ -755,8 +755,10 @@ class PdfCorpusBuildCreate(BaseModel):
     document_intelligence_profile: Literal["none", "general", "fiction", "scholarly"] = "scholarly"
     document_nlp_provider: Literal["auto", "spacy", "booknlp"] = "auto"
     document_nlp_include_events: bool = False
-    # Values for schema fields flagged "applies to the work as a whole", supplied before segmentation.
+    # Values for corpus-scoped schema fields, supplied before segmentation.
     work_metadata: dict[str, Any] = Field(default_factory=dict, max_length=60)
+    # Reviewer-supplied document fields (title, document_author, ...) that detection on source load could not fill.
+    document_metadata: dict[str, Any] = Field(default_factory=dict, max_length=20)
 
     @field_validator("run_guidance")
     @classmethod

@@ -35,6 +35,8 @@ interface CorpusBuildLifecycleControllerOptions {
   metadataIssueCount: ComputedRef<number>;
   requestedBuildId: () => string;
   runGuidancePayload: () => Record<string, unknown>;
+  /** Reviewer-supplied document fields that detection on source load missed. */
+  documentMetadataPayload?: () => Record<string, string>;
   applyBuildRequest: (request: Record<string, unknown>) => void;
   setMessage: (message: string, tone?: MessageTone) => void;
   resetReviewForBuildStart: () => void;
@@ -268,11 +270,13 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
     options.setMessage("");
     options.resetReviewForBuildStart();
     try {
+      const documentMetadata = options.documentMetadataPayload?.() ?? {};
       const payload = {
         asset_id: options.selectedAssetId.value,
         auto_enrich_work_metadata: true,
         schema_id: options.schemaId.value,
         run_guidance: options.runGuidancePayload(),
+        ...(Object.keys(documentMetadata).length ? { document_metadata: documentMetadata } : {}),
         ...options.providerPayload.value,
         ...(options.handsFree.value.enabled ? { autonomous: { ...options.handsFree.value } } : {}),
       };

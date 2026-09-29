@@ -50,6 +50,7 @@ from .field_assertions import (
 )
 from .metadata_schema import (
     DEFAULT_SCHEMA_ID,
+    DOCUMENT_FIELDS,
     MetadataSchema,
     build_group_prompt,
     default_document_fields,
@@ -114,6 +115,32 @@ def _required_document_fields(build: dict[str, Any], requirement: str) -> list[s
         for policy in policies
         if isinstance(policy, dict) and requirement in (policy.get("required_for") or [])
     ]
+
+
+def _validated_document_metadata(raw: Any) -> dict[str, Any]:
+    """Validate reviewer-supplied document fields against the manifest contract; empty values are dropped.
+
+    Unknown or ill-typed fields are rejected rather than dropped, so a reviewer never believes a value was applied that was not.
+    """
+    if raw in (None, {}):
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError("Document metadata must be a field-to-value object.")
+    unknown = sorted(set(raw) - set(DOCUMENT_FIELDS))
+    if unknown:
+        raise ValueError("Unknown document field(s): " + ", ".join(unknown))
+    supplied = {
+        name: value.strip() if isinstance(value, str) else value
+        for name, value in raw.items()
+        if (value.strip() if isinstance(value, str) else value) not in (None, "", [])
+    }
+    try:
+        validated = DocumentManifestModel.model_validate(supplied).model_dump(mode="json")
+    except ValidationError as exc:
+        raise ValueError("Document metadata is not valid: " + "; ".join(
+            f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors()[:5]
+        )) from exc
+    return {name: validated[name] for name in supplied}
 
 
 class ManifestWorkflowMixin:
@@ -192,7 +219,11 @@ class ManifestWorkflowMixin:
         unknown_guidance_fields = sorted(set(guidance) - set(schema.field_names()))
         if unknown_guidance_fields:
             raise ValueError("Run guidance references fields outside the selected schema: " + ", ".join(unknown_guidance_fields))
-        request = {**request, "work_metadata": _validated_work_metadata(schema, request.get("work_metadata"))}
+        request = {
+            **request,
+            "work_metadata": _validated_work_metadata(schema, request.get("work_metadata")),
+            "document_metadata": _validated_document_metadata(request.get("document_metadata")),
+        }
         public_request = {k: v for k, v in request.items() if k not in {"api_key", "_review_provider"}}
         build = self.repo.create_build({
             "schema": schema.model_dump(mode="json"), "schema_id": schema.id, "schema_hash": schema.content_hash(), "schema_name": schema.name,

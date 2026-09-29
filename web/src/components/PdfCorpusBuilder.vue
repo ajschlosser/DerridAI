@@ -97,6 +97,8 @@ import CorpusEnrichmentConfiguration from "./corpus-builder/CorpusEnrichmentConf
 import CorpusSemanticGraphPanel from "./corpus-builder/CorpusSemanticGraphPanel.vue";
 import CorpusRecordSemanticMap from "./corpus-builder/CorpusRecordSemanticMap.vue";
 import CorpusMetadataConfiguration from "./corpus-builder/CorpusMetadataConfiguration.vue";
+import CorpusMissingDocumentFields from "./corpus-builder/CorpusMissingDocumentFields.vue";
+import { missingRequiredDocumentFields, suppliedDocumentMetadata } from "../domain/documentFields";
 import CorpusAdvancedConfiguration from "./corpus-builder/CorpusAdvancedConfiguration.vue";
 import { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
 import CorpusRecordDecisionDock from "./corpus-builder/CorpusRecordDecisionDock.vue";
@@ -466,6 +468,20 @@ async function switchWorkspace(workspace: CorpusWorkspaceMode) {
     },
   });
 }
+// Required document fields that detection on source load missed; only these are asked of the user.
+// Nothing is asked before detection has run for the source.
+const missingDocumentFields = computed(() =>
+  selectedAsset.value?.deterministic_checked_at
+    ? missingRequiredDocumentFields(selectedSchema.value, selectedAsset.value?.initial_metadata)
+    : [],
+);
+const documentMetadata = ref<Record<string, string>>({});
+watch(selectedAssetId, () => {
+  documentMetadata.value = {};
+});
+const documentMetadataPayload = () =>
+  suppliedDocumentMetadata(missingDocumentFields.value, documentMetadata.value);
+
 const {
   registerBuildOperation,
   syncBuildInRail,
@@ -499,6 +515,7 @@ const {
   metadataIssueCount,
   requestedBuildId: () => String(route.query.build || ""),
   runGuidancePayload,
+  documentMetadataPayload,
   applyBuildRequest,
   setMessage,
   resetReviewForBuildStart: () => {
@@ -2435,6 +2452,12 @@ defineExpose({
         @update:use-profile-defaults="useProfileDefaults = $event"
       />
 
+      <CorpusMissingDocumentFields
+        v-if="selectedAsset"
+        v-model="documentMetadata"
+        :fields="missingDocumentFields"
+        :disabled="busy !== ''"
+      />
       <CorpusBuildReadiness
         :media-kind="selectedAsset?.media_kind"
         :source-filename="selectedAsset?.filename || ''"
