@@ -5264,6 +5264,8 @@
   "pdf_corpus.save_and_mark_reviewed": "Save & mark reviewed",
   "pdf_corpus.metadata_enrichment_pending": "LLM enrichment pending",
   "pdf_corpus.metadata_enrichment_pending_help": "This record is editable now, but its background LLM metadata has not settled yet. Confidence and suggestions will appear as each metadata family completes.",
+  "pdf_corpus.metadata_pipeline_trace_title": "How metadata precedents were retrieved",
+  "pdf_corpus.metadata_pipeline_trace_help": "This audit trace shows the exact saved retrieval pipeline used for this record, including semantic search, reranking, fallbacks, candidate counts, and timing. It describes how advisory precedents were selected; it does not make those precedents authoritative metadata.",
   "pdf_corpus.llm_suggestion_selected_short": "LLM suggestion selected by default",
   "pdf_corpus.bulk_edit_eyebrow": "Record metadata",
   "pdf_corpus.bulk_metadata_help_v481": "Select fields to change, then choose an existing corpus value or enter a new one. Unselected fields are untouched.",
