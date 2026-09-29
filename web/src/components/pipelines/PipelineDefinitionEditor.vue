@@ -265,32 +265,191 @@ function updateConfig(
     </label>
 
     <section class="stage-settings" :aria-label="t('pipelines.stage_settings', 'Stage settings')">
-      <header>
+      <header class="stage-settings-header">
         <div>
           <h4>{{ t("pipelines.stage_settings", "Stage settings") }}</h4>
           <p>
             {{
               t(
                 "pipelines.stage_settings_help",
-                "Only parameters declared by the registered server strategy are editable here.",
+                "Build the chain from registered strategies. Edges and fallback paths are validated before a version can be activated.",
               )
             }}
           </p>
         </div>
+        <button class="btn" type="button" :disabled="!strategies.length" @click="addStage">
+          {{ t("pipelines.add_stage", "Add stage") }}
+        </button>
       </header>
 
       <article
         v-for="(stage, stageIndex) in modelValue.stages"
-        :key="stage.id"
+        :key="stageIndex"
         class="stage-settings-card"
       >
         <div class="stage-settings-heading">
+          <div class="stage-identity-grid">
+            <label>
+              <span>{{ t("pipelines.stage_id", "Stage ID") }}</span>
+              <input
+                class="control"
+                :value="stage.id"
+                autocomplete="off"
+                @input="updateStageId(stageIndex, ($event.target as HTMLInputElement).value)"
+              />
+            </label>
+            <label>
+              <span>{{ t("pipelines.strategy", "Strategy") }}</span>
+              <select
+                class="control"
+                :value="stage.strategy"
+                @change="updateStageStrategy(stageIndex, ($event.target as HTMLSelectElement).value)"
+              >
+                <optgroup
+                  v-for="group in strategiesByFamily"
+                  :key="group.family"
+                  :label="group.family"
+                >
+                  <option
+                    v-for="option in group.strategies"
+                    :key="option.strategy_id"
+                    :value="option.strategy_id"
+                  >
+                    {{ option.label }}
+                  </option>
+                </optgroup>
+              </select>
+            </label>
+          </div>
+          <div class="stage-toolbar">
+            <label class="stage-toggle">
+              <input
+                type="checkbox"
+                :checked="stage.enabled"
+                @change="toggleStageEnabled(stageIndex, ($event.target as HTMLInputElement).checked)"
+              />
+              <span>{{ t("pipelines.enabled", "Enabled") }}</span>
+            </label>
+            <label class="stage-toggle">
+              <input
+                type="checkbox"
+                :checked="modelValue.entry_stage_ids.includes(stage.id)"
+                @change="toggleEntry(stage.id, ($event.target as HTMLInputElement).checked)"
+              />
+              <span>{{ t("pipelines.entry_stage", "Entry") }}</span>
+            </label>
+            <button
+              class="btn icon-only"
+              type="button"
+              :disabled="stageIndex === 0"
+              :aria-label="t('pipelines.move_stage_up', 'Move stage up')"
+              @click="moveStage(stageIndex, -1)"
+            >
+              ↑
+            </button>
+            <button
+              class="btn icon-only"
+              type="button"
+              :disabled="stageIndex === modelValue.stages.length - 1"
+              :aria-label="t('pipelines.move_stage_down', 'Move stage down')"
+              @click="moveStage(stageIndex, 1)"
+            >
+              ↓
+            </button>
+            <button
+              class="btn icon-only"
+              type="button"
+              :disabled="modelValue.stages.length <= 1"
+              :aria-label="t('pipelines.remove_stage', 'Remove stage')"
+              @click="removeStage(stageIndex)"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+
+        <div class="strategy-summary">
           <div>
             <strong>{{ strategyMap.get(stage.strategy)?.label || stage.strategy }}</strong>
-            <code>{{ stage.id }}</code>
+            <span>{{ strategyMap.get(stage.strategy)?.family || "unknown" }}</span>
           </div>
-          <span>{{ strategyMap.get(stage.strategy)?.family || "unknown" }}</span>
+          <p v-if="strategyMap.get(stage.strategy)?.description">
+            {{ strategyMap.get(stage.strategy)?.description }}
+          </p>
+          <small v-if="strategyMap.get(stage.strategy)">
+            {{ strategyMap.get(stage.strategy)?.input_type }}
+            <span aria-hidden="true">→</span>
+            {{ strategyMap.get(stage.strategy)?.output_type }}
+            <template v-if="strategyMap.get(stage.strategy)?.invokes_llm">
+              · {{ t("pipelines.invokes_llm", "invokes LLM") }}
+            </template>
+          </small>
         </div>
+
+        <fieldset class="edge-editor">
+          <legend>{{ t("pipelines.connections", "Connections") }}</legend>
+          <div class="edge-grid">
+            <div class="next-targets">
+              <span class="edge-label">{{ t("pipelines.next_stages", "Next stages") }}</span>
+              <div class="edge-target-list">
+                <label
+                  v-for="target in modelValue.stages.filter((item) => item.id !== stage.id)"
+                  :key="target.id"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="stage.next.includes(target.id)"
+                    @change="
+                      toggleNext(
+                        stageIndex,
+                        target.id,
+                        ($event.target as HTMLInputElement).checked,
+                      )
+                    "
+                  />
+                  <code>{{ target.id }}</code>
+                </label>
+                <small v-if="modelValue.stages.length <= 1">
+                  {{ t("pipelines.no_other_stages", "Add another stage to create an edge.") }}
+                </small>
+              </div>
+            </div>
+
+            <div class="fallback-grid">
+              <label
+                v-for="fallback in [
+                  ['on_empty', t('pipelines.on_empty', 'On empty')],
+                  ['on_unavailable', t('pipelines.on_unavailable', 'On unavailable')],
+                  ['on_timeout', t('pipelines.on_timeout', 'On timeout')],
+                  ['on_error', t('pipelines.on_error', 'On error')],
+                ] as const"
+                :key="fallback[0]"
+              >
+                <span>{{ fallback[1] }}</span>
+                <select
+                  class="control"
+                  :value="stage[fallback[0]] || ''"
+                  @change="
+                    updateFallback(
+                      stageIndex,
+                      fallback[0],
+                      ($event.target as HTMLSelectElement).value,
+                    )
+                  "
+                >
+                  <option value="">{{ t("pipelines.no_fallback", "No fallback") }}</option>
+                  <option
+                    v-for="target in modelValue.stages.filter((item) => item.id !== stage.id)"
+                    :key="target.id"
+                    :value="target.id"
+                  >
+                    {{ target.id }}
+                  </option>
+                </select>
+              </label>
+            </div>
+          </div>
+        </fieldset>
 
         <div v-if="configProperties(stage).length" class="config-grid">
           <label v-for="[key, rule] in configProperties(stage)" :key="key">
