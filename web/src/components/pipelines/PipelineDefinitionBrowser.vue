@@ -24,8 +24,7 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
 function assigned(pipeline: PipelineDefinition) {
   return props.assignments.some(
     (item) =>
-      item.pipeline_id === pipeline.pipeline_id &&
-      item.pipeline_version === pipeline.version,
+      item.pipeline_id === pipeline.pipeline_id && item.pipeline_version === pipeline.version,
   );
 }
 </script>
