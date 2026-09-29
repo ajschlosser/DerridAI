@@ -31,19 +31,26 @@ export const viewPathMap: Record<string, string> = {
   works: "/works",
   global: "/search",
   annotations: "/annotations",
-  pdf: "/pdf",
+  pdf: "/corpus-builder",
   compare: "/compare",
   vector: "/databases",
   rag: "/rag",
   faq: "/faq",
-  responsecache: "/system-data",
+  responsecache: "/system-data/overview",
   providers: "/providers",
   schemas: "/schemas",
-  config: "/settings",
+  config: "/settings/workspace",
 };
-export const pathViewMap: Record<string, string> = Object.fromEntries(
-  Object.entries(viewPathMap).map(([view, path]) => [path, view]),
-);
+export const pathViewMap: Record<string, string> = {
+  ...Object.fromEntries(Object.entries(viewPathMap).map(([view, path]) => [path, view])),
+  "/source-explorer": "pdf",
+};
+
+function viewFromPath(path: string): string | undefined {
+  if (path.startsWith("/settings/")) return "config";
+  if (path.startsWith("/system-data/")) return "responsecache";
+  return pathViewMap[path];
+}
 
 export function createNavigation(deps: Deps) {
   const {
@@ -240,7 +247,6 @@ export function createNavigation(deps: Deps) {
       "ts",
     ])
       params.delete(key);
-    params.set("view", state.view || "home");
     if (state.activeFileId) params.set("file", state.activeFileId);
     const file = activeFile();
     if (file && Number.isFinite(selectedIndex(file)))
@@ -256,7 +262,20 @@ export function createNavigation(deps: Deps) {
       const compressed = compressUrlState(tableState);
       if (compressed) params.set("ts", compressed);
     }
-    const path = viewPathMap[state.view] || "/";
+    let path = viewPathMap[state.view] || "/";
+    // Route-native sub-workspaces share one legacy runtime view. Preserve the
+    // specific path the router owns so URL synchronization never collapses
+    // Source Explorer, Settings sections, or System Data workspaces back to
+    // their default sibling.
+    if (
+      state.view === "pdf" &&
+      ["/corpus-builder", "/source-explorer"].includes(location.pathname)
+    )
+      path = location.pathname;
+    else if (state.view === "config" && location.pathname.startsWith("/settings/"))
+      path = location.pathname;
+    else if (state.view === "responsecache" && location.pathname.startsWith("/system-data/"))
+      path = location.pathname;
     const query = params.toString();
     return `${path}${query ? `?${query}` : ""}${url.hash}`;
   }
@@ -277,7 +296,7 @@ export function createNavigation(deps: Deps) {
   }
   function applyUrlState() {
     const params = new URLSearchParams(location.search);
-    const pathView = pathViewMap[location.pathname];
+    const pathView = viewFromPath(location.pathname);
     const view = pathView || params.get("view");
     if (view && viewConfig.some((item: Any) => item.id === view)) state.view = view;
     const file = params.get("file");
