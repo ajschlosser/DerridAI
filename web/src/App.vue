@@ -533,7 +533,6 @@ watch(
         :collapsed="effectiveSidebarCollapsed"
         @navigate="navigate"
       />
-      <div class="sidebar-spacer"></div>
       <SidebarUtilityNav
         :items="utilityNavItems"
         :collapsed="effectiveSidebarCollapsed"
@@ -711,9 +710,13 @@ watch(
   background: var(--bg);
 }
 .app-shell-modern {
+  --ref-sidebar: 252px;
   grid-template-columns: var(--ref-sidebar) minmax(0, 1fr);
   min-height: 100vh;
   background: var(--ref-bg);
+}
+.shell-sidebar {
+  padding: 12px 11px 10px;
 }
 .shell-workspace {
   min-width: 0;
@@ -864,9 +867,17 @@ watch(
     display: none;
   }
 }
+@media (max-width: 1250px) and (min-width: 901px) {
+  .app-shell-modern {
+    --ref-sidebar: 228px;
+  }
+}
 @media (max-width: 900px) {
   .app-shell-modern {
     grid-template-columns: 64px minmax(0, 1fr);
+  }
+  .shell-sidebar {
+    padding: 9px 7px;
   }
 }
 @media (max-width: 780px) {
