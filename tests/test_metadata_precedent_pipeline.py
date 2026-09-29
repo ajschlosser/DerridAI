@@ -39,8 +39,8 @@ def test_metadata_precedent_pipeline_normalizes_custom_hybrid_weights() -> None:
             stage = stage.model_copy(
                 update={
                     "config": {
-                        "semantic_weight": 3.0,
-                        "lexical_weight": 1.0,
+                        "semantic_weight": 0.6,
+                        "lexical_weight": 0.2,
                     }
                 }
             )
