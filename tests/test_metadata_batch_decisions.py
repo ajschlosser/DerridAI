@@ -12,6 +12,7 @@ provenance side effects that need a system store.
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -141,3 +142,56 @@ def test_precedents_are_read_only_and_exclude_the_record_itself(tmp_path, monkey
     assert repo.get_record(build["build_id"], "r1")["record_revision"] == 1
     with pytest.raises(ValueError):
         manager.metadata_precedents(build["build_id"], "r1", "needs_review_not_a_field")
+
+
+def _write_block_text(repo, text: str) -> None:
+    path = repo.asset_blocks_path("a")
+    block = json.loads(path.read_text(encoding="utf-8").splitlines()[0])
+    path.write_text(json.dumps({**block, "text": text}) + "\n", encoding="utf-8")
+
+
+def test_accepting_an_unbound_value_runs_the_evidence_cascade_without_an_llm(tmp_path, monkeypatch):
+    from app import evidence_suggestions
+
+    remembered: list = []
+    repo, build, manager = _manager(tmp_path, rec("r1", "b1"), monkeypatch, remembered)
+    _write_block_text(repo, "Here Levinas argues that the face precedes ontology.")
+    calls: list = []
+    real_cascade = evidence_suggestions.suggest_evidence_cascade
+
+    def spy(*args, **kwargs):
+        calls.append(kwargs)
+        return real_cascade(*args, **kwargs)
+
+    monkeypatch.setattr(evidence_suggestions, "suggest_evidence_cascade", spy)
+
+    result = manager.apply_metadata_decisions(build["build_id"], "r1", {"position_holder": "Levinas"}, expected_revision=1)
+
+    assert [call["field"] for call in calls] == ["position_holder"]
+    assert calls[0]["llm_choice"] is None, "accepting a value must never spend a model call"
+    entry = result["record"]["metadata_evidence"]["position_holder"]
+    assert entry["block_ids"] == ["b1"]
+    # Advisory, exactly as during enrichment: never counted as reviewed evidence.
+    assert entry["backfilled"] is True and entry["confidence"] is None
+    saved = repo.get_record(build["build_id"], "r1")
+    assert saved["metadata_evidence"]["position_holder"]["block_ids"] == ["b1"]
+    assert saved["position_holder"] == "Levinas"
+
+
+def test_accepting_a_value_keeps_evidence_the_reviewer_already_bound(tmp_path, monkeypatch):
+    from app import evidence_suggestions
+
+    remembered: list = []
+    repo, build, manager = _manager(tmp_path, rec("r1", "b1"), monkeypatch, remembered)
+    monkeypatch.setattr(
+        evidence_suggestions, "suggest_evidence_cascade",
+        lambda *a, **k: pytest.fail("bound evidence must not be re-adjudicated"),
+    )
+
+    result = manager.metadata_decision(
+        build["build_id"], "r1", "position_holder", "Levinas", expected_revision=1,
+        evidence_source="reviewer_knowledge", evidence_note="Known from the preface.",
+    )
+
+    entry = result["record"]["metadata_evidence"]["position_holder"]
+    assert entry["source_kind"] == "reviewer_knowledge" and not entry.get("backfilled")

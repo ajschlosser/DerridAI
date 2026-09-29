@@ -132,9 +132,16 @@ def _public_job(summary: dict[str, Any]) -> dict[str, Any]:
 
 
 def _default_managers() -> tuple[Any, ...]:
-    from ..services import capture_jobs, llm_jobs, llm_tool_jobs, rag_jobs, upsert_jobs
+    from ..services import (
+    capture_jobs,
+    document_nlp_pack_jobs,
+    llm_jobs,
+    llm_tool_jobs,
+    rag_jobs,
+    upsert_jobs,
+)
 
-    return (llm_jobs, llm_tool_jobs, rag_jobs, upsert_jobs, capture_jobs)
+    return (llm_jobs, llm_tool_jobs, rag_jobs, upsert_jobs, capture_jobs, document_nlp_pack_jobs)
 
 
 class RealtimeObserver:

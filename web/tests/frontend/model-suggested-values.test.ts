@@ -71,6 +71,47 @@ describe("model-suggested values", () => {
     ]);
   });
 
+  it("preselects the model's enum suggestion instead of leaving the select on its placeholder", () => {
+    const wrapper = mount(CorpusMetadataFieldEditor, {
+      props: {
+        field: "stance",
+        value: "",
+        control: "enum",
+        options: stance,
+        open: true,
+        status: {
+          status: "model_inferred",
+          method: "llm",
+          confidence: 0.4,
+          llm_value: "Criticize",
+        },
+      },
+    });
+    expect((wrapper.get("select").element as HTMLSelectElement).value).toBe("criticize");
+  });
+
+  it("selects a value whose options arrive after the field is mounted", async () => {
+    const wrapper = mount(CorpusMetadataFieldEditor, {
+      props: { field: "stance", value: "Question", control: "enum", options: [], open: true },
+    });
+    await wrapper.setProps({ options: stance });
+    expect((wrapper.get("select").element as HTMLSelectElement).value).toBe("question");
+  });
+
+  it("does not preselect a sealed blind-review suggestion", () => {
+    const wrapper = mount(CorpusMetadataFieldEditor, {
+      props: {
+        field: "stance",
+        value: "",
+        control: "enum",
+        options: stance,
+        open: true,
+        status: { method: "llm", blind: true, llm_value: "criticize" },
+      },
+    });
+    expect((wrapper.get("select").element as HTMLSelectElement).value).toBe("");
+  });
+
   it("keeps a plain list when the model proposed nothing", () => {
     const wrapper = mount(CorpusMetadataFieldEditor, {
       props: { field: "stance", value: "", control: "enum", options: stance, open: true },

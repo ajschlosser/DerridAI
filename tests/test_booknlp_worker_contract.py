@@ -140,3 +140,39 @@ def test_booknlp_model_digest_mismatch_is_reported(monkeypatch, tmp_path):
     assert manifest["coref_model_path"]["verified"] is False
     assert manifest["quote_attribution_model_path"]["expected_sha256"] is None
     assert worker._digest_mismatches() == ["coref_model_path"]
+
+
+def test_worker_loads_the_installed_language_pack_and_its_pinned_digests(monkeypatch, tmp_path):
+    for name in ("ENTITY", "COREF", "QUOTE"):
+        monkeypatch.delenv(f"BOOKNLP_{name}_MODEL", raising=False)
+        monkeypatch.delenv(f"BOOKNLP_{name}_SHA256", raising=False)
+    monkeypatch.setenv("BOOKNLP_MODELS_DIR", str(tmp_path))
+    pack = tmp_path / "en" / "booknlp-en-small"
+    pack.mkdir(parents=True)
+    digests = {}
+    for role in ("entity", "coref", "quote"):
+        (pack / f"{role}.model").write_bytes(role.encode())
+        digests[role] = hashlib.sha256(role.encode()).hexdigest()
+    digests["quote"] = "0" * 64  # the worker re-verifies rather than trusting the manifest
+    (tmp_path / "en" / "active.json").write_text(json.dumps({
+        "pack_id": "booknlp-en-small", "language": "en", "engine": "booknlp",
+        "files": {role: f"booknlp-en-small/{role}.model" for role in ("entity", "coref", "quote")},
+        "sha256": digests,
+    }))
+    worker = _worker_module()
+
+    assert worker._missing_models() == []
+    assert worker._paths()["coref_model_path"] == str((pack / "coref.model").resolve())
+    assert worker._digest_mismatches() == ["quote_attribution_model_path"]
+
+
+def test_worker_ignores_pack_paths_that_escape_the_models_directory(monkeypatch, tmp_path):
+    for name in ("ENTITY", "COREF", "QUOTE"):
+        monkeypatch.delenv(f"BOOKNLP_{name}_MODEL", raising=False)
+    monkeypatch.setenv("BOOKNLP_MODELS_DIR", str(tmp_path / "models"))
+    (tmp_path / "secret.model").write_bytes(b"x")
+    (tmp_path / "models" / "en").mkdir(parents=True)
+    (tmp_path / "models" / "en" / "active.json").write_text(json.dumps({
+        "engine": "booknlp", "files": {"entity": "../../secret.model"}, "sha256": {},
+    }))
+    assert _worker_module()._paths()["entity_model_path"] == ""

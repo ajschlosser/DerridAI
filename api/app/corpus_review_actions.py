@@ -1037,6 +1037,9 @@ class ReviewActionsMixin:
         """Settle disputes and adjudication memory for decisions that are already persisted."""
         current_record = self.repo.get_record(build_id, record_id)
         previous_record = json.loads(json.dumps(current_record))
+        warnings: list[str] = []
+        if decision == "value":
+            warnings.extend(self._cascade_evidence_for_accepted(build_id, current_record, decisions))
         disputes = current_record.get("metadata_disputes") if isinstance(current_record.get("metadata_disputes"), list) else []
         for dispute in disputes:
             name = dispute.get("field") if isinstance(dispute, dict) else None
@@ -1056,7 +1059,6 @@ class ReviewActionsMixin:
         # Adjudication memory is derived, best-effort suggestion state. It is written
         # only after the authoritative record is saved; a failure is reported rather
         # than raised so it can never make a saved decision look unsaved.
-        warnings: list[str] = []
         schema = self._schema_for(build_id)
         for name, value in decisions.items():
             try:
@@ -1115,6 +1117,80 @@ class ReviewActionsMixin:
         unit_ids = target.get("source_unit_ids") or target.get("source_block_ids") or []
         return value, [blocks_by_id[b] for b in map(str, unit_ids) if b in blocks_by_id]
 
+    def _evidence_field_metadata(self, build_id: str, field: str) -> dict[str, Any]:
+        schema = self._schema_for(build_id)
+        field_spec = schema.by_name().get(field)
+        if field_spec is not None:
+            field_metadata: dict[str, Any] = field_spec.model_dump(mode="json")
+            field_metadata["group_label"] = schema.group(field_spec.group).label
+            return field_metadata
+        # Core/fixed fields do not have SchemaField rows; their owning group
+        # still supplies schema-authored context without field-name rules.
+        field_group = next(
+            (group for group, names in schema.family_fields().items() if field in names),
+            "",
+        )
+        return {
+            "name": field,
+            "group_label": schema.group(field_group).label if field_group else "",
+            "instruction": schema.group(field_group).intro if field_group else "",
+        }
+
+    def _evidence_document_id(self, build_id: str, record: dict[str, Any]) -> str:
+        return str(
+            record.get("source_document_id")
+            or record.get("source_asset_id")
+            or self.repo.get_build(build_id).get("asset_id")
+            or ""
+        )
+
+    def _cascade_evidence_for_accepted(
+        self, build_id: str, record: dict[str, Any], fields: Any
+    ) -> list[str]:
+        """Run the evidence cascade, without its LLM stage, for accepted values nothing has bound yet.
+
+        A reviewer can accept a value the enrichment cascade never looked at (a hint, a
+        dropdown suggestion, a typed value). The result stays advisory exactly as it
+        would during enrichment (``backfilled``, no confidence): it points the reviewer
+        at supporting spans but never counts as reviewed evidence. Returns warnings.
+        """
+        from .evidence_suggestions import suggest_evidence_cascade
+        from .source_embeddings import SourceEmbeddingProjection
+
+        evidence = record.get("metadata_evidence") if isinstance(record.get("metadata_evidence"), dict) else {}
+        pending = [
+            name for name in fields
+            if (assertion := current_assertion_by_name(record, name)) is not None
+            and assertion.value not in (None, "", [])
+            and not evidence.get(name)
+        ]
+        if not pending:
+            return []
+        blocks_by_id = self._blocks_for(build_id)
+        unit_ids = record.get("source_unit_ids") or record.get("source_block_ids") or []
+        blocks = [blocks_by_id[b] for b in map(str, unit_ids) if b in blocks_by_id]
+        if not blocks:
+            return []
+        projection = SourceEmbeddingProjection(self._progressive_metadata_index.store)
+        source_document_id = self._evidence_document_id(build_id, record)
+        warnings: list[str] = []
+        for name in pending:
+            assertion = current_assertion_by_name(record, name)
+            try:
+                entry = suggest_evidence_cascade(
+                    assertion.value, blocks, field=name,
+                    field_metadata=self._evidence_field_metadata(build_id, name),
+                    source_document_id=source_document_id, projection=projection,
+                    llm_choice=None,
+                )
+            except Exception as exc:  # noqa: BLE001 - advisory evidence must not fail a saved decision
+                warnings.append(f"Evidence cascade did not run for {name}: {exc}")
+                continue
+            if entry:
+                replace_assertion_evidence(record, assertion, [entry], reason=entry["reason"])
+        project_record_assertions(record)
+        return warnings
+
     def suggest_evidence(self, build_id: str, record_id: str, field: str, limit: int = 5) -> list[dict[str, Any]]:
         """Advisory, read-only ranking of the record's source blocks for a field's current value."""
         return self.suggest_evidence_result(build_id, record_id, field, limit=limit)["items"]
@@ -1128,35 +1204,12 @@ class ReviewActionsMixin:
 
         value, blocks = self._evidence_candidates(build_id, record_id, field)
         record = self.repo.get_record(build_id, record_id)
-        schema = self._schema_for(build_id)
-        field_spec = schema.by_name().get(field)
-        if field_spec is not None:
-            field_metadata: Any = field_spec.model_dump(mode="json")
-            field_metadata["group_label"] = schema.group(field_spec.group).label
-        else:
-            # Core/fixed fields do not have SchemaField rows; their owning group
-            # still supplies schema-authored context without field-name rules.
-            field_group = next(
-                (group for group, names in schema.family_fields().items() if field in names),
-                "",
-            )
-            field_metadata = {
-                "name": field,
-                "group_label": schema.group(field_group).label if field_group else "",
-                "instruction": schema.group(field_group).intro if field_group else "",
-            }
-        source_document_id = str(
-            record.get("source_document_id")
-            or record.get("source_asset_id")
-            or self.repo.get_build(build_id).get("asset_id")
-            or ""
-        )
         projection = SourceEmbeddingProjection(self._progressive_metadata_index.store)
         items, status = suggest_evidence_blocks_semantic(
             value,
             blocks,
-            field_metadata=field_metadata,
-            source_document_id=source_document_id,
+            field_metadata=self._evidence_field_metadata(build_id, field),
+            source_document_id=self._evidence_document_id(build_id, record),
             projection=projection,
             limit=limit,
         )

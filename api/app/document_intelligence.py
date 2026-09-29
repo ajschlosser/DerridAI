@@ -98,6 +98,38 @@ def document_text_for_records(
     return "".join(pieces), spans
 
 
+# spaCy covers every language (with a multilingual fallback); BookNLP only enhances
+# English when its optional worker is configured, so Automatic is the default.
+DEFAULT_DOCUMENT_NLP_PROVIDER = "auto"
+
+
+def booknlp_url_for(code: str) -> str:
+    """The BookNLP-contract worker configured for a language, or ``""`` when there is none.
+
+    Each language routes to its own worker (``DOCUMENT_NLP_BASE_URL_FR`` and so on), so a
+    French or German literary pipeline can serve the same normalized contract. The generic
+    ``DOCUMENT_NLP_BASE_URL`` serves only the languages listed in ``DOCUMENT_NLP_LANGUAGES``
+    (default ``en``, which is all upstream BookNLP models cover).
+    """
+    code = str(code or "").strip().lower()
+    if not code:
+        return ""
+    specific = str(os.environ.get(f"DOCUMENT_NLP_BASE_URL_{code.upper()}") or "").strip()
+    if specific:
+        return specific
+    languages = {
+        item.strip().lower()
+        for item in str(os.environ.get("DOCUMENT_NLP_LANGUAGES") or "en").split(",")
+        if item.strip()
+    }
+    # A BookNLP pack an administrator installed for a language is served by the generic worker.
+    from .document_nlp_packs import installed_languages
+
+    languages |= installed_languages("booknlp")
+    generic = str(os.environ.get("DOCUMENT_NLP_BASE_URL") or "").strip()
+    return generic if code in languages else ""
+
+
 def _call_booknlp(
     text: str,
     *,
@@ -309,7 +341,7 @@ def analyze_document(
 ) -> dict[str, Any]:
     """Run the selected whole-document analyzer and return normalized annotations."""
     profile = str(request.get("document_intelligence_profile") or "scholarly")
-    selected_provider = str(request.get("document_nlp_provider") or "auto")
+    selected_provider = str(request.get("document_nlp_provider") or DEFAULT_DOCUMENT_NLP_PROVIDER)
     include_events = bool(request.get("document_nlp_include_events"))
     text, record_spans = document_text_for_records(records)
     run: dict[str, Any] = {
@@ -343,17 +375,30 @@ def analyze_document(
     code = language_code(language)
     # Provider endpoints are administrator/runtime configuration, not build-request
     # input. This avoids turning corpus requests into arbitrary server-side fetches.
-    booknlp_url = str(os.environ.get("DOCUMENT_NLP_BASE_URL") or "").strip()
-    should_try_booknlp = (
-        selected_provider in {"auto", "booknlp"}
-        and code == "en"
-        and bool(booknlp_url)
-    )
+    # Route on the language tag itself: a worker may serve a language no local
+    # spaCy model covers (``language_code`` only knows the installed ones).
+    tag = str(language or "").strip().lower().replace("_", "-").split("-")[0]
+    route_code = code or (tag if re.fullmatch(r"[a-z]{2,3}", tag) else "")
+    booknlp_url = booknlp_url_for(route_code)
+    should_try_booknlp = selected_provider in {"auto", "booknlp"} and bool(booknlp_url)
+    if selected_provider == "booknlp" and not should_try_booknlp:
+        # An explicit BookNLP request must not silently become a spaCy run: the
+        # reviewer asked for coreference/quotation attribution spaCy cannot give.
+        any_worker = bool(str(os.environ.get("DOCUMENT_NLP_BASE_URL") or "").strip())
+        reason = "language_unsupported" if any_worker else "provider_not_configured"
+        run.update(status="unavailable", provider="booknlp", reason=reason)
+        run["warnings"].append(
+            f"No BookNLP worker is configured for language '{route_code or 'unknown'}'"
+            f" (set DOCUMENT_NLP_BASE_URL_{(route_code or 'XX').upper()} to a worker for it)."
+            if any_worker
+            else "BookNLP was requested but DOCUMENT_NLP_BASE_URL is not configured on the API."
+        )
+        return run
     if should_try_booknlp:
         try:
             provider_result = _call_booknlp(
                 text,
-                language=code,
+                language=route_code,
                 source_document_id=source_document_id,
                 profile=profile,
                 include_events=include_events,

@@ -106,6 +106,9 @@ services:
       RAG_CROSS_ENCODER_MODEL: ${RAG_CROSS_ENCODER_MODEL:-cross-encoder/ms-marco-MiniLM-L-6-v2}
       RAG_MODEL_CACHE: ${RAG_MODEL_CACHE:-/data/models}
       DOCUMENT_NLP_BASE_URL: ${DOCUMENT_NLP_BASE_URL:-}
+      DOCUMENT_NLP_LANGUAGES: ${DOCUMENT_NLP_LANGUAGES:-en}
+      DOCUMENT_NLP_BASE_URL_FR: ${DOCUMENT_NLP_BASE_URL_FR:-}
+      DOCUMENT_NLP_BASE_URL_DE: ${DOCUMENT_NLP_BASE_URL_DE:-}
       DOCUMENT_NLP_TIMEOUT_SECONDS: ${DOCUMENT_NLP_TIMEOUT_SECONDS:-900}
     volumes:
       - ./data:/data
@@ -123,15 +126,17 @@ services:
       start_period: 20s
     restart: unless-stopped
 
-  # Optional whole-document BookNLP analyzer.  Model artifacts are mounted
-  # read-only and must be supplied explicitly; the worker never downloads weights
-  # at runtime. Enable with --profile document-nlp and set
-  # DOCUMENT_NLP_BASE_URL=http://document-nlp:8090 on the API process.
+  # Optional English-only BookNLP enhancement (spaCy in the API covers every
+  # language).  Enable with --profile document-nlp and set
+  # DOCUMENT_NLP_BASE_URL=http://document-nlp:8090 on the API.  Models come from
+  # an administrator-installed language pack (Settings -> System) or explicit
+  # BOOKNLP_* paths; the worker never downloads weights itself.
   document-nlp:
     build:
       context: ./booknlp-worker
     profiles: ["document-nlp"]
     environment:
+      BOOKNLP_LANGUAGE: ${BOOKNLP_LANGUAGE:-en}
       BOOKNLP_ENTITY_MODEL: ${BOOKNLP_ENTITY_MODEL:-}
       BOOKNLP_COREF_MODEL: ${BOOKNLP_COREF_MODEL:-}
       BOOKNLP_QUOTE_MODEL: ${BOOKNLP_QUOTE_MODEL:-}

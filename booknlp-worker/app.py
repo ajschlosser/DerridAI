@@ -37,14 +37,50 @@ class AnalyzeRequest(BaseModel):
     include_events: bool = False
 
 
+def _worker_language() -> str:
+    """The one language this worker's approved model artifacts cover (upstream BookNLP: ``en``)."""
+    return str(os.environ.get("BOOKNLP_LANGUAGE") or "en").strip().lower()
+
+
+_PACK_ROLES = {"entity_model_path": "entity", "coref_model_path": "coref", "quote_attribution_model_path": "quote"}
+
+
+def _installed_pack() -> dict[str, Any]:
+    """The administrator-installed pack for this worker's language (read-only mount), if any.
+
+    DerridAI's API writes ``<models>/<lang>/active.json`` only after every artifact
+    downloaded and matched its pinned SHA-256; the worker still re-verifies below.
+    """
+    root = Path(os.environ.get("BOOKNLP_MODELS_DIR") or "/models/booknlp")
+    try:
+        manifest = json.loads((root / _worker_language() / "active.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(manifest, dict) or manifest.get("engine") != "booknlp":
+        return {}
+    base = (root / _worker_language()).resolve()
+    files = {}
+    for role, relative in (manifest.get("files") or {}).items():
+        path = (base / str(relative)).resolve()
+        if path.is_relative_to(base):
+            files[role] = str(path)
+    return {**manifest, "files": files}
+
+
 def _paths(include_events: bool = False) -> dict[str, str]:
     # BookNLP's event head is part of the entity tagger model; it does not use a
     # separate event-model artifact. Keep one artifact contract for both modes.
+    # Explicit BOOKNLP_*_MODEL paths win; otherwise use the installed language pack.
     _ = include_events
+    pack = _installed_pack().get("files") or {}
+    env = {
+        "entity_model_path": "BOOKNLP_ENTITY_MODEL",
+        "coref_model_path": "BOOKNLP_COREF_MODEL",
+        "quote_attribution_model_path": "BOOKNLP_QUOTE_MODEL",
+    }
     return {
-        "entity_model_path": os.environ.get("BOOKNLP_ENTITY_MODEL", ""),
-        "coref_model_path": os.environ.get("BOOKNLP_COREF_MODEL", ""),
-        "quote_attribution_model_path": os.environ.get("BOOKNLP_QUOTE_MODEL", ""),
+        key: os.environ.get(name, "") or pack.get(_PACK_ROLES[key], "")
+        for key, name in env.items()
     }
 
 
@@ -62,7 +98,10 @@ def _expected_digest(role: str) -> str:
         "coref_model_path": "BOOKNLP_COREF_SHA256",
         "quote_attribution_model_path": "BOOKNLP_QUOTE_SHA256",
     }
-    return str(os.environ.get(env_by_role.get(role, ""), "") or "").strip().lower()
+    explicit = str(os.environ.get(env_by_role.get(role, ""), "") or "").strip().lower()
+    if explicit or os.environ.get(env_by_role[role].replace("_SHA256", "_MODEL")):
+        return explicit
+    return str((_installed_pack().get("sha256") or {}).get(_PACK_ROLES.get(role, ""), "")).strip().lower()
 
 
 def _file_sha256(path: Path) -> str:
@@ -73,10 +112,20 @@ def _file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-@lru_cache(maxsize=1)
 def _artifact_manifest() -> list[dict[str, Any]]:
+    # Hashing large models is slow; cache per resolved path set so a newly
+    # installed pack is picked up without restarting the worker.
+    return _artifact_manifest_for(tuple(sorted(_paths().items())), tuple(sorted(
+        (role, _expected_digest(role)) for role in _PACK_ROLES
+    )))
+
+
+@lru_cache(maxsize=4)
+def _artifact_manifest_for(
+    paths: tuple[tuple[str, str], ...], _expected: tuple[tuple[str, str], ...]
+) -> list[dict[str, Any]]:
     artifacts: list[dict[str, Any]] = []
-    for role, value in _paths().items():
+    for role, value in paths:
         path = Path(value)
         if not value or not path.is_file():
             continue
@@ -106,7 +155,9 @@ def _digest_mismatches(
 
 
 def _pipeline(include_events: bool) -> Any:
-    key = "entity,quote,coref,event" if include_events else "entity,quote,coref"
+    pipeline = "entity,quote,coref,event" if include_events else "entity,quote,coref"
+    # Keyed by the resolved artifacts too, so installing another pack reloads the models.
+    key = pipeline + "|" + "|".join(sorted(_paths(include_events).values()))
     if key in _models:
         return _models[key]
     missing = _missing_models(include_events)
@@ -123,13 +174,17 @@ def _pipeline(include_events: bool) -> Any:
         from booknlp.booknlp import BookNLP
 
         params: dict[str, Any] = {
-            "pipeline": key,
+            "pipeline": pipeline,
             "model": "custom",
             "spacy_model": os.environ.get("BOOKNLP_SPACY_MODEL", "en_core_web_sm"),
             "pronominalCorefOnly": True,
             **_paths(include_events),
         }
-        _models[key] = BookNLP("en", params)
+        # Drop pipelines built from a previous pack; model sets are hundreds of MB each.
+        artifacts = key.split("|", 1)[1]
+        for stale in [name for name in _models if name.split("|", 1)[1] != artifacts]:
+            del _models[stale]
+        _models[key] = BookNLP(_worker_language(), params)
         return _models[key]
 
 
@@ -318,6 +373,7 @@ def health() -> dict[str, Any]:
     return {
         "ready": not missing and not mismatches,
         "provider": "booknlp",
+        "language": _worker_language(),
         "version": importlib.metadata.version("booknlp"),
         "missing_model_artifacts": missing,
         "digest_mismatches": mismatches,
@@ -328,8 +384,11 @@ def health() -> dict[str, Any]:
 
 @app.post("/analyze")
 def analyze(body: AnalyzeRequest) -> dict[str, Any]:
-    if body.language.lower().split("-", 1)[0] != "en":
-        raise HTTPException(status_code=422, detail="This BookNLP worker supports English only.")
+    if body.language.lower().split("-", 1)[0] != _worker_language():
+        raise HTTPException(
+            status_code=422,
+            detail=f"This BookNLP worker supports '{_worker_language()}' only.",
+        )
     try:
         pipeline = _pipeline(body.include_events)
     except Exception as exc:

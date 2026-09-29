@@ -17,6 +17,7 @@ from fastapi import (
     Response,
     UploadFile,
 )
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse
 
 from ..celf_queries import document_intelligence_reads as intelligence_reads
@@ -163,7 +164,10 @@ async def create_pdf_asset(
                 )
             chunks.append(chunk)
         data = b"".join(chunks)
-        return pdf_corpus_repository.save_asset(
+        # Extraction, OCR and page-number detection are blocking and can take minutes;
+        # running them on the event loop would stall every other API request meanwhile.
+        return await run_in_threadpool(
+            pdf_corpus_repository.save_asset,
             data,
             filename=file.filename or "source.pdf",
             ocr_mode=ocr_mode,

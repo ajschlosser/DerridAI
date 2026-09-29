@@ -34,9 +34,23 @@ export function groupOptionsBySuggestion(
   options: string[],
   suggested: string[],
 ): { suggested: string[]; others: string[] } {
-  const wanted = new Set(suggested);
+  const wanted = new Set(suggested.map(optionKey));
   return {
-    suggested: options.filter((option) => wanted.has(option)),
-    others: options.filter((option) => !wanted.has(option)),
+    suggested: options.filter((option) => wanted.has(optionKey(option))),
+    others: options.filter((option) => !wanted.has(optionKey(option))),
   };
+}
+
+/** Case/separator-insensitive identity, so a model's "Close Reading" still names the option `close_reading`. */
+const optionKey = (value: string) =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, "_");
+
+/** The closed-vocabulary option a value names, or `undefined` when it names none. */
+export function matchOption(options: string[], value: string): string | undefined {
+  if (!value.trim()) return undefined;
+  const key = optionKey(value);
+  return options.find((option) => option === value) ?? options.find((o) => optionKey(o) === key);
 }

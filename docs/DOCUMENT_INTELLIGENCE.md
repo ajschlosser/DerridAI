@@ -41,13 +41,13 @@ Record split/merge operations do not make a provider result authoritative. A rer
 
 `api/app/document_intelligence.py` owns the provider-neutral contract. Provider-native output is normalized before the Corpus Builder or metadata prompts can use it.
 
-### spaCy fallback
+### spaCy (universal baseline)
 
-The existing local spaCy pipelines remain the graceful fallback. The fallback provides whole-document named-entity observations and conservative surface-form clusters. It does **not** pretend to provide BookNLP-style pronominal coreference or quotation attribution.
+spaCy runs inside the API for every language and is what **Automatic** (the default) uses unless BookNLP is set up for an English document. It provides whole-document named-entity observations and conservative surface-form clusters. A language resolves to, in order: a configured/installed package (`SPACY_MODEL_<LANG>`; English, French and German `lg` models ship in the image), an administrator-installed spaCy language pack, then the multilingual `xx_ent_wiki_sm` entity model. The reported model name says which was used, including `(multilingual fallback)`; with none available the analysis is `unavailable`, never silently empty. It does **not** pretend to provide BookNLP-style pronominal coreference or quotation attribution.
 
 ### BookNLP
 
-BookNLP runs in the optional `document-nlp` Compose service, isolated from the main API Python environment. The worker normalizes:
+BookNLP is an optional **English-only** enhancement (BookNLP 1.0.8 accepts no other language) that adds pronominal coreference and quotation-speaker attribution. It runs in the optional `document-nlp` Compose service, isolated from the main API Python environment. The worker normalizes:
 
 - entity mentions and BookNLP coreference IDs;
 - aliases / canonical display names;
@@ -57,7 +57,7 @@ BookNLP runs in the optional `document-nlp` Compose service, isolated from the m
 
 The main API never imports BookNLP.
 
-The worker is intentionally configured with `model="custom"`. Runtime model downloads are forbidden. Approved model artifacts must already exist and are mounted read-only.
+The worker is intentionally configured with `model="custom"` and never downloads models itself. Approved model artifacts are mounted read-only; they come either from an installed language pack (below) or from explicit `BOOKNLP_*` paths.
 
 Required environment variables for BookNLP are:
 
@@ -86,16 +86,45 @@ DOCUMENT_NLP_TIMEOUT_SECONDS=900
 
 The paths supplied in the `BOOKNLP_*` variables must point to files visible inside the worker (normally below `/models/booknlp`). The host directory `./data/models/booknlp` is mounted read-only at that location.
 
-To enable the service:
+To enable it:
 
 ```bash
 DOCUMENT_NLP_BASE_URL=http://document-nlp:8090 \
 docker compose --profile document-nlp up -d --build
 ```
 
-If the service or an approved model artifact is unavailable, an **Auto** build falls back to the installed spaCy provider and records a warning. A build explicitly configured for **BookNLP only** reports Document Intelligence as unavailable but continues the corpus build rather than converting provider failure into scholarly state.
+**Automatic** (the default) uses BookNLP only for a language with a configured worker and otherwise spaCy, without a warning; if a configured worker fails it falls back to spaCy with a warning. **spaCy only** skips BookNLP. **BookNLP only** never falls back: when no ready worker serves the document's language, Document Intelligence is recorded as unavailable with the reason (`provider_not_configured`, `language_unsupported` or `provider_unavailable`), and the corpus build continues.
 
-The current BookNLP worker is English-only. Other languages continue through the provider-neutral fallback path. A future French or multilingual analyzer should implement the same normalized output contract rather than introduce BookNLP-specific fields into Records.
+### Language packs
+
+Administrators install models on demand under **Settings → System → Language packs**. Each install is a cancellable background job that downloads the pack's files over HTTPS, refuses a redirect off HTTPS, stops at the declared size, and checks every SHA-256 before anything becomes active. Files are staged, then swapped in with `<models>/<lang>/active.json`; a failed or cancelled install leaves the previous pack untouched. The worker reads that manifest from its read-only mount (`/models/booknlp`), re-verifies the digests, and reloads when a different pack is installed. Explicit `BOOKNLP_*_MODEL` paths still take precedence.
+
+The built-in catalog (`api/app/document_nlp_packs.py`):
+
+| Pack                                                                                                                                    | Language     | Engine        | Download  | Installable    |
+| --------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------------- | --------- | -------------- |
+| spaCy `md` / `lg` models (24 languages: ca, da, de, el, en, es, fi, fr, hr, it, ja, ko, lt, mk, nb, nl, pl, pt, ro, ru, sl, sv, uk, zh) | per language | spaCy 3.8     | 33–603 MB | yes            |
+| spaCy multilingual entities (`xx_ent_wiki_sm`)                                                                                          | any          | spaCy 3.8     | ~11 MB    | yes            |
+| BookNLP English, big models                                                                                                             | en           | BookNLP 1.0.8 | ~1.2 GB   | yes            |
+| BookNLP English, small models                                                                                                           | en           | BookNLP 1.0.8 | ~160 MB   | yes            |
+| Propp (NER + coreference)                                                                                                               | fr           | `propp_fr`    | ~167 MB   | reference only |
+| LLpro                                                                                                                                   | de           | LLpro         | —         | reference only |
+
+spaCy packs install the official 3.8.0 wheels from `explosion/spacy-models`; their SHA-256 digests (not published upstream) were computed from those wheels and live in `api/app/document_nlp_spacy_packs.json`. Only the wheel's model data directory is extracted (bounded size, no path escapes, no Python files) and loaded with `spacy.load(<directory>)`; the package code is never imported. Japanese and Chinese packs need Sudachi and pkuseg, which the API image installs; a pack whose Python requirements are missing is shown as not installable. Russian and Ukrainian packs declare pymorphy3 only for the lemmatizer DerridAI never loads. BookNLP digests were computed from the published artifacts; Propp's are pinned to a Hugging Face revision's LFS metadata. Reference-only entries need a worker for their engine that implements the `/analyze` contract, which DerridAI does not bundle yet. Model files are pickled PyTorch/Python objects, so loading one executes code: install only packs whose source you trust.
+
+Administrators can add catalog entries as JSON (pack ID, ISO 639 language, engine, label, source, license, and `entity`/`coref`/`quote` files with HTTPS URL, SHA-256 and size). Custom entries are stored in `<models>/catalog.custom.json`. An installed BookNLP pack routes its language to the generic worker, but upstream BookNLP only runs English; a pack for another language needs a worker for it (`DOCUMENT_NLP_BASE_URL_<LANG>`).
+
+### Languages
+
+Upstream BookNLP models are English-only, so the bundled worker defaults to `BOOKNLP_LANGUAGE=en`. Languages are routed per worker rather than assumed:
+
+```text
+DOCUMENT_NLP_BASE_URL        # generic worker
+DOCUMENT_NLP_LANGUAGES=en    # languages the generic worker serves
+DOCUMENT_NLP_BASE_URL_FR     # a worker for French (likewise _DE, _ES, ...)
+```
+
+A language-specific URL wins over the generic one. Any worker for another language must implement the same `/analyze` request and normalized response contract (entities, coreference clusters, quotations, characters, model provenance) and must be backed by approved, mounted artifacts for that language; set `BOOKNLP_LANGUAGE` on the bundled worker only when its artifacts and BookNLP runtime actually support that language. Without a configured worker, that language's analysis is unavailable under **BookNLP** and uses spaCy under **Auto**. Provider-specific fields never enter Records.
 
 ## Build profiles
 
@@ -108,7 +137,7 @@ Corpus Builder exposes four Document Intelligence profiles:
 | General                 | General entity and quotation analysis without a genre-specific interpretation                           |
 | Off                     | Skip whole-document analysis                                                                            |
 
-Provider selection is independent: **Auto**, **local spaCy fallback**, or **BookNLP only**.
+Provider selection is independent: **BookNLP** (default, no fallback), **Auto**, or **local spaCy**.
 
 BookNLP event annotations are opt-in and experimental. BookNLP's event head is supplied by the same approved entity-tagger artifact, so no separate event-model file is required. Events are not enabled merely because the Fiction profile is selected.
 
@@ -310,4 +339,4 @@ Tests and future implementations must preserve these rules:
 7. Semantic edge authority cannot exceed the weakest unresolved/disputed support aggregated into that edge.
 8. Canonical publication JSONL excludes `nlp_candidates` and `document_intelligence`.
 9. Missing BookNLP is non-fatal to Corpus Builder.
-10. Runtime BookNLP model downloads remain disabled.
+10. The worker and corpus builds never download models; only an administrator's language-pack install does, and only pinned, digest-verified files become active.
