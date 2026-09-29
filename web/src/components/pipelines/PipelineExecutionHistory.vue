@@ -3,10 +3,7 @@
 import { computed } from "vue";
 import AppIcon from "../AppIcon.vue";
 import PipelineRunTracePanel from "./PipelineRunTracePanel.vue";
-import {
-  formatPipelineDate,
-  pipelineRunStatusLabel,
-} from "../../domain/pipelinePresentation";
+import { formatPipelineDate, pipelineRunStatusLabel } from "../../domain/pipelinePresentation";
 import { useI18nStore } from "../../stores/i18n";
 import type { PipelineRunTrace } from "../../types/pipelines";
 
@@ -73,10 +70,7 @@ const selectedTrace = computed(
         <strong>{{ t("pipelines.no_runs", "No pipeline traces yet") }}</strong>
         <p>
           {{
-            t(
-              "pipelines.no_runs_help",
-              "New Research runs will appear here once they complete.",
-            )
+            t("pipelines.no_runs_help", "New Research runs will appear here once they complete.")
           }}
         </p>
       </div>
