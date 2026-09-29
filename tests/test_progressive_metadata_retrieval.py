@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import sys
 import types
+from pathlib import Path
 
 import pytest
-from pathlib import Path
 
 if "chromadb" not in sys.modules:
     sys.modules["chromadb"] = types.SimpleNamespace()
