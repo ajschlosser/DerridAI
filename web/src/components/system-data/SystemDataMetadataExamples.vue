@@ -1,6 +1,7 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import AppIcon from "../AppIcon.vue";
 import {
   systemApi,
@@ -10,11 +11,13 @@ import {
 import { useI18nStore } from "../../stores/i18n";
 
 const i18n = useI18nStore();
+const route = useRoute();
+const router = useRouter();
 const page = ref<SystemMetadataExemplarPage>({
   exists: false,
   count: 0,
   limit: 25,
-  offset: 0,
+  offset: Math.max(0, Number(route.query.offset) || 0),
   rows: [],
   facets: { fields: [], kinds: [], languages: [], scopes: [], schemas: [] },
 });
@@ -22,12 +25,12 @@ const loading = ref(false);
 const error = ref("");
 const detail = ref<SystemMetadataExemplar | null>(null);
 const filters = ref({
-  field: "",
-  kind: "",
-  language: "",
-  scope_id: "",
-  schema_id: "",
-  record_id: "",
+  field: String(route.query.field || ""),
+  kind: String(route.query.kind || ""),
+  language: String(route.query.language || ""),
+  scope_id: String(route.query.build || ""),
+  schema_id: String(route.query.schema || ""),
+  record_id: String(route.query.record || ""),
 });
 
 const activeFilters = computed(() =>
@@ -40,7 +43,26 @@ function valueText(value: unknown) {
   if (value === null || value === undefined || value === "") return "—";
   return typeof value === "string" ? value : JSON.stringify(value);
 }
-async function load(offset = 0) {
+function syncRoute(offset: number, push = false) {
+  const target = {
+    name: "system-data-metadata",
+    query: {
+      ...route.query,
+      field: filters.value.field || undefined,
+      kind: filters.value.kind || undefined,
+      language: filters.value.language || undefined,
+      build: filters.value.scope_id || undefined,
+      schema: filters.value.schema_id || undefined,
+      record: filters.value.record_id || undefined,
+      offset: offset > 0 ? String(offset) : undefined,
+    },
+  };
+  if (push) void router.push(target);
+  else void router.replace(target);
+}
+
+async function load(offset = 0, updateRoute = true, push = false) {
+  if (updateRoute) syncRoute(offset, push);
   loading.value = true;
   error.value = "";
   try {
@@ -74,7 +96,35 @@ function clearAll() {
   filters.value = { field: "", kind: "", language: "", scope_id: "", schema_id: "", record_id: "" };
   void load(0);
 }
-onMounted(() => void load(0));
+watch(
+  () => [
+    route.query.field,
+    route.query.kind,
+    route.query.language,
+    route.query.build,
+    route.query.schema,
+    route.query.record,
+    route.query.offset,
+  ],
+  ([field, kind, language, build, schema, record, nextOffset]) => {
+    const next = {
+      field: String(field || ""),
+      kind: String(kind || ""),
+      language: String(language || ""),
+      scope_id: String(build || ""),
+      schema_id: String(schema || ""),
+      record_id: String(record || ""),
+    };
+    const offset = Math.max(0, Number(nextOffset) || 0);
+    if (JSON.stringify(next) === JSON.stringify(filters.value) && offset === page.value.offset)
+      return;
+    filters.value = next;
+    detail.value = null;
+    void load(offset, false);
+  },
+);
+
+onMounted(() => void load(Math.max(0, Number(route.query.offset) || 0), false));
 </script>
 
 <template>
@@ -228,7 +278,7 @@ onMounted(() => void load(0));
             class="btn tiny"
             type="button"
             :disabled="page.offset <= 0"
-            @click="load(Math.max(0, page.offset - page.limit))"
+            @click="load(Math.max(0, page.offset - page.limit), true, true)"
           >
             {{ t("common.previous", "Previous") }}
           </button>
@@ -236,7 +286,7 @@ onMounted(() => void load(0));
             class="btn tiny"
             type="button"
             :disabled="page.offset + page.rows.length >= page.count"
-            @click="load(page.offset + page.limit)"
+            @click="load(page.offset + page.limit, true, true)"
           >
             {{ t("common.next", "Next") }}
           </button>
