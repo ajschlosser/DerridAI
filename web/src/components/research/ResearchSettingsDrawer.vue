@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, watch } from "vue";
 import AppIcon from "../AppIcon.vue";
 import PipelineStageList from "../pipelines/PipelineStageList.vue";
+import UiTooltip from "../ui/UiTooltip.vue";
 import { useI18nStore } from "../../stores/i18n";
 import type {
   PipelineAssignment,
@@ -542,27 +543,27 @@ defineExpose({ open, close });
                 <p>{{ i18n.t("research.candidate_pool_help") }}</p>
                 <div class="research-settings-grid compact">
                   <label
-                    ><span><code>k</code>{{ i18n.t("research.k_label") }}</span
+                    ><span><code>k</code>{{ i18n.t("research.k_label") }} <UiTooltip :text="i18n.t('research.k_help')" /></span
                     ><input
                       v-model.number="draft.k"
                       class="control"
                       type="number"
                       min="1"
                       max="500"
-                    /><small>{{ i18n.t("research.k_help") }}</small></label
+                    /></label
                   >
                   <label
-                    ><span><code>fetch_k</code>{{ i18n.t("research.fetch_k_label") }}</span
+                    ><span><code>fetch_k</code>{{ i18n.t("research.fetch_k_label") }} <UiTooltip :text="i18n.t('help.glossary.fetch_k.definition')" /></span
                     ><input
                       v-model.number="draft.fetch_k"
                       class="control"
                       type="number"
                       min="1"
                       max="5000"
-                    /><small>{{ i18n.t("research.fetch_k_help") }}</small></label
+                    /></label
                   >
                   <label
-                    ><span><code>MMR λ</code>{{ i18n.t("research.lambda_label") }}</span
+                    ><span><code>MMR λ</code>{{ i18n.t("research.lambda_label") }} <UiTooltip :text="i18n.t('help.glossary.mmr_lambda.definition')" /></span
                     ><input
                       v-model.number="draft.lambda_mult"
                       class="control"
@@ -570,16 +571,16 @@ defineExpose({ open, close });
                       step="0.05"
                       min="0"
                       max="1"
-                    /><small>{{ i18n.t("research.lambda_help") }}</small></label
+                    /></label
                   >
                   <label
-                    ><span><code>RRF k</code>{{ i18n.t("research.rrf_label") }}</span
+                    ><span><code>RRF k</code>{{ i18n.t("research.rrf_label") }} <UiTooltip :text="i18n.t('help.glossary.rrf_k.definition')" /></span
                     ><input
                       v-model.number="draft.rrf_k"
                       class="control"
                       type="number"
                       min="1"
-                    /><small>{{ i18n.t("research.rrf_help") }}</small></label
+                    /></label
                   >
                 </div>
               </fieldset>
@@ -589,7 +590,7 @@ defineExpose({ open, close });
                 <p>{{ i18n.t("research.reranking_decomposition_help") }}</p>
                 <div class="research-settings-grid three">
                   <label
-                    ><span>{{ i18n.t("research.rerank_top_n") }}</span
+                    ><span>{{ i18n.t("research.rerank_top_n") }} <UiTooltip :text="i18n.t('help.glossary.rerank_top_n.definition')" /></span
                     ><input
                       v-model.number="draft.rerank_top_n"
                       class="control"
@@ -598,7 +599,7 @@ defineExpose({ open, close });
                       max="500"
                   /></label>
                   <label
-                    ><span>{{ i18n.t("research.reranker") }}</span
+                    ><span>{{ i18n.t("research.reranker") }} <UiTooltip :text="i18n.t('help.glossary.cross_encoder.definition')" /></span
                     ><select v-model="draft.reranker" class="control">
                       <option value="cross_encoder">{{ i18n.t("research.cross_encoder") }}</option>
                       <option value="lexical">{{ i18n.t("research.lexical_fallback") }}</option>
@@ -606,7 +607,7 @@ defineExpose({ open, close });
                     </select></label
                   >
                   <label
-                    ><span>{{ i18n.t("research.decomposition_tokens") }}</span
+                    ><span>{{ i18n.t("research.decomposition_tokens") }} <UiTooltip :text="i18n.t('help.glossary.query_decomposition.definition')" /></span
                     ><input
                       v-model.number="draft.query_decomposition_num_predict"
                       class="control"
@@ -701,14 +702,14 @@ defineExpose({ open, close });
                   >
                   <label class="research-toggle-setting"
                     ><input v-model="draft.use_prior_response_memory" type="checkbox" /><span
-                      ><b>{{ i18n.t("research.use_prior_response_memory") }}</b
-                      ><small>{{ i18n.t("research.use_prior_response_memory_help") }}</small></span
+                      ><b>{{ i18n.t("research.use_prior_response_memory") }} <UiTooltip :text="i18n.t('research.use_prior_response_memory_help')" /></b
+                      ><small>{{ i18n.t("research.use_prior_response_memory_summary") }}</small></span
                     ></label
                   >
                   <label class="research-toggle-setting"
                     ><input v-model="draft.use_prior_claim_memory" type="checkbox" /><span
-                      ><b>{{ i18n.t("research.use_prior_claim_memory") }}</b
-                      ><small>{{ i18n.t("research.use_prior_claim_memory_help") }}</small></span
+                      ><b>{{ i18n.t("research.use_prior_claim_memory") }} <UiTooltip :text="i18n.t('research.use_prior_claim_memory_help')" /></b
+                      ><small>{{ i18n.t("research.use_prior_claim_memory_summary") }}</small></span
                     ></label
                   >
                 </div>
@@ -719,12 +720,12 @@ defineExpose({ open, close });
                 class="research-settings-card wide research-prompt-metadata"
                 tabindex="-1"
               >
-                <legend>{{ i18n.t("research.prompt_metadata", "Prompt metadata") }}</legend>
+                <legend>{{ i18n.t("research.prompt_metadata", "Prompt metadata") }} <UiTooltip :text="i18n.t('research.prompt_metadata_help')" /></legend>
                 <p>
                   {{
                     i18n.t(
-                      "research.prompt_metadata_help",
-                      "Choose which scholarly metadata fields enter the generation prompt. Source identity, citations, record IDs, and evidence text stay in the deterministic evidence envelope.",
+                      "research.prompt_metadata_summary",
+                      "Choose which scholarly metadata fields the model sees; source identity and citation evidence remain separate.",
                     )
                   }}
                 </p>
@@ -885,7 +886,7 @@ defineExpose({ open, close });
                 </div>
                 <div class="research-settings-grid three">
                   <label
-                    ><span><code>num_ctx</code>{{ i18n.t("research.context_window") }}</span
+                    ><span><code>num_ctx</code>{{ i18n.t("research.context_window") }} <UiTooltip :text="i18n.t('help.glossary.context_window.definition')" /></span
                     ><input
                       v-model.number="generationDraft.num_ctx"
                       class="control"
@@ -893,7 +894,7 @@ defineExpose({ open, close });
                       min="512"
                   /></label>
                   <label
-                    ><span><code>num_predict</code>{{ i18n.t("research.max_output_tokens") }}</span
+                    ><span><code>num_predict</code>{{ i18n.t("research.max_output_tokens") }} <UiTooltip :text="i18n.t('providers.max_output_help')" /></span
                     ><input
                       v-model.number="generationDraft.num_predict"
                       class="control"
@@ -901,7 +902,7 @@ defineExpose({ open, close });
                       min="16"
                   /></label>
                   <label
-                    ><span>{{ i18n.t("research.thinking") }}</span
+                    ><span>{{ i18n.t("research.thinking") }} <UiTooltip :text="i18n.t('providers.think_help')" /></span
                     ><select v-model="generationDraft.think" class="control">
                       <option value="false">{{ i18n.t("research.off") }}</option>
                       <option value="true">{{ i18n.t("research.on") }}</option>
@@ -911,7 +912,7 @@ defineExpose({ open, close });
                     </select></label
                   >
                   <label
-                    ><span>{{ i18n.t("research.temperature") }}</span
+                    ><span>{{ i18n.t("research.temperature") }} <UiTooltip :text="i18n.t('help.glossary.temperature.definition')" /></span
                     ><input
                       v-model.number="generationDraft.temperature"
                       class="control"
@@ -921,7 +922,7 @@ defineExpose({ open, close });
                       max="2"
                   /></label>
                   <label
-                    ><span><code>top_p</code>{{ i18n.t("research.nucleus_sampling") }}</span
+                    ><span><code>top_p</code>{{ i18n.t("research.nucleus_sampling") }} <UiTooltip :text="i18n.t('help.glossary.top_p.definition')" /></span
                     ><input
                       v-model.number="generationDraft.top_p"
                       class="control"
@@ -931,7 +932,7 @@ defineExpose({ open, close });
                       max="1"
                   /></label>
                   <label
-                    ><span><code>top_k</code>{{ i18n.t("research.top_k_sampling") }}</span
+                    ><span><code>top_k</code>{{ i18n.t("research.top_k_sampling") }} <UiTooltip :text="i18n.t('providers.top_k_help')" /></span
                     ><input
                       v-model.number="generationDraft.top_k"
                       class="control"
@@ -957,17 +958,16 @@ defineExpose({ open, close });
                       step="0.01"
                   /></label>
                   <label
-                    ><span>{{ i18n.t("research.seed") }}</span
+                    ><span>{{ i18n.t("research.seed") }} <UiTooltip :text="i18n.t('help.glossary.seed.definition')" /></span
                     ><input v-model.number="generationDraft.seed" class="control" type="number"
                   /></label>
                   <label
-                    ><span><code>keep_alive</code>{{ i18n.t("research.keep_alive") }}</span
+                    ><span><code>keep_alive</code>{{ i18n.t("research.keep_alive") }} <UiTooltip :text="i18n.t('providers.keep_alive_help')" /></span
                     ><input v-model="generationDraft.keep_alive" class="control"
                   /></label>
                   <label class="wide"
-                    ><span>{{ i18n.t("research.provider_options") }}</span
-                    ><textarea v-model="extraOptions" spellcheck="false"></textarea
-                    ><small>{{ i18n.t("research.provider_options_help") }}</small></label
+                    ><span>{{ i18n.t("research.provider_options") }} <UiTooltip :text="i18n.t('providers.extra_options_help')" /></span
+                    ><textarea v-model="extraOptions" spellcheck="false"></textarea></label
                   >
                 </div>
               </div>
