@@ -92,7 +92,13 @@ async function loadPipelines() {
   }
 }
 function refresh() {
-  void Promise.allSettled([loadDatabases(), loadCache(), loadExemplars(), loadChroma(), loadPipelines()]);
+  void Promise.allSettled([
+    loadDatabases(),
+    loadCache(),
+    loadExemplars(),
+    loadChroma(),
+    loadPipelines(),
+  ]);
 }
 
 onMounted(refresh);
