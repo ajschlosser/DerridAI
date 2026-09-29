@@ -193,6 +193,14 @@ DEFAULT_STRATEGIES = [
         },
     ),
     StrategySpec(
+        strategy_id="fallback.metadata_precedents_lexical",
+        family="candidate_generation",
+        label="Metadata lexical fallback",
+        description="When semantic metadata-precedent retrieval is unavailable, use bounded deterministic word-overlap ranking while preserving schema scope, reviewed analogy conditions, correction policy, and packet limits.",
+        input_type="any",
+        output_type="context_packet",
+    ),
+    StrategySpec(
         strategy_id="filter.metadata_scope",
         family="filter",
         label="Metadata scope filter",
