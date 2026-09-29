@@ -205,7 +205,7 @@ export function createOperationDock(deps: Deps) {
     const handle = stack?.querySelector("[data-operation-drag]");
     if (!handle || handle.dataset.dragWired) return;
     handle.dataset.dragWired = "1";
-    const dragTooltip = document.querySelector<HTMLElement>("#operationDragHelp");
+    const dragTooltip = document.querySelector("#operationDragHelp") as HTMLElement | null;
     const showDragHelp = () => {
       if (!dragTooltip) return;
       dragTooltip.hidden = false;
