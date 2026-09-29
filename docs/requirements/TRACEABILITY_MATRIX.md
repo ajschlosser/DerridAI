@@ -8,8 +8,8 @@ This matrix is a navigation and verification index. The detailed document contai
 
 ## Coverage summary
 
-- Total requirements: **361**
-- Requirements with verification text that includes **Direct**: **256**
+- Total requirements: **366**
+- Requirements with verification text that includes **Direct**: **261**
 - Requirements explicitly containing a **Gap** marker: **11**
 - Requirements with **Architectural** verification: **12**
 
@@ -261,6 +261,11 @@ This matrix is a navigation and verification index. The detailed document contai
 | **PRD-PIPE-011** | Benchmarks MUST retain the exact compared pipeline definitions/hashes and relevant model/reranker identity. | [PIPELINES_AND_SYSTEM_DATA.md](PIPELINES_AND_SYSTEM_DATA.md) | PRD-G-014, PRD-G-034 | **Direct:** [pipeline benchmark](../../tests/test_pipeline_benchmark.py) (`test_benchmark_run_captures_exact_pipeline_and_reranker_identity`) |
 | **PRD-PIPE-012** | Benchmark UI MUST present descriptive measurements without declaring a scholarly-quality winner. | [PIPELINES_AND_SYSTEM_DATA.md](PIPELINES_AND_SYSTEM_DATA.md) | PRD-G-034 | **Direct/Partial:** [benchmark panel](../../web/tests/frontend/pipeline-benchmark-panel.test.ts); [System Data pipelines](../../web/tests/frontend/system-data-pipelines.test.ts) |
 | **PRD-PIPE-013** | Benchmark cases/runs MUST participate in validated backup/restore with referential integrity. | [PIPELINES_AND_SYSTEM_DATA.md](PIPELINES_AND_SYSTEM_DATA.md) | PRD-G-032 | **Direct:** [pipeline benchmark](../../tests/test_pipeline_benchmark.py) (`test_pipeline_store_persists_cases_runs_and_backup`) |
+| **PRD-PIPE-014** | Pipeline Studio SHOULD separate definition management, execution history, and operational tools into focused workspaces. | [PIPELINES_AND_SYSTEM_DATA.md](PIPELINES_AND_SYSTEM_DATA.md) | PRD-G-019, PRD-G-022, PRD-G-031 | **Direct:** [System Data pipelines](../../web/tests/frontend/system-data-pipelines.test.ts) |
+| **PRD-PIPE-015** | Saved pipeline definitions MUST be inspectable as a relational stage graph that distinguishes normal flow from fallback flow. | [PIPELINES_AND_SYSTEM_DATA.md](PIPELINES_AND_SYSTEM_DATA.md) | PRD-G-010, PRD-G-037 | **Direct:** [System Data pipelines](../../web/tests/frontend/system-data-pipelines.test.ts) |
+| **PRD-PIPE-016** | Administrators MUST be able to query, filter, and page through recorded pipeline execution history. | [PIPELINES_AND_SYSTEM_DATA.md](PIPELINES_AND_SYSTEM_DATA.md) | PRD-G-014, PRD-G-031 | **Direct:** [pipeline store](../../tests/test_pipeline_store.py); [System Data pipelines](../../web/tests/frontend/system-data-pipelines.test.ts) |
+| **PRD-PIPE-017** | An execution trace diagram MUST relate observed runtime behavior back to the saved pipeline graph/version it executed. | [PIPELINES_AND_SYSTEM_DATA.md](PIPELINES_AND_SYSTEM_DATA.md) | PRD-G-010, PRD-G-014, PRD-G-037 | **Direct/Partial:** [System Data pipelines](../../web/tests/frontend/system-data-pipelines.test.ts); [pipeline tracing](../../tests/test_pipeline_tracing.py) |
+| **PRD-PIPE-018** | Deleting an execution trace or clearing execution history MUST NOT mutate pipeline definitions or active assignments. | [PIPELINES_AND_SYSTEM_DATA.md](PIPELINES_AND_SYSTEM_DATA.md) | PRD-G-003, PRD-G-023, PRD-G-032 | **Direct:** [pipeline store](../../tests/test_pipeline_store.py); [System Data pipelines](../../web/tests/frontend/system-data-pipelines.test.ts) |
 | **PRD-PUB-001** | Publication MUST operate on reviewed/eligible Records and MUST NOT silently publish unresolved required metadata. | [PUBLICATION_AND_INTEROPERABILITY.md](PUBLICATION_AND_INTEROPERABILITY.md) | PRD-G-011, PRD-G-017 | **Direct:** [publication lifecycle](../../tests/test_publication_lifecycle.py) |
 | **PRD-PUB-002** | Rejected Records MUST be excluded from required-metadata/publication checks for the publishable corpus while an all-rejected build becomes an explicit no-publishable-records state. | [PUBLICATION_AND_INTEROPERABILITY.md](PUBLICATION_AND_INTEROPERABILITY.md) | PRD-G-017, PRD-G-025 | **Direct/Partial:** [publication lifecycle](../../tests/test_publication_lifecycle.py); [verse cleanup/rejected Records](../../tests/test_verse_cleanup_and_rejected_records.py) |
 | **PRD-PUB-003** | Public JSONL MUST materialize scholarly values that consumers need even when canonical internal authority is represented through FieldAssertions. | [PUBLICATION_AND_INTEROPERABILITY.md](PUBLICATION_AND_INTEROPERABILITY.md) | PRD-G-004, PRD-G-017 | **Direct:** [DerridAI ledger](../../tests/test_derridai_ledger.py); [publication lifecycle](../../tests/test_publication_lifecycle.py) |
@@ -381,6 +386,6 @@ This matrix is a navigation and verification index. The detailed document contai
 
 ## Interpretation
 
-A **Direct** label means one or more automated tests exercise the requirement or its principal invariant. **Partial** means important behavior is automated but the full requirement still requires broader review. **Architectural** means conformance spans multiple components or design boundaries and cannot be established by one test. **Gap** is an explicit verification debt and should be treated as candidate QA work rather than assumed coverage.
+A **Direct** label means one or more automated tests exercise the requirement or its principal invariant. **Partial** means important behavior is automated but the full requirement still requires broader review. **Architectural** means conformance spans multiple components or design boundaries and cannot be established by one test. **Gap** is explicit verification debt and should be treated as candidate QA work rather than assumed coverage.
 
 When a requirement changes, update the detailed source document first and regenerate or update this matrix in the same pull request.
