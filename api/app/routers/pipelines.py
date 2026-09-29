@@ -10,6 +10,14 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from ..http_auth import request_user, require_admin
 from ..models import RAGRunRequest
 from ..pipelines.access import resolve_research_pipeline
+from ..pipelines.benchmark import (
+    ResearchBenchmarkCaseCreate,
+    ResearchBenchmarkRunRequest,
+    build_case,
+    build_run,
+    collection_snapshot,
+    verify_collection_snapshot,
+)
 from ..pipelines.comparison import (
     ResearchPipelineComparisonRequest,
     compare_research_dry_runs,
@@ -194,20 +202,11 @@ def reset_pipeline_assignment(feature: str, request: Request) -> dict[str, Any]:
     return {"deleted": removed, "resolved": resolved}
 
 
-@router.post("/compare/research")
-def compare_research_pipelines(
+def _execute_research_comparison(
     body: ResearchPipelineComparisonRequest,
-    request: Request,
+    *,
+    owner: str,
 ) -> dict[str, Any]:
-    """Run two saved Research pipelines through retrieval without persisting a run.
-
-    The comparison stops after provenance-checked evidence context construction.
-    It never generates a final answer, grades a response, writes response memory,
-    or creates a pipeline-run trace. Query decomposition may still call the
-    configured language model when the submitted request explicitly enables it.
-    """
-
-    user = require_admin(request)
     if body.request.skip_retrieval:
         raise HTTPException(
             status_code=422,
@@ -240,7 +239,7 @@ def compare_research_pipelines(
             return run_rag_pipeline(
                 comparison_request,
                 store,
-                owner=user.username,
+                owner=owner,
                 stop_after_context=True,
             )
         except ValueError as exc:
@@ -249,6 +248,131 @@ def compare_research_pipelines(
     left = execute(body.left.pipeline_id, body.left.version)
     right = execute(body.right.pipeline_id, body.right.version)
     return compare_research_dry_runs(left, right)
+
+
+@router.post("/compare/research")
+def compare_research_pipelines(
+    body: ResearchPipelineComparisonRequest,
+    request: Request,
+) -> dict[str, Any]:
+    """Run two saved Research pipelines through retrieval without persisting a run."""
+
+    user = require_admin(request)
+    return _execute_research_comparison(body, owner=user.username)
+
+
+@router.get("/benchmarks/cases")
+def benchmark_cases(
+    request: Request,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> dict[str, Any]:
+    """List immutable fixed-corpus/fixed-prompt Research benchmark cases."""
+
+    require_admin(request)
+    rows = pipeline_store.list_benchmark_cases(limit=limit, offset=offset)
+    return {
+        "cases": [row.model_dump(mode="json") for row in rows],
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@router.post("/benchmarks/cases")
+def create_benchmark_case(
+    body: ResearchBenchmarkCaseCreate,
+    request: Request,
+) -> dict[str, Any]:
+    """Save a new immutable version of a retrieval benchmark case."""
+
+    user = require_admin(request)
+    try:
+        version = pipeline_store.next_benchmark_case_version(body.benchmark_id)
+        case = build_case(
+            body,
+            version=version,
+            created_by=user.username,
+            store=store,
+        )
+        saved = pipeline_store.put_benchmark_case(case)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"case": saved.model_dump(mode="json")}
+
+
+@router.post("/benchmarks/run")
+def run_benchmark(
+    body: ResearchBenchmarkRunRequest,
+    request: Request,
+) -> dict[str, Any]:
+    """Run and persist a fixed-case retrieval comparison.
+
+    Benchmark persistence is separate from ordinary Research jobs, response
+    memory, claim memory, and pipeline execution traces.
+    """
+
+    user = require_admin(request)
+    case = pipeline_store.get_benchmark_case(body.benchmark_id, body.benchmark_version)
+    if case is None:
+        raise HTTPException(status_code=404, detail="Pipeline benchmark case not found.")
+
+    benchmark_request = RAGRunRequest.model_validate(case.request)
+    try:
+        current_snapshot = collection_snapshot(store, benchmark_request.source_collection)
+        verify_collection_snapshot(case.collection_snapshot, current_snapshot)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Benchmark collection could not be inspected: {exc}",
+        ) from exc
+
+    comparison = _execute_research_comparison(
+        ResearchPipelineComparisonRequest(
+            request=benchmark_request,
+            left=body.left,
+            right=body.right,
+        ),
+        owner=user.username,
+    )
+    run = build_run(
+        case,
+        owner=user.username,
+        current_snapshot=current_snapshot,
+        comparison=comparison,
+    )
+    saved = pipeline_store.put_benchmark_run(run)
+    return {"run": saved.model_dump(mode="json")}
+
+
+@router.get("/benchmarks/runs")
+def benchmark_runs(
+    request: Request,
+    benchmark_id: str = Query(default="", max_length=80),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> dict[str, Any]:
+    require_admin(request)
+    rows = pipeline_store.list_benchmark_runs(
+        benchmark_id=benchmark_id or None,
+        limit=limit,
+        offset=offset,
+    )
+    return {
+        "runs": [row.model_dump(mode="json") for row in rows],
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@router.get("/benchmarks/runs/{benchmark_run_id}")
+def benchmark_run(benchmark_run_id: str, request: Request) -> dict[str, Any]:
+    require_admin(request)
+    run = pipeline_store.get_benchmark_run(benchmark_run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Pipeline benchmark run not found.")
+    return {"run": run.model_dump(mode="json")}
 
 
 @router.get("/metrics")
