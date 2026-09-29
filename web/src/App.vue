@@ -28,6 +28,8 @@ import {
 } from "./domain/appNavigation";
 import { SETTINGS_SECTIONS, isSettingsSectionId } from "./domain/settings";
 import { viewConfig } from "./domain/runtimeConstants";
+import SemanticMapHost from "./components/semantic/SemanticMapHost.vue";
+import { useSemanticMapStore } from "./stores/semanticMap";
 import * as runtime from "./runtime/runtime.js";
 
 const router = useRouter();
@@ -52,9 +54,7 @@ const commandShortcut =
 const nativeBackPath = ref<string | null>(null);
 const nativeForwardPath = ref<string | null>(null);
 const s = computed(() => shell.snapshot);
-const effectiveSidebarCollapsed = computed(
-  () => s.value.sidebarCollapsed || narrowSidebar.value,
-);
+const effectiveSidebarCollapsed = computed(() => s.value.sidebarCollapsed || narrowSidebar.value);
 
 const pageCapability: Record<string, string> = {
   home: "page.dashboard",
@@ -152,7 +152,9 @@ function navEntry(item: ShellNavItem): SidebarNavEntry {
 const groupedNavItems = computed<SidebarNavGroup[]>(() => {
   if (!shell.navReady) return [];
 
-  const byId = new Map(s.value.nav.filter((item) => canNav(item.id)).map((item) => [item.id, item]));
+  const byId = new Map(
+    s.value.nav.filter((item) => canNav(item.id)).map((item) => [item.id, item]),
+  );
   const canonical = new Map<string, SidebarNavEntry[]>();
   canonical.set("Overview", []);
 
