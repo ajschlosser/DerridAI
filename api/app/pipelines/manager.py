@@ -6,10 +6,15 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from .defaults import BUILT_IN_ASSIGNMENTS, BUILT_IN_PIPELINES, built_in_assignment, built_in_pipeline
+from .defaults import (
+    BUILT_IN_ASSIGNMENTS,
+    BUILT_IN_PIPELINES,
+    built_in_assignment,
+    built_in_pipeline,
+)
 from .models import PipelineAssignment, PipelineDefinition
-from .service import PipelineService, pipeline_hash, pipeline_service
 from .research import compile_research_pipeline
+from .service import PipelineService, pipeline_hash, pipeline_service
 from .store import PipelineStore, pipeline_store
 
 
