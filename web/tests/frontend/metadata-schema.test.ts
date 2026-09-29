@@ -202,6 +202,21 @@ describe("the schema editor", () => {
     w.unmount();
   });
 
+  it("keeps focus and the expanded row while typing a new field's name", async () => {
+    const w = await mountEditor();
+    await button(w, "Duplicate").trigger("click");
+    await button(w, "Add a field").trigger("click");
+    const name = w
+      .findAll('input[maxlength="40"]')
+      .find((i) => (i.element as HTMLInputElement).value === "")!;
+    for (const ch of "new_field") {
+      await name.setValue((name.element as HTMLInputElement).value + ch);
+      expect(document.activeElement).toBe(name.element);
+    }
+    expect((name.element as HTMLInputElement).value).toBe("new_field");
+    w.unmount();
+  });
+
   it("shows a validation message from the server and keeps the draft", async () => {
     vi.spyOn(metadataSchemasApi, "create").mockRejectedValue(
       new Error("'region_type' is used by DerridAI itself and cannot be a field name."),
