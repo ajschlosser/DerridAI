@@ -1393,6 +1393,7 @@ def run_rag_pipeline(
     rerank_telemetry: dict[str, Any] = {"mode": effective_reranker}
     active_rerank_stage_id: str | None = None
     fallback_condition: str | None = None
+    cross_encoder_calls = 0
 
     if request.skip_retrieval:
         reranked = selected_pool or deduped
@@ -1414,6 +1415,7 @@ def run_rag_pipeline(
         if rerank_pool_limit and retrieved_pool:
             if effective_reranker == "cross_encoder":
                 active_rerank_stage_id = pipeline_plan.rerank_stage_id
+                cross_encoder_calls += 1
                 attempted, rerank_warning, rerank_telemetry = _cross_encoder_rerank(
                     rerank_query,
                     retrieved_pool,
@@ -1527,6 +1529,7 @@ def run_rag_pipeline(
             "selected_evidence_pinned": len(selected_pool),
             "active_stage_id": active_rerank_stage_id,
             "fallback_condition": fallback_condition,
+            "cross_encoder_calls": cross_encoder_calls,
             "cross_encoder_model": (
                 runtime_settings.cross_encoder_model
                 if requested_reranker == "cross_encoder"
@@ -1672,6 +1675,8 @@ def run_rag_pipeline(
         "rerank_top_n": runtime_settings.rerank_top_n,
         "effective_rerank_top_n": len(reranked),
         "query_decomposition": effective_query_decomposition,
+        "query_transform_model_calls": 1 if effective_query_decomposition else 0,
+        "cross_encoder_calls": cross_encoder_calls,
         "requested_query_decomposition": request.query_decomposition,
         "query_decomposition_num_predict": runtime_settings.query_decomposition_num_predict,
         "skip_retrieval": request.skip_retrieval,
