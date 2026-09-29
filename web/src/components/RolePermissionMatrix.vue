@@ -12,6 +12,7 @@ import {
 import { useI18nStore } from "../stores/i18n";
 import UiButton from "./ui/UiButton.vue";
 import UiStatusBadge from "./ui/UiStatusBadge.vue";
+import UiTooltip from "./ui/UiTooltip.vue";
 
 const props = defineProps<{
   capabilities: CapabilityDefinition[];
@@ -130,7 +131,9 @@ function describedBy(id: string) {
           <small :id="describedBy(capability.id)">{{
             i18n.t(capabilityHelpKey(capability.id), capability.description)
           }}</small>
-          <code :title="i18n.t('roles.permission_id')">{{ capability.id }}</code>
+          <UiTooltip :text="i18n.t('roles.permission_id')" trigger-mode="content" placement="bottom">
+            <code>{{ capability.id }}</code>
+          </UiTooltip>
         </span>
       </label>
     </fieldset>
