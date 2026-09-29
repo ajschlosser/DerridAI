@@ -13,7 +13,9 @@ The runtime executes a closed set of registered strategies; graphs cannot name
 arbitrary code. The provenance gate and bounded selection are mandatory. The
 direct-support gate is what makes a graph cELF-compliant: a graph that lets
 candidates reach provenance without it is executable (for experimentation or
-by choice) but is reported as not cELF-compliant everywhere its results appear.
+by choice) but is reported as non-cELF-guaranteed at the pipeline output boundary.
+Those advisory suggestions may still be retained and later turned into compliant
+corpus evidence when a reviewer binds and validates direct support.
 """
 
 from __future__ import annotations
@@ -157,20 +159,20 @@ def compile_recovery_pipeline(pipeline: PipelineDefinition) -> RecoveryPlan:
     )
     if loose:
         compliant, reason = False, (
-            "Not cELF-compliant: candidates from "
+            "Non-cELF-guaranteed: candidates from "
             + ", ".join(repr(item) for item in loose)
             + " reach the provenance gate without direct-support validation. Results remain "
             "advisory and pending review, and each carries this compliance status."
         )
     elif weak:
         compliant, reason = False, (
-            "Not cELF-compliant: support stage(s) "
+            "Non-cELF-guaranteed: support stage(s) "
             + ", ".join(repr(item) for item in weak)
             + f" accept direct support below {BACKFILL_MIN_SCORE:.2f}."
         )
     else:
         compliant, reason = True, (
-            "cELF-compliant: every candidate passes direct-support validation, or is a flagged "
+            "cELF-guaranteed: every candidate passes direct-support validation, or is a flagged "
             "closed-choice model selection, before the provenance gate."
         )
     return RecoveryPlan(

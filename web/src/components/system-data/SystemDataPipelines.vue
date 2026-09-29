@@ -446,8 +446,16 @@ onMounted(() => {
           }}
         </p>
       </div>
-      <details>
-        <summary>{{ t("pipelines.key_terms", "Key terms in plain language") }}</summary>
+      <div class="plain-language-guide">
+        <h2>{{ t("pipelines.key_terms", "Key terms in plain language") }}</h2>
+        <p class="guide-note">
+          {{
+            t(
+              "pipelines.key_terms_help",
+              "Use these quick definitions to read the diagram and understand what the pipeline can and cannot guarantee.",
+            )
+          }}
+        </p>
         <dl>
           <div>
             <dt>{{ t("pipelines.term_stage", "Stage") }}</dt>
@@ -505,7 +513,7 @@ onMounted(() => {
             </dd>
           </div>
         </dl>
-      </details>
+      </div>
     </section>
 
     <p v-if="error" class="error-banner" role="alert">{{ error }}</p>
@@ -664,20 +672,34 @@ onMounted(() => {
   font-size: 0.78rem;
   line-height: 1.5;
 }
-.concept-guide summary {
-  cursor: pointer;
-  font-weight: 750;
-}
-.concept-guide dl {
+.plain-language-guide {
   display: grid;
   gap: 8px;
-  margin: 10px 0 0;
+  padding-top: 4px;
 }
-.concept-guide dl > div {
+.plain-language-guide h2 {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+.guide-note {
+  margin: 0;
+}
+.plain-language-guide dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+.plain-language-guide dl > div {
   display: grid;
   gap: 2px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--card);
 }
-.concept-guide dt {
+.plain-language-guide dt {
   font-size: 0.77rem;
   font-weight: 750;
 }

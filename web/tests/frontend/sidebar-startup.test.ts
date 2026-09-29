@@ -115,6 +115,17 @@ function testRouter() {
           titleFallback: "Pipeline Studio",
         },
       },
+      {
+        path: "/settings/:section",
+        name: "settings-section",
+        component: page,
+        meta: {
+          navId: "config",
+          navSection: "System",
+          titleKey: "nav.config",
+          titleFallback: "Settings",
+        },
+      },
       { path: "/:rest(.*)*", component: page },
     ],
   });
@@ -278,6 +289,30 @@ describe("sidebar at sign-in", () => {
         .find((button) => button.text() === "AI & Automation")
         ?.attributes("aria-expanded"),
     ).toBe("true");
+  });
+
+  it("does not link breadcrumb items to the current workspace", async () => {
+    const { wrapper, router } = await signIn("admin");
+    await router.push("/system-data/overview");
+    await flushPromises();
+
+    const crumbs = wrapper.find(".vue-breadcrumb-path");
+    expect(crumbs.text()).toContain("System");
+    expect(crumbs.text()).toContain("System Data");
+    expect(crumbs.text()).toContain("Overview");
+    expect(crumbs.findAll("a").map((link) => link.text())).toEqual(["DerridAI"]);
+  });
+
+  it("places Settings breadcrumbs under System on direct loads", async () => {
+    const { wrapper, router } = await signIn("admin");
+    await router.push("/settings/workspace");
+    await flushPromises();
+
+    const crumbs = wrapper.find(".vue-breadcrumb-path");
+    expect(crumbs.text()).toContain("System");
+    expect(crumbs.text()).toContain("Settings");
+    expect(crumbs.text()).toContain("Workspace");
+    expect(crumbs.findAll("a").map((link) => link.text())).toEqual(["DerridAI", "System"]);
   });
 
   it("filters navigation without hiding its information architecture", async () => {

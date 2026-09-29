@@ -8,6 +8,7 @@ const ROW_GAP = 18;
 const CANVAS_PAD = 16;
 
 export type PipelineEdgeKind = "next" | "on_empty" | "on_unavailable" | "on_timeout" | "on_error";
+export type PipelineDiagramOrientation = "horizontal" | "vertical";
 
 export type PipelineGraphEdge = {
   id: string;
@@ -108,7 +109,15 @@ export function configurationForTrace(
   };
 }
 
-function edgePath(from: PipelineGraphNode, to: PipelineGraphNode): string {
+export function pipelineEdgePath(from: PipelineGraphNode, to: PipelineGraphNode): string {
+  if (Math.abs(to.y - from.y) > Math.abs(to.x - from.x)) {
+    const x1 = from.x + PIPELINE_NODE_WIDTH / 2;
+    const y1 = from.y + PIPELINE_NODE_HEIGHT;
+    const x2 = to.x + PIPELINE_NODE_WIDTH / 2;
+    const y2 = to.y;
+    const bend = Math.max(24, (y2 - y1) / 2);
+    return `M ${x1} ${y1} C ${x1} ${y1 + bend}, ${x2} ${y2 - bend}, ${x2} ${y2}`;
+  }
   const x1 = from.x + PIPELINE_NODE_WIDTH;
   const y1 = from.y + PIPELINE_NODE_HEIGHT / 2;
   const x2 = to.x;
@@ -125,6 +134,7 @@ export function layoutPipelineDiagram(
   stages: PipelineStage[],
   entryStageIds: string[],
   execution?: PipelineRunTrace | null,
+  orientation: PipelineDiagramOrientation = "horizontal",
 ): PipelineDiagram {
   const byId = new Map(stages.map((stage) => [stage.id, stage]));
   const edges: Array<{ from: string; to: string; kind: PipelineEdgeKind }> = [];
@@ -216,8 +226,14 @@ export function layoutPipelineDiagram(
         strategy: stage.strategy,
         enabled: stage.enabled,
         entry: entryStageIds.includes(id),
-        x: CANVAS_PAD + index * (PIPELINE_NODE_WIDTH + COLUMN_GAP),
-        y: offsetY + row * (PIPELINE_NODE_HEIGHT + ROW_GAP),
+        x:
+          orientation === "horizontal"
+            ? CANVAS_PAD + index * (PIPELINE_NODE_WIDTH + COLUMN_GAP)
+            : CANVAS_PAD + row * (PIPELINE_NODE_WIDTH + COLUMN_GAP),
+        y:
+          orientation === "horizontal"
+            ? offsetY + row * (PIPELINE_NODE_HEIGHT + ROW_GAP)
+            : CANVAS_PAD + index * (PIPELINE_NODE_HEIGHT + ROW_GAP),
         executionStatus: execution
           ? mark?.stage.status || (configured ? "not_reached" : null)
           : null,
@@ -249,9 +265,20 @@ export function layoutPipelineDiagram(
       id: `${edge.kind}:${edge.from}:${edge.to}:${index}`,
       ...edge,
       traversed,
-      path: edgePath(from, to),
+      path: pipelineEdgePath(from, to),
     });
   });
 
+  if (orientation === "vertical") {
+    return {
+      nodes,
+      edges: drawn,
+      width: CANVAS_PAD * 2 + tallest * PIPELINE_NODE_WIDTH + Math.max(0, tallest - 1) * COLUMN_GAP,
+      height:
+        CANVAS_PAD * 2 +
+        columnCount * PIPELINE_NODE_HEIGHT +
+        Math.max(0, columnCount - 1) * ROW_GAP,
+    };
+  }
   return { nodes, edges: drawn, width, height };
 }

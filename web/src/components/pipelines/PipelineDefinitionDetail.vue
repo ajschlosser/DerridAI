@@ -158,6 +158,23 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
       <AppIcon name="help" />
       <span>{{ pipeline.runtime_support.reason }}</span>
     </p>
+    <p
+      v-if="
+        pipeline.purpose === 'evidence_recovery' &&
+        pipeline.runtime_support?.celf_compliant === false
+      "
+      class="support-note"
+    >
+      <AppIcon name="help" />
+      <span>
+        {{
+          t(
+            "pipelines.non_celf_boundary_help",
+            "This pipeline keeps useful relevance suggestions, but does not guarantee direct support at its output. A reviewer can bind and validate direct evidence later; only that evidence-bound result receives a cELF guarantee.",
+          )
+        }}
+      </span>
+    </p>
 
     <ul
       v-if="pipeline.validation?.issues?.length"
@@ -178,7 +195,7 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
       :stages="pipeline.stages"
       :entry-stage-ids="pipeline.entry_stage_ids"
       :strategies="strategies"
-      :title="t('pipelines.diagram_title', 'Relational diagram')"
+      :title="t('pipelines.diagram_title', 'Pipeline diagram')"
       :description="
         t(
           'pipelines.diagram_help',
