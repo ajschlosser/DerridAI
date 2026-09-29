@@ -5,6 +5,7 @@ import PipelineStageConnections from "./PipelineStageConnections.vue";
 import PipelineStrategyConfigFields from "./PipelineStrategyConfigFields.vue";
 import {
   pipelineDataTypeHelp,
+  pipelineStageFamilyHelp,
   pipelineStageFamilyLabel,
   pipelineStrategyDescription,
   pipelineStrategyLabel,
@@ -190,7 +191,13 @@ const strategiesByFamily = computed(() => {
     <div class="strategy-summary">
       <div>
         <strong>{{ strategy ? pipelineStrategyLabel(strategy, t) : stage.strategy }}</strong>
-        <span>{{ pipelineStageFamilyLabel(strategy?.family, t) }}</span>
+        <span class="label-with-help">
+          {{ pipelineStageFamilyLabel(strategy?.family, t) }}
+          <UiTooltip
+            :text="pipelineStageFamilyHelp(strategy?.family, t)"
+            :label="t('pipelines.explain_stage_family', 'Explain this kind of stage')"
+          />
+        </span>
       </div>
       <p v-if="strategy">{{ pipelineStrategyDescription(strategy, t) }}</p>
       <small v-if="strategy" class="strategy-io">
