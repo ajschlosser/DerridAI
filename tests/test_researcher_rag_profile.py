@@ -50,6 +50,13 @@ def test_researcher_rag_uses_approved_model_and_not_browser_overrides():
         "RAGRunRequest": RAGRunRequest,
         "HTTPException": HTTPException,
         "profile_generation_options": profile_generation_options,
+        # Pipeline resolution is covered independently by pipeline-access tests.
+        # This isolated route test remains scoped to researcher provider policy,
+        # so provide the already-resolved server default as an explicit dependency.
+        "resolve_research_pipeline": lambda **kwargs: SimpleNamespace(
+            pipeline_id="research.current",
+            version=1,
+        ),
     }
     exec(
         compile(
