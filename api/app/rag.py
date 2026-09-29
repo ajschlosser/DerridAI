@@ -1285,18 +1285,30 @@ def run_rag_pipeline(
 
     # Step 4: rerank.
     stage_start = time.perf_counter()
-    update("rerank", 0, 1, request.reranker)
+
+    effective_reranker = request.reranker
+    if effective_reranker == "cross_encoder" and not pipeline_plan.cross_encoder_available:
+        effective_reranker = (
+            "lexical" if pipeline_plan.lexical_rerank_available else "none"
+        )
+    if effective_reranker == "lexical" and not pipeline_plan.lexical_rerank_available:
+        effective_reranker = "none"
+
+    update("rerank", 0, 1, effective_reranker)
     rerank_query = (
         query_metadata["prompt_query"]
         + "\n"
         + query_metadata["prompt_query_fr"]
     ).strip()
-    # ``rerank_top_n`` is the single source of truth. Query decomposition may
-    # transform the wording of the query, but it must not alter pipeline limits.
-    # User-selected evidence is pinned: it is never allowed to disappear merely
-    # because a reranker prefers retrieved neighbors.  Selected records consume
-    # slots first, then the reranker fills the remaining requested slots.
-    requested_top_n = len(deduped) if request.skip_retrieval else max(1, int(request.rerank_top_n))
+    # rerank_top_n is the final evidence-record budget. When the selected
+    # pipeline has a post-rerank diversity stage, relevance reranking keeps a
+    # modestly wider pool so diversity can choose a different source rather than
+    # merely reorder the already-truncated final K.
+    requested_top_n = (
+        len(deduped)
+        if request.skip_retrieval
+        else max(1, int(request.rerank_top_n))
+    )
     selected_pool = [item for item in deduped if item.get("selected_evidence")]
     retrieved_pool = [item for item in deduped if not item.get("selected_evidence")]
     effective_top_n = (
@@ -1305,52 +1317,129 @@ def run_rag_pipeline(
         else min(max(requested_top_n, len(selected_pool)), max(1, len(deduped)))
     )
     remaining_slots = max(0, effective_top_n - len(selected_pool))
+    post_diversity = pipeline_plan.post_rerank_diversity
+    rerank_pool_limit = min(
+        len(retrieved_pool),
+        max(
+            remaining_slots,
+            remaining_slots * 3 if post_diversity != "none" else remaining_slots,
+        ),
+    )
 
     if request.skip_retrieval:
         reranked = selected_pool or deduped
         for item in reranked:
             item["rerank_score"] = item.get("rerank_score", 1.0)
+        reranked_retrieved: list[dict[str, Any]] = []
+        selected_ranked = list(reranked)
     else:
         selected_ranked = []
         for item in selected_pool:
             row = dict(item)
-            row["rerank_score"] = max(1.0, float(item.get("rerank_score") or 0.0))
+            row["rerank_score"] = max(
+                1.0,
+                float(item.get("rerank_score") or 0.0),
+            )
             selected_ranked.append(row)
 
-        reranked_retrieved: list[dict[str, Any]] = []
-        if remaining_slots and retrieved_pool:
-            if request.reranker == "cross_encoder":
+        reranked_retrieved = []
+        if rerank_pool_limit and retrieved_pool:
+            if effective_reranker == "cross_encoder":
                 reranked_retrieved, rerank_warning = _cross_encoder_rerank(
                     rerank_query,
                     retrieved_pool,
-                    remaining_slots,
+                    rerank_pool_limit,
                     request.cross_encoder_model,
                 )
                 if rerank_warning:
                     warnings.append(rerank_warning)
-            elif request.reranker == "lexical":
+            elif effective_reranker == "lexical":
                 reranked_retrieved = _lexical_rerank(
-                    rerank_query, retrieved_pool, remaining_slots
+                    rerank_query,
+                    retrieved_pool,
+                    rerank_pool_limit,
                 )
             else:
-                reranked_retrieved = retrieved_pool[:remaining_slots]
+                reranked_retrieved = retrieved_pool[:rerank_pool_limit]
                 for item in reranked_retrieved:
                     item["rerank_score"] = item.get("rrf_score", 0.0)
+
+        if post_diversity == "none":
+            reranked_retrieved = reranked_retrieved[:remaining_slots]
         reranked = selected_ranked + reranked_retrieved
 
     stages.append({
         "name": "rerank",
         "seconds": time.perf_counter() - stage_start,
         "detail": {
-            "mode": request.reranker,
+            "mode": effective_reranker,
+            "requested_mode": request.reranker,
             "requested_top_n": requested_top_n,
-            "effective_top_n": len(reranked),
+            "rerank_pool_count": len(reranked_retrieved),
             "selected_evidence_pinned": len(selected_pool),
-            "cross_encoder_model": request.cross_encoder_model,
+            "cross_encoder_model": (
+                request.cross_encoder_model
+                if effective_reranker == "cross_encoder"
+                else None
+            ),
         },
     })
-    update("rerank", 1, 1, f"{len(reranked)} evidence records retained")
+    update("rerank", 1, 1, f"{len(reranked)} records after relevance reranking")
     check_cancel()
+
+    if not request.skip_retrieval and post_diversity != "none" and remaining_slots:
+        diversity_started = time.perf_counter()
+        if post_diversity == "source_aware":
+            diversified = source_aware_select(
+                reranked_retrieved,
+                limit=remaining_slots,
+                relevance=lambda item: float(
+                    item.get("rerank_score")
+                    if item.get("rerank_score") is not None
+                    else item.get("rrf_score") or 0.0
+                ),
+            )
+        else:
+            # Cross-encoder scores are not calibrated to the [0,1] scale used by
+            # cosine diversity. Convert rerank order to a bounded rank relevance
+            # before applying post-rerank MMR so lambda remains interpretable.
+            ranked_for_diversity: list[dict[str, Any]] = []
+            denominator = max(1, len(reranked_retrieved) - 1)
+            for index, item in enumerate(reranked_retrieved):
+                row = dict(item)
+                row["_diversity_relevance"] = 1.0 - (index / denominator)
+                ranked_for_diversity.append(row)
+            diversified = mmr_select(
+                ranked_for_diversity,
+                limit=remaining_slots,
+                lambda_mult=request.lambda_mult,
+                relevance=lambda item: float(item.get("_diversity_relevance") or 0.0),
+                vector=lambda item: item.get("embedding"),
+            )
+            for item in diversified:
+                item.pop("_diversity_relevance", None)
+
+        reranked = selected_ranked + diversified
+        stages.append({
+            "name": "diversity",
+            "seconds": time.perf_counter() - diversity_started,
+            "detail": {
+                "mode": post_diversity,
+                "input_count": len(reranked_retrieved),
+                "output_count": len(diversified),
+                "selected_evidence_pinned": len(selected_ranked),
+                "lambda_mult": (
+                    request.lambda_mult if post_diversity == "mmr" else None
+                ),
+            },
+        })
+        update(
+            "diversity",
+            1,
+            1,
+            f"{len(reranked)} records retained after {post_diversity} diversity",
+        )
+        check_cancel()
 
     # Step 5: build compact evidence context.
     stage_start = time.perf_counter()
