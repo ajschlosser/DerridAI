@@ -10,6 +10,48 @@ from .models import PipelineRunTrace, PipelineStageTrace
 from .storage import PipelineDatabase, dump_json, load_json
 
 
+def _like_term(value: str) -> str:
+    escaped = value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
+def _run_filter_clause(
+    *,
+    feature: str | None,
+    owner: str | None,
+    pipeline_id: str | None,
+    status: str | None,
+    query: str | None,
+) -> tuple[str, list[Any]]:
+    clauses: list[str] = []
+    params: list[Any] = []
+    if feature:
+        clauses.append("feature=?")
+        params.append(feature)
+    if owner:
+        clauses.append("owner=?")
+        params.append(owner)
+    if pipeline_id:
+        clauses.append("pipeline_id=?")
+        params.append(pipeline_id)
+    if status:
+        clauses.append("status=?")
+        params.append(status)
+    text = str(query or "").strip()
+    if text:
+        like = _like_term(text)
+        clauses.append(
+            "("
+            "run_id LIKE ? ESCAPE '\\' OR pipeline_id LIKE ? ESCAPE '\\' "
+            "OR feature LIKE ? ESCAPE '\\' OR IFNULL(owner, '') LIKE ? ESCAPE '\\'"
+            ")"
+        )
+        params.extend((like, like, like, like))
+    if not clauses:
+        return "", params
+    return "WHERE " + " AND ".join(clauses), params
+
+
 class PipelineTraceStore:
     def __init__(self, database: PipelineDatabase) -> None:
         self.database = database
@@ -123,28 +165,73 @@ class PipelineTraceStore:
         *,
         feature: str | None = None,
         owner: str | None = None,
+        pipeline_id: str | None = None,
+        status: str | None = None,
+        query: str | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[PipelineRunTrace]:
         page_limit = max(1, min(500, int(limit)))
         page_offset = max(0, int(offset))
+        where, params = _run_filter_clause(
+            feature=feature,
+            owner=owner,
+            pipeline_id=pipeline_id,
+            status=status,
+            query=query,
+        )
         with self.database.lock, self.database.connect() as conn:
             rows = conn.execute(
-                """
+                f"""
                 SELECT run_id
                 FROM pipeline_runs
-                WHERE (? IS NULL OR feature=?)
-                  AND (? IS NULL OR owner=?)
+                {where}
                 ORDER BY started_at DESC
                 LIMIT ? OFFSET ?
                 """,
-                (feature, feature, owner, owner, page_limit, page_offset),
+                (*params, page_limit, page_offset),
             ).fetchall()
         return [
             trace
             for trace in (self.get_run(str(row["run_id"])) for row in rows)
             if trace is not None
         ]
+
+    def count_runs(
+        self,
+        *,
+        feature: str | None = None,
+        owner: str | None = None,
+        pipeline_id: str | None = None,
+        status: str | None = None,
+        query: str | None = None,
+    ) -> int:
+        where, params = _run_filter_clause(
+            feature=feature,
+            owner=owner,
+            pipeline_id=pipeline_id,
+            status=status,
+            query=query,
+        )
+        with self.database.lock, self.database.connect() as conn:
+            row = conn.execute(
+                f"SELECT COUNT(*) FROM pipeline_runs {where}",
+                params,
+            ).fetchone()
+        return int(row[0] if row is not None else 0)
+
+    def delete_run(self, run_id: str) -> bool:
+        with self.database.lock, self.database.connect() as conn:
+            existed = conn.execute(
+                "SELECT 1 FROM pipeline_runs WHERE run_id=?",
+                (str(run_id),),
+            ).fetchone()
+            if existed is None:
+                return False
+            conn.execute("DELETE FROM pipeline_stage_runs WHERE run_id=?", (str(run_id),))
+            conn.execute("DELETE FROM pipeline_runs WHERE run_id=?", (str(run_id),))
+            conn.commit()
+        return True
 
     def snapshot(self) -> dict[str, list[dict[str, Any]]]:
         with self.database.lock, self.database.connect() as conn:

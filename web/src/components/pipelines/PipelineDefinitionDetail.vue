@@ -2,6 +2,7 @@
 <script setup lang="ts">
 import AppIcon from "../AppIcon.vue";
 import UiTooltip from "../ui/UiTooltip.vue";
+import PipelineGraphDiagram from "./PipelineGraphDiagram.vue";
 import PipelineStageList from "./PipelineStageList.vue";
 import { pipelinePurposeLabel } from "../../domain/pipelinePresentation";
 import { useI18nStore } from "../../stores/i18n";
@@ -173,19 +174,23 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
       </li>
     </ul>
 
-    <div class="reading-note">
-      <strong>{{ t("pipelines.how_to_read_chain", "How to read this chain") }}</strong>
-      <span>
-        {{
-          t(
-            "pipelines.how_to_read_chain_help",
-            "Read from the entry stage through each “then” connection. A fallback label marks an exception route. “Deterministic” stages use fixed rules, “Learned model” stages use non-generative machine-learning models, and “LLM” stages call a generative language model.",
-          )
-        }}
-      </span>
-    </div>
+    <PipelineGraphDiagram
+      :stages="pipeline.stages"
+      :entry-stage-ids="pipeline.entry_stage_ids"
+      :strategies="strategies"
+      :title="t('pipelines.diagram_title', 'Relational diagram')"
+      :description="
+        t(
+          'pipelines.diagram_help',
+          'Stages are nodes. Solid arrows are the normal path. Dashed arrows are fallbacks used only when a stage is empty, unavailable, timed out, or in error.',
+        )
+      "
+    />
 
-    <PipelineStageList :pipeline="pipeline" :strategies="strategies" />
+    <details class="stage-details">
+      <summary>{{ t("pipelines.stage_details", "Stage details") }}</summary>
+      <PipelineStageList :pipeline="pipeline" :strategies="strategies" />
+    </details>
 
     <footer v-if="assignment && assignment.source !== 'built_in'" class="assignment-footer">
       <div>
@@ -332,6 +337,21 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
 .assignment-footer span {
   color: var(--muted);
   font-size: 0.75rem;
+}
+.stage-details {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--soft);
+}
+.stage-details summary {
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+.stage-details summary:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
 }
 @media (max-width: 680px) {
   .detail-header,

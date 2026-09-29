@@ -95,15 +95,44 @@ class PipelineStore:
         *,
         feature: str | None = None,
         owner: str | None = None,
+        pipeline_id: str | None = None,
+        status: str | None = None,
+        query: str | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[PipelineRunTrace]:
         return self.traces.list_runs(
             feature=feature,
             owner=owner,
+            pipeline_id=pipeline_id,
+            status=status,
+            query=query,
             limit=limit,
             offset=offset,
         )
+
+    def count_runs(
+        self,
+        *,
+        feature: str | None = None,
+        owner: str | None = None,
+        pipeline_id: str | None = None,
+        status: str | None = None,
+        query: str | None = None,
+    ) -> int:
+        return self.traces.count_runs(
+            feature=feature,
+            owner=owner,
+            pipeline_id=pipeline_id,
+            status=status,
+            query=query,
+        )
+
+    def delete_run(self, run_id: str) -> bool:
+        return self.traces.delete_run(run_id)
+
+    def clear_runs(self) -> dict[str, int]:
+        return self.traces.clear()
 
     def snapshot(self) -> dict[str, Any]:
         """Return configuration and trace history for full system backups."""

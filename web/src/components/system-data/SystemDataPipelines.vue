@@ -9,6 +9,7 @@ import PipelineExecutionHistory from "../pipelines/PipelineExecutionHistory.vue"
 import PipelineComparisonPanel from "../pipelines/PipelineComparisonPanel.vue";
 import PipelineOperationsSummary from "../pipelines/PipelineOperationsSummary.vue";
 import PipelineVersionEditorPanel from "../pipelines/PipelineVersionEditorPanel.vue";
+import type { PipelineRunFilters } from "../pipelines/PipelineExecutionHistory.vue";
 import { pipelinesApi } from "../../api/pipelines";
 import { pipelineKey } from "../../domain/pipelinePresentation";
 import { useI18nStore } from "../../stores/i18n";
@@ -26,11 +27,23 @@ const route = useRoute();
 const router = useRouter();
 const catalog = ref<PipelineCatalog | null>(null);
 const runs = ref<PipelineRunTrace[]>([]);
+const focusedRun = ref<PipelineRunTrace | null>(null);
 const metrics = ref<PipelineOperationalMetrics | null>(null);
 const loading = ref(true);
 const error = ref("");
-const selectedKey = ref(String(route.query.pipeline || ""));
-const selectedTraceId = ref(String(route.query.run || ""));
+const section = ref<"pipelines" | "executions" | "operations">("pipelines");
+const selectedKey = ref("");
+const selectedTraceId = ref("");
+const runTotal = ref(0);
+const runLimit = 25;
+const runFilters = ref<PipelineRunFilters>({
+  query: "",
+  feature: "",
+  pipelineId: "",
+  status: "",
+  owner: "",
+});
+const runOffset = ref(0);
 const draft = ref<PipelineDefinition | null>(null);
 const validation = ref<PipelineValidationResponse | null>(null);
 const saving = ref(false);
@@ -38,20 +51,58 @@ const assigning = ref(false);
 const cloning = ref(false);
 
 const t = (key: string, fallback: string) => i18n.t(key, fallback);
+const sections = ["pipelines", "executions", "operations"] as const;
+
+function readRoute() {
+  const requested = String(route.query.section || "");
+  section.value = sections.includes(requested as (typeof sections)[number])
+    ? (requested as (typeof sections)[number])
+    : "pipelines";
+  selectedKey.value = String(route.query.pipeline || "");
+  selectedTraceId.value = String(route.query.run || "");
+  runFilters.value = {
+    query: String(route.query.q || ""),
+    feature: String(route.query.feature || ""),
+    pipelineId: String(route.query.pipeline_id || ""),
+    status: String(route.query.status || ""),
+    owner: String(route.query.owner || ""),
+  };
+  runOffset.value = Math.max(0, Number(route.query.offset || 0) || 0);
+}
 
 function syncRouteState() {
-  void router.replace({
-    name: "pipelines",
-    query: {
-      ...route.query,
-      pipeline: selectedKey.value || undefined,
-      run: selectedTraceId.value || undefined,
-    },
-  });
+  const query: Record<string, string | string[] | undefined> = {
+    ...route.query,
+    section: section.value === "pipelines" ? undefined : section.value,
+    pipeline: selectedKey.value || undefined,
+    run: selectedTraceId.value || undefined,
+    q: runFilters.value.query || undefined,
+    feature: runFilters.value.feature || undefined,
+    pipeline_id: runFilters.value.pipelineId || undefined,
+    status: runFilters.value.status || undefined,
+    owner: runFilters.value.owner || undefined,
+    offset: runOffset.value ? String(runOffset.value) : undefined,
+  };
+  for (const key of Object.keys(query)) {
+    if (query[key] === undefined || query[key] === "") delete query[key];
+  }
+  const current = route.query;
+  const same =
+    Object.keys(query).length === Object.keys(current).length &&
+    Object.entries(query).every(
+      ([key, value]) => String(current[key] || "") === String(value || ""),
+    );
+  if (!same) void router.replace({ name: "pipelines", query });
+}
+
+function selectSection(next: (typeof sections)[number]) {
+  section.value = next;
+  syncRouteState();
 }
 
 function selectPipeline(key: string) {
   selectedKey.value = key;
+  section.value = "pipelines";
   syncRouteState();
 }
 
@@ -89,33 +140,59 @@ const isSelectedAssigned = computed(() => {
   const assignment = selectedAssignment.value;
   return Boolean(
     pipeline &&
-      assignment &&
-      assignment.pipeline_id === pipeline.pipeline_id &&
-      assignment.pipeline_version === pipeline.version,
+    assignment &&
+    assignment.pipeline_id === pipeline.pipeline_id &&
+    assignment.pipeline_version === pipeline.version,
   );
 });
 const canAssignSelected = computed(() => {
   const pipeline = selectedPipeline.value;
   return Boolean(
     pipeline &&
-      pipeline.status === "active" &&
-      pipeline.runtime_support?.supported &&
-      featureForPurpose(pipeline.purpose),
+    pipeline.status === "active" &&
+    pipeline.runtime_support?.supported &&
+    featureForPurpose(pipeline.purpose),
   );
 });
+
+async function loadRuns() {
+  const tracePage = await pipelinesApi.runs({
+    feature: runFilters.value.feature || undefined,
+    owner: runFilters.value.owner || undefined,
+    pipelineId: runFilters.value.pipelineId || undefined,
+    status: runFilters.value.status || undefined,
+    query: runFilters.value.query || undefined,
+    limit: runLimit,
+    offset: runOffset.value,
+  });
+  runs.value = tracePage.runs || [];
+  runTotal.value = tracePage.total ?? runs.value.length;
+  if (selectedTraceId.value && !runs.value.some((item) => item.run_id === selectedTraceId.value)) {
+    try {
+      focusedRun.value = (await pipelinesApi.run(selectedTraceId.value)).run;
+    } catch {
+      focusedRun.value = null;
+      selectedTraceId.value = runs.value[0]?.run_id || "";
+    }
+  } else if (!selectedTraceId.value && runs.value.length) {
+    selectedTraceId.value = runs.value[0].run_id;
+    focusedRun.value = runs.value[0];
+  } else {
+    focusedRun.value = runs.value.find((item) => item.run_id === selectedTraceId.value) || null;
+  }
+}
 
 async function load() {
   loading.value = true;
   error.value = "";
   try {
-    const [nextCatalog, tracePage, nextMetrics] = await Promise.all([
+    const [nextCatalog, nextMetrics] = await Promise.all([
       pipelinesApi.catalog(),
-      pipelinesApi.runs({ limit: 30 }),
       pipelinesApi.metrics({ limit: 250 }),
     ]);
     catalog.value = nextCatalog;
-    runs.value = tracePage.runs || [];
     metrics.value = nextMetrics;
+    await loadRuns();
 
     if (
       !selectedKey.value ||
@@ -129,13 +206,6 @@ async function load() {
       );
       const fallback = preferred || nextCatalog.pipelines[0];
       selectedKey.value = fallback ? pipelineKey(fallback) : "";
-    }
-
-    if (
-      runs.value.length &&
-      (!selectedTraceId.value || !runs.value.some((item) => item.run_id === selectedTraceId.value))
-    ) {
-      selectedTraceId.value = runs.value[0].run_id;
     }
     syncRouteState();
   } catch (exc) {
@@ -233,27 +303,111 @@ async function resetSelectedAssignment() {
   }
 }
 
+async function applyRunFilters(filters: PipelineRunFilters) {
+  runFilters.value = filters;
+  runOffset.value = 0;
+  selectedTraceId.value = "";
+  error.value = "";
+  try {
+    await loadRuns();
+    syncRouteState();
+  } catch (exc) {
+    error.value = exc instanceof Error ? exc.message : String(exc);
+  }
+}
+
+async function changeRunPage(offset: number) {
+  runOffset.value = offset;
+  error.value = "";
+  try {
+    await loadRuns();
+    syncRouteState();
+  } catch (exc) {
+    error.value = exc instanceof Error ? exc.message : String(exc);
+  }
+}
+
+async function deleteRun(runId: string) {
+  if (
+    !window.confirm(
+      t(
+        "pipelines.delete_run_confirm",
+        "Delete this execution from history? The saved pipeline version is not affected.",
+      ),
+    )
+  ) {
+    return;
+  }
+  error.value = "";
+  try {
+    await pipelinesApi.deleteRun(runId);
+    if (selectedTraceId.value === runId) selectedTraceId.value = "";
+    await Promise.all([
+      loadRuns(),
+      pipelinesApi.metrics({ limit: 250 }).then((next) => (metrics.value = next)),
+    ]);
+    syncRouteState();
+  } catch (exc) {
+    error.value = exc instanceof Error ? exc.message : String(exc);
+  }
+}
+
+async function clearHistory() {
+  if (
+    !window.confirm(
+      t(
+        "pipelines.clear_history_confirm",
+        "Delete every execution trace? Pipeline definitions and assignments stay in place.",
+      ),
+    )
+  ) {
+    return;
+  }
+  error.value = "";
+  try {
+    await pipelinesApi.clearRuns();
+    selectedTraceId.value = "";
+    focusedRun.value = null;
+    runOffset.value = 0;
+    await Promise.all([
+      loadRuns(),
+      pipelinesApi.metrics({ limit: 250 }).then((next) => (metrics.value = next)),
+    ]);
+    syncRouteState();
+  } catch (exc) {
+    error.value = exc instanceof Error ? exc.message : String(exc);
+  }
+}
+
+function openConfiguration(key: string) {
+  selectPipeline(key);
+}
+
 watch(
-  () => [route.query.pipeline, route.query.run],
-  ([pipeline, run]) => {
-    const nextPipeline = String(pipeline || "");
-    const nextRun = String(run || "");
-    if (
-      nextPipeline &&
-      nextPipeline !== selectedKey.value &&
-      pipelines.value.some((item) => pipelineKey(item) === nextPipeline)
-    )
-      selectedKey.value = nextPipeline;
-    if (
-      nextRun &&
-      nextRun !== selectedTraceId.value &&
-      runs.value.some((item) => item.run_id === nextRun)
-    )
-      selectedTraceId.value = nextRun;
+  () => route.query,
+  () => {
+    const previous = JSON.stringify({
+      filters: runFilters.value,
+      offset: runOffset.value,
+      section: section.value,
+    });
+    readRoute();
+    const next = JSON.stringify({
+      filters: runFilters.value,
+      offset: runOffset.value,
+      section: section.value,
+    });
+    if (previous !== next && catalog.value)
+      void loadRuns().catch((exc) => {
+        error.value = exc instanceof Error ? exc.message : String(exc);
+      });
   },
 );
 
-onMounted(load);
+onMounted(() => {
+  readRoute();
+  void load();
+});
 </script>
 
 <template>
@@ -358,7 +512,36 @@ onMounted(load);
     </div>
 
     <template v-else-if="catalog">
-      <section class="studio-grid" :aria-label="t('pipelines.definitions', 'Pipeline definitions')">
+      <div class="studio-tabs" role="tablist" :aria-label="t('pipelines.title', 'Pipeline Studio')">
+        <button
+          v-for="item in sections"
+          :id="`pipeline-tab-${item}`"
+          :key="item"
+          type="button"
+          role="tab"
+          :aria-selected="section === item"
+          :aria-controls="`pipeline-panel-${item}`"
+          :class="{ selected: section === item }"
+          @click="selectSection(item)"
+        >
+          {{
+            item === "pipelines"
+              ? t("pipelines.studio_pipelines", "Pipelines")
+              : item === "executions"
+                ? t("pipelines.studio_executions", "Executions")
+                : t("pipelines.studio_operations", "Operations")
+          }}
+        </button>
+      </div>
+
+      <section
+        v-if="section === 'pipelines'"
+        id="pipeline-panel-pipelines"
+        class="studio-grid"
+        role="tabpanel"
+        aria-labelledby="pipeline-tab-pipelines"
+        :aria-label="t('pipelines.definitions', 'Pipeline definitions')"
+      >
         <PipelineDefinitionBrowser
           :pipelines="pipelines"
           :assignments="assignments"
@@ -381,7 +564,7 @@ onMounted(load);
       </section>
 
       <PipelineVersionEditorPanel
-        v-if="draft"
+        v-if="draft && section === 'pipelines'"
         v-model="draft"
         :strategies="strategies"
         :validation="validation"
@@ -391,15 +574,41 @@ onMounted(load);
         @save="saveDraft"
       />
 
-      <PipelineComparisonPanel :pipelines="pipelines" />
+      <section
+        v-else-if="section === 'executions'"
+        id="pipeline-panel-executions"
+        role="tabpanel"
+        aria-labelledby="pipeline-tab-executions"
+      >
+        <PipelineExecutionHistory
+          :runs="runs"
+          :pipelines="pipelines"
+          :strategies="strategies"
+          :selected-run-id="selectedTraceId"
+          :focused-run="focusedRun"
+          :total="runTotal"
+          :limit="runLimit"
+          :offset="runOffset"
+          :filters="runFilters"
+          @select="selectTrace"
+          @apply="applyRunFilters"
+          @page="changeRunPage"
+          @delete-run="deleteRun"
+          @clear-history="clearHistory"
+          @open-configuration="openConfiguration"
+        />
+      </section>
 
-      <PipelineOperationsSummary v-if="metrics" :metrics="metrics" />
-
-      <PipelineExecutionHistory
-        :runs="runs"
-        :selected-run-id="selectedTraceId"
-        @select="selectTrace"
-      />
+      <section
+        v-else
+        id="pipeline-panel-operations"
+        class="operations-stack"
+        role="tabpanel"
+        aria-labelledby="pipeline-tab-operations"
+      >
+        <PipelineComparisonPanel :pipelines="pipelines" />
+        <PipelineOperationsSummary v-if="metrics" :metrics="metrics" />
+      </section>
     </template>
   </div>
 </template>
@@ -481,7 +690,39 @@ onMounted(load);
 }
 .studio-grid {
   display: grid;
-  grid-template-columns: minmax(220px, 0.34fr) minmax(0, 1fr);
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.studio-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--soft);
+}
+.studio-tabs button {
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.studio-tabs button.selected {
+  background: var(--card);
+  font-weight: 750;
+}
+.studio-tabs button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.operations-stack {
+  display: grid;
   gap: 14px;
 }
 @media (max-width: 960px) {

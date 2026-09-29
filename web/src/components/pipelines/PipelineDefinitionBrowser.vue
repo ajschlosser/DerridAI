@@ -1,5 +1,6 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
+import { computed, ref } from "vue";
 import { useI18nStore } from "../../stores/i18n";
 import {
   pipelineDefinitionStatusLabel,
@@ -21,6 +22,23 @@ const emit = defineEmits<{
 
 const i18n = useI18nStore();
 const t = (key: string, fallback: string) => i18n.t(key, fallback);
+const query = ref("");
+const purpose = ref("");
+const status = ref("");
+
+const purposes = computed(() => [...new Set(props.pipelines.map((item) => item.purpose))]);
+const visible = computed(() => {
+  const needle = query.value.trim().toLowerCase();
+  return props.pipelines.filter((pipeline) => {
+    if (purpose.value && pipeline.purpose !== purpose.value) return false;
+    if (status.value && pipeline.status !== status.value) return false;
+    if (!needle) return true;
+    return [pipeline.name, pipeline.pipeline_id, pipeline.purpose, String(pipeline.version)]
+      .join(" ")
+      .toLowerCase()
+      .includes(needle);
+  });
+});
 
 function assigned(pipeline: PipelineDefinition) {
   return props.assignments.some(
@@ -45,12 +63,48 @@ function assigned(pipeline: PipelineDefinition) {
         />
       </strong>
       <span :aria-label="t('pipelines.definition_count', 'Pipeline definition count')">
-        {{ pipelines.length }}
+        {{ visible.length }}/{{ pipelines.length }}
       </span>
     </div>
 
+    <form class="browser-filters" @submit.prevent>
+      <label>
+        <span class="sr-only">{{ t("pipelines.search_definitions", "Search pipelines") }}</span>
+        <input
+          v-model="query"
+          class="control"
+          type="search"
+          :placeholder="t('pipelines.search_definitions', 'Search pipelines')"
+          :aria-label="t('pipelines.search_definitions', 'Search pipelines')"
+        />
+      </label>
+      <div class="filter-row">
+        <label>
+          <span class="sr-only">{{ t("pipelines.filter_purpose", "Purpose") }}</span>
+          <select v-model="purpose" class="control" :aria-label="t('pipelines.filter_purpose', 'Purpose')">
+            <option value="">{{ t("pipelines.filter_all", "All") }}</option>
+            <option v-for="item in purposes" :key="item" :value="item">
+              {{ pipelinePurposeLabel(item, t) }}
+            </option>
+          </select>
+        </label>
+        <label>
+          <span class="sr-only">{{ t("pipelines.filter_status", "Status") }}</span>
+          <select v-model="status" class="control" :aria-label="t('pipelines.filter_status', 'Status')">
+            <option value="">{{ t("pipelines.filter_all", "All") }}</option>
+            <option value="active">{{ t("pipelines.status_active", "Active") }}</option>
+            <option value="draft">{{ t("pipelines.status_draft", "Draft") }}</option>
+            <option value="disabled">{{ t("pipelines.status_disabled", "Disabled") }}</option>
+          </select>
+        </label>
+      </div>
+    </form>
+
+    <p v-if="!visible.length" class="browser-empty">
+      {{ t("pipelines.no_definition_matches", "No pipelines match these filters.") }}
+    </p>
     <button
-      v-for="pipeline in pipelines"
+      v-for="pipeline in visible"
       :key="pipelineKey(pipeline)"
       type="button"
       class="pipeline-choice"
@@ -95,6 +149,38 @@ function assigned(pipeline: PipelineDefinition) {
 .browser-heading span {
   color: var(--muted);
   font-size: 0.78rem;
+}
+.browser-filters {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.filter-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.browser-filters .control {
+  width: 100%;
+  min-height: 36px;
+}
+.browser-empty {
+  margin: 0;
+  padding: 12px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 .heading-with-help {
   display: inline-flex;
