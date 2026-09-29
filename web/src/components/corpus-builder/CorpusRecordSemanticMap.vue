@@ -41,7 +41,7 @@ const i18n = useI18nStore();
 const MAX_TRAIL = 30;
 const MAX_INNER = 24;
 const MAX_OUTER = 16;
-const SIZE = { width: 640, height: 440 };
+const SIZE = { width: 820, height: 600 };
 const LAYERS = ["entity", "quotation", "ner", "pos"] as const;
 
 const trail = ref<Step[]>([]);
@@ -585,16 +585,16 @@ function onWheel(event: WheelEvent) {
         >
           <rect
             v-if="node.ring === 'center' && currentMap"
-            x="-14"
-            y="-10"
-            width="28"
-            height="20"
-            rx="4"
+            x="-8"
+            y="-6"
+            width="16"
+            height="12"
+            rx="3"
           />
-          <circle v-else :r="node.ring === 'center' ? 10 : node.ring === 'inner' ? 6 : 4.5" />
+          <circle v-else :r="node.ring === 'center' ? 7 : node.ring === 'inner' ? 5 : 4" />
           <text
             :x="node.ring === 'center' ? 0 : 11"
-            :y="node.ring === 'center' ? 28 : 4"
+            :y="node.ring === 'center' ? 22 : 4"
             :text-anchor="node.ring === 'center' ? 'middle' : 'start'"
           >
             {{ shortLabel(node.label) }}
@@ -1022,9 +1022,12 @@ button.mention:focus-visible,
   overflow: auto;
 }
 .semantic-map-canvas {
+  /* Drawn at natural size so labels keep the 12px minimum; the frame scrolls on narrow panels. */
   display: block;
-  width: 100%;
-  min-width: 480px;
+  width: 820px;
+  max-width: none;
+  height: 600px;
+  margin-inline: auto;
 }
 .map-edge {
   stroke: var(--border-strong);
