@@ -118,6 +118,22 @@ def validate_pipeline_definition(
     }
 
 
+@router.post("/definitions/{pipeline_id}/{version}/clone-draft")
+def clone_pipeline_definition_draft(
+    pipeline_id: str,
+    version: int,
+    request: Request,
+) -> dict[str, Any]:
+    """Prepare an editable clone without persisting a new version yet."""
+
+    require_admin(request)
+    try:
+        draft = pipeline_manager.prepare_clone(pipeline_id, version)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Pipeline definition not found.") from exc
+    return {"pipeline": draft.model_dump(mode="json")}
+
+
 @router.post("/definitions")
 def create_pipeline_definition(
     body: PipelineDefinition,
