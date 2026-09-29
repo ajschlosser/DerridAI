@@ -2,6 +2,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import AppIcon from "../AppIcon.vue";
+import UiTooltip from "../ui/UiTooltip.vue";
 import { useI18nStore } from "../../stores/i18n";
 import type { PipelineRunTrace, PipelineStageTrace } from "../../types/pipelines";
 
@@ -54,6 +55,14 @@ function stageDetail(stage: PipelineStageTrace) {
           {{ trace.run_id }} · {{ completedStages }}/{{ trace.stages.length }}
           {{ t("pipelines.stages_completed", "stages completed") }}
         </p>
+        <p class="trace-explainer">
+          {{
+            t(
+              "pipelines.trace_plain_help",
+              "This is the historical record of what actually happened during the run. It is not merely the saved design: skipped steps, fallbacks, models, counts, and timings reflect runtime behavior.",
+            )
+          }}
+        </p>
       </div>
       <div class="trace-summary">
         <span class="status-pill" :data-status="trace.status">{{ statusLabel(trace.status) }}</span>
@@ -77,12 +86,42 @@ function stageDetail(stage: PipelineStageTrace) {
         <div class="trace-stage">
           <div class="trace-stage-heading">
             <div>
-              <strong>{{ stage.strategy_id }}</strong>
-              <code>{{ stage.stage_id }}</code>
+              <strong class="trace-label-with-help">
+                {{ stage.strategy_id }}
+                <UiTooltip
+                  :text="
+                    t(
+                      'pipelines.trace_strategy_help',
+                      'The strategy ID is the technical name of the registered operation that ran at this step.',
+                    )
+                  "
+                />
+              </strong>
+              <code class="trace-label-with-help">
+                {{ stage.stage_id }}
+                <UiTooltip
+                  :text="
+                    t(
+                      'pipelines.trace_stage_id_help',
+                      'The stage ID identifies this specific step inside the saved pipeline version. It lets you match the runtime trace back to the pipeline definition.',
+                    )
+                  "
+                />
+              </code>
             </div>
             <div class="trace-stage-metrics">
               <span>{{ statusLabel(stage.status) }}</span>
-              <span>{{ ms(stage.elapsed_ms) }}</span>
+              <span class="trace-label-with-help">
+                {{ ms(stage.elapsed_ms) }}
+                <UiTooltip
+                  :text="
+                    t(
+                      'pipelines.trace_elapsed_help',
+                      'Elapsed time is the measured runtime for this stage when DerridAI could attribute a duration to it. A dash means the duration was not separately measured.',
+                    )
+                  "
+                />
+              </span>
             </div>
           </div>
 
@@ -90,11 +129,27 @@ function stageDetail(stage: PipelineStageTrace) {
           <div v-if="stage.input_count != null || stage.output_count != null" class="trace-counts">
             <span>
               {{ t("pipelines.input", "Input") }}
+              <UiTooltip
+                :text="
+                  t(
+                    'pipelines.trace_input_help',
+                    'How many items entered this stage, when the stage reports a count. The items may be candidate records, passages, or another stage-specific data type.',
+                  )
+                "
+              />
               <strong>{{ count(stage.input_count) }}</strong>
             </span>
             <span aria-hidden="true">→</span>
             <span>
               {{ t("pipelines.output", "Output") }}
+              <UiTooltip
+                :text="
+                  t(
+                    'pipelines.trace_output_help',
+                    'How many items left this stage. A smaller output than input often means filtering, reranking truncation, validation, or selection reduced the candidate set.',
+                  )
+                "
+              />
               <strong>{{ count(stage.output_count) }}</strong>
             </span>
           </div>
@@ -163,6 +218,10 @@ function stageDetail(stage: PipelineStageTrace) {
 .trace-header p {
   margin: 4px 0 0;
   font-size: 0.76rem;
+}
+.trace-header .trace-explainer {
+  max-width: 720px;
+  line-height: 1.45;
 }
 .trace-summary {
   display: grid;
@@ -237,6 +296,11 @@ function stageDetail(stage: PipelineStageTrace) {
 .trace-stage-heading strong,
 .trace-stage-heading code {
   display: block;
+}
+.trace-label-with-help {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 2px;
 }
 .trace-stage-heading strong {
   font-size: 0.82rem;

@@ -93,6 +93,7 @@ const meta = {
     assigned: true,
     canAssign: true,
     assigning: false,
+    cloning: false,
   },
 } satisfies Meta<typeof PipelineDefinitionDetail>;
 

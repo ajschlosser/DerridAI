@@ -633,7 +633,13 @@ class SystemStore:
         }
 
     def restore_snapshot(self, payload: dict[str, Any]) -> None:
-        """Restore server-owned configuration plus pipeline operational state."""
+        """Restore server-owned configuration plus pipeline operational state.
+
+        Pipeline payloads are validated before general system configuration is
+        touched. If an unexpected persistence failure occurs after validation,
+        the prior logical system/pipeline snapshots are restored before the
+        exception is re-raised.
+        """
         from .pipelines.store import PipelineStore
 
         if not isinstance(payload, dict):
@@ -645,18 +651,44 @@ class SystemStore:
 
         restored = copy.deepcopy(payload)
         pipeline_snapshot = restored.pop("pipelines", None)
-        with self._lock:
-            self._write(restored)
-            self._ensure()
-
-        # A full restore replaces, rather than merges, operational state. Older
-        # backups predate pipeline tables and therefore restore an empty custom
-        # pipeline layer while built-in definitions remain available from code.
         pipeline_store = PipelineStore(self.path)
+
+        # Reject malformed pipeline backups before replacing any system state.
         if isinstance(pipeline_snapshot, dict):
-            pipeline_store.restore_snapshot(pipeline_snapshot)
-        else:
-            pipeline_store.clear_all()
+            pipeline_store.validate_snapshot(pipeline_snapshot)
+
+        with self._lock:
+            previous_system = copy.deepcopy(self._read())
+        previous_pipelines = pipeline_store.snapshot()
+
+        try:
+            with self._lock:
+                self._write(restored)
+                self._ensure()
+
+            # A full restore replaces, rather than merges, operational state.
+            # Older backups predate pipeline tables and therefore restore an
+            # empty custom layer while code-owned built-ins remain available.
+            if isinstance(pipeline_snapshot, dict):
+                pipeline_store.restore_snapshot(pipeline_snapshot)
+            else:
+                pipeline_store.restore_snapshot(
+                    {
+                        "definitions": [],
+                        "assignments": [],
+                        "runs": [],
+                        "stages": [],
+                    }
+                )
+        except Exception:
+            # Best-effort cross-domain rollback. PipelineStore restoration is
+            # itself atomic; restoring the previous general system payload keeps
+            # a failed full backup from leaving half of the system replaced.
+            with self._lock:
+                self._write(previous_system)
+                self._ensure()
+            pipeline_store.restore_snapshot(previous_pipelines)
+            raise
 
 
 system_store = SystemStore()

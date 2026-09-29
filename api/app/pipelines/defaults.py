@@ -31,7 +31,7 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
             {
                 "id": "query",
                 "strategy": "query.research_decompose",
-                "config": {"optional": True},
+                "config": {"optional": True, "num_predict": 768},
                 "next": ["dense", "lexical"],
             },
             {
@@ -80,11 +80,20 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
             {
                 "id": "pack",
                 "strategy": "pack.evidence_context",
+                "config": {
+                    "record_char_limit": 12000,
+                    "total_char_limit": 120000,
+                },
                 "next": ["generate"],
             },
             {
                 "id": "generate",
                 "strategy": "llm.generate_answer",
+                "next": ["bind"],
+            },
+            {
+                "id": "bind",
+                "strategy": "validate.citation_binding",
                 "next": ["grade"],
             },
             {
@@ -110,7 +119,7 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
             {
                 "id": "query",
                 "strategy": "query.research_decompose",
-                "config": {"optional": True},
+                "config": {"optional": True, "num_predict": 768},
                 "next": ["dense", "lexical"],
             },
             {
@@ -136,6 +145,10 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
             {
                 "id": "rerank",
                 "strategy": "rerank.cross_encoder",
+                "config": {
+                    "top_k": 24,
+                    "model": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+                },
                 "on_unavailable": "rerank_fallback",
                 "on_timeout": "rerank_fallback",
                 "on_error": "rerank_fallback",
@@ -159,11 +172,20 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
             {
                 "id": "pack",
                 "strategy": "pack.evidence_context",
+                "config": {
+                    "record_char_limit": 12000,
+                    "total_char_limit": 120000,
+                },
                 "next": ["generate"],
             },
             {
                 "id": "generate",
                 "strategy": "llm.generate_answer",
+                "next": ["bind"],
+            },
+            {
+                "id": "bind",
+                "strategy": "validate.citation_binding",
                 "next": ["grade"],
             },
             {

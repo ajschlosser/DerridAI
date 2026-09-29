@@ -3,6 +3,7 @@
 import PipelineStageEditor from "./PipelineStageEditor.vue";
 import { useI18nStore } from "../../stores/i18n";
 import type { PipelineDefinition, PipelineStrategy } from "../../types/pipelines";
+import UiTooltip from "../ui/UiTooltip.vue";
 
 const props = defineProps<{
   modelValue: PipelineDefinition;
@@ -197,9 +198,32 @@ function moveStage(stageIndex: number, direction: -1 | 1) {
 
 <template>
   <div class="pipeline-editor">
+    <div class="editor-intro">
+      <strong>{{
+        t("pipelines.clone_edit_intro_title", "You are creating a new immutable version")
+      }}</strong>
+      <p>
+        {{
+          t(
+            "pipelines.clone_edit_intro",
+            "The original pipeline will not be changed. Give this copy an identity, review each stage, validate the graph, and save it. Saving creates a historical version; making it active is a separate action.",
+          )
+        }}
+      </p>
+    </div>
     <div class="identity-grid">
       <label>
-        <span>{{ t("pipelines.pipeline_id", "Pipeline ID") }}</span>
+        <span class="label-with-help">
+          {{ t("pipelines.pipeline_id", "Pipeline ID") }}
+          <UiTooltip
+            :text="
+              t(
+                'pipelines.pipeline_id_help',
+                'A stable technical name used by DerridAI and its audit records. Versions that belong to the same pipeline share this ID. It is not the human-readable display name.',
+              )
+            "
+          />
+        </span>
         <input
           class="control"
           :value="modelValue.pipeline_id"
@@ -208,7 +232,17 @@ function moveStage(stageIndex: number, direction: -1 | 1) {
         />
       </label>
       <label>
-        <span>{{ t("pipelines.version", "Version") }}</span>
+        <span class="label-with-help">
+          {{ t("pipelines.version", "Version") }}
+          <UiTooltip
+            :text="
+              t(
+                'pipelines.version_help',
+                'An immutable revision number. A saved ID and version pair can never be overwritten, so past Research runs can always point to the exact configuration they used.',
+              )
+            "
+          />
+        </span>
         <input
           class="control"
           type="number"
@@ -224,7 +258,17 @@ function moveStage(stageIndex: number, direction: -1 | 1) {
         />
       </label>
       <label class="identity-name">
-        <span>{{ t("pipelines.name", "Name") }}</span>
+        <span class="label-with-help">
+          {{ t("pipelines.name", "Name") }}
+          <UiTooltip
+            :text="
+              t(
+                'pipelines.name_help',
+                'A human-readable title for administrators and researchers. Changing the name does not change the technical pipeline ID.',
+              )
+            "
+          />
+        </span>
         <input
           class="control"
           :value="modelValue.name"
@@ -232,7 +276,17 @@ function moveStage(stageIndex: number, direction: -1 | 1) {
         />
       </label>
       <label>
-        <span>{{ t("pipelines.status", "Status") }}</span>
+        <span class="label-with-help">
+          {{ t("pipelines.status", "Status") }}
+          <UiTooltip
+            :text="
+              t(
+                'pipelines.status_help',
+                'Draft means editable configuration that cannot become the system assignment yet. Active means eligible to be assigned. Disabled keeps the version for history but prevents new selection.',
+              )
+            "
+          />
+        </span>
         <select
           class="control"
           :value="modelValue.status"
@@ -251,7 +305,17 @@ function moveStage(stageIndex: number, direction: -1 | 1) {
     </div>
 
     <label class="notes-field">
-      <span>{{ t("pipelines.notes", "Notes") }}</span>
+      <span class="label-with-help">
+        {{ t("pipelines.notes", "Notes") }}
+        <UiTooltip
+          :text="
+            t(
+              'pipelines.notes_help',
+              'Use notes to record the scholarly or technical reason for this version—for example, why retrieval depth changed or why a fallback was added.',
+            )
+          "
+        />
+      </span>
       <textarea
         class="control"
         rows="3"
@@ -268,7 +332,7 @@ function moveStage(stageIndex: number, direction: -1 | 1) {
             {{
               t(
                 "pipelines.stage_settings_help",
-                "Build the chain from registered strategies. Edges and fallback paths are validated before a version can be activated.",
+                "Think of the pipeline as a research recipe. Each stage is one step, the strategy says what that step does, normal connections say what happens next, and fallback connections say what to do when a step cannot produce its normal result.",
               )
             }}
           </p>
@@ -305,6 +369,23 @@ function moveStage(stageIndex: number, direction: -1 | 1) {
   display: grid;
   gap: 16px;
 }
+.editor-intro {
+  display: grid;
+  gap: 4px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--soft);
+}
+.editor-intro strong {
+  font-size: 0.8rem;
+}
+.editor-intro p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
 .identity-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -320,6 +401,11 @@ function moveStage(stageIndex: number, direction: -1 | 1) {
   color: var(--muted);
   font-size: 0.75rem;
   font-weight: 750;
+}
+.label-with-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
 .identity-name {
   grid-column: span 2;
