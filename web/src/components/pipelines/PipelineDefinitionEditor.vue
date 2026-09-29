@@ -21,7 +21,6 @@ const i18n = useI18nStore();
 const strategyMap = computed(
   () => new Map(props.strategies.map((strategy) => [strategy.strategy_id, strategy])),
 );
-const stageIds = computed(() => props.modelValue.stages.map((stage) => stage.id));
 const strategiesByFamily = computed(() => {
   const groups = new Map<string, PipelineStrategy[]>();
   for (const strategy of props.strategies) {
@@ -34,6 +33,15 @@ const strategiesByFamily = computed(() => {
     strategies: strategies.sort((a, b) => a.label.localeCompare(b.label)),
   }));
 });
+const fallbackOptions = [
+  { key: "on_empty" as const, label: () => t("pipelines.on_empty", "On empty") },
+  {
+    key: "on_unavailable" as const,
+    label: () => t("pipelines.on_unavailable", "On unavailable"),
+  },
+  { key: "on_timeout" as const, label: () => t("pipelines.on_timeout", "On timeout") },
+  { key: "on_error" as const, label: () => t("pipelines.on_error", "On error") },
+];
 
 function t(key: string, fallback: string) {
   return i18n.t(key, fallback);
@@ -117,7 +125,9 @@ function updateFallback(
 }
 function addStage() {
   const next = clonePipeline();
-  const strategy = props.strategies[0];
+  const strategy =
+    props.strategies.find((item) => item.strategy_id === "query.passthrough") ||
+    props.strategies[0];
   if (!strategy) return;
   const used = new Set(next.stages.map((stage) => stage.id));
   const stem = strategy.strategy_id.split(".").pop()?.replace(/[^a-z0-9_]+/gi, "_") || "stage";
@@ -160,6 +170,7 @@ function moveStage(stageIndex: number, direction: -1 | 1) {
   if (target < 0 || target >= props.modelValue.stages.length) return;
   const next = clonePipeline();
   const [stage] = next.stages.splice(stageIndex, 1);
+  if (!stage) return;
   next.stages.splice(target, 0, stage);
   emit("update:modelValue", next);
 }
@@ -183,6 +194,7 @@ function updateConfig(
 ) {
   const next = clonePipeline();
   const stage = next.stages[stageIndex];
+  if (!stage) return;
   const kind = String(rule.type || "string");
   if (kind === "boolean") {
     stage.config[key] = Boolean(raw);
@@ -417,22 +429,17 @@ function updateConfig(
 
             <div class="fallback-grid">
               <label
-                v-for="fallback in [
-                  ['on_empty', t('pipelines.on_empty', 'On empty')],
-                  ['on_unavailable', t('pipelines.on_unavailable', 'On unavailable')],
-                  ['on_timeout', t('pipelines.on_timeout', 'On timeout')],
-                  ['on_error', t('pipelines.on_error', 'On error')],
-                ] as const"
-                :key="fallback[0]"
+                v-for="fallback in fallbackOptions"
+                :key="fallback.key"
               >
-                <span>{{ fallback[1] }}</span>
+                <span>{{ fallback.label() }}</span>
                 <select
                   class="control"
-                  :value="stage[fallback[0]] || ''"
+                  :value="stage[fallback.key] || ''"
                   @change="
                     updateFallback(
                       stageIndex,
-                      fallback[0],
+                      fallback.key,
                       ($event.target as HTMLSelectElement).value,
                     )
                   "
