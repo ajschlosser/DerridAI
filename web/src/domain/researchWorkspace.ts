@@ -146,6 +146,7 @@ export function createResearchWorkspace(deps: Deps) {
       assignment: null,
       override_allowed: false,
       pipelines: [],
+      strategies: [],
     };
     try {
       pipelineVisibility = await api("/api/system/pipelines/research-options");
@@ -198,6 +199,9 @@ export function createResearchWorkspace(deps: Deps) {
           : null,
       pipeline_options: Array.isArray(pipelineVisibility.pipelines)
         ? cloneAuditValue(pipelineVisibility.pipelines)
+        : [],
+      pipeline_strategies: Array.isArray(pipelineVisibility.strategies)
+        ? cloneAuditValue(pipelineVisibility.strategies)
         : [],
       pipeline_override_allowed: Boolean(pipelineVisibility.override_allowed),
       can_run: hasCapability("rag.run"),
