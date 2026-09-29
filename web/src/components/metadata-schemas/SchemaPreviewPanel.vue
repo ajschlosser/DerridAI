@@ -21,7 +21,7 @@ const { t, tf } = useSchemaCopy();
 
 const group = ref(CORE_GROUP);
 const text = ref(
-  "In this passage Derrida distinguishes the archive from simple memory. He cites Freud while qualifying the claim: the archive is not merely a storehouse, and its authority depends on the institution that preserves and interprets it. The paragraph asks whether a supposedly universal concept can remain neutral when its exclusions and historical conditions are ignored.",
+  "In this passage the document author distinguishes an institutional practice from simple memory while qualifying the claim: the practice is not merely a storehouse, and its authority depends on the institution that preserves and interprets it. The paragraph asks whether a supposedly universal concept can remain neutral when its exclusions and historical conditions are ignored.",
 );
 const profile = ref(props.defaultProviderId ? "" : (props.providerProfiles[0]?.id ?? ""));
 const result = ref<SchemaPreview | null>(null);

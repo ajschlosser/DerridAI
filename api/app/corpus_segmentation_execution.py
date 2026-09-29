@@ -31,6 +31,15 @@ from .corpus_segmentation import (
 )
 
 
+def _manifest_prompt_context(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Return only source-document context that is appropriate for LLM boundary prompts."""
+    return {
+        key: manifest.get(key)
+        for key in ("title", "document_author", "translator", "language", "document_type")
+        if manifest.get(key) not in (None, "")
+    }
+
+
 class BuildSegmentationExecutionMixin:
     """Mixin members declared here exist on PdfCorpusBuildManager, not on this mixin itself.
 
@@ -53,15 +62,12 @@ class BuildSegmentationExecutionMixin:
             f"[{b['block_id']} | PDF p.{b['page']} | {b['type']}]\n{b['text']}"
             for b in window
         )
-        manifest_summary = {
-            key: manifest.get(key)
-            for key in ("title", "document_author", "translator", "language", "document_type")
-            if manifest.get(key) not in (None, "")
-        }
-        return f"""You are a conservative semantic-boundary auditor for a Derrida scholarly corpus.
+        manifest_summary = _manifest_prompt_context(manifest)
+        return f"""You are a conservative semantic-boundary auditor for a scholarly corpus.
 Judge only genuine discourse boundaries. Split when one coherent argumentative/discursive unit ends because of a meaningful change in speaker, position holder, stance, target, quotation frame, discourse role, or argumentative move. NEVER split because a page changes, an execution window ends, or text reaches a size. Keep a quotation with the attribution needed to understand who owns the quoted proposition.
 
 Document context: {json.dumps(manifest_summary, ensure_ascii=False)}
+When document_author is present, use it only as source-document authorship context. Do not assume it is the speaker or position holder, and do not invent an author or work when the document context does not supply one.
 
 SOURCE BLOCKS (immutable IDs):
 {block_text}
@@ -78,8 +84,12 @@ Return a COMPACT JSON object containing ONLY transitions that plausibly need a s
         request: dict[str, Any],
         build_id: str,
     ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
-        prompt = f"""Classify ONE possible semantic record boundary in a Derrida scholarly corpus.
+        manifest_summary = _manifest_prompt_context(manifest)
+        prompt = f"""Classify ONE possible semantic record boundary in a scholarly corpus.
 Do not use page changes or length as evidence. Decide whether the second source block begins a new coherent discourse/argument unit because of a meaningful change in speaker, position holder, stance, target, quotation frame, discourse role, or argumentative move.
+
+Document context: {json.dumps(manifest_summary, ensure_ascii=False)}
+When document_author is present, use it only as source-document authorship context. Do not assume it is the speaker or position holder, and do not invent an author or work when the document context does not supply one.
 
 LEFT [{left['block_id']}]:\n{str(left.get('text') or '')[:7000]}
 
@@ -231,11 +241,12 @@ Return only `decision`, `confidence`, and `changes` in the supplied schema.
                 f"Signals: {', '.join(c.get('signals') or [])}\n"
                 f"LEFT:\n{str(left.get('text') or '')[-3200:]}\nRIGHT:\n{str(right.get('text') or '')[:3200]}"
             )
-        context={k:manifest.get(k) for k in ("title","document_author","language","document_type") if manifest.get(k) not in (None,"")}
-        prompt=f"""You are a conservative semantic-boundary adjudicator for an auditable Derrida corpus.
+        context = _manifest_prompt_context(manifest)
+        prompt=f"""You are a conservative semantic-boundary adjudicator for an auditable scholarly corpus.
 Python has already filtered out ordinary prose and protected attribution-sensitive seams. For each listed transition choose SPLIT only when the right block clearly begins a new coherent discourse/argument unit because of a meaningful change in speaker, position holder, stance, target, quotation frame, discourse role, or argumentative move. Otherwise choose KEEP. Page changes and text length are never evidence. When in doubt, KEEP.
 
 Document context: {json.dumps(context, ensure_ascii=False)}
+When document_author is present, use it only as source-document authorship context. Do not assume it is the speaker or position holder, and do not invent an author or work when the document context does not supply one.
 
 {"\n\n---\n\n".join(items)}
 
@@ -327,8 +338,8 @@ Return one compact decision per transition using its exact left-hand block ID in
                     f"RIGHT START: {str(example.get('right_excerpt') or '')[:700]}"
                 )
             examples_text = "\n\nRelevant editorial examples from this build:\n" + "\n---\n".join(rendered)
-        context = {k: manifest.get(k) for k in ("title", "document_author", "language", "document_type") if manifest.get(k) not in (None, "")}
-        prompt = f"""You are the second-reader boundary adjudicator for an auditable Derrida corpus.
+        context = _manifest_prompt_context(manifest)
+        prompt = f"""You are the second-reader boundary adjudicator for an auditable scholarly corpus.
 A deterministic segmentation system has already created two adjacent records. Decide whether the current boundary is semantically coherent.
 
 Use KEEP when the left record ends a coherent discourse unit and the right record begins another.
@@ -339,6 +350,7 @@ Use UNCERTAIN when the evidence is genuinely ambiguous.
 Strong signals include sentence/paragraph continuation, unfinished quotation framing, speaker or position-holder continuation, a heading stranded with the wrong unit, or an argumentative move that is visibly cut in half. Page boundaries and record length are never semantic evidence. Never rewrite, summarize, or invent text. If recommending a move, choose `suggested_after_block_id` only from the allowed seam IDs.
 
 Document context: {json.dumps(context, ensure_ascii=False)}
+When document_author is present, use it only as source-document authorship context. Do not assume it is the speaker or position holder, and do not invent an author or work when the document context does not supply one.
 Boundary id: {boundary_id}
 Current seam after block: {current_after}
 Allowed seam IDs: {json.dumps(candidates, ensure_ascii=False)}

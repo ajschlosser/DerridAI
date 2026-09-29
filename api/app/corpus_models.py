@@ -26,11 +26,11 @@ SCHEMA_VERSION = "pdf-corpus-v3"
 
 
 
-SEGMENTATION_PROMPT_VERSION = "derridai-local-boundaries-v7"
+SEGMENTATION_PROMPT_VERSION = "derridai-local-boundaries-v8"
 
 
 
-METADATA_PROMPT_VERSION = "derridai-record-metadata-v12"
+METADATA_PROMPT_VERSION = "derridai-record-metadata-v13"
 
 
 
