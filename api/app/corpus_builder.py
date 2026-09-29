@@ -277,9 +277,15 @@ from .nlp_annotations import annotate_record
 from .operation_events import note_corpus_build, note_record_metadata
 from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
 from .rag import _citation_strings, chat_complete
-from .run_guidance import find_guidance_matches
-from .semantic_content_graph import build_semantic_content_graph
 from .record_semantic_map import record_semantic_map, semantic_node_neighborhood
+from .run_guidance import find_guidance_matches
+from .semantic_content_graph import (
+    _records_digest as _semantic_records_digest,
+)
+from .semantic_content_graph import (
+    build_semantic_content_graph,
+    semantic_content_graph_view,
+)
 from .sentence_boundaries import snap_boundaries_to_sentences
 from .source_embeddings import SourceEmbeddingProjection
 from .source_quality import assess_extracted_source, page_source_quality_report
@@ -1773,6 +1779,9 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         # in memory so a reviewer can hot-swap profiles for subsequently scheduled
         # metadata work while the public build manifest remains secret-free.
         self._runtime_requests: dict[str, dict[str, Any]] = {}
+        # Derived semantic graphs keyed by build and the exact inputs that produced
+        # them; bounded so large corpora do not accumulate in memory.
+        self._semantic_graph_cache: dict[str, tuple[tuple[Any, ...], dict[str, Any]]] = {}
         self._executor = ThreadPoolExecutor(max_workers=max(1, max_workers), thread_name_prefix="derridai-pdf-corpus")
         # Conventions confirmed independently in several builds; see enrichment_cycles.
         self._global_learning = GlobalLearningStore(self.repo.root / "global_learning.json")
@@ -1865,6 +1874,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         request = build.get("request") if isinstance(build.get("request"), dict) else {}
         self._run_document_intelligence(build_id, records, manifest, request)
         self.repo.save_records(build_id, records)
+        self._semantic_graph_cache.pop(build_id, None)
         graph = self.semantic_content_graph(build_id)
         return {
             "document_intelligence": self.document_intelligence(build_id),
@@ -1888,7 +1898,12 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
     def _current_semantic_graph(
         self, build_id: str
     ) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
-        """The graph, reviewer-presented Records, and annotation run, without persisting."""
+        """Return the current graph, reviewer-presented Records, and annotation run.
+
+        The derived graph may use the bounded in-process cache, but this helper does
+        not persist checkpoints or mutate the build. Record- and node-centred
+        exploration therefore remain read-only.
+        """
         records = [json.loads(json.dumps(row)) for row in self.repo.load_records(build_id)]
         for row in records:
             _present_for_reviewer(row)
@@ -1898,11 +1913,31 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             if analysis.get("stale")
             else analysis
         )
+        key = (
+            _semantic_records_digest(records),
+            analysis.get("text_sha256"),
+            analysis.get("provider"),
+            analysis.get("provider_version"),
+            analysis.get("version"),
+            len(analysis.get("entities") or []),
+            len(analysis.get("entity_clusters") or []),
+            len(analysis.get("characters") or []),
+            bool(analysis.get("stale")),
+            str(analysis.get("profile") or ""),
+        )
+        cached = self._semantic_graph_cache.get(build_id)
+        if cached is not None and cached[0] == key:
+            return cached[1], records, analysis
         graph = build_semantic_content_graph(
             records,
             graph_analysis,
             schema=self._schema_for(build_id),
         )
+        with self._lock:
+            self._semantic_graph_cache.pop(build_id, None)
+            self._semantic_graph_cache[build_id] = (key, graph)
+            while len(self._semantic_graph_cache) > 4:
+                self._semantic_graph_cache.pop(next(iter(self._semantic_graph_cache)))
         return graph, records, analysis
 
     def record_semantic_map(self, build_id: str, record_id: str) -> dict[str, Any]:
@@ -1919,7 +1954,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         """Rebuild the semantic-content graph against the current Record revisions.
 
         Rebuilding on read keeps structural edits and human metadata corrections from
-        leaving a stale visualization.  The graph remains a derived projection.
+        leaving a stale visualization. The graph remains a derived projection.
         """
         graph, _, _ = self._current_semantic_graph(build_id)
         self.repo.save_checkpoint(build_id, "semantic_content_graph", graph)
@@ -1927,6 +1962,10 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         build["semantic_content_graph"] = graph.get("summary") or {}
         self.repo.save_build(build)
         return graph
+
+    def semantic_content_graph_view(self, build_id: str, **params: Any) -> dict[str, Any]:
+        """Bounded, filterable slice of the current graph for interactive display."""
+        return semantic_content_graph_view(self.semantic_content_graph(build_id), **params)
 
     def _project_metadata_exemplars(
         self,

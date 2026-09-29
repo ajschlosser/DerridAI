@@ -380,6 +380,99 @@ export interface SemanticContentGraph {
   epistemic_note?: string;
 }
 
+export interface SemanticGraphViewNode {
+  id: string;
+  type: string;
+  label: string;
+  aliases?: string[];
+  mention_count: number;
+  record_count: number;
+  degree: number;
+}
+
+export interface SemanticGraphViewEdge {
+  id: string;
+  source: string;
+  target: string;
+  predicate: string;
+  relation_kind: "semantic" | "observational" | string;
+  authority_status: string;
+  count: number;
+}
+
+export interface SemanticGraphViewRelation extends SemanticGraphViewEdge {
+  direction: "incoming" | "outgoing";
+  other_id: string;
+  other_label: string;
+  other_type: string;
+  record_ids: string[];
+  record_count: number;
+  supporting_fields: string[];
+  derivation_method: string;
+  evidence_ref_count: number;
+  observed_verbs: string[];
+}
+
+export type SemanticRelationKindFilter = "all" | "semantic" | "observational";
+export type SemanticIndexSort = "mentions" | "label" | "degree" | "records";
+
+export interface SemanticGraphViewParams {
+  q?: string;
+  types?: string[];
+  relation_kind?: SemanticRelationKindFilter;
+  focus?: string;
+  node_limit?: number;
+  edge_limit?: number;
+  min_mentions?: number;
+  index_offset?: number;
+  index_limit?: number;
+  index_sort?: SemanticIndexSort;
+}
+
+/** Bounded, ranked slice of the semantic graph; the full projection stays server-side. */
+export interface SemanticContentGraphView {
+  version: number;
+  kind: "semantic_content_graph_view" | string;
+  profile?: string;
+  summary: NonNullable<SemanticContentGraph["summary"]>;
+  epistemic_note?: string;
+  facets: {
+    types: Array<{ type: string; count: number }>;
+    predicates: Array<{ relation_kind: string; predicate: string; count: number }>;
+  };
+  query: Required<Pick<SemanticGraphViewParams, "relation_kind" | "focus">> & {
+    query: string;
+    types: string[];
+    node_limit: number;
+    edge_limit: number;
+    min_mentions: number;
+  };
+  view: {
+    nodes: SemanticGraphViewNode[];
+    edges: SemanticGraphViewEdge[];
+    candidate_nodes: number;
+    candidate_edges: number;
+    truncated_nodes: boolean;
+    truncated_edges: boolean;
+  };
+  focus: {
+    node: SemanticGraphViewNode & {
+      derivation_method?: string;
+      record_ids?: string[];
+      character_profile?: SemanticContentGraphNode["character_profile"] | null;
+    };
+    relations: SemanticGraphViewRelation[];
+    relations_total: number;
+  } | null;
+  index: {
+    items: SemanticGraphViewNode[];
+    total: number;
+    offset: number;
+    limit: number;
+    sort: SemanticIndexSort;
+  };
+}
+
 export interface AutonomousPolicy {
   enabled: boolean;
   passes: number;

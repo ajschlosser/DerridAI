@@ -6,6 +6,8 @@ import type {
   DocumentIntelligenceRun,
   RecordSemanticMap,
   SemanticContentGraph,
+  SemanticContentGraphView,
+  SemanticGraphViewParams,
   SemanticNodeNeighborhood,
 } from "./types";
 import { LEGACY_CORPUS_BASE, legacyCorpusUrl } from "./compatibility";
@@ -40,6 +42,23 @@ export const corpusBuildsApi = {
     apiRequest<SemanticContentGraph>(
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/semantic-content-graph`,
     ),
+  semanticContentGraphView: (
+    buildId: string,
+    params: SemanticGraphViewParams = {},
+    init: { signal?: AbortSignal } = {},
+  ) => {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (value === undefined || value === "" || value === null) continue;
+      if (Array.isArray(value)) value.forEach((item) => query.append(key, String(item)));
+      else query.set(key, String(value));
+    }
+    const suffix = query.toString() ? `?${query}` : "";
+    return apiRequest<SemanticContentGraphView>(
+      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/semantic-content-graph/view${suffix}`,
+      init,
+    );
+  },
   recordSemanticMap: (buildId: string, recordId: string) =>
     apiRequest<RecordSemanticMap>(
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/semantic-map`,

@@ -602,6 +602,33 @@ def evidence_sufficiency_issues(evidence: Sequence[Mapping[str, Any]]) -> list[d
     return issues
 
 
+def partition_sufficient_records(
+    records: Sequence[Mapping[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+    """Split ranked candidates into citable records and provenance-incomplete ones.
+
+    Incomplete records are excluded before evidence tags are assigned, so one
+    record lacking e.g. ``document_author`` cannot abort the whole run; the
+    exclusions are returned so callers can surface them for review.
+    """
+    kept: list[dict[str, Any]] = []
+    excluded: list[dict[str, str]] = []
+    for item in records:
+        record = item.get("record") if isinstance(item.get("record"), dict) else {}
+        inline, full = _citation_strings(dict(record))
+        issues = evidence_sufficiency_issues([{
+            "evidence_id": str(record.get("record_id") or "unknown"),
+            "record": record,
+            "inline_citation": inline,
+            "full_citation": full,
+        }])
+        if issues:
+            excluded.append({"record_id": issues[0]["evidence_id"], "missing": issues[0]["missing"]})
+        else:
+            kept.append(dict(item))
+    return kept, excluded
+
+
 _EVIDENCE_TAG_GROUP = r"((?:E\d+)(?:\s*[,;]\s*E\d+)*)"
 # Memory-guidance prompt tags are internal grounding context, never citation syntax.
 # If a model echoes one, strip it before the answer reaches the reader.
@@ -1281,6 +1308,15 @@ def run_rag_pipeline(
 
     # Step 5: build compact evidence context.
     stage_start = time.perf_counter()
+    reranked, insufficient_records = partition_sufficient_records(reranked)
+    if insufficient_records:
+        warnings.append(
+            "Excluded provenance-incomplete records from evidence: "
+            + "; ".join(
+                f"{item['record_id']} missing {item['missing']}"
+                for item in insufficient_records
+            )
+        )
     retrieval_context, works, evidence = _context_string(
         reranked,
         record_char_limit=request.evidence_record_char_limit,
@@ -1295,9 +1331,19 @@ def run_rag_pipeline(
             "evidence_count": len(evidence),
             "characters": len(retrieval_context),
             "sufficiency_issues": sufficiency_issues,
+            "excluded_insufficient_records": insufficient_records,
         },
     })
     update("context", 1, 1, f"{len(evidence)} evidence records packaged")
+    if not evidence and insufficient_records:
+        detail = "; ".join(
+            f"{item['record_id']} missing {item['missing']}"
+            for item in insufficient_records
+        )
+        raise ValueError(
+            "RAG evidence sufficiency failed: every retrieved record lacks required "
+            f"provenance ({detail})."
+        )
     if not evidence:
         raise ValueError("RAG evidence sufficiency failed: retrieval produced no evidence records.")
     if sufficiency_issues:

@@ -165,6 +165,23 @@ POST /api/pdf/corpus-builds/{build_id}/document-intelligence/rerun
 The Semantic Content Graph remains a separate derived read surface at
 `GET /api/pdf/corpus-builds/{build_id}/semantic-content-graph`. It rebuilds
 against current reviewer-presented Records so blind-review sealing is preserved.
+The rebuilt graph is cached in process against a digest of those Records and the
+Document Intelligence run, so repeated reads do not recompute it.
+
+Interactive clients use the bounded view instead of the full projection:
+
+```text
+GET /api/pdf/corpus-builds/{build_id}/semantic-content-graph/view
+    ?q=&types=&relation_kind=all|semantic|observational&focus=<node id>
+    &node_limit=(≤250)&edge_limit=(≤1200)&min_mentions=
+    &index_offset=&index_limit=(≤200)&index_sort=mentions|degree|records|label
+```
+
+It returns type/predicate facets, a ranked node set with the strongest induced
+edges (overview) or one entity's neighbourhood with paged relations (focus), a
+paged entity index, and explicit `candidate_*`/`truncated_*` counts. Relations
+keep `relation_kind`, `authority_status`, supporting fields, and evidence-reference
+counts.
 
 Record-centred projections of the same graph support per-Record maps and graph walks:
 
@@ -173,7 +190,7 @@ GET /api/pdf/corpus-builds/{build_id}/records/{record_id}/semantic-map
 GET /api/pdf/corpus-builds/{build_id}/semantic-content-graph/nodes/{node_id}
 ```
 
-Both rebuild from the same reviewer-presented Records without persisting anything and are bounded (local and neighbour nodes, adjacent relations, linked Records, per-node Record lists). See **Record semantic maps** below.
+Both rebuild from the same reviewer-presented Records without persisting anything and are bounded (local and neighbour nodes, adjacent relations, linked Records, per-node Record lists).
 
 ## Metadata enrichment
 
@@ -261,15 +278,14 @@ Record Review includes an **Entities & relationships** panel after the Document 
 
 It provides:
 
-- a filter by entity type;
-- search across canonical labels and aliases;
-- a complete entity/concept index, not only nodes visible in the diagram;
-- an interactive network diagram;
-- a selected-node inspector with aliases, mention counts, Record counts, and adjacent relationships;
-- visually distinct semantic versus observational edges;
+- server-side search, entity-type facets, relation-kind and minimum-mention filters, and a density control;
+- a paged, sortable entity/concept index covering every matching entity, not only nodes visible in the diagram;
+- an interactive, zoomable force-directed map with neighbourhood exploration and a breadcrumb trail;
+- a selected-node inspector with aliases, mention/Record/connection counts, and relations grouped by semantic versus observational, carrying authority status and evidence-reference counts;
+- visually distinct semantic, observational, and disputed edges;
 - a stale-analysis warning and explicit **Reanalyse document** action after reviewed-text changes.
 
-The diagram intentionally renders only a bounded subset of the current filtered nodes for legibility, while the table remains the complete index.
+The diagram renders at most 250 entities from the bounded view and reports what it omitted; the paged index remains the complete route to every entity.
 
 Each Record's inspector also has a **Semantic map** tab that shows the Record map, its annotated text, and its linked Records, and lets the reviewer walk node → node and node → Record across the corpus with a back-tracking exploration path.
 

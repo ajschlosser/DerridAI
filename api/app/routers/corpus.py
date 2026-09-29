@@ -682,6 +682,43 @@ def get_pdf_corpus_semantic_content_graph(build_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="Corpus build not found") from exc
 
 
+@router.get("/api/pdf/corpus-builds/{build_id}/semantic-content-graph/view")
+def get_pdf_corpus_semantic_content_graph_view(
+    build_id: str,
+    q: str = Query("", max_length=200),
+    types: list[str] = Query(default_factory=list),
+    relation_kind: str = Query("all", pattern="^(all|semantic|observational)$"),
+    focus: str = Query("", max_length=200),
+    node_limit: int = Query(80, ge=1, le=250),
+    edge_limit: int = Query(400, ge=0, le=1200),
+    min_mentions: int = Query(0, ge=0),
+    index_offset: int = Query(0, ge=0),
+    index_limit: int = Query(50, ge=1, le=200),
+    index_sort: str = Query("mentions", pattern="^(mentions|label|degree|records)$"),
+) -> dict[str, Any]:
+    """Bounded, ranked view of the semantic graph (overview or one entity's neighbourhood).
+
+    Large corpora can hold tens of thousands of entities; clients receive a capped
+    slice, facet counts, and a paged index, with truncation reported explicitly.
+    """
+    try:
+        return pdf_corpus_builds.semantic_content_graph_view(
+            build_id,
+            query=q,
+            types=types,
+            relation_kind=relation_kind,
+            focus=focus,
+            node_limit=node_limit,
+            edge_limit=edge_limit,
+            min_mentions=min_mentions,
+            index_offset=index_offset,
+            index_limit=index_limit,
+            index_sort=index_sort,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+
+
 @router.get("/api/pdf/corpus-builds/{build_id}/records/{record_id}/semantic-map")
 def get_pdf_corpus_record_semantic_map(build_id: str, record_id: str) -> dict[str, Any]:
     """Reviewer-safe semantic map of one Record and the Records it shares nodes with."""

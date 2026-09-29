@@ -184,6 +184,7 @@ CARRIES_RECORDS = {
     ("GET", "/api/pdf/corpus-builds/{build_id}/records"),
     # Semantic graph nodes/edges may project reviewer-visible metadata values.
     ("GET", "/api/pdf/corpus-builds/{build_id}/semantic-content-graph"),
+    ("GET", "/api/pdf/corpus-builds/{build_id}/semantic-content-graph/view"),
     # Record maps and node walks are projections of that same reviewer-presented graph.
     ("GET", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/semantic-map"),
     ("GET", "/api/pdf/corpus-builds/{build_id}/semantic-content-graph/nodes/{node_id}"),

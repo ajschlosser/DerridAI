@@ -608,13 +608,16 @@ Choose **Scholarly / non-fiction** for philosophical, critical, historical, and 
 
 Entity aliases, coreference clusters, quotation-speaker candidates, and optional event output are model-derived navigation/enrichment hints. They do not count as source evidence, do not confirm who holds a proposition, and do not become human-confirmed metadata automatically.
 
-In Record Review, open **Entities & relationships** to inspect the build-wide content map. The panel includes:
+In Record Review, open **Entities & relationships** to inspect the build-wide content map. Large corpora can hold tens of thousands of entities, so the map never loads or draws them all: the server returns a ranked, size-capped view and says how much it left out. The panel includes:
 
-- a complete searchable entity/concept index with type, aliases, mention count, and Record coverage;
-- an interactive relationship diagram (bounded to a legible subset of the current filter while the table remains complete);
-- semantic relationships projected from current attribution metadata and its evidence/authority state;
-- observational relationships such as co-occurrence and dialogue proximity, drawn separately because they do not assert friendship, influence, agreement, addressee, or another stronger relation;
-- a node inspector showing aliases and adjacent relationships.
+- a filter bar: search across labels and aliases, entity-type chips with counts (multi-select), a **Relationships** switch (All / Semantic / Observational), **Minimum mentions**, and **Map density** (top 40–250 entities);
+- a status line ("Showing 80 of 12,430 entities · 312 of 95,004 relationships") and a notice when the drawing is partial;
+- an interactive relationship map: circle size reflects mentions, colour reflects entity type, solid lines are evidence-aware semantic relations, dashed lines are computational observations, and dotted red lines are disputed relations. Hover or keyboard focus highlights an entity's neighbours; drag or use arrow keys to pan, scroll or **+**/**−** to zoom, **0** to fit;
+- **Explore neighbourhood** (or double-click an entity, or pick one from the index) to redraw the map around that entity with its strongest connections, with a breadcrumb back to the overview;
+- an inspector with aliases, mention/Record/connection counts, and — in a neighbourhood — the entity's relations grouped into evidence-aware relations (with Reviewer confirmed / Unreviewed / Disputed status and evidence-reference counts) and computational observations;
+- a complete, paged entity/concept index (50 per page) sortable by mentions, connections, Records, or name.
+
+Observational relationships such as co-occurrence and dialogue proximity are drawn separately because they do not assert friendship, influence, agreement, addressee, or another stronger relation.
 
 For fiction, the index supplies the requested character list and the graph provides a character network without turning simple proximity into a literary claim. For scholarly/non-fiction text, the index supplies people, concepts, works, topics and other named entities, while existing fields such as `position_holder`, `target`, `stance`, `speaker`, `quoted_speaker`, `quoted_author`, and `quoted_work` contribute evidence-aware semantic edges.
 
