@@ -8043,6 +8043,9 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
                                           'Les poids sémantique et lexical sont normalisés ensemble.'),
  'pipelines.config.min_score.label': 'Score minimal de soutien',
  'pipelines.config.min_score.help': 'Plus faible score de soutien qu’un candidat peut obtenir tout en franchissant cette validation.',
+ 'pipelines.config.min_similarity.label': 'Similarité minimale',
+ 'pipelines.config.min_similarity.help': ('Nom technique : min_similarity. Les candidats sous ce seuil de similarité sémantique ne franchissent pas '
+                                          'l’étape de repérage. L’augmenter rend la mémoire plus sélective; le diminuer admet des analogies plus lâches.'),
  'pipelines.config.generic_help': ('Paramètre technique déclaré par le serveur pour la stratégie choisie. Le modifier change le '
                                    'comportement de cette étape; la validation vérifie le type et la plage permis.'),
  'pipelines.data_type.query_help': 'Question de recherche ou expression de recherche avant le repérage des passages candidats.',
