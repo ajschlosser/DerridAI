@@ -218,13 +218,13 @@ Any follow-up Pipeline Studio UI should target the routed `/pipelines` experienc
 
 As of current `master`, built-in system assignments are:
 
-| Feature | Assigned pipeline | Status |
-| --- | --- | --- |
-| Research | `research.current@1` | active |
-| Reviewer evidence suggestion | `evidence.reviewer.current@2` | active |
-| Metadata precedents | `metadata.precedents.current@1` | active |
-| Validated claim memory | `memory.claim.current@1` | active |
-| Prior response memory | `memory.response.current@1` | active |
+| Feature                      | Assigned pipeline               | Status |
+| ---------------------------- | ------------------------------- | ------ |
+| Research                     | `research.current@1`            | active |
+| Reviewer evidence suggestion | `evidence.reviewer.current@2`   | active |
+| Metadata precedents          | `metadata.precedents.current@1` | active |
+| Validated claim memory       | `memory.claim.current@1`        | active |
+| Prior response memory        | `memory.response.current@1`     | active |
 
 There are also important draft/legacy definitions:
 
@@ -465,28 +465,28 @@ Changing that assignment is a quality decision and must follow controlled compar
 
 The audit defined 20 completion criteria. Current approximate status:
 
-| # | Criterion | Status |
-| --- | --- | --- |
-| 1 | One documented registry of retrieval/reranking/validation/packing/LLM strategies | largely met for registered pipeline strategies |
-| 2 | Every vector-search feature resolves through a named/versioned pipeline | not met |
-| 3 | Every CrossEncoder call resolves through a named/versioned pipeline stage | verify before claiming; migrated major paths, but re-audit |
-| 4 | Every generative LLM call resolves through a pipeline or documented operational exception | not met |
-| 5 | UI can show assigned pipeline for every relevant feature | partial |
-| 6 | UI can show fully resolved pipeline before a run | met for supported Research configuration; not universal |
-| 7 | UI can show actual stages after a run | met for migrated Research/metadata/evidence surfaces; not universal |
-| 8 | Fallback/timeout/skipped/unavailable behavior visible | met in migrated runtimes; not universal |
-| 9 | Candidate counts and stage-specific scores remain distinct | met in migrated retrieval traces |
-| 10 | Distance-to-relevance normalization is metric-aware/shared | verify globally before closing |
-| 11 | MMR uses one shared implementation | verify globally before closing |
-| 12 | Historical runs preserve immutable resolved pipeline snapshots | met for pipeline-traced runs |
-| 13 | Authorized users can create/version chains from registered strategies | met for supported purposes |
-| 14 | Chains validated for type/provenance/bounds/permissions | substantially met; continue hardening |
-| 15 | Evidence-binding chains cannot bypass source/provenance validation | met for active reviewer evidence pipeline |
-| 16 | Research and Corpus Builder expose point-of-use traces | substantially met |
-| 17 | Central operational view of pipelines/assignments/traces | met in Pipeline Studio |
-| 18 | Benchmark tooling can compare variants with fixed prompts/corpora | not met; #281 is retrieval comparison, not benchmark integration |
-| 19 | New controls meet project accessibility/i18n/theme requirements | enforced per change; continue CI gates |
-| 20 | Retrieval configuration remains separate from cELF provenance authority | met architecturally; preserve this invariant |
+| #   | Criterion                                                                                 | Status                                                              |
+| --- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| 1   | One documented registry of retrieval/reranking/validation/packing/LLM strategies          | largely met for registered pipeline strategies                      |
+| 2   | Every vector-search feature resolves through a named/versioned pipeline                   | not met                                                             |
+| 3   | Every CrossEncoder call resolves through a named/versioned pipeline stage                 | verify before claiming; migrated major paths, but re-audit          |
+| 4   | Every generative LLM call resolves through a pipeline or documented operational exception | not met                                                             |
+| 5   | UI can show assigned pipeline for every relevant feature                                  | partial                                                             |
+| 6   | UI can show fully resolved pipeline before a run                                          | met for supported Research configuration; not universal             |
+| 7   | UI can show actual stages after a run                                                     | met for migrated Research/metadata/evidence surfaces; not universal |
+| 8   | Fallback/timeout/skipped/unavailable behavior visible                                     | met in migrated runtimes; not universal                             |
+| 9   | Candidate counts and stage-specific scores remain distinct                                | met in migrated retrieval traces                                    |
+| 10  | Distance-to-relevance normalization is metric-aware/shared                                | verify globally before closing                                      |
+| 11  | MMR uses one shared implementation                                                        | verify globally before closing                                      |
+| 12  | Historical runs preserve immutable resolved pipeline snapshots                            | met for pipeline-traced runs                                        |
+| 13  | Authorized users can create/version chains from registered strategies                     | met for supported purposes                                          |
+| 14  | Chains validated for type/provenance/bounds/permissions                                   | substantially met; continue hardening                               |
+| 15  | Evidence-binding chains cannot bypass source/provenance validation                        | met for active reviewer evidence pipeline                           |
+| 16  | Research and Corpus Builder expose point-of-use traces                                    | substantially met                                                   |
+| 17  | Central operational view of pipelines/assignments/traces                                  | met in Pipeline Studio                                              |
+| 18  | Benchmark tooling can compare variants with fixed prompts/corpora                         | not met; #281 is retrieval comparison, not benchmark integration    |
+| 19  | New controls meet project accessibility/i18n/theme requirements                           | enforced per change; continue CI gates                              |
+| 20  | Retrieval configuration remains separate from cELF provenance authority                   | met architecturally; preserve this invariant                        |
 
 Do not convert “partial” rows to “met” without inspecting current production call sites and tests.
 
