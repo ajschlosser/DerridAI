@@ -13,7 +13,6 @@ import type {
   CorpusBuildEvent,
   CorpusBuildSummary,
   CorpusRecordEvent,
-  ModelActivityEvent,
   RealtimeEvent,
 } from "../../../realtime/protocol";
 
@@ -93,12 +92,6 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
       patch.metadata_tasks_queued = summary.metadata_tasks_queued;
     Object.assign(build, patch);
     syncBuildInRail(build);
-  }
-
-  function applyRealtimeModelActivity(event: ModelActivityEvent) {
-    const build = options.currentBuild.value;
-    if (!build || build.build_id !== event.resource_id) return;
-    Object.assign(build, { llm_activity: { ...event.payload.activity } });
   }
 
   function registerBuildOperation(build: CorpusBuild) {
@@ -206,9 +199,15 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
         }
         return false;
       }
-      if (event.type === "llm.started" || event.type === "llm.progress" || event.type === "llm.completed") {
-        applyRealtimeModelActivity(event as ModelActivityEvent);
-        return false;
+      if (
+        event.type === "llm.started" ||
+        event.type === "llm.progress" ||
+        event.type === "llm.completed"
+      ) {
+        // The bounded event intentionally omits provider-load state and elapsed time. Re-read
+        // the authoritative build snapshot for those few activity transitions, but reconcile
+        // it into the existing object so the workspace never remounts or visibly reloads.
+        return true;
       }
       if (
         event.type === "corpus.record_started" ||
