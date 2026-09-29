@@ -57,13 +57,12 @@ Siehe [SPECIFICATION.md](SPECIFICATION.md) für die normative cELF-1.0-Spezifika
 
 ### Laufzeitdienste
 
-| Dienst | Stack | Rolle |
-| --- | --- | --- |
-| `web` | Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js, nginx | Browseranwendung; proxyt `/api/`; nutzt REST, GraphQL und Realtime-Benachrichtigungen. Storybook ist ein optionales Dev-Profil. |
-| `api` | Python 3.12, FastAPI, Strawberry GraphQL, ChromaDB-Client, PyMuPDF, sentence-transformers, spaCy | Autoritative Anwendungsgrenze für Auth, Quellen/Korpus, cELF-Reads, Provenienz, RAG, Pipelines, Jobs und Systemzustand. |
-| `document-nlp` | BookNLP-Worker | Optionale isolierte englische Document-Intelligence-Erweiterung. Erhält begrenzten, geprüften Text und besitzt keine Korpusautorität. |
-| `chroma` | Chroma-Server | Optionales HTTP-Profil. Der eingebettete `PersistentClient` bleibt Standard; beide Modi speichern abgeleitete Such-/Vektorprojektionen. |
-| `ollama` | Ollama | Optionales lokales Profil. DerridAI kann stattdessen Host-Ollama oder jeden konfigurierten OpenAI-kompatiblen Endpoint verwenden. |
+
+- `web` — Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js und nginx. Browseranwendung; proxyt `/api/` und nutzt REST, GraphQL sowie Realtime-Benachrichtigungen. Storybook ist ein optionales Dev-Profil.
+- `api` — Python 3.12, FastAPI, Strawberry GraphQL, ChromaDB-Client, PyMuPDF, sentence-transformers und spaCy. Autoritative Anwendungsgrenze für Authentifizierung, Quellen/Korpus, cELF-Reads, Provenienz, RAG, Pipelines, Jobs und Systemzustand.
+- `document-nlp` — optionaler isolierter BookNLP-Worker für englische Document Intelligence. Er erhält begrenzten, geprüften Text und besitzt keine Korpusautorität.
+- `chroma` — optionaler HTTP-Chroma-Server. Der eingebettete `PersistentClient` bleibt Standard; beide Modi speichern abgeleitete Such-/Vektorprojektionen.
+- `ollama` — optionaler lokaler Ollama-Dienst. DerridAI kann stattdessen bereits auf dem Host laufendes Ollama oder jeden konfigurierten OpenAI-kompatiblen Endpoint verwenden.
 
 Der Standard-Compose-Stack startet `web` und `api`; die übrigen Dienste sind optionale Profile oder externe Provider.
 
