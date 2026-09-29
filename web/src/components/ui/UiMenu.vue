@@ -2,6 +2,7 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, useId } from "vue";
 import AppIcon from "../AppIcon.vue";
+import UiTooltip from "./UiTooltip.vue";
 
 export interface UiMenuItem {
   id: string;
@@ -105,22 +106,44 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", outside, true)
 
 <template>
   <div ref="root" class="ui-menu" :data-placement="placement" :data-align="align">
+    <UiTooltip
+      v-if="iconOnly"
+      :text="ariaLabel || label"
+      trigger-mode="content"
+      :content-focusable="disabled"
+      placement="bottom"
+    >
+      <button
+        ref="trigger"
+        type="button"
+        class="ui-menu-trigger icon-only"
+        aria-haspopup="menu"
+        :aria-expanded="open"
+        :aria-controls="open ? menuId : undefined"
+        :aria-label="ariaLabel || label"
+        :disabled="disabled"
+        @click="toggle"
+        @keydown="onTriggerKey"
+      >
+        <AppIcon v-if="icon" :name="icon" aria-hidden="true" />
+        <span v-if="caret" class="ui-menu-caret" aria-hidden="true"></span>
+      </button>
+    </UiTooltip>
     <button
+      v-else
       ref="trigger"
       type="button"
       class="ui-menu-trigger"
-      :class="{ 'icon-only': iconOnly }"
       aria-haspopup="menu"
       :aria-expanded="open"
       :aria-controls="open ? menuId : undefined"
-      :aria-label="iconOnly || ariaLabel ? ariaLabel || label : undefined"
-      :title="iconOnly ? ariaLabel || label : undefined"
+      :aria-label="ariaLabel || undefined"
       :disabled="disabled"
       @click="toggle"
       @keydown="onTriggerKey"
     >
       <AppIcon v-if="icon" :name="icon" aria-hidden="true" />
-      <span v-if="!iconOnly" class="ui-menu-label">{{ label }}</span>
+      <span class="ui-menu-label">{{ label }}</span>
       <span v-if="caret" class="ui-menu-caret" aria-hidden="true"></span>
     </button>
     <ul
