@@ -25,6 +25,7 @@ from .field_assertions import (
     project_record_assertions,
 )
 from .metadata_exemplars import (
+    PROMPT_CHARS_PER_TOKEN,
     budget_prompt_examples,
     build_correction_exemplars,
     build_metadata_exemplar,
@@ -331,12 +332,50 @@ class EditorialMemoryMixin:
                 kept = ranked[:max(2, prelimit)]
             if kept:
                 examples[field] = kept
-        # Bound the complete few-shot packet rather than only each field.  This
-        # keeps progressive retrieval from trading metadata quality for prompt
-        # bloat as the reviewed corpus grows.
-        examples = budget_prompt_examples(examples, field_limits=field_limits or None)
+        # Resolve the exact computational pipeline independently from the
+        # metadata schema. The schema still owns field eligibility, similarity
+        # floors, analogy fields, and positive/correction quotas.
+        metadata_pipeline_plan = None
+        metadata_pipeline_info: dict[str, Any] = {}
+        if use_progressive:
+            from .pipelines.manager import pipeline_manager
+            from .pipelines.metadata_precedents import (
+                compile_metadata_precedent_pipeline,
+            )
+            from .pipelines.models import PipelineDefinition
 
-        retrieval_telemetry: dict[str, Any] = {}
+            resolved_pipeline = pipeline_manager.resolve("metadata_precedents")
+            resolved_definition = PipelineDefinition.model_validate(
+                resolved_pipeline["pipeline"]
+            )
+            metadata_pipeline_plan = compile_metadata_precedent_pipeline(
+                resolved_definition
+            )
+            metadata_pipeline_info = {
+                "pipeline_id": resolved_definition.pipeline_id,
+                "pipeline_version": resolved_definition.version,
+                "pipeline_hash": resolved_pipeline.get("pipeline_hash"),
+            }
+
+        # Bound the complete few-shot packet rather than only each field. This
+        # keeps progressive retrieval from trading metadata quality for prompt
+        # bloat as the reviewed corpus grows. A pipeline may tighten or expand
+        # this computational packet budget; it cannot override schema quotas.
+        prompt_budget_kwargs: dict[str, Any] = {
+            "field_limits": field_limits or None,
+        }
+        if (
+            metadata_pipeline_plan is not None
+            and metadata_pipeline_plan.packet_char_budget is not None
+        ):
+            prompt_budget_kwargs["token_budget"] = max(
+                1,
+                int(metadata_pipeline_plan.packet_char_budget)
+                // PROMPT_CHARS_PER_TOKEN,
+            )
+        examples = budget_prompt_examples(examples, **prompt_budget_kwargs)
+
+        retrieval_telemetry: dict[str, Any] = dict(metadata_pipeline_info)
         progressive_index = getattr(self, "_progressive_metadata_index", None)
         if use_progressive and current_record and canonical_exemplars and progressive_index is not None:
             retrieval_fields = sorted({
@@ -362,13 +401,62 @@ class EditorialMemoryMixin:
                     field_correction_limits=field_correction_limits or None,
                     field_match_fields=field_match_fields or None,
                     current_values=reviewed_values(current_record),
+                    packet_char_budget=(
+                        metadata_pipeline_plan.packet_char_budget
+                        if metadata_pipeline_plan is not None
+                        and metadata_pipeline_plan.packet_char_budget is not None
+                        else 4800
+                    ),
+                    fetch_k=(
+                        metadata_pipeline_plan.fetch_k
+                        if metadata_pipeline_plan is not None
+                        and metadata_pipeline_plan.fetch_k is not None
+                        else 16
+                    ),
+                    semantic_weight=(
+                        metadata_pipeline_plan.semantic_weight
+                        if metadata_pipeline_plan is not None
+                        else 0.8
+                    ),
+                    lexical_weight=(
+                        metadata_pipeline_plan.lexical_weight
+                        if metadata_pipeline_plan is not None
+                        else 0.2
+                    ),
+                    mmr_lambda=(
+                        metadata_pipeline_plan.mmr_lambda
+                        if metadata_pipeline_plan is not None
+                        else 0.72
+                    ),
+                    cross_encoder_enabled=bool(
+                        metadata_pipeline_plan
+                        and metadata_pipeline_plan.rerank_stage_id
+                    ),
+                    cross_encoder_top_k=(
+                        metadata_pipeline_plan.cross_encoder_top_k
+                        if metadata_pipeline_plan is not None
+                        else None
+                    ),
+                    cross_encoder_model=(
+                        metadata_pipeline_plan.cross_encoder_model
+                        if metadata_pipeline_plan is not None
+                        else None
+                    ),
+                    cross_encoder_timeout_seconds=(
+                        metadata_pipeline_plan.cross_encoder_timeout_seconds
+                        if metadata_pipeline_plan is not None
+                        else None
+                    ),
                     exclude_record_id=exclude_record_id,
                 )
                 if retrieval_fields
                 else None
             )
             if isinstance(semantic, dict):
-                retrieval_telemetry = dict(semantic.get("telemetry") or {})
+                retrieval_telemetry = {
+                    **metadata_pipeline_info,
+                    **dict(semantic.get("telemetry") or {}),
+                }
                 if isinstance(semantic.get("examples"), dict):
                     # Semantic evidence-bound precedents supersede lexical ordering
                     # only for fields where the vector index found valid current
@@ -378,7 +466,7 @@ class EditorialMemoryMixin:
                             examples[str(field)] = items
                     examples = budget_prompt_examples(
                         examples,
-                        field_limits=field_limits or None,
+                        **prompt_budget_kwargs,
                     )
                 if retrieval_telemetry.get("fallback_reason"):
                     warned: set[str] = getattr(
