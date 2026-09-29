@@ -736,6 +736,28 @@ class ChromaMetadataExemplarIndex:
             },
         }
 
+    def _failed_result(
+        self,
+        *,
+        started_total: float,
+        reason: str,
+        fallback_kind: str,
+    ) -> dict[str, Any]:
+        return {
+            "ok": False,
+            "examples": {},
+            "telemetry": {
+                "fallback_reason": reason,
+                "fallback_kind": fallback_kind,
+                "fallback_mode": "none",
+                "examples_considered": 0,
+                "examples_used": 0,
+                "packet_chars": 0,
+                "fields_served": [],
+                "total_ms": _elapsed_ms(started_total),
+            },
+        }
+
     def retrieve(
         self,
         *,
@@ -762,6 +784,7 @@ class ChromaMetadataExemplarIndex:
         cross_encoder_top_k: int | None = None,
         cross_encoder_model: str | None = None,
         cross_encoder_timeout_seconds: float | None = None,
+        allow_lexical_fallback: bool = True,
     ) -> dict[str, Any]:
         """Sync canonical exemplars, retrieve per field, and return a bounded packet."""
 
@@ -781,6 +804,12 @@ class ChromaMetadataExemplarIndex:
         lexical_weight /= weight_total
         mmr_lambda = max(0.0, min(1.0, float(mmr_lambda)))
         if self._disabled_reason:
+            if not allow_lexical_fallback:
+                return self._failed_result(
+                    started_total=started_total,
+                    reason=self._disabled_reason,
+                    fallback_kind="unavailable",
+                )
             return self._lexical_fallback_result(
                 started_total=started_total,
                 canonical=canonical,
@@ -1030,6 +1059,19 @@ class ChromaMetadataExemplarIndex:
             }
         except Exception as exc:  # noqa: BLE001 - progressive RAG is advisory
             self._disabled_reason = f"{exc.__class__.__name__}: {str(exc)[:300]}"
+            fallback_kind = (
+                "timeout"
+                if isinstance(exc, TimeoutError)
+                else "unavailable"
+                if isinstance(exc, (ImportError, ModuleNotFoundError))
+                else "error"
+            )
+            if not allow_lexical_fallback:
+                return self._failed_result(
+                    started_total=started_total,
+                    reason=self._disabled_reason,
+                    fallback_kind=fallback_kind,
+                )
             return self._lexical_fallback_result(
                 started_total=started_total,
                 canonical=canonical,
@@ -1044,11 +1086,5 @@ class ChromaMetadataExemplarIndex:
                 packet_char_budget=packet_char_budget,
                 exclude_record_id=exclude_record_id,
                 reason=self._disabled_reason,
-                fallback_kind=(
-                    "timeout"
-                    if isinstance(exc, TimeoutError)
-                    else "unavailable"
-                    if isinstance(exc, (ImportError, ModuleNotFoundError))
-                    else "error"
-                ),
+                fallback_kind=fallback_kind,
             )
