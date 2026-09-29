@@ -706,7 +706,10 @@ async function exerciseDockedOperations(page: Page) {
   await expect(stack).toBeVisible();
 
   for (const selector of [".operations-docked-summary", "#operationProgressStack"]) {
-    const scan = await new AxeBuilder({ page }).include(selector).withTags(DOCK_WCAG_TAGS).analyze();
+    const scan = await new AxeBuilder({ page })
+      .include(selector)
+      .withTags(DOCK_WCAG_TAGS)
+      .analyze();
     expect(
       scan.violations.map(
         (violation) =>
