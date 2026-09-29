@@ -57,13 +57,12 @@ See [SPECIFICATION.md](SPECIFICATION.md) for the normative cELF 1.0 specificatio
 
 ### Runtime services
 
-| Service | Stack | Role |
-| --- | --- | --- |
-| `web` | Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js, nginx | Browser application; proxies `/api/`; consumes REST, GraphQL, and realtime notifications. Storybook is an opt-in development profile. |
-| `api` | Python 3.12, FastAPI, Strawberry GraphQL, ChromaDB client, PyMuPDF, sentence-transformers, spaCy | Authoritative application boundary for auth, source/corpus operations, cELF reads, provenance, RAG, pipelines, jobs, and system state. |
-| `document-nlp` | BookNLP worker | Optional isolated English Document Intelligence enhancement. It receives bounded reviewed text and has no corpus authority. |
-| `chroma` | Chroma server | Optional HTTP Chroma profile. Embedded PersistentClient remains the default; both modes store derived search/vector projections. |
-| `ollama` | Ollama | Optional local compose profile. DerridAI can instead use Ollama already running on the host or any configured OpenAI-compatible endpoint. |
+
+- `web` — Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js, and nginx. It is the browser application, proxies `/api/`, and consumes REST, GraphQL, and realtime notifications. Storybook is an opt-in development profile.
+- `api` — Python 3.12, FastAPI, Strawberry GraphQL, the ChromaDB client, PyMuPDF, sentence-transformers, and spaCy. It is the authoritative application boundary for authentication, source/corpus operations, cELF reads, provenance, RAG, pipelines, jobs, and system state.
+- `document-nlp` — an optional isolated BookNLP worker for English Document Intelligence. It receives bounded reviewed text and has no corpus authority.
+- `chroma` — an optional HTTP Chroma server. Embedded `PersistentClient` remains the default; both modes store derived search/vector projections.
+- `ollama` — an optional local Ollama service. DerridAI can instead use Ollama already running on the host or any configured OpenAI-compatible endpoint.
 
 The default Compose stack starts `web` and `api`; the other services are opt-in profiles or external providers.
 
