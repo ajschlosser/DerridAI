@@ -659,7 +659,7 @@ const pageText = computed(() => {
         <div class="graph-stage" :class="{ busy: loading }">
           <UiRelationToolbar
             class="graph-controls"
-            :aria-label="i18n.t('pdf_corpus.semantic_graph_accessible_label')"
+            :accessible-label="i18n.t('pdf_corpus.semantic_graph_accessible_label')"
             :zoom-out-label="i18n.t('pdf_corpus.semantic_graph_zoom_out')"
             :zoom-in-label="i18n.t('pdf_corpus.semantic_graph_zoom_in')"
             :fit-label="i18n.t('pdf_corpus.semantic_graph_zoom_fit')"
@@ -689,7 +689,7 @@ const pageText = computed(() => {
             v-else
             ref="viewport"
             class="graph-viewport"
-            :aria-label="i18n.t('pdf_corpus.semantic_graph_accessible_label')"
+            :accessible-label="i18n.t('pdf_corpus.semantic_graph_accessible_label')"
             :help-text="
               i18n.t(
                 'pdf_corpus.semantic_graph_keyboard_help',
