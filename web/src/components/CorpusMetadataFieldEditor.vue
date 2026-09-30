@@ -93,7 +93,13 @@ function derivationLabel(value: unknown) {
   return key ? i18n.t(key) : humanizeToken(value);
 }
 function useHint(value: unknown) {
-  draft.value = Array.isArray(value) ? value.join(", ") : value;
+  if (Array.isArray(value)) {
+    draft.value = isMultiCombobox.value
+      ? value.join(", ")
+      : value.length === 1
+        ? value[0]
+        : value.map((item) => metadataValueText(item)).join("\n");
+  } else draft.value = value;
   editing.value = true;
   markDirty();
 }
