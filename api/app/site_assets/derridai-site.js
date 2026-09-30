@@ -948,70 +948,270 @@
   }
 
   function providerSettings(config, onChange) {
-    const profiles = Array.isArray(publication.provider_profiles) ? publication.provider_profiles : [];
-    const profile = node("select", { class: "control" },
+    const profiles = Array.isArray(publication.provider_profiles)
+      ? publication.provider_profiles
+      : [];
+    const profile = node(
+      "select",
+      { class: "control" },
       node("option", { value: "", text: t("site.runtime.custom_provider") }),
-      ...profiles.map((item) => node("option", { value: item.id, text: `${item.name || item.id} · ${item.model || ""}` }))
+      ...profiles.map((item) =>
+        node("option", {
+          value: item.id,
+          text: `${item.name || item.id} · ${item.model || ""}`,
+        }),
+      ),
     );
     profile.value = config.profileId || "";
-    const type = node("select", { class: "control" },
+
+    const type = node(
+      "select",
+      { class: "control" },
       node("option", { value: "ollama", text: t("site.runtime.provider_ollama") }),
-      node("option", { value: "openai", text: t("site.runtime.provider_openai") })
+      node("option", { value: "openai", text: t("site.runtime.provider_openai") }),
     );
     type.value = config.type;
-    const endpoint = node("input", { class: "control", value: config.baseUrl, placeholder: t("site.runtime.endpoint_placeholder") });
-    const chat = node("input", { class: "control", value: config.chatModel, placeholder: t("site.runtime.chat_model") });
+
+    const endpoint = node("input", {
+      class: "control",
+      value: config.baseUrl,
+      placeholder: t("site.runtime.endpoint_placeholder"),
+      inputMode: "url",
+    });
+    const chat = node("input", {
+      class: "control",
+      value: config.chatModel,
+      placeholder: t("site.runtime.chat_model"),
+    });
     const embedding = node("input", {
       class: "control",
       value: config.embeddingModel,
       placeholder: t("site.runtime.embedding_model"),
       readOnly: Boolean(vectors.model),
-      title: vectors.model ? t("site.runtime.embedding_model_locked", { model: vectors.model }) : "",
+      title: vectors.model
+        ? t("site.runtime.embedding_model_locked", { model: vectors.model })
+        : "",
     });
-    const key = node("input", { class: "control", type: "password", value: sessionApiKey, autocomplete: "off", placeholder: t("site.runtime.api_key_session") });
+    const key = node("input", {
+      class: "control",
+      type: "password",
+      value: sessionApiKey,
+      autocomplete: "off",
+      placeholder: t("site.runtime.api_key_session"),
+    });
+    const testButton = node("button", {
+      type: "button",
+      text: t("site.runtime.test_provider"),
+    });
+    const diagnostic = node("div", {
+      class: "provider-test",
+      role: "status",
+      "aria-live": "polite",
+    });
 
     function current() {
       return {
-        profileId: profile.value, type: type.value, baseUrl: endpoint.value.trim(),
-        chatModel: chat.value.trim(), embeddingModel: embedding.value.trim(), apiKey: key.value,
+        profileId: profile.value,
+        type: type.value,
+        baseUrl: endpoint.value.trim(),
+        chatModel: chat.value.trim(),
+        embeddingModel: embedding.value.trim(),
+        apiKey: key.value,
       };
     }
+
     function changed() {
       const next = current();
       sessionApiKey = next.apiKey;
       saveProvider(next);
+      diagnostic.className = "provider-test";
+      diagnostic.replaceChildren(
+        node("span", { class: "muted", text: t("site.runtime.provider_not_tested") }),
+      );
       onChange(next);
     }
+
+    function corsCommand(result, next) {
+      if (next.type !== "ollama" || result.origin === "null") return "";
+      return `OLLAMA_ORIGINS="${result.origin}" ollama serve`;
+    }
+
+    async function copyCommand(command, button) {
+      try {
+        await navigator.clipboard.writeText(command);
+        button.textContent = t("site.runtime.copied");
+      } catch {
+        button.textContent = t("site.runtime.copy_failed");
+      }
+    }
+
+    function showDiagnostic(result, next) {
+      diagnostic.className = `provider-test ${result.ok ? "ok" : "error"}`;
+      const children = [
+        node("strong", { text: result.message }),
+        node("div", {
+          class: "provider-origin",
+          text: t("site.runtime.current_origin", {
+            origin:
+              result.origin === "null"
+                ? t("site.runtime.file_origin")
+                : result.origin,
+          }),
+        }),
+      ];
+
+      if (result.kind === "cors" && next.type === "ollama") {
+        const command = corsCommand(result, next);
+        if (command) {
+          const copy = node("button", {
+            type: "button",
+            text: t("site.runtime.copy_command"),
+            on: { click: () => copyCommand(command, copy) },
+          });
+          children.push(
+            node("small", { text: t("site.runtime.ollama_cors_help") }),
+            node("code", { class: "provider-command", text: command }),
+            copy,
+          );
+        } else {
+          children.push(
+            node("small", { text: t("site.runtime.file_origin_cors_help") }),
+          );
+        }
+      } else if (result.kind === "cors") {
+        children.push(
+          node("small", {
+            text: t("site.runtime.openai_cors_help", {
+              origin:
+                result.origin === "null"
+                  ? t("site.runtime.file_origin")
+                  : result.origin,
+            }),
+          }),
+        );
+      } else if (result.kind === "mixed-content") {
+        children.push(
+          node("small", { text: t("site.runtime.mixed_content_help") }),
+        );
+      }
+
+      diagnostic.replaceChildren(...children);
+    }
+
     profile.addEventListener("change", () => {
       const chosen = profiles.find((item) => item.id === profile.value);
       if (chosen) {
         type.value = chosen.type || "openai";
-        endpoint.value = chosen.base_url || "";
+        if (chosen.base_url) endpoint.value = chosen.base_url;
         chat.value = chosen.model || "";
       }
       changed();
     });
-    for (const control of [type, endpoint, chat, embedding, key]) control.addEventListener("change", changed);
-    return node("details", { class: "settings", open: !config.baseUrl },
+    for (const control of [type, endpoint, chat, embedding, key]) {
+      control.addEventListener("change", changed);
+    }
+
+    testButton.addEventListener("click", async () => {
+      const next = current();
+      sessionApiKey = next.apiKey;
+      saveProvider(next);
+      onChange(next);
+      testButton.disabled = true;
+      diagnostic.className = "provider-test";
+      diagnostic.replaceChildren(
+        node("span", { text: t("site.runtime.testing_provider") }),
+      );
+      try {
+        const result = await testProviderConnection(next);
+        showDiagnostic(result, next);
+      } catch (error) {
+        showDiagnostic(
+          {
+            ok: false,
+            kind: "provider",
+            message:
+              error instanceof Error ? error.message : String(error),
+            origin: providerOrigin(),
+          },
+          next,
+        );
+      } finally {
+        testButton.disabled = false;
+      }
+    });
+
+    diagnostic.append(
+      node("span", { class: "muted", text: t("site.runtime.provider_not_tested") }),
+    );
+
+    return node(
+      "details",
+      { class: "settings", open: !config.baseUrl },
       node("summary", { text: t("site.runtime.provider_settings") }),
-      node("div", { class: "stack" },
-        node("label", { class: "field" }, node("span", { text: t("site.runtime.provider_profile") }), profile),
-        node("label", { class: "field" }, node("span", { text: t("site.runtime.provider_type") }), type),
-        node("label", { class: "field" }, node("span", { text: t("site.runtime.endpoint") }), endpoint),
-        node("label", { class: "field" }, node("span", { text: t("site.runtime.chat_model") }), chat),
-        node("label", { class: "field" }, node("span", { text: t("site.runtime.embedding_model") }), embedding),
-        node("label", { class: "field" }, node("span", { text: t("site.runtime.api_key") }), key),
+      node(
+        "div",
+        { class: "stack" },
+        node(
+          "label",
+          { class: "field" },
+          node("span", { text: t("site.runtime.provider_profile") }),
+          profile,
+        ),
+        node(
+          "label",
+          { class: "field" },
+          node("span", { text: t("site.runtime.provider_type") }),
+          type,
+        ),
+        node(
+          "label",
+          { class: "field" },
+          node("span", { text: t("site.runtime.endpoint") }),
+          endpoint,
+        ),
+        node(
+          "label",
+          { class: "field" },
+          node("span", { text: t("site.runtime.chat_model") }),
+          chat,
+        ),
+        node(
+          "label",
+          { class: "field" },
+          node("span", { text: t("site.runtime.embedding_model") }),
+          embedding,
+        ),
+        node(
+          "label",
+          { class: "field" },
+          node("span", { text: t("site.runtime.api_key") }),
+          key,
+        ),
         node("small", { class: "muted", text: t("site.runtime.api_key_help") }),
-        node("small", { class: "muted", text: t("site.runtime.cors_help") })
-      )
+        node("small", { class: "muted", text: t("site.runtime.cors_help") }),
+        testButton,
+        diagnostic,
+      ),
     );
   }
 
   function researchView() {
     let config = { ...providerDefaults(), apiKey: sessionApiKey };
-    const question = node("textarea", { class: "control", placeholder: t("site.runtime.question_placeholder"), "aria-label": t("site.runtime.question") });
-    const ask = node("button", { class: "primary", type: "button", text: t("site.runtime.ask") });
-    const status = node("div", { class: "status", role: "status", "aria-live": "polite" });
+    const question = node("textarea", {
+      class: "control",
+      placeholder: t("site.runtime.question_placeholder"),
+      "aria-label": t("site.runtime.question"),
+    });
+    const ask = node("button", {
+      class: "primary",
+      type: "button",
+      text: t("site.runtime.ask"),
+    });
+    const status = node("div", {
+      class: "status",
+      role: "status",
+      "aria-live": "polite",
+    });
     const answer = node("div", { class: "answer" });
     const evidence = node("div", { class: "evidence" });
 
@@ -1023,61 +1223,208 @@
       status.textContent = t("site.runtime.retrieving");
       answer.textContent = "";
       evidence.replaceChildren();
+
       try {
-        const found = await retrieve(q, publication.features?.semantic_search ? "hybrid" : "keyword", {}, 24, config);
-        const selected = mmr(found, 10);
-        if (!selected.length) throw new Error(t("site.runtime.no_evidence"));
-        selected.forEach((item, index) => evidence.append(node("button", {
-          type: "button", on: { click: () => openRecord(item.record) },
-        }, node("strong", { text: `[E${index + 1}] ${item.record.work || item.record.record_id}` }), node("small", { class: "muted", text: citation(item.record) }))));
-        const packet = selected.map((item, index) => {
-          const record = item.record;
-          return `[E${index + 1}] ${citation(record)}\nRecord ID: ${record.record_id}\nSpeaker: ${record.speaker || ""}\nPosition holder: ${record.position_holder || ""}\nStance: ${record.stance || ""}\nTEXT:\n${record.text || ""}`;
-        }).join("\n\n");
-        const prompt = `${t("site.runtime.research_instruction")}\n\n${t("site.runtime.question")}: ${q}\n\n${t("site.runtime.evidence")}:\n${packet}`;
-        status.textContent = t("site.runtime.generating");
-        const response = await generate(prompt, config);
-        answer.textContent = response || t("site.runtime.empty_answer");
-        status.textContent = t("site.runtime.complete");
+        const retrieval = await retrieve(
+          q,
+          publication.features?.semantic_search ? "hybrid" : "keyword",
+          {},
+          24,
+          config,
+          (stage, current, total, workName) => {
+            status.textContent = t("site.runtime.loading_progress", {
+              stage:
+                stage === "vectors"
+                  ? t("site.runtime.loading_vectors")
+                  : t("site.runtime.loading_records"),
+              current,
+              total,
+              work: workName || "",
+            });
+          },
+        );
+        const selected = mmr(retrieval.items, 10);
+        if (!selected.length) {
+          status.className = "status warning";
+          status.textContent = t("site.runtime.no_evidence");
+          return;
+        }
+
+        selected.forEach((item, index) =>
+          evidence.append(
+            node(
+              "button",
+              {
+                type: "button",
+                on: { click: () => openRecord(item.record) },
+              },
+              node("strong", {
+                text: `[E${index + 1}] ${item.record.work || item.record.record_id}`,
+              }),
+              node("small", { class: "muted", text: citation(item.record) }),
+            ),
+          ),
+        );
+
+        const packet = selected
+          .map((item, index) => {
+            const record = item.record;
+            return `[E${index + 1}] ${citation(record)}
+Record ID: ${record.record_id}
+Speaker: ${record.speaker || ""}
+Position holder: ${record.position_holder || ""}
+Stance: ${record.stance || ""}
+TEXT:
+${record.text || ""}`;
+          })
+          .join("\n\n");
+        const prompt = `${t("site.runtime.research_instruction")}
+
+${t("site.runtime.question")}: ${q}
+
+${t("site.runtime.evidence")}:
+${packet}`;
+
+        status.className = retrieval.warning ? "status warning" : "status";
+        status.textContent = retrieval.warning
+          ? retrieval.warning
+          : t("site.runtime.generating");
+
+        try {
+          const response = await generate(prompt, config);
+          answer.textContent = response || t("site.runtime.empty_answer");
+          status.className = retrieval.warning ? "status warning" : "status";
+          status.textContent = retrieval.warning
+            ? t("site.runtime.complete_with_warning", {
+                warning: retrieval.warning,
+              })
+            : t("site.runtime.complete");
+        } catch (generationError) {
+          answer.textContent = t("site.runtime.generation_unavailable_evidence");
+          status.className = "status warning";
+          status.textContent = t("site.runtime.generation_failed_evidence_ready", {
+            error:
+              generationError instanceof Error
+                ? generationError.message
+                : String(generationError),
+          });
+        }
       } catch (error) {
         status.className = "status error";
-        status.textContent = t("site.runtime.research_failed", { error: error instanceof Error ? error.message : String(error) });
+        status.textContent = t("site.runtime.research_failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
       } finally {
         ask.disabled = false;
       }
     }
+
     ask.addEventListener("click", run);
-    const settings = providerSettings(config, (next) => { config = next; });
-    return node("div", { class: "research-layout" },
-      node("section", { class: "panel stack" },
+    const settings = providerSettings(config, (next) => {
+      config = next;
+    });
+
+    return node(
+      "div",
+      { class: "research-layout" },
+      node(
+        "section",
+        { class: "panel stack" },
         node("h2", { text: t("site.runtime.research") }),
-        question, ask, status,
-        node("div", { class: "answer", "aria-live": "polite" }, answer)
+        question,
+        ask,
+        status,
+        node("div", { class: "answer", "aria-live": "polite" }, answer),
       ),
-      node("aside", { class: "stack" },
+      node(
+        "aside",
+        { class: "stack" },
         node("section", { class: "panel" }, settings),
-        node("section", { class: "panel stack" }, node("h3", { text: t("site.runtime.evidence") }), evidence)
-      )
+        node(
+          "section",
+          { class: "panel stack" },
+          node("h3", { text: t("site.runtime.evidence") }),
+          evidence,
+        ),
+      ),
     );
   }
 
   function notesView() {
     const items = annotations();
-    if (!items.length) return node("div", { class: "panel empty", text: t("site.runtime.no_annotations") });
-    return node("div", { class: "stack" }, ...items.map((item) => {
-      const record = records.find((row) => String(row.record_id) === String(item.record_id));
-      return node("article", { class: "annotation" },
-        node("strong", { text: item.work || item.record_id }),
-        node("div", { class: "meta", text: formatDate(item.created_at) }),
-        item.quote ? node("blockquote", { text: item.quote }) : null,
-        item.note ? node("p", { text: item.note }) : null,
-        node("div", { class: "chips" }, ...(item.tags || []).map((tag) => node("span", { class: "chip", text: tag }))),
-        node("div", {},
-          record ? node("button", { type: "button", text: t("site.runtime.view_record"), on: { click: () => openRecord(record) } }) : null,
-          node("button", { type: "button", class: "danger", text: t("site.runtime.delete"), on: { click: () => deleteAnnotation(item.id) } })
-        )
-      );
-    }));
+    if (!items.length) {
+      return node("div", {
+        class: "panel empty",
+        text: t("site.runtime.no_annotations"),
+      });
+    }
+
+    return node(
+      "div",
+      { class: "stack" },
+      ...items.map((item) => {
+        const noteStatus = node("span", {
+          class: "status",
+          role: "status",
+          "aria-live": "polite",
+        });
+        const open = node("button", {
+          type: "button",
+          text: t("site.runtime.view_record"),
+          on: {
+            click: async () => {
+              open.disabled = true;
+              noteStatus.textContent = t("site.runtime.loading_record");
+              try {
+                const record = await findRecordById(item.record_id, item.work);
+                if (record) {
+                  noteStatus.textContent = "";
+                  openRecord(record);
+                } else {
+                  noteStatus.className = "status warning";
+                  noteStatus.textContent = t("site.runtime.record_not_found");
+                }
+              } catch (error) {
+                noteStatus.className = "status warning";
+                noteStatus.textContent = t("site.runtime.record_load_failed", {
+                  error: error instanceof Error ? error.message : String(error),
+                });
+              } finally {
+                open.disabled = false;
+              }
+            },
+          },
+        });
+
+        return node(
+          "article",
+          { class: "annotation" },
+          node("strong", { text: item.work || item.record_id }),
+          node("div", { class: "meta", text: formatDate(item.created_at) }),
+          item.quote ? node("blockquote", { text: item.quote }) : null,
+          item.note ? node("p", { text: item.note }) : null,
+          node(
+            "div",
+            { class: "chips" },
+            ...(item.tags || []).map((tag) =>
+              node("span", { class: "chip", text: tag }),
+            ),
+          ),
+          node(
+            "div",
+            {},
+            open,
+            node("button", {
+              type: "button",
+              class: "danger",
+              text: t("site.runtime.delete"),
+              on: { click: () => deleteAnnotation(item.id) },
+            }),
+          ),
+          noteStatus,
+        );
+      }),
+    );
   }
 
   function navButton(name, target) {
@@ -1124,7 +1471,7 @@
         publication.description ? node("p", { text: publication.description }) : null,
         node("div", { class: "meta", text: t("site.runtime.publication_summary", {
           works: Number((publication.works || []).length).toLocaleString(locale),
-          records: Number(records.length).toLocaleString(locale),
+          records: Number(totalRecordCount).toLocaleString(locale),
           date: formatDate(publication.created_at),
         }) })
       ),
