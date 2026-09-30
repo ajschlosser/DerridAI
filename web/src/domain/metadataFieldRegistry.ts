@@ -49,7 +49,13 @@ const LEGACY_FIELD_SPECS: Record<string, MetadataFieldSpec> = {
   },
   quoted_work: {
     control: "combobox",
-    suggestionFields: ["quoted_work", "works_referenced", "work", "document_title", "original_title"],
+    suggestionFields: [
+      "quoted_work",
+      "works_referenced",
+      "work",
+      "document_title",
+      "original_title",
+    ],
     allowCustom: true,
   },
   quoted_position_holder: {
