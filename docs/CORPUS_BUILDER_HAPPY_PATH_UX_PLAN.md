@@ -420,3 +420,10 @@ Work on this branch will be committed in coherent checkpoints. At each checkpoin
 - Re-checked branch divergence at handoff time: the branch is currently **100 commits ahead and 28 commits behind current `master`**, with merge base `7b805d83f9f1ef87aa37a785bc64ac0f78e93cd5`.
 - The handoff explicitly supersedes the older “aligned with master” observation from draft-PR creation time. Current master synchronization is now the first remaining integration task.
 - No remaining Phase 8 validation checkbox was marked complete without actually running the corresponding formatter/test/CI/accessibility gate.
+
+
+### Checkpoint 9 — current master synchronized
+
+- Merged current `master` (`2560d801300226595455ee2a98054641bdd5a7fa`) into the branch as `9d13da310fc36edf8ba8168ea1781adfccfb8c67`.
+- Reconciled the only overlapping master changes semantically: English/Québec French locale dictionaries, generated English fallbacks, and the User Guide's static-site publication section. Corpus Builder UX copy and master’s publication-delivery-mode work are both retained.
+- The branch is now **0 commits behind master**. Remaining work is validation-driven: CI/static checks, focused/full frontend coverage, E2E/WCAG/Storybook rendering, and fixes exposed by those gates.

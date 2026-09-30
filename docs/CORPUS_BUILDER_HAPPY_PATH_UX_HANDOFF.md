@@ -16,14 +16,15 @@ The core implementation is largely in place. The remaining work is primarily int
 
 ## Current repository state
 
-At handoff time:
+Current integration state:
 
 - branch: `task/corpus-builder-happy-path-ux`
-- merge base with current `master`: `7b805d83f9f1ef87aa37a785bc64ac0f78e93cd5`
-- branch vs current `master`: **100 commits ahead, 28 commits behind**
-- status: **diverged**
+- synchronized with `master` commit: `2560d801300226595455ee2a98054641bdd5a7fa`
+- synchronization merge commit: `9d13da310fc36edf8ba8168ea1781adfccfb8c67`
+- branch vs current `master` immediately after synchronization: **0 commits behind**
+- status: **master reconciliation completed; validation in progress**
 
-Important: an earlier plan checkpoint says the branch was aligned with `master` when the draft PR was created. That was true at that checkpoint, but it is no longer true. The next agent should reconcile current `master` before treating validation results as final.
+The synchronization retained both the Corpus Builder UX work and the overlapping publication-delivery-mode additions to English/Québec French locale dictionaries, generated English fallbacks, and the User Guide.
 
 ## Non-negotiable architectural constraints
 
@@ -238,24 +239,9 @@ Storybook coverage now includes:
 
 Treat the implementation plan as authoritative for remaining checklist items, but the highest-priority work is:
 
-### 1. Reconcile with current master
+### 1. Current-master reconciliation — completed
 
-The branch is currently **28 commits behind master**.
-
-Before doing final validation:
-
-1. inspect recent master changes touching the files listed above;
-2. merge/rebase carefully;
-3. resolve semantic conflicts rather than mechanically choosing one side;
-4. re-run all focused Corpus Builder tests after synchronization.
-
-Pay particular attention to:
-
-- locale dictionaries / generated English fallback;
-- Corpus Builder composition files;
-- review queue behavior;
-- shared UI primitives;
-- docs changed by parallel architecture/UX work.
+Current `master` was merged into this branch at `9d13da310fc36edf8ba8168ea1781adfccfb8c67`. The branch was 0 commits behind immediately after that merge. The overlapping locale/fallback/User Guide changes were merged semantically rather than choosing one side wholesale.
 
 ### 2. Run formatting and static checks
 
