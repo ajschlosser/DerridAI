@@ -63,3 +63,30 @@ export const NeedsAttention: Story = {
   },
 };
 export const ConcurrentBuild: Story = { args: { activeBuildCount: 2 } };
+
+export const FrenchLengthStress: Story = {
+  parameters: { locale: "fr-CA" },
+  args: {
+    sourceFilename:
+      "Jacques Derrida — Cosmopolites de tous les pays, encore un effort ! — édition critique et annotée.pdf",
+    schemaLabel:
+      "Schéma de métadonnées pour l’analyse discursive, l’attribution et l’indexation sémantique",
+    providerLabel: "Fournisseur local de recherche",
+    modelLabel: "modèle-expérimental-à-contexte-étendu",
+    issues: [
+      {
+        id: "structure_review",
+        section: "structure",
+        severity: "warning",
+        message:
+          "Révisez la structure du document avant la construction afin de confirmer la correspondance des pages imprimées.",
+      },
+    ],
+  },
+};
+
+export const Narrow: Story = {
+  parameters: {
+    viewport: { defaultViewport: "mobile1" },
+  },
+};
