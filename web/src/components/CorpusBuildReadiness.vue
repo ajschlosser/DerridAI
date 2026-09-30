@@ -88,6 +88,18 @@ const providerSummary = computed(() =>
     .filter(Boolean)
     .join(" · "),
 );
+const sourceFacts = computed(() => {
+  if (!props.sourceFilename) return "";
+  const kind = String(props.mediaKind || "").toLowerCase();
+  const media = kind ? i18n.t(`pdf_corpus.setup.media.${kind}`, kind.toUpperCase()) : "";
+  const extent =
+    hasPages(props.mediaKind) && props.pageCount
+      ? i18n.tf("pdf_corpus.setup.summary.pages", { count: props.pageCount })
+      : props.blockCount
+        ? i18n.tf("pdf_corpus.setup.summary.blocks", { count: props.blockCount })
+        : "";
+  return [media, extent].filter(Boolean).join(" · ");
+});
 </script>
 
 <template>
@@ -110,7 +122,10 @@ const providerSummary = computed(() =>
     >
       <div>
         <dt>{{ i18n.t("pdf_corpus.readiness.source") }}</dt>
-        <dd>{{ sourceFilename || i18n.t("pdf_corpus.choose_source_prompt") }}</dd>
+        <dd>
+          {{ sourceFilename || i18n.t("pdf_corpus.choose_source_prompt") }}
+          <small v-if="sourceFacts">{{ sourceFacts }}</small>
+        </dd>
       </div>
       <div v-if="hasPages(mediaKind)">
         <dt>{{ i18n.t("pdf_corpus.readiness.structure") }}</dt>
@@ -287,6 +302,13 @@ const providerSummary = computed(() =>
   font-size: var(--fs-sm);
   line-height: 1.4;
   overflow-wrap: anywhere;
+}
+.build-command-summary dd small {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-secondary);
+  font-size: var(--fs-xs) !important;
+  font-weight: normal;
 }
 .build-command-summary .build-command-warning dt,
 .build-command-summary .build-command-warning dd {
