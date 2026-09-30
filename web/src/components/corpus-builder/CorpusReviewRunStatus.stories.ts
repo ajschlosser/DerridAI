@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
-import CorpusRunMonitor from "./CorpusRunMonitor.vue";
+import CorpusReviewRunStatus from "./CorpusReviewRunStatus.vue";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Storybook fixture intentionally supplies only fields used by the monitor and its child status surfaces.
 const build: any = {
@@ -49,15 +49,15 @@ const profiles: any[] = [
 ];
 
 const meta = {
-  title: "Corpus Builder/Status/Run Monitor",
-  component: CorpusRunMonitor,
+  title: "Corpus Builder/Review/Run Status",
+  component: CorpusReviewRunStatus,
   args: {
     build,
     profiles,
     activeProfileId: "local-qwen",
     activeModel: "qwen3.5:4b",
   },
-} satisfies Meta<typeof CorpusRunMonitor>;
+} satisfies Meta<typeof CorpusReviewRunStatus>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

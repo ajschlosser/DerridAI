@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// Copyright 2026 Aaron John Schlosser, PhD.
 import { computed } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import type { ReviewQueue } from "../types/corpus";
@@ -26,8 +27,8 @@ const primaryModel = computed<ReviewQueue>(() =>
 );
 const primaryTabs: Array<{ id: ReviewQueue; key: string; fallback: string }> = [
   { id: "all", key: "pdf_corpus.queue_all", fallback: "All" },
-  { id: "ready", key: "pdf_corpus.queue_ready", fallback: "Reviewable" },
-  { id: "issues", key: "pdf_corpus.queue_issues", fallback: "Issues" },
+  { id: "ready", key: "pdf_corpus.queue_tab.ready", fallback: "Ready" },
+  { id: "issues", key: "pdf_corpus.queue_tab.issues", fallback: "Needs attention" },
   { id: "accepted", key: "pdf_corpus.queue_accepted", fallback: "Accepted" },
   { id: "rejected", key: "pdf_corpus.queue_rejected", fallback: "Rejected" },
 ];
@@ -80,7 +81,12 @@ function onKeydown(event: KeyboardEvent, current: ReviewQueue) {
 
 <template>
   <div class="queue-controls">
-    <div class="queue-tabs" role="toolbar" :aria-label="i18n.t('pdf_corpus.review_queue')">
+    <div
+      class="queue-tabs"
+      role="toolbar"
+      :aria-label="i18n.t('pdf_corpus.review_queue')"
+      aria-describedby="review-queue-count-help"
+    >
       <button
         v-for="tab in primaryTabs"
         :key="tab.id"
@@ -112,7 +118,7 @@ function onKeydown(event: KeyboardEvent, current: ReviewQueue) {
         </option>
       </select>
     </label>
-    <p class="queue-count-help" role="note">
+    <p id="review-queue-count-help" class="sr-only">
       {{ i18n.t("pdf_corpus.queue_count_help") }}
     </p>
   </div>
@@ -136,7 +142,7 @@ function onKeydown(event: KeyboardEvent, current: ReviewQueue) {
   border: 1px solid transparent;
   border-radius: 999px;
   background: transparent;
-  color: var(--muted);
+  color: var(--text-secondary);
   padding: 7px 11px;
   display: flex;
   align-items: center;
@@ -149,20 +155,20 @@ function onKeydown(event: KeyboardEvent, current: ReviewQueue) {
   min-width: 22px;
   padding: 2px 6px;
   border-radius: 999px;
-  background: var(--soft);
-  color: var(--text);
+  background: var(--surface-subtle);
+  color: var(--text-primary);
   font-size: 0.8125rem;
   text-align: center;
 }
 .queue-tab[aria-pressed="true"] {
-  background: var(--card);
-  border-color: var(--line);
-  color: var(--text);
+  background: var(--surface-card);
+  border-color: var(--border-subtle);
+  color: var(--text-primary);
   box-shadow: 0 1px 2px rgb(0 0 0/0.04);
 }
 .queue-tab:focus-visible,
 .issue-filter select:focus-visible {
-  outline: 3px solid var(--accent);
+  outline: 3px solid var(--ui-accent-focus);
   outline-offset: 2px;
 }
 .queue-tab:disabled {
@@ -175,18 +181,12 @@ function onKeydown(event: KeyboardEvent, current: ReviewQueue) {
   gap: 7px;
   font-size: 0.8125rem;
   font-weight: 700;
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 .issue-filter .control {
   min-height: 40px;
   font-size: 0.8125rem;
   min-width: 150px;
-}
-.queue-count-help {
-  flex-basis: 100%;
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.75rem;
 }
 @media (max-width: 700px) {
   .queue-controls,

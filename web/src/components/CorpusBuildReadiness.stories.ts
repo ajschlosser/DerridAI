@@ -26,7 +26,20 @@ export const NeedsAttention: Story = {
   args: {
     canStart: false,
     contextSafe: false,
-    warnings: ["Review document structure before building."],
+    issues: [
+      {
+        id: "context_unsafe",
+        section: "advanced",
+        severity: "blocking",
+        message: "Context budget is too small for the selected settings.",
+      },
+      {
+        id: "structure_review",
+        section: "structure",
+        severity: "warning",
+        message: "Review document structure before building.",
+      },
+    ],
   },
 };
 export const ConcurrentBuild: Story = { args: { activeBuildCount: 2 } };

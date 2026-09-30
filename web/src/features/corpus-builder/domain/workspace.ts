@@ -1,0 +1,86 @@
+/* Copyright 2026 Aaron John Schlosser, PhD. */
+import type { CorpusBuild } from "../../../api/corpus";
+
+/** The four top-level Corpus Builder workspaces: Setup → Build → Review → Publish. */
+export type CorpusWorkspace = "setup" | "build" | "review" | "publish";
+
+export const CORPUS_WORKSPACES: readonly CorpusWorkspace[] = [
+  "setup",
+  "build",
+  "review",
+  "publish",
+] as const;
+
+export interface CorpusWorkspaceContext {
+  hasBuild: boolean;
+  /** Records (and their topology) exist, so they can be reviewed and published. */
+  hasRecordTopology: boolean;
+}
+
+export type CorpusWorkflowState = "complete" | "current" | "available" | "unavailable";
+
+export function parseCorpusWorkspace(value: unknown): CorpusWorkspace | "" {
+  const text = String(Array.isArray(value) ? value[0] : (value ?? ""));
+  return (CORPUS_WORKSPACES as readonly string[]).includes(text) ? (text as CorpusWorkspace) : "";
+}
+
+/**
+ * Whether a workspace can be entered. Publish does not require a publishable build:
+ * it is where publication blockers are inspected and repaired.
+ */
+export function isWorkspaceAvailable(
+  workspace: CorpusWorkspace,
+  context: CorpusWorkspaceContext,
+): boolean {
+  if (workspace === "setup") return true;
+  if (workspace === "build") return context.hasBuild;
+  return context.hasBuild && context.hasRecordTopology;
+}
+
+/** The requested workspace when it is available, otherwise the fallback. */
+export function resolveWorkspace(
+  requested: CorpusWorkspace | "",
+  context: CorpusWorkspaceContext,
+  fallback: CorpusWorkspace,
+): CorpusWorkspace {
+  return requested && isWorkspaceAvailable(requested, context) ? requested : fallback;
+}
+
+export interface CorpusWorkflowProgressInput {
+  build: CorpusBuild | null;
+  hasSource: boolean;
+  setupCanStart: boolean;
+  hasRecordTopology: boolean;
+}
+
+/** Automated processing has produced a reviewable (or later) build. */
+export function isAutomatedProcessingDone(build: CorpusBuild | null): boolean {
+  if (!build) return false;
+  if (build.publication) return true;
+  return (
+    ["review", "ready", "published"].includes(String(build.stage || "")) ||
+    ["ready", "awaiting_review"].includes(String(build.status || ""))
+  );
+}
+
+/** Which workflow stages are complete. Completion never controls navigability. */
+export function corpusCompletion(
+  input: CorpusWorkflowProgressInput,
+): Record<CorpusWorkspace, boolean> {
+  const build = input.build;
+  const recordCount = Number(build?.record_count || 0);
+  return {
+    setup: input.hasSource && input.setupCanStart,
+    build: isAutomatedProcessingDone(build),
+    review:
+      recordCount > 0 &&
+      Number(
+        build?.publication_readiness?.records_pending ??
+          Math.max(
+            0,
+            recordCount - Number(build?.accepted_count || 0) - Number(build?.rejected_count || 0),
+          ),
+      ) === 0,
+    publish: Boolean(build?.publication),
+  };
+}

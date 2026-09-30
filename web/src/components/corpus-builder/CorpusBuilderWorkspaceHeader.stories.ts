@@ -7,13 +7,16 @@ const meta = {
   args: {
     sourceFilename: "Of Grammatology.pdf",
     buildId: "build-42",
-    stage: "review",
-    status: "awaiting_review",
+    status: { label: "Reviewing", detail: "", tone: "info" },
     recordCount: 84,
     acceptedCount: 31,
     workspace: "review",
-    canBuild: true,
-    canReview: true,
+    steps: [
+      { id: "setup", available: true, state: "complete" },
+      { id: "build", available: true, state: "complete" },
+      { id: "review", available: true, state: "current" },
+      { id: "publish", available: true, state: "available" },
+    ],
   },
 } satisfies Meta<typeof CorpusBuilderWorkspaceHeader>;
 
@@ -26,26 +29,32 @@ export const EmptyWorkspace: Story = {
   args: {
     sourceFilename: "",
     buildId: "",
-    stage: "",
-    status: "",
+    status: null,
     recordCount: 0,
     acceptedCount: 0,
     workspace: "setup",
-    canBuild: false,
-    canReview: false,
+    steps: [
+      { id: "setup", available: true, state: "current" },
+      { id: "build", available: false, state: "unavailable" },
+      { id: "review", available: false, state: "unavailable" },
+      { id: "publish", available: false, state: "unavailable" },
+    ],
   },
 };
 
 export const Published: Story = {
   args: {
     publicationId: "publication-2026-09-25-001",
-    stage: "published",
-    status: "published",
+    status: { label: "Published", detail: "", tone: "success" },
     recordCount: 84,
     acceptedCount: 84,
-    workspace: "build",
-    canBuild: true,
-    canReview: true,
+    workspace: "publish",
+    steps: [
+      { id: "setup", available: true, state: "complete" },
+      { id: "build", available: true, state: "complete" },
+      { id: "review", available: true, state: "complete" },
+      { id: "publish", available: true, state: "current" },
+    ],
   },
 };
 
@@ -54,7 +63,6 @@ export const FrenchLengthStress: Story = {
   args: {
     sourceFilename:
       "Jacques Derrida — Cosmopolites de tous les pays, encore un effort ! — édition critique.pdf",
-    stage: "awaiting_review",
-    status: "awaiting_review",
+    status: { label: "Prêt à publier", detail: "", tone: "success" },
   },
 };

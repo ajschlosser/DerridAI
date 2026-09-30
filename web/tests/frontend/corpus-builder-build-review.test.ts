@@ -1,6 +1,8 @@
 import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
-import CorpusBuildProgress from "../../src/components/CorpusBuildProgress.vue";
+import CorpusBuildPrimaryStatus from "../../src/components/corpus-builder/CorpusBuildPrimaryStatus.vue";
+import CorpusBuildTelemetry from "../../src/components/CorpusBuildTelemetry.vue";
+import CorpusBuildWorkspace from "../../src/components/corpus-builder/CorpusBuildWorkspace.vue";
 import CorpusFinishWorkspace from "../../src/components/CorpusFinishWorkspace.vue";
 import CorpusInitializationDialog from "../../src/components/CorpusInitializationDialog.vue";
 import CorpusReviewQueueTabs from "../../src/components/CorpusReviewQueueTabs.vue";
@@ -49,14 +51,9 @@ const buildBase: any = {
 
 describe("Corpus Builder build, review, and finish states", () => {
   it("reports progress, unresolved topology, LLM telemetry, and validation hazards accessibly", () => {
-    const wrapper = mount(CorpusBuildProgress, {
+    const wrapper = mount(CorpusBuildTelemetry, {
       props: {
-        status: "awaiting_review",
         stage: "review",
-        progress: 0.63,
-        recordCount: 31,
-        reviewCount: 4,
-        acceptedCount: 27,
         unresolvedCount: 2,
         llmMetrics: { calls: 12, retries: 2, structured_output_failures: 1 },
         validation: {
@@ -66,12 +63,8 @@ describe("Corpus Builder build, review, and finish states", () => {
           metadata_schema_errors: [{ record_id: "r1", reason: "Stance value is invalid." }],
           citation_errors: ["r1"],
         },
-        warnings: ["One boundary remains unresolved."],
       },
     });
-    const progress = wrapper.get('[role="progressbar"]');
-    expect(progress.attributes("aria-valuenow")).toBe("63");
-    expect(progress.attributes("aria-valuetext")).toContain("63%");
     expect(wrapper.get(".unresolved-line").text()).toContain("2");
     expect(wrapper.get(".llm-metrics").text()).toContain("12");
     expect(wrapper.get(".validation-strip").text()).toContain("Validation needs attention");
@@ -79,46 +72,65 @@ describe("Corpus Builder build, review, and finish states", () => {
   });
 
   it("reports the active metadata family and real task counts during enrichment", () => {
-    const wrapper = mount(CorpusBuildProgress, {
+    const wrapper = mount(CorpusBuildPrimaryStatus, {
       props: {
-        status: "running",
-        stage: "enriching",
-        progress: 0.72,
-        recordCount: 112,
-        reviewCount: 0,
-        acceptedCount: 0,
-        metadataActiveTasks: [{ record_id: "record-36", task: "quotation" }],
-        metadataTasksTotal: 336,
-        metadataTasksCompleted: 214,
-        metadataTasksFailed: 1,
-        metadataTasksSkipped: 2,
-        metadataTasksRunning: 3,
-        metadataTasksQueued: 116,
+        build: {
+          ...buildBase,
+          status: "running",
+          stage: "enriching",
+          progress: 0.72,
+          record_count: 112,
+          accepted_count: 0,
+          metadata_active_tasks: [{ record_id: "record-36", task: "quotation" }],
+          metadata_tasks_total: 336,
+          metadata_tasks_completed: 214,
+          metadata_tasks_failed: 1,
+          metadata_tasks_skipped: 2,
+          metadata_tasks_running: 3,
+          metadata_tasks_queued: 116,
+        },
+        running: true,
+        canResume: false,
+        hasRecordTopology: true,
       },
     });
-    const operation = wrapper.get(".current-operation").text();
+    const operation = wrapper.get(".primary-status-operation").text();
     expect(operation).toContain("record-36");
     expect(operation).toContain("quotation");
     expect(operation).toContain("217/336");
     expect(operation).toContain("3 active");
+    expect(wrapper.get("h2").text()).toBe("Enriching metadata");
+    expect(wrapper.get('[role="progressbar"]').attributes("aria-valuenow")).toBe("72");
+    expect(wrapper.get('[aria-current="step"]').text()).toContain("Enrich");
   });
 
-  it("surfaces recoverable build failures as alerts without hiding preserved warnings", () => {
-    const wrapper = mount(CorpusBuildProgress, {
+  it("surfaces recoverable build failures as alerts without hiding preserved warnings", async () => {
+    const wrapper = mount(CorpusBuildWorkspace, {
       props: {
-        status: "failed",
-        stage: "failed",
-        progress: 0.48,
-        recordCount: 84,
-        reviewCount: 0,
-        acceptedCount: 0,
-        error: "Provider unavailable.",
-        warnings: ["Completed checkpoints were preserved."],
-        validation: null,
+        build: {
+          ...buildBase,
+          status: "failed",
+          stage: "failed",
+          progress: 0.48,
+          record_count: 84,
+          error: "Provider unavailable.",
+          warnings: ["Completed checkpoints were preserved."],
+        },
+        running: false,
+        canResume: true,
+        hasRecordTopology: true,
+        awaitingManifestReview: false,
+        retryingSegmentation: false,
+        segmentationNeedsReview: false,
+        contextSafe: true,
       },
     });
     expect(wrapper.get('[role="alert"]').text()).toContain("Provider unavailable");
-    expect(wrapper.get(".warnings").text()).toContain("build warning");
+    expect(wrapper.text()).toContain("Completed checkpoints were preserved.");
+    // Diagnostics stay closed until asked for; actionable failure is not inside them.
+    expect(wrapper.get("details.corpus-build-diagnostics").attributes("open")).toBeUndefined();
+    await buttonByText(wrapper, "Resume").trigger("click");
+    expect(wrapper.emitted("resume")).toHaveLength(1);
   });
 
   it("shows initialization as an inline panel, not a modal, with explicit cancellation", async () => {
@@ -181,12 +193,12 @@ describe("Corpus Builder build, review, and finish states", () => {
     expect(lastEmission(wrapper, "update:modelValue")[0]).toBe("source");
     await wrapper.get('[data-review-queue="issues"]').trigger("keydown", { key: "ArrowRight" });
     expect(lastEmission(wrapper, "update:modelValue")[0]).toBe("accepted");
-    expect(wrapper.get(".queue-count-help").text()).toContain("counts may overlap");
+    expect(wrapper.get("#review-queue-count-help").text()).toContain("counts may overlap");
   });
 
   it("routes a ready corpus to publication", async () => {
     const wrapper = mount(CorpusFinishWorkspace, { props: { build: buildBase } });
-    expect(wrapper.get("#finish-corpus-title").text()).toContain("Ready to publish");
+    expect(wrapper.get(".finish-primary button").text()).toContain("Publish");
     await wrapper.get(".finish-primary button").trigger("click");
     expect(wrapper.emitted("publish")).toHaveLength(1);
   });

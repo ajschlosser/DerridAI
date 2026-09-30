@@ -9,7 +9,6 @@ import {
   type AutonomousPolicy,
 } from "../api/corpus";
 import { useI18nStore } from "../stores/i18n";
-import CorpusBuildProgress from "./CorpusBuildProgress.vue";
 import DocumentStructureConfigurator from "./DocumentStructureConfigurator.vue";
 import MediaStructureConfigurator from "./MediaStructureConfigurator.vue";
 import SourceTranscriptionDialog from "./SourceTranscriptionDialog.vue";
@@ -17,32 +16,20 @@ import { sourceMediaCapabilities } from "../domain/sourceMedia";
 import DocumentManifestEditor from "./DocumentManifestEditor.vue";
 import DocumentManifestDialog from "./DocumentManifestDialog.vue";
 import CorpusInitializationDialog from "./CorpusInitializationDialog.vue";
-import CorpusWorkflowStepper from "./CorpusWorkflowStepper.vue";
 import CorpusBuildReadiness from "./CorpusBuildReadiness.vue";
 import CorpusSourceIngest from "./CorpusSourceIngest.vue";
-import CorpusBuildHistoryMenu from "./CorpusBuildHistoryMenu.vue";
-import CorpusQualitySummary from "./CorpusQualitySummary.vue";
 import CorpusRecordSizingSettings from "./CorpusRecordSizingSettings.vue";
 import CorpusRecordFocusReview from "./CorpusRecordFocusReview.vue";
 import type { ReviewQueue } from "../types/corpus";
-import CorpusBuildLifecycleCard from "./CorpusBuildLifecycleCard.vue";
-import CorpusMetadataIssues from "./CorpusMetadataIssues.vue";
-import CorpusBuildTimeline from "./CorpusBuildTimeline.vue";
-import CorpusFinishWorkspace from "./CorpusFinishWorkspace.vue";
 import CorpusMetadataResolutionPanel from "./CorpusMetadataResolutionPanel.vue";
-import CorpusBuildStageNotice from "./CorpusBuildStageNotice.vue";
 import CorpusSourceQualityDialog from "./CorpusSourceQualityDialog.vue";
 import CorpusTextCleanupDialog from "./CorpusTextCleanupDialog.vue";
 import CorpusEditorialMemoryDialog from "./CorpusEditorialMemoryDialog.vue";
-import CorpusReviewSessionBar from "./CorpusReviewSessionBar.vue";
 import CorpusJsonlPreviewDialog from "./CorpusJsonlPreviewDialog.vue";
 import CorpusLlmTextTouchupDialog from "./CorpusLlmTextTouchupDialog.vue";
 import CorpusBoundarySliceDialog from "./CorpusBoundarySliceDialog.vue";
 import CorpusEvidenceBrowserDialog from "./corpus-builder/CorpusEvidenceBrowserDialog.vue";
 import MetadataEnrichmentDialog from "./MetadataEnrichmentDialog.vue";
-import CorpusModelActivity from "./CorpusModelActivity.vue";
-import CorpusDocumentIntelligenceStatus from "./CorpusDocumentIntelligenceStatus.vue";
-import CorpusLlmActivityInspector from "./CorpusLlmActivityInspector.vue";
 import CorpusHandsFreeSettings from "./CorpusHandsFreeSettings.vue";
 import MetadataSchemaEditor from "./MetadataSchemaEditor.vue";
 import {
@@ -82,14 +69,26 @@ import {
 } from "../features/corpus-builder/domain/recordMetadata";
 import { useCorpusPublication } from "../features/corpus-builder/composables/useCorpusPublication";
 import UiNoticeStack, { type Notice } from "./ui/UiNoticeStack.vue";
-import CorpusRunMonitor from "./corpus-builder/CorpusRunMonitor.vue";
-import CorpusConfigurationNav, {
-  type CorpusConfigurationSection,
-} from "./corpus-builder/CorpusConfigurationNav.vue";
 import CorpusBuilderWorkspaceHeader from "./corpus-builder/CorpusBuilderWorkspaceHeader.vue";
-import CorpusUnreviewedPublishDialog from "./CorpusUnreviewedPublishDialog.vue";
+import CorpusBuildHistoryMenu from "./CorpusBuildHistoryMenu.vue";
+import CorpusSetupWorkspace from "./corpus-builder/CorpusSetupWorkspace.vue";
+import CorpusBuildWorkspace from "./corpus-builder/CorpusBuildWorkspace.vue";
+import CorpusReviewWorkspace from "./corpus-builder/CorpusReviewWorkspace.vue";
+import CorpusPublishWorkspace from "./corpus-builder/CorpusPublishWorkspace.vue";
+import CorpusReviewHeader from "./corpus-builder/CorpusReviewHeader.vue";
+import CorpusReviewRunStatus from "./corpus-builder/CorpusReviewRunStatus.vue";
+import {
+  corpusSetupIssues,
+  corpusSetupSectionStates,
+  type CorpusSetupInput,
+  type CorpusSetupSectionId,
+} from "../features/corpus-builder/domain/setupState";
+import {
+  corpusPrimaryStatus,
+  corpusWorkflowSteps,
+} from "../features/corpus-builder/domain/workflowPresentation";
+import { useCorpusWorkspaceNavigation } from "../features/corpus-builder/composables/useCorpusWorkspaceNavigation";
 import CorpusReviewRecordQueue from "./corpus-builder/CorpusReviewRecordQueue.vue";
-import CorpusReviewToolbar from "./corpus-builder/CorpusReviewToolbar.vue";
 import CorpusReviewEvidencePanel from "./corpus-builder/CorpusReviewEvidencePanel.vue";
 import CorpusRecordSizeAdvice from "./CorpusRecordSizeAdvice.vue";
 import CorpusUnitPolicy from "./CorpusUnitPolicy.vue";
@@ -356,12 +355,10 @@ const error = ref("");
 const notice = ref("");
 const statusRegion = ref<HTMLElement | null>(null);
 const decisionDock = ref<InstanceType<typeof CorpusRecordDecisionDock> | null>(null);
-const configurationSection = ref<CorpusConfigurationSection>("source");
+const configurationSection = ref<CorpusSetupSectionId | "">("source");
 const recordSaveQueue = new RecordMutationQueue();
 const documentMetadataOpen = ref(false);
 const missingMetadataPromptOpen = ref(false);
-const confirmingBuildDelete = ref(false);
-const confirmingUnreviewedPublish = ref(false);
 /** Skipping review is offered once processing is done and until a publication exists. */
 const canPublishUnreviewed = computed(() =>
   Boolean(
@@ -372,8 +369,13 @@ const canPublishUnreviewed = computed(() =>
   ),
 );
 async function publishUnreviewed() {
-  confirmingUnreviewedPublish.value = false;
-  await publish({ download: false, acceptUnreviewed: true });
+  await publishAndShow({ acceptUnreviewed: true });
+}
+/** A successful publication lands on the Publish workspace, which shows the published snapshot. */
+async function publishAndShow(options: { acceptUnreviewed?: boolean } = {}) {
+  const result = await publish({ download: false, ...options });
+  if (result) await switchWorkspace("publish");
+  return result;
 }
 const textCleanupOpen = ref(false);
 const sourceTranscriptionOpen = ref(false);
@@ -429,48 +431,21 @@ const {
   retryingSegmentation,
   canRetryMetadata,
   metadataIssueCount,
-  metadataFieldIssueCount,
   metadataRetryRunning,
   awaitingManifestReview,
   hasRecordTopology,
-  finishPhase,
   showReviewWorkspace: lifecycleShowReviewWorkspace,
 } = useCorpusBuildLifecycle(currentBuild, recordTotal, reviewQueue, reviewRequested);
 
-type CorpusWorkspaceMode = "setup" | "build" | "review";
-const requestedWorkspace = computed<CorpusWorkspaceMode | "">(() => {
-  const value = String(route.query.workspace || "");
-  return value === "setup" || value === "build" || value === "review" ? value : "";
+const { workspaceMode, switchWorkspace } = useCorpusWorkspaceNavigation({
+  currentBuild,
+  hasRecordTopology,
+  reviewReady: lifecycleShowReviewWorkspace,
 });
-const defaultWorkspace = computed<CorpusWorkspaceMode>(() => {
-  if (!currentBuild.value) return "setup";
-  return hasRecordTopology.value && lifecycleShowReviewWorkspace.value ? "review" : "build";
-});
-const workspaceMode = computed<CorpusWorkspaceMode>(() => {
-  const requested = requestedWorkspace.value;
-  if (requested === "setup") return "setup";
-  if (requested === "build" && currentBuild.value) return "build";
-  if (requested === "review" && hasRecordTopology.value) return "review";
-  return defaultWorkspace.value;
-});
-const showBuildConfiguration = computed(() => workspaceMode.value === "setup");
 const showReviewWorkspace = computed(
   () =>
     workspaceMode.value === "review" && hasRecordTopology.value && !awaitingManifestReview.value,
 );
-async function switchWorkspace(workspace: CorpusWorkspaceMode) {
-  if (workspace === "build" && !currentBuild.value) return;
-  if (workspace === "review" && !hasRecordTopology.value) return;
-  await router.push({
-    query: {
-      ...route.query,
-      workspace,
-      build: currentBuild.value?.build_id || route.query.build,
-      record: workspace === "review" ? route.query.record : undefined,
-      queue: workspace === "review" ? route.query.queue : undefined,
-    },
-  });
-}
 // Required document fields that detection on source load missed; only these are asked of the user.
 // Nothing is asked before detection has run for the source.
 const missingDocumentFields = computed(() =>
@@ -744,12 +719,13 @@ async function fixNextIssue() {
   if (!remaining.length) return returnToReadiness();
   await fixValidationIssue(remaining[0]);
 }
+/** Leave a fix context and return to Publication readiness, which is the Publish workspace. */
 function returnToReadiness() {
   fixContext.value = null;
   reviewRequested.value = false;
   reviewQueue.value = "all";
   recordQuery.value = "";
-  void switchWorkspace("build");
+  void switchWorkspace("publish");
 }
 
 /** The reviewer answers from their own knowledge: the decision records them, not a source span, as the source. */
@@ -1374,42 +1350,75 @@ const selectedStructureSummary = computed(() => {
     );
   return parts.join(" · ");
 });
-const setupWarnings = computed(() => {
-  const warnings: string[] = [];
-  if (
+const setupInput = computed<CorpusSetupInput>(() => ({
+  asset: selectedAsset.value
+    ? {
+        filename: selectedAsset.value.filename,
+        media_kind: selectedAsset.value.media_kind,
+        page_count: selectedAsset.value.page_count,
+        block_count: selectedAsset.value.block_count,
+      }
+    : null,
+  structureNeedsReview: Boolean(
     paginatedSource.value &&
-    selectedAsset.value?.pages?.length &&
-    !selectedAsset.value.document_layout?.main_text_pdf_start
-  )
-    warnings.push(i18n.t("pdf_corpus.readiness.review_structure"));
-  if (selectedProviderId.value && selectedProfileActiveBuildCount.value)
-    warnings.push(
-      i18n.tf("pdf_corpus.profile_active_builds", {
-        count: selectedProfileActiveBuildCount.value,
-      }),
-    );
-  if (!recordSizingValid.value) warnings.push(i18n.t("pdf_corpus.record_sizing.invalid"));
-  return warnings;
-});
+      selectedAsset.value?.pages?.length &&
+      !selectedAsset.value.document_layout?.main_text_pdf_start,
+  ),
+  structureSummary: selectedStructureSummary.value,
+  recordSizingValid: recordSizingValid.value,
+  targetChars: recordSizing.value.preferred_record_chars,
+  toleranceChars: recordSizing.value.record_length_tolerance,
+  schemaName: chosenSchema.value?.name || "",
+  schemaVersion: chosenSchema.value?.schema_version || "",
+  guidanceFieldCount: Object.keys(runGuidancePayload()).length,
+  missingDocumentFieldCount: missingDocumentFields.value.length,
+  providerLabel: selectedProviderLabel.value,
+  modelLabel: selectedProfileModel.value || manualModel.value,
+  enrichmentMode: enrichmentMode.value,
+  documentIntelligenceProfile: documentIntelligenceProfile.value,
+  profileActiveBuildCount: selectedProviderId.value ? selectedProfileActiveBuildCount.value : 0,
+  contextSafe: contextSafe.value,
+}));
+const setupText = {
+  t: (key: string, fallback?: string) => i18n.t(key, fallback),
+  tf: (key: string, values: Record<string, string | number>) => i18n.tf(key, values),
+};
+const setupIssues = computed(() => corpusSetupIssues(setupInput.value, setupText));
+const setupSections = computed(() =>
+  corpusSetupSectionStates(setupInput.value, setupIssues.value, setupText),
+);
+const primaryStatus = computed(() => corpusPrimaryStatus(currentBuild.value, setupText));
+const workflowSteps = computed(() =>
+  corpusWorkflowSteps(
+    workspaceMode.value,
+    { hasBuild: Boolean(currentBuild.value), hasRecordTopology: hasRecordTopology.value },
+    {
+      build: currentBuild.value,
+      hasSource: Boolean(selectedAsset.value),
+      setupCanStart: canStartConcurrentBuild.value,
+      hasRecordTopology: hasRecordTopology.value,
+    },
+  ),
+);
+/** Build shows until Records can be reviewed, and while a manifest still needs the reviewer's decision. */
+const showBuildWorkspace = computed(
+  () =>
+    Boolean(currentBuild.value) &&
+    (workspaceMode.value === "build" ||
+      (workspaceMode.value === "review" && !showReviewWorkspace.value)),
+);
+/** Publication blockers open review work: switch to Review, then apply the queue/record/fix context. */
+async function reviewFromPublish(action: () => unknown) {
+  await switchWorkspace("review");
+  await action();
+}
+function toggleSetupSection(section: CorpusSetupSectionId) {
+  configurationSection.value = configurationSection.value === section ? "" : section;
+}
+function openSetupSection(section: CorpusSetupSectionId) {
+  configurationSection.value = section;
+}
 
-function formatDate(value?: string | null) {
-  if (!value) return "—";
-  try {
-    return new Intl.DateTimeFormat(i18n.locale || undefined, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(value));
-  } catch {
-    return value;
-  }
-}
-function statusLabel(build: CorpusBuild) {
-  if (build.publication) return i18n.t("pdf_corpus.status.published_snapshot");
-  return i18n.t(
-    `pdf_corpus.status.${String(build.status || "unknown")}`,
-    String(build.status || "unknown").replace(/_/g, " "),
-  );
-}
 const statusNotices = computed<Notice[]>(() => [
   ...(error.value
     ? [
@@ -2004,7 +2013,6 @@ watch(selectedAssetId, () => {
   else configurationSection.value = "source";
 });
 watch(selectedBuildId, () => {
-  confirmingBuildDelete.value = false;
   sourceProblemDialogBuildId.value = "";
 });
 watch(
@@ -2159,13 +2167,11 @@ defineExpose({
       :source-filename="selectedAsset?.filename || ''"
       :build-id="currentBuild?.build_id || ''"
       :publication-id="currentBuild?.publication?.publication_id || ''"
-      :stage="currentBuild?.stage || ''"
-      :status="currentBuild?.status || ''"
+      :status="primaryStatus"
       :record-count="currentBuild?.record_count || 0"
       :accepted-count="currentBuild?.accepted_count || 0"
       :workspace="workspaceMode"
-      :can-build="Boolean(currentBuild)"
-      :can-review="hasRecordTopology"
+      :steps="workflowSteps"
       :sticky="!showReviewWorkspace"
       @workspace="switchWorkspace"
     >
@@ -2177,16 +2183,13 @@ defineExpose({
           @select="chooseBuild"
           @refresh="refreshBuilds"
         />
-        <button
-          v-if="canPublishUnreviewed"
-          type="button"
-          class="btn"
-          :disabled="busy !== ''"
-          @click="confirmingUnreviewedPublish = true"
+        <a
+          v-if="currentBuild?.publication"
+          class="btn primary"
+          :href="corpusBuilderApi.publicationUrl(currentBuild.publication.publication_id)"
+          >{{ i18n.t("pdf_corpus.download_jsonl") }}</a
         >
-          {{ i18n.t("pdf_corpus.accept_unreviewed") }}
-        </button>
-        <button
+        <UiButton
           v-if="
             currentBuild &&
             (buildRunning
@@ -2195,28 +2198,16 @@ defineExpose({
                   String(currentBuild.status || ''),
                 ))
           "
-          type="button"
-          class="btn"
-          @click="startNewBuildSetup"
-          :disabled="busy !== ''"
-        >
-          {{
+          :label="
             buildRunning
-              ? i18n.t("pdf_corpus.start_concurrent_build")
-              : i18n.t("pdf_corpus.start_new_build")
-          }}
-        </button>
+              ? i18n.t('pdf_corpus.start_concurrent_build')
+              : i18n.t('pdf_corpus.start_new_build')
+          "
+          :disabled="busy !== ''"
+          @click="startNewBuildSetup"
+        />
       </template>
     </CorpusBuilderWorkspaceHeader>
-
-    <CorpusUnreviewedPublishDialog
-      :open="canPublishUnreviewed && confirmingUnreviewedPublish"
-      :busy="busy !== ''"
-      :pending-records="Number(currentBuild?.publication_readiness?.records_pending || 0)"
-      :unresolved-fields="Number(currentBuild?.metadata_issue_summary?.fields_unresolved || 0)"
-      @close="confirmingUnreviewedPublish = false"
-      @confirm="publishUnreviewed"
-    />
 
     <div ref="statusRegion" tabindex="-1" class="status-region" aria-live="polite">
       <UiNoticeStack
@@ -2227,22 +2218,6 @@ defineExpose({
       />
     </div>
 
-    <CorpusWorkflowStepper
-      v-if="workspaceMode !== 'setup' || !currentBuild"
-      :stage="currentBuild?.stage || ''"
-      :status="currentBuild?.status || ''"
-      :published="Boolean(currentBuild?.publication)"
-      :has-asset="Boolean(selectedAsset)"
-      :has-manifest="Boolean(currentBuild?.manifest && Object.keys(currentBuild.manifest).length)"
-      :accepted-count="currentBuild?.accepted_count || 0"
-      :record-count="currentBuild?.record_count || 0"
-      :blocker-count="currentBuild?.publication_readiness?.blockers?.length || 0"
-      :can-publish="Boolean(currentBuild?.publication_readiness?.can_publish)"
-    />
-    <CorpusModelActivity
-      v-if="currentBuild && buildRunning && workspaceMode !== 'setup'"
-      :activity="currentBuild.llm_activity"
-    />
     <CorpusInitializationDialog
       v-if="workspaceMode === 'build' && currentBuild && buildRunning && !hasRecordTopology"
       :build="currentBuild"
@@ -2250,39 +2225,14 @@ defineExpose({
       @cancel="cancelBuild"
     />
 
-    <section
-      v-if="showBuildConfiguration"
-      class="builder-setup"
-      :aria-labelledby="'pdf-corpus-config-title'"
+    <CorpusSetupWorkspace
+      v-if="workspaceMode === 'setup'"
+      :sections="setupSections"
+      :expanded="configurationSection"
+      :disabled-sections="selectedAsset ? [] : ['structure']"
+      @toggle="toggleSetupSection"
     >
-      <h2 id="pdf-corpus-config-title" class="sr-only">
-        {{ i18n.t("pdf_corpus.build_configuration") }}
-      </h2>
-      <CorpusConfigurationNav
-        v-model="configurationSection"
-        :has-source="Boolean(selectedAsset)"
-        :structure-available="Boolean(selectedAsset)"
-      />
-
-      <section
-        v-show="configurationSection === 'source'"
-        id="corpus-config-panel-source"
-        class="setup-section setup-source-section"
-        role="tabpanel"
-        aria-labelledby="corpus-config-tab-source"
-      >
-        <div class="setup-section-head">
-          <div>
-            <div>
-              <h3 id="pdf-corpus-source-title">
-                {{ i18n.t("pdf_corpus.source_setup_title") }}
-              </h3>
-              <p>
-                {{ i18n.t("pdf_corpus.source_setup_help") }}
-              </p>
-            </div>
-          </div>
-        </div>
+      <template #source>
         <CorpusSourceIngest
           v-model:asset-id="selectedAssetId"
           v-model:illegibility="sourceIllegibility"
@@ -2313,1367 +2263,933 @@ defineExpose({
           @import-gutenberg="importGutenberg"
           @import-wikisource="importLibraryUrl"
           @delete-asset="deleteAsset"
-          @continue="configurationSection = 'structure'"
+          @continue="openSetupSection('structure')"
           @save-language="saveSourceLanguage"
           :queued-source-ids="queuedSourceIds"
           @queue-sources="queueSources"
           @sources-changed="refreshAssets"
           @view-capture-sources="viewCaptureSources"
         />
-      </section>
-
-      <section
-        v-if="paginatedSource && selectedAsset?.pages?.length"
-        v-show="configurationSection === 'structure'"
-        id="corpus-config-panel-structure"
-        class="setup-phase"
-        role="tabpanel"
-        aria-labelledby="corpus-config-tab-structure"
-      >
-        <div class="phase-label">
-          <div>
-            <h3 id="pdf-corpus-structure-phase-title">
-              {{ i18n.t("pdf_corpus.document_structure") }}
-            </h3>
-            <p>
-              {{ i18n.t("pdf_corpus.structure_before_build_help") }}
-            </p>
-          </div>
-        </div>
-        <CorpusUnitPolicy
-          v-if="selectedAsset.media_kind !== 'audio'"
+      </template>
+      <template #structure>
+        <template v-if="paginatedSource && selectedAsset?.pages?.length">
+          <CorpusUnitPolicy
+            v-if="selectedAsset.media_kind !== 'audio'"
+            :asset="selectedAsset"
+            :disabled="Boolean(buildRunning && currentBuild?.asset_id === selectedAssetId)"
+            :busy="busy === 'units'"
+            @apply="applyUnitPolicy"
+          />
+          <DocumentStructureConfigurator
+            class="document-structure-config"
+            :asset="selectedAsset"
+            :pdf-url="sourcePdfUrl"
+            :disabled="
+              busy !== '' || Boolean(buildRunning && currentBuild?.asset_id === selectedAssetId)
+            "
+            :saving="busy === 'document-layout'"
+            @save="saveDocumentLayout"
+            @save-page-labels="savePageLabels"
+          />
+        </template>
+        <template v-else-if="selectedAsset">
+          <CorpusUnitPolicy
+            v-if="selectedAsset.media_kind !== 'audio'"
+            :asset="selectedAsset"
+            :disabled="Boolean(buildRunning && currentBuild?.asset_id === selectedAssetId)"
+            :busy="busy === 'units'"
+            @apply="applyUnitPolicy"
+          />
+          <MediaStructureConfigurator
+            :media-kind="selectedAsset.media_kind"
+            :filename="selectedAsset.filename"
+            :page-count="selectedAsset.page_count"
+            :block-count="selectedAsset.block_count"
+          />
+        </template>
+        <CorpusRecordSizeAdvice
+          v-if="selectedAsset && selectedAsset.media_kind !== 'audio'"
           :asset="selectedAsset"
-          :disabled="Boolean(buildRunning && currentBuild?.asset_id === selectedAssetId)"
-          :busy="busy === 'units'"
-          @apply="applyUnitPolicy"
-        />
-        <DocumentStructureConfigurator
-          class="document-structure-config"
-          :asset="selectedAsset"
-          :pdf-url="sourcePdfUrl"
+          :sizing="recordSizing"
           :disabled="
-            busy !== '' || Boolean(buildRunning && currentBuild?.asset_id === selectedAssetId)
+            Boolean(buildRunning && currentBuild?.asset_id === selectedAssetId) || busy !== ''
           "
-          :saving="busy === 'document-layout'"
-          @save="saveDocumentLayout"
-          @save-page-labels="savePageLabels"
-        />
-      </section>
-      <section
-        v-else-if="selectedAsset"
-        v-show="configurationSection === 'structure'"
-        id="corpus-config-panel-structure"
-        class="setup-phase"
-        role="tabpanel"
-        aria-labelledby="corpus-config-tab-structure"
-      >
-        <div class="phase-label">
-          <div>
-            <h3 id="media-structure-phase-title">
-              {{ i18n.t("pdf_corpus.source_interpretation", "Source interpretation") }}
-            </h3>
-          </div>
-        </div>
-        <CorpusUnitPolicy
-          v-if="selectedAsset.media_kind !== 'audio'"
-          :asset="selectedAsset"
-          :disabled="Boolean(buildRunning && currentBuild?.asset_id === selectedAssetId)"
-          :busy="busy === 'units'"
           @apply="applyUnitPolicy"
         />
-        <MediaStructureConfigurator
-          :media-kind="selectedAsset.media_kind"
-          :filename="selectedAsset.filename"
-          :page-count="selectedAsset.page_count"
-          :block-count="selectedAsset.block_count"
-        />
-      </section>
-
-      <CorpusEnrichmentConfiguration
-        v-show="configurationSection === 'enrichment'"
-        :selected-provider-id="selectedProviderId"
-        :selected-review-provider-id="selectedReviewProviderId"
-        :provider-profiles="providerProfiles"
-        :default-profile-id="runtime.getDefaultProviderProfileId?.() || ''"
-        :selected-provider-label="selectedProviderLabel"
-        :selected-profile-model="selectedProfileModel"
-        :enrichment-mode="enrichmentMode"
-        :semantic-indexing="semanticIndexing"
-        :document-intelligence-profile="documentIntelligenceProfile"
-        :document-nlp-provider="documentNlpProvider"
-        :document-nlp-include-events="documentNlpIncludeEvents"
-        :media-kind="selectedAsset?.media_kind || ''"
-        :auto-clean-text="autoCleanText"
-        :llm-touchup-during-enrichment="llmTouchupDuringEnrichment"
-        :noise-unusable-threshold="noiseUnusableThreshold"
-        :llm-assess-text-noise="llmAssessTextNoise"
-        :manual-provider="manualProvider"
-        :manual-model="manualModel"
-        :manual-base-url="manualBaseUrl"
-        :manual-api-key="manualApiKey"
-        :disabled="busy !== ''"
-        @update:selected-provider-id="selectedProviderId = $event"
-        @update:selected-review-provider-id="selectedReviewProviderId = $event"
-        @update:enrichment-mode="enrichmentMode = $event"
-        @update:semantic-indexing="semanticIndexing = $event"
-        @update:document-intelligence-profile="documentIntelligenceProfile = $event"
-        @update:document-nlp-provider="documentNlpProvider = $event"
-        @update:document-nlp-include-events="documentNlpIncludeEvents = $event"
-        @update:auto-clean-text="autoCleanText = $event"
-        @update:llm-touchup-during-enrichment="llmTouchupDuringEnrichment = $event"
-        @update:noise-unusable-threshold="noiseUnusableThreshold = $event"
-        @update:llm-assess-text-noise="llmAssessTextNoise = $event"
-        @update:manual-provider="manualProvider = $event"
-        @update:manual-model="manualModel = $event"
-        @update:manual-base-url="manualBaseUrl = $event"
-        @update:manual-api-key="manualApiKey = $event"
-        @manage-providers="manageProviders"
-      />
-
-      <CorpusRecordSizeAdvice
-        v-if="selectedAsset && selectedAsset.media_kind !== 'audio'"
-        v-show="configurationSection === 'structure'"
-        :asset="selectedAsset"
-        :sizing="recordSizing"
-        :disabled="
-          Boolean(buildRunning && currentBuild?.asset_id === selectedAssetId) || busy !== ''
-        "
-        @apply="applyUnitPolicy"
-      />
-
-      <details v-show="configurationSection === 'structure'" class="setup-section setup-disclosure">
-        <summary>
-          <span
-            ><b>{{ i18n.t("pdf_corpus.record_construction") }}</b
-            ><small>{{
-              i18n.tf("pdf_corpus.readiness.sizing", {
-                target: recordSizing.preferred_record_chars.toLocaleString(),
-                tolerance: recordSizing.record_length_tolerance.toLocaleString(),
-              })
-            }}</small></span
-          >
-        </summary>
-        <div class="setup-disclosure-body">
-          <CorpusRecordSizingSettings
-            v-model="recordSizing"
-            :disabled="busy !== ''"
-            :observed="currentBuild?.topology_quality"
-          />
-        </div>
-      </details>
-      <CorpusMetadataConfiguration
-        v-show="configurationSection === 'metadata'"
-        v-model:schema-id="schemaId"
-        v-model:run-guidance="runGuidance"
-        :schema-choices="schemaChoices"
-        :chosen-schema="chosenSchema"
-        :run-guidance-fields="runGuidanceFields"
-        :disabled="busy !== ''"
-        @manage-schemas="schemaEditorOpen = true"
-      />
-
-      <CorpusAdvancedConfiguration
-        v-show="configurationSection === 'advanced'"
-        v-model:hands-free="handsFree"
-        :generation="effectiveGeneration"
-        :stage-limits="stageLimits"
-        :stage-timeouts="stageTimeouts"
-        :max-concurrent-requests="maxConcurrentRequests"
-        :use-profile-defaults="useProfileDefaults"
-        :disabled="busy !== ''"
-        @update:generation="generationOverrides = $event"
-        @update:stage-limits="stageLimits = $event"
-        @update:stage-timeouts="stageTimeouts = $event"
-        @update:max-concurrent-requests="maxConcurrentRequests = $event"
-        @update:use-profile-defaults="useProfileDefaults = $event"
-      />
-
-      <CorpusMissingDocumentFields
-        v-if="selectedAsset"
-        v-model="documentMetadata"
-        :fields="missingDocumentFields"
-        :disabled="busy !== ''"
-      />
-      <CorpusBuildReadiness
-        :media-kind="selectedAsset?.media_kind"
-        :source-filename="selectedAsset?.filename || ''"
-        :page-count="selectedAsset?.page_count || 0"
-        :block-count="selectedAsset?.block_count || 0"
-        :structure-summary="selectedStructureSummary"
-        :provider-label="selectedProviderLabel"
-        :model-label="selectedProfileModel || manualModel"
-        :enrichment-mode="enrichmentMode"
-        :target-chars="recordSizing.preferred_record_chars"
-        :tolerance-chars="recordSizing.record_length_tolerance"
-        :context-safe="contextSafe"
-        :active-build-count="activeBuildCount"
-        :can-start="canStartConcurrentBuild"
-        :busy="busy === 'build'"
-        :warnings="setupWarnings"
-        @build="startBuild"
-      />
-    </section>
-    <details v-if="currentBuild && !showBuildConfiguration" class="active-build-settings">
-      <summary>{{ i18n.t("pdf_corpus.build_settings_summary") }}</summary>
-      <div>
-        <span>{{ currentBuild.source_filename }}</span
-        ><span>{{ i18n.t("pdf_corpus.provider_profile") }}: {{ activeProviderProfileLabel }}</span
-        ><span>{{ i18n.t("pdf_corpus.model") }}: {{ activeModelLabel }}</span>
-        <details v-if="activeRunGuidance.length" class="active-guidance-summary">
+        <details class="setup-disclosure">
           <summary>
-            {{ i18n.t("pdf_corpus.run_guidance_title") }}
+            <span
+              ><b>{{ i18n.t("pdf_corpus.record_construction") }}</b
+              ><small>{{
+                i18n.tf("pdf_corpus.readiness.sizing", {
+                  target: recordSizing.preferred_record_chars.toLocaleString(),
+                  tolerance: recordSizing.record_length_tolerance.toLocaleString(),
+                })
+              }}</small></span
+            >
           </summary>
-          <ul>
-            <li v-for="item in activeRunGuidance" :key="item.field">
-              <b>{{ item.label }}</b>
-              <span v-if="item.instructions">{{ item.instructions }}</span>
-              <small v-if="item.lookFor.length">{{ item.lookFor.join(" · ") }}</small>
-            </li>
-          </ul>
+          <div class="setup-disclosure-body">
+            <CorpusRecordSizingSettings
+              v-model="recordSizing"
+              :disabled="busy !== ''"
+              :observed="currentBuild?.topology_quality"
+            />
+          </div>
         </details>
-        <button
-          type="button"
-          class="btn small"
-          @click="
-            selectedBuildId = '';
-            currentBuild = null;
-          "
-        >
-          {{
-            i18n.t(
-              activeBuildCount
-                ? "pdf_corpus.configure_another_build"
-                : "pdf_corpus.configure_new_build",
-              activeBuildCount ? "Configure another build" : "Configure a new build",
-            )
-          }}
-        </button>
-      </div>
-    </details>
-
-    <div
-      v-if="currentBuild && !showBuildConfiguration"
-      class="builder-workspace"
-      :class="{ 'review-mode': showReviewWorkspace }"
+        <div class="setup-continue">
+          <UiButton
+            variant="primary"
+            :label="i18n.t('pdf_corpus.setup.continue_metadata')"
+            @click="openSetupSection('metadata')"
+          />
+        </div>
+      </template>
+      <template #metadata>
+        <CorpusMetadataConfiguration
+          v-model:schema-id="schemaId"
+          v-model:run-guidance="runGuidance"
+          :schema-choices="schemaChoices"
+          :chosen-schema="chosenSchema"
+          :run-guidance-fields="runGuidanceFields"
+          :disabled="busy !== ''"
+          @manage-schemas="schemaEditorOpen = true"
+        />
+        <CorpusMissingDocumentFields
+          v-if="selectedAsset"
+          v-model="documentMetadata"
+          :fields="missingDocumentFields"
+          :disabled="busy !== ''"
+        />
+        <div class="setup-continue">
+          <UiButton
+            variant="primary"
+            :label="i18n.t('pdf_corpus.setup.continue_enrichment')"
+            @click="openSetupSection('enrichment')"
+          />
+        </div>
+      </template>
+      <template #enrichment>
+        <CorpusEnrichmentConfiguration
+          :selected-provider-id="selectedProviderId"
+          :selected-review-provider-id="selectedReviewProviderId"
+          :provider-profiles="providerProfiles"
+          :default-profile-id="runtime.getDefaultProviderProfileId?.() || ''"
+          :selected-provider-label="selectedProviderLabel"
+          :selected-profile-model="selectedProfileModel"
+          :enrichment-mode="enrichmentMode"
+          :semantic-indexing="semanticIndexing"
+          :document-intelligence-profile="documentIntelligenceProfile"
+          :document-nlp-provider="documentNlpProvider"
+          :document-nlp-include-events="documentNlpIncludeEvents"
+          :media-kind="selectedAsset?.media_kind || ''"
+          :auto-clean-text="autoCleanText"
+          :llm-touchup-during-enrichment="llmTouchupDuringEnrichment"
+          :noise-unusable-threshold="noiseUnusableThreshold"
+          :llm-assess-text-noise="llmAssessTextNoise"
+          :manual-provider="manualProvider"
+          :manual-model="manualModel"
+          :manual-base-url="manualBaseUrl"
+          :manual-api-key="manualApiKey"
+          :disabled="busy !== ''"
+          @update:selected-provider-id="selectedProviderId = $event"
+          @update:selected-review-provider-id="selectedReviewProviderId = $event"
+          @update:enrichment-mode="enrichmentMode = $event"
+          @update:semantic-indexing="semanticIndexing = $event"
+          @update:document-intelligence-profile="documentIntelligenceProfile = $event"
+          @update:document-nlp-provider="documentNlpProvider = $event"
+          @update:document-nlp-include-events="documentNlpIncludeEvents = $event"
+          @update:auto-clean-text="autoCleanText = $event"
+          @update:llm-touchup-during-enrichment="llmTouchupDuringEnrichment = $event"
+          @update:noise-unusable-threshold="noiseUnusableThreshold = $event"
+          @update:llm-assess-text-noise="llmAssessTextNoise = $event"
+          @update:manual-provider="manualProvider = $event"
+          @update:manual-model="manualModel = $event"
+          @update:manual-base-url="manualBaseUrl = $event"
+          @update:manual-api-key="manualApiKey = $event"
+          @manage-providers="manageProviders"
+        />
+      </template>
+      <template #advanced>
+        <CorpusAdvancedConfiguration
+          v-model:hands-free="handsFree"
+          :generation="effectiveGeneration"
+          :stage-limits="stageLimits"
+          :stage-timeouts="stageTimeouts"
+          :max-concurrent-requests="maxConcurrentRequests"
+          :use-profile-defaults="useProfileDefaults"
+          :disabled="busy !== ''"
+          @update:generation="generationOverrides = $event"
+          @update:stage-limits="stageLimits = $event"
+          @update:stage-timeouts="stageTimeouts = $event"
+          @update:max-concurrent-requests="maxConcurrentRequests = $event"
+          @update:use-profile-defaults="useProfileDefaults = $event"
+        />
+      </template>
+      <template #footer>
+        <CorpusBuildReadiness
+          :media-kind="selectedAsset?.media_kind"
+          :source-filename="selectedAsset?.filename || ''"
+          :page-count="selectedAsset?.page_count || 0"
+          :block-count="selectedAsset?.block_count || 0"
+          :structure-summary="selectedStructureSummary"
+          :provider-label="selectedProviderLabel"
+          :model-label="selectedProfileModel || manualModel"
+          :enrichment-mode="enrichmentMode"
+          :target-chars="recordSizing.preferred_record_chars"
+          :tolerance-chars="recordSizing.record_length_tolerance"
+          :context-safe="contextSafe"
+          :active-build-count="activeBuildCount"
+          :can-start="canStartConcurrentBuild"
+          :busy="busy === 'build'"
+          :issues="setupIssues"
+          :schema-label="setupSections[2].summary"
+          @build="startBuild"
+          @edit-section="openSetupSection"
+        />
+      </template>
+    </CorpusSetupWorkspace>
+    <CorpusBuildWorkspace
+      v-else-if="showBuildWorkspace && currentBuild"
+      :build="currentBuild"
+      :running="buildRunning"
+      :can-resume="canResume"
+      :has-record-topology="hasRecordTopology"
+      :awaiting-manifest-review="awaitingManifestReview"
+      :retrying-segmentation="retryingSegmentation"
+      :segmentation-needs-review="segmentationNeedsReview"
+      :context-safe="contextSafe"
+      :busy="busy !== ''"
+      :provider-label="activeProviderProfileLabel"
+      :model-label="activeModelLabel"
+      :run-guidance="activeRunGuidance"
+      @pause="pauseBuild"
+      @cancel="cancelBuild"
+      @resume="resumeBuild"
+      @delete="deleteBuild"
+      @open-review="switchWorkspace('review')"
+      @open-publish="switchWorkspace('publish')"
+      @confirm-manifest="confirmManifest"
+      @acknowledge-warnings="acknowledgeBuildWarnings"
     >
-      <aside
-        v-if="!showReviewWorkspace"
-        class="build-rail"
-        :aria-label="i18n.t('pdf_corpus.builds')"
-      >
-        <div class="rail-title">
-          <div>
-            <b>{{ i18n.t("pdf_corpus.builds") }}</b
-            ><span>{{ buildsTotal }} {{ i18n.t("pdf_corpus.total") }}</span>
-          </div>
-          <UiTooltip
-            :text="i18n.t('pdf_corpus.refresh_builds')"
-            trigger-mode="content"
-            :content-focusable="false"
-            placement="bottom"
-          >
-            <button
-              type="button"
-              class="icon-button"
-              :aria-label="i18n.t('pdf_corpus.refresh_builds')"
-              @click="refreshBuilds"
-            >
-              ↻
-            </button>
-          </UiTooltip>
-        </div>
-        <button
-          v-for="build in builds"
-          :key="build.build_id"
-          type="button"
-          class="build-row"
-          :class="{ active: build.build_id === selectedBuildId }"
-          :aria-current="build.build_id === selectedBuildId ? 'true' : undefined"
-          @click="chooseBuild(build)"
-        >
-          <span class="status-dot" :data-status="build.status" aria-hidden="true"></span>
-          <span
-            ><b>{{ build.source_filename }}</b
-            ><small>{{ statusLabel(build) }} · {{ Math.round((build.progress || 0) * 100) }}%</small
-            ><small
-              >{{ build.record_count || 0 }} {{ i18n.t("pdf_corpus.records") }} ·
-              {{ formatDate(build.created_at) }}</small
-            ></span
-          >
-        </button>
-        <div v-if="!builds.length" class="rail-empty">
-          {{ i18n.t("pdf_corpus.no_builds") }}
-        </div>
-      </aside>
+      <template #manifest>
+        <DocumentManifestEditor
+          v-if="currentBuild.manifest && Object.keys(currentBuild.manifest).length"
+          :media-kind="selectedAsset?.media_kind"
+          :manifest="currentBuild.manifest || {}"
+          :disabled="buildRunning || busy !== ''"
+          @save="saveManifest"
+          @reanalyze="reanalyzeDocument"
+        />
+      </template>
+    </CorpusBuildWorkspace>
 
-      <main class="build-main">
-        <section
-          v-if="currentBuild"
-          class="build-summary"
-          :aria-labelledby="'pdf-corpus-current-build'"
-        >
-          <div v-if="!showReviewWorkspace" class="summary-top">
-            <div>
-              <span class="eyebrow">{{ currentBuild.profile_id }}</span>
-              <h2 id="pdf-corpus-current-build">{{ currentBuild.source_filename }}</h2>
-              <p>{{ currentBuild.build_id }}</p>
-            </div>
-            <div class="summary-actions">
-              <button v-if="buildRunning" type="button" class="btn" @click="pauseBuild">
-                {{ i18n.t("pdf_corpus.pause") }}
-              </button>
-              <button v-if="buildRunning" type="button" class="btn" @click="cancelBuild">
-                {{ i18n.t("pdf_corpus.cancel") }}
-              </button>
-              <button
-                v-if="canResume"
-                type="button"
-                class="btn"
-                @click="resumeBuild"
-                :disabled="busy !== ''"
-              >
-                {{ i18n.t("pdf_corpus.resume") }}
-              </button>
-              <span v-if="confirmingBuildDelete" class="delete-confirm" role="group">
-                <span>{{ i18n.t("pdf_corpus.build_delete_confirm") }}</span>
-                <button
-                  type="button"
-                  class="btn danger"
-                  @click="
-                    confirmingBuildDelete = false;
-                    deleteBuild();
-                  "
-                >
-                  {{ i18n.t("pdf_corpus.build_delete") }}
-                </button>
-                <button type="button" class="btn" @click="confirmingBuildDelete = false">
-                  {{ i18n.t("ui.cancel") }}
-                </button>
-              </span>
-              <button
-                v-else-if="!buildRunning"
-                type="button"
-                class="btn"
-                @click="confirmingBuildDelete = true"
-              >
-                {{ i18n.t("pdf_corpus.build_delete") }}
-              </button>
-              <a
-                v-if="currentBuild.publication"
-                class="btn primary"
-                :href="corpusBuilderApi.publicationUrl(currentBuild.publication.publication_id)"
-                >{{ i18n.t("pdf_corpus.download_jsonl") }}</a
-              >
-            </div>
-          </div>
-          <CorpusBuildLifecycleCard v-if="!showReviewWorkspace" :build="currentBuild" />
-          <CorpusQualitySummary
-            v-if="!awaitingManifestReview && !showReviewWorkspace"
-            :build="currentBuild"
-          />
+    <CorpusPublishWorkspace
+      v-else-if="workspaceMode === 'publish' && currentBuild"
+      :build="currentBuild"
+      :busy="busy !== ''"
+      :metadata-retry-running="metadataRetryRunning"
+      :can-publish-unreviewed="canPublishUnreviewed"
+      @retry-metadata="retryIncompleteMetadata"
+      @review-metadata="reviewFromPublish(openMetadataIssueQueue)"
+      @review-metadata-record="
+        (recordId) => reviewFromPublish(() => reviewMetadataRecord(recordId))
+      "
+      @review-validation="reviewFromPublish(() => openValidationIssueQueue())"
+      @fix-issue="(issue) => reviewFromPublish(() => fixValidationIssue(issue))"
+      @review-topology="reviewFromPublish(openTopologyIssueQueue)"
+      @review-issues="reviewFromPublish(openIssueQueue)"
+      @review-rejected="reviewFromPublish(openRejectedQueue)"
+      @review-records="reviewFromPublish(openAllReviewQueue)"
+      @review-source="reviewFromPublish(openSourceIssueQueue)"
+      @restore-rejected="restoreAllRejected"
+      @start-new="startNewBuildSetup"
+      @edit-document-metadata="documentMetadataOpen = true"
+      @rerun-enrichment="openEnrichmentFromFinish"
+      @publish="publishAndShow()"
+      @publish-unreviewed="publishUnreviewed"
+    />
 
-          <CorpusBuildStageNotice
-            v-if="buildRunning && !hasRecordTopology"
-            :stage="currentBuild.stage"
-          />
-          <CorpusFinishWorkspace
-            v-if="!awaitingManifestReview && finishPhase && !showReviewWorkspace"
-            :build="currentBuild"
-            :busy="busy !== ''"
-            @retry-metadata="retryIncompleteMetadata"
-            @review-metadata="openMetadataIssueQueue"
-            @review-validation="openValidationIssueQueue()"
-            @fix-issue="fixValidationIssue"
-            @review-topology="openTopologyIssueQueue"
-            @review-issues="openIssueQueue"
-            @review-rejected="openRejectedQueue"
-            @review-records="openAllReviewQueue"
-            @review-source="openSourceIssueQueue"
-            @restore-rejected="restoreAllRejected"
-            @start-new="startNewBuildSetup"
-            @edit-document-metadata="documentMetadataOpen = true"
-            @rerun-enrichment="openEnrichmentFromFinish"
-            @publish="publish({ download: false })"
-          />
-          <CorpusMetadataIssues
-            v-if="
-              !awaitingManifestReview &&
-              finishPhase &&
-              metadataFieldIssueCount > 0 &&
-              !currentBuild.publication
-            "
-            :build="currentBuild"
-            :busy="busy !== '' || metadataRetryRunning"
-            @retry="retryIncompleteMetadata"
-            @review="reviewMetadataRecord"
-          />
-          <section
-            v-if="!showReviewWorkspace"
-            class="build-monitor"
-            :aria-label="i18n.t('pdf_corpus.build_monitor')"
-          >
-            <div class="build-monitor-heading">
-              <div>
-                <span class="eyebrow">{{ i18n.t("pdf_corpus.build_monitor") }}</span>
-                <h3>{{ i18n.t("pdf_corpus.build_monitor_title") }}</h3>
-              </div>
-              <small>{{ i18n.t("pdf_corpus.build_monitor_help") }}</small>
-            </div>
-            <CorpusBuildProgress
-              :status="currentBuild.publication ? 'published' : currentBuild.status"
-              :stage="currentBuild.publication ? 'published' : currentBuild.stage"
-              :progress="currentBuild.progress || 0"
-              :record-count="currentBuild.record_count || 0"
-              :review-count="currentBuild.needs_review_count || 0"
-              :accepted-count="currentBuild.accepted_count || 0"
-              :error="currentBuild.error"
-              :warnings="currentBuild.warnings || []"
-              :warning-acknowledgements="currentBuild.warning_acknowledgements || {}"
-              :validation="currentBuild.validation || null"
-              :llm-metrics="currentBuild.llm_metrics || null"
-              :metadata-operation="currentBuild.metadata_operation || null"
-              :metadata-active-tasks="currentBuild.metadata_active_tasks || []"
-              :metadata-tasks-total="currentBuild.metadata_tasks_total || 0"
-              :metadata-tasks-completed="currentBuild.metadata_tasks_completed || 0"
-              :metadata-tasks-failed="currentBuild.metadata_tasks_failed || 0"
-              :metadata-tasks-skipped="currentBuild.metadata_tasks_skipped || 0"
-              :metadata-tasks-running="currentBuild.metadata_tasks_running || 0"
-              :metadata-tasks-queued="currentBuild.metadata_tasks_queued || 0"
-              :boundary-candidates-completed="currentBuild.boundary_candidates_completed || 0"
-              :unresolved-count="
-                currentBuild.boundary_review_count ||
-                currentBuild.segmentation_unresolved_regions?.length ||
-                0
+    <CorpusReviewWorkspace
+      v-else-if="showReviewWorkspace && currentBuild"
+      :queue-splitter="queueSplitter"
+      :inspector-splitter="inspectorSplitter"
+      :height-splitter="reviewHeightSplitter"
+      :queue-collapsed="reviewQueueCollapsed"
+      :mode="reviewWorkspaceMode"
+      :loading="recordsLoading"
+      :fix-context="fixContext"
+      :fix-progress="fixProgress"
+      @fix-next="fixNextIssue"
+      @back-to-readiness="returnToReadiness"
+      @grid-change="reviewGridEl = $event"
+      @frame-change="reviewFrameEl = $event"
+    >
+      <template #panels>
+        <CorpusSemanticGraphPanel
+          v-if="currentBuild?.semantic_content_graph"
+          :build-id="currentBuild.build_id"
+          :summary="currentBuild.semantic_content_graph"
+          :disabled="busy !== '' || buildRunning"
+          @refreshed="refreshBuild"
+        />
+        <CorpusSemanticAliasPanel
+          :build-id="currentBuild.build_id"
+          :disabled="busy !== ''"
+          @changed="refreshBuild"
+        />
+      </template>
+      <template #header>
+        <CorpusReviewHeader
+          v-model:queue="reviewQueue"
+          v-model:query="recordQuery"
+          :accepted="Number(reviewQueueCounts.accepted ?? currentBuild?.accepted_count ?? 0)"
+          :ready="readyCount"
+          :issues="issueCount"
+          :remaining="pendingCount"
+          :workspace-mode="reviewWorkspaceMode"
+          :has-selected-record="Boolean(selectedRecord)"
+          :focus-disabled="!selectedRecord"
+          :total="Number(currentBuild?.record_count || 0)"
+          :metadata="Number(reviewQueueCounts.metadata ?? metadataIssueCount)"
+          :topology="topologyIssueCount"
+          :source-problems="
+            Number(reviewQueueCounts.source ?? currentBuild?.source_problem_count ?? 0)
+          "
+          :rejected="Number(reviewQueueCounts.rejected ?? currentBuild?.rejected_count ?? 0)"
+          :bulk-action-items="bulkActionItems"
+          :bulk-action-feedback="bulkActionFeedback"
+          :bulk-metadata-open="bulkMetadataOpen"
+          :schema="currentBuild?.schema"
+          :known-values="metadataKnownValues"
+          :region-types="regionTypes"
+          :discourse-roles="discourseRoles"
+          :selected-count="selectedReviewCount"
+          :bulk-total-count="Number(currentBuild?.record_count || recordTotal)"
+          :bulk-disabled="busy !== '' || reviewLocked"
+          :page-number="pageNumber"
+          :page-count="pageCount"
+          :has-previous-page="recordOffset > 0"
+          :has-next-page="recordOffset + pageSize < recordTotal"
+          :disabled="busy !== ''"
+          @focus="openFocusView"
+          @workspace="setReviewWorkspaceMode"
+          @accept-clean="acceptCleanRecords"
+          @bulk-action="runBulkAction"
+          @bulk-apply="applyBulkMetadata"
+          @bulk-close="bulkMetadataOpen = false"
+          @previous-page="previousPage"
+          @next-page="nextPage"
+        >
+          <template #run-status>
+            <CorpusReviewRunStatus
+              :build="currentBuild"
+              :profiles="providerProfiles"
+              :active-profile-id="activeBuildProfileId"
+              :active-model="activeModelLabel"
+              :disabled="busy !== ''"
+              @switch-profile="switchBuildProvider"
+              @settle="settleMetadata"
+              @cancel="cancelBuild"
+              @resume="resumeBuild"
+              @run-another="
+                llmActionProviderId =
+                  llmActionProviderId || selectedProviderId || providerProfiles[0]?.id || '';
+                metadataEnrichmentOpen = true;
               "
-              :segmentation-telemetry="{
-                candidateCount: currentBuild.boundary_candidate_count || 0,
-                deterministicSplits: currentBuild.boundary_deterministic_split_count || 0,
-                deterministicKeeps: currentBuild.boundary_deterministic_keep_count || 0,
-                llmAdjudications: currentBuild.boundary_llm_adjudication_count || 0,
-                llmBatchCalls: currentBuild.boundary_llm_batch_call_count || 0,
-                llmSplits: currentBuild.boundary_llm_split_count || 0,
-                llmKeeps: currentBuild.boundary_llm_keep_count || 0,
-                provisionalSplits: currentBuild.provisional_boundary_count || 0,
-                sizeOptimizedSplits: currentBuild.size_optimized_boundary_count || 0,
-                absoluteSafetySplits: currentBuild.absolute_safety_boundary_count || 0,
-                budgetSkipped: currentBuild.boundary_budget_skipped_count || 0,
-                classifierFailures: currentBuild.boundary_classifier_failure_count || 0,
-                reviewCount: currentBuild.boundary_review_count || 0,
-              }"
+              @open-record="openHandsFreeException"
+              @inspect-editorial-memory="openEditorialMemory"
+              @acknowledge-warnings="acknowledgeBuildWarnings"
             />
-            <CorpusDocumentIntelligenceStatus
-              v-if="currentBuild.document_intelligence"
-              :run="currentBuild.document_intelligence"
-              :requested-provider="String(currentBuild.request?.document_nlp_provider || 'auto')"
-            />
-            <CorpusLlmActivityInspector :build-id="currentBuild.build_id" />
-            <CorpusBuildTimeline v-if="!awaitingManifestReview" :build="currentBuild" />
-          </section>
-          <section
-            v-if="awaitingManifestReview"
-            class="manifest-gate"
-            aria-labelledby="manifest-review-title"
-          >
-            <div>
-              <h3 id="manifest-review-title">
-                {{ i18n.t("pdf_corpus.manifest_review_required") }}
-              </h3>
-              <p>
-                {{ i18n.t("pdf_corpus.manifest_review_required_help") }}
-              </p>
-            </div>
-            <button
-              type="button"
-              class="btn primary"
-              @click="confirmManifest"
-              :disabled="busy !== '' || !contextSafe"
+          </template>
+        </CorpusReviewHeader>
+      </template>
+      <template #queue>
+        <CorpusReviewRecordQueue
+          :rows="queueRows"
+          :record-total="recordTotal"
+          :selected-record-id="loadingRecordId || selectedRecordId"
+          :selected-review-ids="selectedReviewIds"
+          :all-visible-selected="allVisibleSelected"
+          :loading="recordsLoading"
+          :hydrated="reviewHydrated"
+          :disabled="busy !== ''"
+          @root-change="setRecordListElement"
+          @collapse="reviewQueueCollapsed = true"
+          @toggle-visible="toggleVisibleSelection"
+          @toggle-record="toggleReviewSelection"
+          @select-record="selectRecord"
+          @source-warning="openRecordSourceWarning"
+          @show-all="
+            reviewQueue = 'all';
+            recordQuery = '';
+          "
+        />
+      </template>
+      <template #record>
+        <article
+          v-show="reviewWorkspaceMode === 'record'"
+          ref="reviewPaneEl"
+          class="record-review-pane"
+          :aria-labelledby="selectedRecord ? 'review-record-title' : undefined"
+        >
+          <template v-if="selectedRecord">
+            <header class="record-review-head">
+              <div>
+                <button
+                  v-if="reviewQueueCollapsed"
+                  type="button"
+                  class="link-button queue-toggle"
+                  @click="reviewQueueCollapsed = false"
+                >
+                  {{ i18n.t("pdf_corpus.show_queue") }}</button
+                ><span class="eyebrow">{{ i18n.t("pdf_corpus.proposed_record") }}</span>
+                <h3 id="review-record-title">{{ selectedRecord.record_id }}</h3>
+                <p>
+                  {{ selectedRecord.inline_citation }}
+                  · {{ selectedRecord.text_length.toLocaleString() }}
+                  {{ i18n.t("pdf_corpus.characters") }}{{ selectedRecordActivitySummary }}
+                </p>
+              </div>
+            </header>
+            <aside
+              v-if="selectedRecord.text_touchup_proposal?.status === 'pending_review'"
+              class="review-reason touchup-review-notice"
+              data-tone="info"
+              role="status"
             >
-              {{ i18n.t("pdf_corpus.confirm_manifest_continue") }}
-            </button>
-          </section>
-          <section
-            v-if="retryingSegmentation"
-            class="build-guidance running-guidance"
-            role="status"
-            aria-live="polite"
-          >
-            <span class="guidance-icon" aria-hidden="true">↻</span>
-            <div>
-              <h3>
-                {{ i18n.t("pdf_corpus.retry_in_progress") }}
-              </h3>
-              <p>
-                {{ i18n.t("pdf_corpus.retry_in_progress_help") }}
-              </p>
-            </div>
-          </section>
-          <section
-            v-else-if="
-              currentBuild.status === 'failed' ||
-              currentBuild.status === 'interrupted' ||
-              currentBuild.status === 'cancelled'
-            "
-            class="build-guidance failure-guidance"
-            role="alert"
-          >
-            <span class="guidance-icon" aria-hidden="true">!</span>
-            <div>
-              <h3>
-                {{ i18n.t("pdf_corpus.build_stopped_title") }}
-              </h3>
-              <p>
-                {{ currentBuild.error || i18n.t("pdf_corpus.build_stopped_help") }}
-              </p>
-              <small>{{ i18n.t("pdf_corpus.build_stopped_checkpoint") }}</small>
-            </div>
-          </section>
-          <section
-            v-if="segmentationNeedsReview && !showReviewWorkspace"
-            class="segmentation-blocked segmentation-review-localized"
-            role="status"
-            aria-labelledby="segmentation-review-title"
-          >
-            <div>
-              <h3 id="segmentation-review-title">
-                {{ i18n.t("pdf_corpus.segmentation_review_title") }}
-              </h3>
-              <p>
-                {{ i18n.t("pdf_corpus.segmentation_review_help") }}
-              </p>
-            </div>
-            <details v-if="currentBuild.segmentation_unresolved_regions?.length">
-              <summary>
+              <div class="touchup-review-copy">
+                <b>{{ i18n.t("pdf_corpus.llm_touchup_proposal_available") }}</b>
+                <span>{{ i18n.t("pdf_corpus.llm_touchup_proposal_help") }}</span>
+              </div>
+              <button
+                type="button"
+                class="btn small"
+                @click="beginTextEdit(true)"
+                :disabled="busy !== '' || reviewLocked"
+              >
+                {{ i18n.t("pdf_corpus.review_touchup_proposal") }}
+              </button>
+            </aside>
+            <aside
+              v-else-if="
+                selectedRecord.review_reason &&
+                selectedRecord.review_reason.toLowerCase() !== 'pending human review.'
+              "
+              class="review-reason"
+              role="note"
+            >
+              <b>{{
+                recordIssueKinds(selectedRecord).length
+                  ? recordIssueKinds(selectedRecord)
+                      .map((kind) => i18n.t(`pdf_corpus.record_state.${kind}`, kind))
+                      .join(" · ")
+                  : i18n.t("pdf_corpus.why_review")
+              }}</b
+              ><span class="review-reason-text">{{ selectedRecord.review_reason }}</span>
+            </aside>
+            <section class="record-text-review" aria-labelledby="reviewed-record-text-title">
+              <header>
+                <div>
+                  <b id="reviewed-record-text-title">{{
+                    i18n.t("pdf_corpus.reviewed_record_text")
+                  }}</b
+                  ><span
+                    v-if="selectedRecord.text_review_status === 'human_corrected'"
+                    class="human-corrected"
+                    >{{ i18n.t("pdf_corpus.human_corrected") }}</span
+                  ><span
+                    v-else-if="selectedRecord.text_review_status === 'human_reviewed'"
+                    class="human-corrected"
+                    >{{ i18n.t("pdf_corpus.human_reviewed") }}</span
+                  >
+                </div>
+                <div class="record-text-head-actions">
+                  <label v-if="!editingText" class="context-toggle">
+                    <input v-model="showRecordContext" type="checkbox" />
+                    {{ i18n.t("pdf_corpus.context_show") }}
+                  </label>
+                  <button
+                    v-if="!editingText"
+                    type="button"
+                    class="btn small"
+                    @click="openRecordPopout"
+                  >
+                    {{ i18n.t("pdf_corpus.reviewed_record_text") }}
+                  </button>
+                  <button
+                    v-if="editingText"
+                    type="button"
+                    class="btn small"
+                    @click="textCleanupOpen = true"
+                    :disabled="busy !== '' || reviewLocked"
+                  >
+                    {{ i18n.t("pdf_corpus.clean_text") }}</button
+                  ><UiTooltip
+                    v-if="editingText"
+                    :text="i18n.t('pdf_corpus.save_reviewed_text') + ' (Ctrl/Cmd S)'"
+                    trigger-mode="content"
+                    :content-focusable="Boolean(busy !== '' || reviewLocked || !textDraft.trim())"
+                    placement="bottom"
+                  >
+                    <button
+                      type="button"
+                      class="btn small primary"
+                      @click="saveReviewedText()"
+                      :disabled="busy !== '' || reviewLocked || !textDraft.trim()"
+                      aria-keyshortcuts="Control+S Meta+S"
+                    >
+                      {{ i18n.t("ui.save") }}
+                    </button> </UiTooltip
+                  ><button
+                    v-if="editingText"
+                    type="button"
+                    class="btn small"
+                    @click="llmTouchupOpen = true"
+                    :disabled="busy !== '' || reviewLocked"
+                  >
+                    {{ i18n.t("pdf_corpus.llm_touchup") }}</button
+                  ><button
+                    v-if="
+                      !editingText &&
+                      selectedRecord.text_review_status !== 'human_corrected' &&
+                      selectedRecord.text_review_status !== 'human_reviewed'
+                    "
+                    type="button"
+                    class="btn small"
+                    @click="markTextReviewed"
+                    :disabled="busy !== '' || reviewLocked"
+                  >
+                    {{ i18n.t("pdf_corpus.mark_text_reviewed") }}</button
+                  ><button
+                    type="button"
+                    class="btn small"
+                    @click="editingText ? cancelTextEdit() : beginTextEdit()"
+                    :disabled="busy !== '' || reviewLocked"
+                  >
+                    {{ editingText ? i18n.t("ui.cancel") : i18n.t("pdf_corpus.edit_text") }}
+                  </button>
+                </div>
+              </header>
+              <textarea
+                v-if="editingText"
+                v-model="textDraft"
+                class="record-text-editor"
+                :aria-label="i18n.t('pdf_corpus.reviewed_record_text')"
+              ></textarea>
+              <RecordContextReader
+                v-else
+                class="record-primary-text"
+                :build-id="currentBuild?.build_id || ''"
+                :record-id="selectedRecord.record_id"
+                :text="selectedRecord.text"
+                :show-context="showRecordContext"
+                @select="selectRecordById"
+              />
+              <p
+                v-if="selectedRecord.text_noise?.score != null"
+                class="record-noise-summary"
+                role="status"
+              >
                 {{
-                  i18n.tf("pdf_corpus.unresolved_count", {
-                    count: currentBuild.segmentation_unresolved_regions.length,
+                  i18n.tf("pdf_corpus.text_noise.score", {
+                    score: Math.round(Number(selectedRecord.text_noise.score)),
                   })
                 }}
-              </summary>
-              <ul>
-                <li
-                  v-for="(region, index) in currentBuild.segmentation_unresolved_regions.slice(
-                    0,
-                    20,
-                  )"
-                  :key="index"
+                <span v-if="selectedRecord.text_noise.unusable">
+                  ·
+                  {{ i18n.t("pdf_corpus.text_noise.unusable") }}
+                </span>
+              </p>
+              <div
+                v-if="editingText && selectedRecord.source_quality_issues?.length"
+                class="text-review-actions"
+              >
+                <label
+                  v-if="selectedRecord.source_quality_issues?.length"
+                  class="resolve-source-check"
+                  ><input v-model="resolveSourceOnTextSave" type="checkbox" /><span>{{
+                    i18n.t("pdf_corpus.resolve_source_with_correction")
+                  }}</span></label
                 >
-                  <code>{{
-                    region.after_block_id || region.left_block_id || region.start_block_id || "?"
-                  }}</code>
-                  →
-                  <code>{{
-                    region.next_block_id || region.right_block_id || region.end_block_id || "?"
-                  }}</code
-                  ><span v-if="region.reason"> · {{ region.reason }}</span>
-                </li>
-              </ul>
-            </details>
-          </section>
-          <details
-            v-if="
-              currentBuild.manifest &&
-              Object.keys(currentBuild.manifest).length &&
-              !showReviewWorkspace
-            "
-            class="manifest-details"
-            :open="awaitingManifestReview"
-          >
-            <summary>
-              {{ i18n.t("pdf_corpus.document_manifest") }} ·
-              {{ i18n.t("pdf_corpus.revision") }}
-              {{ currentBuild.manifest_revision || 1 }}
-            </summary>
-            <DocumentManifestEditor
-              :media-kind="selectedAsset?.media_kind"
-              :manifest="currentBuild.manifest || {}"
-              :disabled="buildRunning || busy !== ''"
-              @save="saveManifest"
-              @reanalyze="reanalyzeDocument"
+              </div>
+            </section>
+            <MovableRecordModal
+              v-if="recordPopout"
+              :record-id="recordPopout.recordId"
+              :text="recordPopout.text"
+              @close="recordPopout = null"
             />
-          </details>
-          <div v-if="!showReviewWorkspace" class="provenance-strip">
-            <span>SHA {{ currentBuild.source_sha256?.slice(0, 12) }}…</span
-            ><span>{{
-              currentBuild.model || selectedProfileModel || i18n.t("pdf_corpus.provider_default")
-            }}</span
-            ><span
-              >{{ i18n.t("schemas.version") }} v{{
-                currentBuild.metadata_schema_version || "—"
-              }}</span
-            ><span>{{ currentBuild.segmentation_prompt_version }}</span>
+          </template>
+          <div v-else class="inspector-empty">
+            {{ i18n.t("pdf_corpus.select_record") }}
           </div>
-        </section>
-
-        <template v-if="showReviewWorkspace">
-          <CorpusRunMonitor
-            v-if="currentBuild"
-            :build="currentBuild"
-            :profiles="providerProfiles"
-            :active-profile-id="activeBuildProfileId"
-            :active-model="activeModelLabel"
-            :disabled="busy !== ''"
-            @switch-profile="switchBuildProvider"
-            @settle="settleMetadata"
-            @cancel="cancelBuild"
-            @resume="resumeBuild"
-            @run-another="
-              llmActionProviderId =
-                llmActionProviderId || selectedProviderId || providerProfiles[0]?.id || '';
-              metadataEnrichmentOpen = true;
-            "
-            @open-record="openHandsFreeException"
-            @inspect-editorial-memory="openEditorialMemory"
-            @acknowledge-warnings="acknowledgeBuildWarnings"
-          />
-
-          <div v-if="fixContext" class="fix-banner" role="status">
-            <span>
-              <b>{{ i18n.t("pdf_corpus.fixing_title") }}</b>
-              <span v-if="fixProgress" class="fix-banner-progress">{{
-                i18n.tf("pdf_corpus.fixing_progress", {
-                  position: fixProgress.position,
-                  total: fixProgress.total,
-                })
+        </article>
+      </template>
+      <template #inspector>
+        <aside
+          ref="reviewInspectorEl"
+          class="review-inspector"
+          :aria-label="i18n.t('pdf_corpus.review_details')"
+        >
+          <div v-if="reviewWorkspaceMode !== 'record'" class="detail-workspace-head">
+            <div>
+              <span class="eyebrow">{{ i18n.t("pdf_corpus.review_workspace") }}</span>
+              <h3>
+                {{
+                  reviewWorkspaceMode === "metadata"
+                    ? i18n.t("pdf_corpus.workspace.metadata")
+                    : i18n.t("pdf_corpus.workspace.source")
+                }}
+              </h3>
+              <p>
+                {{
+                  reviewWorkspaceMode === "metadata"
+                    ? i18n.t("pdf_corpus.workspace.metadata_help")
+                    : i18n.t("pdf_corpus.workspace.source_help")
+                }}
+              </p>
+            </div>
+            <button type="button" class="btn small" @click="setReviewWorkspaceMode('record')">
+              {{ i18n.t("pdf_corpus.workspace.back_record") }}
+            </button>
+          </div>
+          <div
+            v-if="reviewWorkspaceMode === 'record' && selectedRecord"
+            class="review-inspector-tabs"
+            role="tablist"
+            :aria-label="i18n.t('pdf_corpus.review_detail_views')"
+          >
+            <button
+              id="review-tab-metadata"
+              data-review-tab="metadata"
+              type="button"
+              role="tab"
+              aria-controls="review-panel-metadata"
+              :aria-selected="reviewInspectorTab === 'metadata'"
+              :tabindex="reviewInspectorTab === 'metadata' ? 0 : -1"
+              @keydown="reviewInspectorKeydown"
+              @click="reviewInspectorTab = 'metadata'"
+            >
+              {{ i18n.t("pdf_corpus.metadata_tab")
+              }}<span v-if="selectedMetadataBlockingFields.length">{{
+                selectedMetadataBlockingFields.length
               }}</span>
-              {{ fixContext.reason }}
-              <code>{{ fixContext.field || fixContext.recordId }}</code>
-            </span>
-            <span class="fix-banner-actions">
-              <button type="button" class="btn small" @click="fixNextIssue">
-                {{ i18n.t("pdf_corpus.fix_next_issue") }}
-              </button>
-              <button type="button" class="btn small primary" @click="returnToReadiness">
-                {{ i18n.t("pdf_corpus.back_to_readiness") }}
-              </button>
-            </span>
+            </button>
+            <button
+              id="review-tab-evidence"
+              data-review-tab="evidence"
+              type="button"
+              role="tab"
+              aria-controls="review-panel-evidence"
+              :aria-selected="reviewInspectorTab === 'evidence'"
+              :tabindex="reviewInspectorTab === 'evidence' ? 0 : -1"
+              @keydown="reviewInspectorKeydown"
+              @click="reviewInspectorTab = 'evidence'"
+            >
+              {{ i18n.t("pdf_corpus.evidence_tab") }}
+            </button>
+            <button
+              id="review-tab-source"
+              data-review-tab="source"
+              type="button"
+              role="tab"
+              aria-controls="review-panel-source"
+              :aria-selected="reviewInspectorTab === 'source'"
+              :tabindex="reviewInspectorTab === 'source' ? 0 : -1"
+              @keydown="reviewInspectorKeydown"
+              @click="reviewInspectorTab = 'source'"
+            >
+              {{ i18n.t("pdf_corpus.source_tab") }}
+            </button>
+            <button
+              id="review-tab-semantic"
+              data-review-tab="semantic"
+              type="button"
+              role="tab"
+              aria-controls="review-panel-semantic"
+              :aria-selected="reviewInspectorTab === 'semantic'"
+              :tabindex="reviewInspectorTab === 'semantic' ? 0 : -1"
+              @keydown="reviewInspectorKeydown"
+              @click="reviewInspectorTab = 'semantic'"
+            >
+              {{ i18n.t("pdf_corpus.semantic_tab") }}
+            </button>
           </div>
-
-          <CorpusReviewSessionBar
-            v-if="currentBuild"
-            :source-filename="currentBuild.source_filename"
-            :model="currentBuild.model"
-            :build-id="currentBuild.build_id"
-            :accepted="Number(currentBuild.accepted_count || 0)"
-            :reviewable="readyCount"
-            :remaining="pendingCount"
-            :issues="issueCount"
-            :focus-disabled="!selectedRecord"
-            @focus="openFocusView"
-          />
-
-          <CorpusSemanticGraphPanel
-            v-if="currentBuild?.semantic_content_graph"
-            :build-id="currentBuild.build_id"
-            :summary="currentBuild.semantic_content_graph"
-            :disabled="busy !== '' || buildRunning"
-            @refreshed="refreshBuild"
-          />
-
-          <CorpusSemanticAliasPanel
-            v-if="currentBuild"
-            :build-id="currentBuild.build_id"
-            :disabled="busy !== ''"
-            @changed="refreshBuild"
-          />
-
-          <div ref="reviewFrameEl" class="review-frame">
-            <CorpusReviewToolbar
-              v-model:queue="reviewQueue"
-              v-model:query="recordQuery"
-              :total="Number(currentBuild?.record_count || 0)"
-              :ready="readyCount"
-              :issues="issueCount"
-              :metadata="Number(reviewQueueCounts.metadata ?? metadataIssueCount)"
-              :topology="topologyIssueCount"
-              :source-problems="
-                Number(reviewQueueCounts.source ?? currentBuild?.source_problem_count ?? 0)
-              "
-              :accepted="Number(reviewQueueCounts.accepted ?? currentBuild?.accepted_count ?? 0)"
-              :rejected="Number(reviewQueueCounts.rejected ?? currentBuild?.rejected_count ?? 0)"
-              :workspace-mode="reviewWorkspaceMode"
-              :has-selected-record="Boolean(selectedRecord)"
-              :bulk-action-items="bulkActionItems"
-              :bulk-action-feedback="bulkActionFeedback"
-              :bulk-metadata-open="bulkMetadataOpen"
+          <section
+            v-if="
+              selectedRecord &&
+              (reviewWorkspaceMode === 'metadata' ||
+                (reviewWorkspaceMode === 'record' && reviewInspectorTab === 'metadata'))
+            "
+            id="review-panel-metadata"
+            class="review-inspector-panel"
+            role="tabpanel"
+            aria-labelledby="review-tab-metadata"
+            tabindex="0"
+          >
+            <CorpusMetadataResolutionPanel
               :schema="currentBuild?.schema"
-              :known-values="metadataKnownValues"
+              :build-id="currentBuild?.build_id"
+              :record="selectedRecord"
               :region-types="regionTypes"
               :discourse-roles="discourseRoles"
-              :selected-count="selectedReviewCount"
-              :bulk-total-count="Number(currentBuild?.record_count || recordTotal)"
-              :bulk-disabled="busy !== '' || reviewLocked"
-              :page-number="pageNumber"
-              :page-count="pageCount"
-              :has-previous-page="recordOffset > 0"
-              :has-next-page="recordOffset + pageSize < recordTotal"
-              :disabled="busy !== ''"
-              @workspace="setReviewWorkspaceMode"
-              @accept-clean="acceptCleanRecords"
-              @bulk-action="runBulkAction"
-              @bulk-apply="applyBulkMetadata"
-              @bulk-close="bulkMetadataOpen = false"
-              @previous-page="previousPage"
-              @next-page="nextPage"
+              :busy="busy !== '' && busy !== 'metadata-field'"
+              :batch-saving="metadataSavingField === '__batch__'"
+              :saving-field="metadataSavingField"
+              :saved-field="metadataSavedField"
+              :confidence-calibration="currentBuild?.llm_confidence_calibration || {}"
+              :known-values="metadataKnownValues"
+              :blocking-fields="selectedMetadataBlockingFields"
+              @complete="handleMetadataComplete"
+              @resolve="resolveMetadataField"
+              @no-value="resolveMetadataNoValue"
+              @resolve-many="resolveMetadataSuggestions"
+              @source="showMetadataSource"
+              @resolve-with-evidence="resolveMetadataWithSelectionEvidence"
+              @resolve-with-human-source="resolveMetadataWithHumanSource"
+              @browse-evidence="openEvidenceBrowser"
+              @dirty="handleMetadataDirty"
             />
-
-            <section
-              ref="reviewGridEl"
-              class="review-grid record-first-review"
-              :style="{
-                '--rw-queue': `${queueSplitter.size.value}px`,
-                '--rw-inspector': `${inspectorSplitter.size.value}px`,
-                height: `${reviewHeightSplitter.size.value}px`,
-              }"
-              :class="{
-                'queue-collapsed': reviewQueueCollapsed,
-                'detail-mode': reviewWorkspaceMode !== 'record',
-                'metadata-workspace': reviewWorkspaceMode === 'metadata',
-                'source-workspace': reviewWorkspaceMode === 'source',
-              }"
-              :aria-busy="recordsLoading"
-            >
-              <CorpusReviewRecordQueue
-                :rows="queueRows"
-                :record-total="recordTotal"
-                :selected-record-id="loadingRecordId || selectedRecordId"
-                :selected-review-ids="selectedReviewIds"
-                :all-visible-selected="allVisibleSelected"
-                :loading="recordsLoading"
-                :hydrated="reviewHydrated"
+            <details class="record-data">
+              <summary>
+                {{ i18n.t("pdf_corpus.advanced_metadata") }}
+              </summary>
+              <p class="help">
+                {{ i18n.t("pdf_corpus.metadata_help") }}
+              </p>
+              <button
+                type="button"
+                class="btn small metadata-cache-clear"
                 :disabled="busy !== ''"
-                @root-change="setRecordListElement"
-                @collapse="reviewQueueCollapsed = true"
-                @toggle-visible="toggleVisibleSelection"
-                @toggle-record="toggleReviewSelection"
-                @select-record="selectRecord"
-                @source-warning="openRecordSourceWarning"
-                @show-all="
-                  reviewQueue = 'all';
-                  recordQuery = '';
-                "
-              />
-              <div
-                v-if="!reviewQueueCollapsed"
-                class="review-splitter"
-                data-splitter="queue"
-                role="separator"
-                tabindex="0"
-                aria-orientation="vertical"
-                :aria-label="i18n.t('pdf_corpus.resize_queue')"
-                v-bind="queueSplitter.aria()"
-                @pointerdown="queueSplitter.onPointerDown"
-                @keydown="queueSplitter.onKeydown"
-                @dblclick="queueSplitter.reset"
-              ></div>
-
-              <article
-                v-show="reviewWorkspaceMode === 'record'"
-                ref="reviewPaneEl"
-                class="record-review-pane"
-                :aria-labelledby="selectedRecord ? 'review-record-title' : undefined"
+                @click="clearMetadataSuggestionCache"
               >
-                <template v-if="selectedRecord">
-                  <header class="record-review-head">
-                    <div>
-                      <button
-                        v-if="reviewQueueCollapsed"
-                        type="button"
-                        class="link-button queue-toggle"
-                        @click="reviewQueueCollapsed = false"
-                      >
-                        {{ i18n.t("pdf_corpus.show_queue") }}</button
-                      ><span class="eyebrow">{{ i18n.t("pdf_corpus.proposed_record") }}</span>
-                      <h3 id="review-record-title">{{ selectedRecord.record_id }}</h3>
-                      <p>
-                        {{ selectedRecord.inline_citation }}
-                        · {{ selectedRecord.text_length.toLocaleString() }}
-                        {{ i18n.t("pdf_corpus.characters") }}{{ selectedRecordActivitySummary }}
-                      </p>
-                    </div>
-                    <div class="record-head-actions">
-                      <button type="button" class="btn small" @click="openFocusView">
-                        {{ i18n.t("pdf_corpus.focus_view") }}
-                      </button>
-                    </div>
-                  </header>
-                  <aside
-                    v-if="selectedRecord.text_touchup_proposal?.status === 'pending_review'"
-                    class="review-reason touchup-review-notice"
-                    data-tone="info"
-                    role="status"
-                  >
-                    <div class="touchup-review-copy">
-                      <b>{{ i18n.t("pdf_corpus.llm_touchup_proposal_available") }}</b>
-                      <span>{{ i18n.t("pdf_corpus.llm_touchup_proposal_help") }}</span>
-                    </div>
-                    <button
-                      type="button"
-                      class="btn small"
-                      @click="beginTextEdit(true)"
-                      :disabled="busy !== '' || reviewLocked"
+                {{ i18n.t("pdf_corpus.clear_metadata_cache") }}
+              </button>
+              <section v-if="currentBuild?.manifest" class="document-metadata-launch">
+                <div>
+                  <b>{{ i18n.t("pdf_corpus.document_metadata_defaults") }}</b
+                  ><span>{{ i18n.t("pdf_corpus.document_metadata_defaults_help") }}</span>
+                </div>
+                <button
+                  type="button"
+                  class="btn"
+                  :disabled="busy !== ''"
+                  @click="documentMetadataOpen = true"
+                >
+                  {{ i18n.t("pdf_corpus.edit_document_metadata") }}
+                </button>
+              </section>
+
+              <LlmExecutionControl
+                :model-value="llmActionProviderId || selectedProviderId"
+                :model-override="llmActionModel"
+                :profiles="providerProfiles"
+                :disabled="busy !== ''"
+                :task="i18n.t('pdf_corpus.metadata_rerun_provider_help')"
+                @update:model-value="(value) => (llmActionProviderId = value)"
+                @update:model-override="(value) => (llmActionModel = value)"
+              /><label class="sr-only" for="pdf-corpus-metadata">{{
+                i18n.t("pdf_corpus.interpretive_metadata")
+              }}</label
+              ><textarea
+                id="pdf-corpus-metadata"
+                v-model="metadataDraft"
+                class="metadata-json"
+                spellcheck="false"
+                @input="metadataEditorDirty = true"
+              ></textarea>
+              <p class="metadata-rerun-consequence">
+                {{ i18n.t("pdf_corpus.metadata_rerun_consequence") }}
+              </p>
+              <div class="data-actions">
+                <button
+                  type="button"
+                  class="btn small"
+                  @click="saveMetadata"
+                  :disabled="busy !== ''"
+                >
+                  {{ i18n.t("pdf_corpus.save_metadata") }}</button
+                ><label class="rerun-family"
+                  ><span>{{ i18n.t("pdf_corpus.rerun_family") }}</span
+                  ><select v-model="metadataRerunFamily" class="control small">
+                    <option value="all">
+                      {{ i18n.t("pdf_corpus.metadata_family.all") }}
+                    </option>
+                    <option
+                      v-for="family in metadataFamilyOptions"
+                      :key="family.key"
+                      :value="family.key"
                     >
-                      {{ i18n.t("pdf_corpus.review_touchup_proposal") }}
-                    </button>
-                  </aside>
-                  <aside
-                    v-else-if="
-                      selectedRecord.review_reason &&
-                      selectedRecord.review_reason.toLowerCase() !== 'pending human review.'
+                      {{ family.label }}
+                    </option>
+                  </select></label
+                ><UiTooltip
+                  :text="i18n.t('pdf_corpus.rerun_metadata_help')"
+                  trigger-mode="content"
+                  :content-focusable="busy !== ''"
+                  placement="bottom"
+                >
+                  <button
+                    type="button"
+                    class="btn small"
+                    @click="rerunMetadata()"
+                    :disabled="busy !== ''"
+                  >
+                    {{ i18n.t("pdf_corpus.rerun_metadata") }}
+                  </button> </UiTooltip
+                ><UiTooltip
+                  :text="i18n.t('pdf_corpus.requeue_metadata_help')"
+                  trigger-mode="content"
+                  :content-focusable="busy !== ''"
+                  placement="bottom"
+                >
+                  <button
+                    type="button"
+                    class="btn small soft"
+                    @click="requeueCurrentRecord"
+                    :disabled="busy !== ''"
+                  >
+                    {{ i18n.t("pdf_corpus.requeue_metadata") }}
+                  </button> </UiTooltip
+                ><UiTooltip
+                  :text="i18n.t('pdf_corpus.metadata_enrichment_again_help')"
+                  trigger-mode="content"
+                  :content-focusable="busy !== ''"
+                  placement="bottom"
+                >
+                  <button
+                    type="button"
+                    class="btn small"
+                    @click="
+                      llmActionProviderId =
+                        llmActionProviderId || selectedProviderId || providerProfiles[0]?.id || '';
+                      metadataEnrichmentOpen = true;
                     "
-                    class="review-reason"
-                    role="note"
+                    :disabled="busy !== ''"
                   >
-                    <b>{{
-                      recordIssueKinds(selectedRecord).length
-                        ? recordIssueKinds(selectedRecord)
-                            .map((kind) => i18n.t(`pdf_corpus.record_state.${kind}`, kind))
-                            .join(" · ")
-                        : i18n.t("pdf_corpus.why_review")
-                    }}</b
-                    ><span class="review-reason-text">{{ selectedRecord.review_reason }}</span>
-                  </aside>
-                  <section class="record-text-review" aria-labelledby="reviewed-record-text-title">
-                    <header>
-                      <div>
-                        <b id="reviewed-record-text-title">{{
-                          i18n.t("pdf_corpus.reviewed_record_text")
-                        }}</b
-                        ><span
-                          v-if="selectedRecord.text_review_status === 'human_corrected'"
-                          class="human-corrected"
-                          >{{ i18n.t("pdf_corpus.human_corrected") }}</span
-                        ><span
-                          v-else-if="selectedRecord.text_review_status === 'human_reviewed'"
-                          class="human-corrected"
-                          >{{ i18n.t("pdf_corpus.human_reviewed") }}</span
-                        >
-                      </div>
-                      <div class="record-text-head-actions">
-                        <label v-if="!editingText" class="context-toggle">
-                          <input v-model="showRecordContext" type="checkbox" />
-                          {{ i18n.t("pdf_corpus.context_show") }}
-                        </label>
-                        <button
-                          v-if="!editingText"
-                          type="button"
-                          class="btn small"
-                          @click="openRecordPopout"
-                        >
-                          {{ i18n.t("pdf_corpus.reviewed_record_text") }}
-                        </button>
-                        <button
-                          v-if="editingText"
-                          type="button"
-                          class="btn small"
-                          @click="textCleanupOpen = true"
-                          :disabled="busy !== '' || reviewLocked"
-                        >
-                          {{ i18n.t("pdf_corpus.clean_text") }}</button
-                        ><UiTooltip
-                          v-if="editingText"
-                          :text="i18n.t('pdf_corpus.save_reviewed_text') + ' (Ctrl/Cmd S)'"
-                          trigger-mode="content"
-                          :content-focusable="
-                            Boolean(busy !== '' || reviewLocked || !textDraft.trim())
-                          "
-                          placement="bottom"
-                        >
-                          <button
-                            type="button"
-                            class="btn small primary"
-                            @click="saveReviewedText()"
-                            :disabled="busy !== '' || reviewLocked || !textDraft.trim()"
-                            aria-keyshortcuts="Control+S Meta+S"
-                          >
-                            {{ i18n.t("ui.save") }}
-                          </button> </UiTooltip
-                        ><button
-                          v-if="editingText"
-                          type="button"
-                          class="btn small"
-                          @click="llmTouchupOpen = true"
-                          :disabled="busy !== '' || reviewLocked"
-                        >
-                          {{ i18n.t("pdf_corpus.llm_touchup") }}</button
-                        ><button
-                          v-if="
-                            !editingText &&
-                            selectedRecord.text_review_status !== 'human_corrected' &&
-                            selectedRecord.text_review_status !== 'human_reviewed'
-                          "
-                          type="button"
-                          class="btn small"
-                          @click="markTextReviewed"
-                          :disabled="busy !== '' || reviewLocked"
-                        >
-                          {{ i18n.t("pdf_corpus.mark_text_reviewed") }}</button
-                        ><button
-                          type="button"
-                          class="btn small"
-                          @click="editingText ? cancelTextEdit() : beginTextEdit()"
-                          :disabled="busy !== '' || reviewLocked"
-                        >
-                          {{ editingText ? i18n.t("ui.cancel") : i18n.t("pdf_corpus.edit_text") }}
-                        </button>
-                      </div>
-                    </header>
-                    <textarea
-                      v-if="editingText"
-                      v-model="textDraft"
-                      class="record-text-editor"
-                      :aria-label="i18n.t('pdf_corpus.reviewed_record_text')"
-                    ></textarea>
-                    <RecordContextReader
-                      v-else
-                      class="record-primary-text"
-                      :build-id="currentBuild?.build_id || ''"
-                      :record-id="selectedRecord.record_id"
-                      :text="selectedRecord.text"
-                      :show-context="showRecordContext"
-                      @select="selectRecordById"
-                    />
-                    <p
-                      v-if="selectedRecord.text_noise?.score != null"
-                      class="record-noise-summary"
-                      role="status"
-                    >
-                      {{
-                        i18n.tf("pdf_corpus.text_noise.score", {
-                          score: Math.round(Number(selectedRecord.text_noise.score)),
-                        })
-                      }}
-                      <span v-if="selectedRecord.text_noise.unusable">
-                        ·
-                        {{ i18n.t("pdf_corpus.text_noise.unusable") }}
-                      </span>
-                    </p>
-                    <div
-                      v-if="editingText && selectedRecord.source_quality_issues?.length"
-                      class="text-review-actions"
-                    >
-                      <label
-                        v-if="selectedRecord.source_quality_issues?.length"
-                        class="resolve-source-check"
-                        ><input v-model="resolveSourceOnTextSave" type="checkbox" /><span>{{
-                          i18n.t("pdf_corpus.resolve_source_with_correction")
-                        }}</span></label
-                      >
-                    </div>
-                  </section>
-                  <MovableRecordModal
-                    v-if="recordPopout"
-                    :record-id="recordPopout.recordId"
-                    :text="recordPopout.text"
-                    @close="recordPopout = null"
-                  />
-                </template>
-                <div v-else class="inspector-empty">
-                  {{ i18n.t("pdf_corpus.select_record") }}
-                </div>
-              </article>
-
-              <div
-                v-if="reviewWorkspaceMode === 'record'"
-                class="review-splitter"
-                data-splitter="inspector"
-                role="separator"
-                tabindex="0"
-                aria-orientation="vertical"
-                :aria-label="i18n.t('pdf_corpus.resize_inspector')"
-                v-bind="inspectorSplitter.aria()"
-                @pointerdown="inspectorSplitter.onPointerDown"
-                @keydown="inspectorSplitter.onKeydown"
-                @dblclick="inspectorSplitter.reset"
-              ></div>
-              <aside
-                ref="reviewInspectorEl"
-                class="review-inspector"
-                :aria-label="i18n.t('pdf_corpus.review_details')"
-              >
-                <div v-if="reviewWorkspaceMode !== 'record'" class="detail-workspace-head">
-                  <div>
-                    <span class="eyebrow">{{ i18n.t("pdf_corpus.review_workspace") }}</span>
-                    <h3>
-                      {{
-                        reviewWorkspaceMode === "metadata"
-                          ? i18n.t("pdf_corpus.workspace.metadata")
-                          : i18n.t("pdf_corpus.workspace.source")
-                      }}
-                    </h3>
-                    <p>
-                      {{
-                        reviewWorkspaceMode === "metadata"
-                          ? i18n.t("pdf_corpus.workspace.metadata_help")
-                          : i18n.t("pdf_corpus.workspace.source_help")
-                      }}
-                    </p>
-                  </div>
-                  <button type="button" class="btn small" @click="setReviewWorkspaceMode('record')">
-                    {{ i18n.t("pdf_corpus.workspace.back_record") }}
+                    {{ i18n.t("pdf_corpus.metadata_enrichment_again") }}
                   </button>
-                </div>
-                <div
-                  v-if="reviewWorkspaceMode === 'record' && selectedRecord"
-                  class="review-inspector-tabs"
-                  role="tablist"
-                  :aria-label="i18n.t('pdf_corpus.review_detail_views')"
-                >
-                  <button
-                    id="review-tab-metadata"
-                    data-review-tab="metadata"
-                    type="button"
-                    role="tab"
-                    aria-controls="review-panel-metadata"
-                    :aria-selected="reviewInspectorTab === 'metadata'"
-                    :tabindex="reviewInspectorTab === 'metadata' ? 0 : -1"
-                    @keydown="reviewInspectorKeydown"
-                    @click="reviewInspectorTab = 'metadata'"
-                  >
-                    {{ i18n.t("pdf_corpus.metadata_tab")
-                    }}<span v-if="selectedMetadataBlockingFields.length">{{
-                      selectedMetadataBlockingFields.length
-                    }}</span>
-                  </button>
-                  <button
-                    id="review-tab-evidence"
-                    data-review-tab="evidence"
-                    type="button"
-                    role="tab"
-                    aria-controls="review-panel-evidence"
-                    :aria-selected="reviewInspectorTab === 'evidence'"
-                    :tabindex="reviewInspectorTab === 'evidence' ? 0 : -1"
-                    @keydown="reviewInspectorKeydown"
-                    @click="reviewInspectorTab = 'evidence'"
-                  >
-                    {{ i18n.t("pdf_corpus.evidence_tab") }}
-                  </button>
-                  <button
-                    id="review-tab-source"
-                    data-review-tab="source"
-                    type="button"
-                    role="tab"
-                    aria-controls="review-panel-source"
-                    :aria-selected="reviewInspectorTab === 'source'"
-                    :tabindex="reviewInspectorTab === 'source' ? 0 : -1"
-                    @keydown="reviewInspectorKeydown"
-                    @click="reviewInspectorTab = 'source'"
-                  >
-                    {{ i18n.t("pdf_corpus.source_tab") }}
-                  </button>
-                  <button
-                    id="review-tab-semantic"
-                    data-review-tab="semantic"
-                    type="button"
-                    role="tab"
-                    aria-controls="review-panel-semantic"
-                    :aria-selected="reviewInspectorTab === 'semantic'"
-                    :tabindex="reviewInspectorTab === 'semantic' ? 0 : -1"
-                    @keydown="reviewInspectorKeydown"
-                    @click="reviewInspectorTab = 'semantic'"
-                  >
-                    {{ i18n.t("pdf_corpus.semantic_tab") }}
-                  </button>
-                </div>
-                <section
-                  v-if="
-                    selectedRecord &&
-                    (reviewWorkspaceMode === 'metadata' ||
-                      (reviewWorkspaceMode === 'record' && reviewInspectorTab === 'metadata'))
-                  "
-                  id="review-panel-metadata"
-                  class="review-inspector-panel"
-                  role="tabpanel"
-                  aria-labelledby="review-tab-metadata"
-                  tabindex="0"
-                >
-                  <CorpusMetadataResolutionPanel
-                    :schema="currentBuild?.schema"
-                    :build-id="currentBuild?.build_id"
-                    :record="selectedRecord"
-                    :region-types="regionTypes"
-                    :discourse-roles="discourseRoles"
-                    :busy="busy !== '' && busy !== 'metadata-field'"
-                    :batch-saving="metadataSavingField === '__batch__'"
-                    :saving-field="metadataSavingField"
-                    :saved-field="metadataSavedField"
-                    :confidence-calibration="currentBuild?.llm_confidence_calibration || {}"
-                    :known-values="metadataKnownValues"
-                    :blocking-fields="selectedMetadataBlockingFields"
-                    @complete="handleMetadataComplete"
-                    @resolve="resolveMetadataField"
-                    @no-value="resolveMetadataNoValue"
-                    @resolve-many="resolveMetadataSuggestions"
-                    @source="showMetadataSource"
-                    @resolve-with-evidence="resolveMetadataWithSelectionEvidence"
-                    @resolve-with-human-source="resolveMetadataWithHumanSource"
-                    @browse-evidence="openEvidenceBrowser"
-                    @dirty="handleMetadataDirty"
-                  />
-                  <details class="record-data">
-                    <summary>
-                      {{ i18n.t("pdf_corpus.advanced_metadata") }}
-                    </summary>
-                    <p class="help">
-                      {{ i18n.t("pdf_corpus.metadata_help") }}
-                    </p>
-                    <button
-                      type="button"
-                      class="btn small metadata-cache-clear"
-                      :disabled="busy !== ''"
-                      @click="clearMetadataSuggestionCache"
-                    >
-                      {{ i18n.t("pdf_corpus.clear_metadata_cache") }}
-                    </button>
-                    <section v-if="currentBuild?.manifest" class="document-metadata-launch">
-                      <div>
-                        <b>{{ i18n.t("pdf_corpus.document_metadata_defaults") }}</b
-                        ><span>{{ i18n.t("pdf_corpus.document_metadata_defaults_help") }}</span>
-                      </div>
-                      <button
-                        type="button"
-                        class="btn"
-                        :disabled="busy !== ''"
-                        @click="documentMetadataOpen = true"
-                      >
-                        {{ i18n.t("pdf_corpus.edit_document_metadata") }}
-                      </button>
-                    </section>
-
-                    <LlmExecutionControl
-                      :model-value="llmActionProviderId || selectedProviderId"
-                      :model-override="llmActionModel"
-                      :profiles="providerProfiles"
-                      :disabled="busy !== ''"
-                      :task="i18n.t('pdf_corpus.metadata_rerun_provider_help')"
-                      @update:model-value="(value) => (llmActionProviderId = value)"
-                      @update:model-override="(value) => (llmActionModel = value)"
-                    /><label class="sr-only" for="pdf-corpus-metadata">{{
-                      i18n.t("pdf_corpus.interpretive_metadata")
-                    }}</label
-                    ><textarea
-                      id="pdf-corpus-metadata"
-                      v-model="metadataDraft"
-                      class="metadata-json"
-                      spellcheck="false"
-                      @input="metadataEditorDirty = true"
-                    ></textarea>
-                    <p class="metadata-rerun-consequence">
-                      {{ i18n.t("pdf_corpus.metadata_rerun_consequence") }}
-                    </p>
-                    <div class="data-actions">
-                      <button
-                        type="button"
-                        class="btn small"
-                        @click="saveMetadata"
-                        :disabled="busy !== ''"
-                      >
-                        {{ i18n.t("pdf_corpus.save_metadata") }}</button
-                      ><label class="rerun-family"
-                        ><span>{{ i18n.t("pdf_corpus.rerun_family") }}</span
-                        ><select v-model="metadataRerunFamily" class="control small">
-                          <option value="all">
-                            {{ i18n.t("pdf_corpus.metadata_family.all") }}
-                          </option>
-                          <option
-                            v-for="family in metadataFamilyOptions"
-                            :key="family.key"
-                            :value="family.key"
-                          >
-                            {{ family.label }}
-                          </option>
-                        </select></label
-                      ><UiTooltip
-                        :text="i18n.t('pdf_corpus.rerun_metadata_help')"
-                        trigger-mode="content"
-                        :content-focusable="busy !== ''"
-                        placement="bottom"
-                      >
-                        <button
-                          type="button"
-                          class="btn small"
-                          @click="rerunMetadata()"
-                          :disabled="busy !== ''"
-                        >
-                          {{ i18n.t("pdf_corpus.rerun_metadata") }}
-                        </button> </UiTooltip
-                      ><UiTooltip
-                        :text="i18n.t('pdf_corpus.requeue_metadata_help')"
-                        trigger-mode="content"
-                        :content-focusable="busy !== ''"
-                        placement="bottom"
-                      >
-                        <button
-                          type="button"
-                          class="btn small soft"
-                          @click="requeueCurrentRecord"
-                          :disabled="busy !== ''"
-                        >
-                          {{ i18n.t("pdf_corpus.requeue_metadata") }}
-                        </button> </UiTooltip
-                      ><UiTooltip
-                        :text="i18n.t('pdf_corpus.metadata_enrichment_again_help')"
-                        trigger-mode="content"
-                        :content-focusable="busy !== ''"
-                        placement="bottom"
-                      >
-                        <button
-                          type="button"
-                          class="btn small"
-                          @click="
-                            llmActionProviderId =
-                              llmActionProviderId ||
-                              selectedProviderId ||
-                              providerProfiles[0]?.id ||
-                              '';
-                            metadataEnrichmentOpen = true;
-                          "
-                          :disabled="busy !== ''"
-                        >
-                          {{ i18n.t("pdf_corpus.metadata_enrichment_again") }}
-                        </button>
-                      </UiTooltip>
-                    </div>
-                  </details>
-                </section>
-                <CorpusReviewEvidencePanel
-                  v-else-if="
-                    selectedRecord &&
-                    reviewWorkspaceMode === 'record' &&
-                    reviewInspectorTab === 'evidence'
-                  "
-                  :record="selectedRecord"
-                  :fields="evidenceCandidateFields"
-                  :build-id="currentBuild?.build_id || ''"
-                  :llm-request="
-                    directProfilePayloadWithModel(
-                      llmActionProviderId || selectedProviderId || providerProfiles[0]?.id || '',
-                      llmActionModel,
-                    )
-                  "
-                  :selected-field="selectedEvidenceField"
-                  :blocks="visibleBlocks"
-                  :evidence-block-ids="evidenceBlockIds"
-                  :paginated-source="paginatedSource"
-                  :disabled="busy !== ''"
-                  @update:selected-field="selectedEvidenceField = $event"
-                  @toggle-evidence="toggleEvidenceBlock"
-                  @set-evidence="setEvidenceBlocks"
-                  @browse-external="openExternalEvidenceBrowser(selectedEvidenceField)"
-                />
-                <section
-                  v-else-if="
-                    selectedRecord &&
-                    reviewWorkspaceMode === 'record' &&
-                    reviewInspectorTab === 'semantic'
-                  "
-                  id="review-panel-semantic"
-                  class="review-inspector-panel"
-                  role="tabpanel"
-                  aria-labelledby="review-tab-semantic"
-                  tabindex="0"
-                >
-                  <CorpusRecordSemanticMap
-                    :build-id="currentBuild?.build_id || ''"
-                    :record="selectedRecord"
-                    :disabled="busy !== '' || buildRunning"
-                    @open-record="navigateToQueueRecord"
-                    @refreshed="refreshBuild"
-                  />
-                </section>
-                <CorpusReviewSourcePanel
-                  v-else-if="
-                    selectedRecord &&
-                    (reviewWorkspaceMode === 'record' || reviewWorkspaceMode === 'source')
-                  "
-                  :record="selectedRecord"
-                  :workspace-mode="reviewWorkspaceMode"
-                  :media-kind="selectedAsset?.media_kind"
-                  :audio-url="audioSourceUrl"
-                  :image-url="imageSourceUrl"
-                  :show-pdf-explorer="selectedSourceCapabilities.pdfViewer"
-                  :pdf-url="sourcePdfUrl"
-                  :page="selectedPdfPage"
-                  :page-count="selectedAsset?.page_count || 0"
-                  :page-width="selectedPageMeta?.width || 0"
-                  :page-height="selectedPageMeta?.height || 0"
-                  :page-blocks="selectedPageBlocks"
-                  :visible-blocks="visibleBlocks"
-                  :evidence-ids="evidenceIdsArray"
-                  :evidence-block-ids="evidenceBlockIds"
-                  :selected-evidence-field="selectedEvidenceField"
-                  :paginated-source="paginatedSource"
-                  :can-previous-source-page="selectedPdfPageIndex > 0"
-                  :can-next-source-page="selectedPdfPageIndex < recordPdfPages.length - 1"
-                  :can-merge-previous="canMergePrevious"
-                  :can-merge-next="canMergeNext"
-                  :profiles="providerProfiles"
-                  :provider-profile-id="llmActionProviderId || selectedProviderId"
-                  :model-override="llmActionModel"
-                  :active-requests="llmActionConcurrentLoad"
-                  :disabled="busy !== ''"
-                  @previous-source-page="previousSourcePage"
-                  @next-source-page="nextSourcePage"
-                  @open-viewer="sourceTranscriptionOpen = true"
-                  @open-pdf-explorer="openPdfExplorer"
-                  @update:provider-profile-id="llmActionProviderId = $event"
-                  @update:model-override="llmActionModel = $event"
-                  @adjudicate="adjudicateBoundary"
-                  @toggle-evidence="toggleEvidenceBlock"
-                  @set-evidence="setEvidenceBlocks"
-                  @split="split"
-                />
-                <div v-else class="inspector-empty">
-                  {{ i18n.t("pdf_corpus.select_record") }}
-                </div>
-              </aside>
-              <!-- One decision dock for the whole workspace, under the inspector where adjudication ends: what still
-                   blocks the record, history, and the record decision, always in the same place. -->
-              <CorpusRecordDecisionDock
-                v-if="selectedRecord"
-                ref="decisionDock"
-                :accepted="Boolean(selectedRecord.accepted)"
-                :editing="editingText"
-                :busy="busy !== ''"
-                :locked="reviewLocked"
-                :saving="busy === 'text'"
-                :save-disabled="!textDraft.trim()"
-                :blocking-count="selectedMetadataBlockingFields.length"
-                :blocking-label="selectedMetadataBlockingLabel"
-                :action-items="recordActionItems"
-                @focus-blocker="focusFirstMetadataBlocker"
-                @undo="undoReview"
-                @redo="redoReview"
-                @action="runRecordAction"
-                @skip="skipRecord"
-                @reject="rejectRecord"
-                @accept="toggleAccept"
-                @cancel-edit="cancelTextEdit"
-                @save-text="saveReviewedText()"
-              />
-            </section>
-            <div
-              class="review-height-splitter"
-              data-splitter="review-height"
-              role="separator"
-              tabindex="0"
-              aria-orientation="horizontal"
-              :aria-label="i18n.t('pdf_corpus.resize_review_height')"
-              v-bind="reviewHeightSplitter.aria()"
-              @pointerdown="reviewHeightSplitter.onPointerDown"
-              @keydown="reviewHeightSplitter.onKeydown"
-              @dblclick="reviewHeightSplitter.reset"
-            ></div>
+                </UiTooltip>
+              </div>
+            </details>
+          </section>
+          <CorpusReviewEvidencePanel
+            v-else-if="
+              selectedRecord &&
+              reviewWorkspaceMode === 'record' &&
+              reviewInspectorTab === 'evidence'
+            "
+            :record="selectedRecord"
+            :fields="evidenceCandidateFields"
+            :build-id="currentBuild?.build_id || ''"
+            :llm-request="
+              directProfilePayloadWithModel(
+                llmActionProviderId || selectedProviderId || providerProfiles[0]?.id || '',
+                llmActionModel,
+              )
+            "
+            :selected-field="selectedEvidenceField"
+            :blocks="visibleBlocks"
+            :evidence-block-ids="evidenceBlockIds"
+            :paginated-source="paginatedSource"
+            :disabled="busy !== ''"
+            @update:selected-field="selectedEvidenceField = $event"
+            @toggle-evidence="toggleEvidenceBlock"
+            @set-evidence="setEvidenceBlocks"
+            @browse-external="openExternalEvidenceBrowser(selectedEvidenceField)"
+          />
+          <section
+            v-else-if="
+              selectedRecord &&
+              reviewWorkspaceMode === 'record' &&
+              reviewInspectorTab === 'semantic'
+            "
+            id="review-panel-semantic"
+            class="review-inspector-panel"
+            role="tabpanel"
+            aria-labelledby="review-tab-semantic"
+            tabindex="0"
+          >
+            <CorpusRecordSemanticMap
+              :build-id="currentBuild?.build_id || ''"
+              :record="selectedRecord"
+              :disabled="busy !== '' || buildRunning"
+              @open-record="navigateToQueueRecord"
+              @refreshed="refreshBuild"
+            />
+          </section>
+          <CorpusReviewSourcePanel
+            v-else-if="
+              selectedRecord &&
+              (reviewWorkspaceMode === 'record' || reviewWorkspaceMode === 'source')
+            "
+            :record="selectedRecord"
+            :workspace-mode="reviewWorkspaceMode"
+            :media-kind="selectedAsset?.media_kind"
+            :audio-url="audioSourceUrl"
+            :image-url="imageSourceUrl"
+            :show-pdf-explorer="selectedSourceCapabilities.pdfViewer"
+            :pdf-url="sourcePdfUrl"
+            :page="selectedPdfPage"
+            :page-count="selectedAsset?.page_count || 0"
+            :page-width="selectedPageMeta?.width || 0"
+            :page-height="selectedPageMeta?.height || 0"
+            :page-blocks="selectedPageBlocks"
+            :visible-blocks="visibleBlocks"
+            :evidence-ids="evidenceIdsArray"
+            :evidence-block-ids="evidenceBlockIds"
+            :selected-evidence-field="selectedEvidenceField"
+            :paginated-source="paginatedSource"
+            :can-previous-source-page="selectedPdfPageIndex > 0"
+            :can-next-source-page="selectedPdfPageIndex < recordPdfPages.length - 1"
+            :can-merge-previous="canMergePrevious"
+            :can-merge-next="canMergeNext"
+            :profiles="providerProfiles"
+            :provider-profile-id="llmActionProviderId || selectedProviderId"
+            :model-override="llmActionModel"
+            :active-requests="llmActionConcurrentLoad"
+            :disabled="busy !== ''"
+            @previous-source-page="previousSourcePage"
+            @next-source-page="nextSourcePage"
+            @open-viewer="sourceTranscriptionOpen = true"
+            @open-pdf-explorer="openPdfExplorer"
+            @update:provider-profile-id="llmActionProviderId = $event"
+            @update:model-override="llmActionModel = $event"
+            @adjudicate="adjudicateBoundary"
+            @toggle-evidence="toggleEvidenceBlock"
+            @set-evidence="setEvidenceBlocks"
+            @split="split"
+          />
+          <div v-else class="inspector-empty">
+            {{ i18n.t("pdf_corpus.select_record") }}
           </div>
-        </template>
-
-        <section v-else class="builder-empty">
-          <h2>{{ i18n.t("pdf_corpus.no_selected_build") }}</h2>
-          <p>
-            {{ i18n.t("pdf_corpus.no_selected_build_help") }}
-          </p>
-        </section>
-      </main>
-    </div>
+        </aside>
+      </template>
+      <template #dock>
+        <CorpusRecordDecisionDock
+          v-if="selectedRecord"
+          ref="decisionDock"
+          :accepted="Boolean(selectedRecord.accepted)"
+          :editing="editingText"
+          :busy="busy !== ''"
+          :locked="reviewLocked"
+          :saving="busy === 'text'"
+          :save-disabled="!textDraft.trim()"
+          :blocking-count="selectedMetadataBlockingFields.length"
+          :blocking-label="selectedMetadataBlockingLabel"
+          :action-items="recordActionItems"
+          @focus-blocker="focusFirstMetadataBlocker"
+          @undo="undoReview"
+          @redo="redoReview"
+          @action="runRecordAction"
+          @skip="skipRecord"
+          @reject="rejectRecord"
+          @accept="toggleAccept"
+          @cancel-edit="cancelTextEdit"
+          @save-text="saveReviewedText()"
+        />
+      </template>
+    </CorpusReviewWorkspace>
 
     <DocumentManifestDialog
       v-if="documentMetadataOpen && currentBuild?.manifest"
@@ -4016,4 +3532,4 @@ defineExpose({
   </section>
 </template>
 
-<style scoped src="../features/corpus-builder/CorpusBuilderWorkspace.css"></style>
+<style scoped src="../features/corpus-builder/CorpusBuilderShell.css"></style>

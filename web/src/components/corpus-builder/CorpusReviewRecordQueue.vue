@@ -151,9 +151,12 @@ function recordSelectionChanged(recordId: string, event: Event) {
             trigger-mode="content"
             placement="bottom"
           >
-            <span class="record-llm-processed">
+            <span
+              class="record-llm-processed"
+              role="img"
+              :aria-label="i18n.t('pdf_corpus.llm_processed', 'LLM processed')"
+            >
               <AppIcon name="spark" />
-              {{ i18n.t("pdf_corpus.llm_processed", "LLM processed") }}
             </span>
           </UiTooltip>
           <small v-if="extraIssueKinds(record).length" class="record-issue-summary">
@@ -195,14 +198,14 @@ function recordSelectionChanged(recordId: string, event: Event) {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
-  color: var(--text-secondary, var(--muted));
+  color: var(--text-secondary, var(--text-secondary));
   font-size: 0.8125rem;
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
 .records-pane {
-  background: var(--soft);
-  border-inline-end: 1px solid var(--line);
+  background: var(--surface-subtle);
+  border-inline-end: 1px solid var(--border-subtle);
 }
 .pane-head {
   position: sticky;
@@ -215,8 +218,8 @@ function recordSelectionChanged(recordId: string, event: Event) {
   gap: 0.25rem 0.5rem;
   min-height: 0;
   padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid var(--line);
-  background: var(--soft);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-subtle);
   font-size: 0.8125rem;
 }
 .pane-head > b {
@@ -240,7 +243,7 @@ function recordSelectionChanged(recordId: string, event: Event) {
   align-items: center;
   gap: 0.5rem;
   min-height: 1.5rem;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 0.8125rem;
   font-weight: 650;
   cursor: pointer;
@@ -249,13 +252,13 @@ function recordSelectionChanged(recordId: string, event: Event) {
 .record-select input {
   inline-size: 18px;
   block-size: 18px;
-  accent-color: var(--accent);
+  accent-color: var(--ui-accent);
 }
 .record-row-wrap {
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr) 36px;
   align-items: stretch;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--border-subtle);
 }
 .record-select {
   display: grid;
@@ -278,7 +281,7 @@ function recordSelectionChanged(recordId: string, event: Event) {
 }
 .record-row:hover,
 .record-row.active {
-  background: var(--soft);
+  background: var(--surface-subtle);
 }
 .record-row-wrap .record-row {
   border-bottom: 0;
@@ -288,7 +291,7 @@ function recordSelectionChanged(recordId: string, event: Event) {
   font-size: 0.8125rem;
 }
 .record-row small {
-  color: var(--muted);
+  color: var(--text-secondary);
   line-height: 1.35;
 }
 .record-row-main {
@@ -306,9 +309,9 @@ function recordSelectionChanged(recordId: string, event: Event) {
   block-size: 1.25rem;
   margin-block-start: 0.0625rem;
   box-sizing: border-box;
-  border: 2px solid var(--muted);
+  border: 2px solid var(--text-secondary);
   border-radius: 50%;
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 .record-state-icon svg {
   inline-size: 0.75rem;
@@ -341,7 +344,7 @@ function recordSelectionChanged(recordId: string, event: Event) {
   margin-top: 5px;
   padding: 2px 7px;
   border-radius: 999px;
-  background: var(--soft);
+  background: var(--surface-subtle);
   color: var(--accent-fg);
   font-size: 0.8125rem;
   font-weight: 800;
@@ -364,15 +367,8 @@ function recordSelectionChanged(recordId: string, event: Event) {
   display: inline-flex;
   width: fit-content;
   align-items: center;
-  gap: 4px;
   margin-top: 4px;
-  padding: 2px 6px;
-  border: 1px solid var(--tone-ok-border);
-  border-radius: 999px;
-  background: var(--tone-ok-bg);
   color: var(--tone-ok-fg);
-  font-size: 0.75rem;
-  font-weight: 700;
 }
 .record-llm-processed svg {
   width: 13px;
@@ -380,7 +376,7 @@ function recordSelectionChanged(recordId: string, event: Event) {
 }
 .record-issue-summary {
   margin-top: 3px;
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 .record-source-warn {
   display: grid;
@@ -395,7 +391,7 @@ function recordSelectionChanged(recordId: string, event: Event) {
   cursor: pointer;
 }
 .record-source-warn:focus-visible {
-  outline: 3px solid var(--accent);
+  outline: 3px solid var(--ui-accent);
   outline-offset: 2px;
 }
 .record-source-warn svg {
@@ -404,7 +400,7 @@ function recordSelectionChanged(recordId: string, event: Event) {
 }
 .rail-empty {
   padding: 18px 14px;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 0.8125rem;
   line-height: 1.45;
 }
