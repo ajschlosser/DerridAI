@@ -13,7 +13,7 @@ import UiRelationResizeHandle from "./UiRelationResizeHandle.vue";
 
 const props = withDefaults(
   defineProps<{
-    ariaLabel: string;
+    accessibleLabel: string;
     helpText?: string;
     resizeLabel: string;
     minZoom?: number;
@@ -213,7 +213,7 @@ defineExpose({
     :style="viewportStyle"
     role="region"
     tabindex="0"
-    :aria-label="ariaLabel"
+    :aria-label="accessibleLabel"
     :aria-describedby="helpText ? helpId : undefined"
     @pointerdown="onPointerDown"
     @pointermove="viewport.updatePan"
