@@ -37,9 +37,9 @@
   if (!availableLocales.includes(locale)) locale = availableLocales[0] || "en-US";
   let theme = readLocal(themeKey) === "dark" ? "dark" : "light";
   let highContrast = readLocal(contrastKey) === "high";
-  let selectedProviderId = readLocal(providerKey) || providerProfiles[0]?.id || "";
+  let selectedProviderId = readLocal(providerKey) || "";
   if (!providerProfiles.some((profile) => profile.id === selectedProviderId)) {
-    selectedProviderId = providerProfiles[0]?.id || "";
+    selectedProviderId = "";
   }
   let sessionApiKey = "";
   let view = "search";
@@ -805,7 +805,7 @@
       ...providerProfiles.map((profile) =>
         node("option", {
           value: profile.id,
-          text: `${profile.name || profile.id} · ${profile.type === "openai" ? "OpenAI-compatible" : "Ollama"}`,
+          text: `${profile.name || profile.id} · ${profile.type === "openai" ? t("site.runtime.provider_openai") : t("site.runtime.provider_ollama")}`,
         }),
       ),
     );
@@ -832,7 +832,7 @@
           class: "meta",
           text: profile
             ? t("site.runtime.provider_summary", {
-                type: profile.type === "openai" ? "OpenAI-compatible" : "Ollama",
+                type: profile.type === "openai" ? t("site.runtime.provider_openai") : t("site.runtime.provider_ollama"),
                 model: profile.model || t("site.runtime.not_configured"),
                 endpoint: profile.base_url || t("site.runtime.not_configured"),
               })
