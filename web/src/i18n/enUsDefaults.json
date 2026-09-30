@@ -6754,7 +6754,7 @@
   "help.page.corpus_data.impact": "Vector collections are derived and rebuildable. Rebuilding an index changes semantic retrieval behavior but does not rewrite the authoritative reviewed corpus.",
   "help.page.corpus_builder.title": "Corpus Builder",
   "help.page.corpus_builder.summary": "Turn source material into reviewable, provenance-preserving scholarly records.",
-  "help.page.corpus_builder.tasks": "Build a corpus from supported source media: configure extraction and segmentation, choose a metadata schema and models, run enrichment, review records and evidence, resolve blockers, and publish accepted records.",
+  "help.page.corpus_builder.tasks": "Follow Setup → Build & review → Publish: choose a source, confirm or edit the Build plan, start processing, review ready Records while enrichment continues when useful, pause or resume the build, resolve exceptions, and publish through the reviewed or explicit suggestions-as-is path.",
   "help.page.corpus_builder.impact": "This workflow creates the authoritative reviewed corpus state. Source extraction, model suggestions, reviewer decisions, evidence bindings, and publication status remain distinguishable and auditable.",
   "help.page.source_explorer.title": "Source Explorer",
   "help.page.source_explorer.summary": "Inspect source material directly and connect source locations to records without running a full corpus build.",
