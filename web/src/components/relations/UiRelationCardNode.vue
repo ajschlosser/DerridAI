@@ -41,6 +41,20 @@ withDefaults(
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.ui-relation-card-node :deep(small) {
+  color: var(--relation-node-kicker-fg, var(--text-tertiary));
+  font-size: var(--relation-node-kicker-size, 12px);
+  font-weight: var(--relation-node-kicker-weight, 750);
+}
+.ui-relation-card-node :deep(strong) {
+  color: var(--relation-node-title-fg, var(--text-primary));
+  font-size: var(--relation-node-title-size, 12.5px);
+  font-weight: var(--relation-node-title-weight, 750);
+}
+.ui-relation-card-node :deep(span) {
+  color: var(--relation-node-detail-fg, var(--text-tertiary));
+  font-size: var(--relation-node-detail-size, 12px);
+}
 @media (forced-colors: active) {
   .ui-relation-card-node {
     border-color: ButtonText;
