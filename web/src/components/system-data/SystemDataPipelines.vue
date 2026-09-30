@@ -407,17 +407,18 @@ onMounted(() => {
           @click="helpOpen = true"
         />
       </template>
+      <template #meta>
+        <div class="pipeline-studio-nav">
+          <UiTabs
+            :tabs="studioTabs"
+            :model-value="section"
+            :tablist-label="t('pipelines.title', 'Pipeline Studio')"
+            id-prefix="pipeline"
+            @update:model-value="selectSection($event as PipelineStudioSection)"
+          />
+        </div>
+      </template>
     </UiPageHeader>
-
-    <nav class="pipeline-studio-nav" :aria-label="t('pipelines.title', 'Pipeline Studio')">
-      <UiTabs
-        :tabs="studioTabs"
-        :model-value="section"
-        :tablist-label="t('pipelines.title', 'Pipeline Studio')"
-        id-prefix="pipeline"
-        @update:model-value="selectSection($event as PipelineStudioSection)"
-      />
-    </nav>
 
     <UiNoticeStack
       v-if="notices.length"
@@ -519,10 +520,7 @@ onMounted(() => {
 
 <style scoped>
 .pipeline-studio {
-  --pipeline-studio-nav-block-size: calc(var(--control-height) + 1px);
-  --pipeline-studio-sticky-top: calc(
-    var(--ref-topbar, 60px) + var(--pipeline-studio-nav-block-size) + var(--space-3)
-  );
+  --pipeline-studio-sticky-top: calc(var(--ref-topbar, 60px) + var(--space-3));
   --pipeline-studio-pane-max-height: min(
     calc(100dvh - var(--pipeline-studio-sticky-top) - var(--space-3)),
     960px
@@ -531,10 +529,6 @@ onMounted(() => {
   gap: var(--space-4);
 }
 .pipeline-studio-nav {
-  position: sticky;
-  top: var(--ref-topbar, 60px);
-  z-index: var(--z-sticky, 20);
-  min-height: var(--pipeline-studio-nav-block-size);
-  background: var(--surface-canvas);
+  margin-top: var(--space-2);
 }
 </style>
