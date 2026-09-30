@@ -19,6 +19,7 @@ import type { VectorCollection } from "../../types/vector";
 const props = defineProps<{
   pipelines: PipelineDefinition[];
 }>();
+const emit = defineEmits<{ openPipeline: [key: string] }>();
 
 const i18n = useI18nStore();
 const t = (key: string, fallback: string) => i18n.t(key, fallback);
@@ -322,6 +323,7 @@ const createDisabledReason = computed(() => {
               corpusFingerprint: benchmark.corpus.fingerprint,
               warnings: benchmark.reproducibility_warnings,
             }"
+            @open-pipeline="emit('openPipeline', $event)"
           />
         </template>
         <p v-else class="empty">
