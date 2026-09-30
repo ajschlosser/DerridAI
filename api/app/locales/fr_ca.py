@@ -9688,5 +9688,7 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'site.create_no_provider_profiles': 'Aucun profil de fournisseur LLM pour les chercheurs n\'est configuré dans DerridAI.',
  'site.create_provider_profiles': 'Profils de fournisseur LLM',
  'site.create_provider_profiles_help': 'Choisissez les profils à inclure comme configuration non secrète du navigateur pour Recherche. Les points de terminaison et noms de modèles sont exportés; les clés API ne le sont jamais et doivent être saisies par le visiteur si nécessaire.',
- 'site.create_providers_selected': '{count} profils de fournisseur sélectionnés'
+ 'site.create_providers_selected': '{count} profils de fournisseur sélectionnés',
+ 'site.create_provider_openai': 'Compatible OpenAI',
+ 'site.create_provider_ollama': 'Ollama'
 }
