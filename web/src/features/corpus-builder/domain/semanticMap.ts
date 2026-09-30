@@ -111,3 +111,16 @@ export function radialLayout(
   }
   return positions;
 }
+
+/** Visual tone for an entity type; unknown types read as a generic entity. */
+export function nodeTone(type: string): "person" | "concept" | "work" | "term" | "entity" {
+  if (type === "person" || type === "character") return "person";
+  if (type === "concept" || type === "topic") return "concept";
+  if (type === "work") return "work";
+  if (type === "term") return "term";
+  return "entity";
+}
+
+export function relationLabel(edge: { predicate?: string }): string {
+  return String(edge.predicate || "").replaceAll("_", " ");
+}
