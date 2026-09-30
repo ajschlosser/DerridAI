@@ -250,7 +250,7 @@ for (const scheme of ["light", "dark"] as const) {
     await page.getByRole("menuitem", { name: /run hands-free/i }).click();
     const dialog = page.getByRole("dialog", { name: /run hands-free/i });
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByText(/no one reviews the records in this mode/i)).toBeVisible();
+    await expect(dialog.getByText(/policy-selected values remain unreviewed/i)).toBeVisible();
     await expect(dialog.getByLabel(/extra enrichment passes/i)).toBeEnabled();
     await expect(
       dialog.getByRole("checkbox", { name: /publish when every record is accepted/i }),

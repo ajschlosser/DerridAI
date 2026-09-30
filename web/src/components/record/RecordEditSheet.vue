@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, watch } from "vue";
 import AppIcon from "../AppIcon.vue";
 import { useI18nStore } from "../../stores/i18n";
+import { metadataFieldSpec } from "../../domain/metadataFieldRegistry";
 
 const props = withDefaults(defineProps<{ open: boolean; record: Record<string, unknown> }>(), {
   open: false,
@@ -158,21 +159,13 @@ function fieldLabel(key: string) {
   return i18n.t(`field.${key}`);
 }
 function isArrayField(key: string) {
-  return (
-    Array.isArray(original.value[key]) ||
-    [
-      "topics",
-      "concepts",
-      "persons",
-      "works_referenced",
-      "institutions_referenced",
-      "locations_referenced",
-      "events_referenced",
-      "groups_referenced",
-      "languages_referenced",
-      "quotation_chain",
-    ].includes(key)
-  );
+  const control = metadataFieldSpec(key, [], []).control;
+  if (control === "multi-combobox") return true;
+  // Known first-party fields keep their declared scalar contract even when an
+  // older record happens to contain an array. Only unknown/custom fields fall
+  // back to runtime shape when no schema definition is available here.
+  if (knownFields.has(key)) return false;
+  return Array.isArray(original.value[key]);
 }
 function isBooleanField(key: string) {
   return (
@@ -200,6 +193,7 @@ function isLongField(key: string) {
 function displayInputValue(key: string) {
   const value = draft.value[key];
   if (isArrayField(key)) return Array.isArray(value) ? value.join(", ") : String(value ?? "");
+  if (Array.isArray(value)) return value.map((item) => String(item ?? "")).join(" | ");
   return String(value ?? "");
 }
 function updateField(key: string, value: string) {

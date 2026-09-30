@@ -58,6 +58,16 @@ Corpus Builder is source-media aware rather than PDF-only. Source acquisition an
 7. **Review.** Reviewer edits are revisioned and preserve field/evidence provenance. The frontend applies ordinary review edits optimistically while serializing conflicting same-record persistence and handling rejection/rebase/rollback.
 8. **Publish/index.** Validated records are serialized for publication. Vector indexes are explicit derived projections that can be rebuilt from authoritative records.
 
+Autonomous builds use the same stages, then add a policy settlement stage before
+acceptance and publication. Policy selection records its actor and configuration
+separately from the selected assertion; it does not turn model-derived,
+deterministic, unresolved, failed, disputed, or low-confidence state into human
+confirmation. Publication metadata reports `reviewed`, `autonomous`, or `hybrid`
+decision mode and evaluates cELF Core/Publication conformance independently from
+that mode. Legacy unreviewed publication requests remain accepted for API
+compatibility, but their conformance result is computed from source, identity,
+integrity, and publication blockers rather than inferred from review status.
+
 Corpus Capture discovery/acquisition jobs run through `job_capture.py` and the shared operation ledger. `capture_store.py` persists captures, candidates, and provider snapshots in System SQLite. Those rows are not corpus content: registered sources remain canonical SourceDocument assets, and `source_capture_links` is a many-to-many provenance association so one source can be reached by multiple captures without making a capture ID part of source identity. Interrupted capture workers are marked interrupted/failed rather than silently replayed after restart.
 
 The Sources workspace is a compact projection over canonical source assets plus capture links and build summaries. `source_registry.py` never exposes source text or blocks in its table rows; the projection can be rebuilt from source/build state.

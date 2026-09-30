@@ -10,7 +10,12 @@ export const corpusPublicationsApi = {
       sha256: string;
       record_count: number;
       created_at: string;
+      review_mode?: "reviewed" | "autonomous" | "hybrid" | "unreviewed";
+      decision_mode?: "reviewed" | "autonomous" | "hybrid" | "unreviewed";
       celf_conformant?: boolean;
+      celf_conformance?: Record<string, unknown>;
+      human_reviewed_record_count?: number;
+      autonomous_record_count?: number;
       unreviewed_record_count?: number;
       unreviewed_accepted_field_count?: number;
     }>(`${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/publish`, {

@@ -17,9 +17,9 @@ const policy = (over = {}) => ({
 describe("hands-free settings", () => {
   beforeEach(() => setActivePinia(createPinia()));
 
-  it("says plainly that no one reviews, and locks the rules until it is switched on", () => {
+  it("explains autonomous selection and locks the rules until it is switched on", () => {
     const wrapper = mount(CorpusHandsFreeSettings, { props: { modelValue: policy() } });
-    expect(wrapper.text()).toContain("No one reviews the records in this mode");
+    expect(wrapper.text()).toContain("policy-selected values remain unreviewed");
     expect(wrapper.get("fieldset").attributes("disabled")).toBeDefined();
     expect(
       mount(CorpusHandsFreeSettings, { props: { modelValue: policy({ enabled: true }) } })
