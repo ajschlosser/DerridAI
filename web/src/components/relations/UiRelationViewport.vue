@@ -1,6 +1,6 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, onMounted, useId, watch } from "vue";
+import { computed, onMounted, ref, useId, watch } from "vue";
 import { useRelationResize } from "../../composables/relations/useRelationResize";
 import { useRelationViewport } from "../../composables/relations/useRelationViewport";
 import type {
@@ -59,7 +59,7 @@ const emit = defineEmits<{
 }>();
 
 const helpId = useId();
-const surface = defineModel<HTMLElement | null>("surface", { default: null });
+const surface = ref<HTMLElement | null>(null);
 
 const viewport = useRelationViewport({
   minZoom: props.minZoom,
