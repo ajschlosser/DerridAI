@@ -170,6 +170,28 @@ describe("CorpusSemanticGraphPanel", () => {
     expect(corpusBuildsApi.semanticContentGraphView.mock.calls.at(-1)![1].index_offset).toBe(50);
   });
 
+  it("uses one tab stop for the dense node set and roves focus with arrow keys", async () => {
+    const wrapper = await openPanel();
+    const graphNodes = wrapper.findAll(".graph-node");
+    expect(graphNodes.filter((item) => item.attributes("tabindex") === "0")).toHaveLength(1);
+    expect(graphNodes.filter((item) => item.attributes("tabindex") === "-1")).toHaveLength(
+      graphNodes.length - 1,
+    );
+
+    const first = graphNodes[0];
+    const second = graphNodes[1];
+    await first.trigger("focus");
+    await first.trigger("keydown", { key: "ArrowRight" });
+    await flushPromises();
+
+    expect(first.attributes("tabindex")).toBe("-1");
+    expect(second.attributes("tabindex")).toBe("0");
+
+    await second.trigger("keydown", { key: "Home" });
+    await flushPromises();
+    expect(first.attributes("tabindex")).toBe("0");
+  });
+
   it("uses the shared relation viewport and keeps edges attached while nodes move", async () => {
     const wrapper = await openPanel();
     const viewport = wrapper.get(".graph-viewport");
