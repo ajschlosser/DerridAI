@@ -105,7 +105,7 @@ def test_site_bundle_separates_publication_sdk_and_reference_ui(
     publication = package["manifest"]
     chunks = package["chunks"]
 
-    assert publication["format"] == "derridai-static-site-v3"
+    assert publication["format"] == "derridai-static-site-v4"
     assert publication["corpus_id"] == "derrida-primary"
     assert [work["work"] for work in publication["works"]] == ["Glas", "Rogues"]
     assert publication["features"]["browser_llm"] is False
