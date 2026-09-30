@@ -132,8 +132,7 @@ const pendingMediaKind = computed(() =>
 );
 const ocrAvailable = computed(
   () =>
-    Boolean(pendingMediaKind.value) &&
-    sourceMediaCapabilities(pendingMediaKind.value).imageRegions,
+    Boolean(pendingMediaKind.value) && sourceMediaCapabilities(pendingMediaKind.value).imageRegions,
 );
 
 const ocrStrategy = computed(() => {
