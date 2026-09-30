@@ -14,7 +14,11 @@ from typing import Any
 
 from .corpus_metadata import REVIEW_METADATA_FIELDS
 from .corpus_record_quality import iso_now
-from .field_assertions import current_assertion_by_name, current_assertions, migrate_record_assertions
+from .field_assertions import (
+    current_assertion_by_name,
+    current_assertions,
+    migrate_record_assertions,
+)
 
 
 def _metadata_value_missing(field: str, value: Any) -> bool:
