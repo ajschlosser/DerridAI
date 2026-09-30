@@ -205,7 +205,8 @@ def build_site_bundle(
     publication_id = f"sitepub-{uuid.uuid4().hex}"
     csp_nonce = uuid.uuid4().hex
     normalized_locale = locale if locale in {"en-US", "fr-CA"} else "en-US"
-    title = str(title or "").strip() or "DerridAI research site"
+    locale_dictionary = FR_CA if normalized_locale == "fr-CA" else EN_US
+    title = str(title or "").strip() or locale_dictionary["site.runtime.site_title"]
     description = str(description or "").strip()
 
     digest_payload = json.dumps(
