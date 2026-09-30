@@ -8173,7 +8173,7 @@
   "pdf_corpus.primary_status.rail_complete": "complete",
   "pdf_corpus.primary_status.rail_current": "in progress",
   "pdf_corpus.primary_status.rail_pending": "not started",
-  "pdf_corpus.diagnostics.title": "Diagnostics",
+  "pdf_corpus.diagnostics.title": "Run details",
   "pdf_corpus.diagnostics.help": "Audit and troubleshooting detail for this build.",
   "pdf_corpus.diagnostics.quality": "Quality & validation",
   "pdf_corpus.diagnostics.model_activity": "Model activity",
