@@ -5,7 +5,11 @@ import { useI18nStore } from "../stores/i18n";
 import type { GutenbergHit, PdfAsset, WikisourceHit, GutenbergStatus } from "../api/corpus";
 import type { SourceLanguagePrompt } from "../features/corpus-builder/composables/useCorpusSourceConfiguration";
 
-import { hasPages, sourceMediaCapabilities } from "../domain/sourceMedia";
+import {
+  hasPages,
+  sourceMediaCapabilities,
+  sourceMediaKindForFile,
+} from "../domain/sourceMedia";
 import { languageName, sortLanguageCodes } from "../domain/languages";
 import AppIcon from "./AppIcon.vue";
 import CorpusLibrarySearch from "./corpus-builder/CorpusLibrarySearch.vue";
@@ -32,8 +36,6 @@ const props = withDefaults(
     assets?: PdfAsset[];
     assetId?: string;
     illegibility?: number;
-    detectPageNumbers?: boolean;
-    llmPageDetection?: boolean;
     sourceUrl?: string;
     gutenbergQuery?: string;
     hits?: GutenbergHit[];
@@ -56,8 +58,6 @@ const props = withDefaults(
     assets: () => [],
     assetId: "",
     illegibility: 0,
-    detectPageNumbers: true,
-    llmPageDetection: true,
     sourceUrl: "",
     gutenbergQuery: "",
     hits: () => [],
@@ -80,8 +80,6 @@ const props = withDefaults(
 const emit = defineEmits<{
   "update:assetId": [string];
   "update:illegibility": [number];
-  "update:detectPageNumbers": [boolean];
-  "update:llmPageDetection": [boolean];
   "update:sourceUrl": [string];
   "update:gutenbergQuery": [string];
   "update:wikisourceLanguage": [string];
@@ -132,11 +130,14 @@ function confirmDelete(assetId: string) {
 }
 
 const sourceSetupDisabled = computed(() => props.disabled || props.sourceSelectionDisabled);
-const selectedMediaKind = computed(() => props.selectedAsset?.media_kind || "");
+const pendingFile = ref<File | null>(null);
+const pendingMediaKind = computed(() =>
+  pendingFile.value ? sourceMediaKindForFile(pendingFile.value) : "",
+);
 const ocrAvailable = computed(
   () =>
-    Boolean(selectedMediaKind.value) &&
-    sourceMediaCapabilities(selectedMediaKind.value).imageRegions,
+    Boolean(pendingMediaKind.value) &&
+    sourceMediaCapabilities(pendingMediaKind.value).imageRegions,
 );
 
 const ocrStrategy = computed(() => {
@@ -190,10 +191,32 @@ function onOcrStrategy(strategy: string) {
   emit("update:illegibility", strategy === "always" ? 100 : strategy === "difficult" ? 50 : 0);
 }
 
+function stageFile(file: File) {
+  const kind = sourceMediaKindForFile(file);
+  if (kind && sourceMediaCapabilities(kind).imageRegions) {
+    pendingFile.value = file;
+    return;
+  }
+  pendingFile.value = null;
+  emit("file", file);
+}
+
+function confirmPendingFile() {
+  const file = pendingFile.value;
+  if (!file) return;
+  pendingFile.value = null;
+  emit("file", file);
+}
+
+function chooseDifferentFile() {
+  pendingFile.value = null;
+  void nextTick(() => uploadInput.value?.click());
+}
+
 function onFile(event: Event) {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
-  if (file) emit("file", file);
+  if (file) stageFile(file);
   input.value = "";
 }
 
@@ -234,7 +257,7 @@ function onDrop(event: DragEvent) {
   const transfer = event.dataTransfer;
   const file = transfer?.files?.[0];
   if (file) {
-    emit("file", file);
+    stageFile(file);
     return;
   }
   // A dragged link becomes a URL import.
@@ -333,34 +356,6 @@ onBeforeUnmount(() => {
           {{ i18n.t("pdf_corpus.source_stage_add") }}
         </h4>
 
-        <fieldset v-if="ocrAvailable" class="ocr-choice" :disabled="sourceSetupDisabled">
-          <legend>{{ i18n.t("pdf_corpus.source_illegibility") }}</legend>
-          <small id="source-illegibility-help">{{
-            i18n.t("pdf_corpus.source_illegibility_help")
-          }}</small>
-          <div class="ocr-options">
-            <label
-              v-for="option in [
-                ['embedded', 'source_ocr_embedded', 'source_ocr_embedded_help'],
-                ['difficult', 'source_ocr_difficult', 'source_ocr_difficult_help'],
-                ['always', 'source_ocr_always', 'source_ocr_always_help'],
-              ]"
-              :key="option[0]"
-              :class="{ 'is-selected': ocrStrategy === option[0] }"
-            >
-              <input
-                name="source-ocr-strategy"
-                type="radio"
-                :value="option[0]"
-                :checked="ocrStrategy === option[0]"
-                @change="onOcrStrategy(option[0])"
-              />
-              <span class="ocr-option-title">{{ i18n.t(`pdf_corpus.${option[1]}`) }}</span>
-              <span class="ocr-option-help">{{ i18n.t(`pdf_corpus.${option[2]}`) }}</span>
-            </label>
-          </div>
-        </fieldset>
-
         <button
           type="button"
           class="dropzone source-choose"
@@ -398,6 +393,64 @@ onBeforeUnmount(() => {
           :aria-label="i18n.t('pdf_corpus.choose_pdf')"
           @change="onFile"
         />
+        <section
+          v-if="pendingFile"
+          class="pending-source"
+          aria-labelledby="pending-source-title"
+        >
+          <div class="pending-source-head">
+            <div>
+              <strong id="pending-source-title">{{
+                i18n.tf("pdf_corpus.source_pending_title", { filename: pendingFile.name })
+              }}</strong>
+              <small>{{ i18n.t("pdf_corpus.source_pending_help") }}</small>
+            </div>
+            <span class="kind-mark" aria-hidden="true">{{
+              pendingMediaKind === "image" ? "IMG" : "PDF"
+            }}</span>
+          </div>
+          <fieldset v-if="ocrAvailable" class="ocr-choice" :disabled="sourceSetupDisabled">
+            <legend>{{ i18n.t("pdf_corpus.source_illegibility") }}</legend>
+            <small id="source-illegibility-help">{{
+              i18n.t("pdf_corpus.source_illegibility_help")
+            }}</small>
+            <div class="ocr-options">
+              <label
+                v-for="option in [
+                  ['embedded', 'source_ocr_embedded', 'source_ocr_embedded_help'],
+                  ['difficult', 'source_ocr_difficult', 'source_ocr_difficult_help'],
+                  ['always', 'source_ocr_always', 'source_ocr_always_help'],
+                ]"
+                :key="option[0]"
+                :class="{ 'is-selected': ocrStrategy === option[0] }"
+              >
+                <input
+                  name="source-ocr-strategy"
+                  type="radio"
+                  :value="option[0]"
+                  :checked="ocrStrategy === option[0]"
+                  @change="onOcrStrategy(option[0])"
+                />
+                <span class="ocr-option-title">{{ i18n.t(`pdf_corpus.${option[1]}`) }}</span>
+                <span class="ocr-option-help">{{ i18n.t(`pdf_corpus.${option[2]}`) }}</span>
+              </label>
+            </div>
+          </fieldset>
+          <div class="pending-source-actions">
+            <UiButton
+              variant="ghost"
+              :label="i18n.t('pdf_corpus.source_choose_different')"
+              :disabled="sourceSetupDisabled"
+              @click="chooseDifferentFile"
+            />
+            <UiButton
+              variant="primary"
+              :label="i18n.t('pdf_corpus.source_ingest_selected')"
+              :disabled="sourceSetupDisabled"
+              @click="confirmPendingFile"
+            />
+          </div>
+        </section>
         <ul
           id="source-formats"
           class="format-chips"
@@ -596,7 +649,7 @@ onBeforeUnmount(() => {
             <span aria-hidden="true">→</span>
           </button>
         </article>
-        <div v-else class="source-empty">
+        <div v-else-if="!pendingFile" class="source-empty">
           <span class="empty-orb" aria-hidden="true"><AppIcon name="spark" /></span>
           <strong>{{ i18n.t("pdf_corpus.source_empty_title") }}</strong>
           <p>{{ i18n.t("pdf_corpus.source_empty_help") }}</p>
@@ -804,6 +857,43 @@ onBeforeUnmount(() => {
 }
 
 /* Reading strategy: a segmented choice, decided before a file is added. */
+.pending-source {
+  display: grid;
+  gap: var(--space-4, 16px);
+  padding: var(--space-4, 16px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg, 12px);
+  background: var(--surface-subtle);
+}
+
+.pending-source-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+}
+
+.pending-source-head > div {
+  display: grid;
+  gap: var(--space-1, 4px);
+  min-width: 0;
+}
+
+.pending-source-head strong {
+  overflow-wrap: anywhere;
+}
+
+.pending-source-head small {
+  color: var(--text-muted);
+}
+
+.pending-source-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2, 8px);
+}
+
 .ocr-choice {
   display: grid;
   gap: var(--space-2, 8px);
