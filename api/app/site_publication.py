@@ -345,7 +345,7 @@ def build_site_bundle(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; connect-src 'self' http: https:; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data: blob:; connect-src 'self' http: https:; img-src 'self' file: data: https:; style-src 'self' 'unsafe-inline'; script-src 'self' file:">
   <title>{html.escape(title)}</title>
 </head>
 <body>
