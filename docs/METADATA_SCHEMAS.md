@@ -125,6 +125,23 @@ Corrections keep the rejected model value as negative evidence; it must never be
 
 These controls affect advisory enrichment context only. They do not modify canonical reviewed records, change assertion authority, or route metadata exemplars into Research response/claim memory. See [METADATA_MEMORY.md](METADATA_MEMORY.md).
 
+## Value matching
+
+A field's optional `equivalence_profile` sets when two differently written values count as the same semantic value. It is used for review feedback and correction precedents. The stored value and its evidence are never rewritten.
+
+<!-- prettier-ignore -->
+| `mode` | Treats as the same |
+| --- | --- |
+| `exact` | only identical values |
+| `text` | Unicode, whitespace, case, quote and dash variants |
+| `entity_name` | `text` plus initials and their punctuation, and `Surname, Given` order (`J. P. Dingus` = `J.P. Dingus` = `JP Dingus`). `J. Dingus` and `John Dingus` stay unresolved unless a reviewed alias or Document Intelligence links them. |
+| `lexical_phrase` | `text` plus noun and verb lemmas from the installed spaCy pipeline for the record's language (`pushing the boundaries` = `push the boundaries`). Negation, prepositions and modifiers are kept. With no lemmatizer the result is unresolved, never guessed. |
+| `controlled` | `text` variants of a controlled value; aliases are never invented |
+
+`collection_semantics` is `set` (the default) or `ordered`. A list is the same value only when every member pairs one-to-one with an equivalent member; partial overlap is a difference. `identity_kind` scopes identities (`person`, `character`, `concept`, ...), so fields that declare the same kind share identities.
+
+A field without a profile resolves by its semantic compatibility id and then by its type. Person-bearing core fields (`speaker`, `position_holder`, quoted speaker/author/position holder/addressee, `persons`) use `entity_name` with kind `person`. `concepts` and `topics` use `lexical_phrase`. `quotation_chain` is ordered. Strict choices are `controlled`, while booleans and numbers are `exact`. Anything else is `text`. The Fiction profile declares `entity_name` with kind `character` for narrator, focalizer, character and dialogue fields, and `lexical_phrase` for themes, motifs and symbols. An unset profile does not change a schema's content hash. A build keeps the schema copy it started with, so earlier Fiction builds keep type-based matching.
+
 ## Run-specific field guidance
 
 Corpus Builder can add per-build guidance after schema selection: an instruction and/or names, titles, concepts, or variants to watch for. This guidance is saved with the build, not the schema. Exact phrase matches may become review cues and prompt context, but they do not change allowed values or count as evidence.

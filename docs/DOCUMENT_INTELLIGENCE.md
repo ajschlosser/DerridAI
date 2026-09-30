@@ -233,6 +233,8 @@ The prompt explicitly says these are advisory and are not evidence or propositio
 
 This is especially important for DerridAI's attribution chain. Coreference can help establish that "he" and "Emmanuel Levinas" are likely the same discourse entity, but it cannot establish that Levinas holds the proposition currently being analyzed.
 
+Entity clusters also feed the semantic identity registry as advisory aliases. A person cluster can resolve an otherwise unresolved reviewer edit (`Derrida` → `Jacques Derrida`) to the same value, but only when the names are compatible. A pronoun in the cluster is never a name, and a cluster never overrides a deterministic difference or a reviewed identity. A Record projection bound to other text is ignored. Provider, model and cluster ids are kept as provenance.
+
 ## Semantic Content Graph
 
 `api/app/semantic_content_graph.py` builds a derived graph from current Records plus a non-stale Document Intelligence run.
