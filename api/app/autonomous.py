@@ -2,9 +2,10 @@
 """Hands-free corpus building: decide what a build settles on its own, and say so.
 
 In this mode nobody reviews the records, so every decision a reviewer would have made is made by a stated policy, and
-none of it is dressed up as a human decision. A value the model proposed stays "LLM inferred" (method
-"autonomous_policy"), a record it accepted says who accepted it, and everything it could not settle is listed with the
-reason, so a person can review the exceptions afterwards without re-reading the whole corpus.
+none of it is dressed up as a human decision. A value the model proposed keeps its original derivation and method,
+while a separate autonomous-policy decision records why it was selected. A record accepted by policy says so, and
+everything the policy could not settle is listed with the reason, so a person can review the exceptions afterwards
+without re-reading the whole corpus.
 
 The policy is deliberately small and explicit. It is the place to add smarter rules later; the settle step below only
 asks it three questions: may this proposal be taken, may this record be accepted, and what is left.
