@@ -259,35 +259,35 @@ describe("workspace header", () => {
     "presents three user-facing phases while keeping Build and Review directly navigable",
     async () => {
       const wrapper = mount(CorpusBuilderWorkspaceHeader, {
-      props: {
-        sourceFilename: "Of Grammatology.pdf",
-        buildId: "build-42",
-        status: { label: "Reviewing", detail: "", tone: "info" },
-        workspace: "review",
-        steps: [
-          { id: "setup", available: true, state: "complete" },
-          { id: "build", available: true, state: "complete" },
-          { id: "review", available: true, state: "current" },
-          { id: "publish", available: false, state: "unavailable" },
-        ],
-      },
-    });
-    const phases = wrapper.findAll(".workspace-phase-list > li > button");
-    expect(phases).toHaveLength(3);
-    expect(phases[0].text()).toContain("✓");
-    expect(phases[1].text()).toContain("Build & review");
-    expect(phases[1].attributes("aria-current")).toBe("step");
-    expect(phases[2].attributes("disabled")).toBeDefined();
+        props: {
+          sourceFilename: "Of Grammatology.pdf",
+          buildId: "build-42",
+          status: { label: "Reviewing", detail: "", tone: "info" },
+          workspace: "review",
+          steps: [
+            { id: "setup", available: true, state: "complete" },
+            { id: "build", available: true, state: "complete" },
+            { id: "review", available: true, state: "current" },
+            { id: "publish", available: false, state: "unavailable" },
+          ],
+        },
+      });
+      const phases = wrapper.findAll(".workspace-phase-list > li > button");
+      expect(phases).toHaveLength(3);
+      expect(phases[0].text()).toContain("✓");
+      expect(phases[1].text()).toContain("Build & review");
+      expect(phases[1].attributes("aria-current")).toBe("step");
+      expect(phases[2].attributes("disabled")).toBeDefined();
 
-    const subnav = wrapper.findAll(".workspace-subnav button");
-    expect(subnav).toHaveLength(2);
-    expect(subnav[1].attributes("aria-pressed")).toBe("true");
-    await subnav[0].trigger("click");
-    expect(wrapper.emitted("workspace")).toEqual([["build"]]);
+      const subnav = wrapper.findAll(".workspace-subnav button");
+      expect(subnav).toHaveLength(2);
+      expect(subnav[1].attributes("aria-pressed")).toBe("true");
+      await subnav[0].trigger("click");
+      expect(wrapper.emitted("workspace")).toEqual([["build"]]);
 
-    expect(wrapper.get(".corpus-workspace-stage").text()).toBe("Reviewing");
-    // The build ID is secondary metadata, not headline copy.
-    expect(wrapper.get(".corpus-workspace-context strong").text()).toBe("Of Grammatology.pdf");
+      expect(wrapper.get(".corpus-workspace-stage").text()).toBe("Reviewing");
+      // The build ID is secondary metadata, not headline copy.
+      expect(wrapper.get(".corpus-workspace-context strong").text()).toBe("Of Grammatology.pdf");
       expect(wrapper.get("details code").text()).toBe("build-42");
     },
   );
