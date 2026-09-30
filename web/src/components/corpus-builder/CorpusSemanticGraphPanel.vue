@@ -9,6 +9,15 @@
  * the drawing is partial.
  */
 import { computed, onBeforeUnmount, ref, watch } from "vue";
+import UiRelationDotNode from "../relations/UiRelationDotNode.vue";
+import UiRelationEdge from "../relations/UiRelationEdge.vue";
+import UiRelationToolbar from "../relations/UiRelationToolbar.vue";
+import UiRelationViewport from "../relations/UiRelationViewport.vue";
+import { useRelationLayoutState } from "../../composables/relations/useRelationLayoutState";
+import { useRelationNodeDrag } from "../../composables/relations/useRelationNodeDrag";
+import { relationBoundsForPoints } from "../../domain/relations/geometry";
+import { RELATION_SURFACE_PRESETS } from "../../domain/relations/presets";
+import type { RelationViewportState } from "../../domain/relations/types";
 import {
   corpusBuildsApi,
   type DocumentIntelligenceRun,
@@ -33,6 +42,7 @@ const props = defineProps<{
 const emit = defineEmits<{ refreshed: [] }>();
 const i18n = useI18nStore();
 
+const surfacePreset = RELATION_SURFACE_PRESETS.semanticNetwork;
 const WIDTH = 960;
 const HEIGHT = 560;
 const DENSITIES = [40, 80, 150, 250] as const;
@@ -220,12 +230,32 @@ const maxMentions = computed(() =>
 );
 const maxEdgeCount = computed(() => Math.max(1, ...edges.value.map((edge) => edge.count || 1)));
 
-const positions = computed<Map<string, LayoutPoint>>(() =>
+const automaticPositions = computed<Map<string, LayoutPoint>>(() =>
   layoutGraph(
     nodes.value.map((node) => ({ id: node.id, weight: node.mention_count })),
     edges.value.map((edge) => ({ source: edge.source, target: edge.target, weight: edge.count })),
     { width: WIDTH, height: HEIGHT, pinned: view.value?.focus?.node.id },
   ),
+);
+const layoutState = useRelationLayoutState();
+const positions = computed<Map<string, LayoutPoint>>(() => {
+  const next = new Map<string, LayoutPoint>();
+  for (const node of nodes.value) {
+    const fallback = automaticPositions.value.get(node.id) || { x: WIDTH / 2, y: HEIGHT / 2 };
+    next.set(node.id, layoutState.positionFor(node.id, fallback));
+  }
+  return next;
+});
+const layoutIdentity = computed(() =>
+  JSON.stringify({
+    focus: view.value?.query.focus || "",
+    query: view.value?.query.query || "",
+    types: view.value?.query.types || [],
+    relationKind: view.value?.query.relation_kind || "all",
+    nodeLimit: view.value?.query.node_limit || density.value,
+    minMentions: view.value?.query.min_mentions || 0,
+    nodes: nodes.value.map((node) => node.id),
+  }),
 );
 
 const adjacency = computed(() => {
@@ -283,75 +313,80 @@ function edgeActive(edge: SemanticGraphViewEdge) {
   );
 }
 
-/* ---------- Pan & zoom ---------- */
+const contentBounds = computed(() =>
+  relationBoundsForPoints(
+    drawnNodes.value.flatMap((node) => [
+      { x: node.x - node.r, y: node.y - node.r },
+      { x: node.x + node.r, y: node.y + node.r },
+    ]),
+    48,
+  ),
+);
 
-const zoom = ref(1);
-const pan = ref({ x: 0, y: 0 });
-const svgEl = ref<SVGSVGElement | null>(null);
-let drag: { x: number; y: number; px: number; py: number; moved: boolean } | null = null;
+/* ---------- Shared viewport and node movement ---------- */
 
-const viewBox = computed(() => {
-  const w = WIDTH / zoom.value;
-  const h = HEIGHT / zoom.value;
-  const x = (WIDTH - w) / 2 - pan.value.x;
-  const y = (HEIGHT - h) / 2 - pan.value.y;
-  return `${x} ${y} ${w} ${h}`;
+const viewport = ref<InstanceType<typeof UiRelationViewport> | null>(null);
+const viewportState = ref<RelationViewportState>({ pan: { x: 0, y: 0 }, zoom: 1 });
+const draggedNodeId = ref("");
+
+const nodeDrag = useRelationNodeDrag({
+  getZoom: () => viewportState.value.zoom,
+  onMove: (point) => {
+    if (draggedNodeId.value) layoutState.setPosition(draggedNodeId.value, point);
+  },
 });
-function setZoom(next: number) {
-  zoom.value = Math.max(0.5, Math.min(6, next));
+
+function onViewportChange(state: RelationViewportState) {
+  viewportState.value = state;
 }
+
 function fitView() {
-  zoom.value = 1;
-  pan.value = { x: 0, y: 0 };
+  viewport.value?.fitView(contentBounds.value);
 }
-function svgScale() {
-  const rect = svgEl.value?.getBoundingClientRect();
-  return rect && rect.width ? WIDTH / zoom.value / rect.width : 1;
+
+function resetLayout() {
+  layoutState.clearPositions();
+  viewport.value?.resetView();
 }
-function onWheel(event: WheelEvent) {
-  event.preventDefault();
-  setZoom(zoom.value * (event.deltaY < 0 ? 1.15 : 1 / 1.15));
+
+function onNodePointerDown(event: PointerEvent, node: DrawnNode) {
+  draggedNodeId.value = node.id;
+  selectedNodeId.value = node.id;
+  nodeDrag.begin(event, { x: node.x, y: node.y });
 }
-function onPointerDown(event: PointerEvent) {
-  if (event.button !== 0) return;
-  drag = { x: event.clientX, y: event.clientY, px: pan.value.x, py: pan.value.y, moved: false };
+
+function onNodePointerMove(event: PointerEvent) {
+  nodeDrag.update(event);
 }
-function onPointerMove(event: PointerEvent) {
-  if (!drag) return;
-  const dx = event.clientX - drag.x;
-  const dy = event.clientY - drag.y;
-  if (!drag.moved && Math.hypot(dx, dy) < 4) return;
-  if (!drag.moved) (event.currentTarget as Element).setPointerCapture?.(event.pointerId);
-  drag.moved = true;
-  const scale = svgScale();
-  pan.value = { x: drag.px + dx * scale, y: drag.py + dy * scale };
+
+function onNodePointerEnd(event: PointerEvent) {
+  nodeDrag.end(event);
+  draggedNodeId.value = "";
 }
-function onPointerUp(event: PointerEvent) {
-  const wasDrag = drag?.moved;
-  drag = null;
-  (event.currentTarget as Element).releasePointerCapture?.(event.pointerId);
-  if (!wasDrag && event.target === svgEl.value) selectedNodeId.value = "";
+
+function onNodeClick(event: MouseEvent, node: DrawnNode) {
+  if (nodeDrag.consumeClick(event)) return;
+  selectNode(node.id);
 }
-function onCanvasKey(event: KeyboardEvent) {
-  const step = 40 / zoom.value;
-  const moves: Record<string, [number, number]> = {
-    ArrowLeft: [step, 0],
-    ArrowRight: [-step, 0],
-    ArrowUp: [0, step],
-    ArrowDown: [0, -step],
-  };
-  if (event.target !== event.currentTarget) return;
-  if (moves[event.key]) {
+
+function onNodeKeydown(event: KeyboardEvent, node: DrawnNode) {
+  draggedNodeId.value = node.id;
+  if (nodeDrag.nudge(event, { x: node.x, y: node.y })) {
+    draggedNodeId.value = "";
+    return;
+  }
+  draggedNodeId.value = "";
+  if (event.key === "Enter" || event.key === " ") {
     event.preventDefault();
-    const [dx, dy] = moves[event.key];
-    pan.value = { x: pan.value.x + dx, y: pan.value.y + dy };
-  } else if (event.key === "+" || event.key === "=") setZoom(zoom.value * 1.25);
-  else if (event.key === "-") setZoom(zoom.value / 1.25);
-  else if (event.key === "0") fitView();
-  else if (event.key === "Escape") selectedNodeId.value = "";
+    selectNode(node.id);
+  }
 }
-watch(view, (next, prev) => {
-  if (next?.query.focus !== prev?.query.focus) fitView();
+
+watch(layoutIdentity, (next, previous) => {
+  if (previous && next !== previous) {
+    layoutState.clearPositions();
+    viewport.value?.resetView();
+  }
 });
 
 /* ---------- Selection & focus ---------- */
@@ -623,61 +658,25 @@ const pageText = computed(() => {
 
       <div v-if="view" class="graph-layout">
         <div class="graph-stage" :class="{ busy: loading }">
-          <div
+          <UiRelationToolbar
             class="graph-controls"
-            role="toolbar"
-            :aria-label="i18n.t('pdf_corpus.semantic_graph_accessible_label')"
+            :accessible-label="i18n.t('pdf_corpus.semantic_graph_accessible_label')"
+            :zoom-out-label="i18n.t('pdf_corpus.semantic_graph_zoom_out')"
+            :zoom-in-label="i18n.t('pdf_corpus.semantic_graph_zoom_in')"
+            :fit-label="i18n.t('pdf_corpus.semantic_graph_zoom_fit')"
+            :reset-label="i18n.t('pdf_corpus.semantic_graph_reset_layout', 'Reset graph layout')"
+            @zoom-out="viewport?.zoomBy(1 / 1.25)"
+            @zoom-in="viewport?.zoomBy(1.25)"
+            @fit="fitView"
+            @reset="resetLayout"
           >
-            <UiTooltip
-              :text="i18n.t('pdf_corpus.semantic_graph_zoom_in')"
-              trigger-mode="content"
-              :content-focusable="false"
-              placement="bottom"
-            >
-              <button
-                type="button"
-                class="icon-btn"
-                :aria-label="i18n.t('pdf_corpus.semantic_graph_zoom_in')"
-                @click="setZoom(zoom * 1.25)"
-              >
-                +
-              </button>
-            </UiTooltip>
-            <UiTooltip
-              :text="i18n.t('pdf_corpus.semantic_graph_zoom_out')"
-              trigger-mode="content"
-              :content-focusable="false"
-              placement="bottom"
-            >
-              <button
-                type="button"
-                class="icon-btn"
-                :aria-label="i18n.t('pdf_corpus.semantic_graph_zoom_out')"
-                @click="setZoom(zoom / 1.25)"
-              >
-                −
-              </button>
-            </UiTooltip>
-            <UiTooltip
-              :text="i18n.t('pdf_corpus.semantic_graph_zoom_fit')"
-              trigger-mode="content"
-              :content-focusable="false"
-              placement="bottom"
-            >
-              <button
-                type="button"
-                class="icon-btn"
-                :aria-label="i18n.t('pdf_corpus.semantic_graph_zoom_fit')"
-                @click="fitView"
-              >
-                ⤢
-              </button>
-            </UiTooltip>
-            <label class="labels-toggle">
-              <input v-model="showAllLabels" type="checkbox" />
-              <span>{{ i18n.t("pdf_corpus.semantic_graph_labels_toggle") }}</span>
-            </label>
-          </div>
+            <template #after>
+              <label class="labels-toggle">
+                <input v-model="showAllLabels" type="checkbox" />
+                <span>{{ i18n.t("pdf_corpus.semantic_graph_labels_toggle") }}</span>
+              </label>
+            </template>
+          </UiRelationToolbar>
 
           <p v-if="!nodes.length && !loading" class="graph-empty">
             {{
@@ -687,76 +686,90 @@ const pageText = computed(() => {
             }}
           </p>
 
-          <svg
+          <UiRelationViewport
             v-else
-            ref="svgEl"
-            class="graph-canvas"
-            :viewBox="viewBox"
-            preserveAspectRatio="xMidYMid meet"
-            role="group"
-            tabindex="0"
-            :aria-label="i18n.t('pdf_corpus.semantic_graph_accessible_label')"
-            :aria-describedby="'semantic-graph-keyboard-help'"
-            @wheel="onWheel"
-            @pointerdown="onPointerDown"
-            @pointermove="onPointerMove"
-            @pointerup="onPointerUp"
-            @pointercancel="onPointerUp"
-            @keydown="onCanvasKey"
+            ref="viewport"
+            class="graph-viewport"
+            :accessible-label="i18n.t('pdf_corpus.semantic_graph_accessible_label')"
+            :help-text="
+              i18n.t(
+                'pdf_corpus.semantic_graph_keyboard_help',
+                'Drag the background to pan. Drag a node to reposition it. Arrow keys pan, plus and minus zoom, and 0 resets the view. Hold Alt and use an arrow key to move a focused node.',
+              )
+            "
+            :resize-label="
+              i18n.t('pdf_corpus.semantic_graph_resize', 'Resize semantic content graph')
+            "
+            :initial-center="{ x: WIDTH / 2, y: HEIGHT / 2 }"
+            :content-bounds="contentBounds"
+            :content-width="WIDTH"
+            :content-height="HEIGHT"
+            :min-zoom="surfacePreset.minZoom"
+            :max-zoom="surfacePreset.maxZoom"
+            :resize-axis="surfacePreset.resizeAxis"
+            @viewport-change="onViewportChange"
+            @keydown.esc="selectedNodeId = ''"
           >
-            <g class="graph-edges" aria-hidden="true">
-              <path
-                v-for="edge in edges"
-                :key="edge.id"
-                :d="edgePath(edge)"
-                :stroke-width="edgeWidth(edge)"
-                :class="[
-                  'graph-edge',
-                  edge.relation_kind,
-                  edge.authority_status,
-                  { dim: !edgeActive(edge), lit: highlightId && edgeActive(edge) },
-                ]"
-              >
-                <title>
-                  {{ relationLabel(edge.predicate) }} · {{ authorityLabel(edge.authority_status) }}
-                </title>
-              </path>
-            </g>
-            <g class="graph-nodes">
-              <g
-                v-for="node in drawnNodes"
-                :key="node.id"
-                :transform="`translate(${node.x}, ${node.y})`"
-                :class="[
-                  'graph-node',
-                  hueClass(node.type),
-                  {
-                    selected: node.id === selectedNodeId,
-                    focus: node.id === view.focus?.node.id,
-                    dim: highlightSet && !highlightSet.has(node.id),
-                  },
-                ]"
-                role="button"
-                tabindex="0"
-                :aria-label="nodeAriaLabel(node)"
-                :aria-pressed="node.id === selectedNodeId"
-                @click.stop="selectNode(node.id)"
-                @dblclick.stop="focusNode(node.id, node.label)"
-                @pointerenter="hoveredNodeId = node.id"
-                @pointerleave="hoveredNodeId = ''"
-                @focus="hoveredNodeId = node.id"
-                @blur="hoveredNodeId = ''"
-                @keydown.enter.prevent="selectNode(node.id)"
-                @keydown.space.prevent="selectNode(node.id)"
-              >
-                <circle class="halo" :r="node.r + 5" />
-                <circle class="dot" :r="node.r" />
-                <text v-if="labelledIds.has(node.id)" class="label" :x="node.r + 5" y="4">
-                  {{ node.label.length > 32 ? `${node.label.slice(0, 31)}…` : node.label }}
-                </text>
+            <svg
+              class="graph-canvas"
+              :viewBox="`0 0 ${WIDTH} ${HEIGHT}`"
+              :width="WIDTH"
+              :height="HEIGHT"
+            >
+              <g class="graph-edges" aria-hidden="true">
+                <UiRelationEdge
+                  v-for="edge in edges"
+                  :key="edge.id"
+                  :path="edgePath(edge)"
+                  :width="edgeWidth(edge)"
+                  :title="`${relationLabel(edge.predicate)} · ${authorityLabel(edge.authority_status)}`"
+                  :class="[
+                    'graph-edge',
+                    edge.relation_kind,
+                    edge.authority_status,
+                    { dim: !edgeActive(edge), lit: highlightId && edgeActive(edge) },
+                  ]"
+                />
               </g>
-            </g>
-          </svg>
+              <g class="graph-nodes">
+                <g
+                  v-for="node in drawnNodes"
+                  :key="node.id"
+                  :transform="`translate(${node.x}, ${node.y})`"
+                  :class="[
+                    'graph-node',
+                    hueClass(node.type),
+                    {
+                      selected: node.id === selectedNodeId,
+                      focus: node.id === view.focus?.node.id,
+                      dim: highlightSet && !highlightSet.has(node.id),
+                    },
+                  ]"
+                  role="button"
+                  tabindex="0"
+                  :aria-label="nodeAriaLabel(node)"
+                  :aria-pressed="node.id === selectedNodeId"
+                  @click.stop="onNodeClick($event, node)"
+                  @dblclick.stop="focusNode(node.id, node.label)"
+                  @pointerdown.stop="onNodePointerDown($event, node)"
+                  @pointermove.stop="onNodePointerMove"
+                  @pointerup.stop="onNodePointerEnd"
+                  @pointercancel.stop="onNodePointerEnd"
+                  @pointerenter="hoveredNodeId = node.id"
+                  @pointerleave="hoveredNodeId = ''"
+                  @focus="hoveredNodeId = node.id"
+                  @blur="hoveredNodeId = ''"
+                  @keydown="onNodeKeydown($event, node)"
+                >
+                  <UiRelationDotNode
+                    :radius="node.r"
+                    :label="node.label.length > 32 ? `${node.label.slice(0, 31)}…` : node.label"
+                    :show-label="labelledIds.has(node.id)"
+                  />
+                </g>
+              </g>
+            </svg>
+          </UiRelationViewport>
 
           <footer class="graph-legend">
             <span
@@ -1329,7 +1342,7 @@ const pageText = computed(() => {
   background: var(--surface-raised);
   overflow: hidden;
 }
-.graph-stage.busy .graph-canvas {
+.graph-stage.busy .graph-viewport {
   opacity: 0.6;
   transition: opacity var(--motion-base) var(--ease-standard);
 }
@@ -1376,22 +1389,19 @@ const pageText = computed(() => {
   font-size: var(--fs-xs);
   color: var(--muted);
 }
-.graph-canvas {
-  display: block;
+.graph-viewport {
   width: 100%;
-  aspect-ratio: 960 / 560;
+  height: min(560px, 70vh);
   min-height: 360px;
-  max-height: 70vh;
-  cursor: grab;
-  touch-action: none;
-  user-select: none;
 }
-.graph-canvas:active {
-  cursor: grabbing;
-}
-.graph-canvas:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: -2px;
+.graph-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 960px;
+  max-width: none;
+  height: 560px;
+  overflow: visible;
 }
 .graph-empty {
   display: grid;
@@ -1426,43 +1436,32 @@ const pageText = computed(() => {
   opacity: 0.95;
 }
 .graph-node {
-  cursor: pointer;
+  cursor: grab;
+  touch-action: none;
   transition: opacity var(--motion-fast) var(--ease-standard);
 }
 .graph-node.dim {
   opacity: 0.18;
 }
-.graph-node .dot {
-  fill: var(--hue, var(--accent));
-  stroke: var(--surface-raised);
-  stroke-width: 1.5;
+.graph-node {
+  --relation-node-dot: var(--hue, var(--accent));
+  --relation-node-dot-border: var(--surface-raised);
+  --relation-node-label: var(--text);
+  --relation-node-label-halo: var(--surface-raised);
+  --relation-node-halo: transparent;
+  --relation-node-halo-opacity: 1;
 }
-.graph-node .halo {
-  fill: none;
-  stroke: transparent;
-  stroke-width: 3;
+.graph-node.focus {
+  --relation-node-halo: var(--hue, var(--accent));
+  --relation-node-halo-opacity: 0.45;
 }
-.graph-node.focus .halo {
-  stroke: var(--hue, var(--accent));
-  stroke-opacity: 0.45;
-}
-.graph-node.selected .halo,
-.graph-node:focus-visible .halo {
-  stroke: var(--focus-ring);
-  stroke-opacity: 1;
+.graph-node.selected,
+.graph-node:focus-visible {
+  --relation-node-halo: var(--focus-ring);
+  --relation-node-halo-opacity: 1;
 }
 .graph-node:focus {
   outline: none;
-}
-.graph-node .label {
-  fill: var(--text);
-  font-size: 12px;
-  font-weight: var(--fw-semibold);
-  paint-order: stroke;
-  stroke: var(--surface-raised);
-  stroke-width: 3px;
-  stroke-linejoin: round;
-  pointer-events: none;
 }
 .graph-legend {
   display: flex;
