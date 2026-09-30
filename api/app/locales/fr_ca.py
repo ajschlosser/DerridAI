@@ -8897,4 +8897,11 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'pipelines.strategy.llm_closed_choice_evidence.description': 'Demande à un modèle de dialogue de choisir uniquement parmi les identifiants d’unités sources fournis, puis valide ces identifiants de façon déterministe.',
  'pipelines.strategy.llm_grade_rag.label': 'Évaluation de la réponse RAG',
  'pipelines.strategy.llm_grade_rag.description': 'Évalue une réponse générée par rapport au paquet de preuves au moyen du profil d’évaluation configuré.'
+,
+ 'pipelines.diagram_controls': 'Commandes du diagramme de pipeline',
+ 'pipelines.diagram_zoom_out': 'Zoom arrière',
+ 'pipelines.diagram_zoom_in': 'Zoom avant',
+ 'pipelines.diagram_fit': 'Ajuster le diagramme',
+ 'pipelines.diagram_reset_layout': 'Réinitialiser la disposition',
+ 'pipelines.diagram_resize': 'Redimensionner le diagramme de pipeline',
 }
