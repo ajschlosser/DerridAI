@@ -15,7 +15,6 @@ withDefaults(
     class="ui-relation-edge"
     :d="path"
     :stroke-width="width"
-    vector-effect="non-scaling-stroke"
   >
     <title v-if="title">{{ title }}</title>
   </path>
