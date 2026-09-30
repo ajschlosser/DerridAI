@@ -409,10 +409,7 @@ onMounted(() => {
       </template>
     </UiPageHeader>
 
-    <nav
-      class="pipeline-studio-nav"
-      :aria-label="t('pipelines.title', 'Pipeline Studio')"
-    >
+    <nav class="pipeline-studio-nav" :aria-label="t('pipelines.title', 'Pipeline Studio')">
       <UiTabs
         :tabs="studioTabs"
         :model-value="section"
