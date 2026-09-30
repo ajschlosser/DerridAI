@@ -325,7 +325,7 @@ Users can clear `updates` for one record or for every loaded record. Clearing hi
 
 The administrator **Works** page includes **Create site** when a corpus database is selected. Choose any number of indexed works, give the site a title and optional description, then choose an export format. The export dialog also lets you include **all or any subset of the interface languages currently installed in DerridAI** and **all or any subset of the researcher LLM provider profiles**. At least one language is required. Provider profile endpoints and model names may be exported; API keys and other provider secrets are never embedded in a published site.
 
-The generated reference site is fully internationalized from the selected DerridAI dictionaries. Its language menu contains only the languages included in that export, and any missing translated site string falls back to the canonical English string instead of exposing a raw translation key. Locale direction is applied at runtime for both left-to-right and right-to-left scripts.
+The generated reference site is fully internationalized from the selected DerridAI dictionaries. Its language menu contains only the languages included in that export. Publication is blocked if any selected language is missing a required static-site translation; DerridAI does not silently fall back to English for a selected language. Locale direction is applied at runtime for both left-to-right and right-to-left scripts.
 
 ### Single HTML file
 
@@ -338,8 +338,6 @@ The document remains self-contained for corpus browsing and research logic, but 
 Choose **nginx Docker bundle** when the site will be served over HTTP. The ZIP contains:
 
 - `index.html`
-- `derridai-publication.js`
-- `derridai-sdk.js`
 - `derridai-site.js`
 - `Dockerfile`
 - `nginx.conf`
@@ -347,7 +345,7 @@ Choose **nginx Docker bundle** when the site will be served over HTTP. The ZIP c
 - `stop.sh`
 - `README.txt`
 
-The Dockerfile uses a single `nginx:1.27-alpine` image and copies only the static publication files. There is no DerridAI API container, Node runtime, Python runtime, reverse proxy to the application, or Docker Compose dependency.
+The Dockerfile uses a single `nginx:1.27-alpine` image and copies only two Web assets: `index.html` and `derridai-site.js`. The JavaScript file contains the publication package, the reusable DerridAI browser SDK, and the reference interface. There is no DerridAI API container, Node runtime, Python runtime, reverse proxy to the application, or Docker Compose dependency.
 
 After extracting the ZIP:
 
