@@ -13,6 +13,7 @@ const meta = {
   title: "Primitives/Relations/Viewport",
   component: UiRelationViewport,
   parameters: { layout: "padded" },
+  args: { accessibleLabel: "Relationship map", resizeLabel: "Resize relationship map" },
 } satisfies Meta<typeof UiRelationViewport>;
 
 export default meta;
