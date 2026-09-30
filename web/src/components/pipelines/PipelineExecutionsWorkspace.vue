@@ -172,7 +172,9 @@ const menuItems = computed<UiMenuItem[]>(() => [
   align-items: start;
 }
 .pipeline-execution-inspector-scroll {
-  max-height: min(76dvh, 960px);
+  position: sticky;
+  top: var(--pipeline-studio-sticky-top, var(--space-3));
+  max-height: var(--pipeline-studio-pane-max-height, min(76dvh, 960px));
   overflow: auto;
   overscroll-behavior: contain;
   border-radius: var(--radius-card);
@@ -195,6 +197,7 @@ const menuItems = computed<UiMenuItem[]>(() => [
     grid-template-columns: minmax(0, 1fr);
   }
   .pipeline-execution-inspector-scroll {
+    position: static;
     max-height: none;
     overflow: visible;
   }
