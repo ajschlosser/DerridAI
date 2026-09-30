@@ -201,6 +201,7 @@ onMounted(async () => {
               <input
                 type="checkbox"
                 :checked="selectedLanguages.includes(language.code)"
+                :data-site-language="language.code"
                 @change="toggleLanguage(language.code, ($event.target as HTMLInputElement).checked)"
               />
               <span>
@@ -237,6 +238,7 @@ onMounted(async () => {
               <input
                 type="checkbox"
                 :checked="selectedProviderProfiles.includes(profile.id)"
+                :data-site-provider="profile.id"
                 @change="toggleProvider(profile.id, ($event.target as HTMLInputElement).checked)"
               />
               <span>
@@ -269,6 +271,7 @@ onMounted(async () => {
               <input
                 type="checkbox"
                 :checked="selected.includes(work.work)"
+                :data-site-work="work.work"
                 @change="toggle(work.work, ($event.target as HTMLInputElement).checked)"
               />
               <span>
