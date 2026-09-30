@@ -1,6 +1,8 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, ref, useId } from "vue";
+import { nextTick, onBeforeUnmount, ref } from "vue";
+
+let tooltipSequence = 0;
 
 /**
  * Accessible, page-level tooltip behavior. The default trigger is the shared
@@ -25,7 +27,7 @@ const {
   contentFocusable?: boolean;
 }>();
 
-const id = `${useId()}-tooltip`;
+const id = `ui-tooltip-${++tooltipSequence}`;
 const open = ref(false);
 const trigger = ref<HTMLElement | null>(null);
 const bubble = ref<HTMLElement | null>(null);
