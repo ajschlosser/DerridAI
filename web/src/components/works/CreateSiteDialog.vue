@@ -244,7 +244,7 @@ onMounted(async () => {
               <span>
                 <strong>{{ profile.name || profile.id }}</strong>
                 <small>
-                  {{ profile.type === "openai" ? "OpenAI-compatible" : "Ollama" }}
+                  {{ profile.type === "openai" ? i18n.t("site.create_provider_openai") : i18n.t("site.create_provider_ollama") }}
                   <template v-if="profile.model"> · {{ profile.model }}</template>
                 </small>
               </span>
