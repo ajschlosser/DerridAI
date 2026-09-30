@@ -412,3 +412,11 @@ Work on this branch will be committed in coherent checkpoints. At each checkpoin
 - Closed the remaining implementation-plan gaps that were already satisfied by the current composition: queue completion actions, direct Build-plan editing, media-aware summary facts, Run details progressive disclosure, and explicit source/text-fidelity language in the suggestions-as-is publication dialog.
 - Corrected the Build plan's description-list markup so the new summary remains semantically valid for assistive technology.
 - Remaining work is validation-driven: formatting, lint/typecheck, unit/E2E/a11y results, then any fixes those gates uncover.
+
+
+### Checkpoint 8 — agent handoff
+
+- Added `docs/CORPUS_BUILDER_HAPPY_PATH_UX_HANDOFF.md` with the architectural constraints, completed work, touched files, coverage changes, remaining validation work, and a recommended execution order for the next agent.
+- Re-checked branch divergence at handoff time: the branch is currently **100 commits ahead and 28 commits behind current `master`**, with merge base `7b805d83f9f1ef87aa37a785bc64ac0f78e93cd5`.
+- The handoff explicitly supersedes the older “aligned with master” observation from draft-PR creation time. Current master synchronization is now the first remaining integration task.
+- No remaining Phase 8 validation checkbox was marked complete without actually running the corresponding formatter/test/CI/accessibility gate.
