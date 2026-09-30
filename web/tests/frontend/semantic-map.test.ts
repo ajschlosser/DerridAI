@@ -74,6 +74,38 @@ describe("SemanticMapCanvas", () => {
     const moved = read(after);
     expect(moved).toEqual({ x: start.x + 50, y: start.y - 25 });
   });
+
+  it("drags and keyboard-nudges a node in graph space", async () => {
+    const graph = buildSemanticMap(sources, "r1");
+    const wrapper = mount(SemanticMapCanvas, { props: { graph } });
+    await flushPromises();
+    const node = wrapper.get(".semantic-map-node");
+    const read = () => {
+      const style = node.attributes("style") || "";
+      const left = Number(style.match(/left:\s*([-.\d]+)px/)?.[1]);
+      const top = Number(style.match(/top:\s*([-.\d]+)px/)?.[1]);
+      return { left, top };
+    };
+    const before = read();
+    await node.trigger("pointerdown", { button: 0, clientX: 10, clientY: 10, pointerId: 2 });
+    await node.trigger("pointermove", { clientX: 30, clientY: 20, pointerId: 2 });
+    await node.trigger("pointerup", { pointerId: 2 });
+    expect(read()).toEqual({ left: before.left + 20, top: before.top + 10 });
+
+    const afterDrag = read();
+    await node.trigger("keydown", { key: "ArrowRight", altKey: true });
+    expect(read()).toEqual({ left: afterDrag.left + 8, top: afterDrag.top });
+  });
+
+  it("supports keyboard resizing without turning the resize gesture into a pan", async () => {
+    const graph = buildSemanticMap(sources, "r1");
+    const wrapper = mount(SemanticMapCanvas, { props: { graph } });
+    await flushPromises();
+    const surface = wrapper.get(".semantic-map-canvas");
+    const handle = wrapper.get("[data-relation-resize-handle]");
+    await handle.trigger("keydown", { key: "ArrowDown" });
+    expect(surface.attributes("style")).toContain("height: 252px");
+  });
 });
 
 describe("SemanticMapFrame", () => {
