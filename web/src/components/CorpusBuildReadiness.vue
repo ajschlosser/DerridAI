@@ -112,9 +112,17 @@ const providerSummary = computed(() =>
         <dt>{{ i18n.t("pdf_corpus.readiness.source") }}</dt>
         <dd>{{ sourceFilename || i18n.t("pdf_corpus.choose_source_prompt") }}</dd>
       </div>
+      <div v-if="hasPages(mediaKind)">
+        <dt>{{ i18n.t("pdf_corpus.readiness.structure") }}</dt>
+        <dd>{{ structureSummary || i18n.t("pdf_corpus.readiness.structure_unset") }}</dd>
+      </div>
       <div v-if="schemaLabel">
         <dt>{{ i18n.t("pdf_corpus.configure_metadata") }}</dt>
         <dd>{{ schemaLabel }}</dd>
+      </div>
+      <div>
+        <dt>{{ i18n.t("pdf_corpus.readiness.enrichment") }}</dt>
+        <dd>{{ modeLabel }}</dd>
       </div>
       <div>
         <dt>{{ i18n.t("pdf_corpus.readiness.llm") }}</dt>
