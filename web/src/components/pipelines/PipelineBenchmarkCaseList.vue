@@ -45,7 +45,9 @@ function caseKey(item: ResearchPipelineBenchmarkCase) {
 <style scoped>
 .case-list {
   align-self: start;
-  max-height: min(76dvh, 960px);
+  position: sticky;
+  top: var(--pipeline-studio-sticky-top, var(--space-3));
+  max-height: var(--pipeline-studio-pane-max-height, min(76dvh, 960px));
   overflow: auto;
   overscroll-behavior: contain;
   border: 1px solid var(--border-subtle);
@@ -111,5 +113,12 @@ function caseKey(item: ResearchPipelineBenchmarkCase) {
   padding: var(--space-3);
   color: var(--text-tertiary);
   font-size: 0.875rem;
+}
+
+@media (max-width: 960px) {
+  .case-list {
+    position: static;
+    max-height: 360px;
+  }
 }
 </style>
