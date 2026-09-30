@@ -1,6 +1,9 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import UiRelationCardNode from "../relations/UiRelationCardNode.vue";
+import UiRelationEdge from "../relations/UiRelationEdge.vue";
+import UiRelationEdgeLabel from "../relations/UiRelationEdgeLabel.vue";
 import UiRelationNodeShell from "../relations/UiRelationNodeShell.vue";
 import UiRelationToolbar from "../relations/UiRelationToolbar.vue";
 import UiRelationViewport from "../relations/UiRelationViewport.vue";
@@ -265,8 +268,8 @@ function resetLayout() {
 
           <g class="diagram-edges">
             <template v-for="edge in edges" :key="edge.id">
-              <path
-                :d="edgePath(edge)"
+              <UiRelationEdge
+                :path="edgePath(edge)"
                 class="diagram-edge"
                 :class="{
                   active: isActiveEdge(edge),
@@ -274,24 +277,13 @@ function resetLayout() {
                   application: !edge.normative,
                 }"
               />
-              <g v-if="isActiveEdge(edge)">
-                <rect
-                  :x="edgeLabelPosition(edge).x - 57"
-                  :y="edgeLabelPosition(edge).y - 10"
-                  width="114"
-                  height="20"
-                  rx="10"
-                  class="diagram-edge-label-bg"
-                />
-                <text
-                  :x="edgeLabelPosition(edge).x"
-                  :y="edgeLabelPosition(edge).y + 4"
-                  text-anchor="middle"
-                  class="diagram-edge-label"
-                >
-                  {{ truncate(relationFromFocus(edge), 24) }}
-                </text>
-              </g>
+              <UiRelationEdgeLabel
+                v-if="isActiveEdge(edge)"
+                class="diagram-edge-label"
+                :x="edgeLabelPosition(edge).x"
+                :y="edgeLabelPosition(edge).y"
+                :label="truncate(relationFromFocus(edge), 24)"
+              />
             </template>
           </g>
         </svg>
@@ -312,9 +304,11 @@ function resetLayout() {
           @move="moveNode(node.id, $event)"
           @activate="emit('focus', node.id)"
         >
-          <small>{{ typeLabel(node.object_type) }}</small>
-          <strong>{{ truncate(node.label, 30) }}</strong>
-          <span v-if="node.summary">{{ truncate(node.summary, 34) }}</span>
+          <UiRelationCardNode class="diagram-node-card" compact>
+            <small>{{ typeLabel(node.object_type) }}</small>
+            <strong>{{ truncate(node.label, 30) }}</strong>
+            <span v-if="node.summary">{{ truncate(node.summary, 34) }}</span>
+          </UiRelationCardNode>
         </UiRelationNodeShell>
       </template>
     </UiRelationViewport>
@@ -353,90 +347,59 @@ function resetLayout() {
   letter-spacing: 0.02em;
 }
 .diagram-edge {
-  fill: none;
-  stroke: var(--border-strong);
-  stroke-width: 1.5;
-  opacity: 0.72;
+  --relation-edge-stroke: var(--border-strong);
+  --relation-edge-opacity: 0.72;
 }
 .diagram-edge.application {
   stroke-dasharray: 5 5;
 }
 .diagram-edge.active {
-  stroke: var(--accent);
+  --relation-edge-stroke: var(--accent);
+  --relation-edge-opacity: 1;
   stroke-width: 2.5;
-  opacity: 1;
 }
 .diagram-edge.contextual {
-  opacity: 0.22;
-}
-.diagram-edge-label-bg {
-  fill: var(--surface-overlay);
-  stroke: var(--border-subtle);
-}
-.diagram-edge-label {
-  fill: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 700;
+  --relation-edge-opacity: 0.22;
 }
 .diagram-node {
-  display: grid;
-  align-content: center;
-  gap: 2px;
-  min-width: 0;
-  overflow: hidden;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-control);
-  background: var(--surface-card);
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--text-primary);
-  padding: 7px 9px;
+  font: inherit;
   text-align: left;
-  box-shadow: var(--shadow-card);
+  --relation-node-border: var(--border-strong);
+  --relation-node-radius: var(--radius-control);
+  --relation-node-bg: var(--surface-card);
+  --relation-node-shadow: var(--shadow-card);
 }
 .diagram-node:hover {
-  border-color: var(--border-interactive);
-  background: var(--surface-hover);
+  --relation-node-border: var(--border-interactive);
+  --relation-node-bg: var(--surface-hover);
 }
 .diagram-node:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: var(--focus-ring-offset);
 }
 .diagram-node.state-focus {
-  border-color: var(--accent);
-  background: var(--surface-selected);
-  box-shadow: var(--elev-2);
+  --relation-node-border: var(--accent);
+  --relation-node-bg: var(--surface-selected);
+  --relation-node-shadow: var(--elev-2);
 }
 .diagram-node.state-neighbor {
-  border-color: var(--border-interactive);
+  --relation-node-border: var(--border-interactive);
 }
 .diagram-node.state-context {
   opacity: 0.48;
 }
-.diagram-node small,
-.diagram-node strong,
-.diagram-node span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.diagram-node small {
-  color: var(--text-tertiary);
-  font-size: 12px;
-  font-weight: 750;
-}
-.diagram-node strong {
-  color: var(--text-primary);
-  font-size: 12.5px;
-  font-weight: 750;
-}
-.diagram-node span {
-  color: var(--text-tertiary);
-  font-size: 12px;
+.diagram-node-card {
+  width: 100%;
+  height: 100%;
 }
 @media (forced-colors: active) {
   .diagram-edge,
   .diagram-edge.active {
-    stroke: CanvasText;
+    --relation-edge-stroke: CanvasText;
   }
   .diagram-node.state-focus {
     outline: 2px solid Highlight;
