@@ -766,16 +766,7 @@ def _legacy_assertion(
         ("imported", "not_evaluated", "unreviewed", "present" if value not in (None, "", []) else "unresolved"),
     )
     if legacy_status_name == "unresolved":
-        # Legacy review state may keep a model candidate in proposed_value
-        # instead of materializing it on the Record. That still means the
-        # evaluator produced a candidate; unresolved describes authority/value
-        # state, not an absence of evaluation output.
-        proposed_value = status.get("proposed_value")
-        evaluation = (
-            "value_supported"
-            if value not in (None, "", []) or proposed_value not in (None, "", [])
-            else "no_supported_value"
-        )
+        evaluation = "value_supported" if value not in (None, "", []) else "no_supported_value"
     if legacy_status_name == "invalid":
         evaluation = "evaluation_failed" if str(status.get("reason_code") or "") in {"invalid_value", "validation_failed"} else "value_supported"
     if legacy_status_name == "human_confirmed" and str(status.get("method") or "").casefold() not in {"llm", "human_review_of_llm_proposal", "human_adjudication_cache"}:
