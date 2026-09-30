@@ -620,7 +620,6 @@ function displayValue(field: string) {
       </div>
     </details>
 
-
     <details v-if="addableFields.length" class="settled-metadata add-metadata">
       <summary>
         {{ i18n.t("pdf_corpus.add_metadata_section") }}
