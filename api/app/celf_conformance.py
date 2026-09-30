@@ -63,7 +63,7 @@ def evaluate_celf_conformance(
         "core": {"status": core_status, "blockers": core},
         "publication": {
             "status": publication_status,
-            "blockers": publication + core,
+            "blockers": publication,
         },
         "conformant": core_status == "conformant" and publication_status == "conformant",
     }
