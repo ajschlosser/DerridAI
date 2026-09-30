@@ -109,16 +109,9 @@ function onCardClick(event: MouseEvent) {
             <AppIcon name="database" aria-hidden="true" />{{ i18n.t("works.sync") }}
           </button>
           <details class="work-action-menu" @click.stop>
-            <UiTooltip
-              :text="i18n.t('ui.more_actions')"
-              trigger-mode="content"
-              :content-focusable="false"
-              placement="bottom"
-            >
-              <summary class="btn small" :aria-label="i18n.t('ui.more_actions')">
-                {{ i18n.t("ui.actions") }}
-              </summary>
-            </UiTooltip>
+            <summary class="btn small" :aria-label="i18n.t('ui.more_actions')">
+              {{ i18n.t("ui.actions") }}
+            </summary>
             <div class="work-action-popover">
               <button
                 type="button"
