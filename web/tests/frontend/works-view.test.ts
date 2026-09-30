@@ -106,10 +106,23 @@ const runtime = vi.hoisted(() => ({
 }));
 vi.mock("../../src/runtime/runtime.js", () => ({ ...runtime }));
 
+const siteApi = vi.hoisted(() => ({
+  exportSite: vi.fn(),
+}));
+vi.mock("../../src/api/sites", () => ({ sitesApi: siteApi }));
+
 import WorksView from "../../src/views/WorksView.vue";
 import { useI18nStore } from "../../src/stores/i18n";
 import { useShellStore } from "../../src/stores/shell";
 import { useAuthStore } from "../../src/stores/auth";
+
+HTMLDialogElement.prototype.showModal = function showModal() {
+  this.setAttribute("open", "");
+};
+HTMLDialogElement.prototype.close = function close() {
+  this.removeAttribute("open");
+  this.dispatchEvent(new Event("close"));
+};
 
 async function waitForCards() {
   await flushPromises();
@@ -128,6 +141,19 @@ async function mountWorks() {
 describe("WorksView", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    siteApi.exportSite.mockResolvedValue({
+      blob: new Blob(["site"], { type: "application/zip" }),
+      filename: "glas-site.zip",
+      publicationId: "sitepub-1",
+      recordCount: 12,
+      workCount: 1,
+    });
+    vi.stubGlobal("URL", {
+      ...URL,
+      createObjectURL: vi.fn(() => "blob:site"),
+      revokeObjectURL: vi.fn(),
+    });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
     setActivePinia(createPinia());
     const snap = adminSnapshot();
     runtime.getWorksWorkspaceSnapshot.mockReturnValue(snap);
@@ -171,6 +197,31 @@ describe("WorksView", () => {
     expect(runtime.syncAllWorks).toHaveBeenCalled();
     await wrapper.get("[data-upsert-work='Glas']").trigger("click");
     expect(runtime.syncWork).toHaveBeenCalledWith("Glas");
+    wrapper.unmount();
+  });
+
+  it("creates a static site from selected works in the active corpus database", async () => {
+    const wrapper = await mountWorks();
+    await wrapper.get("#createSite").trigger("click");
+    await flushPromises();
+
+    const dialog = wrapper.get(".create-site-dialog");
+    expect(dialog.attributes("open")).toBeDefined();
+    expect(dialog.text()).toContain("Glas");
+
+    await dialog.get("input[type='checkbox']").setValue(true);
+    await dialog.get("input[placeholder='Research collection']").setValue("Glas research site");
+    await dialog.get("button[type='submit']").trigger("submit");
+    await flushPromises();
+
+    expect(siteApi.exportSite).toHaveBeenCalledWith({
+      store: "derrida-primary",
+      works: ["Glas"],
+      title: "Glas research site",
+      description: "",
+      locale: "en-US",
+    });
+    expect(URL.createObjectURL).toHaveBeenCalled();
     wrapper.unmount();
   });
 
