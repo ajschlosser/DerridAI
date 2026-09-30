@@ -2408,6 +2408,7 @@ defineExpose({
       :running="buildRunning"
       :can-resume="canResume"
       :has-record-topology="hasRecordTopology"
+      :ready-count="readyCount"
       :awaiting-manifest-review="awaitingManifestReview"
       :retrying-segmentation="retryingSegmentation"
       :segmentation-needs-review="segmentationNeedsReview"
