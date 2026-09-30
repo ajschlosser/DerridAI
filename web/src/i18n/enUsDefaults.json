@@ -1555,7 +1555,7 @@
   "nav.works": "Works",
   "semantic_map.close": "Close map",
   "semantic_map.count": "{count} terms",
-  "semantic_map.drag_help": "Semantic map. Drag the background to move the map. Drag a term to reposition it. Arrow keys pan, plus and minus zoom, and 0 resets.",
+  "semantic_map.drag_help": "Semantic map. Drag the background to move the map. Drag a term to reposition it. Arrow keys pan, plus and minus zoom, and 0 resets the view. Hold Alt and use an arrow key to move a focused term.",
   "semantic_map.empty": "No concepts, topics, or persons are available to map yet.",
   "semantic_map.kind.concept": "Concept",
   "semantic_map.kind.person": "Person",
@@ -1570,10 +1570,10 @@
   "semantic_map.placement.page": "Dedicated view",
   "semantic_map.placement.record": "Above the record",
   "semantic_map.placement.sidebar": "Sidebar",
-  "semantic_map.reset": "Reset view",
+  "semantic_map.reset": "Reset layout",
   "semantic_map.sidebar_label": "Semantic map sidebar",
   "semantic_map.title": "Semantic map",
-  "semantic_map.zoom": "Zoom",
+  "semantic_map.zoom": "Map controls",
   "semantic_map.zoom_in": "Zoom in",
   "semantic_map.zoom_out": "Zoom out",
   "operations.api_keys_omitted": "API keys are intentionally omitted.",
@@ -7717,5 +7717,7 @@
   "help.parameter_reference": "Parameter reference",
   "help.parameter_reference_help": "Tunable settings are listed separately because they are controls, not concepts. Use this section to compare what each parameter changes.",
   "help.parameter_controls": "What it controls",
-  "help.parameter_effect": "Typical effect"
+  "help.parameter_effect": "Typical effect",
+  "semantic_map.fit": "Fit map",
+  "semantic_map.resize": "Resize semantic map"
 }
