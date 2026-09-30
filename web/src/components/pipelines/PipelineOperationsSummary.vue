@@ -3,6 +3,10 @@
 import { computed } from "vue";
 import { pipelineStrategyLabel } from "../../domain/pipelinePresentation";
 import {
+  pipelineOperationalAttention,
+  type OperationalAttentionRow,
+} from "../../domain/pipelineStudioPresentation";
+import {
   findTerm,
   purposeForFeature,
   purposeText,
@@ -15,6 +19,7 @@ import type {
   PipelineWorkflowVocabulary,
 } from "../../types/pipelines";
 import { useI18nStore } from "../../stores/i18n";
+import UiButton from "../ui/UiButton.vue";
 import UiTooltip from "../ui/UiTooltip.vue";
 
 const props = defineProps<{
@@ -24,8 +29,18 @@ const props = defineProps<{
   vocabulary?: PipelineWorkflowVocabulary;
 }>();
 
+const emit = defineEmits<{
+  /** Open the executions of one workflow category; the server supports this filter. */
+  viewExecutions: [category: string];
+  viewStrategy: [strategyId: string];
+}>();
+
 const i18n = useI18nStore();
 const t = (key: string, fallback: string) => i18n.t(key, fallback);
+const attention = computed(() => pipelineOperationalAttention(props.metrics).slice(0, 10));
+function attentionLabel(row: OperationalAttentionRow) {
+  return row.kind === "workflow" ? workflowLabel(row.id) : strategyLabel(row.id) || row.id;
+}
 
 const failedRuns = computed(() => Number(props.metrics.status_counts.failed || 0));
 const topStrategies = computed(() => props.metrics.strategies.slice(0, 10));
@@ -81,9 +96,9 @@ function formatCount(value: number | null | undefined) {
       </span>
     </header>
 
-    <div v-if="metrics.sampled_run_count" class="metric-cards">
-      <article>
-        <span class="metric-label">
+    <dl v-if="metrics.sampled_run_count" class="metric-summary">
+      <div>
+        <dt class="metric-label">
           {{ t("pipelines.metrics_runs", "Sampled runs") }}
           <UiTooltip
             :text="
@@ -93,25 +108,11 @@ function formatCount(value: number | null | undefined) {
               )
             "
           />
-        </span>
-        <strong>{{ formatCount(metrics.sampled_run_count) }}</strong>
-      </article>
-      <article>
-        <span class="metric-label">
-          {{ t("pipelines.metrics_fallback_runs", "Runs with fallback or stage failure") }}
-          <UiTooltip
-            :text="
-              t(
-                'pipelines.metrics_fallback_runs_help',
-                'A run is counted here when any stage failed, timed out, was unavailable, or recorded a fallback reason. The final run may still have completed successfully.',
-              )
-            "
-          />
-        </span>
-        <strong>{{ formatCount(metrics.fallback_run_count) }}</strong>
-      </article>
-      <article>
-        <span class="metric-label">
+        </dt>
+        <dd>{{ formatCount(metrics.sampled_run_count) }}</dd>
+      </div>
+      <div>
+        <dt class="metric-label">
           {{ t("pipelines.metrics_failed_runs", "Failed runs") }}
           <UiTooltip
             :text="
@@ -121,11 +122,25 @@ function formatCount(value: number | null | undefined) {
               )
             "
           />
-        </span>
-        <strong>{{ formatCount(failedRuns) }}</strong>
-      </article>
-      <article>
-        <span class="metric-label">
+        </dt>
+        <dd>{{ formatCount(failedRuns) }}</dd>
+      </div>
+      <div>
+        <dt class="metric-label">
+          {{ t("pipelines.metrics_fallback_runs", "Runs with fallback or stage failure") }}
+          <UiTooltip
+            :text="
+              t(
+                'pipelines.metrics_fallback_runs_help',
+                'A run is counted here when any stage failed, timed out, was unavailable, or recorded a fallback reason. The final run may still have completed successfully.',
+              )
+            "
+          />
+        </dt>
+        <dd>{{ formatCount(metrics.fallback_run_count) }}</dd>
+      </div>
+      <div>
+        <dt class="metric-label">
           {{ t("pipelines.metrics_p95_runtime", "95th-percentile run time") }}
           <UiTooltip
             :text="
@@ -135,24 +150,78 @@ function formatCount(value: number | null | undefined) {
               )
             "
           />
-        </span>
-        <strong>{{ formatDuration(metrics.p95_run_elapsed_ms) }}</strong>
-      </article>
-    </div>
+        </dt>
+        <dd>{{ formatDuration(metrics.p95_run_elapsed_ms) }}</dd>
+      </div>
+    </dl>
+
+    <section
+      v-if="metrics.sampled_run_count"
+      class="attention"
+      aria-labelledby="pipeline-attention-title"
+    >
+      <h4 id="pipeline-attention-title">{{ t("pipelines.needs_attention", "Needs attention") }}</h4>
+      <p v-if="!attention.length" class="section-help">
+        {{
+          t(
+            "pipelines.needs_attention_none",
+            "No failures, issues, or fallbacks in the recent sample.",
+          )
+        }}
+      </p>
+      <div v-else class="table-shell">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">{{ t("pipelines.attention_subject", "Strategy / workflow") }}</th>
+              <th scope="col">{{ t("pipelines.metric_executions", "Executions") }}</th>
+              <th scope="col">{{ t("pipelines.metric_failed", "Failed") }}</th>
+              <th scope="col">{{ t("pipelines.metric_fallbacks", "Fallbacks") }}</th>
+              <th scope="col">{{ t("pipelines.metric_p95", "p95 time") }}</th>
+              <th scope="col">{{ t("pipelines.attention_action", "Action") }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in attention" :key="`${row.kind}:${row.id}`" :data-kind="row.kind">
+              <td>
+                <strong>{{ attentionLabel(row) }}</strong>
+                <small>
+                  {{
+                    row.kind === "workflow"
+                      ? t("pipelines.attention_workflow", "Workflow")
+                      : t("pipelines.attention_strategy", "Strategy")
+                  }}
+                </small>
+              </td>
+              <td>{{ formatCount(row.executions) }}</td>
+              <td>{{ formatCount(row.failures) }}</td>
+              <td>{{ formatCount(row.fallbacks) }}</td>
+              <td>{{ formatDuration(row.p95Ms) }}</td>
+              <td>
+                <UiButton
+                  v-if="row.kind === 'workflow'"
+                  size="small"
+                  :label="t('pipelines.view_executions', 'View executions')"
+                  @click="emit('viewExecutions', row.id)"
+                />
+                <UiButton
+                  v-else
+                  size="small"
+                  :label="t('pipelines.view_strategy', 'View strategy')"
+                  @click="emit('viewStrategy', row.id)"
+                />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
 
     <div v-if="metrics.sampled_run_count" class="metrics-grid">
       <section v-if="metrics.workflows?.length" aria-labelledby="pipeline-workflow-metrics-title">
         <h4 id="pipeline-workflow-metrics-title">
           {{ t("pipelines.metrics_by_workflow", "By workflow") }}
         </h4>
-        <p class="section-help">
-          {{
-            t(
-              "pipelines.metrics_by_workflow_help",
-              "Runs grouped by what each pipeline is for. Fewer failures or lower latency describe computational health; they do not mean a workflow produces better scholarship.",
-            )
-          }}
-        </p>
         <div class="table-shell">
           <table>
             <thead>
@@ -287,103 +356,106 @@ function formatCount(value: number | null | undefined) {
 <style scoped>
 code.secondary {
   display: block;
-  color: var(--muted);
+  color: var(--text-tertiary);
   font-size: 0.75rem;
 }
 .metrics-workspace {
   display: grid;
-  gap: 14px;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--card);
+  gap: var(--space-4);
 }
 .metrics-workspace > header {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--space-4);
 }
 .metrics-workspace h3,
 .metrics-workspace h4 {
   margin: 0;
+  color: var(--text-primary);
 }
 .metrics-workspace h3 {
-  font-size: 1rem;
+  font-size: 1.125rem;
 }
 .metrics-workspace h4 {
-  font-size: 0.83rem;
+  font-size: 1rem;
 }
 .metrics-workspace header p,
 .section-help,
 .empty-state p {
-  max-width: 800px;
-  margin: 5px 0 0;
-  color: var(--muted);
-  font-size: 0.78rem;
-  line-height: 1.5;
+  max-width: var(--measure);
+  margin: var(--space-1) 0 0;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  line-height: var(--lh-normal);
 }
 .sample-note {
   flex: 0 0 auto;
-  color: var(--muted);
-  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  font-size: 0.8125rem;
 }
-.metric-cards {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+.metric-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-6, 28px);
+  margin: 0;
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
 }
-.metric-cards article {
+.metric-summary > div {
   display: grid;
-  gap: 5px;
-  min-height: 76px;
-  padding: 10px 11px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--soft);
+  gap: 2px;
+}
+.metric-summary dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.375rem;
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
 }
 .metric-label {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  color: var(--muted);
-  font-size: 0.75rem;
-  font-weight: 700;
+  color: var(--text-tertiary);
+  font-size: 0.8125rem;
+  font-weight: var(--fw-bold);
 }
-.metric-cards strong {
-  font-size: 1.15rem;
-  font-variant-numeric: tabular-nums;
+.attention,
+.metrics-grid > section {
+  display: grid;
+  gap: var(--space-2);
 }
 .metrics-grid {
   display: grid;
-  gap: 15px;
-}
-.metrics-grid > section {
-  display: grid;
-  gap: 7px;
+  gap: var(--space-5, 20px);
 }
 .table-shell {
   overflow-x: auto;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-card);
 }
 table {
   width: 100%;
   min-width: 620px;
   border-collapse: collapse;
-  font-size: 0.76rem;
+  font-size: 0.875rem;
 }
 th,
 td {
-  padding: 8px 9px;
-  border-bottom: 1px solid var(--line);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
   text-align: left;
   vertical-align: top;
 }
 th {
-  background: var(--soft);
-  color: var(--muted);
-  font-weight: 750;
+  background: var(--surface-inset);
+  color: var(--text-tertiary);
+  font-size: 0.8125rem;
+  font-weight: var(--fw-bold);
 }
 tbody tr:last-child td {
   border-bottom: 0;
@@ -394,26 +466,12 @@ td code {
 td small {
   display: block;
   margin-top: 2px;
-  color: var(--muted);
-  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  font-size: 0.8125rem;
 }
 .empty-state {
-  padding: 12px 13px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--soft);
-}
-@media (max-width: 900px) {
-  .metric-cards {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-@media (max-width: 640px) {
-  .metrics-workspace > header {
-    display: grid;
-  }
-  .metric-cards {
-    grid-template-columns: 1fr;
-  }
+  padding: var(--space-3) var(--space-4);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-card);
 }
 </style>

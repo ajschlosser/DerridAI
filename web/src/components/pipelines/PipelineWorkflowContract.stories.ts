@@ -22,16 +22,6 @@ const meta = {
     pipeline,
     purpose: contractPurpose("evidence_suggestion"),
     vocabulary: contractVocabulary,
-    assignment: {
-      feature: "evidence_suggestion.reviewer",
-      pipeline_id: "evidence.reviewer.current",
-      pipeline_version: 2,
-      scope: "system",
-      scope_id: null,
-      override_allowed: true,
-      source: "built_in",
-    },
-    assigned: true,
   },
 } satisfies Meta<typeof PipelineWorkflowContract>;
 
@@ -44,7 +34,6 @@ export const Research: Story = {
   args: {
     pipeline: { ...pipeline, pipeline_id: "research.current", version: 1, purpose: "research" },
     purpose: contractPurpose("research"),
-    assigned: false,
   },
 };
 
@@ -57,8 +46,6 @@ export const VectorStoreSearch: Story = {
       purpose: "vector_store_search",
     },
     purpose: contractPurpose("vector_store_search"),
-    assignment: null,
-    assigned: false,
   },
 };
 

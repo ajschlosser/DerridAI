@@ -112,26 +112,58 @@ describe("PipelineGraphDiagram relation interactions", () => {
     await flushPromises();
 
     expect(wrapper.text()).toContain("Fit diagram");
-    expect(wrapper.text()).toContain("Reset layout");
+    expect(wrapper.text()).not.toContain("Reset layout");
     expect(wrapper.find("[data-relation-resize-handle]").exists()).toBe(true);
 
-    const vertical = wrapper
-      .findAll(".diagram-controls button")
-      .find((button) => button.text() === "Vertical");
-    expect(vertical).toBeTruthy();
-    await vertical!.trigger("click");
-    expect(vertical!.attributes("aria-pressed")).toBe("true");
-
-    const density = wrapper.get('[aria-label="Card spacing"]');
-    expect(density.findAll("button").map((button) => button.text())).toEqual([
-      "Compact",
-      "Standard",
-      "Wide",
+    const openLayout = async () => {
+      await wrapper.get(".ui-menu-trigger").trigger("click");
+      await flushPromises();
+      return wrapper.findAll('[role="menuitemradio"], [role="menuitem"]');
+    };
+    let items = await openLayout();
+    expect(items.map((item) => item.text())).toEqual([
+      "Horizontal",
+      "Vertical",
+      "Compact spacing",
+      "Standard spacing",
+      "Wide spacing",
+      "Reset layout",
     ]);
-    expect(density.find("button.selected").text()).toBe("Compact");
-    await density.get("button:nth-child(3)").trigger("click");
-    expect(density.get("button:nth-child(3)").attributes("aria-pressed")).toBe("true");
-    expect(density.find("button.selected").text()).toBe("Wide");
+    expect(items[0].attributes("aria-checked")).toBe("true");
+    expect(items[5].attributes("role")).toBe("menuitem");
+    await items[1].trigger("click");
+    await flushPromises();
+
+    items = await openLayout();
+    expect(items[1].attributes("aria-checked")).toBe("true");
+    expect(items[2].attributes("aria-checked")).toBe("true");
+    await items[4].trigger("click");
+    await flushPromises();
+    items = await openLayout();
+    expect(items[4].attributes("aria-checked")).toBe("true");
+    expect(items[2].attributes("aria-checked")).toBe("false");
+  });
+
+  it("supports controlled stage selection", async () => {
+    const wrapper = mount(PipelineGraphDiagram, {
+      props: {
+        stages,
+        entryStageIds: ["retrieve"],
+        strategies,
+        title: "Pipeline",
+        description: "Test pipeline",
+        selectedStageId: "validate",
+        showInspector: false,
+      },
+    });
+    await flushPromises();
+    const nodes = wrapper.findAll(".diagram-node");
+    expect(nodes[1].classes()).toContain("selected");
+    expect(wrapper.find(".stage-inspector").exists()).toBe(false);
+    await nodes[0].trigger("click");
+    expect(wrapper.emitted("update:selectedStageId")?.at(-1)).toEqual(["retrieve"]);
+    // Still controlled: the parent has not accepted the change.
+    expect(nodes[1].classes()).toContain("selected");
   });
 
   it("keeps unavailable and timeout fallback routes as separate edge kinds", async () => {

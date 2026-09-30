@@ -1,15 +1,23 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
+import PipelineEditorVersionDetails from "./PipelineEditorVersionDetails.vue";
+import PipelineGraphDiagram from "./PipelineGraphDiagram.vue";
 import PipelineStageEditor from "./PipelineStageEditor.vue";
+import PipelineStageNavigator from "./PipelineStageNavigator.vue";
 import { useI18nStore } from "../../stores/i18n";
-import type { PipelineDefinition, PipelinePurpose, PipelineStrategy } from "../../types/pipelines";
-import UiTooltip from "../ui/UiTooltip.vue";
+import type {
+  PipelineDefinition,
+  PipelinePurpose,
+  PipelineStrategy,
+  PipelineWorkflowVocabulary,
+} from "../../types/pipelines";
 
 const props = defineProps<{
   modelValue: PipelineDefinition;
   strategies: PipelineStrategy[];
   purpose?: PipelinePurpose | null;
+  vocabulary?: PipelineWorkflowVocabulary;
 }>();
 
 const emit = defineEmits<{
@@ -21,6 +29,23 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
 // Operations the purpose's adapter cannot run stay reachable for inspect-only
 // versions, but only behind this explicit choice.
 const showAllStrategies = ref(false);
+// Selection is by position so renaming a stage never loses it.
+const selectedIndex = ref(0);
+const stageEditor = ref<InstanceType<typeof PipelineStageEditor> | null>(null);
+const selectedStage = computed(() => props.modelValue.stages[selectedIndex.value] || null);
+const selectedStageId = computed(() => selectedStage.value?.id ?? "");
+
+watch(
+  () => props.modelValue.stages.length,
+  (length) => {
+    if (selectedIndex.value >= length) selectedIndex.value = Math.max(0, length - 1);
+  },
+);
+
+function selectStageById(id: string) {
+  const index = props.modelValue.stages.findIndex((stage) => stage.id === id);
+  if (index >= 0) selectedIndex.value = index;
+}
 
 function clonePipeline(): PipelineDefinition {
   return JSON.parse(JSON.stringify(props.modelValue)) as PipelineDefinition;
@@ -169,6 +194,8 @@ function addStage() {
   });
   if (!next.entry_stage_ids.length) next.entry_stage_ids = [id];
   emit("update:modelValue", next);
+  selectedIndex.value = next.stages.length - 1;
+  void nextTick(() => stageEditor.value?.focus());
 }
 
 function removeStage(stageIndex: number) {
@@ -188,6 +215,8 @@ function removeStage(stageIndex: number) {
     next.entry_stage_ids = [next.stages[0].id];
   }
   emit("update:modelValue", next);
+  // The next stage takes the removed stage's place, else the previous one.
+  selectedIndex.value = Math.min(stageIndex, Math.max(0, next.stages.length - 1));
 }
 
 function moveStage(stageIndex: number, direction: -1 | 1) {
@@ -198,316 +227,92 @@ function moveStage(stageIndex: number, direction: -1 | 1) {
   if (!stage) return;
   next.stages.splice(target, 0, stage);
   emit("update:modelValue", next);
+  if (selectedIndex.value === stageIndex) selectedIndex.value = target;
+  else if (selectedIndex.value === target) selectedIndex.value = stageIndex;
 }
 </script>
 
 <template>
   <div class="pipeline-editor">
-    <div class="editor-intro">
-      <strong>{{
-        t("pipelines.clone_edit_intro_title", "You are creating a new immutable version")
-      }}</strong>
-      <p>
-        {{
-          t(
-            "pipelines.clone_edit_intro",
-            "The original pipeline will not be changed. Give this copy an identity, review each stage, validate the graph, and save it. Saving creates a historical version; making it active is a separate action.",
-          )
-        }}
-      </p>
-    </div>
-    <p class="identity-summary">
-      {{
-        t(
-          "pipelines.identity_summary",
-          "Pipeline ID stays stable across versions. Every saved version is immutable so past runs can resolve the exact configuration.",
-        )
-      }}
-    </p>
-    <div class="identity-grid">
-      <label>
-        <span class="label-with-help">
-          {{ t("pipelines.pipeline_id", "Pipeline ID") }}
-          <UiTooltip
-            :text="
-              t(
-                'pipelines.pipeline_id_help',
-                'A stable technical name used by DerridAI and its audit records. Versions that belong to the same pipeline share this ID. It is not the human-readable display name.',
-              )
-            "
-          />
-        </span>
-        <input
-          class="control"
-          :value="modelValue.pipeline_id"
-          autocomplete="off"
-          @input="updateRoot('pipeline_id', ($event.target as HTMLInputElement).value)"
-        />
-      </label>
-      <label>
-        <span class="label-with-help">
-          {{ t("pipelines.version", "Version") }}
-          <UiTooltip
-            :text="
-              t(
-                'pipelines.version_help',
-                'An immutable revision number. A saved ID and version pair can never be overwritten, so past Research runs can always point to the exact configuration they used.',
-              )
-            "
-          />
-        </span>
-        <input
-          class="control"
-          type="number"
-          min="1"
-          step="1"
-          :value="modelValue.version"
-          @input="
-            updateRoot(
-              'version',
-              Math.max(1, Number(($event.target as HTMLInputElement).value) || 1),
-            )
-          "
-        />
-      </label>
-      <label class="identity-name">
-        <span class="label-with-help">
-          {{ t("pipelines.name", "Name") }}
-          <UiTooltip
-            :text="
-              t(
-                'pipelines.name_help',
-                'A human-readable title for administrators and researchers. Changing the name does not change the technical pipeline ID.',
-              )
-            "
-          />
-        </span>
-        <input
-          class="control"
-          :value="modelValue.name"
-          @input="updateRoot('name', ($event.target as HTMLInputElement).value)"
-        />
-      </label>
-      <label>
-        <span class="label-with-help">
-          {{ t("pipelines.status", "Status") }}
-          <UiTooltip
-            :text="
-              t(
-                'pipelines.status_help',
-                'Draft means editable configuration that cannot become the system assignment yet. Active means eligible to be assigned. Disabled keeps the version for history but prevents new selection.',
-              )
-            "
-          />
-        </span>
-        <select
-          class="control"
-          :value="modelValue.status"
-          @change="
-            updateRoot(
-              'status',
-              ($event.target as HTMLSelectElement).value as PipelineDefinition['status'],
-            )
-          "
-        >
-          <option value="draft">{{ t("pipelines.status_draft", "Draft") }}</option>
-          <option value="active">{{ t("pipelines.status_active", "Active") }}</option>
-          <option value="disabled">{{ t("pipelines.status_disabled", "Disabled") }}</option>
-        </select>
-        <small class="identity-field-help">{{
-          t(
-            "pipelines.status_summary",
-            "Draft is editable; Active can be assigned; Disabled is retained for history but cannot be newly selected.",
-          )
-        }}</small>
-      </label>
-    </div>
+    <PipelineEditorVersionDetails
+      :model-value="modelValue"
+      @update="(key, value) => updateRoot(key, value as never)"
+    />
 
-    <label class="notes-field">
-      <span class="label-with-help">
-        {{ t("pipelines.notes", "Notes") }}
-        <UiTooltip
-          :text="
+    <div class="pipeline-editor-workspace">
+      <div class="pipeline-editor-main">
+        <PipelineGraphDiagram
+          :stages="modelValue.stages"
+          :entry-stage-ids="modelValue.entry_stage_ids"
+          :strategies="strategies"
+          :vocabulary="vocabulary"
+          :title="t('pipelines.diagram_title', 'Pipeline diagram')"
+          :description="
             t(
-              'pipelines.notes_help',
-              'Use notes to record the scholarly or technical reason for this version—for example, why retrieval depth changed or why a fallback was added.',
+              'pipelines.editor_diagram_help',
+              'Select a stage in the diagram or the list to edit it. Solid arrows are the normal path; dashed arrows are fallbacks.',
             )
           "
+          :selected-stage-id="selectedStageId"
+          :show-inspector="false"
+          @update:selected-stage-id="selectStageById"
         />
-      </span>
-      <textarea
-        class="control"
-        rows="3"
-        :value="modelValue.notes || ''"
-        @input="updateRoot('notes', ($event.target as HTMLTextAreaElement).value || null)"
-      />
-    </label>
-
-    <section class="stage-settings" :aria-label="t('pipelines.stage_settings', 'Stage settings')">
-      <header class="stage-settings-header">
-        <div>
-          <h4>{{ t("pipelines.stage_settings", "Stage settings") }}</h4>
-          <p>
-            {{
-              t(
-                "pipelines.stage_settings_help",
-                "Think of the pipeline as a research recipe. Each stage is one step, the strategy says what that step does, normal connections say what happens next, and fallback connections say what to do when a step cannot produce its normal result.",
-              )
-            }}
-          </p>
-        </div>
-        <button class="btn" type="button" :disabled="!strategies.length" @click="addStage">
-          {{ t("pipelines.add_stage", "Add stage") }}
-        </button>
-      </header>
-      <label v-if="purpose" class="show-all-strategies">
-        <input v-model="showAllStrategies" type="checkbox" />
-        <span>
-          {{ t("pipelines.show_all_strategies", "Show operations this workflow cannot run") }}
-          <small>
-            {{
-              t(
-                "pipelines.show_all_strategies_help",
-                "Saving a version that uses one keeps it inspect-only: it can be viewed and compared but not made active.",
-              )
-            }}
-          </small>
-        </span>
-      </label>
+        <PipelineStageNavigator
+          :stages="modelValue.stages"
+          :strategies="strategies"
+          :selected-index="selectedIndex"
+          :entry-stage-ids="modelValue.entry_stage_ids"
+          :can-add="strategies.length > 0"
+          @select="selectedIndex = $event"
+          @add="addStage"
+          @move="moveStage"
+        />
+      </div>
 
       <PipelineStageEditor
-        v-for="(stage, stageIndex) in modelValue.stages"
-        :key="`${stage.id}:${stageIndex}`"
-        :stage="stage"
-        :stage-index="stageIndex"
+        v-if="selectedStage"
+        ref="stageEditor"
+        :stage="selectedStage"
+        :stage-index="selectedIndex"
         :stages="modelValue.stages"
         :strategies="strategies"
         :purpose="purpose || null"
+        :vocabulary="vocabulary"
         :show-all-strategies="showAllStrategies"
         :entry-stage-ids="modelValue.entry_stage_ids"
         @update-id="updateStageId"
         @update-strategy="updateStageStrategy"
         @update-enabled="toggleStageEnabled"
         @toggle-entry="toggleEntry"
-        @move="moveStage"
         @remove="removeStage"
+        @update:show-all-strategies="showAllStrategies = $event"
         @toggle-next="toggleNext"
         @update-fallback="updateFallback"
         @update-config="updateConfig"
       />
-    </section>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.show-all-strategies {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 0.8rem;
-}
-.show-all-strategies input {
-  margin-top: 3px;
-}
-.show-all-strategies small {
-  display: block;
-  color: var(--muted);
-  font-size: 0.75rem;
-}
 .pipeline-editor {
   display: grid;
-  gap: 16px;
+  gap: var(--space-4);
 }
-.editor-intro {
+.pipeline-editor-workspace {
   display: grid;
-  gap: 4px;
-  padding: 11px 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--soft);
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  gap: var(--space-4);
+  align-items: start;
 }
-.editor-intro strong {
-  font-size: 0.8rem;
-}
-.editor-intro p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.78rem;
-  line-height: 1.5;
-}
-.identity-summary {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.78rem;
-  line-height: 1.45;
-}
-.identity-field-help {
-  color: var(--muted);
-  font-size: 0.75rem;
-  line-height: 1.4;
-}
-.identity-grid {
+.pipeline-editor-main {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: var(--space-4);
+  min-width: 0;
 }
-.identity-grid label,
-.notes-field {
-  display: grid;
-  gap: 5px;
-}
-.identity-grid label > span,
-.notes-field > span {
-  color: var(--muted);
-  font-size: 0.75rem;
-  font-weight: 750;
-}
-.label-with-help {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-}
-.identity-name {
-  grid-column: span 2;
-}
-.notes-field textarea {
-  min-height: 76px;
-  resize: vertical;
-}
-.stage-settings {
-  display: grid;
-  gap: 9px;
-}
-.stage-settings-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-.stage-settings-header .btn {
-  flex: 0 0 auto;
-}
-.stage-settings-header h4 {
-  margin: 0;
-  font-size: 0.95rem;
-}
-.stage-settings-header p {
-  margin: 4px 0 0;
-  color: var(--muted);
-  font-size: 0.78rem;
-  line-height: 1.45;
-}
-@media (max-width: 860px) {
-  .stage-settings-header {
-    display: grid;
-  }
-}
-@media (max-width: 680px) {
-  .identity-grid {
-    grid-template-columns: 1fr;
-  }
-  .identity-name {
-    grid-column: auto;
+@media (max-width: 1100px) {
+  .pipeline-editor-workspace {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

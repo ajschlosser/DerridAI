@@ -1,6 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
-import PipelineStrategyCatalog from "./PipelineStrategyCatalog.vue";
+import { ref } from "vue";
+import PipelineStrategiesWorkspace from "./PipelineStrategiesWorkspace.vue";
 import type { PipelineDefinition } from "../../types/pipelines";
 import {
   contractPurposes,
@@ -44,16 +45,34 @@ const pipelines: PipelineDefinition[] = [
 ];
 
 const meta = {
-  title: "Pipelines/Strategy Catalog",
-  component: PipelineStrategyCatalog,
+  title: "Pipelines/Strategies Workspace",
+  component: PipelineStrategiesWorkspace,
   args: {
     strategies: contractStrategies,
     pipelines,
     purposes: contractPurposes,
     vocabulary: contractVocabulary,
     selectedStrategyId: "rerank.cross_encoder",
+    filters: {
+      query: "",
+      family: "",
+      computation: "",
+      capability: "",
+      effect: "",
+      workflow: "",
+    },
   },
-} satisfies Meta<typeof PipelineStrategyCatalog>;
+  render: (args) => ({
+    components: { PipelineStrategiesWorkspace },
+    setup() {
+      const filters = ref({ ...args.filters });
+      const selected = ref(args.selectedStrategyId);
+      return { args, filters, selected };
+    },
+    template:
+      '<PipelineStrategiesWorkspace v-bind="args" v-model:filters="filters" :selected-strategy-id="selected" @select-strategy="selected = $event" />',
+  }),
+} satisfies Meta<typeof PipelineStrategiesWorkspace>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -61,5 +80,18 @@ type Story = StoryObj<typeof meta>;
 export const AllStrategies: Story = {};
 
 export const French: Story = { parameters: { locale: "fr-CA" } };
+
+export const FilteredByEffect: Story = {
+  args: {
+    filters: {
+      query: "",
+      family: "",
+      computation: "deterministic",
+      capability: "",
+      effect: "provenance_gate",
+      workflow: "",
+    },
+  },
+};
 
 export const Empty: Story = { args: { strategies: [] } };

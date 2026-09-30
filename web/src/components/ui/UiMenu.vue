@@ -46,7 +46,7 @@ const trigger = ref<HTMLButtonElement | null>(null);
 const menu = ref<HTMLElement | null>(null);
 const menuId = `${useId()}-menu`;
 const itemId = (id: string) => `${menuId}-${id}`;
-const radio = () => props.items.some((item) => typeof item.checked === "boolean");
+const radio = (item: UiMenuItem) => typeof item.checked === "boolean";
 
 function itemButtons(): HTMLButtonElement[] {
   return Array.from(menu.value?.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]') ?? []);
@@ -158,9 +158,9 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", outside, true)
       <li v-for="item in items" :key="item.id" role="none">
         <button
           type="button"
-          :role="radio() ? 'menuitemradio' : 'menuitem'"
+          :role="radio(item) ? 'menuitemradio' : 'menuitem'"
           class="ui-menu-item"
-          :aria-checked="radio() ? item.checked === true : undefined"
+          :aria-checked="radio(item) ? item.checked === true : undefined"
           :aria-disabled="item.reason ? 'true' : undefined"
           :aria-describedby="item.reason ? itemId(item.id) : undefined"
           tabindex="-1"

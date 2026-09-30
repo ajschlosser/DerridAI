@@ -102,17 +102,17 @@ function enumValues(rule: Record<string, unknown>) {
 <style scoped>
 .config-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: var(--space-3);
 }
 .config-grid label {
   display: grid;
-  gap: 5px;
+  gap: var(--space-1);
 }
 .config-grid label > span {
-  color: var(--muted);
-  font-size: 0.75rem;
-  font-weight: 750;
+  color: var(--text-tertiary);
+  font-size: 0.8125rem;
+  font-weight: var(--fw-bold);
 }
 .config-label {
   display: inline-flex;
@@ -121,12 +121,7 @@ function enumValues(rule: Record<string, unknown>) {
 }
 .no-config {
   margin: 0;
-  color: var(--muted);
-  font-size: 0.76rem;
-}
-@media (max-width: 680px) {
-  .config-grid {
-    grid-template-columns: 1fr;
-  }
+  color: var(--text-tertiary);
+  font-size: 0.8125rem;
 }
 </style>

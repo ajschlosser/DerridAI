@@ -1,9 +1,13 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import PipelineStageConnections from "./PipelineStageConnections.vue";
 import PipelineStrategyConfigFields from "./PipelineStrategyConfigFields.vue";
+import UiButton from "../ui/UiButton.vue";
+import UiTooltip from "../ui/UiTooltip.vue";
 import {
+  pipelineCapabilityLabel,
+  pipelineComputationLabel,
   pipelineDataTypeHelp,
   pipelineDataTypeLabel,
   pipelineStageFamilyHelp,
@@ -11,15 +15,21 @@ import {
   pipelineStrategyDescription,
   pipelineStrategyLabel,
 } from "../../domain/pipelinePresentation";
-import { purposeText, strategyPickerGroups } from "../../domain/pipelineWorkflows";
+import {
+  findTerm,
+  purposeText,
+  strategyComputation,
+  strategyPickerGroups,
+  termLabel,
+} from "../../domain/pipelineWorkflows";
 import { useI18nStore } from "../../stores/i18n";
 import type {
   PipelinePurpose,
   PipelineStage,
   PipelineStrategy,
   PipelineStrategyFit,
+  PipelineWorkflowVocabulary,
 } from "../../types/pipelines";
-import UiTooltip from "../ui/UiTooltip.vue";
 
 const props = defineProps<{
   stage: PipelineStage;
@@ -30,6 +40,7 @@ const props = defineProps<{
   /** The pipeline's purpose; its adapter decides which strategies are supported. */
   purpose?: PipelinePurpose | null;
   showAllStrategies?: boolean;
+  vocabulary?: PipelineWorkflowVocabulary;
 }>();
 
 const emit = defineEmits<{
@@ -37,8 +48,8 @@ const emit = defineEmits<{
   updateStrategy: [stageIndex: number, strategyId: string];
   updateEnabled: [stageIndex: number, enabled: boolean];
   toggleEntry: [stageId: string, checked: boolean];
-  move: [stageIndex: number, direction: -1 | 1];
   remove: [stageIndex: number];
+  "update:showAllStrategies": [value: boolean];
   toggleNext: [stageIndex: number, targetId: string, checked: boolean];
   updateFallback: [
     stageIndex: number,
@@ -55,9 +66,14 @@ const emit = defineEmits<{
 
 const i18n = useI18nStore();
 const t = (key: string, fallback: string) => i18n.t(key, fallback);
+const heading = ref<HTMLElement | null>(null);
 const strategy = computed(
   () => props.strategies.find((item) => item.strategy_id === props.stage.strategy) || null,
 );
+const effectNote = computed(() => {
+  const term = findTerm(props.vocabulary?.effect_notes, strategy.value?.effect_note);
+  return term ? termLabel(term, t) : "";
+});
 function byFamilyThenLabel(rows: PipelineStrategy[]) {
   return [...rows].sort(
     (a, b) =>
@@ -134,213 +150,198 @@ const fitNote = computed(() => {
     },
   );
 });
+
+defineExpose({ focus: () => heading.value?.focus() });
 </script>
 
 <template>
-  <article class="stage-settings-card">
-    <div class="stage-settings-heading">
-      <div class="stage-identity-grid">
-        <label>
-          <span class="label-with-help">
-            {{ t("pipelines.stage_id", "Stage ID") }}
-            <UiTooltip
-              :text="
-                t(
-                  'pipelines.stage_id_help',
-                  'A short internal name for this step. Other stages use this name when they point to it. Renaming it here also updates those connections.',
-                )
-              "
-            />
-          </span>
-          <input
-            class="control"
-            :value="stage.id"
-            autocomplete="off"
-            @input="emit('updateId', stageIndex, ($event.target as HTMLInputElement).value)"
-          />
-        </label>
-        <label>
-          <span class="label-with-help">
-            {{ t("pipelines.strategy", "Strategy") }}
-            <UiTooltip
-              :text="
-                t(
-                  'pipelines.strategy_help',
-                  'The strategy is the server-approved operation this stage performs—for example semantic retrieval, reranking, provenance checking, or answer generation. You are choosing among registered operations, not writing executable code.',
-                )
-              "
-            />
-          </span>
-          <select
-            class="control"
-            :value="stage.strategy"
-            :aria-describedby="fitNote ? `stage-fit-${stageIndex}` : undefined"
-            @change="emit('updateStrategy', stageIndex, ($event.target as HTMLSelectElement).value)"
-          >
-            <optgroup
-              v-for="group in optionGroups"
-              :key="group.id"
-              :label="group.label"
-              :data-fit="group.id"
-            >
-              <option
-                v-for="option in group.strategies"
-                :key="option.strategy_id"
-                :value="option.strategy_id"
-                :disabled="group.disabled && option.strategy_id !== stage.strategy"
-              >
-                {{ optionText(option) }}
-              </option>
-            </optgroup>
-          </select>
-          <small
-            v-if="fitNote"
-            :id="`stage-fit-${stageIndex}`"
-            class="stage-fit-note"
-            :data-fit="fit"
-            role="note"
-          >
-            {{ fitNote }}
-          </small>
-          <small class="stage-field-help">{{
+  <aside class="stage-inspector-editor" :aria-labelledby="`stage-editor-title-${stageIndex}`">
+    <p class="editor-kicker">{{ t("pipelines.stage", "Stage") }}</p>
+    <h4 :id="`stage-editor-title-${stageIndex}`" ref="heading" tabindex="-1">
+      {{ stage.id || t("pipelines.unnamed_stage", "Unnamed stage") }}
+    </h4>
+
+    <label class="field">
+      <span class="label-with-help">
+        {{ t("pipelines.stage_id", "Stage ID") }}
+        <UiTooltip
+          :text="
             t(
-              "pipelines.strategy_safety_summary",
-              "Strategies are registered server operations; choosing one does not add executable code.",
+              'pipelines.stage_id_help',
+              'A short internal name for this step. Other stages use this name when they point to it. Renaming it here also updates those connections.',
             )
-          }}</small>
-        </label>
-      </div>
+          "
+        />
+      </span>
+      <input
+        class="control"
+        :value="stage.id"
+        autocomplete="off"
+        @input="emit('updateId', stageIndex, ($event.target as HTMLInputElement).value)"
+      />
+    </label>
 
-      <div class="stage-toolbar">
-        <label class="stage-toggle">
-          <input
-            type="checkbox"
-            :checked="stage.enabled"
-            @change="emit('updateEnabled', stageIndex, ($event.target as HTMLInputElement).checked)"
-          />
-          <span class="toggle-copy">
-            {{ t("pipelines.enabled", "Enabled") }}
-            <UiTooltip
-              :text="
-                t(
-                  'pipelines.enabled_help',
-                  'When disabled, this stage remains in the saved definition for reference but is not part of the executable graph.',
-                )
-              "
-            />
-          </span>
-        </label>
-        <label class="stage-toggle">
-          <input
-            type="checkbox"
-            :checked="entryStageIds.includes(stage.id)"
-            @change="emit('toggleEntry', stage.id, ($event.target as HTMLInputElement).checked)"
-          />
-          <span class="toggle-copy">
-            {{ t("pipelines.entry_stage", "Entry") }}
-            <UiTooltip
-              :text="
-                t(
-                  'pipelines.entry_stage_help',
-                  'An entry stage is where execution starts. Most Research pipelines have one entry step, usually a query-analysis step; some graph types may allow more than one.',
-                )
-              "
-            />
-          </span>
-        </label>
-        <button
-          class="btn icon-only"
-          type="button"
-          :disabled="stageIndex === 0"
-          :aria-label="t('pipelines.move_stage_up', 'Move stage up')"
-          @click="emit('move', stageIndex, -1)"
+    <div class="field">
+      <label class="field-label label-with-help" :for="`stage-strategy-${stageIndex}`">
+        {{ t("pipelines.strategy", "Strategy") }}
+        <UiTooltip
+          :text="
+            t(
+              'pipelines.strategy_help',
+              'The strategy is the server-approved operation this stage performs—for example semantic retrieval, reranking, provenance checking, or answer generation. You are choosing among registered operations, not writing executable code.',
+            )
+          "
+        />
+      </label>
+      <select
+        :id="`stage-strategy-${stageIndex}`"
+        class="control"
+        :value="stage.strategy"
+        :aria-describedby="fitNote ? `stage-fit-${stageIndex}` : undefined"
+        @change="emit('updateStrategy', stageIndex, ($event.target as HTMLSelectElement).value)"
+      >
+        <optgroup
+          v-for="group in optionGroups"
+          :key="group.id"
+          :label="group.label"
+          :data-fit="group.id"
         >
-          ↑
-        </button>
-        <button
-          class="btn icon-only"
-          type="button"
-          :disabled="stageIndex === stages.length - 1"
-          :aria-label="t('pipelines.move_stage_down', 'Move stage down')"
-          @click="emit('move', stageIndex, 1)"
-        >
-          ↓
-        </button>
-        <button
-          class="btn icon-only"
-          type="button"
-          :disabled="stages.length <= 1"
-          :aria-label="t('pipelines.remove_stage', 'Remove stage')"
-          @click="emit('remove', stageIndex)"
-        >
-          ×
-        </button>
-      </div>
-    </div>
-
-    <div class="strategy-summary">
-      <div>
-        <strong>{{ strategy ? pipelineStrategyLabel(strategy, t) : stage.strategy }}</strong>
-        <span class="label-with-help">
-          {{ pipelineStageFamilyLabel(strategy?.family, t) }}
-          <UiTooltip
-            :text="pipelineStageFamilyHelp(strategy?.family, t)"
-            :label="t('pipelines.explain_stage_family', 'Explain this kind of stage')"
-          />
-        </span>
-      </div>
-      <p v-if="strategy">{{ pipelineStrategyDescription(strategy, t) }}</p>
-      <small v-if="strategy" class="strategy-io">
-        <span>
-          {{ t("pipelines.input", "Input") }}: <code>{{ strategy.input_type }}</code>
-          <UiTooltip
-            :text="pipelineDataTypeHelp(strategy.input_type, t)"
-            :label="t('pipelines.explain_input_type', 'Explain this input type')"
-          />
-        </span>
-        <span aria-hidden="true">→</span>
-        <span>
-          {{ t("pipelines.output", "Output") }}: <code>{{ strategy.output_type }}</code>
-          <UiTooltip
-            :text="pipelineDataTypeHelp(strategy.output_type, t)"
-            :label="t('pipelines.explain_output_type', 'Explain this output type')"
-          />
-        </span>
-        <span v-if="strategy.invokes_llm">
-          {{ t("pipelines.invokes_llm", "Uses a language model") }}
-          <UiTooltip
-            :text="
-              t(
-                'pipelines.invokes_llm_help',
-                'This stage calls a configured language model. Its output may vary between runs, so DerridAI records the model and execution trace for auditability.',
-              )
-            "
-          />
-        </span>
-        <span v-else-if="strategy.deterministic">
-          {{ t("pipelines.deterministic", "Deterministic") }}
-          <UiTooltip
-            :text="
-              t(
-                'pipelines.deterministic_help',
-                'This stage follows fixed program logic rather than using a learned model to score or generate a result. The same inputs and configuration should produce the same result.',
-              )
-            "
-          />
-        </span>
-        <span v-else>
-          {{ t("pipelines.learned_model", "Learned model") }}
-          <UiTooltip
-            :text="
-              t(
-                'pipelines.learned_model_help',
-                'This stage uses a statistical or machine-learning model, such as an embedding model or cross-encoder, but it is not a generative language-model step. Results are model-based rather than purely rule-based.',
-              )
-            "
-          />
-        </span>
+          <option
+            v-for="option in group.strategies"
+            :key="option.strategy_id"
+            :value="option.strategy_id"
+            :disabled="group.disabled && option.strategy_id !== stage.strategy"
+          >
+            {{ optionText(option) }}
+          </option>
+        </optgroup>
+      </select>
+      <small
+        v-if="fitNote"
+        :id="`stage-fit-${stageIndex}`"
+        class="stage-fit-note"
+        :data-fit="fit"
+        role="note"
+      >
+        {{ fitNote }}
       </small>
+      <small class="field-help">
+        {{
+          t(
+            "pipelines.strategy_safety_summary",
+            "Strategies are registered server operations; choosing one does not add executable code.",
+          )
+        }}
+      </small>
+      <details v-if="purpose" class="strategy-advanced">
+        <summary>{{ t("pipelines.strategy_advanced", "Advanced") }}</summary>
+        <label class="show-all-strategies">
+          <input
+            type="checkbox"
+            :checked="showAllStrategies"
+            @change="emit('update:showAllStrategies', ($event.target as HTMLInputElement).checked)"
+          />
+          <span>
+            {{ t("pipelines.show_all_strategies", "Show operations this workflow cannot run") }}
+            <small>
+              {{
+                t(
+                  "pipelines.show_all_strategies_help",
+                  "Saving a version that uses one keeps it inspect-only: it can be viewed and compared but not made active.",
+                )
+              }}
+            </small>
+          </span>
+        </label>
+      </details>
     </div>
+
+    <div class="stage-toggles">
+      <label class="stage-toggle">
+        <input
+          type="checkbox"
+          :checked="stage.enabled"
+          @change="emit('updateEnabled', stageIndex, ($event.target as HTMLInputElement).checked)"
+        />
+        <span class="toggle-copy">
+          {{ t("pipelines.enabled", "Enabled") }}
+          <UiTooltip
+            :text="
+              t(
+                'pipelines.enabled_help',
+                'When disabled, this stage remains in the saved definition for reference but is not part of the executable graph.',
+              )
+            "
+          />
+        </span>
+      </label>
+      <label class="stage-toggle">
+        <input
+          type="checkbox"
+          :checked="entryStageIds.includes(stage.id)"
+          @change="emit('toggleEntry', stage.id, ($event.target as HTMLInputElement).checked)"
+        />
+        <span class="toggle-copy">
+          {{ t("pipelines.entry_stage", "Entry") }}
+          <UiTooltip
+            :text="
+              t(
+                'pipelines.entry_stage_help',
+                'An entry stage is where execution starts. Most Research pipelines have one entry step, usually a query-analysis step; some graph types may allow more than one.',
+              )
+            "
+          />
+        </span>
+      </label>
+    </div>
+
+    <section v-if="strategy" class="strategy-summary" aria-labelledby="stage-strategy-summary">
+      <h5 id="stage-strategy-summary">{{ pipelineStrategyLabel(strategy, t) }}</h5>
+      <p class="summary-family label-with-help">
+        {{ pipelineStageFamilyLabel(strategy.family, t) }}
+        <UiTooltip
+          :text="pipelineStageFamilyHelp(strategy.family, t)"
+          :label="t('pipelines.explain_stage_family', 'Explain this kind of stage')"
+        />
+      </p>
+      <p>{{ pipelineStrategyDescription(strategy, t) }}</p>
+      <dl>
+        <div>
+          <dt>{{ t("pipelines.strategy_io", "Input → output") }}</dt>
+          <dd>
+            <span class="label-with-help">
+              {{ pipelineDataTypeLabel(strategy.input_type, t) }}
+              <UiTooltip
+                :text="pipelineDataTypeHelp(strategy.input_type, t)"
+                :label="t('pipelines.explain_input_type', 'Explain this input type')"
+              />
+            </span>
+            →
+            <span class="label-with-help">
+              {{ pipelineDataTypeLabel(strategy.output_type, t) }}
+              <UiTooltip
+                :text="pipelineDataTypeHelp(strategy.output_type, t)"
+                :label="t('pipelines.explain_output_type', 'Explain this output type')"
+              />
+            </span>
+          </dd>
+        </div>
+        <div>
+          <dt>{{ t("pipelines.strategy_computation", "Computation") }}</dt>
+          <dd>{{ pipelineComputationLabel(strategyComputation(strategy), t) }}</dd>
+        </div>
+        <div v-if="effectNote">
+          <dt>{{ t("pipelines.scholarly_effect", "Scholarly effect") }}</dt>
+          <dd>{{ effectNote }}</dd>
+        </div>
+        <div v-if="strategy.capabilities.length">
+          <dt>{{ t("pipelines.strategy_requires", "Requires") }}</dt>
+          <dd>
+            {{ strategy.capabilities.map((item) => pipelineCapabilityLabel(item, t)).join(", ") }}
+          </dd>
+        </div>
+      </dl>
+    </section>
 
     <PipelineStageConnections
       :stage="stage"
@@ -349,140 +350,197 @@ const fitNote = computed(() => {
       @update-fallback="(key, target) => emit('updateFallback', stageIndex, key, target)"
     />
 
-    <PipelineStrategyConfigFields
-      :stage="stage"
-      :strategy="strategy"
-      @update-config="(key, raw, rule) => emit('updateConfig', stageIndex, key, raw, rule)"
-    />
-  </article>
+    <section class="stage-config" aria-labelledby="stage-config-title">
+      <h5 id="stage-config-title">{{ t("pipelines.stage_configuration", "Configuration") }}</h5>
+      <PipelineStrategyConfigFields
+        :stage="stage"
+        :strategy="strategy"
+        @update-config="(key, raw, rule) => emit('updateConfig', stageIndex, key, raw, rule)"
+      />
+    </section>
+
+    <footer class="stage-footer">
+      <UiButton
+        variant="danger"
+        :label="t('pipelines.remove_stage', 'Remove stage')"
+        :disabled="stages.length <= 1"
+        :disabled-reason="
+          stages.length <= 1
+            ? t('pipelines.remove_last_stage_reason', 'A pipeline needs at least one stage.')
+            : ''
+        "
+        @click="emit('remove', stageIndex)"
+      />
+    </footer>
+  </aside>
 </template>
 
 <style scoped>
+.stage-inspector-editor {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-card);
+}
+.editor-kicker {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.stage-inspector-editor h4 {
+  margin: calc(var(--space-3) * -1) 0 0;
+  color: var(--text-primary);
+  font-size: 1.125rem;
+  overflow-wrap: anywhere;
+}
+.stage-inspector-editor h4:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+.stage-inspector-editor h5 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.9375rem;
+}
+.field {
+  display: grid;
+  gap: var(--space-1);
+}
+.field > span,
+.field-label {
+  color: var(--text-tertiary);
+  font-size: 0.8125rem;
+  font-weight: var(--fw-bold);
+}
+.field .control {
+  width: 100%;
+}
+.field-help {
+  color: var(--text-tertiary);
+  font-size: 0.8125rem;
+  line-height: var(--lh-normal);
+}
 .stage-fit-note {
   display: block;
-  padding: 4px 8px;
-  border-left: 3px solid currentColor;
-  font-size: 0.75rem;
-  line-height: 1.4;
+  padding: var(--space-1) var(--space-2);
+  border-left: 3px solid var(--tone-warn-border);
+  background: var(--tone-warn-bg);
+  color: var(--tone-warn-fg);
+  font-size: 0.8125rem;
+  line-height: var(--lh-normal);
 }
-.stage-settings-card {
-  display: grid;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 11px;
-  background: var(--soft);
+.stage-fit-note[data-fit="output_contract"] {
+  border-left-color: var(--tone-danger-border);
+  background: var(--tone-danger-bg);
+  color: var(--tone-danger-fg);
 }
-.stage-settings-heading {
+.strategy-advanced summary {
+  width: fit-content;
+  color: var(--text-tertiary);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.strategy-advanced summary:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+.show-all-strategies {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  font-size: 0.875rem;
 }
-.stage-identity-grid {
-  display: grid;
-  grid-template-columns: minmax(10rem, 0.75fr) minmax(14rem, 1.25fr);
-  gap: 10px;
-  flex: 1;
+.show-all-strategies input {
+  margin-top: 3px;
 }
-.stage-identity-grid label {
-  display: grid;
-  gap: 5px;
-}
-.stage-field-help {
-  color: var(--muted);
-  font-size: 0.75rem;
-  font-weight: 500;
-  line-height: 1.4;
-}
-.stage-identity-grid label > span {
-  color: var(--muted);
-  font-size: 0.75rem;
-  font-weight: 750;
+.show-all-strategies small {
+  display: block;
+  color: var(--text-tertiary);
+  font-size: 0.8125rem;
 }
 .label-with-help,
-.toggle-copy,
-.strategy-io > span {
+.toggle-copy {
   display: inline-flex;
   align-items: center;
   gap: 2px;
 }
-.strategy-io {
+.stage-toggles {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 5px;
-}
-.strategy-io code {
-  font-size: 0.75rem;
-}
-.stage-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-  justify-content: flex-end;
+  gap: var(--space-2);
 }
 .stage-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  min-height: 36px;
-  padding: 0 8px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--card);
-  font-size: 0.75rem;
-  font-weight: 700;
+  gap: var(--space-2);
+  min-height: var(--control-height-small);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-inset);
+  font-size: 0.875rem;
+  font-weight: var(--fw-bold);
 }
 .stage-toggle input {
   margin: 0;
 }
 .strategy-summary {
   display: grid;
-  gap: 4px;
-  padding: 9px 10px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--card);
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
 }
-.strategy-summary > div {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-}
-.strategy-summary strong {
-  font-size: 0.78rem;
-}
-.strategy-summary span,
-.strategy-summary p,
-.strategy-summary small {
-  color: var(--muted);
-}
-.strategy-summary > div span,
-.strategy-summary p,
-.strategy-summary small {
-  font-size: 0.75rem;
-}
-.strategy-summary > div span {
-  font-weight: 700;
-}
-.strategy-summary p,
-.strategy-summary small {
+.strategy-summary p {
   margin: 0;
-  line-height: 1.4;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  line-height: var(--lh-normal);
 }
-@media (max-width: 860px) {
-  .stage-settings-heading {
-    display: grid;
-  }
-  .stage-toolbar {
-    justify-content: flex-start;
-  }
+.strategy-summary .summary-family {
+  color: var(--text-tertiary);
+  font-size: 0.8125rem;
 }
-@media (max-width: 680px) {
-  .stage-identity-grid {
-    grid-template-columns: 1fr;
+.strategy-summary dl {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+}
+.strategy-summary dt {
+  color: var(--text-tertiary);
+  font-size: 0.8125rem;
+}
+.strategy-summary dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+}
+.stage-config {
+  display: grid;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+.stage-footer {
+  display: flex;
+  justify-content: flex-start;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+@media (min-width: 1101px) {
+  .stage-inspector-editor {
+    position: sticky;
+    top: var(--pipeline-studio-sticky-top, var(--space-3));
+    max-height: calc(100dvh - var(--pipeline-studio-sticky-top, var(--space-3)) - var(--space-3));
+    overflow: auto;
+    overscroll-behavior: contain;
   }
 }
 </style>

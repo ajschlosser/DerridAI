@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { chromaApi } from "../../src/api/chroma";
 import { pipelinesApi } from "../../src/api/pipelines";
-import PipelineComparisonPanel from "../../src/components/pipelines/PipelineComparisonPanel.vue";
+import PipelineComparisonWorkspace from "../../src/components/pipelines/PipelineComparisonWorkspace.vue";
 import { useI18nStore } from "../../src/stores/i18n";
 import type {
   PipelineDefinition,
@@ -192,7 +192,7 @@ const comparison: ResearchPipelineComparisonResult = {
   },
 };
 
-describe("PipelineComparisonPanel", () => {
+describe("PipelineComparisonWorkspace", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     useI18nStore().dictionary = {};
@@ -210,11 +210,9 @@ describe("PipelineComparisonPanel", () => {
   });
 
   it("runs a non-persistent comparison and explains descriptive overlap", async () => {
-    const wrapper = mount(PipelineComparisonPanel, { props: { pipelines } });
-    const details = wrapper.find("details");
-    (details.element as HTMLDetailsElement).open = true;
-    await details.trigger("toggle");
+    const wrapper = mount(PipelineComparisonWorkspace, { props: { pipelines } });
     await flushPromises();
+    expect(wrapper.find("details.comparison-panel").exists()).toBe(false);
 
     await wrapper.find("textarea").setValue("What is the trace?");
     const selects = wrapper.findAll("select");
@@ -245,8 +243,17 @@ describe("PipelineComparisonPanel", () => {
     expect(wrapper.text()).toContain("33%");
     expect(wrapper.text()).toContain("Cross-encoder calls: 1");
     expect(wrapper.text()).toContain("Only in Pipeline A");
-    expect(wrapper.text()).toContain("r1");
-    expect(wrapper.text()).toContain("r3");
+    expect(wrapper.text()).toContain("Only in Pipeline B");
+
+    // One aligned table: shared records first (Pipeline A's order), then A-only, then B-only.
+    const rows = wrapper.findAll(".aligned tbody tr");
+    expect(rows.map((row) => row.get("code").text())).toEqual(["r2", "r1", "r3"]);
+    expect(rows.map((row) => row.attributes("data-presence"))).toEqual(["both", "left", "right"]);
+    expect(rows[0].findAll("td").map((cell) => cell.text())).toEqual(["#2", "#1"]);
+    expect(rows[1].findAll("td").map((cell) => cell.text())).toEqual(["#1", "—"]);
+    expect(rows[2].findAll("td").map((cell) => cell.text())).toEqual(["—", "#2"]);
+    expect(rows[0].text()).toContain("Writing and Difference");
+    expect(wrapper.text()).not.toMatch(/\b(winner|best)\b/i);
     expect(wrapper.text()).toContain("does not declare either pipeline better");
   });
 });

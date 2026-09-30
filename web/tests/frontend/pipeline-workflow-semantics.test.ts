@@ -5,12 +5,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
 
 import { pipelinesApi } from "../../src/api/pipelines";
-import PipelineDefinitionBrowser from "../../src/components/pipelines/PipelineDefinitionBrowser.vue";
-import PipelineExecutionHistory from "../../src/components/pipelines/PipelineExecutionHistory.vue";
+import PipelineDefinitionNavigator from "../../src/components/pipelines/PipelineDefinitionNavigator.vue";
+import PipelineExecutionsWorkspace from "../../src/components/pipelines/PipelineExecutionsWorkspace.vue";
 import PipelineOperationsSummary from "../../src/components/pipelines/PipelineOperationsSummary.vue";
 import PipelineStageEditor from "../../src/components/pipelines/PipelineStageEditor.vue";
 import PipelineStageList from "../../src/components/pipelines/PipelineStageList.vue";
-import PipelineStrategyCatalog from "../../src/components/pipelines/PipelineStrategyCatalog.vue";
+import PipelineStrategiesWorkspace from "../../src/components/pipelines/PipelineStrategiesWorkspace.vue";
 import PipelineVersionEditorPanel from "../../src/components/pipelines/PipelineVersionEditorPanel.vue";
 import PipelineWorkflowContract from "../../src/components/pipelines/PipelineWorkflowContract.vue";
 import {
@@ -170,9 +170,9 @@ describe("pipeline workflow domain helpers", () => {
   });
 });
 
-describe("workflow browser", () => {
-  function mountBrowser(workflow = "") {
-    return mount(PipelineDefinitionBrowser, {
+describe("workflow navigator", () => {
+  function mountNavigator(workflow = "") {
+    return mount(PipelineDefinitionNavigator, {
       props: {
         pipelines,
         assignments: [],
@@ -184,25 +184,22 @@ describe("workflow browser", () => {
     });
   }
 
-  it("renders Used for categories from catalog metadata with counts", async () => {
-    const wrapper = mountBrowser();
-    const group = wrapper.get('[role="group"]');
-    expect(group.attributes("aria-label")).toBe("Used for");
-    const options = group.findAll("button");
-    expect(options.map((item) => item.attributes("data-category") || "all")).toEqual([
-      "all",
+  it("offers Used for categories from catalog metadata with counts", async () => {
+    const wrapper = mountNavigator();
+    const select = wrapper.findAll("select")[0];
+    const options = select.findAll("option");
+    expect(options.map((item) => item.attributes("value"))).toEqual([
+      "",
       ...contractVocabulary.categories.map((term) => term.id),
     ]);
-    const evidence = group.get('[data-category="evidence"]');
-    expect(text(evidence)).toContain("Evidence 2");
-    expect(evidence.attributes("aria-pressed")).toBe("false");
-    await evidence.trigger("click");
+    const evidence = options.find((item) => item.attributes("value") === "evidence")!;
+    expect(text(evidence)).toContain("Evidence (2)");
+    await select.setValue("evidence");
     expect(wrapper.emitted("update:workflow")).toEqual([["evidence"]]);
   });
 
   it("filters to one workflow while keeping precise purposes distinguishable", () => {
-    const wrapper = mountBrowser("evidence");
-    expect(wrapper.get('[data-category="evidence"]').attributes("aria-pressed")).toBe("true");
+    const wrapper = mountNavigator("evidence");
     const choices = wrapper.findAll(".pipeline-choice").map((item) => text(item));
     expect(choices).toHaveLength(2);
     expect(choices[0]).toContain("Reviewer evidence suggestion");
@@ -210,10 +207,46 @@ describe("workflow browser", () => {
     expect(text(wrapper)).not.toContain("Research — current production chain");
   });
 
-  it("searches by localized purpose label", async () => {
-    const wrapper = mountBrowser();
+  it("searches by localized purpose label through the filters prop", async () => {
+    const wrapper = mountNavigator();
     await wrapper.get('input[type="search"]').setValue("vector store");
+    expect(wrapper.emitted("update:filters")).toEqual([[{ query: "vector store", status: "" }]]);
+    await wrapper.setProps({ filters: { query: "vector store", status: "" } });
     expect(wrapper.findAll(".pipeline-choice")).toHaveLength(1);
+  });
+
+  it("groups immutable versions under one pipeline and selects exact versions", async () => {
+    const research = pipelines.find((item) => item.purpose === "research")!;
+    const wrapper = mount(PipelineDefinitionNavigator, {
+      props: {
+        pipelines: [
+          research,
+          { ...structuredClone(research), version: research.version + 1, status: "draft" },
+        ],
+        assignments: [],
+        purposes: contractPurposes,
+        vocabulary: contractVocabulary,
+        selectedKey: "",
+      },
+    });
+    expect(wrapper.findAll(".pipeline-choice")).toHaveLength(1);
+    expect(text(wrapper)).toContain("1 pipelines · 2 versions");
+    expect(wrapper.find(".version-list").exists()).toBe(false);
+    await wrapper.get(".version-toggle").trigger("click");
+    const versions = wrapper.findAll(".version-choice");
+    expect(versions.map((item) => text(item))).toEqual([
+      expect.stringContaining(`v${research.version + 1}`),
+      expect.stringContaining(`v${research.version}`),
+    ]);
+    await versions[0].trigger("click");
+    expect(wrapper.emitted("select")).toEqual([
+      [`${research.pipeline_id}@${research.version + 1}`],
+    ]);
+    // Selecting the group opens the highest active executable version, not the draft.
+    await wrapper.get(".pipeline-choice").trigger("click");
+    expect(wrapper.emitted("select")!.at(-1)).toEqual([
+      `${research.pipeline_id}@${research.version}`,
+    ]);
   });
 });
 
@@ -224,8 +257,6 @@ describe("workflow contract panel", () => {
         pipeline: subject,
         purpose: contractPurpose(purposeId),
         vocabulary: contractVocabulary,
-        assignment: null,
-        assigned: false,
       },
     });
   }
@@ -264,61 +295,84 @@ describe("workflow contract panel", () => {
   });
 });
 
-describe("strategy catalog", () => {
-  function mountCatalog() {
-    return mount(PipelineStrategyCatalog, {
+describe("strategies workspace", () => {
+  const noFilters = {
+    query: "",
+    family: "",
+    computation: "",
+    capability: "",
+    effect: "",
+    workflow: "",
+  };
+  function mountCatalog(selectedStrategyId = "") {
+    const wrapper = mount(PipelineStrategiesWorkspace, {
       props: {
         strategies: contractStrategies,
         pipelines,
         purposes: contractPurposes,
         vocabulary: contractVocabulary,
+        selectedStrategyId,
+        filters: noFilters,
       },
     });
+    return wrapper;
   }
+  async function filter(wrapper: ReturnType<typeof mountCatalog>, patch: object) {
+    await wrapper.setProps({ filters: { ...noFilters, ...patch } });
+  }
+  const rowIds = (wrapper: ReturnType<typeof mountCatalog>) =>
+    wrapper.findAll("tbody tr").map((row) => row.attributes("data-strategy"));
 
   it("finds semantic strategies with family, types, requirements, effect and usage", async () => {
-    const wrapper = mountCatalog();
-    await wrapper.get('input[type="search"]').setValue("semantic");
-    const ids = wrapper.findAll(".strategy-card").map((card) => card.attributes("data-strategy"));
-    expect(ids).toContain("retrieve.chroma_similarity");
-    expect(ids).toContain("retrieve.source_cosine");
-    expect(ids).not.toContain("validate.evidence_support");
-    const chroma = text(wrapper.get('[data-strategy="retrieve.chroma_similarity"]'));
+    const wrapper = mountCatalog("retrieve.chroma_similarity");
+    await filter(wrapper, { query: "semantic" });
+    expect(rowIds(wrapper)).toContain("retrieve.chroma_similarity");
+    expect(rowIds(wrapper)).toContain("retrieve.source_cosine");
+    expect(rowIds(wrapper)).not.toContain("validate.evidence_support");
+    const chroma = text(wrapper.get('tr[data-strategy="retrieve.chroma_similarity"]'));
     expect(chroma).toContain("Candidate generation");
-    expect(chroma).toMatch(/Query →\s*(to)?\s*Candidate set/);
-    expect(chroma).toContain("RequiresEmbedding model, Chroma");
-    expect(chroma).toContain("Advisory only");
     expect(chroma).toContain("Produces candidates — not evidence");
-    expect(chroma).toContain("Used byResearch, Search");
+    const inspector = text(wrapper.get(".strategy-inspector"));
+    expect(inspector).toMatch(/Query →\s*(to)?\s*Candidate set/);
+    expect(inspector).toContain("RequiresEmbedding model, Chroma");
+    expect(inspector).toContain("Produces candidates — not evidence");
+    expect(inspector).toContain("Used byResearch, Search");
   });
 
   it("separates a cross-encoder's relevance from direct support", async () => {
     const wrapper = mountCatalog();
-    const rerank = text(wrapper.get('[data-strategy="rerank.cross_encoder"]'));
-    expect(rerank).toContain("Relevance ranking only — does not establish support");
-    const support = text(wrapper.get('[data-strategy="validate.evidence_support"]'));
-    expect(support).toContain("Evidence eligibility gate");
-    expect(support).toContain("Used byEvidence");
+    expect(text(wrapper.get('tr[data-strategy="rerank.cross_encoder"]'))).toContain(
+      "Relevance ranking only — does not establish support",
+    );
+    expect(text(wrapper.get('tr[data-strategy="validate.evidence_support"]'))).toContain(
+      "Evidence eligibility gate",
+    );
+  });
+
+  it("selects a row from the keyboard-focusable control and emits the strategy", async () => {
+    const wrapper = mountCatalog();
+    await wrapper.get('tr[data-strategy="validate.evidence_support"] .row-select').trigger("click");
+    expect(wrapper.emitted("selectStrategy")).toEqual([["validate.evidence_support"]]);
   });
 
   it("filters by scholarly effect and opens a pipeline that uses a strategy", async () => {
     const wrapper = mountCatalog();
-    const selects = wrapper.findAll("select");
-    const effect = selects.find((item) =>
-      item.findAll("option").some((option) => option.attributes("value") === "eligibility_gate"),
-    );
-    await effect!.setValue("eligibility_gate");
-    const cards = wrapper.findAll(".strategy-card");
-    expect(cards.map((card) => card.attributes("data-strategy"))).toEqual([
-      "validate.evidence_support",
-    ]);
-    await cards[0].get(".link-button").trigger("click");
+    await filter(wrapper, { effect: "eligibility_gate" });
+    expect(rowIds(wrapper)).toEqual(["validate.evidence_support"]);
+    await wrapper.get(".strategy-inspector .link-button").trigger("click");
     expect(wrapper.emitted("openPipeline")).toEqual([["evidence.reviewer.current@2"]]);
+  });
+
+  it("counts active advanced filters on the Filters control", async () => {
+    const wrapper = mountCatalog();
+    expect(wrapper.text()).toContain("Filters");
+    await filter(wrapper, { computation: "deterministic", workflow: "evidence" });
+    expect(wrapper.text()).toContain("Filters (2)");
   });
 
   it("shows an explicit empty state", async () => {
     const wrapper = mountCatalog();
-    await wrapper.get('input[type="search"]').setValue("no-such-operation");
+    await filter(wrapper, { query: "no-such-operation" });
     expect(text(wrapper)).toContain("No strategies match these filters.");
   });
 });
@@ -396,11 +450,8 @@ describe("purpose-aware editing", () => {
         saving: false,
       },
     });
-    const content = text(wrapper);
-    expect(text(wrapper.get(".purpose-line"))).toBe(
-      "Used forEvidence·Reviewer evidence suggestion",
-    );
-    expect(content).toContain("This new version remains a Reviewer evidence suggestion pipeline.");
+    expect(text(wrapper.get(".detail-kicker"))).toBe("Evidence · Reviewer evidence suggestion");
+    expect(text(wrapper)).toContain("Purpose is fixed for this version.");
   });
 });
 
@@ -416,9 +467,9 @@ const evidenceRun: PipelineRunTrace = {
   stages: [],
 };
 
-describe("execution history", () => {
+describe("executions workspace", () => {
   it("leads with the workflow and keeps the feature ID as technical detail", async () => {
-    const wrapper = mount(PipelineExecutionHistory, {
+    const wrapper = mount(PipelineExecutionsWorkspace, {
       props: {
         runs: [evidenceRun],
         pipelines,
@@ -426,6 +477,11 @@ describe("execution history", () => {
         vocabulary: contractVocabulary,
         strategies: contractStrategies,
         selectedRunId: "run-evidence",
+        focusedRun: null,
+        total: 1,
+        limit: 25,
+        offset: 0,
+        filters: { query: "", category: "", feature: "", pipelineId: "", status: "", owner: "" },
       },
     });
     const row = text(wrapper.get("tbody tr"));
@@ -434,10 +490,15 @@ describe("execution history", () => {
     expect(row).not.toContain("evidence_suggestion.reviewer");
     const summary = wrapper.get(".trace-summary");
     expect(text(summary.get(".trace-workflow"))).toBe("Evidence·Reviewer evidence suggestion");
-    expect(text(summary.get(".trace-technical"))).toContain("evidence_suggestion.reviewer");
+    expect(text(wrapper.get(".trace-technical"))).toContain("evidence_suggestion.reviewer");
 
-    const [category, purpose] = wrapper.findAll(".trace-filters select");
+    const category = wrapper.findAll(".trace-filters select")[0];
     await category.setValue("evidence");
+    const filtersButton = wrapper
+      .findAll(".trace-filters button")
+      .find((button) => button.text() === "Filters")!;
+    await filtersButton.trigger("click");
+    const purpose = wrapper.get(".filter-advanced select");
     const purposes = purpose.findAll("option").map((option) => option.attributes("value"));
     expect(purposes).toEqual([
       "",
@@ -448,6 +509,45 @@ describe("execution history", () => {
     ]);
     await wrapper.get(".trace-filters").trigger("submit");
     expect(wrapper.emitted("apply")?.[0]?.[0]).toMatchObject({ category: "evidence", feature: "" });
+  });
+
+  it("puts destructive actions behind menus instead of permanent buttons", async () => {
+    const wrapper = mount(PipelineExecutionsWorkspace, {
+      props: {
+        runs: [evidenceRun],
+        pipelines,
+        purposes: contractPurposes,
+        vocabulary: contractVocabulary,
+        strategies: contractStrategies,
+        selectedRunId: "run-evidence",
+        focusedRun: null,
+        total: 1,
+        limit: 25,
+        offset: 0,
+        filters: { query: "", category: "", feature: "", pipelineId: "", status: "", owner: "" },
+      },
+    });
+    expect(wrapper.find(".row-delete").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("Clear history");
+
+    await wrapper.get(".run-actions .ui-menu-trigger").trigger("click");
+    const items = wrapper.findAll('[role="menuitem"]');
+    expect(items.map((item) => item.text())).toEqual([
+      expect.stringContaining("Open configuration"),
+      "Delete execution",
+    ]);
+    await items[1].trigger("click");
+    expect(wrapper.emitted("deleteRun")).toEqual([["run-evidence"]]);
+
+    const more = wrapper
+      .findAll(".trace-filters .ui-menu-trigger")
+      .find((button) => button.text().includes("More"))!;
+    await more.trigger("click");
+    await wrapper
+      .findAll('[role="menuitem"]')
+      .find((item) => item.text() === "Clear execution history")!
+      .trigger("click");
+    expect(wrapper.emitted("clearHistory")).toHaveLength(1);
   });
 });
 
@@ -503,7 +603,8 @@ describe("operations", () => {
     const workflow = text(wrapper.get('[data-category="evidence"]'));
     expect(workflow).toContain("Evidence");
     expect(workflow).toContain("Reviewer evidence suggestion");
-    expect(text(wrapper)).toContain("do not mean a workflow produces better scholarship");
+    expect(text(wrapper)).toContain("not the scholarly validity of retrieved evidence");
+    expect(text(wrapper)).not.toContain("do not mean a workflow produces better scholarship");
     expect(text(wrapper)).toContain("Cross-encoder reranker");
   });
 });
@@ -559,7 +660,7 @@ describe("Pipeline Studio routes", () => {
   it("keeps the workflow filter and strategy selection in the URL", async () => {
     const { wrapper, router } = await mountStudio({ workflow: "evidence" });
     expect(wrapper.findAll(".pipeline-choice")).toHaveLength(2);
-    await wrapper.get('.workflow-filter [data-category="search"]').trigger("click");
+    await wrapper.findAll("select")[0].setValue("search");
     await flushPromises();
     expect(router.currentRoute.value.query.workflow).toBe("search");
 
@@ -567,9 +668,7 @@ describe("Pipeline Studio routes", () => {
     await flushPromises();
     expect(router.currentRoute.value.query.section).toBe("strategies");
     expect(wrapper.get("#pipeline-tab-strategies").attributes("aria-selected")).toBe("true");
-    const card = wrapper.get('[data-strategy="rerank.cross_encoder"] .strategy-technical');
-    (card.element as HTMLDetailsElement).open = true;
-    await card.trigger("toggle");
+    await wrapper.get('tr[data-strategy="rerank.cross_encoder"] .row-select').trigger("click");
     await flushPromises();
     expect(router.currentRoute.value.query.strategy).toBe("rerank.cross_encoder");
   });
@@ -586,7 +685,7 @@ describe("Pipeline Studio routes", () => {
     });
     const { wrapper } = await mountStudio({ pipeline: "evidence.reviewer.current.custom@2" });
     await wrapper
-      .findAll(".detail-actions .btn")
+      .findAll(".detail-actions button")
       .find((item) => item.text().includes("Make active"))!
       .trigger("click");
     await flushPromises();
