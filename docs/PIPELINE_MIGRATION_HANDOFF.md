@@ -42,41 +42,13 @@ The most important repository rules for the next pass are unchanged:
 
 ## 3. Current repository state
 
-### Default branch
+### Where the work stands (2026-09-29)
 
-`master` currently includes PR #270, “Modernize global navigation and route workspaces,” merged as:
+- On `master`: Phase A (evidence recovery, Vector Store search, metadata pre-fill and precedent remapping; sections 4.10–4.13), PR #281's non-persistent Research dry-run and A/B comparison (section 6), metadata enrichment (4.14, #304) and segmentation (4.15, #306).
+- In PR #312: the document manifest (4.16), text touch-up (4.17) and the reviewer's **Ask the model** evidence choice (4.18).
+- Still calling a model directly: section 8.6 lists each call and how to move it.
 
-`66320989434bf17225f8d3867dc11f1eff1eddb6`
-
-That change matters to this work because Pipeline Studio is now a first-class `/pipelines` workspace under **AI & Automation**, with canonical route state and hierarchical breadcrumbs rather than being only a System Data subsection.
-
-### Current pipeline-comparison branch
-
-PR #281 is based on an older master and must be synchronized with the current default branch before merge. At the latest comparison captured during this handoff, the branch had diverged from `master`: it contained the comparison work but was behind by the commits that landed with PR #270.
-
-GitHub currently reports the PR as mergeable, but that is not a substitute for explicitly bringing current `master` into the branch and rerunning the quality gates. Do that before considering #281 complete.
-
-### CI status at handoff
-
-The latest PR #281 quality-gate run is GitHub Actions run **2000** (`36614460202`) for head `cb340d420ef6bff582ab41d66c2138a0487c93ae`.
-
-Run 2000 completed successfully. All jobs were green, including:
-
-- changes
-- format-check
-- backend
-- backend-lint
-- backend-types
-- api-contract
-- frontend-lint
-- frontend-static
-- frontend-e2e (1/2)
-- frontend-e2e (2/2)
-- frontend-legacy (1/2)
-- frontend-legacy (2/2)
-- frontend-a11y
-
-This validates the comparison implementation on its pre-PR-#270 base. It is **not** final merge validation: rerun the full quality gates after synchronizing the branch with current `master`.
+Branch every slice from current `master` and open its PR against `master`. Do not stack PRs; if a slice depends on an unmerged one, say so in the PR body.
 
 ## 4. What has landed
 
@@ -227,6 +199,8 @@ Runtime contract (purpose `evidence_recovery`):
 - A record without a source-document identity is reported before any retrieval or model call.
 
 Built-ins: `evidence.recovery.celf@1` (text support, then closed-choice model; no embeddings or reranking) and `evidence.recovery.cascade@1` (relevance-first order: text, similarity, cross-encoder, MMR, model). The cascade is non-cELF-guaranteed at its output boundary, so its suggestions remain advisory until direct evidence is bound and validated. Traces list only the stages that ran, in execution order, with `fallback_reason` on each stage that left along a fallback edge.
+
+Closed-choice model stage settings. `llm.closed_choice_evidence` has `provider_role` (`chain`, `primary`, `review`; default `chain`) and `attempts` (1–4, default 2), and recovery applies them. Enrichment's callback (`_evidence_closed_choice` in `corpus_metadata_enrichment_execution.py`) receives the stage's role and attempts. `chain` is the pre-pipeline behaviour: the primary provider, then the review provider when the build configures one, with `_chat_json()`'s escalation note and error text. The built-ins set neither key, so their calls are unchanged (no version bump). A clone can ask one provider per stage and express escalation as two closed-choice stages joined by `on_error`/`on_timeout`/`on_unavailable`; such a graph stays cELF-compliant. A missing provider role makes the stage `unavailable` without a model call, and a read timeout makes it `timed_out`, so the graph's fallback edges decide what follows (before, every failure was `failed`; the built-ins have no fallback edge on this stage, so they still end the run). The trace records the settings and the provider and model that actually answered. The reviewer-suggestion graph never calls a model, so it rejects both keys (`RECOVERY_ONLY_CONFIG`). When a closed-choice stage fails or times out and a fallback edge leads to another closed-choice stage, that stage is an escalation: its first provider gets `_chat_json()`'s escalation note, the build counts an escalation, and the trace records `escalated: true`. An empty answer, an unconfigured provider or a failed retrieval stage routing to the model is not an escalation, so the built-ins' prompts are unchanged. Parity is pinned by `tests/test_evidence_recovery_closed_choice.py`.
 
 The remaining direct `predict_scores()` callers are `rag.py` (Research pipeline) and `metadata_exemplar_retrieval.py` (metadata-precedent pipeline). Re-verify they are unreachable outside those pipelines before closing the CrossEncoder criterion.
 
@@ -528,8 +502,8 @@ Not done:
 
 Status:
 
-1. **Dry-run pipeline testing** — implemented in PR #281 for Research retrieval/context, pending merge.
-2. **A/B pipeline comparison** — implemented in PR #281 for Research retrieval/context, pending merge.
+1. **Dry-run pipeline testing** — merged in PR #281 for Research retrieval/context.
+2. **A/B pipeline comparison** — merged in PR #281 for Research retrieval/context.
 3. **Aggregate stage latency/error/fallback dashboards** — merged in PR #280.
 4. **Benchmark-run integration** — not implemented.
 5. **Export/import for pipeline definitions** — not implemented as a first-class Pipeline Studio workflow.
@@ -560,7 +534,7 @@ Migrated in section 4.13.
 
 The original audit identified many generative/structured LLM uses beyond Research answer generation, including Corpus Builder segmentation/metadata work, touch-up/review operations, translation, and other utility calls.
 
-Corpus Builder metadata enrichment migrated in section 4.14, segmentation's boundary questions in section 4.15, the document manifest in section 4.16, text touch-up in section 4.17 and the reviewer's **Ask the model** evidence choice in section 4.18. Still calling a model directly: `page_marker_chooser`, `_llm_text_noise_pass` and `preview_schema_group` (`_chat_json()`), evidence recovery's closed-choice callback (`_chat_json()` default chain), the catalogue-match lookup `llm_tools.run_work_metadata_lookup()` and the Records touch-up `llm.propose_touchup()` (`chat_complete()`). Planned: page-marker choice and the text-noise second reader as small slices of their own; the schema preview moves onto the `corpus_metadata_enrichment` pipeline so it runs like a build.
+Corpus Builder metadata enrichment migrated in section 4.14, segmentation's boundary questions in section 4.15, the document manifest in section 4.16, text touch-up in section 4.17 and the reviewer's **Ask the model** evidence choice in section 4.18; evidence recovery's closed-choice stage now applies its own provider role and attempts (section 4.10). Still calling a model directly: `page_marker_chooser`, `_llm_text_noise_pass` and `preview_schema_group` (`_chat_json()`), the catalogue-match lookup `llm_tools.run_work_metadata_lookup()` and the Records touch-up `llm.propose_touchup()` (`chat_complete()`). Planned: page-marker choice and the text-noise second reader as small slices of their own; the schema preview moves onto the `corpus_metadata_enrichment` pipeline so it runs like a build.
 
 Only claim that acceptance criterion “every generative LLM call resolves through a pipeline” is met after a fresh call-site audit.
 
@@ -569,6 +543,62 @@ Only claim that acceptance criterion “every generative LLM call resolves throu
 The target `research.balanced@1` graph exists as data, but the production assignment intentionally remains `research.current@1`.
 
 Changing that assignment is a quality decision and must follow controlled comparisons/benchmarks, not architectural preference alone.
+
+### 8.6 Finishing the remaining direct model calls
+
+Every slice follows the pattern of sections 4.14–4.18 unless a subsection below says otherwise:
+
+- **Feature module.** Add `pipelines/<feature>.py` declaring a `StructuredStageFeature` (feature, purpose, strategy, label), a `compile_*` wrapper around `compile_structured_stage_pipeline`, and a `*Session` whose `open()` returns `open_for(SPEC)`. Copy `pipelines/corpus_text_touchup.py`.
+- **Call site.** Build an `invoke(role, attempts, escalated)` that raises `LookupError` for an unconfigured role, open the session, call `session.run(invoke, response_contract=..., providers=...)`, and `finish()` it on success, failure and cancellation (`cancelled=True`). Convert the `RuntimeError` from `open()` into the caller's normal failure path. Examples: `touchup_record_text` and `suggest_evidence_llm`.
+- **Wiring.** A registry `StrategySpec` with `provider_role` (enum) and `attempts` (1–4) settings; a built-in pipeline and assignment in `defaults.py` that reproduce the current behaviour exactly; both branches in `manager.py` (assignment compile and `runtime_support`); `featureForPurpose` in `SystemDataPipelines.vue`; the label in `pipelinePresentation.ts`; the purpose and strategy keys in `en_us.py`, `fr_ca.py` and `web/src/i18n/enUsDefaults.json` (Python locale strings are single-quoted: no apostrophes); a row in the `it.each` of `web/tests/frontend/system-data-pipelines.test.ts`; a bullet in `docs/USER_GUIDE.md`; a section 4.x here and a row in section 5.
+- **Tests.** A parity file like `tests/test_corpus_text_touchup_pipeline.py`: script `chat_complete`, run the pipeline, run the legacy call with the pipeline's recorded prompt, compare calls, token budgets, results and error text; then the built-in compiles and is assigned, identity and trace, a review-first clone (when the feature has a review role), an unresolvable assignment makes no model call, and cancellation. Stash the frontend wiring once to show the Vitest row fails without it.
+- **Identity.** Put it on the result the reviewer sees. Never put it in anything that is later pasted into a prompt (see the manifest, section 4.16).
+- **Default cost.** A built-in must make exactly the calls the legacy code makes. Ask before changing any default assignment.
+
+#### 8.6.1 Already decided
+
+- `corpus_builder.py` `page_marker_chooser` (`page_marker_choice`, two attempts, ingestion time, called from `routers/corpus.py`): its own small slice with the standard pattern.
+- `corpus_builder.py` `_llm_text_noise_pass` (`derridai_text_noise`, per flagged record during a build): its own small `text_noise` slice. Open one session for the pass (one trace), like the segmentation second reader. An unresolvable assignment keeps the deterministic scores and adds one build warning.
+- `corpus_manifest_workflow.py` `preview_schema_group` (run=true): send it through the existing `corpus_metadata_enrichment` pipeline (`EnrichmentSession`), not a new feature, so a schema preview runs like a build.
+
+#### 8.6.2 Evidence recovery's closed-choice call
+
+Done (section 4.10). The plan below is kept as the record of what was decided.
+
+Where: `_evidence_llm_choice` in `corpus_metadata_enrichment_execution.py` is passed as `llm_choice` to `execute_evidence_recovery()`; the recovery runtime (`pipelines/evidence_recovery.py`, `_Run._llm`) calls it when the graph reaches an `llm.closed_choice_evidence` stage. The callback runs the full default `_chat_json()` chain (primary ×2, then review ×2). The reviewer's Evidence-tab recovery (`corpus_review_actions.py`, around `execute_evidence_recovery(..., llm_choice=None)`) never calls a model.
+
+This is not a new feature. The call is already a stage of the `evidence_recovery` graph, so the fix is to make that stage's settings authoritative:
+
+1. Give `llm.closed_choice_evidence` a `config_schema` with `provider_role` (enum `chain`, `primary`, `review`; default `chain`) and `attempts` (1–4, default 2). `chain` means today's behaviour (primary, then review). Existing built-ins set neither key, so `evidence.recovery.celf@1` and `evidence.recovery.cascade@1` keep their behaviour without a version bump.
+2. Change the callback to `llm_choice(prompt, role, attempts)`: `_Run._llm` reads the stage's `config` (it is already passed in) and the callback calls `_chat_json(..., attempts=attempts, roles=("primary", "review") if role == "chain" else (role,))`. Map a missing role (`LookupError`) to `_Outcome("unavailable", ...)` and an exception with a true `timed_out` attribute to `_Outcome("timed_out", ...)` (today every failure is `failed`), so the graph's `on_unavailable`/`on_timeout` edges decide what follows. Record the answering role's provider and model in the stage observation (today it always records the primary).
+3. A clone can then express primary → review escalation as two `llm.closed_choice_evidence` stages joined by `on_error`/`on_timeout`; the recovery compiler already allows more than one such stage. Check that `compile_recovery_pipeline` still marks the chain cELF-compliant.
+4. The reviewer-suggestion graph (`pipelines/evidence.py`) never calls the model, so these keys must not look editable there. Add `"llm.closed_choice_evidence": frozenset({"provider_role", "attempts"})` to `RECOVERY_ONLY_CONFIG` in `registry.py`; `reject_unhonoured_config` (called by `compile_evidence_pipeline`) then rejects them. The recovery compiler does not call `reject_unhonoured_config`, so recovery keeps them.
+5. Tests: extend the recovery tests with a scripted provider. Parity is the existing built-ins with no config (identical calls). Also cover a clone with `provider_role: review` answering first, a two-stage escalation, the key being rejected in a reviewer-suggestion pipeline, and `evidence_cascade_llm_enabled=false` still skipping the stage.
+6. Docs: extend section 4.10 (not a new 4.x), plus the evidence-recovery paragraph of `docs/USER_GUIDE.md`.
+
+#### 8.6.3 Records touch-up (`llm.propose_touchup`)
+
+Where: `propose_touchup()` in `api/app/llm.py`, called by `POST /api/llm/touchup` (`routers/llm.py`) and by the background touch-up job (`job_llm.py`, one call per record). This is the Records tool's metadata or text touch-up, not the Corpus Builder touch-up of section 4.17 (the remaining-migration plan calls it `record.touchup`). It does not use `_chat_json()`: `_propose_ollama` and `_propose_openai` stream one request each over `httpx`, `_parse_proposal` validates it, and any failure raises `TouchupFailure(status_code, message)`. The request names one provider and model; there is no review provider.
+
+1. Feature `record_touchup`, strategy `llm.record_touchup`, built-in `record.touchup.current@1`: one stage, `provider_role` enum `["primary"]` only, `attempts` default **1** (range 1–3), no escalation. That is today's behaviour exactly.
+2. Wrap the provider branch in an invoker: `providers={"primary": (provider, selected_model)}`; retry only a response that failed `_parse_proposal` validation, never a timeout or transport error (server policy, as in `_chat_json`). Map the session's failures back to the same `TouchupFailure` status codes and messages, so the API and job errors don't change.
+3. One trace per proposal: the route opens a session per request, the job one per record. Add an optional `pipeline` field to `TouchupResponse` (and its TypeScript type) and to the job's per-record result. That changes the public API schema, so update `tests/test_frontend_api_contract.py` and run `pytest -m contract`.
+4. An unresolvable assignment makes no model call and raises `TouchupFailure(503, "The record touch-up pipeline is unavailable: …")`. The job records it per record, as it does other failures.
+5. Parity test: monkeypatch `httpx.Client` (or the two `_propose_*` functions' transport) with scripted streamed replies; compare requests and `TouchupFailure` codes between legacy and pipeline for success, an invalid answer, a timeout and a transport error.
+
+#### 8.6.4 Catalogue-match lookup (`run_work_metadata_lookup`)
+
+Where: `run_work_metadata_lookup()` in `api/app/llm_tools.py` fetches catalogue candidates deterministically (`_multi_catalog_candidates`), then makes one `chat_complete()` call (384 tokens, JSON mode) asking which candidate matches, and copies bibliographic values from the chosen record deterministically. Callers: `_catalog_enrich_manifest()` in `corpus_builder.py` (every build and every **Analyse the document again**, unless `auto_enrich_work_metadata` is false) and the Works metadata lookup job (`run_work_metadata_batch` via `job_tools.py`). There is no retry, and an unparseable answer is treated as "no reliable match", not as an error.
+
+1. Feature `work_metadata_match`, strategy `llm.catalogue_match`, built-in `work_metadata.match.current@1`: one stage, `provider_role` enum `["primary"]`, `attempts` default **1**, no escalation (`WorkMetadataRequest` has no review provider). Parity requires attempts 1 and the lenient `_extract_json` behaviour; a retry on an unparseable answer would be a new model call and a default cost increase.
+2. Only the `chat_complete` call goes in the invoker. Candidate retrieval, the "no adapter configured" early return (which makes no model call and records no trace), index validation, `applicable_fields_for` and value copying stay domain code.
+3. Identity goes on the proposal (`pipeline`). **Not** in the manifest: `_catalog_enrich_manifest` writes `catalog_metadata` into the manifest, which is sent verbatim in enrichment prompts. Append the identity to the `document_manifest_pipeline` checkpoint as a second run kind (e.g. `{"kind": "catalogue_match", ...}`), or give it its own checkpoint.
+4. Unresolvable assignment: no model call; the manifest path takes its existing "Automatic bibliographic lookup was unavailable" warning; the Works batch records the error per work, as it does now.
+5. Parity test: monkeypatch `llm_tools.chat_complete` and `_multi_catalog_candidates`; cover a match, `candidate_index: -1`, an unparseable answer and a provider exception, through both callers.
+
+#### 8.6.5 After these
+
+Re-run the generative-call audit (Step 4 of section 10): `grep -rn "chat_complete(\|_chat_json(" api/app` and account for every hit as a pipeline stage or a documented operational exception (for example provider warm-up or model probes in `llm.py`). Only then mark criterion 4 in section 9.
 
 ## 9. Acceptance-criteria status
 
@@ -601,7 +631,7 @@ Do not convert “partial” rows to “met” without inspecting current produc
 
 ## 10. Recommended next work order
 
-After PR #281 is synchronized with `master`, green, and merged, continue in this order.
+PR #281 is merged. The Corpus Builder model calls (section 8.6) are being finished first; then continue in this order.
 
 ### Step 1 — Finish benchmark-run integration
 
@@ -647,13 +677,10 @@ Do not activate `research.balanced@1` based only on architectural neatness.
 
 ### Step 3 — Inventory and migrate remaining retrieval paths
 
-Create a fresh checklist from the original audit and current code. Prioritize:
+General Vector Store search, metadata pre-fill and precedent evidence remapping are done (sections 4.11–4.13). Create a fresh checklist from the original audit and current code. Prioritize:
 
-1. general Vector Store/search pipelines;
-2. metadata prefill;
-3. precedent evidence remapping;
-4. any remaining direct CrossEncoder caller;
-5. any vector-search caller not resolving an assignment/version.
+1. any remaining direct CrossEncoder caller (re-check the `predict_scores()` callers in `rag.py` and `metadata_exemplar_retrieval.py`);
+2. any vector-search caller not resolving an assignment/version.
 
 The migration pattern should be the same as the successful earlier work:
 
@@ -666,7 +693,7 @@ The migration pattern should be the same as the successful earlier work:
 
 ### Step 4 — Re-audit generative LLM call sites
 
-Repeat the “complete generative LLM-query inventory” section of the original audit against current `master`.
+Finish section 8.6 first, then repeat the “complete generative LLM-query inventory” section of the original audit against current `master`.
 
 Classify each call as:
 
@@ -830,16 +857,11 @@ Pipeline Studio now has its own canonical route. New Pipeline Studio UI should i
 
 The next person taking this work should begin with:
 
-1. pull/fetch current `master` and confirm `66320989434bf17225f8d3867dc11f1eff1eddb6` or newer;
-2. inspect PR #281 and current head;
-3. synchronize `task/pipeline-dry-run-comparison` with current `master`;
-4. preserve PR #270’s `/pipelines` route/navigation changes;
-5. run focused comparison tests;
-6. run the full quality gates;
-7. fix any post-sync conflicts/regressions;
-8. merge #281 only when the post-sync CI is fully green;
-9. then begin benchmark-run integration;
-10. use benchmark evidence before considering activation of `research.balanced@1`.
+1. fetch current `master`; confirm PR #312 (manifest, text touch-up, reviewer evidence choice) has merged, or finish its review first;
+2. read section 8.6 and pick the next call. Evidence recovery (8.6.2) is done; suggested order for the rest: the three already-decided small slices (8.6.1), then the Records touch-up (8.6.3) and the catalogue match (8.6.4);
+3. branch each slice from `master` and open its PR against `master`;
+4. run the full quality gates before reporting a slice done, and state in the PR which were not run;
+5. after section 8.6, run the generative-call audit (section 8.6.5), then benchmark integration (section 10, Step 1).
 
 ## 16. Definition of “done” for this migration
 

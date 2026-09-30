@@ -75,6 +75,28 @@ _METHODS = {
 }
 _FALLBACK_EDGE = {"unavailable": "on_unavailable", "timed_out": "on_timeout", "failed": "on_error"}
 MISSING_SOURCE_DOCUMENT = "missing_source_document_identity"
+# ``chain`` is the pre-pipeline behaviour: the primary provider, then the review
+# provider when one is configured. The built-ins set no provider_role, so they keep it.
+CLOSED_CHOICE_ROLES = ("chain", "primary", "review")
+CLOSED_CHOICE_DEFAULT_ROLE = "chain"
+CLOSED_CHOICE_DEFAULT_ATTEMPTS = 2
+
+
+@dataclass(frozen=True)
+class ClosedChoiceAnswer:
+    """A closed-choice model answer and the provider and model that gave it."""
+
+    answer: dict[str, Any]
+    provider: str | None = None
+    model: str | None = None
+
+
+# ``llm_choice(prompt, provider_role, attempts, escalated)``. ``escalated`` is true when
+# a failure edge of another closed-choice stage reached this one, so the provider is
+# told a first-pass model gave no valid answer. It raises ``LookupError`` when the
+# requested provider role is not configured, and an exception whose ``timed_out``
+# attribute is true when the provider stopped on a read timeout.
+ClosedChoice = Callable[[str, str, int, bool], ClosedChoiceAnswer]
 
 
 @dataclass(frozen=True)
@@ -203,7 +225,7 @@ class _Run:
         field_metadata: Any,
         source_document_id: str,
         projection: Any,
-        llm_choice: Callable[[str], dict[str, Any]] | None,
+        llm_choice: ClosedChoice | None,
         llm_skip_reason: str,
         provider: str | None,
         model: str | None,
@@ -220,6 +242,8 @@ class _Run:
         self.provider = provider
         self.model = model
         self.query_text: str | None = None
+        # Set by the executor when a closed-choice stage's failure edge leads to the next stage.
+        self.escalated = False
         self.block_text = {
             str(block.get("block_id") or ""): str(block.get("text") or "") for block in blocks
         }
@@ -371,19 +395,29 @@ class _Run:
         reason = None if kept else f"No candidate reached direct-support score {min_score:.2f}."
         return _Outcome("completed", kept, reason, {"parameters": {"min_score": min_score, "validator": METHOD}})
 
-    def _llm(self, _config: dict[str, Any], _rows: list[dict[str, Any]]) -> _Outcome:
+    def _llm(self, config: dict[str, Any], _rows: list[dict[str, Any]]) -> _Outcome:
+        role = str(config.get("provider_role", CLOSED_CHOICE_DEFAULT_ROLE))
+        attempts = min(4, max(1, int(config.get("attempts", CLOSED_CHOICE_DEFAULT_ATTEMPTS))))
+        parameters: dict[str, Any] = {"provider_role": role, "attempts": attempts}
+        if self.escalated:
+            parameters["escalated"] = True
         if self.llm_choice is None:
-            return _Outcome("skipped", [], self.llm_skip_reason)
+            return _Outcome("skipped", [], self.llm_skip_reason, {"parameters": parameters})
+        if role not in CLOSED_CHOICE_ROLES:
+            return _Outcome("failed", [], f"Unknown provider role {role!r}.", {"parameters": parameters})
         try:
-            picks = validate_llm_choice(
-                self.llm_choice(llm_prompt(self.field, self.value, self.blocks)),
-                self.blocks,
-                self.value,
-                limit=self.plan.selection_limit,
-            )
-        except Exception as exc:  # noqa: BLE001 - the graph's on_error edge decides what follows
-            return _Outcome("failed", [], f"Closed-choice model selection failed: {str(exc)[:300]}")
-        observation = {"provider": self.provider, "model": self.model}
+            choice = self.llm_choice(llm_prompt(self.field, self.value, self.blocks), role, attempts, self.escalated)
+            picks = validate_llm_choice(choice.answer, self.blocks, self.value, limit=self.plan.selection_limit)
+        except LookupError as exc:
+            return _Outcome("unavailable", [], str(exc)[:300], {"parameters": parameters})
+        except Exception as exc:  # noqa: BLE001 - the graph's fallback edges decide what follows
+            status = "timed_out" if getattr(exc, "timed_out", False) else "failed"
+            return _Outcome(status, [], f"Closed-choice model selection failed: {str(exc)[:300]}", {"parameters": parameters})
+        observation = {
+            "parameters": parameters,
+            "provider": choice.provider or self.provider,
+            "model": choice.model or self.model,
+        }
         return _Outcome("completed", picks, None if picks else "The model chose no source unit.", observation)
 
     def _provenance(self, _config: dict[str, Any], rows: list[dict[str, Any]]) -> _Outcome:
@@ -418,7 +452,7 @@ def execute_recovery_pipeline(
     field_metadata: Any,
     source_document_id: str,
     projection: Any,
-    llm_choice: Callable[[str], dict[str, Any]] | None,
+    llm_choice: ClosedChoice | None,
     llm_skip_reason: str,
     provider: str | None = None,
     model: str | None = None,
@@ -457,6 +491,9 @@ def execute_recovery_pipeline(
         # report the candidate set they were handed.
         input_count = len(blocks) if stage.strategy in {_LEXICAL, _SEMANTIC, _LLM} else len(rows)
         outcome = run.run(stage, rows)
+        # Only a model that was asked and gave no valid answer makes the next stage an
+        # escalation: not an empty answer, an unconfigured provider, or a failed retrieval.
+        run.escalated = stage.strategy == _LLM and outcome.status in {"failed", "timed_out"}
         produced = outcome.status == "completed" and (bool(outcome.rows) or stage.strategy == _QUERY)
         if produced:
             following = stage.next[0] if stage.next else None
@@ -531,7 +568,7 @@ def execute_evidence_recovery(
     field_metadata: Any,
     source_document_id: str,
     projection: Any,
-    llm_choice: Callable[[str], dict[str, Any]] | None = None,
+    llm_choice: ClosedChoice | None = None,
     llm_skip_reason: str = "Closed-choice evidence selection is disabled for this request.",
     provider: str | None = None,
     model: str | None = None,

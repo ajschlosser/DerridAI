@@ -53,4 +53,30 @@ describe("PipelineStrategyConfigFields", () => {
     expect(wrapper.emitted("updateConfig")?.[0]?.slice(0, 2)).toEqual(["provider_role", "primary"]);
     expect(wrapper.get("input[type=number]").attributes("max")).toBe("4");
   });
+
+  it("names evidence recovery's default primary-then-review chain", () => {
+    const closedChoice: PipelineStrategy = {
+      ...strategy,
+      strategy_id: "llm.closed_choice_evidence",
+      config_schema: {
+        type: "object",
+        properties: {
+          provider_role: { type: "string", enum: ["chain", "primary", "review"], default: "chain" },
+        },
+      },
+    };
+    const wrapper = mount(PipelineStrategyConfigFields, {
+      props: {
+        stage: { ...stage, strategy: "llm.closed_choice_evidence", config: {} },
+        strategy: closedChoice,
+      },
+    });
+
+    expect(
+      wrapper
+        .get("select")
+        .findAll("option")
+        .map((option) => option.text()),
+    ).toEqual(["Primary, then review provider", "Primary provider", "Review provider"]);
+  });
 });

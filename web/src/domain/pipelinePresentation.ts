@@ -267,7 +267,7 @@ export function pipelineConfigHelp(key: string, t: PipelineTranslator) {
     ),
     provider_role: t(
       "pipelines.config.provider_role.help",
-      "Technical name: provider_role. Which of the build's configured model providers runs this stage: the primary provider, or the separately configured review provider. A stage whose provider the build does not configure is reported as unavailable.",
+      "Technical name: provider_role. Which of the build's configured model providers runs this stage: the primary provider, the separately configured review provider, or (in evidence recovery) the primary provider followed by the review provider. A stage whose provider the build does not configure is reported as unavailable.",
     ),
     attempts: t(
       "pipelines.config.attempts.help",
@@ -320,6 +320,7 @@ export function pipelineConfigOptionLabel(key: string, value: string, t: Pipelin
     provider_role: {
       primary: t("pipelines.config.provider_role.primary", "Primary provider"),
       review: t("pipelines.config.provider_role.review", "Review provider"),
+      chain: t("pipelines.config.provider_role.chain", "Primary, then review provider"),
     },
   };
   return labels[key]?.[value] || value;
