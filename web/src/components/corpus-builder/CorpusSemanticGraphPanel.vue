@@ -25,14 +25,19 @@ import {
   type SemanticContentGraphView,
   type SemanticGraphViewEdge,
   type SemanticGraphViewNode,
-  type SemanticGraphViewRelation,
   type SemanticIndexSort,
   type SemanticRelationKindFilter,
 } from "../../api/corpus";
 import { readDocumentIntelligence } from "../../features/corpus-builder/api/documentIntelligenceReads";
 import { layoutGraph, nodeRadius, type LayoutPoint } from "../../domain/semanticGraphLayout";
 import { useI18nStore } from "../../stores/i18n";
-import UiTooltip from "../ui/UiTooltip.vue";
+import {
+  SEMANTIC_INDEX_PAGE as INDEX_PAGE,
+  authorityLabel as authorityText,
+  relationLabel,
+} from "../../domain/semanticGraphLabels";
+import SemanticGraphEntityIndex from "./SemanticGraphEntityIndex.vue";
+import SemanticGraphInspector from "./SemanticGraphInspector.vue";
 
 const props = defineProps<{
   buildId: string;
@@ -46,7 +51,6 @@ const surfacePreset = RELATION_SURFACE_PRESETS.semanticNetwork;
 const WIDTH = 960;
 const HEIGHT = 560;
 const DENSITIES = [40, 80, 150, 250] as const;
-const INDEX_PAGE = 50;
 const LABEL_BUDGET = 18;
 const RELATION_OPTIONS: Array<{ kind: SemanticRelationKindFilter; key: string }> = [
   { kind: "all", key: "pdf_corpus.semantic_graph_relations_all" },
@@ -489,47 +493,12 @@ const selectedEdges = computed(() =>
       )
     : [],
 );
-const relationGroups = computed(() => {
-  const relations = focusDetail.value?.relations || [];
-  return [
-    {
-      kind: "semantic",
-      title: i18n.t("pdf_corpus.semantic_graph_semantic_relations"),
-      items: relations.filter((rel) => rel.relation_kind === "semantic"),
-    },
-    {
-      kind: "observational",
-      title: i18n.t("pdf_corpus.semantic_graph_observational_relations"),
-      items: relations.filter((rel) => rel.relation_kind !== "semantic"),
-    },
-  ].filter((group) => group.items.length);
-});
-
-function relationLabel(predicate: string) {
-  return String(predicate || "").replaceAll("_", " ");
-}
-function authorityLabel(status: string) {
-  if (status === "human_confirmed")
-    return i18n.t("pdf_corpus.semantic_graph_authority_human_confirmed");
-  if (status === "disputed") return i18n.t("pdf_corpus.semantic_graph_authority_disputed");
-  return i18n.t("pdf_corpus.semantic_graph_authority_unreviewed");
-}
-function featureText(values?: Array<{ label: string; count?: number }>) {
-  return (values || [])
-    .slice(0, 8)
-    .map((item) => (Number(item.count || 0) > 1 ? `${item.label} ×${item.count}` : item.label))
-    .join(" · ");
-}
 function nodeAriaLabel(node: SemanticGraphViewNode) {
   return `${node.label}, ${node.type}, ${i18n.tf("pdf_corpus.semantic_graph_mentions", {
     count: node.mention_count,
     records: node.record_count,
   })}`;
 }
-function relationKey(rel: SemanticGraphViewRelation) {
-  return `${rel.id}:${rel.direction}`;
-}
-
 /* ---------- Status copy ---------- */
 
 const formatter = computed(() => new Intl.NumberFormat(i18n.locale || undefined));
@@ -549,15 +518,6 @@ const showingText = computed(() => {
 const truncated = computed(() =>
   Boolean(view.value?.view.truncated_nodes || view.value?.view.truncated_edges),
 );
-const pageText = computed(() => {
-  const index = view.value?.index;
-  if (!index || !index.total) return "";
-  return i18n.tf("pdf_corpus.semantic_graph_page", {
-    start: n(index.offset + 1),
-    end: n(Math.min(index.total, index.offset + index.items.length)),
-    total: n(index.total),
-  });
-});
 </script>
 
 <template>
@@ -785,7 +745,7 @@ const pageText = computed(() => {
                   :key="edge.id"
                   :path="edgePath(edge)"
                   :width="edgeWidth(edge) / viewportState.zoom"
-                  :title="`${relationLabel(edge.predicate)} · ${authorityLabel(edge.authority_status)}`"
+                  :title="`${relationLabel(edge.predicate)} · ${authorityText(edge.authority_status, i18n.t)}`"
                   :class="[
                     'graph-edge',
                     edge.relation_kind,
@@ -869,259 +829,31 @@ const pageText = computed(() => {
           </p>
         </div>
 
-        <aside class="graph-inspector" :aria-label="i18n.t('pdf_corpus.semantic_graph_inspector')">
-          <template v-if="selectedNode">
-            <div class="inspector-head">
-              <p :class="['type-pill', hueClass(selectedNode.type)]">
-                <i class="swatch" aria-hidden="true" />{{ selectedNode.type }}
-              </p>
-              <UiTooltip
-                :text="i18n.t('pdf_corpus.semantic_graph_clear_selection')"
-                trigger-mode="content"
-                :content-focusable="false"
-                placement="bottom"
-              >
-                <button
-                  type="button"
-                  class="icon-btn small"
-                  :aria-label="i18n.t('pdf_corpus.semantic_graph_clear_selection')"
-                  @click="selectedNodeId = ''"
-                >
-                  ×
-                </button>
-              </UiTooltip>
-            </div>
-            <h4>{{ selectedNode.label }}</h4>
-            <p v-if="selectedNode.aliases?.length" class="graph-aliases">
-              {{ selectedNode.aliases.join(" · ") }}
-            </p>
-            <dl class="stat-row">
-              <div>
-                <dt>{{ i18n.t("pdf_corpus.semantic_graph_mentions_short") }}</dt>
-                <dd>{{ n(selectedNode.mention_count) }}</dd>
-              </div>
-              <div>
-                <dt>{{ i18n.t("pdf_corpus.semantic_graph_records_short") }}</dt>
-                <dd>{{ n(selectedNode.record_count) }}</dd>
-              </div>
-              <div>
-                <dt>{{ i18n.t("pdf_corpus.semantic_graph_connections_short") }}</dt>
-                <dd>{{ n(selectedNode.degree) }}</dd>
-              </div>
-            </dl>
-            <button
-              v-if="selectedNode.id !== focusId"
-              type="button"
-              class="btn primary focus-btn"
-              :aria-label="
-                i18n.tf('pdf_corpus.semantic_graph_focus_on', { label: selectedNode.label })
-              "
-              @click="focusNode(selectedNode.id, selectedNode.label)"
-            >
-              {{ i18n.t("pdf_corpus.semantic_graph_focus_action") }}
-            </button>
-
-            <div v-if="focusDetail?.node.character_profile" class="character-profile">
-              <h5>{{ i18n.t("pdf_corpus.semantic_graph_character_profile") }}</h5>
-              <dl>
-                <template v-if="focusDetail.node.character_profile.actions_as_agent?.length">
-                  <dt>{{ i18n.t("pdf_corpus.semantic_graph_actions_agent") }}</dt>
-                  <dd>{{ featureText(focusDetail.node.character_profile.actions_as_agent) }}</dd>
-                </template>
-                <template v-if="focusDetail.node.character_profile.actions_as_patient?.length">
-                  <dt>{{ i18n.t("pdf_corpus.semantic_graph_actions_patient") }}</dt>
-                  <dd>{{ featureText(focusDetail.node.character_profile.actions_as_patient) }}</dd>
-                </template>
-                <template v-if="focusDetail.node.character_profile.possessions?.length">
-                  <dt>{{ i18n.t("pdf_corpus.semantic_graph_possessions") }}</dt>
-                  <dd>{{ featureText(focusDetail.node.character_profile.possessions) }}</dd>
-                </template>
-                <template v-if="focusDetail.node.character_profile.modifiers?.length">
-                  <dt>{{ i18n.t("pdf_corpus.semantic_graph_modifiers") }}</dt>
-                  <dd>{{ featureText(focusDetail.node.character_profile.modifiers) }}</dd>
-                </template>
-              </dl>
-              <small>{{ i18n.t("pdf_corpus.semantic_graph_character_profile_note") }}</small>
-            </div>
-
-            <template v-if="focusDetail">
-              <p class="relations-count">
-                {{
-                  i18n.tf("pdf_corpus.semantic_graph_relations_count", {
-                    shown: n(focusDetail.relations.length),
-                    total: n(focusDetail.relations_total),
-                  })
-                }}
-              </p>
-              <section v-for="group in relationGroups" :key="group.kind" class="relation-group">
-                <h5>{{ group.title }}</h5>
-                <ul class="relation-list">
-                  <li v-for="rel in group.items" :key="relationKey(rel)">
-                    <div class="relation-line">
-                      <span class="predicate">
-                        <span aria-hidden="true">{{
-                          rel.direction === "outgoing" ? "→" : "←"
-                        }}</span>
-                        <span class="visually-hidden">{{
-                          rel.direction === "outgoing"
-                            ? i18n.t("pdf_corpus.semantic_graph_direction_outgoing")
-                            : i18n.t("pdf_corpus.semantic_graph_direction_incoming")
-                        }}</span>
-                        {{ relationLabel(rel.predicate) }}
-                      </span>
-                      <button
-                        type="button"
-                        :class="['entity-link', hueClass(rel.other_type)]"
-                        @click="focusNode(rel.other_id, rel.other_label)"
-                      >
-                        {{ rel.other_label }}
-                      </button>
-                    </div>
-                    <div class="relation-meta">
-                      <span
-                        v-if="rel.relation_kind === 'semantic'"
-                        :class="['badge', rel.authority_status]"
-                      >
-                        {{ authorityLabel(rel.authority_status) }}
-                      </span>
-                      <small>{{
-                        i18n.tf("pdf_corpus.semantic_graph_occurrences", {
-                          count: n(rel.count),
-                          records: n(rel.record_count),
-                        })
-                      }}</small>
-                      <small v-if="rel.evidence_ref_count">{{
-                        i18n.tf("pdf_corpus.semantic_graph_evidence_refs", {
-                          count: n(rel.evidence_ref_count),
-                        })
-                      }}</small>
-                      <small v-if="rel.observed_verbs.length">{{
-                        i18n.tf("pdf_corpus.semantic_graph_observed_verbs", {
-                          verbs: rel.observed_verbs.join(" · "),
-                        })
-                      }}</small>
-                    </div>
-                  </li>
-                </ul>
-              </section>
-            </template>
-            <ul v-else-if="selectedEdges.length" class="relation-list compact">
-              <li v-for="edge in selectedEdges.slice(0, 12)" :key="edge.id">
-                <div class="relation-line">
-                  <span class="predicate">{{ relationLabel(edge.predicate) }}</span>
-                  <button
-                    type="button"
-                    class="entity-link"
-                    @click="selectNode(edge.source === selectedNode.id ? edge.target : edge.source)"
-                  >
-                    {{
-                      nodesById.get(edge.source === selectedNode.id ? edge.target : edge.source)
-                        ?.label
-                    }}
-                  </button>
-                </div>
-              </li>
-            </ul>
-          </template>
-          <div v-else class="inspector-empty">
-            <p>{{ i18n.t("pdf_corpus.semantic_graph_select_node") }}</p>
-          </div>
-        </aside>
+        <SemanticGraphInspector
+          :selected-node="selectedNode"
+          :focus-detail="focusDetail"
+          :selected-edges="selectedEdges"
+          :nodes-by-id="nodesById"
+          :focus-id="focusId"
+          :hue-class="hueClass"
+          @clear="selectedNodeId = ''"
+          @focus="focusNode"
+          @select="selectNode"
+        />
       </div>
 
       <!-- Paged entity index: the accessible, complete route to every entity -->
-      <section v-if="view" class="entity-index" aria-labelledby="semantic-graph-entity-index-title">
-        <div class="entity-index-heading">
-          <div>
-            <h4 id="semantic-graph-entity-index-title">
-              {{ i18n.t("pdf_corpus.semantic_graph_entity_index") }}
-            </h4>
-            <p>
-              {{
-                i18n.tf("pdf_corpus.semantic_graph_entity_index_count", {
-                  shown: n(view.index.total),
-                  total: n(view.summary.nodes || 0),
-                })
-              }}
-            </p>
-          </div>
-          <label class="toolbar-field narrow" for="semantic-graph-index-sort">
-            <span>{{ i18n.t("pdf_corpus.semantic_graph_sort") }}</span>
-            <select id="semantic-graph-index-sort" v-model="indexSort" class="control">
-              <option value="mentions">
-                {{ i18n.t("pdf_corpus.semantic_graph_sort_mentions") }}
-              </option>
-              <option value="degree">{{ i18n.t("pdf_corpus.semantic_graph_sort_degree") }}</option>
-              <option value="records">
-                {{ i18n.t("pdf_corpus.semantic_graph_sort_records") }}
-              </option>
-              <option value="label">{{ i18n.t("pdf_corpus.semantic_graph_sort_label") }}</option>
-            </select>
-          </label>
-        </div>
-        <div class="entity-index-table-wrap">
-          <table class="entity-index-table">
-            <thead>
-              <tr>
-                <th scope="col">{{ i18n.t("pdf_corpus.semantic_graph_entity") }}</th>
-                <th scope="col">{{ i18n.t("pdf_corpus.semantic_graph_type") }}</th>
-                <th scope="col" class="num">
-                  {{ i18n.t("pdf_corpus.semantic_graph_mentions_short") }}
-                </th>
-                <th scope="col" class="num">
-                  {{ i18n.t("pdf_corpus.semantic_graph_records_short") }}
-                </th>
-                <th scope="col" class="num">
-                  {{ i18n.t("pdf_corpus.semantic_graph_connections_short") }}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="node in view.index.items"
-                :key="node.id"
-                :class="{ selected: node.id === selectedNodeId }"
-              >
-                <td>
-                  <button type="button" class="entity-link" @click="focusNode(node.id, node.label)">
-                    {{ node.label }}
-                  </button>
-                  <small v-if="node.aliases?.length">{{
-                    node.aliases.slice(0, 4).join(" · ")
-                  }}</small>
-                </td>
-                <td>
-                  <span :class="['type-pill', hueClass(node.type)]"
-                    ><i class="swatch" aria-hidden="true" />{{ node.type }}</span
-                  >
-                </td>
-                <td class="num">{{ n(node.mention_count) }}</td>
-                <td class="num">{{ n(node.record_count) }}</td>
-                <td class="num">{{ n(node.degree) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div v-if="view.index.total > INDEX_PAGE" class="pager">
-          <button
-            type="button"
-            class="btn secondary"
-            :disabled="indexOffset === 0 || loading"
-            @click="indexOffset = Math.max(0, indexOffset - INDEX_PAGE)"
-          >
-            {{ i18n.t("pdf_corpus.semantic_graph_prev_page") }}
-          </button>
-          <span>{{ pageText }}</span>
-          <button
-            type="button"
-            class="btn secondary"
-            :disabled="indexOffset + INDEX_PAGE >= view.index.total || loading"
-            @click="indexOffset += INDEX_PAGE"
-          >
-            {{ i18n.t("pdf_corpus.semantic_graph_next_page") }}
-          </button>
-        </div>
-      </section>
+      <SemanticGraphEntityIndex
+        v-if="view"
+        v-model:sort="indexSort"
+        v-model:offset="indexOffset"
+        :index="view.index"
+        :node-total="view.summary.nodes || 0"
+        :loading="loading"
+        :selected-node-id="selectedNodeId"
+        :hue-class="hueClass"
+        @focus="focusNode"
+      />
 
       <p v-if="view?.epistemic_note" class="graph-epistemic-note">
         {{ view.epistemic_note }}
@@ -1570,237 +1302,6 @@ const pageText = computed(() => {
   margin: 0;
   padding: 0 var(--space-3) var(--space-2);
   font-size: var(--fs-xs);
-}
-
-/* Inspector */
-.graph-inspector {
-  display: grid;
-  align-content: start;
-  gap: var(--space-2);
-  max-height: 78vh;
-  overflow: auto;
-  padding: var(--space-3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: var(--surface-raised);
-}
-.inspector-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.inspector-empty {
-  display: grid;
-  place-items: center;
-  min-height: 200px;
-  color: var(--muted);
-  text-align: center;
-}
-.graph-inspector h4 {
-  font-size: var(--fs-lg, 1.125rem);
-  overflow-wrap: anywhere;
-}
-.stat-row {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-2);
-  margin: var(--space-1, 4px) 0;
-}
-.stat-row div {
-  padding: var(--space-2);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: var(--surface-inset);
-}
-.stat-row dt {
-  font-size: var(--fs-xs);
-  color: var(--muted);
-}
-.stat-row dd {
-  margin: 0;
-  font-weight: var(--fw-semibold);
-  font-variant-numeric: tabular-nums;
-}
-.focus-btn {
-  justify-self: start;
-}
-.character-profile {
-  display: grid;
-  gap: var(--space-2);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--line);
-}
-.character-profile h5,
-.character-profile dl,
-.character-profile dd,
-.relation-group h5 {
-  margin: 0;
-}
-.character-profile dl {
-  display: grid;
-  gap: var(--space-2);
-}
-.character-profile dt {
-  font-size: var(--fs-xs);
-  font-weight: var(--fw-semibold);
-  color: var(--muted);
-}
-.character-profile dd {
-  overflow-wrap: anywhere;
-}
-.character-profile small {
-  color: var(--muted);
-}
-.relations-count {
-  padding-top: var(--space-2);
-  border-top: 1px solid var(--line);
-  font-size: var(--fs-xs);
-}
-.relation-group {
-  display: grid;
-  gap: var(--space-1, 4px);
-}
-.relation-group h5 {
-  font-size: var(--fs-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-}
-.relation-list {
-  display: grid;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.relation-list li {
-  display: grid;
-  gap: 4px;
-  padding-block: var(--space-2);
-  border-top: 1px solid var(--line);
-}
-.relation-line {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: baseline;
-}
-.predicate {
-  font-size: var(--fs-xs);
-  color: var(--muted);
-}
-.relation-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-  align-items: center;
-}
-.relation-meta small {
-  color: var(--muted);
-  font-size: var(--fs-xs);
-}
-.badge {
-  padding: 1px 8px;
-  border: 1px solid;
-  border-radius: 999px;
-  font-size: var(--fs-xs);
-  font-weight: var(--fw-semibold);
-  color: var(--tone-warn-fg);
-  background: var(--tone-warn-bg);
-  border-color: var(--tone-warn-border);
-}
-.badge.human_confirmed {
-  color: var(--tone-ok-fg);
-  background: var(--tone-ok-bg);
-  border-color: var(--tone-ok-border);
-}
-.badge.disputed {
-  color: var(--tone-danger-fg);
-  background: var(--tone-danger-bg);
-  border-color: var(--tone-danger-border);
-}
-
-/* Entity index */
-.entity-index {
-  display: grid;
-  gap: var(--space-2);
-}
-.entity-index-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: end;
-  gap: var(--space-3);
-}
-.entity-index-heading h4,
-.entity-index-heading p {
-  margin: 0;
-}
-.entity-index-heading p {
-  margin-top: 2px;
-  color: var(--muted);
-  font-size: var(--fs-xs);
-}
-.entity-index-table-wrap {
-  max-height: 420px;
-  overflow: auto;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-}
-.entity-index-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--fs-xs);
-}
-.entity-index-table th,
-.entity-index-table td {
-  padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--line);
-  text-align: start;
-  vertical-align: top;
-}
-.entity-index-table .num {
-  text-align: end;
-  font-variant-numeric: tabular-nums;
-}
-.entity-index-table th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: var(--surface-raised);
-  font-weight: var(--fw-semibold);
-}
-.entity-index-table tbody tr:hover,
-.entity-index-table tbody tr.selected {
-  background: var(--surface-hover);
-}
-.entity-index-table td:first-child {
-  min-width: 220px;
-}
-.entity-index-table td:first-child small {
-  display: block;
-  margin-top: 2px;
-  color: var(--muted);
-}
-.entity-link {
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: var(--accent-fg);
-  font: inherit;
-  font-weight: var(--fw-semibold);
-  text-align: start;
-  cursor: pointer;
-}
-.entity-link:hover {
-  text-decoration: underline;
-}
-.pager {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: var(--space-3);
-  font-size: var(--fs-xs);
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
 }
 .graph-epistemic-note {
   margin: 0;

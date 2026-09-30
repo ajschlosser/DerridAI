@@ -28,9 +28,12 @@ import {
 } from "../../api/corpus";
 import {
   radialLayout,
-  segmentText,
+  nodeTone,
+  relationLabel,
   type Point,
 } from "../../features/corpus-builder/domain/semanticMap";
+import RecordSemanticAnnotatedText from "./RecordSemanticAnnotatedText.vue";
+import RecordSemanticMapLists from "./RecordSemanticMapLists.vue";
 import { useI18nStore } from "../../stores/i18n";
 
 type Step = { kind: "record"; id: string } | { kind: "node"; id: string; label: string };
@@ -52,7 +55,6 @@ const MAX_TRAIL = 30;
 const MAX_INNER = 24;
 const MAX_OUTER = 16;
 const SIZE = { width: 820, height: 600 };
-const LAYERS = ["entity", "quotation", "ner", "pos"] as const;
 
 const trail = ref<Step[]>([]);
 const maps = ref<Record<string, RecordSemanticMap>>({});
@@ -61,7 +63,6 @@ const previews = ref<Record<string, string>>({});
 const loading = ref(false);
 const rerunning = ref(false);
 const error = ref("");
-const shownLayers = ref<Set<string>>(new Set(LAYERS));
 const includeTerms = ref(false);
 
 const current = computed<Step | null>(() => trail.value[trail.value.length - 1] || null);
@@ -176,27 +177,10 @@ function stepLabel(step: Step) {
     : step.label;
 }
 const LAYER_STATUSES = new Set(["ok", "stale", "missing", "unavailable"]);
-const AUTHORITY_STATUSES = new Set(["human_confirmed", "unreviewed", "disputed"]);
 function statusLabel(status: SemanticLayerStatus) {
   return LAYER_STATUSES.has(status)
     ? i18n.t(`pdf_corpus.semantic_map_status_${status}`)
     : String(status);
-}
-function authorityLabel(status?: string) {
-  const value = status || "unreviewed";
-  return AUTHORITY_STATUSES.has(value)
-    ? i18n.t(`pdf_corpus.semantic_map_authority_${value}`)
-    : value.replaceAll("_", " ");
-}
-function relationLabel(edge: SemanticContentGraphEdge) {
-  return String(edge.predicate || "").replaceAll("_", " ");
-}
-function nodeTone(type: string) {
-  if (type === "person" || type === "character") return "person";
-  if (type === "concept" || type === "topic") return "concept";
-  if (type === "work") return "work";
-  if (type === "term") return "term";
-  return "entity";
 }
 function shortLabel(value: string) {
   return value.length > 22 ? `${value.slice(0, 21)}…` : value;
@@ -209,19 +193,6 @@ const layerStatusNeedsRerun = computed(() => {
     (status) => status === "stale" || status === "missing",
   );
 });
-
-// --- the annotated text of the Record under review ------------------------------------------------------------------
-const textSegments = computed(() =>
-  isOwnRecord.value && currentMap.value
-    ? segmentText(String(props.record.text || ""), currentMap.value.mentions, shownLayers.value)
-    : [],
-);
-function toggleLayer(layer: string, on: boolean) {
-  const next = new Set(shownLayers.value);
-  if (on) next.add(layer);
-  else next.delete(layer);
-  shownLayers.value = next;
-}
 
 // --- the diagram ----------------------------------------------------------------------------------------------------
 interface DiagramNode {
@@ -371,25 +342,6 @@ const contentBounds = computed(() =>
   ),
 );
 
-const localNodesByType = computed(() => {
-  const groups = new Map<string, RecordSemanticMapNode[]>();
-  for (const node of currentMap.value?.nodes || []) {
-    if (!node.local) continue;
-    const bucket = groups.get(node.type) || [];
-    bucket.push(node);
-    groups.set(node.type, bucket);
-  }
-  return Array.from(groups.entries()).sort(([left], [right]) =>
-    left === "term" ? 1 : right === "term" ? -1 : left.localeCompare(right),
-  );
-});
-
-function neighborOf(edge: SemanticContentGraphEdge) {
-  const hood = currentNeighborhood.value;
-  if (!hood) return null;
-  const otherId = edge.source === hood.node.id ? edge.target : edge.source;
-  return hood.nodes.find((node) => node.id === otherId) || null;
-}
 function recordPreview(recordId: string) {
   return previews.value[recordId] || "";
 }
@@ -538,67 +490,13 @@ function onNodeKeydown(event: KeyboardEvent, node: DiagramNode) {
         }}
       </p>
 
-      <section
+      <RecordSemanticAnnotatedText
         v-if="isOwnRecord && props.record.text"
-        class="annotated-text"
-        :aria-labelledby="`${idPrefix}-semantic-annotated-title`"
-      >
-        <div class="annotated-text-head">
-          <h4 :id="`${idPrefix}-semantic-annotated-title`">
-            {{ i18n.t("pdf_corpus.semantic_map_annotated_text") }}
-          </h4>
-          <fieldset class="layer-toggles">
-            <legend>{{ i18n.t("pdf_corpus.semantic_map_show_layers") }}</legend>
-            <label v-for="layer in LAYERS" :key="layer" :data-layer="layer">
-              <input
-                type="checkbox"
-                :checked="shownLayers.has(layer)"
-                @change="toggleLayer(layer, ($event.target as HTMLInputElement).checked)"
-              />
-              {{ i18n.t(`pdf_corpus.semantic_map_layer_${layer}`) }}
-            </label>
-          </fieldset>
-        </div>
-        <p class="annotated-text-body">
-          <template v-for="segment in textSegments" :key="segment.start">
-            <button
-              v-if="segment.mention?.node_id"
-              type="button"
-              class="mention"
-              :data-layer="segment.mention.layer"
-              :title="
-                segment.mention.speaker
-                  ? i18n.tf('pdf_corpus.semantic_map_quotation_speaker', {
-                      speaker: segment.mention.speaker,
-                    })
-                  : segment.mention.tag
-              "
-              :aria-label="
-                i18n.tf('pdf_corpus.semantic_map_walk_to', {
-                  label: `${segment.text} (${segment.mention.tag || segment.mention.layer})`,
-                })
-              "
-              @click="walkToMention(segment.mention.node_id || '', segment.text)"
-            >
-              {{ segment.text
-              }}<small class="mention-tag" aria-hidden="true">{{
-                segment.mention.tag || segment.mention.layer
-              }}</small>
-            </button>
-            <mark
-              v-else-if="segment.mention"
-              class="mention"
-              :data-layer="segment.mention.layer"
-              :title="segment.mention.tag"
-              >{{ segment.text
-              }}<small class="mention-tag">{{
-                segment.mention.tag || segment.mention.layer
-              }}</small></mark
-            >
-            <template v-else>{{ segment.text }}</template>
-          </template>
-        </p>
-      </section>
+        :text="props.record.text"
+        :mentions="currentMap.mentions"
+        :id-prefix="idPrefix"
+        @walk="walkToMention"
+      />
       <p v-else-if="!isOwnRecord && recordPreview(currentMap.record_id)" class="record-preview">
         {{ recordPreview(currentMap.record_id) }}
       </p>
@@ -749,162 +647,16 @@ function onNodeKeydown(event: KeyboardEvent, node: DiagramNode) {
       {{ i18n.t("pdf_corpus.semantic_map_empty") }}
     </p>
 
-    <!-- Record step lists -------------------------------------------------------------------------------------- -->
-    <div v-if="currentMap" class="semantic-map-lists">
-      <section v-if="localNodesByType.length" :aria-labelledby="`${idPrefix}-semantic-local-title`">
-        <h4 :id="`${idPrefix}-semantic-local-title`">
-          {{ i18n.t("pdf_corpus.semantic_map_in_record") }}
-        </h4>
-        <dl class="node-groups">
-          <template v-for="[type, nodes] in localNodesByType" :key="type">
-            <dt>{{ type }}</dt>
-            <dd>
-              <button
-                v-for="node in nodes"
-                :key="node.id"
-                type="button"
-                class="node-chip"
-                :data-tone="nodeTone(node.type)"
-                @click="walkToNode(node)"
-              >
-                {{ node.label }}<small>{{ node.record_count || 1 }}</small>
-              </button>
-            </dd>
-          </template>
-        </dl>
-      </section>
-
-      <section :aria-labelledby="`${idPrefix}-semantic-linked-title`">
-        <h4 :id="`${idPrefix}-semantic-linked-title`">
-          {{ i18n.t("pdf_corpus.semantic_map_linked_records") }}
-        </h4>
-        <p class="help">{{ i18n.t("pdf_corpus.semantic_map_linked_records_help") }}</p>
-        <p v-if="!currentMap.linked_records.length" class="semantic-map-status">
-          {{ i18n.t("pdf_corpus.semantic_map_no_links") }}
-        </p>
-        <ul v-else class="record-links">
-          <li v-for="link in currentMap.linked_records" :key="link.record_id">
-            <div class="record-link-head">
-              <b>{{ link.record_id }}</b>
-              <small>{{
-                i18n.tf("pdf_corpus.semantic_map_shared", { count: link.shared_node_count })
-              }}</small>
-            </div>
-            <p>{{ link.preview }}</p>
-            <div class="record-link-shared">
-              <button
-                v-for="node in link.shared_nodes"
-                :key="node.id"
-                type="button"
-                class="node-chip"
-                :data-tone="nodeTone(node.type)"
-                @click="walkToNode(node)"
-              >
-                {{ node.label }}
-              </button>
-            </div>
-            <div class="record-link-actions">
-              <button type="button" class="btn small" @click="walkToRecord(link.record_id)">
-                {{ i18n.t("pdf_corpus.semantic_map_explore_record") }}
-              </button>
-              <button
-                type="button"
-                class="btn small secondary"
-                @click="emit('openRecord', link.record_id)"
-              >
-                {{ i18n.t("pdf_corpus.semantic_map_open_record") }}
-              </button>
-            </div>
-          </li>
-        </ul>
-      </section>
-    </div>
-
-    <!-- Node step lists ---------------------------------------------------------------------------------------- -->
-    <div v-else-if="currentNeighborhood" class="semantic-map-lists">
-      <section :aria-labelledby="`${idPrefix}-semantic-relations-title`">
-        <h4 :id="`${idPrefix}-semantic-relations-title`">
-          {{
-            i18n.tf("pdf_corpus.semantic_map_relations", {
-              shown: currentNeighborhood.edges.length,
-              total: currentNeighborhood.total_edges,
-            })
-          }}
-        </h4>
-        <p v-if="!currentNeighborhood.edges.length" class="semantic-map-status">
-          {{ i18n.t("pdf_corpus.semantic_map_no_relations") }}
-        </p>
-        <ul v-else class="relation-list">
-          <li
-            v-for="edge in currentNeighborhood.edges"
-            :key="edge.id"
-            :data-kind="edge.relation_kind"
-          >
-            <span class="relation-line">
-              <span v-if="edge.target === currentNeighborhood.node.id" aria-hidden="true">←</span>
-              <b>{{ relationLabel(edge) }}</b>
-              <span v-if="edge.source === currentNeighborhood.node.id" aria-hidden="true">→</span>
-              <button
-                v-if="neighborOf(edge)"
-                type="button"
-                class="node-chip"
-                :data-tone="nodeTone(neighborOf(edge)!.type)"
-                @click="walkToNode(neighborOf(edge)!)"
-              >
-                {{ neighborOf(edge)!.label }}
-              </button>
-            </span>
-            <small>
-              {{
-                edge.relation_kind === "semantic"
-                  ? `${i18n.t("pdf_corpus.semantic_graph_semantic")} · ${authorityLabel(edge.authority_status)}`
-                  : i18n.t("pdf_corpus.semantic_graph_observational")
-              }}
-              ·
-              {{
-                i18n.tf("pdf_corpus.semantic_map_relation_records", {
-                  count: edge.record_ids?.length || 0,
-                })
-              }}
-            </small>
-          </li>
-        </ul>
-      </section>
-      <section :aria-labelledby="`${idPrefix}-semantic-node-records-title`">
-        <h4 :id="`${idPrefix}-semantic-node-records-title`">
-          {{
-            i18n.tf("pdf_corpus.semantic_map_records_for_node", {
-              shown: currentNeighborhood.records.length,
-              total: currentNeighborhood.total_records,
-            })
-          }}
-        </h4>
-        <ul class="record-links">
-          <li v-for="row in currentNeighborhood.records" :key="row.record_id">
-            <div class="record-link-head">
-              <b>{{ row.record_id }}</b>
-              <small v-if="row.record_id === props.record.record_id">{{
-                i18n.t("pdf_corpus.semantic_map_current_record")
-              }}</small>
-            </div>
-            <p>{{ row.preview }}</p>
-            <div class="record-link-actions">
-              <button type="button" class="btn small" @click="walkToRecord(row.record_id)">
-                {{ i18n.t("pdf_corpus.semantic_map_explore_record") }}
-              </button>
-              <button
-                v-if="row.record_id !== props.record.record_id"
-                type="button"
-                class="btn small secondary"
-                @click="emit('openRecord', row.record_id)"
-              >
-                {{ i18n.t("pdf_corpus.semantic_map_open_record") }}
-              </button>
-            </div>
-          </li>
-        </ul>
-      </section>
-    </div>
+    <RecordSemanticMapLists
+      v-if="currentMap || currentNeighborhood"
+      :map="currentMap"
+      :neighborhood="currentNeighborhood"
+      :record-id="props.record.record_id"
+      :id-prefix="idPrefix"
+      @walk-to-node="walkToNode"
+      @walk-to-record="walkToRecord"
+      @open-record="emit('openRecord', $event)"
+    />
 
     <p
       v-if="currentMap?.epistemic_note || currentNeighborhood?.epistemic_note"
@@ -999,36 +751,6 @@ function onNodeKeydown(event: KeyboardEvent, node: DiagramNode) {
   border-color: var(--tone-warn-border);
   background: var(--tone-warn-bg);
 }
-.annotated-text {
-  display: grid;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-control);
-  background: var(--surface-raised);
-}
-.annotated-text-head {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: var(--space-2);
-  align-items: center;
-}
-.layer-toggles {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin: 0;
-  padding: 0;
-  border: 0;
-  font-size: var(--fs-xs);
-}
-.layer-toggles legend {
-  float: left;
-  margin-inline-end: var(--space-1);
-  padding: 0;
-  font-weight: var(--fw-semibold);
-}
 .layer-toggles label,
 .include-terms {
   display: inline-flex;
@@ -1042,67 +764,11 @@ function onNodeKeydown(event: KeyboardEvent, node: DiagramNode) {
 .include-terms input {
   margin: 0;
 }
-.annotated-text-body {
-  margin: 0;
-  max-height: 280px;
-  overflow: auto;
-  line-height: 2.2;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.mention {
-  padding: 0 2px;
-  border: 0;
-  border-bottom: 2px solid var(--tone-info-border);
-  border-radius: 2px;
-  background: var(--tone-info-bg);
-  color: var(--text);
-  font: inherit;
-  cursor: default;
-}
-button.mention {
-  cursor: pointer;
-}
 button.mention:focus-visible,
 .node-chip:focus-visible,
 .trail-step:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
-}
-.mention-tag {
-  display: inline-block;
-  margin-inline-start: 4px;
-  padding: 0 6px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-pill);
-  background: var(--surface-card);
-  color: var(--text-2);
-  font-size: var(--fs-xs);
-  font-weight: var(--fw-semibold);
-  line-height: 1.5;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  vertical-align: 0.15em;
-  white-space: nowrap;
-  user-select: none;
-}
-.mention[data-layer="quotation"] .mention-tag {
-  border-color: var(--tone-warn-border);
-}
-.mention[data-layer="entity"] .mention-tag {
-  border-color: var(--tone-ok-border);
-}
-.mention[data-layer="quotation"] {
-  background: var(--tone-warn-bg);
-  border-bottom-color: var(--tone-warn-border);
-}
-.mention[data-layer="pos"] {
-  background: transparent;
-  border-bottom: 2px dotted var(--border-strong);
-}
-.mention[data-layer="entity"] {
-  background: var(--tone-ok-bg);
-  border-bottom-color: var(--tone-ok-border);
 }
 .record-preview {
   margin: 0;
@@ -1233,100 +899,5 @@ button.mention:focus-visible,
 }
 .legend-line.faint {
   opacity: 0.35;
-}
-.semantic-map-lists {
-  display: grid;
-  gap: var(--space-4);
-}
-.semantic-map-lists section {
-  display: grid;
-  gap: var(--space-2);
-}
-.node-groups {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: var(--space-2) var(--space-3);
-  margin: 0;
-}
-.node-groups dt {
-  font-size: var(--fs-xs);
-  font-weight: var(--fw-semibold);
-  color: var(--muted);
-}
-.node-groups dd {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin: 0;
-}
-.node-chip {
-  display: inline-flex;
-  gap: 4px;
-  align-items: baseline;
-  padding: 2px var(--space-2);
-  border: 1px solid var(--line);
-  border-inline-start: 3px solid var(--border-strong);
-  border-radius: var(--radius-control);
-  background: var(--card);
-  color: var(--text);
-  font: inherit;
-  font-size: var(--fs-xs);
-  cursor: pointer;
-}
-.node-chip small {
-  color: var(--muted);
-}
-.node-chip[data-tone="person"] {
-  border-inline-start-color: var(--tone-info-edge);
-}
-.node-chip[data-tone="concept"] {
-  border-inline-start-color: var(--accent);
-}
-.node-chip[data-tone="work"] {
-  border-inline-start-color: var(--tone-ok-edge);
-}
-.node-chip[data-tone="entity"] {
-  border-inline-start-color: var(--tone-warn-edge);
-}
-.record-links,
-.relation-list {
-  display: grid;
-  gap: var(--space-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.record-links li,
-.relation-list li {
-  display: grid;
-  gap: 4px;
-  padding-block: var(--space-2);
-  border-top: 1px solid var(--line);
-}
-.record-links p {
-  color: var(--muted);
-  font-size: var(--fs-xs);
-}
-.record-link-head,
-.relation-line {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  align-items: baseline;
-}
-.record-link-head small,
-.relation-list small {
-  color: var(--muted);
-  font-size: var(--fs-xs);
-}
-.record-link-shared,
-.record-link-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-.relation-list li[data-kind="observational"] b {
-  font-weight: var(--fw-regular);
-  font-style: italic;
 }
 </style>
