@@ -9487,6 +9487,6 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'site.runtime.tags_placeholder': 'Étiquettes séparées par des virgules',
  'site.runtime.use_selection': 'Utiliser le texte sélectionné',
  'site.runtime.view_record': 'Voir la fiche',
- 'site.runtime.work_filter': 'Œuvre'
+ 'site.runtime.work_filter': 'Œuvre',
  'pdf_corpus.setup.summary.minutes': '{count} min',
 }
