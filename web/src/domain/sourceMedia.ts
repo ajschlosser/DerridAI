@@ -12,12 +12,24 @@ export type CorpusMediaKind =
   | "gutenberg"
   | string;
 
-export function sourceMediaKindForFile(file: { name?: string; type?: string }): CorpusMediaKind | "" {
-  const name = String(file.name || "").trim().toLowerCase();
-  const type = String(file.type || "").trim().toLowerCase();
+export function sourceMediaKindForFile(file: {
+  name?: string;
+  type?: string;
+}): CorpusMediaKind | "" {
+  const name = String(file.name || "")
+    .trim()
+    .toLowerCase();
+  const type = String(file.type || "")
+    .trim()
+    .toLowerCase();
   if (type === "application/pdf" || name.endsWith(".pdf")) return "pdf";
   if (type.startsWith("image/") || /\.(?:png|jpe?g)$/.test(name)) return "image";
-  if (type.startsWith("audio/") || type.startsWith("video/") || /\.(?:mp3|wav|m4a|ogg|flac|webm|mp4|mpeg|mpga|aac)$/.test(name)) return "audio";
+  if (
+    type.startsWith("audio/") ||
+    type.startsWith("video/") ||
+    /\.(?:mp3|wav|m4a|ogg|flac|webm|mp4|mpeg|mpga|aac)$/.test(name)
+  )
+    return "audio";
   if (
     type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
     name.endsWith(".docx")
