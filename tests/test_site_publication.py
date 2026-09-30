@@ -34,7 +34,7 @@ def _record(record_id: str = "r1", work: str = "Glas") -> dict:
 
 def _publication_from_index(index_html: str) -> dict:
     match = re.search(
-        r'<script id="derridai-publication" type="application/json">(.*?)</script>',
+        r'<script id="derridai-publication" type="application/json"[^>]*>(.*?)</script>',
         index_html,
         flags=re.DOTALL,
     )
