@@ -15,7 +15,7 @@ const props = withDefaults(
   defineProps<{
     ariaLabel: string;
     helpText?: string;
-    resizeLabel?: string;
+    resizeLabel: string;
     minZoom?: number;
     maxZoom?: number;
     initialZoom?: number;
@@ -34,7 +34,6 @@ const props = withDefaults(
   }>(),
   {
     helpText: "",
-    resizeLabel: "Resize graph",
     minZoom: 0.45,
     maxZoom: 6,
     initialZoom: 1,
