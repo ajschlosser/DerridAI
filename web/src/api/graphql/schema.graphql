@@ -7,9 +7,7 @@ type CelfModel {
   edges: [CelfRelationship!]!
 }
 
-"""
-A normative cELF object type.
-"""
+"""A normative cELF object type."""
 type CelfObjectType {
   type: String!
   profile: String!
@@ -18,9 +16,7 @@ type CelfObjectType {
   normative: Boolean!
 }
 
-"""
-A normative, walkable relationship between cELF object types.
-"""
+"""A normative, walkable relationship between cELF object types."""
 type CelfRelationship {
   id: String!
   source_type: String!
@@ -42,20 +38,9 @@ type CorpusBuildReview {
   """
   The paged, filtered review queue (REST: GET /api/pdf/corpus-builds/{id}/records).
   """
-  review_queue(
-    offset: Int! = 0
-    limit: Int! = 50
-    needs_review: Boolean = null
-    disposition: String = null
-    metadata_incomplete: Boolean = null
-    source_problem: Boolean = null
-    review_queue: String = null
-    query: String! = ""
-  ): CorpusReviewQueuePage!
+  review_queue(offset: Int! = 0, limit: Int! = 50, needs_review: Boolean = null, disposition: String = null, metadata_incomplete: Boolean = null, source_problem: Boolean = null, review_queue: String = null, query: String! = ""): CorpusReviewQueuePage!
 
-  """
-  Queue-row projections for specific Records, in the order requested.
-  """
+  """Queue-row projections for specific Records, in the order requested."""
   rows(record_ids: [String!]!): [CorpusQueueRow]!
 
   """
@@ -79,9 +64,7 @@ type CorpusBuildReview {
   metadata_facets(fields: [String!] = null): JSON!
 }
 
-"""
-Build-wide review-queue counts by state.
-"""
+"""Build-wide review-queue counts by state."""
 type CorpusQueueCounts {
   all: Int!
   ready: Int!
@@ -127,9 +110,7 @@ type CorpusRecord {
   review_document: JSON!
 }
 
-"""
-One page of the review queue: rows, total, and build-wide counts.
-"""
+"""One page of the review queue: rows, total, and build-wide counts."""
 type CorpusReviewQueuePage {
   items: [CorpusQueueRow!]!
   total: Int!
@@ -138,9 +119,7 @@ type CorpusReviewQueuePage {
   queue_counts: CorpusQueueCounts!
 }
 
-"""
-One normalized entity/coreference cluster from Document Intelligence.
-"""
+"""One normalized entity/coreference cluster from Document Intelligence."""
 type DocumentEntityCluster {
   cluster_id: String!
   canonical: String!
@@ -148,9 +127,7 @@ type DocumentEntityCluster {
   entity_type: String
 }
 
-"""
-One normalized entity mention in conserved whole-document offsets.
-"""
+"""One normalized entity mention in conserved whole-document offsets."""
 type DocumentEntityMention {
   cluster_id: String!
   start_char: Int
@@ -160,9 +137,7 @@ type DocumentEntityMention {
   entity_type: String
 }
 
-"""
-One model artifact used by a Document Intelligence provider.
-"""
+"""One model artifact used by a Document Intelligence provider."""
 type DocumentIntelligenceArtifact {
   role: String
   name: String
@@ -209,9 +184,7 @@ type DocumentIntelligenceRun {
   events: JSON!
 }
 
-"""
-One normalized quotation and its candidate speaker attribution.
-"""
+"""One normalized quotation and its candidate speaker attribution."""
 type DocumentQuotation {
   start_char: Int
   end_char: Int
@@ -220,9 +193,7 @@ type DocumentQuotation {
   speaker_text: String
 }
 
-"""
-A revision-bound evidence locator.
-"""
+"""A revision-bound evidence locator."""
 type EvidenceRef {
   evidence_ref_id: String!
   locator_kind: String
@@ -239,9 +210,7 @@ type FieldAssertion {
   field_id: String
   field_name: String
 
-  """
-  Schema-defined value; arbitrary by design.
-  """
+  """Schema-defined value; arbitrary by design."""
   value: JSON
   derivation_method: String
   evaluation_status: String
@@ -258,15 +227,11 @@ type FieldAssertion {
   created_at: String
   supersedes_assertion_id: String
 
-  """
-  Whether this is the field's selected current assertion.
-  """
+  """Whether this is the field's selected current assertion."""
   is_current: Boolean!
 }
 
-"""
-A claim produced by a research run, owner-scoped.
-"""
+"""A claim produced by a research run, owner-scoped."""
 type GeneratedClaim {
   claim_id: String!
   claim_text: String!
@@ -279,9 +244,7 @@ type GeneratedClaim {
   validated_at: String
   created_at: String
 
-  """
-  Durable support bindings for this claim (batched per request).
-  """
+  """Durable support bindings for this claim (batched per request)."""
   support_bindings: [SupportBinding!]!
 
   """
@@ -293,10 +256,7 @@ type GeneratedClaim {
 """
 The `JSON` scalar type represents JSON values as specified by [ECMA-404](https://ecma-international.org/wp-content/uploads/ECMA-404_2nd_edition_december_2017.pdf).
 """
-scalar JSON
-  @specifiedBy(
-    url: "https://ecma-international.org/wp-content/uploads/ECMA-404_2nd_edition_december_2017.pdf"
-  )
+scalar JSON @specifiedBy(url: "https://ecma-international.org/wp-content/uploads/ECMA-404_2nd_edition_december_2017.pdf")
 
 """
 One reviewed metadata exemplar (REST: GET /api/system/data/metadata-exemplars rows).
@@ -348,13 +308,9 @@ type MetadataExemplarPage {
   projection_backlog: JSON!
 }
 
-"""
-Read-only cELF queries. Commands are REST; live events are WebSocket.
-"""
+"""Read-only cELF queries. Commands are REST; live events are WebSocket."""
 type Query {
-  """
-  The normative cELF type graph (REST: GET /api/derridai/model).
-  """
+  """The normative cELF type graph (REST: GET /api/derridai/model)."""
   celf_model: CelfModel!
 
   """
@@ -362,14 +318,10 @@ type Query {
   """
   record_graph(record: JSON!, include_assertion_history: Boolean! = false): ResearchObjectGraph!
 
-  """
-  One owner-scoped generated claim.
-  """
+  """One owner-scoped generated claim."""
   generated_claim(claim_id: String!): GeneratedClaim!
 
-  """
-  One Research run with its answer and cited evidence.
-  """
+  """One Research run with its answer and cited evidence."""
   research_run(run_id: String!): ResearchRun!
 
   """
@@ -382,24 +334,13 @@ type Query {
   """
   source_document(source_document_id: String!): SourceDocumentView!
 
-  """
-  A vector store by name (REST: GET /api/stores/{name}).
-  """
+  """A vector store by name (REST: GET /api/stores/{name})."""
   vector_store(name: String!): VectorStore!
 
   """
   Progressive metadata exemplars (REST: GET /api/system/data/metadata-exemplars).
   """
-  metadata_exemplars(
-    offset: Int! = 0
-    limit: Int! = 50
-    field: String! = ""
-    kind: String! = ""
-    language: String! = ""
-    scope_id: String! = ""
-    schema_id: String! = ""
-    record_id: String! = ""
-  ): MetadataExemplarPage!
+  metadata_exemplars(offset: Int! = 0, limit: Int! = 50, field: String! = "", kind: String! = "", language: String! = "", scope_id: String! = "", schema_id: String! = "", record_id: String! = ""): MetadataExemplarPage!
 }
 
 """
@@ -418,9 +359,7 @@ type ResearchObjectEdge {
   status: String
 }
 
-"""
-A finite, re-centerable cELF instance graph around one Record.
-"""
+"""A finite, re-centerable cELF instance graph around one Record."""
 type ResearchObjectGraph {
   specification_version: String!
   root_id: String!
@@ -454,9 +393,7 @@ type ResearchObjectNode {
   field_assertion: FieldAssertion
   evidence_ref: EvidenceRef
 
-  """
-  The owner-scoped durable claim behind a GeneratedClaim node (batched).
-  """
+  """The owner-scoped durable claim behind a GeneratedClaim node (batched)."""
   generated_claim: GeneratedClaim
 }
 
@@ -482,29 +419,21 @@ type ResearchRun {
   """
   evidence: JSON!
 
-  """
-  Generated claims produced by this run (administrator-only).
-  """
+  """Generated claims produced by this run (administrator-only)."""
   generated_claims: [GeneratedClaim!]!
 }
 
-"""
-Record support carried by an advisory validated-claim precedent.
-"""
+"""Record support carried by an advisory validated-claim precedent."""
 type SimilarClaimSupport {
   record_id: String!
   record_revision: Int
   relation: String
 
-  """
-  Checked attribution snapshot (speaker, position_holder, …).
-  """
+  """Checked attribution snapshot (speaker, position_holder, …)."""
   semantic: JSON!
 }
 
-"""
-Advisory precedent only: similarity never asserts evidentiary support.
-"""
+"""Advisory precedent only: similarity never asserts evidentiary support."""
 type SimilarValidatedClaim {
   claim_id: String!
   claim_text: String!
@@ -515,9 +444,7 @@ type SimilarValidatedClaim {
   support: [SimilarClaimSupport!]!
 }
 
-"""
-One Corpus Builder build derived from a SourceDocument.
-"""
+"""One Corpus Builder build derived from a SourceDocument."""
 type SourceBuildReference {
   build_id: String!
   status: String!
@@ -525,9 +452,7 @@ type SourceBuildReference {
   record_count: Int
 }
 
-"""
-One Corpus Capture provenance link for a SourceDocument.
-"""
+"""One Corpus Capture provenance link for a SourceDocument."""
 type SourceCaptureReference {
   capture_id: String!
   candidate_id: String!
@@ -539,9 +464,7 @@ type SourceCaptureReference {
   author_name: String
 }
 
-"""
-One medium page/layout projection for a SourceDocument.
-"""
+"""One medium page/layout projection for a SourceDocument."""
 type SourceDocumentPage {
   physical_page: Int!
   printed_page_label: String
@@ -556,9 +479,7 @@ type SourceDocumentPage {
   logical_pages: JSON!
 }
 
-"""
-A bounded page of SourceDocument page/layout projections.
-"""
+"""A bounded page of SourceDocument page/layout projections."""
 type SourceDocumentPagePage {
   items: [SourceDocumentPage!]!
   total: Int!
@@ -596,19 +517,10 @@ type SourceDocumentView {
   captures: [SourceCaptureReference!]!
   builds: [SourceBuildReference!]!
 
-  """
-  A bounded page of implementation-level extraction/source units.
-  """
-  source_units(
-    offset: Int! = 0
-    limit: Int! = 100
-    ids: [String!] = null
-    around: String = null
-  ): SourceUnitProjectionPage!
+  """A bounded page of implementation-level extraction/source units."""
+  source_units(offset: Int! = 0, limit: Int! = 100, ids: [String!] = null, around: String = null): SourceUnitProjectionPage!
 
-  """
-  A bounded page of medium-specific page/layout projections.
-  """
+  """A bounded page of medium-specific page/layout projections."""
   pages(offset: Int! = 0, limit: Int! = 100): SourceDocumentPagePage!
 }
 
@@ -649,9 +561,7 @@ type SourceUnitProjection {
   speaker: String
 }
 
-"""
-A bounded page of persisted extraction units for one SourceDocument.
-"""
+"""A bounded page of persisted extraction units for one SourceDocument."""
 type SourceUnitProjectionPage {
   items: [SourceUnitProjection!]!
   total: Int!
@@ -675,15 +585,11 @@ type SupportBinding {
   """
   validation_status: String!
 
-  """
-  Deterministic citation rendered when bound.
-  """
+  """Deterministic citation rendered when bound."""
   citation: JSON
   created_at: String
 
-  """
-  Medium-aware source spans bound as evidence.
-  """
+  """Medium-aware source spans bound as evidence."""
   source_spans: [SourceSpan!]!
 }
 
@@ -743,9 +649,7 @@ A Chroma-backed vector store: derived corpus projection, never canonical.
 type VectorStore {
   name: String!
 
-  """
-  A page of vector-store records (REST: GET /api/stores/{name}/records).
-  """
+  """A page of vector-store records (REST: GET /api/stores/{name}/records)."""
   records(offset: Int! = 0, limit: Int! = 100, work: String = null): VectorRecordPage!
 
   """
@@ -753,9 +657,7 @@ type VectorStore {
   """
   record(chroma_id: String!): VectorRecord
 
-  """
-  Per-work aggregate stats (REST: GET /api/stores/{name}/works).
-  """
+  """Per-work aggregate stats (REST: GET /api/stores/{name}/works)."""
   works: [VectorWorkStat!]!
 }
 
@@ -768,8 +670,6 @@ type VectorWorkStat {
   total_words: Int!
   average_record_length: Int!
 
-  """
-  Other fields observed for the work (mixed values, edition, …).
-  """
+  """Other fields observed for the work (mixed values, edition, …)."""
   details: JSON!
 }

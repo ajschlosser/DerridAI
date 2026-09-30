@@ -13,7 +13,10 @@
       "output_type": "model_output",
       "assignment_scope": "system",
       "override_allowed": true,
-      "required_guarantees": ["source_provenance", "citation_binding"],
+      "required_guarantees": [
+        "source_provenance",
+        "citation_binding"
+      ],
       "label_key": "pipelines.purpose.research.label",
       "description_key": "pipelines.purpose.research.description",
       "consumer_key": "pipelines.purpose.research.consumer",
@@ -75,7 +78,11 @@
       "output_type": "candidate_set",
       "assignment_scope": "system",
       "override_allowed": true,
-      "required_guarantees": ["direct_support", "source_provenance", "reviewer_approval"],
+      "required_guarantees": [
+        "direct_support",
+        "source_provenance",
+        "reviewer_approval"
+      ],
       "label_key": "pipelines.purpose.evidence_suggestion.label",
       "description_key": "pipelines.purpose.evidence_suggestion.description",
       "consumer_key": "pipelines.purpose.evidence_suggestion.consumer",
@@ -137,7 +144,10 @@
       "output_type": "candidate_set",
       "assignment_scope": "system",
       "override_allowed": true,
-      "required_guarantees": ["source_provenance", "reviewer_approval"],
+      "required_guarantees": [
+        "source_provenance",
+        "reviewer_approval"
+      ],
       "label_key": "pipelines.purpose.evidence_recovery.label",
       "description_key": "pipelines.purpose.evidence_recovery.description",
       "consumer_key": "pipelines.purpose.evidence_recovery.consumer",
@@ -199,7 +209,10 @@
       "output_type": "candidate_set",
       "assignment_scope": "system",
       "override_allowed": true,
-      "required_guarantees": ["source_provenance", "reviewer_approval"],
+      "required_guarantees": [
+        "source_provenance",
+        "reviewer_approval"
+      ],
       "label_key": "pipelines.purpose.precedent_evidence_remap.label",
       "description_key": "pipelines.purpose.precedent_evidence_remap.description",
       "consumer_key": "pipelines.purpose.precedent_evidence_remap.consumer",
@@ -261,7 +274,11 @@
       "output_type": "model_output",
       "assignment_scope": "system",
       "override_allowed": true,
-      "required_guarantees": ["backend_validation", "source_provenance", "reviewer_approval"],
+      "required_guarantees": [
+        "backend_validation",
+        "source_provenance",
+        "reviewer_approval"
+      ],
       "label_key": "pipelines.purpose.corpus_reviewer_evidence_choice.label",
       "description_key": "pipelines.purpose.corpus_reviewer_evidence_choice.description",
       "consumer_key": "pipelines.purpose.corpus_reviewer_evidence_choice.consumer",
@@ -323,7 +340,9 @@
       "output_type": "candidate_set",
       "assignment_scope": "system",
       "override_allowed": true,
-      "required_guarantees": ["access_outside_pipeline"],
+      "required_guarantees": [
+        "access_outside_pipeline"
+      ],
       "label_key": "pipelines.purpose.vector_store_search.label",
       "description_key": "pipelines.purpose.vector_store_search.description",
       "consumer_key": "pipelines.purpose.vector_store_search.consumer",
@@ -385,7 +404,9 @@
       "output_type": "context_packet",
       "assignment_scope": "system",
       "override_allowed": true,
-      "required_guarantees": ["reviewed_precedents_only"],
+      "required_guarantees": [
+        "reviewed_precedents_only"
+      ],
       "label_key": "pipelines.purpose.metadata_precedents.label",
       "description_key": "pipelines.purpose.metadata_precedents.description",
       "consumer_key": "pipelines.purpose.metadata_precedents.consumer",
@@ -447,7 +468,9 @@
       "output_type": "candidate_set",
       "assignment_scope": "system",
       "override_allowed": true,
-      "required_guarantees": ["reviewed_precedents_only"],
+      "required_guarantees": [
+        "reviewed_precedents_only"
+      ],
       "label_key": "pipelines.purpose.metadata_prefill.label",
       "description_key": "pipelines.purpose.metadata_prefill.description",
       "consumer_key": "pipelines.purpose.metadata_prefill.consumer",
@@ -509,7 +532,10 @@
       "output_type": "model_output",
       "assignment_scope": "system",
       "override_allowed": true,
-      "required_guarantees": ["backend_validation", "reviewer_approval"],
+      "required_guarantees": [
+        "backend_validation",
+        "reviewer_approval"
+      ],
       "label_key": "pipelines.purpose.corpus_metadata_enrichment.label",
       "description_key": "pipelines.purpose.corpus_metadata_enrichment.description",
       "consumer_key": "pipelines.purpose.corpus_metadata_enrichment.consumer",
@@ -571,7 +597,9 @@
       "output_type": "candidate_set",
       "assignment_scope": "system",
       "override_allowed": false,
-      "required_guarantees": ["eligible_memory_only"],
+      "required_guarantees": [
+        "eligible_memory_only"
+      ],
       "label_key": "pipelines.purpose.claim_memory.label",
       "description_key": "pipelines.purpose.claim_memory.description",
       "consumer_key": "pipelines.purpose.claim_memory.consumer",
@@ -633,7 +661,9 @@
       "output_type": "candidate_set",
       "assignment_scope": "system",
       "override_allowed": false,
-      "required_guarantees": ["eligible_memory_only"],
+      "required_guarantees": [
+        "eligible_memory_only"
+      ],
       "label_key": "pipelines.purpose.response_memory.label",
       "description_key": "pipelines.purpose.response_memory.description",
       "consumer_key": "pipelines.purpose.response_memory.consumer",
@@ -695,7 +725,9 @@
       "output_type": "model_output",
       "assignment_scope": "system",
       "override_allowed": true,
-      "required_guarantees": ["backend_validation"],
+      "required_guarantees": [
+        "backend_validation"
+      ],
       "label_key": "pipelines.purpose.corpus_document_manifest.label",
       "description_key": "pipelines.purpose.corpus_document_manifest.description",
       "consumer_key": "pipelines.purpose.corpus_document_manifest.consumer",
@@ -757,7 +789,10 @@
       "output_type": "model_output",
       "assignment_scope": "system",
       "override_allowed": true,
-      "required_guarantees": ["backend_validation", "text_conservation"],
+      "required_guarantees": [
+        "backend_validation",
+        "text_conservation"
+      ],
       "label_key": "pipelines.purpose.corpus_segmentation.label",
       "description_key": "pipelines.purpose.corpus_segmentation.description",
       "consumer_key": "pipelines.purpose.corpus_segmentation.consumer",
@@ -819,7 +854,10 @@
       "output_type": "model_output",
       "assignment_scope": "system",
       "override_allowed": true,
-      "required_guarantees": ["backend_validation", "reviewer_approval"],
+      "required_guarantees": [
+        "backend_validation",
+        "reviewer_approval"
+      ],
       "label_key": "pipelines.purpose.corpus_text_touchup.label",
       "description_key": "pipelines.purpose.corpus_text_touchup.description",
       "consumer_key": "pipelines.purpose.corpus_text_touchup.consumer",
@@ -1275,13 +1313,19 @@
       "output_type": "model_output",
       "deterministic": false,
       "invokes_llm": true,
-      "capabilities": ["chat_model", "structured_output"],
+      "capabilities": [
+        "chat_model",
+        "structured_output"
+      ],
       "config_schema": {
         "type": "object",
         "properties": {
           "provider_role": {
             "type": "string",
-            "enum": ["primary", "review"],
+            "enum": [
+              "primary",
+              "review"
+            ],
             "default": "primary"
           },
           "attempts": {
@@ -1308,13 +1352,20 @@
       "output_type": "candidate_set",
       "deterministic": false,
       "invokes_llm": true,
-      "capabilities": ["chat_model", "closed_choice"],
+      "capabilities": [
+        "chat_model",
+        "closed_choice"
+      ],
       "config_schema": {
         "type": "object",
         "properties": {
           "provider_role": {
             "type": "string",
-            "enum": ["chain", "primary", "review"],
+            "enum": [
+              "chain",
+              "primary",
+              "review"
+            ],
             "default": "chain"
           },
           "attempts": {
@@ -1341,13 +1392,19 @@
       "output_type": "model_output",
       "deterministic": false,
       "invokes_llm": true,
-      "capabilities": ["chat_model", "structured_output"],
+      "capabilities": [
+        "chat_model",
+        "structured_output"
+      ],
       "config_schema": {
         "type": "object",
         "properties": {
           "provider_role": {
             "type": "string",
-            "enum": ["primary", "review"],
+            "enum": [
+              "primary",
+              "review"
+            ],
             "default": "primary"
           },
           "attempts": {
@@ -1374,7 +1431,9 @@
       "output_type": "model_output",
       "deterministic": false,
       "invokes_llm": true,
-      "capabilities": ["chat_model"],
+      "capabilities": [
+        "chat_model"
+      ],
       "config_schema": {},
       "label_key": "pipelines.strategy.llm_generate_answer.label",
       "description_key": "pipelines.strategy.llm_generate_answer.description",
@@ -1392,7 +1451,9 @@
       "output_type": "evaluation",
       "deterministic": false,
       "invokes_llm": true,
-      "capabilities": ["chat_model"],
+      "capabilities": [
+        "chat_model"
+      ],
       "config_schema": {},
       "label_key": "pipelines.strategy.llm_grade_rag.label",
       "description_key": "pipelines.strategy.llm_grade_rag.description",
@@ -1410,13 +1471,19 @@
       "output_type": "model_output",
       "deterministic": false,
       "invokes_llm": true,
-      "capabilities": ["chat_model", "structured_output"],
+      "capabilities": [
+        "chat_model",
+        "structured_output"
+      ],
       "config_schema": {
         "type": "object",
         "properties": {
           "provider_role": {
             "type": "string",
-            "enum": ["primary", "review"],
+            "enum": [
+              "primary",
+              "review"
+            ],
             "default": "primary"
           },
           "attempts": {
@@ -1443,13 +1510,19 @@
       "output_type": "model_output",
       "deterministic": false,
       "invokes_llm": true,
-      "capabilities": ["chat_model", "structured_output"],
+      "capabilities": [
+        "chat_model",
+        "structured_output"
+      ],
       "config_schema": {
         "type": "object",
         "properties": {
           "provider_role": {
             "type": "string",
-            "enum": ["primary", "review"],
+            "enum": [
+              "primary",
+              "review"
+            ],
             "default": "primary"
           },
           "attempts": {
@@ -1476,13 +1549,19 @@
       "output_type": "model_output",
       "deterministic": false,
       "invokes_llm": true,
-      "capabilities": ["chat_model", "structured_output"],
+      "capabilities": [
+        "chat_model",
+        "structured_output"
+      ],
       "config_schema": {
         "type": "object",
         "properties": {
           "provider_role": {
             "type": "string",
-            "enum": ["primary", "review"],
+            "enum": [
+              "primary",
+              "review"
+            ],
             "default": "primary"
           },
           "attempts": {
@@ -1629,7 +1708,9 @@
       "output_type": "query",
       "deterministic": false,
       "invokes_llm": true,
-      "capabilities": ["chat_model"],
+      "capabilities": [
+        "chat_model"
+      ],
       "config_schema": {
         "type": "object",
         "properties": {
@@ -1656,7 +1737,9 @@
       "output_type": "candidate_set",
       "deterministic": false,
       "invokes_llm": false,
-      "capabilities": ["cross_encoder"],
+      "capabilities": [
+        "cross_encoder"
+      ],
       "config_schema": {
         "type": "object",
         "properties": {
@@ -1714,7 +1797,10 @@
       "output_type": "candidate_set",
       "deterministic": false,
       "invokes_llm": false,
-      "capabilities": ["embedding", "chroma"],
+      "capabilities": [
+        "embedding",
+        "chroma"
+      ],
       "config_schema": {
         "type": "object",
         "properties": {
@@ -1741,7 +1827,10 @@
       "output_type": "candidate_set",
       "deterministic": false,
       "invokes_llm": false,
-      "capabilities": ["embedding", "chroma"],
+      "capabilities": [
+        "embedding",
+        "chroma"
+      ],
       "config_schema": {
         "type": "object",
         "properties": {
@@ -1832,7 +1921,10 @@
       "output_type": "candidate_set",
       "deterministic": false,
       "invokes_llm": false,
-      "capabilities": ["embedding", "chroma"],
+      "capabilities": [
+        "embedding",
+        "chroma"
+      ],
       "config_schema": {
         "type": "object",
         "properties": {
@@ -1859,7 +1951,10 @@
       "output_type": "candidate_set",
       "deterministic": false,
       "invokes_llm": false,
-      "capabilities": ["embedding", "chroma"],
+      "capabilities": [
+        "embedding",
+        "chroma"
+      ],
       "config_schema": {
         "type": "object",
         "properties": {
@@ -1909,7 +2004,9 @@
       "output_type": "candidate_set",
       "deterministic": false,
       "invokes_llm": false,
-      "capabilities": ["embedding"],
+      "capabilities": [
+        "embedding"
+      ],
       "config_schema": {
         "type": "object",
         "properties": {
@@ -2181,7 +2278,9 @@
       "output_type": "candidate_set",
       "deterministic": true,
       "invokes_llm": false,
-      "capabilities": ["evidence_validation"],
+      "capabilities": [
+        "evidence_validation"
+      ],
       "config_schema": {
         "type": "object",
         "properties": {
