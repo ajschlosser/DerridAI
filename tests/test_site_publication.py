@@ -32,10 +32,10 @@ def _record(record_id: str = "r1", work: str = "Glas") -> dict:
     }
 
 
-def _package_from_runtime(runtime: str) -> dict:
+def _package_from_publication_asset(asset: str) -> dict:
     prefix = f"globalThis.{site_publication.PACKAGE_GLOBAL}="
-    assert runtime.startswith(prefix)
-    payload = runtime[len(prefix) :].split(";\n", 1)[0]
+    assert asset.startswith(prefix)
+    payload = asset[len(prefix) :].split(";\n", 1)[0]
     return json.loads(payload)
 
 
@@ -53,7 +53,7 @@ def _chunk_vectors(chunk: dict, dimension: int) -> list[list[float]]:
     ]
 
 
-def test_site_bundle_is_exactly_two_files_with_progressive_client_package(
+def test_site_bundle_separates_publication_sdk_and_reference_ui(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -76,20 +76,6 @@ def test_site_bundle_is_exactly_two_files_with_progressive_client_package(
             ],
         },
     )
-    monkeypatch.setattr(
-        site_publication.system_store,
-        "researcher_profiles",
-        lambda: [
-            {
-                "id": "embed",
-                "name": "Lab endpoint",
-                "type": "openai",
-                "base_url": "https://models.example/v1",
-                "model": "chat-model",
-                "api_key": "MUST-NOT-LEAK",
-            }
-        ],
-    )
 
     bundle = site_publication.build_site_bundle(
         store_name="derrida-primary",
@@ -99,27 +85,38 @@ def test_site_bundle_is_exactly_two_files_with_progressive_client_package(
     )
 
     with zipfile.ZipFile(io.BytesIO(bundle.payload)) as archive:
-        assert archive.namelist() == ["index.html", "derridai-site.js"]
+        assert archive.namelist() == [
+            "index.html",
+            "derridai-publication.js",
+            "derridai-sdk.js",
+            "derridai-site.js",
+        ]
         index_html = archive.read("index.html").decode("utf-8")
-        runtime = archive.read("derridai-site.js").decode("utf-8")
+        publication_asset = archive.read("derridai-publication.js").decode("utf-8")
+        sdk_runtime = archive.read("derridai-sdk.js").decode("utf-8")
+        site_runtime = archive.read("derridai-site.js").decode("utf-8")
 
-    assert "derridai-publication" not in index_html
     assert "A publication-safe passage." not in index_html
-    assert "derridai-site.js" in index_html
-    assert "connect-src 'self' http: https:" in index_html
+    assert index_html.index("derridai-publication.js") < index_html.index("derridai-sdk.js")
+    assert index_html.index("derridai-sdk.js") < index_html.index("derridai-site.js")
+    assert "connect-src 'self' http: https:" not in index_html
+    assert "connect-src 'self'" in index_html
 
-    package = _package_from_runtime(runtime)
+    package = _package_from_publication_asset(publication_asset)
     publication = package["manifest"]
     chunks = package["chunks"]
 
-    assert publication["format"] == "derridai-static-site-v2"
+    assert publication["format"] == "derridai-static-site-v3"
     assert publication["corpus_id"] == "derrida-primary"
     assert [work["work"] for work in publication["works"]] == ["Glas", "Rogues"]
     assert publication["features"]["browser_llm"] is False
-    assert publication["features"]["external_provider_generation"] is True
+    assert publication["features"]["derridai_sdk"] is True
+    assert publication["features"]["host_supplied_generation"] is True
+    assert publication["features"]["direct_provider_endpoints"] is False
     assert publication["features"]["progressive_work_loading"] is True
     assert publication["vector_index"]["dimension"] == 3
     assert publication["vector_index"]["model"] == "bge-m3:latest"
+    assert "provider_profiles" not in publication
     assert "records" not in publication
     assert "vectors" not in publication["vector_index"]
 
@@ -129,16 +126,16 @@ def test_site_bundle_is_exactly_two_files_with_progressive_client_package(
     decoded = _chunk_vectors(chunks[0], 3)[0]
     assert decoded == pytest.approx([0.1, 0.2, 0.3])
 
-    assert publication["provider_profiles"][0]["id"] == "embed"
-    assert "api_key" not in publication["provider_profiles"][0]
-    assert "base_url" not in publication["provider_profiles"][0]
-    assert "MUST-NOT-LEAK" not in runtime
-    assert "testProviderConnection" in runtime
-    assert "OLLAMA_ORIGINS" in runtime
-    assert "semantic_provider_fallback" in runtime
+    assert "createClient" in sdk_runtime
+    assert "DerridAI" in sdk_runtime
+    assert "__DERRIDAI_HOST_CAPABILITIES__" in site_runtime
+    assert "sdk.createClient" in site_runtime
+    assert "OLLAMA_ORIGINS" not in site_runtime
+    assert "/chat/completions" not in site_runtime
+    assert "/api/chat" not in site_runtime
+    assert "apiKey" not in site_runtime
     assert bundle.record_count == 2
     assert bundle.work_count == 2
-
 
 def test_site_chunks_records_and_vectors_by_work() -> None:
     records = [
@@ -177,8 +174,6 @@ def test_site_bundle_blocks_when_a_selected_work_is_not_indexed(
             "records": [{"record": _record(work="Glas"), "embedding": None}],
         },
     )
-    monkeypatch.setattr(site_publication.system_store, "researcher_profiles", lambda: [])
-
     with pytest.raises(ValueError, match="Missing: Rogues"):
         site_publication.build_site_bundle(
             store_name="derrida-primary",
@@ -200,8 +195,6 @@ def test_site_bundle_blocks_records_that_are_not_publication_valid(
             "records": [{"record": invalid, "embedding": None}],
         },
     )
-    monkeypatch.setattr(site_publication.system_store, "researcher_profiles", lambda: [])
-
     with pytest.raises(ValueError, match="publication-valid"):
         site_publication.build_site_bundle(
             store_name="derrida-primary",
