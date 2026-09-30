@@ -10,7 +10,7 @@ const props = withDefaults(
     x: number;
     y: number;
     zoom: number;
-    ariaLabel: string;
+    accessibleLabel: string;
     draggable?: boolean;
     locked?: boolean;
     nudgeStep?: number;
@@ -68,7 +68,7 @@ function onKeydown(event: KeyboardEvent) {
     data-relation-node
     :data-relation-node-id="nodeId"
     :data-node-id="nodeId"
-    :aria-label="ariaLabel"
+    :aria-label="accessibleLabel"
     @pointerdown.stop="onPointerDown"
     @pointermove.stop="onPointerMove"
     @pointerup.stop="onPointerEnd"
