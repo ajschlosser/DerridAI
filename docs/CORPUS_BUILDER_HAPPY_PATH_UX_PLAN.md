@@ -125,19 +125,19 @@ Status: **complete**
 
 ### Phase 1 — Workflow presentation: Setup / Build & review / Publish
 
-Status: **not started**
+Status: **complete**
 
 Goal: correct the conceptual hierarchy without rewriting authoritative workspace state.
 
-- [ ] Add a presentation grouping that maps internal `build` and `review` to one user-facing **Build & review** phase.
-- [ ] Update `CorpusBuilderWorkspaceHeader.vue` to render three user-facing phases while still routing to the correct internal workspace.
-- [ ] When Build & review is selected:
-  - [ ] route to Review if Records are available and the user was already reviewing;
-  - [ ] otherwise route to Build;
-  - [ ] preserve direct links to explicit `workspace=build` or `workspace=review`.
-- [ ] Ensure step completion does not falsely imply automated work and human review must happen sequentially.
-- [ ] Add English and Québec French copy.
-- [ ] Update workspace unit/characterization tests.
+- [x] Add a presentation grouping that maps internal `build` and `review` to one user-facing **Build & review** phase.
+- [x] Update `CorpusBuilderWorkspaceHeader.vue` to render three user-facing phases while still routing to the correct internal workspace.
+- [x] When Build & review is selected:
+  - [x] preserve the current Build/Review workspace when the grouped phase is already active;
+  - [x] from another phase, route to Review once Records exist, otherwise Build;
+  - [x] preserve direct links to explicit `workspace=build` or `workspace=review` and expose both as an in-phase sub-navigation.
+- [x] Ensure combined phase completion requires both automated Build completion and Review completion, so the UI no longer implies a false sequential handoff.
+- [x] Add English and Québec French copy.
+- [x] Update workspace unit coverage for the three-phase presentation and internal Build/Review navigation.
 
 Likely files:
 - `web/src/features/corpus-builder/domain/workflowPresentation.ts`
@@ -375,3 +375,12 @@ Work on this branch will be committed in coherent checkpoints. At each checkpoin
 - Passed the existing authoritative `readyCount` through the Build workspace rather than deriving a second count in presentation code.
 - Added English, Québec French, and frontend English-fallback copy.
 - Extended the active-enrichment component test to cover the new concurrent-review affordance and explanatory copy.
+
+
+### Checkpoint 3 — three-phase workflow presentation
+
+- Replaced the four peer phase buttons with **Setup → Build & review → Publish** at the user-facing level.
+- Kept `build` and `review` as internal route-backed workspaces to avoid breaking deep links or lifecycle logic.
+- Added an in-phase Build/Review sub-navigation so users can switch between live status and Record review without reintroducing them as separate top-level phases.
+- Combined phase completion now requires both Build and Review completion.
+- Added English and Québec French labels plus focused workspace-header coverage.
