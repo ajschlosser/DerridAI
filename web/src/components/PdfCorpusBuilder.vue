@@ -85,7 +85,8 @@ import CorpusRunMonitor from "./corpus-builder/CorpusRunMonitor.vue";
 import CorpusConfigurationNav, {
   type CorpusConfigurationSection,
 } from "./corpus-builder/CorpusConfigurationNav.vue";
-import CorpusBuilderWorkspaceHeader from "./corpus-builder/CorpusBuilderWorkspaceHeader.vue";\nimport CorpusUnreviewedPublishDialog from "./CorpusUnreviewedPublishDialog.vue";
+import CorpusBuilderWorkspaceHeader from "./corpus-builder/CorpusBuilderWorkspaceHeader.vue";
+import CorpusUnreviewedPublishDialog from "./CorpusUnreviewedPublishDialog.vue";
 import CorpusReviewRecordQueue from "./corpus-builder/CorpusReviewRecordQueue.vue";
 import CorpusReviewToolbar from "./corpus-builder/CorpusReviewToolbar.vue";
 import CorpusReviewEvidencePanel from "./corpus-builder/CorpusReviewEvidencePanel.vue";
