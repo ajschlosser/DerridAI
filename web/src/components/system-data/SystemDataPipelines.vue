@@ -9,10 +9,12 @@ import PipelineExecutionHistory from "../pipelines/PipelineExecutionHistory.vue"
 import PipelineBenchmarkPanel from "../pipelines/PipelineBenchmarkPanel.vue";
 import PipelineComparisonPanel from "../pipelines/PipelineComparisonPanel.vue";
 import PipelineOperationsSummary from "../pipelines/PipelineOperationsSummary.vue";
+import PipelineStrategyCatalog from "../pipelines/PipelineStrategyCatalog.vue";
 import PipelineVersionEditorPanel from "../pipelines/PipelineVersionEditorPanel.vue";
 import type { PipelineRunFilters } from "../pipelines/PipelineExecutionHistory.vue";
 import { pipelinesApi } from "../../api/pipelines";
 import { pipelineKey } from "../../domain/pipelinePresentation";
+import { purposeById } from "../../domain/pipelineWorkflows";
 import { useI18nStore } from "../../stores/i18n";
 import type {
   PipelineAssignment,
@@ -23,6 +25,7 @@ import type {
   PipelineValidationResponse,
 } from "../../types/pipelines";
 
+const sections = ["pipelines", "strategies", "executions", "operations"] as const;
 const i18n = useI18nStore();
 const route = useRoute();
 const router = useRouter();
@@ -32,13 +35,16 @@ const focusedRun = ref<PipelineRunTrace | null>(null);
 const metrics = ref<PipelineOperationalMetrics | null>(null);
 const loading = ref(true);
 const error = ref("");
-const section = ref<"pipelines" | "executions" | "operations">("pipelines");
+const section = ref<(typeof sections)[number]>("pipelines");
 const selectedKey = ref("");
+const workflow = ref("");
+const selectedStrategy = ref("");
 const selectedTraceId = ref("");
 const runTotal = ref(0);
 const runLimit = 25;
 const runFilters = ref<PipelineRunFilters>({
   query: "",
+  category: "",
   feature: "",
   pipelineId: "",
   status: "",
@@ -52,7 +58,6 @@ const assigning = ref(false);
 const cloning = ref(false);
 
 const t = (key: string, fallback: string) => i18n.t(key, fallback);
-const sections = ["pipelines", "executions", "operations"] as const;
 
 function readRoute() {
   const requested = String(route.query.section || "");
@@ -60,9 +65,12 @@ function readRoute() {
     ? (requested as (typeof sections)[number])
     : "pipelines";
   selectedKey.value = String(route.query.pipeline || "");
+  workflow.value = String(route.query.workflow || "");
+  selectedStrategy.value = String(route.query.strategy || "");
   selectedTraceId.value = String(route.query.run || "");
   runFilters.value = {
     query: String(route.query.q || ""),
+    category: String(route.query.run_workflow || ""),
     feature: String(route.query.feature || ""),
     pipelineId: String(route.query.pipeline_id || ""),
     status: String(route.query.status || ""),
@@ -76,8 +84,11 @@ function syncRouteState() {
     ...route.query,
     section: section.value === "pipelines" ? undefined : section.value,
     pipeline: selectedKey.value || undefined,
+    workflow: workflow.value || undefined,
+    strategy: selectedStrategy.value || undefined,
     run: selectedTraceId.value || undefined,
     q: runFilters.value.query || undefined,
+    run_workflow: runFilters.value.category || undefined,
     feature: runFilters.value.feature || undefined,
     pipeline_id: runFilters.value.pipelineId || undefined,
     status: runFilters.value.status || undefined,
@@ -112,37 +123,41 @@ function selectTrace(runId: string) {
   syncRouteState();
 }
 
-function featureForPurpose(purpose: string) {
-  const map: Record<string, string> = {
-    research: "research",
-    evidence_suggestion: "evidence_suggestion.reviewer",
-    evidence_recovery: "evidence_recovery",
-    vector_store_search: "vector_store_search",
-    metadata_prefill: "metadata_prefill",
-    precedent_evidence_remap: "precedent_evidence_remap",
-    corpus_metadata_enrichment: "corpus_metadata_enrichment",
-    corpus_segmentation: "corpus_segmentation",
-    corpus_document_manifest: "corpus_document_manifest",
-    corpus_text_touchup: "corpus_text_touchup",
-    corpus_reviewer_evidence_choice: "corpus_reviewer_evidence_choice",
-    metadata_precedents: "metadata_precedents",
-    claim_memory: "claim_memory",
-    response_memory: "response_memory",
-  };
-  return map[purpose] || "";
+function selectWorkflow(category: string) {
+  workflow.value = category;
+  syncRouteState();
+}
+
+function selectStrategy(strategyId: string) {
+  selectedStrategy.value = strategyId;
+  syncRouteState();
 }
 
 const pipelines = computed(() => catalog.value?.pipelines || []);
 const strategies = computed(() => catalog.value?.strategies || []);
 const assignments = computed(() => catalog.value?.assignments || []);
+const purposes = computed(() => catalog.value?.purposes || []);
+const vocabulary = computed(
+  () =>
+    catalog.value?.vocabulary || {
+      categories: [],
+      guarantees: [],
+      phases: [],
+      scholarly_effects: [],
+      effect_notes: [],
+    },
+);
+function purposeFor(pipeline: PipelineDefinition | null) {
+  return pipeline ? purposeById(purposes.value, pipeline.purpose) : null;
+}
+const selectedPurpose = computed(() => purposeFor(selectedPipeline.value));
 const selectedPipeline = computed(() => {
   const match = pipelines.value.find((item) => pipelineKey(item) === selectedKey.value);
   return match || pipelines.value[0] || null;
 });
 const selectedAssignment = computed(() => {
-  const pipeline = selectedPipeline.value;
-  if (!pipeline) return null;
-  const feature = featureForPurpose(pipeline.purpose);
+  const feature = selectedPurpose.value?.consuming_feature;
+  if (!feature) return null;
   return assignments.value.find((item) => item.feature === feature) || null;
 });
 const isSelectedAssigned = computed(() => {
@@ -161,12 +176,13 @@ const canAssignSelected = computed(() => {
     pipeline &&
       pipeline.status === "active" &&
       pipeline.runtime_support?.supported &&
-      featureForPurpose(pipeline.purpose),
+      selectedPurpose.value,
   );
 });
 
 async function loadRuns() {
   const tracePage = await pipelinesApi.runs({
+    category: runFilters.value.category || undefined,
     feature: runFilters.value.feature || undefined,
     owner: runFilters.value.owner || undefined,
     pipelineId: runFilters.value.pipelineId || undefined,
@@ -268,17 +284,18 @@ async function saveDraft() {
 
 async function assignSelected() {
   const pipeline = selectedPipeline.value;
-  if (!pipeline || !canAssignSelected.value || assigning.value) return;
+  const purpose = selectedPurpose.value;
+  if (!pipeline || !purpose || !canAssignSelected.value || assigning.value) return;
 
-  const feature = featureForPurpose(pipeline.purpose);
+  const feature = purpose.consuming_feature;
   const current = assignments.value.find((item) => item.feature === feature);
   const assignment: PipelineAssignment = {
     feature,
     pipeline_id: pipeline.pipeline_id,
     pipeline_version: pipeline.version,
-    scope: "system",
+    scope: purpose.assignment_scope,
     scope_id: null,
-    override_allowed: current?.override_allowed ?? feature === "research",
+    override_allowed: current?.override_allowed ?? purpose.override_allowed,
     source: "system",
   };
 
@@ -296,10 +313,8 @@ async function assignSelected() {
 }
 
 async function resetSelectedAssignment() {
-  const pipeline = selectedPipeline.value;
-  if (!pipeline || assigning.value) return;
-  const feature = featureForPurpose(pipeline.purpose);
-  if (!feature) return;
+  const feature = selectedPurpose.value?.consuming_feature;
+  if (!feature || assigning.value) return;
 
   assigning.value = true;
   error.value = "";
@@ -393,6 +408,13 @@ function openConfiguration(key: string) {
   selectPipeline(key);
 }
 
+const sectionLabels = computed<Record<(typeof sections)[number], string>>(() => ({
+  pipelines: t("pipelines.studio_pipelines", "Pipelines"),
+  strategies: t("pipelines.studio_strategies", "Strategies"),
+  executions: t("pipelines.studio_executions", "Executions"),
+  operations: t("pipelines.studio_operations", "Operations"),
+}));
+
 watch(
   () => route.query,
   () => {
@@ -466,6 +488,17 @@ onMounted(() => {
         </p>
         <dl>
           <div>
+            <dt>{{ t("pipelines.used_for", "Used for") }}</dt>
+            <dd>
+              {{
+                t(
+                  "pipelines.term_used_for_help",
+                  "What the whole pipeline is for—Research, Evidence, Search, Metadata, Memory or Corpus processing—and which part of DerridAI runs it. A version keeps its purpose for life.",
+                )
+              }}
+            </dd>
+          </div>
+          <div>
             <dt>{{ t("pipelines.term_stage", "Stage") }}</dt>
             <dd>
               {{
@@ -483,6 +516,17 @@ onMounted(() => {
                 t(
                   "pipelines.term_strategy_help",
                   "The approved operation a stage performs. In technical terms, it is a registered server-side implementation with a known input, output, and configuration schema.",
+                )
+              }}
+            </dd>
+          </div>
+          <div>
+            <dt>{{ t("pipelines.scholarly_effect", "Scholarly effect") }}</dt>
+            <dd>
+              {{
+                t(
+                  "pipelines.term_scholarly_effect_help",
+                  "What a stage establishes about evidence, support or provenance. Retrieval, reranking and diversity only order candidates; they never make a passage evidence.",
                 )
               }}
             </dd>
@@ -542,13 +586,7 @@ onMounted(() => {
           :class="{ selected: section === item }"
           @click="selectSection(item)"
         >
-          {{
-            item === "pipelines"
-              ? t("pipelines.studio_pipelines", "Pipelines")
-              : item === "executions"
-                ? t("pipelines.studio_executions", "Executions")
-                : t("pipelines.studio_operations", "Operations")
-          }}
+          {{ sectionLabels[item] }}
         </button>
       </div>
 
@@ -563,13 +601,20 @@ onMounted(() => {
         <PipelineDefinitionBrowser
           :pipelines="pipelines"
           :assignments="assignments"
+          :purposes="purposes"
+          :vocabulary="vocabulary"
           :selected-key="selectedKey"
+          :workflow="workflow"
           @select="selectPipeline"
+          @update:workflow="selectWorkflow"
         />
         <PipelineDefinitionDetail
           v-if="selectedPipeline"
           :pipeline="selectedPipeline"
           :strategies="strategies"
+          :purpose="selectedPurpose"
+          :purposes="purposes"
+          :vocabulary="vocabulary"
           :assignment="selectedAssignment"
           :assigned="isSelectedAssigned"
           :can-assign="canAssignSelected"
@@ -585,12 +630,31 @@ onMounted(() => {
         v-if="draft && section === 'pipelines'"
         v-model="draft"
         :strategies="strategies"
+        :purpose="purposeFor(draft)"
+        :vocabulary="vocabulary"
         :validation="validation"
         :saving="saving"
         @cancel="draft = null"
         @validate="validateDraft"
         @save="saveDraft"
       />
+
+      <section
+        v-else-if="section === 'strategies'"
+        id="pipeline-panel-strategies"
+        role="tabpanel"
+        aria-labelledby="pipeline-tab-strategies"
+      >
+        <PipelineStrategyCatalog
+          :strategies="strategies"
+          :pipelines="pipelines"
+          :purposes="purposes"
+          :vocabulary="vocabulary"
+          :selected-strategy-id="selectedStrategy"
+          @select-strategy="selectStrategy"
+          @open-pipeline="selectPipeline"
+        />
+      </section>
 
       <section
         v-else-if="section === 'executions'"
@@ -601,6 +665,8 @@ onMounted(() => {
         <PipelineExecutionHistory
           :runs="runs"
           :pipelines="pipelines"
+          :purposes="purposes"
+          :vocabulary="vocabulary"
           :strategies="strategies"
           :selected-run-id="selectedTraceId"
           :focused-run="focusedRun"
@@ -626,7 +692,13 @@ onMounted(() => {
       >
         <PipelineComparisonPanel :pipelines="pipelines" />
         <PipelineBenchmarkPanel :pipelines="pipelines" />
-        <PipelineOperationsSummary v-if="metrics" :metrics="metrics" />
+        <PipelineOperationsSummary
+          v-if="metrics"
+          :metrics="metrics"
+          :strategies="strategies"
+          :purposes="purposes"
+          :vocabulary="vocabulary"
+        />
       </section>
     </template>
   </div>

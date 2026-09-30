@@ -2,6 +2,11 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import PipelineExecutionHistory from "./PipelineExecutionHistory.vue";
 import type { PipelineRunTrace } from "../../types/pipelines";
+import {
+  contractPurposes,
+  contractStrategies,
+  contractVocabulary,
+} from "./fixtures/pipelineCatalogContract";
 
 const runs: PipelineRunTrace[] = [
   {
@@ -52,6 +57,9 @@ const meta = {
   args: {
     runs,
     pipelines: [],
+    purposes: contractPurposes,
+    vocabulary: contractVocabulary,
+    strategies: contractStrategies,
     selectedRunId: runs[0].run_id,
     total: runs.length,
     limit: 25,

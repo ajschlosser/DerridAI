@@ -2,6 +2,7 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import PipelineDefinitionBrowser from "./PipelineDefinitionBrowser.vue";
 import type { PipelineAssignment, PipelineDefinition } from "../../types/pipelines";
+import { contractPurposes, contractVocabulary } from "./fixtures/pipelineCatalogContract";
 
 const pipelines: PipelineDefinition[] = [
   {
@@ -23,6 +24,36 @@ const pipelines: PipelineDefinition[] = [
     entry_stage_ids: ["retrieve"],
     stages: [],
     built_in: false,
+  },
+  {
+    pipeline_id: "evidence.reviewer.current",
+    version: 2,
+    name: "Evidence suggestion — reviewer support-gated",
+    purpose: "evidence_suggestion",
+    status: "active",
+    entry_stage_ids: ["query"],
+    stages: [],
+    built_in: true,
+  },
+  {
+    pipeline_id: "evidence.recovery.cascade",
+    version: 1,
+    name: "Evidence recovery — relevance cascade",
+    purpose: "evidence_recovery",
+    status: "active",
+    entry_stage_ids: ["query"],
+    stages: [],
+    built_in: true,
+  },
+  {
+    pipeline_id: "store_search.similarity",
+    version: 1,
+    name: "Vector Store search — similarity",
+    purpose: "vector_store_search",
+    status: "active",
+    entry_stage_ids: ["query"],
+    stages: [],
+    built_in: true,
   },
   {
     pipeline_id: "metadata.precedents.current",
@@ -54,7 +85,10 @@ const meta = {
   args: {
     pipelines,
     assignments,
+    purposes: contractPurposes,
+    vocabulary: contractVocabulary,
     selectedKey: "research.current@1",
+    workflow: "",
   },
 } satisfies Meta<typeof PipelineDefinitionBrowser>;
 
@@ -62,6 +96,10 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
+
+export const EvidenceWorkflow: Story = {
+  args: { workflow: "evidence", selectedKey: "evidence.reviewer.current@2" },
+};
 
 export const LongNamesAndFrench: Story = {
   args: {

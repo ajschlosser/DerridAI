@@ -1,20 +1,26 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
+import { computed } from "vue";
 import AppIcon from "../AppIcon.vue";
 import UiTooltip from "../ui/UiTooltip.vue";
 import PipelineGraphDiagram from "./PipelineGraphDiagram.vue";
 import PipelineStageList from "./PipelineStageList.vue";
-import { pipelinePurposeLabel } from "../../domain/pipelinePresentation";
+import PipelineWorkflowContract from "./PipelineWorkflowContract.vue";
+import { findTerm, purposeLabelFor, termLabel } from "../../domain/pipelineWorkflows";
 import { useI18nStore } from "../../stores/i18n";
 import type {
   PipelineAssignment,
   PipelineDefinition,
+  PipelinePurpose,
   PipelineStrategy,
+  PipelineWorkflowVocabulary,
 } from "../../types/pipelines";
-
-defineProps<{
+const props = defineProps<{
   pipeline: PipelineDefinition;
   strategies: PipelineStrategy[];
+  purpose: PipelinePurpose | null;
+  purposes: PipelinePurpose[];
+  vocabulary: PipelineWorkflowVocabulary;
   assignment: PipelineAssignment | null;
   assigned: boolean;
   canAssign: boolean;
@@ -30,13 +36,20 @@ const emit = defineEmits<{
 
 const i18n = useI18nStore();
 const t = (key: string, fallback: string) => i18n.t(key, fallback);
+const category = computed(() =>
+  props.purpose ? findTerm(props.vocabulary.categories, props.purpose.category) : null,
+);
 </script>
 
 <template>
   <article class="pipeline-detail">
     <header class="detail-header">
       <div>
-        <div class="detail-kicker">{{ pipelinePurposeLabel(pipeline.purpose, t) }}</div>
+        <div class="detail-kicker">
+          <span v-if="category">{{ termLabel(category, t) }}</span>
+          <span v-if="category" aria-hidden="true"> · </span>
+          <span>{{ purposeLabelFor(purposes, pipeline.purpose, t) }}</span>
+        </div>
         <h3>{{ pipeline.name }}</h3>
         <p>
           <code>{{ pipeline.pipeline_id }}@{{ pipeline.version }}</code>
@@ -59,8 +72,8 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
           <UiTooltip
             :text="
               t(
-                'pipelines.clone_help',
-                'Built-in and saved pipeline versions are immutable. Clone & edit asks the server for a safe new draft version, leaving the original untouched. The new copy is not used by Research until you save it and explicitly make it active.',
+                'pipelines.clone_help_purpose',
+                'Built-in and saved pipeline versions are immutable. Clone & edit asks the server for a safe new draft version, leaving the original untouched. The copy keeps this pipeline’s purpose, and DerridAI does not use it until you save it and explicitly make it active.',
               )
             "
           />
@@ -90,6 +103,14 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
         </span>
       </div>
     </header>
+
+    <PipelineWorkflowContract
+      :pipeline="pipeline"
+      :purpose="purpose"
+      :vocabulary="vocabulary"
+      :assignment="assignment"
+      :assigned="assigned"
+    />
 
     <dl class="health-strip">
       <div>
@@ -195,6 +216,7 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
       :stages="pipeline.stages"
       :entry-stage-ids="pipeline.entry_stage_ids"
       :strategies="strategies"
+      :vocabulary="vocabulary"
       :title="t('pipelines.diagram_title', 'Pipeline diagram')"
       :description="
         t(
@@ -206,7 +228,7 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
 
     <details class="stage-details">
       <summary>{{ t("pipelines.stage_details", "Stage details") }}</summary>
-      <PipelineStageList :pipeline="pipeline" :strategies="strategies" />
+      <PipelineStageList :pipeline="pipeline" :strategies="strategies" :vocabulary="vocabulary" />
     </details>
 
     <footer v-if="assignment && assignment.source !== 'built_in'" class="assignment-footer">

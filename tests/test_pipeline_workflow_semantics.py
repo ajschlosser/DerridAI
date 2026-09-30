@@ -243,3 +243,23 @@ def test_execution_history_filters_by_workflow_features(tmp_path) -> None:
     assert store.count_runs(features=evidence) == 2
     assert store.count_runs(features=[]) == 0
     assert store.count_runs() == 3
+
+
+def test_frontend_catalog_fixture_matches_the_served_contract() -> None:
+    """Stories and Vitest read this fixture; it must be what the API serves."""
+
+    from pathlib import Path
+
+    fixture = Path(__file__).resolve().parents[1] / (
+        "web/src/components/pipelines/fixtures/pipelineCatalogContract.json"
+    )
+    served = json.loads(
+        json.dumps(
+            {
+                "purposes": purpose_catalog(),
+                "vocabulary": workflow_vocabulary(),
+                "strategies": PipelineService().strategies(),
+            }
+        )
+    )
+    assert json.loads(fixture.read_text(encoding="utf-8")) == served

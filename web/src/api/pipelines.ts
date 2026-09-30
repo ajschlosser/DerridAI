@@ -122,9 +122,12 @@ export const pipelinesApi = {
       `/api/system/pipelines/benchmarks/${encodeURIComponent(benchmarkRunId)}`,
     ),
 
-  metrics: (filters: { feature?: string; owner?: string; limit?: number } = {}) => {
+  metrics: (
+    filters: { feature?: string; category?: string; owner?: string; limit?: number } = {},
+  ) => {
     const query = new URLSearchParams();
     if (filters.feature) query.set("feature", filters.feature);
+    if (filters.category) query.set("category", filters.category);
     if (filters.owner) query.set("owner", filters.owner);
     query.set("limit", String(filters.limit ?? 250));
     return apiRequest<PipelineOperationalMetrics>(`/api/system/pipelines/metrics?${query}`);
@@ -133,6 +136,7 @@ export const pipelinesApi = {
   runs: (
     filters: {
       feature?: string;
+      category?: string;
       owner?: string;
       pipelineId?: string;
       status?: string;
@@ -143,6 +147,7 @@ export const pipelinesApi = {
   ) => {
     const query = new URLSearchParams();
     if (filters.feature) query.set("feature", filters.feature);
+    if (filters.category) query.set("category", filters.category);
     if (filters.owner) query.set("owner", filters.owner);
     if (filters.pipelineId) query.set("pipeline_id", filters.pipelineId);
     if (filters.status) query.set("status", filters.status);

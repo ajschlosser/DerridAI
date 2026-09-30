@@ -10,11 +10,25 @@ import {
   pipelinePurposeLabel,
   pipelineRunStatusLabel,
 } from "../../domain/pipelinePresentation";
+import {
+  findTerm,
+  purposeForFeature,
+  purposeText,
+  termLabel,
+} from "../../domain/pipelineWorkflows";
 import { useI18nStore } from "../../stores/i18n";
-import type { PipelineDefinition, PipelineRunTrace, PipelineStrategy } from "../../types/pipelines";
+import type {
+  PipelineDefinition,
+  PipelinePurpose,
+  PipelineRunTrace,
+  PipelineStrategy,
+  PipelineWorkflowVocabulary,
+} from "../../types/pipelines";
 
 export type PipelineRunFilters = {
   query: string;
+  /** Workflow category; the server expands it to the features that consume it. */
+  category: string;
   feature: string;
   pipelineId: string;
   status: string;
@@ -25,6 +39,8 @@ const props = defineProps<{
   runs: PipelineRunTrace[];
   selectedRunId: string;
   pipelines: PipelineDefinition[];
+  purposes: PipelinePurpose[];
+  vocabulary: PipelineWorkflowVocabulary;
   strategies?: PipelineStrategy[];
   total?: number;
   limit?: number;
@@ -46,6 +62,7 @@ const i18n = useI18nStore();
 const t = (key: string, fallback: string) => i18n.t(key, fallback);
 const draft = ref<PipelineRunFilters>({
   query: "",
+  category: "",
   feature: "",
   pipelineId: "",
   status: "",
@@ -57,6 +74,7 @@ watch(
   (filters) => {
     draft.value = {
       query: filters?.query || "",
+      category: filters?.category || "",
       feature: filters?.feature || "",
       pipelineId: filters?.pipelineId || "",
       status: filters?.status || "",
@@ -82,7 +100,35 @@ const total = computed(() => props.total ?? props.runs.length);
 const offset = computed(() => props.offset || 0);
 const pageStart = computed(() => (total.value ? offset.value + 1 : 0));
 const pageEnd = computed(() => Math.min(total.value, offset.value + props.runs.length));
-const features = computed(() => [...new Set(props.pipelines.map((item) => item.purpose))]);
+const purposeOptions = computed(() =>
+  props.purposes.filter(
+    (purpose) => !draft.value.category || purpose.category === draft.value.category,
+  ),
+);
+
+// Human workflow first; the raw feature ID stays available as technical detail.
+function runWorkflow(run: PipelineRunTrace) {
+  const purpose = purposeForFeature(props.purposes, run.feature);
+  const category = purpose ? findTerm(props.vocabulary.categories, purpose.category) : null;
+  return {
+    category: category
+      ? termLabel(category, t)
+      : t("pipelines.unregistered_purpose", "Unregistered purpose"),
+    purpose: purpose ? purposeText(purpose, "label", t) : pipelinePurposeLabel(run.feature, t),
+  };
+}
+const selectedWorkflow = computed(() =>
+  selectedTrace.value ? runWorkflow(selectedTrace.value) : null,
+);
+const selectedPipelineName = computed(() => {
+  const trace = selectedTrace.value;
+  if (!trace) return "";
+  return (
+    props.pipelines.find(
+      (item) => item.pipeline_id === trace.pipeline_id && item.version === trace.pipeline_version,
+    )?.name || trace.pipeline_id
+  );
+});
 const pipelineIds = computed(() => [...new Set(props.pipelines.map((item) => item.pipeline_id))]);
 const statuses = ["completed", "failed", "cancelled", "running"];
 
@@ -97,7 +143,7 @@ function submitFilters() {
 }
 
 function resetFilters() {
-  draft.value = { query: "", feature: "", pipelineId: "", status: "", owner: "" };
+  draft.value = { query: "", category: "", feature: "", pipelineId: "", status: "", owner: "" };
   emit("apply", { ...draft.value });
 }
 </script>
@@ -132,11 +178,24 @@ function resetFilters() {
         />
       </label>
       <label>
+        <span>{{ t("pipelines.used_for", "Used for") }}</span>
+        <select v-model="draft.category" class="control" @change="draft.feature = ''">
+          <option value="">{{ t("pipelines.filter_all", "All") }}</option>
+          <option v-for="term in vocabulary.categories" :key="term.id" :value="term.id">
+            {{ termLabel(term, t) }}
+          </option>
+        </select>
+      </label>
+      <label>
         <span>{{ t("pipelines.filter_purpose", "Purpose") }}</span>
         <select v-model="draft.feature" class="control">
           <option value="">{{ t("pipelines.filter_all", "All") }}</option>
-          <option v-for="feature in features" :key="feature" :value="feature">
-            {{ pipelinePurposeLabel(feature, t) }}
+          <option
+            v-for="purpose in purposeOptions"
+            :key="purpose.purpose_id"
+            :value="purpose.consuming_feature"
+          >
+            {{ purposeText(purpose, "label", t) }}
           </option>
         </select>
       </label>
@@ -188,8 +247,8 @@ function resetFilters() {
           <thead>
             <tr>
               <th scope="col">{{ t("pipelines.started", "Started") }}</th>
+              <th scope="col">{{ t("pipelines.used_for", "Used for") }}</th>
               <th scope="col">{{ t("pipelines.pipeline", "Pipeline") }}</th>
-              <th scope="col">{{ t("pipelines.filter_purpose", "Purpose") }}</th>
               <th scope="col">{{ t("pipelines.status", "Status") }}</th>
               <th scope="col">{{ t("pipelines.duration", "Duration") }}</th>
               <th scope="col">
@@ -209,11 +268,14 @@ function resetFilters() {
                   {{ formatPipelineDate(run.started_at, i18n.locale) }}
                 </button>
               </td>
+              <td class="run-workflow">
+                <strong>{{ runWorkflow(run).category }}</strong>
+                <span>{{ runWorkflow(run).purpose }}</span>
+              </td>
               <td>
-                <strong>{{ run.pipeline_id }}</strong>
+                <span>{{ run.pipeline_id }}</span>
                 <small>v{{ run.pipeline_version }}</small>
               </td>
-              <td>{{ pipelinePurposeLabel(run.feature, t) }}</td>
               <td>{{ pipelineRunStatusLabel(run.status, t) }}</td>
               <td>{{ duration(run.total_elapsed_ms) }}</td>
               <td>
@@ -250,6 +312,45 @@ function resetFilters() {
       </div>
 
       <div v-if="selectedTrace && configuration" class="trace-detail">
+        <header v-if="selectedWorkflow" class="trace-summary">
+          <p class="trace-workflow">
+            <strong>{{ selectedWorkflow.category }}</strong>
+            <span aria-hidden="true">·</span>
+            <span>{{ selectedWorkflow.purpose }}</span>
+          </p>
+          <p class="trace-pipeline">
+            {{ selectedPipelineName }} <small>v{{ selectedTrace.pipeline_version }}</small>
+          </p>
+          <details class="trace-technical">
+            <summary>{{ t("pipelines.technical_details", "Technical details") }}</summary>
+            <dl>
+              <div>
+                <dt>{{ t("pipelines.feature_id", "Feature ID") }}</dt>
+                <dd>
+                  <code>{{ selectedTrace.feature }}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>{{ t("pipelines.pipeline", "Pipeline") }}</dt>
+                <dd>
+                  <code>{{ selectedTrace.pipeline_id }}@{{ selectedTrace.pipeline_version }}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>{{ t("pipelines.resolved_hash", "Resolved hash") }}</dt>
+                <dd>
+                  <code>{{ selectedTrace.resolved_hash }}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>{{ t("pipelines.run_id", "Run ID") }}</dt>
+                <dd>
+                  <code>{{ selectedTrace.run_id }}</code>
+                </dd>
+              </div>
+            </dl>
+          </details>
+        </header>
         <div class="trace-relate">
           <p>
             {{
@@ -277,6 +378,7 @@ function resetFilters() {
           :stages="configuration.stages"
           :entry-stage-ids="configuration.entryStageIds"
           :strategies="strategies || []"
+          :vocabulary="vocabulary"
           :execution="selectedTrace"
           :title="t('pipelines.execution_diagram', 'Execution diagram')"
           :description="
@@ -308,6 +410,58 @@ function resetFilters() {
 </template>
 
 <style scoped>
+.run-workflow {
+  display: grid;
+  gap: 1px;
+}
+.run-workflow span {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.trace-summary {
+  display: grid;
+  gap: 3px;
+}
+.trace-workflow,
+.trace-pipeline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  font-size: 0.86rem;
+}
+.trace-pipeline {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.trace-technical summary {
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.trace-technical summary:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.trace-technical dl {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 0;
+}
+.trace-technical dl div {
+  display: grid;
+  grid-template-columns: minmax(96px, auto) minmax(0, 1fr);
+  gap: 8px;
+  font-size: 0.75rem;
+}
+.trace-technical dt {
+  color: var(--muted);
+  font-weight: 750;
+}
+.trace-technical dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
 .trace-workspace {
   display: grid;
   gap: 14px;
