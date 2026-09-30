@@ -164,8 +164,12 @@ function semanticLayout(
           dy = Math.sin(angle);
           distance = 1;
         }
-        const minimum = 42 + (Math.max(labels.get(a.id)!.length, 8) + Math.max(labels.get(b.id)!.length, 8)) * 1.7;
-        const force = (distance < minimum ? (minimum - distance) * 0.16 : 900 / (distance * distance)) * (iteration < 40 ? 1 : 0.55);
+        const minimum =
+          42 +
+          (Math.max(labels.get(a.id)!.length, 8) + Math.max(labels.get(b.id)!.length, 8)) * 1.7;
+        const force =
+          (distance < minimum ? (minimum - distance) * 0.16 : 900 / (distance * distance)) *
+          (iteration < 40 ? 1 : 0.55);
         const ux = dx / distance;
         const uy = dy / distance;
         delta.get(a.id)!.x -= ux * force;
@@ -230,9 +234,11 @@ export function buildSemanticMap(sources: SemanticMapSource[], focusId = ""): Se
     if (source.id) {
       const recordNode = touch("record", source.work || source.id, source.id);
       for (const id of ids) link(recordNode, id);
-      if (focusId && source.id === focusId) for (const other of sources) {
-        if (other.id !== source.id && other.work === source.work) link(recordNode, nodeId("record", other.work || other.id, other.id));
-      }
+      if (focusId && source.id === focusId)
+        for (const other of sources) {
+          if (other.id !== source.id && other.work === source.work)
+            link(recordNode, nodeId("record", other.work || other.id, other.id));
+        }
     }
   }
 
