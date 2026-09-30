@@ -319,8 +319,6 @@ const {
   selectedAssetId,
   selectedAsset,
   sourceIllegibility,
-  detectPageNumbers,
-  llmPageDetection,
   sourceUrl,
   gutenbergQuery,
   gutenbergHits,
@@ -2288,8 +2286,6 @@ defineExpose({
         <CorpusSourceIngest
           v-model:asset-id="selectedAssetId"
           v-model:illegibility="sourceIllegibility"
-          v-model:detect-page-numbers="detectPageNumbers"
-          v-model:llm-page-detection="llmPageDetection"
           v-model:source-url="sourceUrl"
           v-model:gutenberg-query="gutenbergQuery"
           v-model:wikisource-language="wikisourceLanguage"
