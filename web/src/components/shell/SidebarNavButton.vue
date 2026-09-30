@@ -3,18 +3,22 @@
 import AppIcon from "../AppIcon.vue";
 import UiTooltip from "../ui/UiTooltip.vue";
 
-defineProps<{
+const props = defineProps<{
   id: string;
   label: string;
   icon: string;
+  collapsed?: boolean;
   active?: boolean;
   disabledReason?: string;
 }>();
 defineEmits<{ navigate: [string] }>();
+
+const showTooltip = () => Boolean(props.collapsed || props.disabledReason);
 </script>
 
 <template>
   <UiTooltip
+    v-if="showTooltip()"
     :text="disabledReason || label"
     trigger-mode="content"
     :content-focusable="Boolean(disabledReason)"
@@ -34,6 +38,19 @@ defineEmits<{ navigate: [string] }>();
       </button>
     </span>
   </UiTooltip>
+  <span v-else class="nav-tooltip-wrap">
+    <button
+      type="button"
+      :class="{ active }"
+      :disabled="Boolean(disabledReason)"
+      :aria-current="active ? 'page' : undefined"
+      :aria-label="label"
+      @click="$emit('navigate', id)"
+    >
+      <AppIcon :name="icon" aria-hidden="true" />
+      <span>{{ label }}</span>
+    </button>
+  </span>
 </template>
 
 <style scoped>
@@ -74,7 +91,9 @@ defineEmits<{ navigate: [string] }>();
 
 .nav-tooltip-wrap > button.active {
   background: var(--surface-selected);
-  box-shadow: inset 2px 0 0 var(--ui-accent);
+  box-shadow:
+    inset 3px 0 0 var(--ui-accent),
+    0 0 0 1px color-mix(in srgb, var(--ui-accent) 12%, transparent);
   color: var(--accent-fg);
   font-weight: var(--fw-semibold, 650);
 }

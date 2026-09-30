@@ -21,6 +21,7 @@ const i18n = useI18nStore();
       :id="item.id"
       :label="item.label"
       :icon="item.icon"
+      :collapsed="collapsed"
       :active="item.active"
       :disabled-reason="item.disabledReason"
       @navigate="emit('navigate', $event)"
@@ -33,14 +34,15 @@ const i18n = useI18nStore();
   display: grid;
   gap: 1px;
   flex: 0 0 auto;
-  margin-top: 4px;
-  padding: 9px 3px 0;
+  margin-top: 8px;
+  padding: 12px 3px 0;
   border-top: 1px solid var(--line);
   font-family: var(--font-ui);
 }
 
 .shell-utility-nav :deep(.nav-tooltip-wrap > button) {
   min-height: 36px;
+  border-radius: 9px;
   color: var(--muted);
 }
 
