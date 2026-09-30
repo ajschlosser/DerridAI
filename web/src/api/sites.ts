@@ -1,12 +1,15 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import { ApiError } from "./http";
 
+export type SiteExportFormat = "local-single-file" | "nginx-docker";
+
 export interface SiteExportRequest {
   store: string;
   works: string[];
   title: string;
   description?: string;
   locale: "en-US" | "fr-CA";
+  export_format: SiteExportFormat;
 }
 
 export interface SiteExportDownload {

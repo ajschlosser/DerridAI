@@ -2,6 +2,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from "vue";
 import { useI18nStore } from "../../stores/i18n";
+import type { SiteExportFormat } from "../../api/sites";
 import type { WorksItem } from "../../types/works";
 import AppIcon from "../AppIcon.vue";
 
@@ -15,7 +16,14 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   cancel: [];
-  create: [payload: { title: string; description: string; works: string[] }];
+  create: [
+    payload: {
+      title: string;
+      description: string;
+      works: string[];
+      export_format: SiteExportFormat;
+    },
+  ];
 }>();
 
 const i18n = useI18nStore();
@@ -23,6 +31,7 @@ const dialog = ref<HTMLDialogElement | null>(null);
 const selected = ref<string[]>(props.initialWork ? [props.initialWork] : []);
 const title = ref(props.initialWork || "");
 const description = ref("");
+const exportFormat = ref<SiteExportFormat>("local-single-file");
 
 const selectedCount = computed(() => selected.value.length);
 const canCreate = computed(() => Boolean(selectedCount.value && props.storeName && !props.busy));
@@ -48,6 +57,7 @@ function submit() {
     title: title.value.trim() || selected.value[0] || "",
     description: description.value.trim(),
     works: [...selected.value],
+    export_format: exportFormat.value,
   });
 }
 
@@ -110,6 +120,24 @@ onMounted(async () => {
           </div>
         </section>
 
+        <fieldset class="site-export-format">
+          <legend>{{ i18n.t("site.create_export_format") }}</legend>
+          <label class="site-export-option">
+            <input v-model="exportFormat" type="radio" value="local-single-file" />
+            <span>
+              <strong>{{ i18n.t("site.create_format_local") }}</strong>
+              <small>{{ i18n.t("site.create_format_local_help") }}</small>
+            </span>
+          </label>
+          <label class="site-export-option">
+            <input v-model="exportFormat" type="radio" value="nginx-docker" />
+            <span>
+              <strong>{{ i18n.t("site.create_format_nginx") }}</strong>
+              <small>{{ i18n.t("site.create_format_nginx_help") }}</small>
+            </span>
+          </label>
+        </fieldset>
+
         <fieldset class="site-work-picker">
           <legend>{{ i18n.t("site.create_select_works") }}</legend>
           <div class="site-work-picker-toolbar">
@@ -159,7 +187,13 @@ onMounted(async () => {
         </button>
         <button type="submit" class="btn primary" :disabled="!canCreate">
           <AppIcon name="download" aria-hidden="true" />
-          {{ props.busy ? i18n.t("site.create_busy") : i18n.t("site.create_action") }}
+          {{
+            props.busy
+              ? i18n.t("site.create_busy")
+              : exportFormat === "local-single-file"
+                ? i18n.t("site.create_action_local")
+                : i18n.t("site.create_action_nginx")
+          }}
         </button>
       </footer>
     </form>
@@ -261,6 +295,52 @@ onMounted(async () => {
 .site-store-summary small,
 .site-feature-summary small,
 .site-work-option small {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.site-export-format {
+  display: grid;
+  min-width: 0;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.site-export-format legend {
+  padding: 0 0.35rem;
+  font-weight: 800;
+}
+
+.site-export-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.7rem;
+  align-items: start;
+  padding: 0.75rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  cursor: pointer;
+}
+
+.site-export-option:has(input:checked) {
+  border-color: var(--ui-accent);
+  box-shadow: 0 0 0 1px var(--ui-accent);
+}
+
+.site-export-option input {
+  margin-top: 0.2rem;
+}
+
+.site-export-option span {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.site-export-option small {
   color: var(--muted);
   line-height: 1.45;
 }
