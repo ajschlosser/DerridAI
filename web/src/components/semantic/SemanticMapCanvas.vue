@@ -11,12 +11,17 @@ import type { RelationPoint } from "../../domain/relations/types";
 import { useI18nStore } from "../../stores/i18n";
 import type { SemanticMapGraph, SemanticMapNode } from "../../domain/semanticMap";
 
-const props = defineProps<{ graph: SemanticMapGraph }>();
+type SemanticMapDensity = "compact" | "standard" | "wide";
+
+const props = withDefaults(
+  defineProps<{ graph: SemanticMapGraph; density?: SemanticMapDensity }>(),
+  { density: "compact" },
+);
+const emit = defineEmits<{ activate: [node: SemanticMapNode] }>();
 const i18n = useI18nStore();
 
 const surfacePreset = RELATION_SURFACE_PRESETS.semanticFree;
 const ORIGIN = 520;
-const CONTENT_SIZE = ORIGIN * 2;
 const nodes = ref<SemanticMapNode[]>([]);
 const viewport = ref<InstanceType<typeof UiRelationViewport> | null>(null);
 
@@ -28,21 +33,66 @@ watch(
   { immediate: true },
 );
 
-const positioned = computed(() => {
-  const byId = new Map(nodes.value.map((node) => [node.id, node]));
-  return { byId };
+const densityScale: Record<SemanticMapDensity, number> = {
+  compact: 1,
+  standard: 1.28,
+  wide: 1.68,
+};
+
+const renderedNodes = computed(() => {
+  const scale = densityScale[props.density];
+  const source = nodes.value.map((node) => ({
+    ...node,
+    x: node.x * scale,
+    y: node.y * scale,
+  }));
+  if (props.density === "compact") return source;
+
+  // Keep the deterministic radial placement, but separate nearby labels in
+  // map space so wide mode is readable without manual node movement.
+  const separated = source.map((node) => ({ ...node }));
+  for (let pass = 0; pass < 8; pass += 1) {
+    for (let left = 0; left < separated.length; left += 1) {
+      for (let right = left + 1; right < separated.length; right += 1) {
+        const a = separated[left];
+        const b = separated[right];
+        const minX = (Math.max(a.label.length, 8) + Math.max(b.label.length, 8)) * 3.5;
+        const minY = 34;
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        if (Math.abs(dx) >= minX || Math.abs(dy) >= minY) continue;
+        const pushX = (minX - Math.abs(dx)) / 2;
+        const pushY = (minY - Math.abs(dy)) / 2;
+        if (Math.abs(dx) >= Math.abs(dy)) {
+          const direction = dx === 0 ? ((left + right) % 2 ? 1 : -1) : Math.sign(dx);
+          a.x -= pushX * direction;
+          b.x += pushX * direction;
+        } else {
+          const direction = dy === 0 ? ((left + right) % 2 ? 1 : -1) : Math.sign(dy);
+          a.y -= pushY * direction;
+          b.y += pushY * direction;
+        }
+      }
+    }
+  }
+  return separated;
 });
+
+const contentSize = computed(() => ORIGIN * 2 * densityScale[props.density]);
 
 const contentBounds = computed(() =>
   relationBoundsForPoints(
-    nodes.value.map((node) => ({ x: ORIGIN + node.x, y: ORIGIN + node.y })),
+    renderedNodes.value.map((node) => ({
+      x: contentSize.value / 2 + node.x,
+      y: contentSize.value / 2 + node.y,
+    })),
     72,
   ),
 );
 
 function screen(id: string) {
-  const node = positioned.value.byId.get(id);
-  return { x: ORIGIN + (node?.x || 0), y: ORIGIN + (node?.y || 0) };
+  const node = renderedNodes.value.find((item) => item.id === id);
+  return { x: contentSize.value / 2 + (node?.x || 0), y: contentSize.value / 2 + (node?.y || 0) };
 }
 
 function edgePath(sourceId: string, targetId: string) {
@@ -54,8 +104,9 @@ function edgePath(sourceId: string, targetId: string) {
 function moveNodeTo(id: string, point: RelationPoint) {
   const node = nodes.value.find((item) => item.id === id);
   if (!node) return;
-  node.x = point.x - ORIGIN;
-  node.y = point.y - ORIGIN;
+  const scale = densityScale[props.density];
+  node.x = (point.x - contentSize.value / 2) / scale;
+  node.y = (point.y - contentSize.value / 2) / scale;
 }
 
 function zoomBy(factor: number) {
@@ -91,17 +142,23 @@ defineExpose({ zoomBy, fitView, resetView });
       )
     "
     :resize-label="i18n.t('semantic_map.resize', 'Resize semantic map')"
-    :initial-center="{ x: ORIGIN, y: ORIGIN }"
+    :initial-center="{ x: contentSize / 2, y: contentSize / 2 }"
     :content-bounds="contentBounds"
-    :content-width="CONTENT_SIZE"
-    :content-height="CONTENT_SIZE"
+    :content-width="contentSize"
+    :content-height="contentSize"
     :min-zoom="surfacePreset.minZoom"
     :max-zoom="surfacePreset.maxZoom"
     :resize-axis="surfacePreset.resizeAxis"
     layer-marker="data-semantic-map-layer"
   >
     <template #default="{ zoom }">
-      <svg class="semantic-map-edges" aria-hidden="true">
+      <svg
+        class="semantic-map-edges"
+        aria-hidden="true"
+        :viewBox="`0 0 ${contentSize} ${contentSize}`"
+        :width="contentSize"
+        :height="contentSize"
+      >
         <UiRelationEdge
           v-for="edge in graph.edges"
           :key="edge.id"
@@ -109,16 +166,17 @@ defineExpose({ zoomBy, fitView, resetView });
         />
       </svg>
       <UiRelationNodeShell
-        v-for="node in nodes"
+        v-for="node in renderedNodes"
         :key="node.id"
         class="semantic-map-node"
         :class="`kind-${node.kind}`"
         :node-id="node.id"
-        :x="ORIGIN + node.x"
-        :y="ORIGIN + node.y"
+        :x="contentSize / 2 + node.x"
+        :y="contentSize / 2 + node.y"
         :zoom="zoom"
         :accessible-label="`${kindLabel(node.kind)}: ${node.label}`"
         @move="moveNodeTo(node.id, $event)"
+        @activate="emit('activate', node)"
       >
         <UiRelationChipNode :label="node.label" />
       </UiRelationNodeShell>
@@ -136,8 +194,7 @@ defineExpose({ zoomBy, fitView, resetView });
 .semantic-map-edges {
   position: absolute;
   inset: 0;
-  width: 1040px;
-  height: 1040px;
+  max-width: none;
   overflow: visible;
 }
 .semantic-map-node {

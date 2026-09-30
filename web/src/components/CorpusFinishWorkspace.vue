@@ -530,10 +530,6 @@ function fixBlocker(code?: string) {
   display: grid;
   min-width: 0;
   gap: var(--space-4);
-  padding: var(--space-5);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-card);
-  background: var(--surface-card);
 }
 .publication-head {
   display: flex;

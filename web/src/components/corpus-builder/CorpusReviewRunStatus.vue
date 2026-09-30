@@ -20,6 +20,7 @@ const emit = defineEmits<{
   switchProfile: [profileId: string, model: string];
   settle: [];
   cancel: [];
+  pause: [];
   resume: [];
   runAnother: [];
   openRecord: [recordId: string];
@@ -79,6 +80,13 @@ const label = computed(() => {
   <div class="review-run-status">
     <span class="review-run-controls">
       <UiButton size="small" :expanded="expanded" :label="label" @click="expanded = !expanded" />
+      <UiButton
+        v-if="buildRunning"
+        size="small"
+        :label="i18n.t('pdf_corpus.pause')"
+        :disabled="disabled"
+        @click="emit('pause')"
+      />
       <UiButton
         v-if="!engaged"
         size="small"

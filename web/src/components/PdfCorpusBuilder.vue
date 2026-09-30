@@ -421,7 +421,6 @@ const {
   retryingSegmentation,
   canRetryMetadata,
   metadataIssueCount,
-  metadataRetryRunning,
   awaitingManifestReview,
   hasRecordTopology,
   showReviewWorkspace: lifecycleShowReviewWorkspace,
@@ -984,7 +983,6 @@ const {
   focusQueueMove,
   navigateToQueueRecord,
   advanceFrom,
-  reviewMetadataRecord,
   openMetadataIssueQueue,
   openValidationIssueQueue,
   openTopologyIssueQueue,
@@ -2408,6 +2406,7 @@ defineExpose({
       :running="buildRunning"
       :can-resume="canResume"
       :has-record-topology="hasRecordTopology"
+      :ready-count="readyCount"
       :awaiting-manifest-review="awaitingManifestReview"
       :retrying-segmentation="retryingSegmentation"
       :segmentation-needs-review="segmentationNeedsReview"
@@ -2441,13 +2440,9 @@ defineExpose({
       v-else-if="workspaceMode === 'publish' && currentBuild"
       :build="currentBuild"
       :busy="busy !== ''"
-      :metadata-retry-running="metadataRetryRunning"
       :can-publish-unreviewed="canPublishUnreviewed"
       @retry-metadata="retryIncompleteMetadata"
       @review-metadata="reviewFromPublish(openMetadataIssueQueue)"
-      @review-metadata-record="
-        (recordId) => reviewFromPublish(() => reviewMetadataRecord(recordId))
-      "
       @review-validation="reviewFromPublish(() => openValidationIssueQueue())"
       @fix-issue="(issue) => reviewFromPublish(() => fixValidationIssue(issue))"
       @review-topology="reviewFromPublish(openTopologyIssueQueue)"
@@ -2544,6 +2539,7 @@ defineExpose({
               @switch-profile="switchBuildProvider"
               @settle="settleMetadata"
               @cancel="cancelBuild"
+              @pause="pauseBuild"
               @resume="resumeBuild"
               @run-another="
                 llmActionProviderId =
@@ -2566,6 +2562,9 @@ defineExpose({
           :all-visible-selected="allVisibleSelected"
           :loading="recordsLoading"
           :hydrated="reviewHydrated"
+          :queue="reviewQueue"
+          :searching="Boolean(recordQuery.trim())"
+          :can-open-publish="hasRecordTopology"
           :disabled="busy !== ''"
           @root-change="setRecordListElement"
           @collapse="reviewQueueCollapsed = true"
@@ -2577,6 +2576,7 @@ defineExpose({
             reviewQueue = 'all';
             recordQuery = '';
           "
+          @open-publish="switchWorkspace('publish')"
         />
       </template>
       <template #record>

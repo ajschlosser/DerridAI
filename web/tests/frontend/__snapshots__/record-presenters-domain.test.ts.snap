@@ -7,6 +7,7 @@ exports[`record presenters > builds dashboard and work insight fragments 2`] = `
   {
     "field": "persons",
     "format": [Function],
+    "heading": "Top 5 persons",
     "id": "persons",
     "title": "Top 5 persons mentioned in the work",
     "type": "bars",
@@ -16,6 +17,7 @@ exports[`record presenters > builds dashboard and work insight fragments 2`] = `
   {
     "field": "concepts",
     "format": [Function],
+    "heading": "Top 5 concepts",
     "id": "concepts",
     "title": "Top 5 concepts mentioned in the work",
     "type": "bars",
@@ -25,6 +27,7 @@ exports[`record presenters > builds dashboard and work insight fragments 2`] = `
   {
     "field": "topics",
     "format": [Function],
+    "heading": "Top 5 topics",
     "id": "topics",
     "title": "Top 5 topics in the work",
     "type": "bars",
@@ -43,6 +46,7 @@ exports[`record presenters > builds dashboard and work insight fragments 2`] = `
   {
     "field": "target",
     "format": [Function],
+    "heading": "Top 5 discourse targets",
     "id": "targets",
     "title": "Top 5 discourse targets in the work",
     "type": "bars",
@@ -52,6 +56,7 @@ exports[`record presenters > builds dashboard and work insight fragments 2`] = `
   {
     "field": "discourse_role",
     "format": [Function],
+    "heading": "Top discourse roles",
     "id": "roles",
     "title": "Top discourse roles as percentage of recorded roles",
     "type": "pie",

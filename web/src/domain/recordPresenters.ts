@@ -106,7 +106,15 @@ export function createRecordPresenters(deps: Deps) {
   function flattenedMetricValues(value: unknown): string[] {
     if (Array.isArray(value)) return value.flatMap(flattenedMetricValues);
     if (value === undefined || value === null || value === "") return [];
-    if (typeof value === "object") return Object.values(value).flatMap(flattenedMetricValues);
+    if (typeof value === "object") {
+      const objectValue = value as Loose;
+      for (const key of ["term", "name", "label", "value"]) {
+        if (Object.prototype.hasOwnProperty.call(objectValue, key)) {
+          return flattenedMetricValues(objectValue[key]);
+        }
+      }
+      return Object.values(objectValue).flatMap(flattenedMetricValues);
+    }
     return [String(value).trim()].filter(Boolean);
   }
   function topRecordFieldShare(rows: Loose[], field: string, limit = 5) {
@@ -142,6 +150,7 @@ export function createRecordPresenters(deps: Deps) {
         id: "persons",
         field: "persons",
         title: tr("dashboard.top_persons_work"),
+        heading: tr("works.top_persons_heading", "Top 5 persons"),
         type: "bars",
         values: topRecordFieldValues(rows, "persons"),
       },
@@ -149,6 +158,7 @@ export function createRecordPresenters(deps: Deps) {
         id: "concepts",
         field: "concepts",
         title: tr("dashboard.top_concepts_work"),
+        heading: tr("works.top_concepts_heading", "Top 5 concepts"),
         type: "bars",
         values: topRecordFieldValues(rows, "concepts"),
       },
@@ -156,6 +166,7 @@ export function createRecordPresenters(deps: Deps) {
         id: "topics",
         field: "topics",
         title: tr("dashboard.top_topics_work"),
+        heading: tr("works.top_topics_heading", "Top 5 topics"),
         type: "bars",
         values: topRecordFieldValues(rows, "topics"),
       },
@@ -163,6 +174,7 @@ export function createRecordPresenters(deps: Deps) {
         id: "targets",
         field: "target",
         title: tr("dashboard.top_discourse_targets_work"),
+        heading: tr("works.top_targets_heading", "Top 5 discourse targets"),
         type: "bars",
         values: topRecordFieldValues(rows, "target"),
       },
@@ -170,6 +182,7 @@ export function createRecordPresenters(deps: Deps) {
         id: "roles",
         field: "discourse_role",
         title: tr("dashboard.discourse_roles_share_work"),
+        heading: tr("works.roles_heading", "Top discourse roles"),
         type: "pie",
         values: topRecordFieldShare(rows, "discourse_role"),
         valueLabel: tr("works.role_occurrences"),

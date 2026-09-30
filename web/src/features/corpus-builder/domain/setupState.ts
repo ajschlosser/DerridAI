@@ -215,7 +215,8 @@ export function corpusSetupSectionStates(
   };
   return CORPUS_SETUP_SECTIONS.map((id) => {
     let state: CorpusSetupSectionState["state"];
-    if (id === "advanced") state = has(id, "blocking") ? "warning" : "optional";
+    if (id === "advanced")
+      state = has(id, "blocking") ? "incomplete" : has(id, "warning") ? "warning" : "optional";
     else if (id === "source") state = asset ? "complete" : "incomplete";
     else if (!asset && id === "structure") state = "incomplete";
     else if (has(id, "blocking")) state = "incomplete";

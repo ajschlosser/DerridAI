@@ -1,7 +1,8 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import UiButton from "../ui/UiButton.vue";
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import type { ReviewQueue } from "../../types/corpus";
 import type { CorpusQueueRow } from "../../features/corpus-builder/api/reviewReads";
 import { rowHasSourceWarning } from "../../features/corpus-builder/domain/queueRows";
 import { useI18nStore } from "../../stores/i18n";
@@ -17,6 +18,9 @@ const props = defineProps<{
   allVisibleSelected: boolean;
   loading: boolean;
   hydrated: boolean;
+  queue?: ReviewQueue;
+  searching?: boolean;
+  canOpenPublish?: boolean;
   disabled?: boolean;
 }>();
 
@@ -28,6 +32,7 @@ const emit = defineEmits<{
   selectRecord: [row: CorpusQueueRow];
   sourceWarning: [row: CorpusQueueRow];
   showAll: [];
+  openPublish: [];
 }>();
 
 const i18n = useI18nStore();
@@ -36,6 +41,14 @@ const llmProcessedHelp = i18n.t(
   "pdf_corpus.llm_processed_help",
   "The metadata enrichment run finished for this record; it is now waiting for human review.",
 );
+
+const completedQueue = computed(() => {
+  if (props.searching || props.rows.length) return "";
+  if (props.queue === "ready") return "ready";
+  if (["issues", "metadata", "topology", "source"].includes(String(props.queue || "")))
+    return "issues";
+  return "";
+});
 
 onMounted(() => emit("rootChange", queueRoot.value));
 onBeforeUnmount(() => emit("rootChange", null));
@@ -184,11 +197,33 @@ function recordSelectionChanged(recordId: string, event: Event) {
     <div v-if="props.loading && !props.hydrated" class="rail-empty" role="status">
       {{ i18n.t("pdf_corpus.loading_records") }}
     </div>
-    <div v-else-if="!props.rows.length" class="rail-empty">
-      {{ i18n.t("pdf_corpus.no_records_filter") }}
-      <UiButton size="small" @click="emit('showAll')">
-        {{ i18n.t("pdf_corpus.show_all_records") }}
-      </UiButton>
+    <div
+      v-else-if="!props.rows.length"
+      class="rail-empty"
+      :data-complete="completedQueue || undefined"
+      role="status"
+    >
+      <span v-if="completedQueue" class="rail-empty-icon" aria-hidden="true">
+        <AppIcon name="check" />
+      </span>
+      <b v-if="completedQueue === 'ready'">{{ i18n.t("pdf_corpus.queue_empty_ready_title") }}</b>
+      <b v-else-if="completedQueue === 'issues'">{{
+        i18n.t("pdf_corpus.queue_empty_issues_title")
+      }}</b>
+      <span v-else>{{ i18n.t("pdf_corpus.no_records_filter") }}</span>
+      <small v-if="completedQueue">{{ i18n.t("pdf_corpus.queue_empty_complete_help") }}</small>
+      <span class="rail-empty-actions">
+        <UiButton size="small" @click="emit('showAll')">
+          {{ i18n.t("pdf_corpus.show_all_records") }}
+        </UiButton>
+        <UiButton
+          v-if="completedQueue && props.canOpenPublish"
+          size="small"
+          variant="primary"
+          :label="i18n.t('pdf_corpus.primary_status.publication_readiness')"
+          @click="emit('openPublish')"
+        />
+      </span>
     </div>
   </nav>
 </template>
@@ -400,9 +435,38 @@ function recordSelectionChanged(recordId: string, event: Event) {
   height: 18px;
 }
 .rail-empty {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
   padding: 18px 14px;
   color: var(--text-secondary);
   font-size: 0.8125rem;
   line-height: 1.45;
+}
+.rail-empty[data-complete] {
+  color: var(--text-primary);
+}
+.rail-empty-icon {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  border: 1px solid var(--tone-ok-border);
+  border-radius: 999px;
+  background: var(--tone-ok-bg);
+  color: var(--tone-ok-fg);
+}
+.rail-empty-icon svg {
+  width: 1rem;
+  height: 1rem;
+}
+.rail-empty small {
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+}
+.rail-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 </style>

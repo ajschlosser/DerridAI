@@ -61,6 +61,7 @@ const i18n = useI18nStore();
           <li>{{ i18n.t("pdf_corpus.accept_unreviewed_scope") }}</li>
           <li>{{ i18n.t("pdf_corpus.accept_unreviewed_preserves") }}</li>
           <li>{{ i18n.t("pdf_corpus.accept_unreviewed_conformance") }}</li>
+          <li>{{ i18n.t("pdf_corpus.accept_unreviewed_source_gate") }}</li>
         </ul>
       </div>
     </div>
