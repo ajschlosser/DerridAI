@@ -4,7 +4,7 @@ import UiButton from "../ui/UiButton.vue";
 
 withDefaults(
   defineProps<{
-    ariaLabel: string;
+    accessibleLabel: string;
     zoomOutLabel: string;
     zoomInLabel: string;
     fitLabel: string;
@@ -27,7 +27,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="ui-relation-toolbar" role="group" :aria-label="ariaLabel">
+  <div class="ui-relation-toolbar" role="group" :aria-label="accessibleLabel">
     <slot name="before" />
     <UiButton
       :label="zoomOutLabel"
