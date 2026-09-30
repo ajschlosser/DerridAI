@@ -617,6 +617,26 @@ class MetadataResponseBase(BaseModel):
         return self
 
 
+def normalize_legacy_cardinality(field: SchemaField, value: Any) -> tuple[Any, bool]:
+    """Normalize a historical value to the field\'s declared cardinality.
+
+    The boolean reports an ambiguity that must remain reviewable instead of being
+    guessed away. A one-item array is losslessly scalar; a multi-item array for a
+    scalar field is not. Conversely, an old scalar for a list field can be wrapped
+    as a one-item list without changing its value.
+    """
+    if field.type == "list":
+        if value in (None, ""):
+            return [], False
+        return (value, False) if isinstance(value, list) else ([value], False)
+    if not isinstance(value, list):
+        return value, False
+    if not value:
+        return None, False
+    if len(value) == 1:
+        return value[0], False
+    return value, True
+
 def _annotation(field: SchemaField) -> Any:
     if field.type == "boolean":
         return bool | None
