@@ -11,7 +11,7 @@ function transform(wrapper: ReturnType<typeof mount>) {
 describe("UiRelationViewport", () => {
   it("does not pan until the pointer crosses the drag threshold", async () => {
     const wrapper = mount(UiRelationViewport, {
-      props: { ariaLabel: "Relations", resizable: false },
+      props: { accessibleLabel: "Relations", resizeLabel: "Resize relations", resizable: false },
     });
     const surface = wrapper.get(".ui-relation-viewport");
     const before = transform(wrapper);
@@ -25,7 +25,7 @@ describe("UiRelationViewport", () => {
 
   it("supports wheel zoom and keyboard panning", async () => {
     const wrapper = mount(UiRelationViewport, {
-      props: { ariaLabel: "Relations", resizable: false },
+      props: { accessibleLabel: "Relations", resizeLabel: "Resize relations", resizable: false },
     });
     const surface = wrapper.get(".ui-relation-viewport");
     await surface.trigger("wheel", { deltaY: -1, clientX: 100, clientY: 100 });
@@ -38,7 +38,7 @@ describe("UiRelationViewport", () => {
   it("resizes from the keyboard", async () => {
     const wrapper = mount(UiRelationViewport, {
       props: {
-        ariaLabel: "Relations",
+        accessibleLabel: "Relations",
         resizeLabel: "Resize relations",
         resizeAxis: "vertical",
       },
@@ -56,7 +56,7 @@ describe("UiRelationNodeShell", () => {
         x: 100,
         y: 50,
         zoom: 2,
-        ariaLabel: "Node one",
+        accessibleLabel: "Node one",
       },
       slots: { default: "Node one" },
     });
@@ -74,7 +74,7 @@ describe("UiRelationNodeShell", () => {
         x: 100,
         y: 50,
         zoom: 1,
-        ariaLabel: "Node one",
+        accessibleLabel: "Node one",
       },
     });
     await wrapper.get("button").trigger("keydown", { key: "ArrowUp", altKey: true });
