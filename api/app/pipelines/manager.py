@@ -6,6 +6,10 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from .corpus_document_manifest import (
+    DOCUMENT_MANIFEST_FEATURE,
+    compile_document_manifest_pipeline,
+)
 from .corpus_metadata_enrichment import ENRICHMENT_FEATURE, compile_enrichment_pipeline
 from .corpus_segmentation import SEGMENTATION_FEATURE, compile_segmentation_pipeline
 from .defaults import (
@@ -221,6 +225,8 @@ class PipelineManager:
             compile_enrichment_pipeline(pipeline)
         elif assignment.feature == SEGMENTATION_FEATURE:
             compile_segmentation_pipeline(pipeline)
+        elif assignment.feature == DOCUMENT_MANIFEST_FEATURE:
+            compile_document_manifest_pipeline(pipeline)
         elif assignment.feature == PREFILL_FEATURE:
             compile_prefill_pipeline(pipeline)
         elif assignment.feature == SEARCH_FEATURE:
@@ -277,6 +283,9 @@ class PipelineManager:
             if pipeline.purpose == "corpus_segmentation":
                 compile_segmentation_pipeline(pipeline)
                 return {"supported": True, "adapter": "corpus_segmentation"}
+            if pipeline.purpose == "corpus_document_manifest":
+                compile_document_manifest_pipeline(pipeline)
+                return {"supported": True, "adapter": "corpus_document_manifest"}
             if pipeline.purpose == "precedent_evidence_remap":
                 compile_remap_pipeline(pipeline)
                 return {"supported": True, "adapter": "precedent_evidence_remap"}

@@ -910,6 +910,38 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
             },
         ],
     ),
+    _pipeline(
+        pipeline_id="corpus.document_manifest.current",
+        version=1,
+        name="Corpus document manifest — current",
+        purpose="corpus_document_manifest",
+        status="active",
+        entry_stage_ids=["primary"],
+        notes=(
+            "Asks the build's primary provider for the document manifest with "
+            "two attempts, when a build starts and when a reviewer asks for "
+            "the document to be analysed again. When those fail or time out "
+            "and the build configures a review provider, the review provider "
+            "gets two attempts of its own. A failed analysis falls back to the "
+            "file's embedded metadata; embedded metadata, a confident "
+            "start-page inference and reviewer-confirmed structure outrank the "
+            "answer after this pipeline."
+        ),
+        stages=[
+            {
+                "id": "primary",
+                "strategy": "llm.document_manifest",
+                "config": {"provider_role": "primary", "attempts": 2},
+                "on_error": "review",
+                "on_timeout": "review",
+            },
+            {
+                "id": "review",
+                "strategy": "llm.document_manifest",
+                "config": {"provider_role": "review", "attempts": 2},
+            },
+        ],
+    ),
 )
 
 BUILT_IN_ASSIGNMENTS: tuple[PipelineAssignment, ...] = (
@@ -923,6 +955,13 @@ BUILT_IN_ASSIGNMENTS: tuple[PipelineAssignment, ...] = (
     PipelineAssignment(
         feature="corpus_segmentation",
         pipeline_id="corpus.segmentation.current",
+        pipeline_version=1,
+        source="built_in",
+        override_allowed=True,
+    ),
+    PipelineAssignment(
+        feature="corpus_document_manifest",
+        pipeline_id="corpus.document_manifest.current",
         pipeline_version=1,
         source="built_in",
         override_allowed=True,

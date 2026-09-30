@@ -413,21 +413,24 @@ describe("System Data Pipeline Studio", () => {
     );
   });
 
-  it("labels and assigns a corpus segmentation pipeline to its feature", async () => {
-    const segmentationCatalog = structuredClone(catalog);
-    segmentationCatalog.pipelines.push({
+  it.each([
+    ["corpus_segmentation", "corpus.segmentation.custom", "Corpus segmentation"],
+    ["corpus_document_manifest", "corpus.document_manifest.custom", "Corpus document manifest"],
+  ])("labels and assigns a %s pipeline to its feature", async (feature, pipelineId, label) => {
+    const featureCatalog = structuredClone(catalog);
+    featureCatalog.pipelines.push({
       ...structuredClone(catalog.pipelines[0]),
-      pipeline_id: "corpus.segmentation.custom",
-      name: "Boundary questions — review first",
-      purpose: "corpus_segmentation",
+      pipeline_id: pipelineId,
+      name: "Custom — review first",
+      purpose: feature,
       built_in: false,
-      runtime_support: { supported: true, adapter: "corpus_segmentation" },
+      runtime_support: { supported: true, adapter: feature },
     });
-    vi.spyOn(pipelinesApi, "catalog").mockResolvedValue(segmentationCatalog);
+    vi.spyOn(pipelinesApi, "catalog").mockResolvedValue(featureCatalog);
     const assign = vi.spyOn(pipelinesApi, "setAssignment").mockResolvedValue({
       assignment: {
-        feature: "corpus_segmentation",
-        pipeline_id: "corpus.segmentation.custom",
+        feature,
+        pipeline_id: pipelineId,
         pipeline_version: 1,
         scope: "system",
         scope_id: null,
@@ -443,7 +446,7 @@ describe("System Data Pipeline Studio", () => {
     await choice!.trigger("click");
     await flushPromises();
 
-    expect(wrapper.text()).toContain("Corpus segmentation");
+    expect(wrapper.text()).toContain(label);
     const activate = wrapper
       .findAll(".detail-actions .btn")
       .find((item) => item.text().includes("Make active"));
@@ -451,10 +454,7 @@ describe("System Data Pipeline Studio", () => {
     await flushPromises();
 
     expect(assign).toHaveBeenCalledWith(
-      expect.objectContaining({
-        feature: "corpus_segmentation",
-        pipeline_id: "corpus.segmentation.custom",
-      }),
+      expect.objectContaining({ feature, pipeline_id: pipelineId }),
     );
   });
 

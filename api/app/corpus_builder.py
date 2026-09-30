@@ -59,6 +59,7 @@ from .corpus_llm_helpers import (
     _context_window,
     _llm_config,
     _parse_json_robust,
+    _provider_roles,
     _stage_limits,
     _stage_timeouts,
 )
@@ -277,6 +278,7 @@ from .models import WorkMetadataRequest, WorkMetadataSeed
 from .nlp_annotations import annotate_record
 from .operation_events import note_corpus_build, note_record_metadata
 from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
+from .pipelines.corpus_document_manifest import DocumentManifestSession
 from .rag import _citation_strings, chat_complete
 from .record_semantic_map import record_semantic_map, semantic_node_neighborhood
 from .run_guidance import find_guidance_matches
@@ -2431,6 +2433,34 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             timed_out=timed_out,
         )
 
+    def _document_manifest_call(
+        self, session: DocumentManifestSession, request: dict[str, Any], prompt: str, *, max_tokens: int, build_id: str,
+    ) -> dict[str, Any]:
+        """Ask for the document manifest through the corpus_document_manifest pipeline, one provider role per stage."""
+
+        def invoke(role: str, attempts: int, escalated: bool) -> dict[str, Any]:
+            if role not in _provider_roles(request):
+                raise LookupError("No review provider is configured for this build.")
+            return self._chat_json(
+                request, prompt, response_model=DocumentManifestModel, max_tokens=max_tokens,
+                schema_name="derridai_document_manifest", attempts=attempts, build_id=build_id,
+                roles=(role,), escalated=escalated,
+            )
+
+        return session.run(invoke, response_contract="derridai_document_manifest", providers=_provider_roles(request))
+
+    def _record_document_manifest_pipeline(self, build_id: str, session: DocumentManifestSession) -> None:
+        """Keep which pipeline ran each analysis beside the manifest, not in it.
+
+        The manifest itself is sent verbatim in metadata-enrichment prompts, so the identity
+        lives in its own checkpoint.
+        """
+        if not build_id or not session.last_path:
+            return
+        runs = list(self.repo.load_checkpoint(build_id, "document_manifest_pipeline", {}).get("runs") or [])
+        runs.append({**session.identity(), "recorded_at": iso_now()})
+        self.repo.save_checkpoint(build_id, "document_manifest_pipeline", {"runs": runs[-20:]})
+
     def _document_manifest(self, asset: dict[str, Any], blocks: list[dict[str, Any]], request: dict[str, Any], build_id: str) -> dict[str, Any]:
         metadata = asset.get("metadata") or {}
         reviewed_layout = asset.get("document_layout") if isinstance(asset.get("document_layout"), dict) and asset.get("document_layout", {}).get("confirmed_by") == "human" else {}
@@ -2480,16 +2510,17 @@ Strategic whole-document sample:
 
 Return one JSON object matching the schema. `main_text_start_page` and `main_text_end_page` are physical PDF pages when supported. `document_is_translation` should be null unless the source itself supports that conclusion.
 """
+        # One trace per analysis. If the pipeline cannot be resolved no model is asked and the
+        # embedded-metadata fallback below applies, with the reason in the build warning.
+        session: DocumentManifestSession | None = None
         try:
-            result = self._chat_json(
-                request,
-                prompt,
-                response_model=DocumentManifestModel,
-                max_tokens=limits["manifest_num_predict"],
-                schema_name="derridai_document_manifest",
-                build_id=build_id,
+            session = DocumentManifestSession.open()
+            result = self._document_manifest_call(
+                session, request, prompt, max_tokens=limits["manifest_num_predict"], build_id=build_id,
             )
         except InterruptedError:
+            if session is not None:
+                session.finish(cancelled=True)
             raise
         except Exception as exc:
             self._append_warning(build_id, f"Document manifest used PDF-metadata fallback: {exc}")
@@ -2498,6 +2529,9 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 document_author=metadata.get("author") or None,
                 notes="LLM manifest unavailable; values are limited to embedded PDF metadata.",
             ).model_dump(mode="json")
+        if session is not None:
+            session.finish()
+            self._record_document_manifest_pipeline(build_id, session)
         # Embedded PDF metadata is a deterministic source assertion. A model
         # may enrich missing bibliography, but must not replace an author
         # explicitly declared by the source file.

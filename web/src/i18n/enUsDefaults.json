@@ -7765,6 +7765,9 @@
   "pipelines.strategy.llm_grade_rag.label": "RAG response grading",
   "pipelines.strategy.llm_grade_rag.description": "Evaluate a generated answer against the evidence packet using the configured grading profile.",
   "pipelines.purpose_corpus_segmentation": "Corpus segmentation",
+  "pipelines.purpose_corpus_document_manifest": "Corpus document manifest",
   "pipelines.strategy.llm_boundary_classification.label": "Boundary classification",
-  "pipelines.strategy.llm_boundary_classification.description": "Ask a chat model a closed-choice question about a record boundary: split or keep an ambiguous transition, or whether a suspicious record seam should stay or move. Returned block IDs are checked deterministically; a failed, omitted, or low-confidence answer keeps the boundary. The stage chooses which configured provider answers and how many attempts it gets."
+  "pipelines.strategy.llm_boundary_classification.description": "Ask a chat model a closed-choice question about a record boundary: split or keep an ambiguous transition, or whether a suspicious record seam should stay or move. Returned block IDs are checked deterministically; a failed, omitted, or low-confidence answer keeps the boundary. The stage chooses which configured provider answers and how many attempts it gets.",
+  "pipelines.strategy.llm_document_manifest.label": "Document manifest",
+  "pipelines.strategy.llm_document_manifest.description": "Ask a chat model once per analysis for a source-bound document manifest: bibliography, language and the main-text page range, from embedded file metadata and a sample of the whole document. Embedded metadata, a confident start-page inference and reviewer-confirmed structure still outrank the answer, and a failed call falls back to embedded metadata. The stage chooses which configured provider answers and how many attempts it gets."
 }

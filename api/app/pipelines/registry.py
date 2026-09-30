@@ -459,6 +459,24 @@ DEFAULT_STRATEGIES = [
         },
     ),
     StrategySpec(
+        strategy_id="llm.document_manifest",
+        family="llm",
+        label="Document manifest",
+        description="Ask a chat model once per analysis for a source-bound document manifest: bibliography, language and the main-text page range, from embedded file metadata and a sample of the whole document. Embedded metadata, a confident start-page inference and reviewer-confirmed structure still outrank the answer, and a failed call falls back to embedded metadata. The stage chooses which configured provider answers and how many attempts it gets.",
+        input_type="context_packet",
+        output_type="model_output",
+        deterministic=False,
+        invokes_llm=True,
+        capabilities=["chat_model", "structured_output"],
+        config_schema={
+            "type": "object",
+            "properties": {
+                "provider_role": {"type": "string", "enum": ["primary", "review"], "default": "primary"},
+                "attempts": {**_integer(1, 4), "default": 2},
+            },
+        },
+    ),
+    StrategySpec(
         strategy_id="llm.closed_choice_evidence",
         family="llm",
         label="Closed-choice evidence selection",
