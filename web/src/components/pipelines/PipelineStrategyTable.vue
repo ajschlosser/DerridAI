@@ -88,7 +88,9 @@ function usedBy(strategy: PipelineStrategy) {
 
 <style scoped>
 .strategy-table-scroll {
-  max-height: min(76dvh, 960px);
+  position: sticky;
+  top: var(--pipeline-studio-sticky-top, var(--space-3));
+  max-height: var(--pipeline-studio-pane-max-height, min(76dvh, 960px));
   overflow: auto;
   overscroll-behavior: contain;
   border: 1px solid var(--border-subtle);
@@ -161,5 +163,11 @@ function usedBy(strategy: PipelineStrategy) {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+@media (max-width: 960px) {
+  .strategy-table-scroll {
+    position: static;
+  }
 }
 </style>

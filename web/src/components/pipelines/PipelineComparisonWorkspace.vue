@@ -13,6 +13,7 @@ import UiButton from "../ui/UiButton.vue";
 const props = defineProps<{
   pipelines: PipelineDefinition[];
 }>();
+const emit = defineEmits<{ openPipeline: [key: string] }>();
 
 const i18n = useI18nStore();
 const t = (key: string, fallback: string) => i18n.t(key, fallback);
@@ -222,7 +223,11 @@ async function runComparison() {
       </span>
     </div>
 
-    <PipelineComparisonResult v-if="result" :result="result" />
+    <PipelineComparisonResult
+      v-if="result"
+      :result="result"
+      @open-pipeline="emit('openPipeline', $event)"
+    />
   </section>
 </template>
 

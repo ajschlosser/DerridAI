@@ -323,7 +323,9 @@ function updateFilters(patch: Partial<PipelineDefinitionFilters>) {
 <style scoped>
 .pipeline-definition-navigator {
   align-self: start;
-  max-height: min(76dvh, 960px);
+  position: sticky;
+  top: var(--pipeline-studio-sticky-top, var(--space-3));
+  max-height: var(--pipeline-studio-pane-max-height, min(76dvh, 960px));
   overflow: auto;
   overscroll-behavior: contain;
   border: 1px solid var(--border-subtle);
@@ -510,6 +512,7 @@ function updateFilters(patch: Partial<PipelineDefinitionFilters>) {
 }
 @media (max-width: 960px) {
   .pipeline-definition-navigator {
+    position: static;
     max-height: 360px;
   }
 }

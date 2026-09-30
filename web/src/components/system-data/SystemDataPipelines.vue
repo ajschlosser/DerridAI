@@ -510,6 +510,7 @@ onMounted(() => {
         @update:operation="selectOperationsSection"
         @view-executions="viewExecutions"
         @view-strategy="viewStrategy"
+        @open-pipeline="selectPipeline"
       />
     </template>
 
@@ -520,6 +521,10 @@ onMounted(() => {
 <style scoped>
 .pipeline-studio {
   --pipeline-studio-sticky-top: calc(var(--ref-topbar, 60px) + var(--space-3));
+  --pipeline-studio-pane-max-height: min(
+    calc(100dvh - var(--pipeline-studio-sticky-top) - var(--space-3)),
+    960px
+  );
   display: grid;
   gap: var(--space-4);
 }
