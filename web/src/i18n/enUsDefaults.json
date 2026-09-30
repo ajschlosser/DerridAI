@@ -1864,6 +1864,7 @@
   "pdf_corpus.record_save_failed": "Record {record} — {fields} could not be saved: {error}",
   "pdf_corpus.accept_clean": "Accept clean ({count})",
   "pdf_corpus.accept_clean_confirm": "Accept {count} clean record(s)? Records with metadata, topology, or source problems will remain for review.",
+  "pdf_corpus.accept_clean_authority_help": "This records your review decision for each ready Record. Records with unresolved metadata, topology, or source issues stay in the review queue.",
   "pdf_corpus.accept_clean_done": "Accepted {count} clean record(s). Only exceptions remain.",
   "pdf_corpus.accept_next": "Accept & next",
   "pdf_corpus.warning_acknowledged_by": "Acknowledged by {actor} · {when}",
