@@ -5,11 +5,7 @@ import { useI18nStore } from "../stores/i18n";
 import type { GutenbergHit, PdfAsset, WikisourceHit, GutenbergStatus } from "../api/corpus";
 import type { SourceLanguagePrompt } from "../features/corpus-builder/composables/useCorpusSourceConfiguration";
 
-import {
-  hasPages,
-  sourceMediaCapabilities,
-  sourceMediaKindForFile,
-} from "../domain/sourceMedia";
+import { hasPages, sourceMediaCapabilities, sourceMediaKindForFile } from "../domain/sourceMedia";
 import { languageName, sortLanguageCodes } from "../domain/languages";
 import AppIcon from "./AppIcon.vue";
 import CorpusLibrarySearch from "./corpus-builder/CorpusLibrarySearch.vue";
@@ -393,21 +389,19 @@ onBeforeUnmount(() => {
           :aria-label="i18n.t('pdf_corpus.choose_pdf')"
           @change="onFile"
         />
-        <section
-          v-if="pendingFile"
-          class="pending-source"
-          aria-labelledby="pending-source-title"
-        >
+        <section v-if="pendingFile" class="pending-source" aria-labelledby="pending-source-title">
           <div class="pending-source-head">
             <div>
-              <strong id="pending-source-title">{{
-                i18n.tf("pdf_corpus.source_pending_title", { filename: pendingFile.name })
-              }}</strong>
+              <strong id="pending-source-title">
+                {{
+                  i18n.tf("pdf_corpus.source_pending_title", { filename: pendingFile.name })
+                }}
+              </strong>
               <small>{{ i18n.t("pdf_corpus.source_pending_help") }}</small>
             </div>
-            <span class="kind-mark" aria-hidden="true">{{
-              pendingMediaKind === "image" ? "IMG" : "PDF"
-            }}</span>
+            <span class="kind-mark" aria-hidden="true">
+              {{ pendingMediaKind === "image" ? "IMG" : "PDF" }}
+            </span>
           </div>
           <fieldset v-if="ocrAvailable" class="ocr-choice" :disabled="sourceSetupDisabled">
             <legend>{{ i18n.t("pdf_corpus.source_illegibility") }}</legend>
@@ -856,7 +850,7 @@ onBeforeUnmount(() => {
   font-weight: var(--fw-bold);
 }
 
-/* Reading strategy: a segmented choice, decided before a file is added. */
+/* Reading strategy: staged only while a local PDF/image is waiting to be ingested. */
 .pending-source {
   display: grid;
   gap: var(--space-4, 16px);
