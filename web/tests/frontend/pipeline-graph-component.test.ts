@@ -107,7 +107,7 @@ describe("PipelineGraphDiagram relation interactions", () => {
 
     expect(wrapper.text()).toContain("Fit diagram");
     expect(wrapper.text()).toContain("Reset layout");
-    expect(wrapper.get("[data-relation-resize-handle]").exists()).toBe(true);
+    expect(wrapper.find("[data-relation-resize-handle]").exists()).toBe(true);
 
     const vertical = wrapper
       .findAll(".diagram-controls button")
