@@ -124,102 +124,102 @@ const sourceFacts = computed(() => {
       :aria-label="i18n.t('pdf_corpus.readiness.configuration_summary')"
     >
       <div>
-        <span>
-          <dt>{{ i18n.t("pdf_corpus.readiness.source") }}</dt>
-          <dd>
+        <dt>{{ i18n.t("pdf_corpus.readiness.source") }}</dt>
+        <dd>
+          <span>
             {{ sourceFilename || i18n.t("pdf_corpus.choose_source_prompt") }}
             <small v-if="sourceFacts">{{ sourceFacts }}</small>
-          </dd>
-        </span>
-        <button
-          type="button"
-          class="build-plan-edit"
-          :aria-label="
-            i18n.tf('pdf_corpus.setup.edit_section', {
-              section: i18n.t('pdf_corpus.configure_source'),
-            })
-          "
-          @click="emit('editSection', 'source')"
-        >
-          {{ i18n.t("pdf_corpus.setup.edit") }}
-        </button>
+          </span>
+          <button
+            type="button"
+            class="build-plan-edit"
+            :aria-label="
+              i18n.tf('pdf_corpus.setup.edit_section', {
+                section: i18n.t('pdf_corpus.configure_source'),
+              })
+            "
+            @click="emit('editSection', 'source')"
+          >
+            {{ i18n.t("pdf_corpus.setup.edit") }}
+          </button>
+        </dd>
       </div>
       <div v-if="hasPages(mediaKind)">
-        <span>
-          <dt>{{ i18n.t("pdf_corpus.readiness.structure") }}</dt>
-          <dd>{{ structureSummary || i18n.t("pdf_corpus.readiness.structure_unset") }}</dd>
-        </span>
-        <button
-          type="button"
-          class="build-plan-edit"
-          :aria-label="
-            i18n.tf('pdf_corpus.setup.edit_section', {
-              section: i18n.t('pdf_corpus.configure_structure'),
-            })
-          "
-          @click="emit('editSection', 'structure')"
-        >
-          {{ i18n.t("pdf_corpus.setup.edit") }}
-        </button>
+        <dt>{{ i18n.t("pdf_corpus.readiness.structure") }}</dt>
+        <dd>
+          <span>{{ structureSummary || i18n.t("pdf_corpus.readiness.structure_unset") }}</span>
+          <button
+            type="button"
+            class="build-plan-edit"
+            :aria-label="
+              i18n.tf('pdf_corpus.setup.edit_section', {
+                section: i18n.t('pdf_corpus.configure_structure'),
+              })
+            "
+            @click="emit('editSection', 'structure')"
+          >
+            {{ i18n.t("pdf_corpus.setup.edit") }}
+          </button>
+        </dd>
       </div>
       <div v-if="schemaLabel">
-        <span>
-          <dt>{{ i18n.t("pdf_corpus.configure_metadata") }}</dt>
-          <dd>{{ schemaLabel }}</dd>
-        </span>
-        <button
-          type="button"
-          class="build-plan-edit"
-          :aria-label="
-            i18n.tf('pdf_corpus.setup.edit_section', {
-              section: i18n.t('pdf_corpus.configure_metadata'),
-            })
-          "
-          @click="emit('editSection', 'metadata')"
-        >
-          {{ i18n.t("pdf_corpus.setup.edit") }}
-        </button>
+        <dt>{{ i18n.t("pdf_corpus.configure_metadata") }}</dt>
+        <dd>
+          <span>{{ schemaLabel }}</span>
+          <button
+            type="button"
+            class="build-plan-edit"
+            :aria-label="
+              i18n.tf('pdf_corpus.setup.edit_section', {
+                section: i18n.t('pdf_corpus.configure_metadata'),
+              })
+            "
+            @click="emit('editSection', 'metadata')"
+          >
+            {{ i18n.t("pdf_corpus.setup.edit") }}
+          </button>
+        </dd>
       </div>
       <div>
-        <span>
-          <dt>{{ i18n.t("pdf_corpus.readiness.enrichment") }}</dt>
-          <dd>{{ modeLabel }} · {{ providerSummary }}</dd>
-        </span>
-        <button
-          type="button"
-          class="build-plan-edit"
-          :aria-label="
-            i18n.tf('pdf_corpus.setup.edit_section', {
-              section: i18n.t('pdf_corpus.configure_enrichment'),
-            })
-          "
-          @click="emit('editSection', 'enrichment')"
-        >
-          {{ i18n.t("pdf_corpus.setup.edit") }}
-        </button>
+        <dt>{{ i18n.t("pdf_corpus.readiness.enrichment") }}</dt>
+        <dd>
+          <span>{{ modeLabel }} · {{ providerSummary }}</span>
+          <button
+            type="button"
+            class="build-plan-edit"
+            :aria-label="
+              i18n.tf('pdf_corpus.setup.edit_section', {
+                section: i18n.t('pdf_corpus.configure_enrichment'),
+              })
+            "
+            @click="emit('editSection', 'enrichment')"
+          >
+            {{ i18n.t("pdf_corpus.setup.edit") }}
+          </button>
+        </dd>
       </div>
       <div>
-        <span>
-          <dt>{{ i18n.t("pdf_corpus.readiness.record_size") }}</dt>
-          <dd>{{ sizing }}</dd>
-        </span>
-        <button
-          type="button"
-          class="build-plan-edit"
-          :aria-label="
-            i18n.tf('pdf_corpus.setup.edit_section', {
-              section: i18n.t('pdf_corpus.configure_structure'),
-            })
-          "
-          @click="emit('editSection', 'structure')"
-        >
-          {{ i18n.t("pdf_corpus.setup.edit") }}
-        </button>
+        <dt>{{ i18n.t("pdf_corpus.readiness.record_size") }}</dt>
+        <dd>
+          <span>{{ sizing }}</span>
+          <button
+            type="button"
+            class="build-plan-edit"
+            :aria-label="
+              i18n.tf('pdf_corpus.setup.edit_section', {
+                section: i18n.t('pdf_corpus.configure_structure'),
+              })
+            "
+            @click="emit('editSection', 'structure')"
+          >
+            {{ i18n.t("pdf_corpus.setup.edit") }}
+          </button>
+        </dd>
       </div>
       <div v-if="blockingCount || warnings.length" class="build-command-warning">
-        <span>
-          <dt>{{ i18n.t("pdf_corpus.attention_required") }}</dt>
-          <dd>
+        <dt>{{ i18n.t("pdf_corpus.attention_required") }}</dt>
+        <dd>
+          <span>
             <template v-if="blockingCount">{{
               i18n.tf("pdf_corpus.readiness.blocker_count", { count: blockingCount })
             }}</template>
@@ -227,8 +227,8 @@ const sourceFacts = computed(() => {
             <template v-if="warnings.length">{{
               i18n.tf("pdf_corpus.readiness.note_count", { count: warnings.length })
             }}</template>
-          </dd>
-        </span>
+          </span>
+        </dd>
       </div>
     </dl>
 
@@ -361,15 +361,18 @@ const sourceFacts = computed(() => {
 .build-command-summary > div {
   min-width: 0;
   display: grid;
+  grid-template-columns: 1fr;
+  gap: 2px;
+  padding: var(--space-2) 0;
+}
+.build-command-summary dd {
+  display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-2);
   align-items: center;
-  padding: var(--space-2) 0;
 }
-.build-command-summary > div > span {
+.build-command-summary dd > span {
   min-width: 0;
-  display: grid;
-  gap: 2px;
 }
 .build-command-summary > div + div {
   border-top: 1px solid var(--border-subtle);
