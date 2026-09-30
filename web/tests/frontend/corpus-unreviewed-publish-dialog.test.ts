@@ -32,7 +32,9 @@ describe("CorpusUnreviewedPublishDialog", () => {
     expect(wrapper.text()).toContain("12");
     expect(wrapper.text()).toContain("cELF Core and Publication conformance");
 
-    const publish = wrapper.findAll("button").find((button) => button.text() === "Publish snapshot");
+    const publish = wrapper
+      .findAll("button")
+      .find((button) => button.text() === "Publish snapshot");
     expect(publish).toBeTruthy();
     await publish!.trigger("click");
     expect(wrapper.emitted("confirm")).toHaveLength(1);
