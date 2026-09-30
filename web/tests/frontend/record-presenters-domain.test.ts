@@ -79,6 +79,31 @@ describe("record presenters", () => {
     expect(presenters.workInsightMetrics([row], "W")).toMatchSnapshot();
     expect(presenters.workInsightsPanelHtml([row], "W")).toMatchSnapshot();
   });
+  it("uses semantic labels from structured metadata values", () => {
+    const insights = presenters.workInsightMetrics(
+      [
+        {
+          record: {
+            work: "W",
+            persons: [{ term: "Levinas", occurrences: 3 }],
+            concepts: [{ label: "hospitality", occurrences: 2 }],
+            topics: [{ name: "ethics", occurrences: 4 }],
+          },
+        },
+      ],
+      "W",
+    ) as Array<{ id: string; values: Array<{ key: string; value: number }> }>;
+
+    expect(insights.find((item) => item.id === "persons")?.values).toEqual([
+      { key: "Levinas", value: 1 },
+    ]);
+    expect(insights.find((item) => item.id === "concepts")?.values).toEqual([
+      { key: "hospitality", value: 1 },
+    ]);
+    expect(insights.find((item) => item.id === "topics")?.values).toEqual([
+      { key: "ethics", value: 1 },
+    ]);
+  });
   it("localizes empty dashboard pie charts at render time", () => {
     const french = createRecordPresenters({
       tr: (key: string, fallback = "") =>

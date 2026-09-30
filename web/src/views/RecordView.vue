@@ -10,6 +10,8 @@ import RecordReadingPane from "../components/record/RecordReadingPane.vue";
 import RecordInspector from "../components/record/RecordInspector.vue";
 import RecordEditSheet from "../components/record/RecordEditSheet.vue";
 import SemanticMapFrame from "../components/semantic/SemanticMapFrame.vue";
+import CorpusRecordSemanticMap from "../components/corpus-builder/CorpusRecordSemanticMap.vue";
+import { corpusBuildsApi } from "../api/corpus";
 import type { RecordWorkspaceSnapshot } from "../types/record";
 import type { SemanticMapSource } from "../domain/semanticMap";
 import type { DerridaiNormativeModel, ResearchObjectGraph } from "../types/researchObjectGraph";
@@ -48,11 +50,12 @@ const annotationLinkedRecords = ref("");
 const annotationError = ref("");
 const semanticSources = ref<SemanticMapSource[]>([]);
 const semanticFocus = ref("");
+const recordSemanticBuildId = ref("");
 const showRecordMap = computed(
   () => semanticMap.enabled && semanticMap.placement === "record" && snapshot.value.available,
 );
 
-function loadSemanticMap() {
+async function loadSemanticMap() {
   try {
     const data = runtime.listSemanticMapSources();
     semanticSources.value = data?.records || [];
@@ -61,10 +64,17 @@ function loadSemanticMap() {
     semanticSources.value = [];
     semanticFocus.value = String(snapshot.value.record_id || "");
   }
+  recordSemanticBuildId.value = "";
+  const recordId = String(snapshot.value.record_id || "");
+  if (recordId) {
+    recordSemanticBuildId.value =
+      (await corpusBuildsApi.recordSemanticMapBuild(recordId).catch(() => ({ build_id: null })))
+        .build_id || "";
+  }
 }
 function openSemanticMap() {
   semanticMap.enable(semanticMap.placement);
-  loadSemanticMap();
+  void loadSemanticMap();
   if (semanticMap.placement === "page") runtime.navigateView("semanticmap");
 }
 
@@ -376,6 +386,17 @@ onBeforeUnmount(() => {
         variant="record"
         :sources="semanticSources"
         :focus-id="semanticFocus"
+      />
+      <CorpusRecordSemanticMap
+        v-if="showRecordMap && recordSemanticBuildId && snapshot.record_id"
+        :build-id="recordSemanticBuildId"
+        :record="{
+          record_id: String(snapshot.record_id),
+          text: typeof record.text === 'string' ? record.text : undefined,
+          record_revision:
+            typeof record.record_revision === 'number' ? record.record_revision : undefined,
+        }"
+        @open-record="runtime.openSemanticRecord?.($event)"
       />
 
       <div class="record-context-strip" :aria-label="i18n.t('record.status')">

@@ -1,17 +1,21 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, nextTick, ref } from "vue";
 import { useRoute } from "vue-router";
 import { useI18nStore } from "../../stores/i18n";
 import { useSemanticMapStore } from "../../stores/semanticMap";
 import {
   SEMANTIC_MAP_PLACEMENTS,
   buildSemanticMap,
+  type SemanticMapNode,
   type SemanticMapPlacement,
   type SemanticMapSource,
 } from "../../domain/semanticMap";
 import * as runtime from "../../runtime/runtime.js";
 import UiRelationToolbar from "../relations/UiRelationToolbar.vue";
+import UiRelationDensityControls, {
+  type RelationDensity,
+} from "../relations/UiRelationDensityControls.vue";
 import UiTooltip from "../ui/UiTooltip.vue";
 import SemanticMapCanvas from "./SemanticMapCanvas.vue";
 
@@ -24,11 +28,13 @@ const props = withDefaults(
   }>(),
   { sources: () => [], focusId: "", showClose: true },
 );
+const emit = defineEmits<{ activate: [node: SemanticMapNode] }>();
 
 const i18n = useI18nStore();
 const map = useSemanticMapStore();
 const route = useRoute();
 const canvas = ref<InstanceType<typeof SemanticMapCanvas> | null>(null);
+const density = ref<RelationDensity>("compact");
 
 const graph = computed(() => buildSemanticMap(props.sources, props.focusId));
 const placementLabel: Record<SemanticMapPlacement, string> = {
@@ -49,6 +55,19 @@ function choose(next: SemanticMapPlacement) {
 
 function kindLabel(kind: string) {
   return i18n.t(`semantic_map.kind.${kind}`, kind);
+}
+
+function chooseDensity(next: RelationDensity) {
+  density.value = next;
+  void nextTick(() => canvas.value?.fitView());
+}
+
+function activate(node: SemanticMapNode) {
+  emit("activate", node);
+  if (node.kind === "record") {
+    const recordId = node.id.slice("record:".length);
+    if (recordId) runtime.openSemanticRecord?.(recordId);
+  }
 }
 </script>
 
@@ -103,7 +122,19 @@ function kindLabel(kind: string) {
       </div>
     </header>
     <p class="semantic-map-caveat">{{ i18n.t("semantic_map.signal_caveat") }}</p>
-    <SemanticMapCanvas ref="canvas" :graph="graph" />
+    <div class="semantic-map-layout-controls">
+      <UiRelationDensityControls
+        :model-value="density"
+        :accessible-label="i18n.t('semantic_map.spacing', 'Map spacing')"
+        :labels="{
+          compact: i18n.t('semantic_map.spacing_compact', 'Compact spacing'),
+          standard: i18n.t('semantic_map.spacing_standard', 'Standard spacing'),
+          wide: i18n.t('semantic_map.spacing_wide', 'Wide spacing'),
+        }"
+        @update:model-value="chooseDensity"
+      />
+    </div>
+    <SemanticMapCanvas ref="canvas" :graph="graph" :density="density" @activate="activate" />
     <details v-if="graph.nodes.length" class="semantic-map-index">
       <summary>{{ i18n.t("semantic_map.node_list", "Terms on this map") }}</summary>
       <ul>
@@ -160,6 +191,10 @@ function kindLabel(kind: string) {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+}
+.semantic-map-layout-controls {
+  display: flex;
+  justify-content: flex-end;
 }
 .semantic-map-placements {
   display: flex;
