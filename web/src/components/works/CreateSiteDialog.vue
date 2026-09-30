@@ -332,7 +332,7 @@ onMounted(async () => {
   align-items: start;
   padding: 0.85rem;
   border-radius: 10px;
-  background: color-mix(in srgb, var(--accent) 7%, var(--surface-raised));
+  background: color-mix(in srgb, var(--ui-accent) 7%, var(--surface-raised));
 }
 
 .site-feature-summary > svg {
@@ -347,7 +347,7 @@ onMounted(async () => {
 
 .site-create-error {
   margin: 0;
-  color: var(--danger);
+  color: var(--tone-danger-fg);
 }
 
 .create-site-actions {
