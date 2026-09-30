@@ -176,12 +176,14 @@ function onMenu(run: PipelineRunTrace, id: string) {
 
 <style scoped>
 .execution-list {
+  position: sticky;
+  top: var(--pipeline-studio-sticky-top, var(--space-3));
   display: grid;
   gap: var(--space-2);
   min-width: 0;
 }
 .execution-list-scroll {
-  max-height: min(76dvh, 960px);
+  max-height: var(--pipeline-studio-pane-max-height, min(76dvh, 960px));
   overflow: auto;
   overscroll-behavior: contain;
   border: 1px solid var(--border-subtle);
@@ -273,5 +275,11 @@ function onMenu(run: PipelineRunTrace, id: string) {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+@media (max-width: 1100px) {
+  .execution-list {
+    position: static;
+  }
 }
 </style>
