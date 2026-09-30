@@ -28,6 +28,16 @@ const i18n = useI18nStore();
 const readiness = computed(() => props.build.publication_readiness || {});
 const summary = computed(() => props.build.metadata_issue_summary || {});
 const publication = computed(() => props.build.publication || null);
+const publicationConformanceBlockers = computed(() => {
+  const conformance = publication.value?.celf_conformance;
+  const blockers = [
+    ...(conformance?.core?.blockers || []),
+    ...(conformance?.publication?.blockers || []),
+  ];
+  return blockers
+    .map((blocker) => String(blocker.code || blocker.reason || blocker.message || "unknown"))
+    .filter(Boolean);
+});
 const next = computed(() => String(readiness.value.next_action || "inspect"));
 const blockers = computed(() => readiness.value.blockers || []);
 const validation = computed(() => props.build.validation || {});
@@ -198,7 +208,13 @@ function fixBlocker(code?: string) {
       </div>
     </section>
 
-    <section v-if="publication" class="publication-snapshot" role="status">
+    <section
+      v-if="publication"
+      class="publication-snapshot"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+    >
       <div>
         <span class="readiness-state" data-tone="ok"
           ><AppIcon :name="stateIcon(false)" />{{ i18n.t("pdf_corpus.complete") }}</span
@@ -210,11 +226,30 @@ function fixBlocker(code?: string) {
           i18n.tf("pdf_corpus.publication_snapshot_summary", { count: publication.record_count })
         }}
       </p>
+      <p v-if="publication.review_mode">
+        {{
+          i18n.tf("pdf_corpus.publication_decision_mode", {
+            mode: publication.review_mode,
+            human: publication.human_reviewed_record_count || 0,
+            autonomous: publication.autonomous_record_count || 0,
+          })
+        }}
+      </p>
+      <p v-if="publication.celf_conformant === true" class="conformant">
+        {{ i18n.t("pdf_corpus.publication_celf_conformant") }}
+      </p>
       <p v-if="publication.celf_conformant === false" class="not-conformant">
         {{
           i18n.tf("pdf_corpus.publication_not_conformant", {
             count: publication.unreviewed_record_count || 0,
             fields: publication.unreviewed_accepted_field_count || 0,
+          })
+        }}
+      </p>
+      <p v-if="publicationConformanceBlockers.length" class="not-conformant">
+        {{
+          i18n.tf("pdf_corpus.publication_celf_blockers", {
+            blockers: publicationConformanceBlockers.join(", "),
           })
         }}
       </p>

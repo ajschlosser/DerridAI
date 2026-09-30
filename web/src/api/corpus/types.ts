@@ -485,6 +485,7 @@ export interface AutonomousReport {
   records: number;
   accepted: number;
   fields_filled: number;
+  decisions?: number;
   left_for_review: number;
   passes_run: number;
   ran_at: string;
@@ -615,9 +616,18 @@ export interface CorpusBuild {
     sha256: string;
     record_count: number;
     created_at: string;
-    /** "unreviewed" when human-review gates were skipped; such a publication is not cELF-conformant. */
-    review_mode?: "reviewed" | "unreviewed";
+    /** Decision provenance, independent from cELF conformance. */
+    review_mode?: "reviewed" | "autonomous" | "hybrid" | "unreviewed";
+    decision_mode?: "reviewed" | "autonomous" | "hybrid" | "unreviewed";
     celf_conformant?: boolean;
+    celf_conformance?: {
+      spec_version?: string;
+      conformant?: boolean;
+      core?: { status?: string; blockers?: Array<Record<string, unknown>> };
+      publication?: { status?: string; blockers?: Array<Record<string, unknown>> };
+    };
+    human_reviewed_record_count?: number;
+    autonomous_record_count?: number;
     unreviewed_record_count?: number;
     unreviewed_accepted_field_count?: number;
   } | null;

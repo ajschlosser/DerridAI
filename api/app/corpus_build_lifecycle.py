@@ -684,12 +684,13 @@ class BuildLifecycleMixin:
 
 
     def run_autonomous(self, build_id: str, request: dict[str, Any]) -> dict[str, Any]:
-        """Hands-free finish: more enrichment passes, then settle what is waiting by policy, accept, optionally publish.
+        """Run the shared autonomous decision policy after canonical build stages.
 
-        Blocks until done, so it runs on a worker thread. Every decision is the policy's and is recorded as such (see
-        autonomous.py); what it could not settle is left for a person and listed in the report on the build.
+        This is also the compatibility entry point for the old post-build action.
+        It never changes assertion authority or treats policy admission as human review.
         """
         policy = AutonomousPolicy.from_request({"autonomous": {**(request.get("autonomous") or {}), "enabled": True}})
+        self._update(build_id, stage="autonomous_settlement", autonomous_policy=policy.public())
         notes: list[str] = []
         passes_run = 0
         if policy.passes and request.get("model"):
@@ -727,12 +728,14 @@ class BuildLifecycleMixin:
         records = self.repo.load_records(build_id)
         profile = self._profile_for(build_id)
         filled_total = accepted = 0
+        decision_total = 0
         exceptions: list[dict[str, Any]] = []
         for record in records:
             if str(record.get("review_disposition") or "") in {"accepted", "rejected"} or _human_touched(record):
                 continue  # a person already decided this record
             outcome = settle_record(record, policy)
             filled_total += len(outcome["filled"])
+            decision_total += len(outcome.get("decisions") or [])
             _sync_record_metadata_state(record, profile)
             ok, reasons = may_accept(record)
             if policy.accept_records and ok:
@@ -742,13 +745,41 @@ class BuildLifecycleMixin:
                 record["needs_review"] = False
                 record["review_reason"] = ""
                 record["accepted_by"] = "autonomous"
-                record["autonomous_decision"] = {"at": iso_now(), "filled": [f["field"] for f in outcome["filled"]]}
+                record["acceptance_mode"] = "autonomous"
+                record["acceptance_actor_kind"] = "policy"
+                record["autonomous_decision"] = {
+                    "at": iso_now(),
+                    "actor_kind": "autonomous_policy",
+                    "policy": policy.public(),
+                    "filled": outcome["filled"],
+                    "decisions": outcome.get("decisions") or [],
+                    "settled_fields": [f["field"] for f in outcome["filled"]],
+                }
                 record["record_revision"] = int(record.get("record_revision") or 1) + 1
                 accepted += 1
             else:
+                if outcome.get("decisions"):
+                    record["acceptance_mode"] = "autonomous"
+                    record["acceptance_actor_kind"] = "policy"
+                    record["autonomous_decision"] = {
+                        "at": iso_now(),
+                        "actor_kind": "autonomous_policy",
+                        "policy": policy.public(),
+                        "filled": outcome["filled"],
+                        "decisions": outcome["decisions"],
+                        "settled_fields": [f["field"] for f in outcome["filled"]],
+                        "accepted": False,
+                    }
                 exceptions.append({"record_id": record.get("record_id"), "reasons": (reasons or [item["reason"] for item in outcome["left"]] or ["left for review by policy"])[:6]})
         self._rewrite_and_validate(build_id, records)
-        return {"records": len(records), "fields_filled": filled_total, "accepted": accepted, "left_for_review": len(exceptions), "exceptions": exceptions[:200]}
+        return {
+            "records": len(records),
+            "fields_filled": filled_total,
+            "decisions": decision_total,
+            "accepted": accepted,
+            "left_for_review": len(exceptions),
+            "exceptions": exceptions[:200],
+        }
 
 
     def enrichment_ledger_csv(self) -> str:

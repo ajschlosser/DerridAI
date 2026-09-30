@@ -31,21 +31,22 @@ function setup() {
 }
 
 describe("unreviewed corpus publication", () => {
-  it("requests an unreviewed publication and reports that it is not cELF-conformant", async () => {
+  it("requests an autonomous publication and reports its independent decision status", async () => {
     publish.mockResolvedValueOnce({
       publication_id: "p1",
       filename: "c.jsonl.zst",
       sha256: "abc",
       record_count: 3,
       created_at: "",
-      celf_conformant: false,
+      celf_conformant: true,
+      review_mode: "autonomous",
       unreviewed_record_count: 2,
       unreviewed_accepted_field_count: 5,
     });
     const { composable, setMessage } = setup();
     await composable.publish({ acceptUnreviewed: true });
     expect(publish).toHaveBeenCalledWith("build-1", { acceptUnreviewed: true });
-    expect(setMessage).toHaveBeenCalledWith("pdf_corpus.published_unreviewed|3|2|5");
+    expect(setMessage).toHaveBeenCalledWith("pdf_corpus.published|3|abc");
   });
 
   it("keeps the normal publication path reviewed", async () => {

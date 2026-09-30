@@ -943,17 +943,12 @@ def confirm_model_assertions(
     return changed
 
 
-UNREVIEWED_ACCEPT_METHOD = "unreviewed_bulk_accept"
-
-
 def accept_unreviewed_suggestions(record: dict[str, Any]) -> int:
-    """Accept every suggested field value on a record copy, without evidence or human confirmation.
+    """Select every eligible suggested value on a publication copy.
 
-    For an unreviewed (non-cELF-conformant) publication only. Human-confirmed, overridden
-    and disputed fields are left alone, as are present values and out-of-vocabulary
-    (`invalid`) proposals. A candidate is the selected assertion's value, or else the latest
-    unreviewed non-human assertion for that field that carries one. The acceptance supersedes
-    the candidate but keeps `authority_status="unreviewed"`: nobody reviewed it.
+    This compatibility helper applies autonomous selection without laundering the
+    candidate's derivation, evaluation, authority, value state, confidence, or
+    evidence into a human-confirmed result.
     """
     migrate_record_assertions(record)
     accepted = 0
@@ -973,16 +968,22 @@ def accept_unreviewed_suggestions(record: dict[str, Any]) -> int:
             )
         if candidate is None:
             continue
+        decision = {
+            "at": _now(),
+            "actor_kind": "autonomous_policy",
+            "field": current.field_name,
+            "assertion_id": candidate.assertion_id,
+            "selected_value": candidate.value,
+            "reason_code": (candidate.legacy_metadata or {}).get("reason_code") or "unresolved",
+            "confidence_reported": candidate.confidence is not None,
+        }
         store_assertion(record, candidate.model_copy(update={
             "assertion_id": f"assertion-{uuid.uuid4().hex}",
-            "value_status": "present",
-            "evaluation_status": "value_supported" if candidate.evaluation_status in {"no_supported_value", "evaluation_failed"} else candidate.evaluation_status,
-            "method": UNREVIEWED_ACCEPT_METHOD,
-            "reason": "Suggested value accepted without evidence or human confirmation for an unreviewed publication.",
-            "legacy_status": None,
+            "legacy_metadata": {**candidate.legacy_metadata, "autonomous_decision": decision},
+            "reason": candidate.reason or "Selected by autonomous policy without human confirmation.",
             "record_revision": int(record.get("record_revision") or candidate.record_revision or 1),
             "supersedes_assertion_id": current.assertion_id,
-            "created_at": _now(),
+            "created_at": decision["at"],
         }))
         accepted += 1
     project_record_assertions(record)
