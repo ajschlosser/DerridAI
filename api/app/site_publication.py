@@ -20,7 +20,6 @@ from typing import Any
 
 from .corpus_publication import serialize_public_record, validate_publication_record
 from .locales.en_us import EN_US
-from .locales.fr_ca import FR_CA
 from .services import store
 from .system_store import normalize_locale_code, system_store
 
