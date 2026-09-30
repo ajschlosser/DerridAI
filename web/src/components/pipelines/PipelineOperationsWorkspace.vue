@@ -27,6 +27,7 @@ const emit = defineEmits<{
   "update:operation": [section: PipelineOperationsSection];
   viewExecutions: [category: string];
   viewStrategy: [strategyId: string];
+  openPipeline: [key: string];
 }>();
 
 const i18n = useI18nStore();
@@ -59,10 +60,15 @@ const tabs = computed(() => [
     >
       <!-- Compare and Benchmarks keep their form and result while another tab is showing. -->
       <KeepAlive>
-        <PipelineComparisonWorkspace v-if="props.operation === 'compare'" :pipelines="pipelines" />
+        <PipelineComparisonWorkspace
+          v-if="props.operation === 'compare'"
+          :pipelines="pipelines"
+          @open-pipeline="emit('openPipeline', $event)"
+        />
         <PipelineBenchmarkWorkspace
           v-else-if="props.operation === 'benchmarks'"
           :pipelines="pipelines"
+          @open-pipeline="emit('openPipeline', $event)"
         />
       </KeepAlive>
       <PipelineOperationsSummary

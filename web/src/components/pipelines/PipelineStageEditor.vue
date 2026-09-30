@@ -538,7 +538,10 @@ defineExpose({ focus: () => heading.value?.focus() });
   .stage-inspector-editor {
     position: sticky;
     top: var(--pipeline-studio-sticky-top, var(--space-3));
-    max-height: calc(100dvh - var(--pipeline-studio-sticky-top, var(--space-3)) - var(--space-3));
+    max-height: var(
+      --pipeline-studio-pane-max-height,
+      calc(100dvh - var(--pipeline-studio-sticky-top, var(--space-3)) - var(--space-3))
+    );
     overflow: auto;
     overscroll-behavior: contain;
   }
