@@ -1188,6 +1188,12 @@ export interface EnrichmentModelMetrics {
   reviews: number;
   autofilled: number;
   acceptance_rate: number | null;
+  /** Accepted reviews split by whether the reviewer restated the value (J.P. → J. P.). */
+  accepted_exact?: number;
+  accepted_equivalent?: number;
+  accepted_equivalent_rate?: number | null;
+  /** Reviewer values saved when equivalence could not be decided; in no denominator. */
+  unresolved_reviews?: number;
   brier_score: number | null;
   correction_rate: number | null;
   rejection_rate: number | null;

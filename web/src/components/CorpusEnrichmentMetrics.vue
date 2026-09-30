@@ -73,7 +73,18 @@ async function load() {
               <th scope="col">{{ t("model", "Model") }}</th>
               <th scope="col">{{ t("proposals", "Proposed") }}</th>
               <th scope="col">{{ t("reviews", "Reviewed") }}</th>
-              <th scope="col">{{ t("acceptance", "Kept as proposed") }}</th>
+              <th scope="col">{{ t("acceptance", "Accepted (same value)") }}</th>
+              <th
+                scope="col"
+                :title="
+                  t(
+                    'help_equivalent',
+                    'The reviewer wrote the same value differently (for example J.P. Dingus as J. P. Dingus). It counts as accepted.',
+                  )
+                "
+              >
+                {{ t("accepted_equivalent", "Accepted as restated") }}
+              </th>
               <th scope="col">{{ t("corrections", "Corrected") }}</th>
               <th scope="col">{{ t("cleared", "Cleared") }}</th>
               <th
@@ -92,7 +103,18 @@ async function load() {
               <th scope="col">{{ t("grounded", "Cited a real source") }}</th>
               <th scope="col">{{ t("touched", "Still needed a person") }}</th>
               <th scope="col">{{ t("stability", "Same answer across runs") }}</th>
-              <th scope="col">{{ t("ms_accepted", "Time per kept value") }}</th>
+              <th
+                scope="col"
+                :title="
+                  t(
+                    'help_unresolved',
+                    'The reviewer\'s value was saved, but DerridAI could not tell whether it was the same value. These count as neither accepted nor corrected.',
+                  )
+                "
+              >
+                {{ t("unresolved_reviews", "Undecided comparisons") }}
+              </th>
+              <th scope="col">{{ t("ms_accepted", "Time per accepted value") }}</th>
             </tr>
           </thead>
           <tbody>
@@ -101,6 +123,7 @@ async function load() {
               <td>{{ m.proposals }}</td>
               <td>{{ m.reviews }}</td>
               <td>{{ pct(m.acceptance_rate) }}</td>
+              <td>{{ pct(m.accepted_equivalent_rate) }}</td>
               <td>{{ pct(m.correction_rate) }}</td>
               <td>{{ pct(m.rejection_rate) }}</td>
               <td>{{ brier(m.brier_score) }}</td>
@@ -109,6 +132,7 @@ async function load() {
               <td>{{ pct(m.grounded_rate) }}</td>
               <td>{{ pct(m.touched_share) }}</td>
               <td>{{ pct(m.stability) }}</td>
+              <td>{{ m.unresolved_reviews ?? 0 }}</td>
               <td>{{ seconds(m.ms_per_accepted_field) }}</td>
             </tr>
           </tbody>
@@ -129,7 +153,7 @@ async function load() {
           <thead>
             <tr>
               <th scope="col">{{ t("model", "Model") }}</th>
-              <th scope="col">{{ t("acceptance_ci", "Kept as proposed (95% range)") }}</th>
+              <th scope="col">{{ t("acceptance_ci", "Accepted, same value (95% range)") }}</th>
               <th scope="col">{{ t("substantive", "Substantively wrong (95% range)") }}</th>
               <th scope="col">{{ t("autofill_precision", "Autofilled values that held up") }}</th>
               <th scope="col">{{ t("spot_checks", "Spot checks still to do") }}</th>

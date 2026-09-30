@@ -15,6 +15,8 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
+
 try:
     import chromadb  # type: ignore  # noqa: F401
 except ModuleNotFoundError:
@@ -192,3 +194,16 @@ def test_blind_label_agreement_is_equivalence_aware(tmp_path):
     manager._record_human_llm_feedback(bid, "speaker", None, "J. P. Dingus", {"status": "unresolved", "method": "llm", "model": "q", "blind": True}, record)
     label = next(e for e in manager._ledger.events() if e["kind"] == "blind_label")
     assert label["agreed"] is True and label["equivalence_relation"] == "equivalent"
+
+
+def test_metrics_split_exact_from_restated_acceptance_and_count_unresolved_apart():
+    rows = [
+        {"kind": ACCEPTED, "model": "m", "field": "speaker", "confidence": 0.9, "equivalence_relation": "exact"},
+        {"kind": ACCEPTED, "model": "m", "field": "speaker", "confidence": 0.9, "equivalence_relation": "equivalent"},
+        {"kind": CORRECTED, "model": "m", "field": "speaker", "confidence": 0.9, "equivalence_relation": "different"},
+        {"kind": UNRESOLVED, "model": "m", "field": "speaker", "confidence": 0.9, "equivalence_relation": "unknown"},
+    ]
+    metrics = compute(rows)["models"]["m"]
+    assert metrics["reviews"] == 3 and metrics["acceptance_rate"] == pytest.approx(2 / 3, abs=1e-3)
+    assert metrics["accepted_exact"] == 1 and metrics["accepted_equivalent"] == 1
+    assert metrics["unresolved_reviews"] == 1
