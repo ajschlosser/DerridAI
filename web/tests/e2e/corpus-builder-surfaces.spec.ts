@@ -17,8 +17,8 @@ async function expectWcag2AA(page: any, include: string) {
   expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
 }
 
-test("build summary is an opaque-enough glass surface and WCAG 2.0 AA clean", async ({ page }) => {
-  await page.goto("/iframe.html?id=corpus-build-readiness--ready&viewMode=story");
+test("build plan is an opaque-enough surface and WCAG 2.0 AA clean", async ({ page }) => {
+  await page.goto("/iframe.html?id=corpus-builder-setup-build-plan--ready&viewMode=story");
   const surface = page.locator(".build-readiness");
   await expect(surface).toBeVisible();
   const background = await surface.evaluate((el) => getComputedStyle(el).backgroundColor);
@@ -80,8 +80,8 @@ test("normalized stance aliases remain selected and disclose normalization", asy
   await expectWcag2AA(page, ".metadata-field");
 });
 
-test("build summary remains usable at 200 percent zoom-equivalent scaling", async ({ page }) => {
-  await page.goto("/iframe.html?id=corpus-build-readiness--ready&viewMode=story");
+test("build plan remains usable at 200 percent zoom-equivalent scaling", async ({ page }) => {
+  await page.goto("/iframe.html?id=corpus-builder-setup-build-plan--ready&viewMode=story");
   await page.evaluate(() => {
     document.documentElement.style.zoom = "2";
   });
