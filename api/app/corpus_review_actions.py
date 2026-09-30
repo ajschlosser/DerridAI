@@ -144,6 +144,8 @@ class ReviewActionsMixin:
             manifest: dict[str, Any],
             request: dict[str, Any],
             build_id: str,
+            *,
+            session: Any = ...,
         ) -> dict[str, Any]: ...
 
     def _assert_human_review_available(self, build_id: str, record: dict[str, Any] | None = None, *, structural: bool = False) -> dict[str, Any]:

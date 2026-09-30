@@ -24,7 +24,7 @@ from .autofill import in_audit_sample
 from .config import APP_VERSION
 from .corpus_llm_helpers import (
     _context_window,
-    _llm_config,
+    _provider_roles,
     _stage_limits,
     _stage_timeouts,
 )
@@ -1497,15 +1497,6 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     status["auto_populated"] = False
                     status["reason"] = ""
         return normalized
-
-
-def _provider_roles(request: dict[str, Any]) -> dict[str, tuple[str, str]]:
-    """Provider/model identity of each provider role the request configures."""
-    roles = {"primary": _llm_config(request)[:2]}
-    reviewer = request.get("_review_provider")
-    if isinstance(reviewer, dict) and reviewer:
-        roles["review"] = _llm_config(reviewer)[:2]
-    return roles
 
 
 def _nlp_hint_line(record: dict[str, Any], group_fields: list[str]) -> str:

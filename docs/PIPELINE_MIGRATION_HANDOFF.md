@@ -270,6 +270,20 @@ The provenance gate and top-K selection cannot be removed; candidates remain adv
 - One trace per Record (also on cancellation); each family's `metadata_execution_ledger` entry carries the pipeline identity, trace ID and the stages that ran. Traces carry provider, model, attempts, response-contract names and failure codes, never prompts or answers. The Corpus Builder does not display the identity yet.
 - Pipeline Studio renders enumerated settings (such as `provider_role`) as a choice list.
 
+### 4.15 Corpus Builder boundary questions moved onto pipeline runtime
+
+The two boundary questions segmentation asks a model now run through the `corpus_segmentation` assignment (built-in `corpus.segmentation.current@1`: `llm.boundary_classification` on the primary provider, 2 attempts, escalating on error or timeout to the review provider, 2 attempts, the same chain `_chat_json()` ran before). Both calls sit in `corpus_segmentation_execution.py`:
+
+- the batch classifier (`_segment_candidate_batch`, `derridai_boundary_batch_v6`), reached from `_segment()`; one trace per segmentation pass, and each cached `local_boundary_state` decision carries the pipeline identity;
+- the second reader (`_adjudicate_record_boundary_pair`, `derridai_boundary_second_reader_v1`); one trace per build audit pass (`_audit_suspicious_record_boundaries`), and one per reviewer request from `adjudicate_record_boundary`. The reviewer path is in this slice because it is the same call; it is a boundary question, not the closed-choice evidence choice of Phase B slice 5. Each verdict (`boundary_llm_after`/`boundary_llm_before` and `boundary_second_reader_history`) carries the pipeline identity.
+
+- The runtime is shared with enrichment: `pipelines/structured_llm_stage.py` holds the compiler, session and trace code; `corpus_metadata_enrichment.py` and `corpus_segmentation.py` only name their feature, purpose and strategy. `_provider_roles()` moved to `corpus_llm_helpers.py`.
+- Classification: provider role and attempts are pipeline settings. Deterministic candidate routing, the adjudication budget, batch size, block-ID validation, the `min_boundary_confidence` threshold (0.72), text conservation, and the rule that a failed, omitted or low-confidence answer keeps the boundary are domain policy, not Studio settings. Prompt text, token budgets and timeouts stay server policy.
+- An unresolvable assignment asks no model: the pass keeps every ambiguous transition, counts it as a classifier failure, adds one build warning, and does not cache those decisions, so a later run asks again. A second-reader verdict becomes `uncertain` with the error.
+- The boundary cache fingerprint is unchanged (prompt version, block text, the request's provider/model, generation settings). It does not include the pipeline, so a cached answer is reused after an assignment change, as it already was when the review provider had answered.
+- `_segment_pair`, `_segment_window_recursive` and `_compact_segment_prompt` were removed with their response models (`derridai_boundary_pair`, `derridai_semantic_boundaries_compact`): no production path reached them. `tests/test_prompt_author_neutrality.py` now checks the two live boundary prompts instead.
+- Parity is pinned by `tests/test_corpus_segmentation_pipeline.py` (scripted provider, both calls, legacy chain against pipeline: calls, prompts, token budgets, results and error text). Existing segmentation tests pass unchanged.
+
 ## 5. Current built-in assignments
 
 As of current `master`, built-in system assignments are:
@@ -283,6 +297,7 @@ As of current `master`, built-in system assignments are:
 | Metadata pre-fill            | `metadata.prefill.current@1`           | active |
 | Precedent evidence remapping | `precedent.remap.current@1`            | active |
 | Corpus metadata enrichment   | `corpus.metadata_enrichment.current@1` | active |
+| Corpus segmentation          | `corpus.segmentation.current@1`        | active |
 | Metadata precedents          | `metadata.precedents.current@1`        | active |
 | Validated claim memory       | `memory.claim.current@1`               | active |
 | Prior response memory        | `memory.response.current@1`            | active |
@@ -512,7 +527,7 @@ Migrated in section 4.13.
 
 The original audit identified many generative/structured LLM uses beyond Research answer generation, including Corpus Builder segmentation/metadata work, touch-up/review operations, translation, and other utility calls.
 
-Corpus Builder metadata enrichment migrated in section 4.14; segmentation, manifest, touch-up, and reviewer evidence choice still call `_chat_json()` directly.
+Corpus Builder metadata enrichment migrated in section 4.14 and segmentation's boundary questions in section 4.15; manifest, touch-up, and reviewer evidence choice still call `_chat_json()` directly.
 
 Only claim that acceptance criterion “every generative LLM call resolves through a pipeline” is met after a fresh call-site audit.
 
