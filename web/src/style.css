@@ -17874,3 +17874,24 @@ html[data-color-scheme="dark"][data-contrast="more"] {
   width: 24px;
   height: 24px;
 }
+
+/* Sidebar surface treatments stay global to preserve the app-shell DOM contract. */
+.shell-sidebar {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface-raised) 96%, var(--ui-accent-soft)) 0%,
+    var(--surface-card) 42%,
+    color-mix(in srgb, var(--surface-inset) 72%, var(--surface-card)) 100%
+  );
+  box-shadow: inset -1px 0 0 color-mix(in srgb, var(--ui-accent) 8%, transparent);
+}
+
+.mobile-navigation-drawer .shell-navigation {
+  background: var(--surface-card);
+}
+
+@media (max-width: 780px) {
+  .shell-sidebar {
+    box-shadow: inset -1px 0 0 color-mix(in srgb, var(--ui-accent) 12%, transparent);
+  }
+}

@@ -333,7 +333,7 @@
 <ul class="providers-summary">
 <li>
 <span class="ui-tooltip" data-trigger-mode="content">
-<span class="ui-tooltip-anchor" tabindex="0" aria-describedby="ui-tooltip-95">
+<span class="ui-tooltip-anchor" tabindex="0" aria-describedby="ui-tooltip-<id>">
 <span class="ui-health-chip" data-available="false">
 <span class="ui-health-dot" aria-hidden="true">
 </span>
@@ -347,7 +347,7 @@
 </li>
 <li>
 <span class="ui-tooltip" data-trigger-mode="content">
-<span class="ui-tooltip-anchor" tabindex="0" aria-describedby="ui-tooltip-96">
+<span class="ui-tooltip-anchor" tabindex="0" aria-describedby="ui-tooltip-<id>">
 <span class="ui-health-chip" data-available="false">
 <span class="ui-health-dot" aria-hidden="true">
 </span>
@@ -498,7 +498,7 @@
 <div class="config-grid">
 <label class="ui-field">
 <span class="ui-field-label">Retrieval k <span class="ui-tooltip" data-trigger-mode="icon">
-<button type="button" class="ui-tooltip-trigger" aria-label="Retrieval k: The number of highest-ranked items kept at a selection step. In Research this is often shown simply as k." aria-describedby="ui-tooltip-97">
+<button type="button" class="ui-tooltip-trigger" aria-label="Retrieval k: The number of highest-ranked items kept at a selection step. In Research this is often shown simply as k." aria-describedby="ui-tooltip-<id>">
 <span aria-hidden="true">i</span>
 </button>
 </span>
@@ -507,7 +507,7 @@
 </label>
 <label class="ui-field">
 <span class="ui-field-label">Rerank top N <span class="ui-tooltip" data-trigger-mode="icon">
-<button type="button" class="ui-tooltip-trigger" aria-label="Rerank top N: The maximum number of retrieved candidates sent through the more expensive reranking step." aria-describedby="ui-tooltip-98">
+<button type="button" class="ui-tooltip-trigger" aria-label="Rerank top N: The maximum number of retrieved candidates sent through the more expensive reranking step." aria-describedby="ui-tooltip-<id>">
 <span aria-hidden="true">i</span>
 </button>
 </span>
@@ -524,7 +524,7 @@
 </label>
 <label class="ui-field">
 <span class="ui-field-label">Max characters per evidence record <span class="ui-tooltip" data-trigger-mode="icon">
-<button type="button" class="ui-tooltip-trigger" aria-label="Max characters per evidence record: A per-record character limit applied when packaging evidence for generation." aria-describedby="ui-tooltip-99">
+<button type="button" class="ui-tooltip-trigger" aria-label="Max characters per evidence record: A per-record character limit applied when packaging evidence for generation." aria-describedby="ui-tooltip-<id>">
 <span aria-hidden="true">i</span>
 </button>
 </span>
@@ -533,7 +533,7 @@
 </label>
 <label class="ui-field">
 <span class="ui-field-label">Total evidence characters <span class="ui-tooltip" data-trigger-mode="icon">
-<button type="button" class="ui-tooltip-trigger" aria-label="Total evidence characters: The maximum amount of source text DerridAI will place in the final evidence packet for a model call." aria-describedby="ui-tooltip-100">
+<button type="button" class="ui-tooltip-trigger" aria-label="Total evidence characters: The maximum amount of source text DerridAI will place in the final evidence packet for a model call." aria-describedby="ui-tooltip-<id>">
 <span aria-hidden="true">i</span>
 </button>
 </span>
@@ -576,7 +576,7 @@
 <div class="config-grid">
 <label class="ui-field">
 <span class="ui-field-label">MMR fetch_k <span class="ui-tooltip" data-trigger-mode="icon">
-<button type="button" class="ui-tooltip-trigger" aria-label="MMR fetch_k: The size of the initial candidate pool fetched before MMR or another selection method reduces it to the final k items." aria-describedby="ui-tooltip-101">
+<button type="button" class="ui-tooltip-trigger" aria-label="MMR fetch_k: The size of the initial candidate pool fetched before MMR or another selection method reduces it to the final k items." aria-describedby="ui-tooltip-<id>">
 <span aria-hidden="true">i</span>
 </button>
 </span>
@@ -585,7 +585,7 @@
 </label>
 <label class="ui-field">
 <span class="ui-field-label">MMR lambda <span class="ui-tooltip" data-trigger-mode="icon">
-<button type="button" class="ui-tooltip-trigger" aria-label="MMR lambda: The MMR trade-off between query relevance and diversity. Higher values favor relevance more strongly; lower values give more weight to avoiding redundancy." aria-describedby="ui-tooltip-102">
+<button type="button" class="ui-tooltip-trigger" aria-label="MMR lambda: The MMR trade-off between query relevance and diversity. Higher values favor relevance more strongly; lower values give more weight to avoiding redundancy." aria-describedby="ui-tooltip-<id>">
 <span aria-hidden="true">i</span>
 </button>
 </span>
@@ -594,7 +594,7 @@
 </label>
 <label class="ui-field">
 <span class="ui-field-label">RRF k <span class="ui-tooltip" data-trigger-mode="icon">
-<button type="button" class="ui-tooltip-trigger" aria-label="RRF k: A constant in reciprocal-rank fusion that controls how sharply the fusion rewards the very highest ranks." aria-describedby="ui-tooltip-103">
+<button type="button" class="ui-tooltip-trigger" aria-label="RRF k: A constant in reciprocal-rank fusion that controls how sharply the fusion rewards the very highest ranks." aria-describedby="ui-tooltip-<id>">
 <span aria-hidden="true">i</span>
 </button>
 </span>
@@ -603,7 +603,7 @@
 </label>
 <label class="ui-field">
 <span class="ui-field-label">Cross-encoder model <span class="ui-tooltip" data-trigger-mode="icon">
-<button type="button" class="ui-tooltip-trigger" aria-label="Cross-encoder model: A reranking model that reads the query and one candidate together, allowing it to judge their relationship more directly than independent embeddings do." aria-describedby="ui-tooltip-104">
+<button type="button" class="ui-tooltip-trigger" aria-label="Cross-encoder model: A reranking model that reads the query and one candidate together, allowing it to judge their relationship more directly than independent embeddings do." aria-describedby="ui-tooltip-<id>">
 <span aria-hidden="true">i</span>
 </button>
 </span>
@@ -612,7 +612,7 @@
 </label>
 <label class="ui-field">
 <span class="ui-field-label">Query-decomposition max tokens <span class="ui-tooltip" data-trigger-mode="icon">
-<button type="button" class="ui-tooltip-trigger" aria-label="Query-decomposition max tokens: Breaking or reformulating a research question into structured search instructions or subqueries before retrieval." aria-describedby="ui-tooltip-105">
+<button type="button" class="ui-tooltip-trigger" aria-label="Query-decomposition max tokens: Breaking or reformulating a research question into structured search instructions or subqueries before retrieval." aria-describedby="ui-tooltip-<id>">
 <span aria-hidden="true">i</span>
 </button>
 </span>
@@ -871,7 +871,7 @@
 </div>
 <footer class="settings-section-actions">
 <span class="ui-tooltip" data-trigger-mode="content">
-<span class="ui-tooltip-anchor" tabindex="0" aria-label="NUKE DerridAI workspace: Type &quot;NUKE&quot; exactly to enable this destructive action." aria-describedby="ui-tooltip-106">
+<span class="ui-tooltip-anchor" tabindex="0" aria-label="NUKE DerridAI workspace: Type &quot;NUKE&quot; exactly to enable this destructive action." aria-describedby="ui-tooltip-<id>">
 <span class="ui-button-wrap">
 <button class="ui-button variant-danger size-default" type="button" disabled="" aria-disabled="true">
 <span>NUKE DerridAI workspace</span>

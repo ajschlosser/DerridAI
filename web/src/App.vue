@@ -743,13 +743,6 @@ watch(
 }
 .shell-sidebar {
   padding: 12px 11px 10px;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--surface-raised) 96%, var(--ui-accent-soft)) 0%,
-    var(--surface-card) 42%,
-    color-mix(in srgb, var(--surface-inset) 72%, var(--surface-card)) 100%
-  );
-  box-shadow: inset -1px 0 0 color-mix(in srgb, var(--ui-accent) 8%, transparent);
 }
 .shell-workspace {
   min-width: 0;
@@ -789,9 +782,6 @@ watch(
   box-shadow: 0 24px 80px color-mix(in srgb, var(--text) 24%, transparent);
 }
 
-.mobile-navigation-drawer .shell-navigation {
-  background: var(--surface-card);
-}
 .mobile-navigation-drawer::backdrop {
   background: color-mix(in srgb, var(--text) 38%, transparent);
 }
@@ -915,7 +905,6 @@ watch(
   }
   .shell-sidebar {
     padding: 9px 7px;
-    box-shadow: inset -1px 0 0 color-mix(in srgb, var(--ui-accent) 12%, transparent);
   }
 }
 @media (max-width: 780px) {
