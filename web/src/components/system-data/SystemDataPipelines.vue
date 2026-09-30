@@ -121,6 +121,7 @@ function featureForPurpose(purpose: string) {
     metadata_prefill: "metadata_prefill",
     precedent_evidence_remap: "precedent_evidence_remap",
     corpus_metadata_enrichment: "corpus_metadata_enrichment",
+    corpus_segmentation: "corpus_segmentation",
     metadata_precedents: "metadata_precedents",
     claim_memory: "claim_memory",
     response_memory: "response_memory",

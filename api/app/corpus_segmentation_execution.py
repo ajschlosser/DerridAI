@@ -1,5 +1,5 @@
 # Copyright 2026 Aaron John Schlosser, PhD.
-"""Boundary-segmentation execution: LLM candidate batches, adjudication, the recursive windowed pass.
+"""Boundary-segmentation execution: LLM candidate batches and second-reader adjudication.
 
 Moved verbatim out of PdfCorpusBuildManager as a mixin (see corpus_review_actions.py's
 module docstring for why a mixin, not free functions, and corpus_build_lifecycle.py's for
@@ -12,13 +12,11 @@ import hashlib
 import json
 from typing import TYPE_CHECKING, Any
 
-from .corpus_llm_helpers import _generation_options, _stage_limits
+from .corpus_llm_helpers import _generation_options, _provider_roles, _stage_limits
 from .corpus_models import (
     SEGMENTATION_PROMPT_VERSION,
     BoundaryAuditResponseModel,
     BoundaryBatchResponseModel,
-    CompactSegmentationResponseModel,
-    PairBoundaryResponseModel,
 )
 from .corpus_record_quality import iso_now
 from .corpus_segmentation import (
@@ -29,6 +27,7 @@ from .corpus_segmentation import (
     _normalize_topology,
     _record_sizing_policy,
 )
+from .pipelines.corpus_segmentation import SegmentationSession
 
 
 def _manifest_prompt_context(manifest: dict[str, Any]) -> dict[str, Any]:
@@ -52,158 +51,10 @@ class BuildSegmentationExecutionMixin:
 
         def _append_warning(self, build_id: str, message: str) -> None: ...
         def _cancelled(self, build_id: str) -> bool: ...
-        def _chat_json(self, request: dict[str, Any], prompt: str, *, response_model: type[Any], max_tokens: int = ..., schema_name: str = ..., attempts: int = ..., build_id: str = ...) -> dict[str, Any]: ...
+        def _chat_json(self, request: dict[str, Any], prompt: str, *, response_model: type[Any], max_tokens: int = ..., schema_name: str = ..., attempts: int = ..., build_id: str = ..., roles: tuple[str, ...] = ..., escalated: bool = ...) -> dict[str, Any]: ...
         def _increment_metric(self, build_id: str, key: str, amount: int = 1) -> None: ...
         def _profile_for(self, build_id: str) -> dict[str, Any]: ...
         def _update(self, build_id: str, **changes: Any) -> dict[str, Any]: ...
-
-    def _compact_segment_prompt(self, window: list[dict[str, Any]], manifest: dict[str, Any]) -> str:
-        block_text = "\n\n".join(
-            f"[{b['block_id']} | PDF p.{b['page']} | {b['type']}]\n{b['text']}"
-            for b in window
-        )
-        manifest_summary = _manifest_prompt_context(manifest)
-        return f"""You are a conservative semantic-boundary auditor for a scholarly corpus.
-Judge only genuine discourse boundaries. Split when one coherent argumentative/discursive unit ends because of a meaningful change in speaker, position holder, stance, target, quotation frame, discourse role, or argumentative move. NEVER split because a page changes, an execution window ends, or text reaches a size. Keep a quotation with the attribution needed to understand who owns the quoted proposition.
-
-Document context: {json.dumps(manifest_summary, ensure_ascii=False)}
-When document_author is present, use it only as source-document authorship context. Do not assume it is the speaker or position holder, and do not invent an author or work when the document context does not supply one.
-
-SOURCE BLOCKS (immutable IDs):
-{block_text}
-
-Return a COMPACT JSON object containing ONLY transitions that plausibly need a split or explicit review. Omit ordinary KEEP transitions. For each returned transition use: `after` (the exact left-hand source block ID), `decision` (`split` or `uncertain`), `confidence` (0..1), and `changes` (zero or more of speaker, position_holder, stance, target, quotation_frame, discourse_role, argumentative_move). An omitted transition is deterministically treated as KEEP. Do not return source text, prose explanations, Markdown, or invented IDs.
-"""
-
-
-    def _segment_pair(
-        self,
-        left: dict[str, Any],
-        right: dict[str, Any],
-        manifest: dict[str, Any],
-        request: dict[str, Any],
-        build_id: str,
-    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
-        manifest_summary = _manifest_prompt_context(manifest)
-        prompt = f"""Classify ONE possible semantic record boundary in a scholarly corpus.
-Do not use page changes or length as evidence. Decide whether the second source block begins a new coherent discourse/argument unit because of a meaningful change in speaker, position holder, stance, target, quotation frame, discourse role, or argumentative move.
-
-Document context: {json.dumps(manifest_summary, ensure_ascii=False)}
-When document_author is present, use it only as source-document authorship context. Do not assume it is the speaker or position holder, and do not invent an author or work when the document context does not supply one.
-
-LEFT [{left['block_id']}]:\n{str(left.get('text') or '')[:7000]}
-
-RIGHT [{right['block_id']}]:\n{str(right.get('text') or '')[:7000]}
-
-Return only `decision`, `confidence`, and `changes` in the supplied schema.
-"""
-        limits = _stage_limits(request)
-        try:
-            result = self._chat_json(
-                request,
-                prompt,
-                response_model=PairBoundaryResponseModel,
-                max_tokens=min(700, limits["segmentation_num_predict"]),
-                schema_name="derridai_boundary_pair",
-                attempts=2,
-                build_id=build_id,
-            )
-        except InterruptedError:
-            raise
-        except Exception as exc:
-            return None, {
-                "after_block_id": left["block_id"],
-                "next_block_id": right["block_id"],
-                "reason": str(exc),
-                "kind": "pair",
-            }
-        return {
-            "after_block_id": left["block_id"],
-            "decision": str(result.get("decision") or "uncertain"),
-            "confidence": max(0.0, min(1.0, float(result.get("confidence") or 0))),
-            "changes": list(result.get("changes") or []),
-            "source": "pair_fallback",
-        }, None
-
-
-    def _segment_window_recursive(
-        self,
-        window: list[dict[str, Any]],
-        manifest: dict[str, Any],
-        request: dict[str, Any],
-        build_id: str,
-        *,
-        depth: int = 0,
-    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-        limits = _stage_limits(request)
-        block_ids = {str(block.get("block_id") or "") for block in window}
-        try:
-            result = self._chat_json(
-                request,
-                self._compact_segment_prompt(window, manifest),
-                response_model=CompactSegmentationResponseModel,
-                max_tokens=limits["segmentation_num_predict"],
-                schema_name="derridai_semantic_boundaries_compact",
-                attempts=2,
-                build_id=build_id,
-            )
-            candidates: list[dict[str, Any]] = []
-            returned: set[str] = set()
-            for item in result.get("boundaries") or []:
-                block_id = str(item.get("after") or "")
-                if block_id not in block_ids or block_id == str(window[-1].get("block_id") or ""):
-                    continue
-                returned.add(block_id)
-                candidates.append({
-                    "after_block_id": block_id,
-                    "decision": str(item.get("decision") or "uncertain"),
-                    "confidence": max(0.0, min(1.0, float(item.get("confidence") or 0))),
-                    "changes": list(item.get("changes") or []),
-                    "source": "compact_window",
-                    "depth": depth,
-                })
-            # Omitted transitions are ordinary KEEP decisions. Requiring a model
-            # to echo every no-op transition made output scale with document length
-            # and caused exactly the failure cascade this compact stage is intended
-            # to avoid. Only explicit split/uncertain proposals are returned.
-            return candidates, []
-        except InterruptedError:
-            raise
-        except Exception as exc:
-            self._increment_metric(build_id, "segmentation_window_failures")
-            # A malformed large response should become a smaller problem, not a
-            # missing slice of the book. Recursively divide the source evidence.
-            if len(window) > 6 and depth < 4:
-                midpoint = len(window) // 2
-                left = window[:min(len(window), midpoint + 2)]
-                right = window[max(0, midpoint - 1):]
-                left_candidates, left_unresolved = self._segment_window_recursive(
-                    left, manifest, request, build_id, depth=depth + 1
-                )
-                right_candidates, right_unresolved = self._segment_window_recursive(
-                    right, manifest, request, build_id, depth=depth + 1
-                )
-                return left_candidates + right_candidates, left_unresolved + right_unresolved
-
-            # At the minimum window size, classify each transition independently.
-            # These tiny schemas are intentionally difficult for a model to truncate.
-            pair_candidates: list[dict[str, Any]] = []
-            unresolved: list[dict[str, Any]] = []
-            for left, right in zip(window, window[1:]):
-                candidate, failure = self._segment_pair(left, right, manifest, request, build_id)
-                if candidate:
-                    pair_candidates.append(candidate)
-                if failure:
-                    unresolved.append(failure)
-            if unresolved:
-                unresolved.append({
-                    "after_block_id": str(window[0].get("block_id") or ""),
-                    "next_block_id": str(window[-1].get("block_id") or ""),
-                    "reason": f"Window remained unresolved after recursive reduction: {exc}",
-                    "kind": "window",
-                })
-            return pair_candidates, unresolved
-
 
     def _boundary_cache_fingerprint(self, left: dict[str, Any], right: dict[str, Any], request: dict[str, Any]) -> str:
         generation = _generation_options(request)
@@ -218,6 +69,24 @@ Return only `decision`, `confidence`, and `changes` in the supplied schema.
         return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")).hexdigest()
 
 
+    def _boundary_call(
+        self, session: SegmentationSession, request: dict[str, Any], prompt: str, *,
+        response_model: type[Any], max_tokens: int, schema_name: str, build_id: str,
+    ) -> dict[str, Any]:
+        """Ask one boundary question through the corpus_segmentation pipeline, one provider role per stage."""
+
+        def invoke(role: str, attempts: int, escalated: bool) -> dict[str, Any]:
+            if role not in _provider_roles(request):
+                raise LookupError("No review provider is configured for this build.")
+            return self._chat_json(
+                request, prompt, response_model=response_model, max_tokens=max_tokens,
+                schema_name=schema_name, attempts=attempts, build_id=build_id,
+                roles=(role,), escalated=escalated,
+            )
+
+        return session.run(invoke, response_contract=schema_name, providers=_provider_roles(request))
+
+
     def _segment_candidate_batch(
         self,
         batch: list[dict[str, Any]],
@@ -225,6 +94,8 @@ Return only `decision`, `confidence`, and `changes` in the supplied schema.
         manifest: dict[str, Any],
         request: dict[str, Any],
         build_id: str,
+        *,
+        session: SegmentationSession,
     ) -> tuple[dict[str, dict[str, Any]], str | None]:
         """Adjudicate a small set of already-filtered transitions in one call.
 
@@ -253,7 +124,7 @@ When document_author is present, use it only as source-document authorship conte
 Return one compact decision per transition using its exact left-hand block ID in `after`. Do not return prose or source text."""
         limits=_stage_limits(request)
         try:
-            result=self._chat_json(request,prompt,response_model=BoundaryBatchResponseModel,max_tokens=min(limits["segmentation_num_predict"],1400),schema_name="derridai_boundary_batch_v6",attempts=2,build_id=build_id)
+            result=self._boundary_call(session,request,prompt,response_model=BoundaryBatchResponseModel,max_tokens=min(limits["segmentation_num_predict"],1400),schema_name="derridai_boundary_batch_v6",build_id=build_id)
         except InterruptedError:
             raise
         except Exception as exc:
@@ -315,7 +186,10 @@ Return one compact decision per transition using its exact left-hand block ID in
         manifest: dict[str, Any],
         request: dict[str, Any],
         build_id: str,
+        *,
+        session: SegmentationSession | None = None,
     ) -> dict[str, Any]:
+        """Second-reader verdict on one record seam. Without ``session`` (a reviewer's request) the call gets its own trace."""
         left_ids = [str(value) for value in (left.get("source_block_ids") or []) if value]
         right_ids = [str(value) for value in (right.get("source_block_ids") or []) if value]
         if not left_ids or not right_ids:
@@ -364,26 +238,37 @@ RIGHT RECORD START:
 
 Return one decision for the exact boundary id. `signals` should contain compact labels such as sentence_continuation, quotation_continuation, heading_attachment, attribution_continuation, argumentative_transition, or coherent_boundary."""
         limits = _stage_limits(request)
+        opened: SegmentationSession | None = None
         try:
-            result = self._chat_json(
-                request, prompt, response_model=BoundaryAuditResponseModel,
+            if session is None:
+                session = opened = SegmentationSession.open()
+            result = self._boundary_call(
+                session, request, prompt, response_model=BoundaryAuditResponseModel,
                 max_tokens=min(int(limits.get("reconciliation_num_predict") or 1000), 1200),
-                schema_name="derridai_boundary_second_reader_v1", attempts=2, build_id=build_id,
+                schema_name="derridai_boundary_second_reader_v1", build_id=build_id,
             )
         except InterruptedError:
+            if opened is not None:
+                opened.finish(cancelled=True)
             raise
         except Exception as exc:
+            if opened is not None:
+                opened.finish()
             return {
                 "boundary_id": boundary_id, "decision": "uncertain", "confidence": 0.0,
                 "reason": f"Boundary second-reader call failed: {exc}",
                 "source": "llm_boundary_audit", "error": str(exc),
+                **({"pipeline": session.identity()} if session is not None else {}),
             }
+        if opened is not None:
+            opened.finish()
+        pipeline = session.identity()
         item = next((row for row in (result.get("decisions") or []) if str(row.get("boundary_id") or "") == boundary_id), None)
         if not isinstance(item, dict):
             return {
                 "boundary_id": boundary_id, "decision": "uncertain", "confidence": 0.0,
                 "reason": "The boundary second reader returned no usable decision.",
-                "source": "llm_boundary_audit",
+                "source": "llm_boundary_audit", "pipeline": pipeline,
             }
         decision = str(item.get("decision") or "uncertain")
         suggested = str(item.get("suggested_after_block_id") or "").strip() or None
@@ -410,6 +295,7 @@ Return one decision for the exact boundary id. `signals` should contain compact 
             "source": "llm_boundary_audit",
             "editorial_examples_used": len(examples),
             "adjudicated_at": iso_now(),
+            "pipeline": pipeline,
         }
 
 
@@ -430,22 +316,37 @@ Return one decision for the exact boundary id. `signals` should contain compact 
         pairs = pairs[:24]
         metrics = {"audited": 0, "keep": 0, "move": 0, "uncertain": 0, "failed": 0}
         decisions=[]
-        for _, left, right in pairs:
-            if self._cancelled(build_id):
-                raise InterruptedError("Corpus build cancelled")
-            decision = self._adjudicate_record_boundary_pair(left, right, manifest, request, build_id)
-            decisions.append(decision)
-            metrics["audited"] += 1
-            choice = str(decision.get("decision") or "uncertain")
-            if decision.get("error"):
-                metrics["failed"] += 1
-            if choice == "keep":
-                metrics["keep"] += 1
-            elif choice in {"move_earlier", "move_later"}:
-                metrics["move"] += 1
-            else:
-                metrics["uncertain"] += 1
-            _apply_boundary_adjudication_to_records(left, right, decision, threshold=threshold)
+        # One trace for the pass. If the pipeline cannot be resolved, each pair tries on its
+        # own and records that failure as an uncertain verdict without a model call.
+        session: SegmentationSession | None = None
+        if pairs:
+            try:
+                session = SegmentationSession.open()
+            except RuntimeError:
+                session = None
+        try:
+            for _, left, right in pairs:
+                if self._cancelled(build_id):
+                    raise InterruptedError("Corpus build cancelled")
+                decision = self._adjudicate_record_boundary_pair(left, right, manifest, request, build_id, session=session)
+                decisions.append(decision)
+                metrics["audited"] += 1
+                choice = str(decision.get("decision") or "uncertain")
+                if decision.get("error"):
+                    metrics["failed"] += 1
+                if choice == "keep":
+                    metrics["keep"] += 1
+                elif choice in {"move_earlier", "move_later"}:
+                    metrics["move"] += 1
+                else:
+                    metrics["uncertain"] += 1
+                _apply_boundary_adjudication_to_records(left, right, decision, threshold=threshold)
+        except InterruptedError:
+            if session is not None:
+                session.finish(cancelled=True)
+            raise
+        if session is not None:
+            session.finish()
         self.repo.save_checkpoint(build_id, "boundary_second_reader", {"decisions": decisions, "metrics": metrics, "completed_at": iso_now()})
         return metrics
 
@@ -513,26 +414,43 @@ Return one decision for the exact boundary id. `signals` should contain compact 
                 pending.append((candidate,fingerprint))
 
         completed=len(llm_candidates)-len(pending)
-        for offset in range(0,len(pending),batch_size):
-            if self._cancelled(build_id): raise InterruptedError("Corpus build cancelled")
-            chunk=pending[offset:offset+batch_size]
-            batch=[item[0] for item in chunk]
-            results,failure=self._segment_candidate_batch(batch,blocks,manifest,request,build_id)
-            batch_call_count+=1
-            if failure:
-                classifier_failures+=len(batch)
-                self._increment_metric(build_id,"local_boundary_classifier_failures",len(batch))
-            for candidate,fingerprint in chunk:
-                bid=str(candidate["after_block_id"])
-                pair=results.get(bid) or {"after_block_id":bid,"decision":"keep","confidence":0.0,"changes":[],"source":"deterministic_keep_after_omission"}
-                decisions[bid]={"pair":pair,"failure":failure,"fingerprint":fingerprint}
-                if pair.get("decision")=="split" and float(pair.get("confidence") or 0)>=threshold:
-                    accepted.append({**candidate,**pair,"source":"local_batch_classifier"}); llm_split_count+=1
-                else:
-                    llm_keep_count+=1
-            self.repo.save_checkpoint(build_id,"local_boundary_state",{"decisions":decisions})
-            completed+=len(chunk)
-            self._update(build_id,stage="segmenting",progress=0.12+0.23*(completed/max(1,len(llm_candidates))),boundary_candidates_completed=min(len(candidates),deterministic_split_count+deterministic_keep_count+completed),boundary_candidate_count=len(candidates))
+        # One pipeline trace for the pass's batch calls. Without a resolvable pipeline no
+        # boundary question is asked: the ambiguous transitions stay KEEP, are counted as
+        # classifier failures, and are not cached, so a later run asks them again.
+        session: SegmentationSession | None = None
+        if pending:
+            try:
+                session=SegmentationSession.open()
+            except RuntimeError as exc:
+                classifier_failures+=len(pending); llm_keep_count+=len(pending)
+                self._increment_metric(build_id,"local_boundary_classifier_failures",len(pending))
+                self._append_warning(build_id,f"{exc} {len(pending)} ambiguous boundary transition(s) were kept without a model call.")
+                pending=[]
+        try:
+            for offset in range(0,len(pending),batch_size):
+                if self._cancelled(build_id): raise InterruptedError("Corpus build cancelled")
+                chunk=pending[offset:offset+batch_size]
+                batch=[item[0] for item in chunk]
+                results,failure=self._segment_candidate_batch(batch,blocks,manifest,request,build_id,session=session)
+                batch_call_count+=1
+                if failure:
+                    classifier_failures+=len(batch)
+                    self._increment_metric(build_id,"local_boundary_classifier_failures",len(batch))
+                for candidate,fingerprint in chunk:
+                    bid=str(candidate["after_block_id"])
+                    pair=results.get(bid) or {"after_block_id":bid,"decision":"keep","confidence":0.0,"changes":[],"source":"deterministic_keep_after_omission"}
+                    decisions[bid]={"pair":pair,"failure":failure,"fingerprint":fingerprint,"pipeline":session.identity()}
+                    if pair.get("decision")=="split" and float(pair.get("confidence") or 0)>=threshold:
+                        accepted.append({**candidate,**pair,"source":"local_batch_classifier"}); llm_split_count+=1
+                    else:
+                        llm_keep_count+=1
+                self.repo.save_checkpoint(build_id,"local_boundary_state",{"decisions":decisions})
+                completed+=len(chunk)
+                self._update(build_id,stage="segmenting",progress=0.12+0.23*(completed/max(1,len(llm_candidates))),boundary_candidates_completed=min(len(candidates),deterministic_split_count+deterministic_keep_count+completed),boundary_candidate_count=len(candidates))
+        except InterruptedError:
+            if session is not None: session.finish(cancelled=True)
+            raise
+        if session is not None: session.finish()
 
         def grouped(boundaries:list[dict[str,Any]])->list[list[dict[str,Any]]]:
             split_ids={str(item.get("after_block_id") or "") for item in boundaries}
