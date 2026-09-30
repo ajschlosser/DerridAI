@@ -272,6 +272,21 @@ describe("ResearchObjectDiagram", () => {
     expect(wrapper.get('button[data-object-id="Record:r1"]').attributes("aria-pressed")).toBe(
       "true",
     );
+    const density = wrapper.get('[aria-label="Card spacing"]');
+    expect(density.findAll("button").map((button) => button.text())).toEqual([
+      "Compact",
+      "Standard",
+      "Wide",
+    ]);
+    const compactLane = wrapper.find(".diagram-lanes rect");
+    expect(compactLane.attributes("width")).toBe("184");
+    expect(wrapper.findAll(".diagram-lanes rect")[1].attributes("x")).toBe("206");
+    await density.get("button:nth-child(2)").trigger("click");
+    expect(wrapper.find(".diagram-lanes rect").attributes("width")).toBe("210");
+    expect(wrapper.findAll(".diagram-lanes rect")[1].attributes("x")).toBe("248");
+    await density.get("button:nth-child(3)").trigger("click");
+    expect(density.get("button:nth-child(3)").attributes("aria-pressed")).toBe("true");
+    expect(wrapper.find(".diagram-lanes rect").attributes("width")).toBe("250");
 
     await wrapper.get('button[data-object-id="EvidenceRef:e1"]').trigger("click");
     expect(wrapper.emitted("focus")?.at(-1)).toEqual(["EvidenceRef:e1"]);

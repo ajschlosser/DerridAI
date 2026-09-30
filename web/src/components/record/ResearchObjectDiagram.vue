@@ -30,6 +30,7 @@ const layoutState = useRelationLayoutState();
 const surfacePreset = RELATION_SURFACE_PRESETS.provenanceLanes;
 
 type LaneId = "source" | "record" | "metadata" | "evidence" | "research";
+type DiagramDensity = "compact" | "standard" | "wide";
 type PositionedNode = ResearchObjectNode & { x: number; y: number; lane: LaneId };
 
 const laneOrder: LaneId[] = ["source", "record", "metadata", "evidence", "research"];
@@ -48,13 +49,21 @@ const laneLabels = computed<Record<LaneId, string>>(() => ({
   research: i18n.t("traceability.lane_research", "Research output"),
 }));
 
-const canvasWidth = 980;
-const laneWidth = 184;
-const laneGap = 10;
 const nodeWidth = 154;
 const nodeHeight = 66;
-const nodeGap = 24;
 const topOffset = 56;
+const density = ref<DiagramDensity>("compact");
+const densityOptions: DiagramDensity[] = ["compact", "standard", "wide"];
+const densitySpacing: Record<
+  DiagramDensity,
+  { canvasWidth: number; laneWidth: number; laneGap: number; nodeGap: number }
+> = {
+  compact: { canvasWidth: 980, laneWidth: 184, laneGap: 10, nodeGap: 24 },
+  standard: { canvasWidth: 1160, laneWidth: 210, laneGap: 26, nodeGap: 42 },
+  wide: { canvasWidth: 1420, laneWidth: 250, laneGap: 48, nodeGap: 68 },
+};
+const spacing = computed(() => densitySpacing[density.value]);
+const canvasWidth = computed(() => spacing.value.canvasWidth);
 
 function laneForType(type: string): LaneId {
   return laneOrder.find((lane) => laneTypes[lane].has(type)) || "research";
@@ -74,19 +83,22 @@ const laneNodes = computed<Record<LaneId, ResearchObjectNode[]>>(() => {
 
 const canvasHeight = computed(() => {
   const maxLane = Math.max(...laneOrder.map((lane) => laneNodes.value[lane].length), 1);
-  return Math.max(300, topOffset + maxLane * (nodeHeight + nodeGap) + 24);
+  return Math.max(300, topOffset + maxLane * (nodeHeight + spacing.value.nodeGap) + 24);
 });
 
 const automaticNodes = computed<PositionedNode[]>(() => {
   const result: PositionedNode[] = [];
   laneOrder.forEach((lane, laneIndex) => {
-    const x = 18 + laneIndex * (laneWidth + laneGap) + (laneWidth - nodeWidth) / 2;
+    const x =
+      18 +
+      laneIndex * (spacing.value.laneWidth + spacing.value.laneGap) +
+      (spacing.value.laneWidth - nodeWidth) / 2;
     laneNodes.value[lane].forEach((node, index) => {
       result.push({
         ...node,
         lane,
         x,
-        y: topOffset + index * (nodeHeight + nodeGap),
+        y: topOffset + index * (nodeHeight + spacing.value.nodeGap),
       });
     });
   });
@@ -115,7 +127,7 @@ const connectedIds = computed(() => {
 const contentBounds = computed(() => {
   const points = [
     { x: 0, y: 0 },
-    { x: canvasWidth, y: canvasHeight.value },
+    { x: canvasWidth.value, y: canvasHeight.value },
     ...positionedNodes.value.flatMap((node) => [
       { x: node.x, y: node.y },
       { x: node.x + nodeWidth, y: node.y + nodeHeight },
@@ -206,6 +218,13 @@ function resetLayout() {
   layoutState.clearPositions();
   viewport.value?.resetView();
 }
+
+function chooseDensity(next: DiagramDensity) {
+  if (density.value === next) return;
+  density.value = next;
+  layoutState.clearPositions();
+  viewport.value?.fitView(contentBounds.value);
+}
 </script>
 
 <template>
@@ -215,6 +234,27 @@ function resetLayout() {
     :aria-label="ariaLabel || i18n.t('traceability.diagram_label', 'Relationship diagram')"
   >
     <div class="diagram-tools">
+      <div
+        class="diagram-density-controls"
+        role="group"
+        :aria-label="i18n.t('traceability.diagram_density', 'Card spacing')"
+      >
+        <button
+          v-for="option in densityOptions"
+          :key="option"
+          type="button"
+          :aria-pressed="density === option"
+          :class="{ selected: density === option }"
+          @click="chooseDensity(option)"
+        >
+          {{
+            i18n.t(
+              `traceability.diagram_density_${option}`,
+              option.charAt(0).toUpperCase() + option.slice(1),
+            )
+          }}
+        </button>
+      </div>
       <UiRelationToolbar
         :accessible-label="i18n.t('traceability.diagram_controls', 'Relationship map controls')"
         :zoom-out-label="i18n.t('traceability.diagram_zoom_out', 'Zoom out')"
@@ -259,13 +299,17 @@ function resetLayout() {
           <g class="diagram-lanes">
             <g v-for="(lane, index) in laneOrder" :key="lane">
               <rect
-                :x="12 + index * (laneWidth + laneGap)"
+                :x="12 + index * (spacing.laneWidth + spacing.laneGap)"
                 y="8"
-                :width="laneWidth"
+                :width="spacing.laneWidth"
                 :height="canvasHeight - 16"
                 rx="10"
               />
-              <text :x="24 + index * (laneWidth + laneGap)" y="31" class="diagram-lane-label">
+              <text
+                :x="24 + index * (spacing.laneWidth + spacing.laneGap)"
+                y="31"
+                class="diagram-lane-label"
+              >
                 {{ laneLabels[lane] }}
               </text>
             </g>
@@ -328,7 +372,36 @@ function resetLayout() {
 }
 .diagram-tools {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
   justify-content: flex-end;
+}
+.diagram-density-controls {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.diagram-density-controls button {
+  min-height: 32px;
+  padding: 5px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.diagram-density-controls button.selected {
+  border-color: var(--border-interactive);
+  background: var(--surface-selected);
+  color: var(--text-primary);
+  font-weight: 750;
+}
+.diagram-density-controls button:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 .diagram-viewport {
   width: 100%;

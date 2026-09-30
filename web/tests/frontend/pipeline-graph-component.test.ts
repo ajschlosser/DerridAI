@@ -121,5 +121,34 @@ describe("PipelineGraphDiagram relation interactions", () => {
     expect(vertical).toBeTruthy();
     await vertical!.trigger("click");
     expect(vertical!.attributes("aria-pressed")).toBe("true");
+
+    const density = wrapper.get('[aria-label="Card spacing"]');
+    expect(density.findAll("button").map((button) => button.text())).toEqual([
+      "Compact",
+      "Standard",
+      "Wide",
+    ]);
+    expect(density.find("button.selected").text()).toBe("Compact");
+    await density.get("button:nth-child(3)").trigger("click");
+    expect(density.get("button:nth-child(3)").attributes("aria-pressed")).toBe("true");
+    expect(density.find("button.selected").text()).toBe("Wide");
+  });
+
+  it("keeps unavailable and timeout fallback routes as separate edge kinds", async () => {
+    const wrapper = mount(PipelineGraphDiagram, {
+      props: {
+        stages: [{ ...stages[0], on_unavailable: "validate", on_timeout: "validate" }, stages[1]],
+        entryStageIds: ["retrieve"],
+        strategies,
+        title: "Pipeline",
+        description: "Test pipeline",
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.find('[data-kind="on_unavailable"]').exists()).toBe(true);
+    expect(wrapper.find('[data-kind="on_timeout"]').exists()).toBe(true);
+    expect(wrapper.find(".diagram-legend [data-kind='on_unavailable']").exists()).toBe(true);
+    expect(wrapper.find(".diagram-legend [data-kind='on_timeout']").exists()).toBe(true);
   });
 });

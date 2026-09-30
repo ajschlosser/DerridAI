@@ -3,12 +3,17 @@ import type { PipelineDefinition, PipelineRunTrace, PipelineStage } from "../typ
 
 export const PIPELINE_NODE_WIDTH = 210;
 export const PIPELINE_NODE_HEIGHT = 84;
-const COLUMN_GAP = 64;
-const ROW_GAP = 18;
 const CANVAS_PAD = 16;
 
 export type PipelineEdgeKind = "next" | "on_empty" | "on_unavailable" | "on_timeout" | "on_error";
 export type PipelineDiagramOrientation = "horizontal" | "vertical";
+export type PipelineDiagramDensity = "compact" | "standard" | "wide";
+
+const DENSITY_SPACING: Record<PipelineDiagramDensity, { columnGap: number; rowGap: number }> = {
+  compact: { columnGap: 64, rowGap: 18 },
+  standard: { columnGap: 112, rowGap: 42 },
+  wide: { columnGap: 176, rowGap: 72 },
+};
 
 export type PipelineGraphEdge = {
   id: string;
@@ -135,7 +140,9 @@ export function layoutPipelineDiagram(
   entryStageIds: string[],
   execution?: PipelineRunTrace | null,
   orientation: PipelineDiagramOrientation = "horizontal",
+  density: PipelineDiagramDensity = "compact",
 ): PipelineDiagram {
+  const { columnGap, rowGap } = DENSITY_SPACING[density];
   const byId = new Map(stages.map((stage) => [stage.id, stage]));
   const edges: Array<{ from: string; to: string; kind: PipelineEdgeKind }> = [];
   for (const stage of stages) {
@@ -209,13 +216,13 @@ export function layoutPipelineDiagram(
   }
   const columnCount = Math.max(1, ...[...columns.keys()].map((index) => index + 1));
   const tallest = Math.max(1, ...[...columns.values()].map((column) => column.length));
-  const height = CANVAS_PAD * 2 + tallest * PIPELINE_NODE_HEIGHT + (tallest - 1) * ROW_GAP;
+  const height = CANVAS_PAD * 2 + tallest * PIPELINE_NODE_HEIGHT + (tallest - 1) * rowGap;
   const width =
-    CANVAS_PAD * 2 + columnCount * PIPELINE_NODE_WIDTH + Math.max(0, columnCount - 1) * COLUMN_GAP;
+    CANVAS_PAD * 2 + columnCount * PIPELINE_NODE_WIDTH + Math.max(0, columnCount - 1) * columnGap;
 
   const nodes: PipelineGraphNode[] = [];
   for (const [index, column] of columns) {
-    const stack = column.length * PIPELINE_NODE_HEIGHT + Math.max(0, column.length - 1) * ROW_GAP;
+    const stack = column.length * PIPELINE_NODE_HEIGHT + Math.max(0, column.length - 1) * rowGap;
     const offsetY = CANVAS_PAD + (height - CANVAS_PAD * 2 - stack) / 2;
     column.forEach((id, row) => {
       const stage = byId.get(id)!;
@@ -228,12 +235,12 @@ export function layoutPipelineDiagram(
         entry: entryStageIds.includes(id),
         x:
           orientation === "horizontal"
-            ? CANVAS_PAD + index * (PIPELINE_NODE_WIDTH + COLUMN_GAP)
-            : CANVAS_PAD + row * (PIPELINE_NODE_WIDTH + COLUMN_GAP),
+            ? CANVAS_PAD + index * (PIPELINE_NODE_WIDTH + columnGap)
+            : CANVAS_PAD + row * (PIPELINE_NODE_WIDTH + columnGap),
         y:
           orientation === "horizontal"
-            ? offsetY + row * (PIPELINE_NODE_HEIGHT + ROW_GAP)
-            : CANVAS_PAD + index * (PIPELINE_NODE_HEIGHT + ROW_GAP),
+            ? offsetY + row * (PIPELINE_NODE_HEIGHT + rowGap)
+            : CANVAS_PAD + index * (PIPELINE_NODE_HEIGHT + rowGap),
         executionStatus: execution
           ? mark?.stage.status || (configured ? "not_reached" : null)
           : null,
@@ -273,11 +280,9 @@ export function layoutPipelineDiagram(
     return {
       nodes,
       edges: drawn,
-      width: CANVAS_PAD * 2 + tallest * PIPELINE_NODE_WIDTH + Math.max(0, tallest - 1) * COLUMN_GAP,
+      width: CANVAS_PAD * 2 + tallest * PIPELINE_NODE_WIDTH + Math.max(0, tallest - 1) * columnGap,
       height:
-        CANVAS_PAD * 2 +
-        columnCount * PIPELINE_NODE_HEIGHT +
-        Math.max(0, columnCount - 1) * ROW_GAP,
+        CANVAS_PAD * 2 + columnCount * PIPELINE_NODE_HEIGHT + Math.max(0, columnCount - 1) * rowGap,
     };
   }
   return { nodes, edges: drawn, width, height };

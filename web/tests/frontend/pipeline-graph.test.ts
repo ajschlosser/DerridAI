@@ -113,4 +113,18 @@ describe("pipeline relational diagrams", () => {
     expect(diagram.edges.some((edge) => edge.from === "dense" && edge.to === "rerank")).toBe(true);
     expect(diagram.height).toBeGreaterThan(diagram.width / 2);
   });
+
+  it("increases spacing from compact through standard to wide", () => {
+    const compact = layoutPipelineDiagram(stages, ["dense"], null, "horizontal", "compact");
+    const standard = layoutPipelineDiagram(stages, ["dense"], null, "horizontal", "standard");
+    const wide = layoutPipelineDiagram(stages, ["dense"], null, "horizontal", "wide");
+
+    expect(standard.width).toBeGreaterThan(compact.width);
+    expect(wide.width).toBeGreaterThan(standard.width);
+    expect(standard.height).toBe(compact.height);
+    expect(wide.height).toBe(compact.height);
+    expect(wide.edges.map((edge) => `${edge.from}->${edge.to}:${edge.kind}`)).toEqual(
+      compact.edges.map((edge) => `${edge.from}->${edge.to}:${edge.kind}`),
+    );
+  });
 });
