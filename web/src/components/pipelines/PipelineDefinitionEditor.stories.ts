@@ -51,7 +51,7 @@ const meta = {
       return { args, value };
     },
     template:
-      '<PipelineDefinitionEditor v-model="value" :strategies="args.strategies" style="max-width: 820px" />',
+      '<PipelineDefinitionEditor v-model="value" :strategies="args.strategies" style="max-width: 1180px" />',
   }),
 } satisfies Meta<typeof PipelineDefinitionEditor>;
 

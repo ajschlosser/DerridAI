@@ -1,6 +1,7 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { useI18nStore } from "../../stores/i18n";
+import UiTagPicker from "../ui/UiTagPicker.vue";
 import UiTooltip from "../ui/UiTooltip.vue";
 import type { PipelineStage } from "../../types/pipelines";
 
@@ -28,11 +29,18 @@ const fallbackOptions: Array<{ key: FallbackKey; label: () => string }> = [
 function targets() {
   return props.stages.filter((item) => item.id !== props.stage.id);
 }
+
+function updateNext(ids: string[]) {
+  const before = new Set(props.stage.next);
+  const after = new Set(ids);
+  for (const id of after) if (!before.has(id)) emit("toggleNext", id, true);
+  for (const id of before) if (!after.has(id)) emit("toggleNext", id, false);
+}
 </script>
 
 <template>
-  <fieldset class="edge-editor">
-    <legend>
+  <section class="edge-editor" aria-labelledby="stage-connections-heading">
+    <h5 id="stage-connections-heading" class="label-with-help">
       {{ t("pipelines.connections", "Connections") }}
       <UiTooltip
         :text="
@@ -42,157 +50,116 @@ function targets() {
           )
         "
       />
-    </legend>
-    <div class="edge-grid">
-      <div class="next-targets">
-        <span class="edge-label label-with-help">
-          {{ t("pipelines.next_stages", "Next stages") }}
+    </h5>
+    <div class="edge-group">
+      <p class="edge-label label-with-help">
+        {{ t("pipelines.normal_flow", "Normal flow") }}
+        <UiTooltip
+          :text="
+            t(
+              'pipelines.next_stages_help',
+              'These are the stages DerridAI should run next when this step completes normally. In graph terminology, each checked item creates a directed edge.',
+            )
+          "
+        />
+      </p>
+      <UiTagPicker
+        :model-value="stage.next"
+        :options="targets().map((target) => target.id)"
+        :label="t('pipelines.next_stages', 'Next stages')"
+        :remove-label="t('pipelines.remove_next_stage', 'Remove {value} from next stages')"
+        :placeholder="t('pipelines.add_next_stage', 'Add a next stage…')"
+        :disabled="stages.length <= 1"
+        @update:model-value="updateNext"
+      />
+      <small v-if="stages.length <= 1" class="edge-note">
+        {{ t("pipelines.no_other_stages", "Add another stage to create an edge.") }}
+      </small>
+    </div>
+
+    <div class="edge-group">
+      <p class="edge-label">{{ t("pipelines.fallback_flow", "Fallback flow") }}</p>
+      <label v-for="fallback in fallbackOptions" :key="fallback.key" class="fallback-row">
+        <span class="label-with-help">
+          {{ fallback.label() }}
           <UiTooltip
             :text="
-              t(
-                'pipelines.next_stages_help',
-                'These are the stages DerridAI should run next when this step completes normally. In graph terminology, each checked item creates a directed edge.',
-              )
+              fallback.key === 'on_empty'
+                ? t(
+                    'pipelines.on_empty_help',
+                    'Use this alternate route when the stage completes but produces no usable items.',
+                  )
+                : fallback.key === 'on_unavailable'
+                  ? t(
+                      'pipelines.on_unavailable_help',
+                      'Use this alternate route when the required model, service, dependency, or capability is not available.',
+                    )
+                  : fallback.key === 'on_timeout'
+                    ? t(
+                        'pipelines.on_timeout_help',
+                        'Use this alternate route when the stage takes longer than its allowed time.',
+                      )
+                    : t(
+                        'pipelines.on_error_help',
+                        'Use this alternate route when the stage fails for another runtime error.',
+                      )
             "
           />
         </span>
-        <div class="edge-target-list">
-          <label v-for="target in targets()" :key="target.id">
-            <input
-              type="checkbox"
-              :checked="stage.next.includes(target.id)"
-              @change="emit('toggleNext', target.id, ($event.target as HTMLInputElement).checked)"
-            />
-            <code>{{ target.id }}</code>
-          </label>
-          <small v-if="stages.length <= 1">
-            {{ t("pipelines.no_other_stages", "Add another stage to create an edge.") }}
-          </small>
-        </div>
-      </div>
-
-      <div class="fallback-grid">
-        <label v-for="fallback in fallbackOptions" :key="fallback.key">
-          <span class="label-with-help">
-            {{ fallback.label() }}
-            <UiTooltip
-              :text="
-                fallback.key === 'on_empty'
-                  ? t(
-                      'pipelines.on_empty_help',
-                      'Use this alternate route when the stage completes but produces no usable items.',
-                    )
-                  : fallback.key === 'on_unavailable'
-                    ? t(
-                        'pipelines.on_unavailable_help',
-                        'Use this alternate route when the required model, service, dependency, or capability is not available.',
-                      )
-                    : fallback.key === 'on_timeout'
-                      ? t(
-                          'pipelines.on_timeout_help',
-                          'Use this alternate route when the stage takes longer than its allowed time.',
-                        )
-                      : t(
-                          'pipelines.on_error_help',
-                          'Use this alternate route when the stage fails for another runtime error.',
-                        )
-              "
-            />
-          </span>
-          <select
-            class="control"
-            :value="stage[fallback.key] || ''"
-            @change="
-              emit('updateFallback', fallback.key, ($event.target as HTMLSelectElement).value)
-            "
-          >
-            <option value="">{{ t("pipelines.no_fallback", "No fallback") }}</option>
-            <option v-for="target in targets()" :key="target.id" :value="target.id">
-              {{ target.id }}
-            </option>
-          </select>
-        </label>
-      </div>
+        <select
+          class="control"
+          :value="stage[fallback.key] || ''"
+          @change="emit('updateFallback', fallback.key, ($event.target as HTMLSelectElement).value)"
+        >
+          <option value="">{{ t("pipelines.no_fallback", "No fallback") }}</option>
+          <option v-for="target in targets()" :key="target.id" :value="target.id">
+            {{ target.id }}
+          </option>
+        </select>
+      </label>
     </div>
-  </fieldset>
+  </section>
 </template>
 
 <style scoped>
 .edge-editor {
+  display: grid;
+  gap: var(--space-3);
+}
+.edge-editor h5 {
   margin: 0;
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--card);
+  color: var(--text-primary);
+  font-size: 0.9375rem;
 }
-.edge-editor legend {
-  padding: 0 5px;
-  color: var(--muted);
-  font-size: 0.75rem;
-  font-weight: 800;
-}
-.edge-editor legend,
 .label-with-help {
   display: inline-flex;
   align-items: center;
   gap: 2px;
 }
-.edge-grid {
+.edge-group {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(16rem, 1fr);
-  gap: 12px;
+  gap: var(--space-2);
 }
-.next-targets {
+.edge-label {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: 0.8125rem;
+  font-weight: var(--fw-bold);
+}
+.edge-note {
+  color: var(--text-tertiary);
+  font-size: 0.8125rem;
+}
+.fallback-row {
   display: grid;
-  align-content: start;
-  gap: 6px;
-}
-.edge-label,
-.fallback-grid label > span {
-  color: var(--muted);
-  font-size: 0.75rem;
-  font-weight: 750;
-}
-.edge-target-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.edge-target-list label {
-  display: inline-flex;
+  grid-template-columns: minmax(6.5rem, 0.8fr) minmax(0, 1.2fr);
   align-items: center;
-  gap: 5px;
-  min-height: 36px;
-  padding: 5px 7px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--soft);
-  font-size: 0.75rem;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
 }
-.edge-target-list code {
-  overflow-wrap: anywhere;
-}
-.edge-target-list small {
-  color: var(--muted);
-  font-size: 0.75rem;
-}
-.fallback-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-.fallback-grid label {
-  display: grid;
-  gap: 5px;
-}
-@media (max-width: 860px) {
-  .edge-grid {
-    grid-template-columns: 1fr;
-  }
-}
-@media (max-width: 680px) {
-  .fallback-grid {
-    grid-template-columns: 1fr;
-  }
+.fallback-row .control {
+  width: 100%;
+  min-height: var(--control-height-small);
 }
 </style>

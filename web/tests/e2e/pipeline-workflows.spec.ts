@@ -11,12 +11,21 @@ async function scan(page: Page, include: string) {
 
 const stories = [
   ["pipelines-workflow-contract--reviewer-evidence", ".workflow-contract"],
-  ["pipelines-strategy-catalog--all-strategies", ".strategy-catalog"],
-  ["pipelines-definition-browser--evidence-workflow", ".pipeline-browser"],
+  ["pipelines-strategies-workspace--all-strategies", ".strategies-workspace"],
+  ["pipelines-definition-navigator--evidence-workflow", ".pipeline-definition-navigator"],
+  ["pipelines-definition-navigator--multiple-versions", ".pipeline-definition-navigator"],
   ["pipelines-version-editor-panel--inspect-only-stage", ".editor-card"],
   ["pipelines-definition-detail--assigned", ".pipeline-detail"],
+  ["pipelines-definition-header--draft-inspect-only", ".definition-header"],
   ["pipelines-operational-health--populated", ".metrics-workspace"],
-  ["pipelines-execution-history--default", ".trace-workspace"],
+  ["pipelines-executions-workspace--default", ".executions-workspace"],
+  ["pipelines-execution-list--default", ".execution-list"],
+  ["pipelines-stage-inspector--executed-with-fallback", ".stage-inspector"],
+  ["pipelines-stage-navigator--default", ".stage-navigator"],
+  ["pipelines-strategy-inspector--used", ".strategy-inspector"],
+  ["pipelines-comparison-result--benchmark-with-drift-warning", ".comparison-result"],
+  ["pipelines-benchmark-case-list--default", ".case-list"],
+  ["pipelines-studio-help-dialog--open", "[role=dialog]"],
 ] as const;
 
 for (const scheme of ["light", "dark"] as const) {
@@ -33,44 +42,77 @@ for (const scheme of ["light", "dark"] as const) {
   }
 }
 
-test("strategy search and technical details work from the keyboard", async ({ page }) => {
-  await page.goto("/iframe.html?id=pipelines-strategy-catalog--all-strategies&viewMode=story");
+test("strategy search and selection work from the keyboard", async ({ page }) => {
+  await page.goto("/iframe.html?id=pipelines-strategies-workspace--all-strategies&viewMode=story");
   const search = page.getByRole("searchbox", { name: "Search strategies" });
   await search.focus();
   await page.keyboard.type("cross-encoder");
-  const card = page.locator('[data-strategy="rerank.cross_encoder"]');
-  await expect(card).toBeVisible();
-  await expect(card).toContainText("Relevance ranking only — does not establish support");
+  const row = page.locator('tr[data-strategy="rerank.cross_encoder"]');
+  await expect(row).toBeVisible();
+  await expect(row).toContainText("Relevance ranking only — does not establish support");
 
-  const usage = card.locator(".strategy-usage summary");
-  await usage.focus();
+  await row.getByRole("button").focus();
   await page.keyboard.press("Enter");
+  const inspector = page.locator(".strategy-inspector");
+  await expect(inspector).toContainText("rerank.cross_encoder");
   await expect(
-    card.getByRole("button", { name: /Research — current production chain/ }),
+    inspector.getByRole("button", { name: /Research — current production chain/ }),
   ).toBeVisible();
 });
 
-test("workflow filter options expose their pressed state", async ({ page }) => {
-  await page.goto("/iframe.html?id=pipelines-definition-browser--evidence-workflow&viewMode=story");
-  const group = page.getByRole("group", { name: "Used for" });
-  await expect(group.getByRole("button", { name: /Evidence/ })).toHaveAttribute(
-    "aria-pressed",
-    "true",
+test("advanced strategy filters are reachable and counted", async ({ page }) => {
+  await page.goto("/iframe.html?id=pipelines-strategies-workspace--all-strategies&viewMode=story");
+  const filters = page.getByRole("button", { name: "Filters" });
+  await expect(filters).toHaveAttribute("aria-expanded", "false");
+  await filters.focus();
+  await page.keyboard.press("Enter");
+  await expect(filters).toHaveAttribute("aria-expanded", "true");
+  await page.getByLabel("Computation").selectOption("deterministic");
+  await expect(page.getByRole("button", { name: "Filters (1)" })).toBeVisible();
+});
+
+test("pipeline versions group under one pipeline and expand from the keyboard", async ({
+  page,
+}) => {
+  await page.goto(
+    "/iframe.html?id=pipelines-definition-navigator--multiple-versions&viewMode=story",
   );
+  const toggle = page.getByRole("button", { name: "3 versions" });
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator(".version-choice")).toHaveCount(3);
+  await toggle.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".version-choice")).toHaveCount(0);
+});
+
+test("used-for and status filters are compact selects", async ({ page }) => {
+  await page.goto(
+    "/iframe.html?id=pipelines-definition-navigator--evidence-workflow&viewMode=story",
+  );
+  await expect(page.getByLabel("Used for")).toHaveValue("evidence");
   await expect(page.locator(".pipeline-choice")).toHaveCount(2);
 });
 
-test("clone editor explains disabled operations", async ({ page }) => {
+test("clone editor explains disabled operations for the selected stage", async ({ page }) => {
   await page.goto(
     "/iframe.html?id=pipelines-version-editor-panel--inspect-only-stage&viewMode=story",
   );
-  await expect(page.locator(".purpose-help")).toContainText(
-    "remains a Reviewer evidence suggestion pipeline",
-  );
+  await expect(page.getByText("Purpose is fixed for this version.")).toBeVisible();
+  await page.locator(".stage-row", { hasText: "mmr" }).click();
   await expect(page.locator(".stage-fit-note").first()).toContainText("stays inspect-only");
+  await page.getByText("Advanced").click();
   await page.getByLabel(/Show operations this workflow cannot run/).check();
   await expect(page.locator('option[value="llm.generate_answer"]').first()).toHaveAttribute(
     "disabled",
     "",
   );
+});
+
+test("the graph and the stage list select the same stage", async ({ page }) => {
+  await page.goto(
+    "/iframe.html?id=pipelines-version-editor-panel--reviewer-evidence-clone&viewMode=story",
+  );
+  await page.locator(".diagram-node", { hasText: "support" }).click();
+  await expect(page.locator(".stage-inspector-editor h4")).toHaveText("support");
+  await expect(page.locator(".stage-row[aria-current=true]")).toContainText("support");
 });

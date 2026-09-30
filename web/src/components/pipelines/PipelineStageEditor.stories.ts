@@ -2,7 +2,7 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import PipelineStageEditor from "./PipelineStageEditor.vue";
 import type { PipelineStage, PipelineStrategy } from "../../types/pipelines";
-import { contractStrategy } from "./fixtures/pipelineCatalogContract";
+import { contractStrategy, contractVocabulary } from "./fixtures/pipelineCatalogContract";
 
 const stages: PipelineStage[] = [
   {
@@ -42,6 +42,7 @@ const meta = {
     stages,
     strategies,
     entryStageIds: ["retrieve"],
+    vocabulary: contractVocabulary,
   },
 } satisfies Meta<typeof PipelineStageEditor>;
 

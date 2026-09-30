@@ -1,7 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import type { PipelineDefinition } from "../../types/pipelines";
-import PipelineBenchmarkPanel from "./PipelineBenchmarkPanel.vue";
+import PipelineBenchmarkWorkspace from "./PipelineBenchmarkWorkspace.vue";
 
 const pipelines: PipelineDefinition[] = [
   {
@@ -29,10 +29,10 @@ const pipelines: PipelineDefinition[] = [
 ];
 
 const meta = {
-  title: "Pipelines/PipelineBenchmarkPanel",
-  component: PipelineBenchmarkPanel,
+  title: "Pipelines/Benchmark Workspace",
+  component: PipelineBenchmarkWorkspace,
   args: { pipelines },
-} satisfies Meta<typeof PipelineBenchmarkPanel>;
+} satisfies Meta<typeof PipelineBenchmarkWorkspace>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
