@@ -240,8 +240,7 @@ function normalized() {
 const selectionMissing = ref(false);
 const scalarCardinalityResolved = computed(
   () =>
-    !scalarCardinalityConflict.value ||
-    (dirty.value && !String(draft.value ?? "").includes("\n")),
+    !scalarCardinalityConflict.value || (dirty.value && !String(draft.value ?? "").includes("\n")),
 );
 const canSave = computed(
   () =>
