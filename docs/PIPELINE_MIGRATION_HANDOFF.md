@@ -260,7 +260,7 @@ The provenance gate and top-K selection cannot be removed; candidates remain adv
 
 ### 4.14 Corpus Builder metadata enrichment moved onto pipeline runtime
 
-`_execute_metadata_tasks()` no longer decides how a metadata group's model call runs. It resolves the `corpus_metadata_enrichment` assignment once per Record (built-in `corpus.metadata_enrichment.current@1`: `llm.structured_metadata` on the primary provider, 2 attempts, escalating on error or timeout to `llm.structured_metadata` on the review provider, 2 attempts) and runs each group through `EnrichmentSession` in `api/app/pipelines/corpus_metadata_enrichment.py`. `_chat_json()` takes `roles` and `escalated` so one stage runs one provider role; its default chain is unchanged for the callers that have not migrated (segmentation, manifest, touch-up, reviewer evidence choice).
+`_execute_metadata_tasks()` no longer decides how a metadata group's model call runs. It resolves the `corpus_metadata_enrichment` assignment once per Record (built-in `corpus.metadata_enrichment.current@1`: `llm.structured_metadata` on the primary provider, 2 attempts, escalating on error or timeout to `llm.structured_metadata` on the review provider, 2 attempts) and runs each group through `EnrichmentSession` in `api/app/pipelines/corpus_metadata_enrichment.py`. `_chat_json()` takes `roles` and `escalated` so one stage runs one provider role; its default chain is unchanged for the callers that have not migrated (page-marker choice, the text-noise second reader, schema preview, evidence recovery's closed-choice callback).
 
 - Classification: provider role and attempts are pipeline settings. The correction/escalation prompt notes, the growing token budget, not retrying a timed-out provider, and the per-family `max_tokens`/timeouts from build settings stay server policy. The schema-derived prompt and response model, family routing (fast/deep, human-owned, adaptive skip, settle), reconciliation, evidence and autofill stay domain code outside the pipeline.
 - The compiler accepts one terminal structured stage with at most one terminal escalation stage on the other provider role. A review stage without a configured review provider is `unavailable`; with no edge, the primary failure is reported exactly as before.
@@ -284,23 +284,56 @@ The two boundary questions segmentation asks a model now run through the `corpus
 - `_segment_pair`, `_segment_window_recursive` and `_compact_segment_prompt` were removed with their response models (`derridai_boundary_pair`, `derridai_semantic_boundaries_compact`): no production path reached them. `tests/test_prompt_author_neutrality.py` now checks the two live boundary prompts instead.
 - Parity is pinned by `tests/test_corpus_segmentation_pipeline.py` (scripted provider, both calls, legacy chain against pipeline: calls, prompts, token budgets, results and error text). Existing segmentation tests pass unchanged.
 
+### 4.16 Corpus Builder document manifest moved onto pipeline runtime
+
+`_document_manifest()` in `corpus_builder.py` asks its one model call through the `corpus_document_manifest` assignment (built-in `corpus.document_manifest.current@1`: `llm.document_manifest` on the primary provider, 2 attempts, escalating on error or timeout to the review provider, 2 attempts, the same chain `_chat_json()` ran before). `pipelines/corpus_document_manifest.py` only names the feature, purpose and strategy; the runtime is `structured_llm_stage.py`. Both callers go through it: the build's `structure` stage (`_run`, whose result is the `manifest` checkpoint) and the reviewer's **Analyse the document again** (`regenerate_manifest` in `corpus_manifest_workflow.py`). `corpus_manifest_workflow.py` has no direct model call for the manifest; its remaining `_chat_json()` call is `preview_schema_group`.
+
+- Classification: provider role and attempts are pipeline settings. The whole-document sample, prompt, `manifest_num_predict` and timeouts stay server policy. The embedded-metadata fallback and the values that outrank the model (embedded PDF author, a start-page inference above 90%, reviewer-confirmed layout, media-specific page semantics, deterministic ingest metadata) are domain policy.
+- One trace per analysis (also on cancellation). The identity goes in its own `document_manifest_pipeline` checkpoint (`runs`, last 20), not in the manifest: the manifest is sent verbatim in metadata-enrichment prompts, so a trace ID there would change every enrichment prompt.
+- An unresolvable assignment asks no model. The analysis takes the existing embedded-metadata fallback and its build warning names the reason. As with any failed analysis, the fallback manifest is checkpointed; **Analyse the document again** retries.
+- Not in this slice: `_catalog_enrich_manifest()` → `llm_tools.run_work_metadata_lookup()` asks a model to choose a catalogue candidate through `chat_complete()` directly (not `_chat_json()`). It is shared with the Works metadata lookup tool and still needs its own slice.
+- Parity is pinned by `tests/test_corpus_document_manifest_pipeline.py` (scripted provider, legacy chain against pipeline: calls, prompts, token budgets, results and fallback warning text). Existing manifest tests pass unchanged.
+
+### 4.17 Corpus Builder text touch-up moved onto pipeline runtime
+
+`touchup_record_text()` in `corpus_builder.py` asks its model call through the `corpus_text_touchup` assignment (built-in `corpus.text_touchup.current@1`: `llm.text_touchup` on the primary provider, 2 attempts, escalating on error or timeout to the review provider, 2 attempts, the chain `_chat_json()` ran before). Both callers go through it: the reviewer's text touch-up route (which saves the proposal) and enrichment when the build sets `llm_touchup_during_enrichment`. `pipelines/corpus_text_touchup.py` only names the feature, purpose and strategy.
+
+- Classification: provider role and attempts are pipeline settings. The prompt (`build_text_touchup_prompt`), its token budget and timeouts are server policy. Sanitizing against the source (`_sanitize_touchup_output`) and "a touch-up is a proposal until a reviewer approves it" are domain policy.
+- One trace per proposal (also on failure and cancellation); the proposal, saved or made during enrichment, carries `pipeline` (identity, trace ID, stages that ran).
+- An unresolvable assignment asks no model: the reviewer request fails with the reason (HTTP 422), and during enrichment the record gets the existing failed-proposal entry and build warning while enrichment continues.
+- Not in this slice: the general Records touch-up (`llm.propose_touchup`, routes in `routers/llm.py` and `job_llm.py`) is a different feature (`record.touchup` in the remaining-migration plan) and still calls the model directly.
+- Parity is pinned by `tests/test_corpus_text_touchup_pipeline.py`.
+
+### 4.18 Reviewer "Ask the model" evidence choice moved onto pipeline runtime
+
+`suggest_evidence_llm()` in `corpus_review_actions.py`, the Evidence tab's **Ask the model**, asks its closed-choice question through a separate `corpus_reviewer_evidence_choice` assignment (built-in `corpus.reviewer_evidence_choice.current@1`: `llm.reviewer_evidence_choice` on the primary provider, 2 attempts, escalating on error or timeout to the review provider, 2 attempts, the chain `_chat_json()` ran before). This is design 2 of the remaining-migration plan: a separate feature whose only model strategy is closed choice over the Record's current source-unit IDs.
+
+- It has its own strategy rather than configuring `llm.closed_choice_evidence`: that strategy has no settings, and giving it `provider_role`/`attempts` would show editable values in the reviewer-suggestion graph (which never calls a model; its closed-choice stage is skipped) and in evidence recovery (which calls it through its own callback), where nothing would apply them.
+- Classification: provider role and attempts are pipeline settings. The prompt (`llm_prompt`), 800-token budget and timeouts are server policy. Block-ID validation and lexical-support flagging (`validate_llm_choice`) and "advisory until the reviewer binds it" are domain policy.
+- One trace per request; each returned suggestion carries `pipeline`. An unresolvable assignment asks no model and the request fails with the reason (HTTP 422).
+- Not in this slice: evidence recovery's closed-choice callback during enrichment (`_evidence_llm_choice` in `corpus_metadata_enrichment_execution.py`) still runs the default `_chat_json()` chain inside the recovery stage; its provider role and attempts are not yet stage settings.
+- Parity is pinned by `tests/test_reviewer_evidence_choice_pipeline.py`.
+
 ## 5. Current built-in assignments
 
 As of current `master`, built-in system assignments are:
 
-| Feature                      | Assigned pipeline                      | Status |
-| ---------------------------- | -------------------------------------- | ------ |
-| Research                     | `research.current@1`                   | active |
-| Reviewer evidence suggestion | `evidence.reviewer.current@2`          | active |
-| Evidence recovery            | `evidence.recovery.cascade@1`          | active |
-| Vector Store search          | `store_search.similarity@1`            | active |
-| Metadata pre-fill            | `metadata.prefill.current@1`           | active |
-| Precedent evidence remapping | `precedent.remap.current@1`            | active |
-| Corpus metadata enrichment   | `corpus.metadata_enrichment.current@1` | active |
-| Corpus segmentation          | `corpus.segmentation.current@1`        | active |
-| Metadata precedents          | `metadata.precedents.current@1`        | active |
-| Validated claim memory       | `memory.claim.current@1`               | active |
-| Prior response memory        | `memory.response.current@1`            | active |
+| Feature                      | Assigned pipeline                           | Status |
+| ---------------------------- | ------------------------------------------- | ------ |
+| Research                     | `research.current@1`                        | active |
+| Reviewer evidence suggestion | `evidence.reviewer.current@2`               | active |
+| Evidence recovery            | `evidence.recovery.cascade@1`               | active |
+| Vector Store search          | `store_search.similarity@1`                 | active |
+| Metadata pre-fill            | `metadata.prefill.current@1`                | active |
+| Precedent evidence remapping | `precedent.remap.current@1`                 | active |
+| Corpus metadata enrichment   | `corpus.metadata_enrichment.current@1`      | active |
+| Corpus segmentation          | `corpus.segmentation.current@1`             | active |
+| Corpus document manifest     | `corpus.document_manifest.current@1`        | active |
+| Corpus text touch-up         | `corpus.text_touchup.current@1`             | active |
+| Reviewer evidence choice     | `corpus.reviewer_evidence_choice.current@1` | active |
+| Metadata precedents          | `metadata.precedents.current@1`             | active |
+| Validated claim memory       | `memory.claim.current@1`                    | active |
+| Prior response memory        | `memory.response.current@1`                 | active |
 
 There are also important draft/legacy definitions:
 
@@ -527,7 +560,7 @@ Migrated in section 4.13.
 
 The original audit identified many generative/structured LLM uses beyond Research answer generation, including Corpus Builder segmentation/metadata work, touch-up/review operations, translation, and other utility calls.
 
-Corpus Builder metadata enrichment migrated in section 4.14 and segmentation's boundary questions in section 4.15; manifest, touch-up, and reviewer evidence choice still call `_chat_json()` directly.
+Corpus Builder metadata enrichment migrated in section 4.14, segmentation's boundary questions in section 4.15, the document manifest in section 4.16, text touch-up in section 4.17 and the reviewer's **Ask the model** evidence choice in section 4.18. Still calling a model directly: `page_marker_chooser`, `_llm_text_noise_pass` and `preview_schema_group` (`_chat_json()`), evidence recovery's closed-choice callback (`_chat_json()` default chain), the catalogue-match lookup `llm_tools.run_work_metadata_lookup()` and the Records touch-up `llm.propose_touchup()` (`chat_complete()`). Planned: page-marker choice and the text-noise second reader as small slices of their own; the schema preview moves onto the `corpus_metadata_enrichment` pipeline so it runs like a build.
 
 Only claim that acceptance criterion “every generative LLM call resolves through a pipeline” is met after a fresh call-site audit.
 

@@ -910,6 +910,98 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
             },
         ],
     ),
+    _pipeline(
+        pipeline_id="corpus.document_manifest.current",
+        version=1,
+        name="Corpus document manifest — current",
+        purpose="corpus_document_manifest",
+        status="active",
+        entry_stage_ids=["primary"],
+        notes=(
+            "Asks the build's primary provider for the document manifest with "
+            "two attempts, when a build starts and when a reviewer asks for "
+            "the document to be analysed again. When those fail or time out "
+            "and the build configures a review provider, the review provider "
+            "gets two attempts of its own. A failed analysis falls back to the "
+            "file's embedded metadata; embedded metadata, a confident "
+            "start-page inference and reviewer-confirmed structure outrank the "
+            "answer after this pipeline."
+        ),
+        stages=[
+            {
+                "id": "primary",
+                "strategy": "llm.document_manifest",
+                "config": {"provider_role": "primary", "attempts": 2},
+                "on_error": "review",
+                "on_timeout": "review",
+            },
+            {
+                "id": "review",
+                "strategy": "llm.document_manifest",
+                "config": {"provider_role": "review", "attempts": 2},
+            },
+        ],
+    ),
+    _pipeline(
+        pipeline_id="corpus.text_touchup.current",
+        version=1,
+        name="Corpus text touch-up — current",
+        purpose="corpus_text_touchup",
+        status="active",
+        entry_stage_ids=["primary"],
+        notes=(
+            "Asks the build's primary provider for a text touch-up proposal "
+            "with two attempts, on a reviewer request or during metadata "
+            "enrichment. When those fail or time out and the build configures a "
+            "review provider, the review provider gets two attempts of its own. "
+            "The answer is sanitized against the source text after this "
+            "pipeline and stays a proposal until a reviewer approves it."
+        ),
+        stages=[
+            {
+                "id": "primary",
+                "strategy": "llm.text_touchup",
+                "config": {"provider_role": "primary", "attempts": 2},
+                "on_error": "review",
+                "on_timeout": "review",
+            },
+            {
+                "id": "review",
+                "strategy": "llm.text_touchup",
+                "config": {"provider_role": "review", "attempts": 2},
+            },
+        ],
+    ),
+    _pipeline(
+        pipeline_id="corpus.reviewer_evidence_choice.current",
+        version=1,
+        name="Reviewer evidence choice — current",
+        purpose="corpus_reviewer_evidence_choice",
+        status="active",
+        entry_stage_ids=["primary"],
+        notes=(
+            "Asks the build's primary provider which of the Record's source "
+            "units support a value, with two attempts, when a reviewer asks for "
+            "a model suggestion. When those fail or time out and the build "
+            "configures a review provider, the review provider gets two "
+            "attempts of its own. Every returned ID is validated after this "
+            "pipeline; suggestions stay advisory until the reviewer binds them."
+        ),
+        stages=[
+            {
+                "id": "primary",
+                "strategy": "llm.reviewer_evidence_choice",
+                "config": {"provider_role": "primary", "attempts": 2},
+                "on_error": "review",
+                "on_timeout": "review",
+            },
+            {
+                "id": "review",
+                "strategy": "llm.reviewer_evidence_choice",
+                "config": {"provider_role": "review", "attempts": 2},
+            },
+        ],
+    ),
 )
 
 BUILT_IN_ASSIGNMENTS: tuple[PipelineAssignment, ...] = (
@@ -923,6 +1015,27 @@ BUILT_IN_ASSIGNMENTS: tuple[PipelineAssignment, ...] = (
     PipelineAssignment(
         feature="corpus_segmentation",
         pipeline_id="corpus.segmentation.current",
+        pipeline_version=1,
+        source="built_in",
+        override_allowed=True,
+    ),
+    PipelineAssignment(
+        feature="corpus_document_manifest",
+        pipeline_id="corpus.document_manifest.current",
+        pipeline_version=1,
+        source="built_in",
+        override_allowed=True,
+    ),
+    PipelineAssignment(
+        feature="corpus_text_touchup",
+        pipeline_id="corpus.text_touchup.current",
+        pipeline_version=1,
+        source="built_in",
+        override_allowed=True,
+    ),
+    PipelineAssignment(
+        feature="corpus_reviewer_evidence_choice",
+        pipeline_id="corpus.reviewer_evidence_choice.current",
         pipeline_version=1,
         source="built_in",
         override_allowed=True,

@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from pydantic import BaseModel, ValidationError
 
 from .corpus_enrichment_helpers import _mark_human_touch, _prepend_metadata_priority
+from .corpus_llm_helpers import _provider_roles
 from .corpus_metadata import MANIFEST_INHERITED_FIELDS, apply_metadata_constraints
 from .corpus_record_quality import iso_now
 from .corpus_record_restructure import (
@@ -65,6 +66,7 @@ from .field_assertions import (
 from .metadata_adjudication_cache import remember as remember_adjudication
 from .metadata_schema import MetadataSchema
 from .nlp_annotations import annotate_record
+from .pipelines.corpus_reviewer_evidence_choice import ReviewerEvidenceChoiceSession
 from .provenance_memory import persist_record_decision
 from .rag import _citation_strings
 from .system_store import system_store
@@ -116,7 +118,7 @@ class ReviewActionsMixin:
         def _profile_for(self, build_id: str) -> dict[str, Any]: ...
         def _profile_of_build(self, build: dict[str, Any]) -> dict[str, Any]: ...
         def _schema_for(self, build_id: str) -> MetadataSchema: ...
-        def _chat_json(self, request: dict[str, Any], prompt: str, *, response_model: type[BaseModel], max_tokens: int = 4096, schema_name: str = "derridai_corpus", attempts: int = 2, build_id: str = "") -> dict[str, Any]: ...
+        def _chat_json(self, request: dict[str, Any], prompt: str, *, response_model: type[BaseModel], max_tokens: int = 4096, schema_name: str = "derridai_corpus", attempts: int = 2, build_id: str = "", roles: tuple[str, ...] = ..., escalated: bool = ...) -> dict[str, Any]: ...
         def _editable_fields(self, build_id: str) -> set[str]: ...
         def _edit_model(self, build_id: str) -> type[BaseModel]: ...
         def _refresh_workflow_fields(self, build: dict[str, Any]) -> dict[str, Any]: ...
@@ -1248,12 +1250,35 @@ class ReviewActionsMixin:
         value, blocks = self._evidence_candidates(build_id, record_id, field)
         if not blocks:
             return []
-        result = self._chat_json(
-            request, llm_prompt(field, value, blocks), response_model=EvidenceChoiceModel,
-            max_tokens=800, schema_name="evidence_choice", attempts=2, build_id=build_id,
-        )
+        prompt = llm_prompt(field, value, blocks)
+
+        def invoke(role: str, attempts: int, escalated: bool) -> dict[str, Any]:
+            if role not in _provider_roles(request):
+                raise LookupError("No review provider is configured for this build.")
+            return self._chat_json(
+                request, prompt, response_model=EvidenceChoiceModel, max_tokens=800,
+                schema_name="evidence_choice", attempts=attempts, build_id=build_id,
+                roles=(role,), escalated=escalated,
+            )
+
+        # One trace per reviewer request. Without a resolvable pipeline no model is asked and
+        # the request fails with the reason.
+        try:
+            session = ReviewerEvidenceChoiceSession.open()
+        except RuntimeError as exc:
+            raise ValueError(str(exc)) from exc
+        try:
+            result = session.run(invoke, response_contract="evidence_choice", providers=_provider_roles(request))
+        except InterruptedError:
+            session.finish(cancelled=True)
+            raise
+        except Exception:
+            session.finish()
+            raise
+        session.finish()
+        identity = session.identity()
         return [
-            {**item, "method": LLM_METHOD, "model": str(request.get("model") or "")}
+            {**item, "method": LLM_METHOD, "model": str(request.get("model") or ""), "pipeline": identity}
             for item in validate_llm_choice(result, blocks, value, limit=limit)
         ]
 

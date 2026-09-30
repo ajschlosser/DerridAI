@@ -304,6 +304,7 @@ class MetadataEnrichmentExecutionMixin:
                         "warnings": proposal["warnings"],
                         "provider": proposal["provider"],
                         "model": proposal["model"],
+                        "pipeline": proposal.get("pipeline"),
                         "created_at": iso_now(),
                     }
                     record["needs_review"] = True
