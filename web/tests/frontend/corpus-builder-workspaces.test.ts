@@ -455,6 +455,52 @@ describe("review header", () => {
     hasNextPage: false,
   };
 
+  it("moves selected-record actions into a contextual selection bar", async () => {
+    const wrapper = mount(CorpusReviewToolbar, {
+      props: {
+        queue: "all",
+        query: "",
+        total: 20,
+        ready: 0,
+        issues: 4,
+        metadata: 1,
+        topology: 0,
+        sourceProblems: 0,
+        accepted: 10,
+        rejected: 1,
+        bulkActionItems: [
+          { id: "edit", label: "Bulk edit metadata" },
+          { id: "hands-free", label: "Run hands-free…" },
+          { id: "reject", label: "Reject selected (2)" },
+        ],
+        bulkActionFeedback: "",
+        bulkMetadataOpen: false,
+        schema: null,
+        knownValues: {},
+        regionTypes: [],
+        discourseRoles: [],
+        selectedCount: 2,
+        bulkTotalCount: 20,
+        bulkDisabled: false,
+        pageNumber: 1,
+        pageCount: 1,
+        hasPreviousPage: false,
+        hasNextPage: false,
+      } as never,
+    });
+
+    expect(wrapper.get(".review-selection-bar").text()).toContain("2 selected");
+    const selectedActions = wrapper.findAll(".review-selection-bar button");
+    expect(selectedActions.map((button) => button.text())).toEqual([
+      "Bulk edit metadata",
+      "Reject selected (2)",
+    ]);
+    await selectedActions[0].trigger("click");
+    await selectedActions[1].trigger("click");
+    expect(wrapper.emitted("bulkAction")).toEqual([["edit"], ["reject"]]);
+    expect(wrapper.get(".action-menu-trigger").text()).toContain("More actions");
+  });
+
   it("confirms bulk acceptance in an accessible dialog before emitting the decision", async () => {
     const wrapper = mount(CorpusReviewToolbar, {
       props: {
