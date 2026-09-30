@@ -81,10 +81,7 @@ export class InlineDataSource implements PublicationDataSource {
     }));
   }
 
-  async loadRecords(
-    chunkId: string,
-    options: OperationOptions = {},
-  ): Promise<PublicationRecord[]> {
+  async loadRecords(chunkId: string, options: OperationOptions = {}): Promise<PublicationRecord[]> {
     throwIfAborted(options.signal);
     const chunk = this.chunksById.get(chunkId);
     if (!chunk) throw new Error(`Unknown publication chunk: ${chunkId}`);
@@ -93,10 +90,7 @@ export class InlineDataSource implements PublicationDataSource {
     return records;
   }
 
-  async loadVectors(
-    chunkId: string,
-    options: OperationOptions = {},
-  ): Promise<VectorChunk | null> {
+  async loadVectors(chunkId: string, options: OperationOptions = {}): Promise<VectorChunk | null> {
     throwIfAborted(options.signal);
     const chunk = this.chunksById.get(chunkId);
     if (!chunk) throw new Error(`Unknown publication chunk: ${chunkId}`);
@@ -172,18 +166,12 @@ export class HttpDataSource implements PublicationDataSource {
       : this.options.chunks.replace("{id}", encodeURIComponent(chunkId));
   }
 
-  async loadRecords(
-    chunkId: string,
-    options: OperationOptions = {},
-  ): Promise<PublicationRecord[]> {
+  async loadRecords(chunkId: string, options: OperationOptions = {}): Promise<PublicationRecord[]> {
     const payload = await this.json<HttpChunkPayload>(this.chunkUrl(chunkId), options);
     return payload.records;
   }
 
-  async loadVectors(
-    chunkId: string,
-    options: OperationOptions = {},
-  ): Promise<VectorChunk | null> {
+  async loadVectors(chunkId: string, options: OperationOptions = {}): Promise<VectorChunk | null> {
     const payload = await this.json<HttpChunkPayload>(this.chunkUrl(chunkId), options);
     const manifest = await this.getManifest(options);
     const dimension = Number(manifest.vector_index?.dimension || 0);
