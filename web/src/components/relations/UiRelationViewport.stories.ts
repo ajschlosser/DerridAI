@@ -1,6 +1,10 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import { ref } from "vue";
+import UiRelationCardNode from "./UiRelationCardNode.vue";
+import UiRelationChipNode from "./UiRelationChipNode.vue";
+import UiRelationDotNode from "./UiRelationDotNode.vue";
+import UiRelationEdge from "./UiRelationEdge.vue";
 import UiRelationNodeShell from "./UiRelationNodeShell.vue";
 import UiRelationToolbar from "./UiRelationToolbar.vue";
 import UiRelationViewport from "./UiRelationViewport.vue";
@@ -16,7 +20,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Interactive: Story = {
   render: () => ({
-    components: { UiRelationNodeShell, UiRelationToolbar, UiRelationViewport },
+    components: { UiRelationCardNode, UiRelationEdge, UiRelationNodeShell, UiRelationToolbar, UiRelationViewport },
     setup() {
       const viewport = ref<InstanceType<typeof UiRelationViewport> | null>(null);
       const nodes = ref([
@@ -54,12 +58,8 @@ export const Interactive: Story = {
         >
           <template #default="{ zoom }">
             <svg aria-hidden="true" style="position:absolute;inset:0;width:720px;height:440px">
-              <line
-                :x1="nodes[0].x"
-                :y1="nodes[0].y"
-                :x2="nodes[1].x"
-                :y2="nodes[1].y"
-                stroke="currentColor"
+              <UiRelationEdge
+                :path="`M ${nodes[0].x} ${nodes[0].y} L ${nodes[1].x} ${nodes[1].y}`"
               />
             </svg>
             <UiRelationNodeShell
@@ -70,13 +70,47 @@ export const Interactive: Story = {
               :y="node.y"
               :zoom="zoom"
               :aria-label="node.label"
-              style="padding:8px 12px;border:1px solid var(--border-subtle);border-radius:999px;background:var(--surface-card);color:var(--text-primary);transform:translate(-50%,-50%)"
+              style="width:170px;height:64px;padding:0;border:0;background:transparent;color:inherit;transform:translate(-50%,-50%)"
               @move="move(node.id, $event)"
             >
-              {{ node.label }}
+              <UiRelationCardNode compact>
+                <small>Research object</small>
+                <strong>{{ node.label }}</strong>
+                <span>Presentation-only node position</span>
+              </UiRelationCardNode>
             </UiRelationNodeShell>
           </template>
         </UiRelationViewport>
+      </div>
+    `,
+  }),
+};
+
+
+export const VisualPrimitives: Story = {
+  render: () => ({
+    components: { UiRelationCardNode, UiRelationChipNode, UiRelationDotNode, UiRelationEdge },
+    template: `
+      <div style="display:grid;gap:18px;max-width:720px">
+        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center">
+          <UiRelationChipNode label="Concept: différance" />
+          <div style="width:190px;height:72px">
+            <UiRelationCardNode>
+              <small>Generated claim</small>
+              <strong>Claim c1</strong>
+              <span>Bound to exact evidence</span>
+            </UiRelationCardNode>
+          </div>
+        </div>
+        <svg width="420" height="130" viewBox="0 0 420 130" aria-label="Dot and edge primitives">
+          <UiRelationEdge path="M 70 65 Q 210 10 350 65" title="supports" />
+          <g transform="translate(70 65)" style="--relation-node-dot:var(--viz-cat-1)">
+            <UiRelationDotNode :radius="8" label="Source" show-label />
+          </g>
+          <g transform="translate(350 65)" style="--relation-node-dot:var(--viz-cat-3)">
+            <UiRelationDotNode :radius="11" label="Claim" show-label />
+          </g>
+        </svg>
       </div>
     `,
   }),
