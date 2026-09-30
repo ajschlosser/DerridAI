@@ -77,57 +77,55 @@ const label = computed(() => {
 
 <template>
   <div class="review-run-status">
-    <UiButton
-      v-if="!engaged"
-      size="small"
-      :label="i18n.t('pdf_corpus.review_run.run_another')"
-      :disabled="disabled"
-      @click="emit('runAnother')"
-    />
-    <template v-else>
-      <span class="review-run-controls">
-        <UiButton size="small" :expanded="expanded" :label="label" @click="expanded = !expanded" />
-        <UiButton
-          v-if="canResume"
-          size="small"
-          :label="i18n.t('pdf_corpus.resume')"
-          :disabled="disabled"
-          @click="emit('resume')"
-        />
-        <span v-if="active" class="sr-only" role="status">{{ label }}</span>
-      </span>
-      <div v-if="attention" class="review-run-alerts">
-        <UiNoticeStack
-          :items="errorNotices"
-          :label="i18n.t('pdf_corpus.build_error')"
-          @dismiss="dismissedError = String(build.error || '')"
-        />
-        <UiNoticeStack
-          :items="warningNotices"
-          :label="i18n.t('pdf_corpus.build_warnings_label')"
-          mode="acknowledge"
-          :limit="3"
-          :disabled="disabled"
-          @dismiss="(id) => emit('acknowledgeWarnings', [id])"
-          @dismiss-all="(ids) => emit('acknowledgeWarnings', ids)"
-        />
-      </div>
-      <div v-if="expanded" class="review-run-detail">
-        <CorpusRunDiagnostics
-          :build="build"
-          :profiles="profiles"
-          :active-profile-id="activeProfileId"
-          :active-model="activeModel"
-          :disabled="disabled"
-          @switch-profile="(profileId, model) => emit('switchProfile', profileId, model)"
-          @settle="emit('settle')"
-          @cancel="emit('cancel')"
-          @run-another="emit('runAnother')"
-          @open-record="(recordId) => emit('openRecord', recordId)"
-          @inspect-editorial-memory="emit('inspectEditorialMemory')"
-        />
-      </div>
-    </template>
+    <span class="review-run-controls">
+      <UiButton size="small" :expanded="expanded" :label="label" @click="expanded = !expanded" />
+      <UiButton
+        v-if="!engaged"
+        size="small"
+        :label="i18n.t('pdf_corpus.review_run.run_another')"
+        :disabled="disabled"
+        @click="emit('runAnother')"
+      />
+      <UiButton
+        v-if="canResume"
+        size="small"
+        :label="i18n.t('pdf_corpus.resume')"
+        :disabled="disabled"
+        @click="emit('resume')"
+      />
+      <span v-if="active" class="sr-only" role="status">{{ label }}</span>
+    </span>
+    <div v-if="attention" class="review-run-alerts">
+      <UiNoticeStack
+        :items="errorNotices"
+        :label="i18n.t('pdf_corpus.build_error')"
+        @dismiss="dismissedError = String(build.error || '')"
+      />
+      <UiNoticeStack
+        :items="warningNotices"
+        :label="i18n.t('pdf_corpus.build_warnings_label')"
+        mode="acknowledge"
+        :limit="3"
+        :disabled="disabled"
+        @dismiss="(id) => emit('acknowledgeWarnings', [id])"
+        @dismiss-all="(ids) => emit('acknowledgeWarnings', ids)"
+      />
+    </div>
+    <div v-if="expanded" class="review-run-detail">
+      <CorpusRunDiagnostics
+        :build="build"
+        :profiles="profiles"
+        :active-profile-id="activeProfileId"
+        :active-model="activeModel"
+        :disabled="disabled"
+        @switch-profile="(profileId, model) => emit('switchProfile', profileId, model)"
+        @settle="emit('settle')"
+        @cancel="emit('cancel')"
+        @run-another="emit('runAnother')"
+        @open-record="(recordId) => emit('openRecord', recordId)"
+        @inspect-editorial-memory="emit('inspectEditorialMemory')"
+      />
+    </div>
   </div>
 </template>
 
