@@ -36,7 +36,7 @@ function mountWorkspace(overrides: Record<string, unknown> = {}) {
       documentIntelligenceProfile: "scholarly",
       documentNlpProvider: "auto",
       documentNlpIncludeEvents: false,
-      autoCleanText: true,
+      autoCleanText: false,
       llmTouchupDuringEnrichment: false,
       noiseUnusableThreshold: 45,
       llmAssessTextNoise: false,
@@ -75,6 +75,15 @@ describe("Corpus Builder enrichment configuration", () => {
 
     expect(wrapper.emitted("update:documentIntelligenceProfile")?.at(-1)).toEqual(["fiction"]);
     expect(wrapper.emitted("update:documentNlpProvider")?.at(-1)).toEqual(["booknlp"]);
+  });
+
+  it("shows experimental events only for BookNLP", async () => {
+    const wrapper = mountWorkspace();
+    expect(wrapper.text()).not.toContain("Experimental event annotations");
+    await wrapper.get("#pdf-corpus-document-nlp-provider").setValue("booknlp");
+    expect(wrapper.text()).toContain("Experimental event annotations");
+    await wrapper.get("#pdf-corpus-document-nlp-provider").setValue("spacy");
+    expect(wrapper.text()).not.toContain("Experimental event annotations");
   });
 
   it("emits the escalation provider selection", async () => {

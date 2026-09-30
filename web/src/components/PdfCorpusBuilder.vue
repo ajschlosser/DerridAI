@@ -51,6 +51,7 @@ import {
   type SchemaSummary,
 } from "../api/metadataSchemas";
 import UiDialog from "./ui/UiDialog.vue";
+import UiButton from "./ui/UiButton.vue";
 import UiTooltip from "./ui/UiTooltip.vue";
 import LlmExecutionControl from "./LlmExecutionControl.vue";
 import { useCorpusBuildLifecycle } from "../composables/useCorpusBuildLifecycle";
@@ -358,6 +359,7 @@ const decisionDock = ref<InstanceType<typeof CorpusRecordDecisionDock> | null>(n
 const configurationSection = ref<CorpusConfigurationSection>("source");
 const recordSaveQueue = new RecordMutationQueue();
 const documentMetadataOpen = ref(false);
+const missingMetadataPromptOpen = ref(false);
 const confirmingBuildDelete = ref(false);
 const confirmingUnreviewedPublish = ref(false);
 /** Skipping review is offered once processing is done and until a publication exists. */
@@ -482,6 +484,9 @@ watch(selectedAssetId, () => {
 });
 const documentMetadataPayload = () =>
   suppliedDocumentMetadata(missingDocumentFields.value, documentMetadata.value);
+const missingMetadataComplete = computed(
+  () => Object.keys(documentMetadataPayload()).length === missingDocumentFields.value.length,
+);
 
 const {
   registerBuildOperation,
@@ -531,9 +536,22 @@ const {
   t: (key, fallback) => i18n.t(key, fallback),
   tf: (key, values) => i18n.tf(key, values),
 });
-async function startBuild() {
+async function startBuild(fromMetadataPrompt = false) {
+  if (
+    !fromMetadataPrompt &&
+    missingDocumentFields.value.length &&
+    !missingMetadataComplete.value
+  ) {
+    missingMetadataPromptOpen.value = true;
+    return;
+  }
   await startBuildOperation();
   if (currentBuild.value) await switchWorkspace("build");
+}
+async function continueBuildWithDocumentMetadata(skip = false) {
+  if (skip) documentMetadata.value = {};
+  missingMetadataPromptOpen.value = false;
+  await startBuild(true);
 }
 
 const { jsonlPreviewOpen, jsonlPreview, openJsonlPreview, publish } = useCorpusPublication({
@@ -3676,6 +3694,34 @@ defineExpose({
       @save="saveManifest"
       @close="documentMetadataOpen = false"
     />
+    <UiDialog
+      v-if="missingMetadataPromptOpen"
+      size="large"
+      :title="i18n.t('pdf_corpus.missing_document_fields_title')"
+      :description="i18n.t('pdf_corpus.missing_document_fields_help')"
+      :close-label="i18n.t('common.close')"
+      @close="continueBuildWithDocumentMetadata(true)"
+    >
+      <CorpusMissingDocumentFields
+        v-model="documentMetadata"
+        :fields="missingDocumentFields"
+        :disabled="busy !== ''"
+      />
+      <template #footer>
+        <UiButton
+          variant="ghost"
+          :label="i18n.t('pdf_corpus.missing_document_fields_skip', 'Skip for now')"
+          :disabled="busy !== ''"
+          @click="continueBuildWithDocumentMetadata(true)"
+        />
+        <UiButton
+          variant="primary"
+          :label="i18n.t('common.continue', 'Continue')"
+          :disabled="busy !== '' || !missingMetadataComplete"
+          @click="continueBuildWithDocumentMetadata()"
+        />
+      </template>
+    </UiDialog>
 
     <Teleport to="body"
       ><CorpusBoundarySliceDialog

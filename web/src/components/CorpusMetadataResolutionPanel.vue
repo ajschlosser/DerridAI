@@ -19,7 +19,6 @@ import { corpusBuilderApi, type MetadataPrecedents } from "../api/corpus";
 import { reviewableMetadataFieldNames } from "../features/corpus-builder/domain/recordMetadata";
 import CorpusMetadataFieldEditor from "./CorpusMetadataFieldEditor.vue";
 import CorpusFieldPrecedents from "./CorpusFieldPrecedents.vue";
-import CorpusRecordResearchClaims from "./CorpusRecordResearchClaims.vue";
 import CorpusFieldOwnershipBadge from "./CorpusFieldOwnershipBadge.vue";
 import CorpusEnrichmentChanges from "./CorpusEnrichmentChanges.vue";
 import CorpusFieldPolicyBadges from "./CorpusFieldPolicyBadges.vue";
@@ -621,7 +620,6 @@ function displayValue(field: string) {
       </div>
     </details>
 
-    <CorpusRecordResearchClaims v-if="buildId" :build-id="buildId" :record-id="record.record_id" />
 
     <details v-if="addableFields.length" class="settled-metadata add-metadata">
       <summary>

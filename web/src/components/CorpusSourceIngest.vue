@@ -5,7 +5,7 @@ import { useI18nStore } from "../stores/i18n";
 import type { GutenbergHit, PdfAsset, WikisourceHit, GutenbergStatus } from "../api/corpus";
 import type { SourceLanguagePrompt } from "../features/corpus-builder/composables/useCorpusSourceConfiguration";
 
-import { hasPages } from "../domain/sourceMedia";
+import { hasPages, sourceMediaCapabilities } from "../domain/sourceMedia";
 import { languageName, sortLanguageCodes } from "../domain/languages";
 import AppIcon from "./AppIcon.vue";
 import CorpusLibrarySearch from "./corpus-builder/CorpusLibrarySearch.vue";
@@ -132,6 +132,10 @@ function confirmDelete(assetId: string) {
 }
 
 const sourceSetupDisabled = computed(() => props.disabled || props.sourceSelectionDisabled);
+const selectedMediaKind = computed(() => props.selectedAsset?.media_kind || "");
+const ocrAvailable = computed(
+  () => !selectedMediaKind.value || sourceMediaCapabilities(selectedMediaKind.value).imageRegions,
+);
 
 const ocrStrategy = computed(() => {
   if (props.illegibility >= 99.9) return "always";
@@ -327,7 +331,7 @@ onBeforeUnmount(() => {
           {{ i18n.t("pdf_corpus.source_stage_add") }}
         </h4>
 
-        <fieldset class="ocr-choice" :disabled="sourceSetupDisabled">
+        <fieldset v-if="ocrAvailable" class="ocr-choice" :disabled="sourceSetupDisabled">
           <legend>{{ i18n.t("pdf_corpus.source_illegibility") }}</legend>
           <small id="source-illegibility-help">{{
             i18n.t("pdf_corpus.source_illegibility_help")
@@ -354,35 +358,6 @@ onBeforeUnmount(() => {
             </label>
           </div>
         </fieldset>
-
-        <label class="page-detect" :class="{ 'is-on': detectPageNumbers }">
-          <input
-            type="checkbox"
-            :checked="detectPageNumbers"
-            :disabled="sourceSetupDisabled"
-            @change="emit('update:detectPageNumbers', ($event.target as HTMLInputElement).checked)"
-          />
-          <span class="page-detect-copy">
-            <strong>{{ i18n.t("pdf_corpus.source_page_detect") }}</strong>
-            <small>{{ i18n.t("pdf_corpus.source_page_detect_help") }}</small>
-          </span>
-        </label>
-        <label
-          v-if="detectPageNumbers"
-          class="page-detect page-detect-llm"
-          :class="{ 'is-on': llmPageDetection }"
-        >
-          <input
-            type="checkbox"
-            :checked="llmPageDetection"
-            :disabled="sourceSetupDisabled"
-            @change="emit('update:llmPageDetection', ($event.target as HTMLInputElement).checked)"
-          />
-          <span class="page-detect-copy">
-            <strong>{{ i18n.t("pdf_corpus.source_page_detect_llm") }}</strong>
-            <small>{{ i18n.t("pdf_corpus.source_page_detect_llm_help") }}</small>
-          </span>
-        </label>
 
         <button
           type="button"

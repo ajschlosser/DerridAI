@@ -1,6 +1,6 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { ref, toRefs } from "vue";
+import { ref, toRefs, watch } from "vue";
 import type { ProviderProfile } from "../../api/system";
 import { useI18nStore } from "../../stores/i18n";
 import CorpusTextNoiseSettings from "../CorpusTextNoiseSettings.vue";
@@ -51,6 +51,9 @@ const manualApiKey = defineModel<string>("manualApiKey", { required: true });
 const i18n = useI18nStore();
 const { selectedProviderLabel, selectedProfileModel } = toRefs(props);
 const advancedOpen = ref(false);
+watch(documentNlpProvider, (provider) => {
+  if (provider !== "booknlp") documentNlpIncludeEvents.value = false;
+});
 </script>
 
 <template>
@@ -198,15 +201,11 @@ const advancedOpen = ref(false);
               </select></label
             >
           </div>
-          <label class="semantic-index-toggle compact-toggle"
+          <label v-if="documentNlpProvider === 'booknlp'" class="semantic-index-toggle compact-toggle"
             ><input
               v-model="documentNlpIncludeEvents"
               type="checkbox"
-              :disabled="
-                props.disabled ||
-                documentIntelligenceProfile === 'none' ||
-                documentNlpProvider === 'spacy'
-              "
+              :disabled="props.disabled || documentIntelligenceProfile === 'none'"
             /><span
               ><b>{{ i18n.t("pdf_corpus.document_nlp_events") }}</b
               ><small>{{ i18n.t("pdf_corpus.document_nlp_events_help") }}</small></span

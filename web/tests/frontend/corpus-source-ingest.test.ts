@@ -248,13 +248,10 @@ describe("Corpus source ingest experience", () => {
   });
 });
 
-describe("page-number detection controls", () => {
-  it("is on by default and reports the choice", async () => {
+describe("page-number detection", () => {
+  it("is automatic and has no user toggle", () => {
     const wrapper = mount(CorpusSourceIngest);
-    const box = wrapper.get('.page-detect input[type="checkbox"]');
-    expect((box.element as HTMLInputElement).checked).toBe(true);
-    await box.setValue(false);
-    expect(wrapper.emitted("update:detectPageNumbers")?.at(-1)).toEqual([false]);
+    expect(wrapper.find('.page-detect input[type="checkbox"]').exists()).toBe(false);
   });
 
   it("shows what was detected on the current source", () => {
@@ -308,17 +305,17 @@ describe("page-number detection controls", () => {
   });
 });
 
-describe("model-assisted page detection control", () => {
-  it("is offered under detection, on by default, and can be turned off", async () => {
+describe("automatic page detection", () => {
+  it("does not ask the user to configure model-assisted detection", () => {
     const wrapper = mount(CorpusSourceIngest);
-    const box = wrapper.get('.page-detect-llm input[type="checkbox"]');
-    expect((box.element as HTMLInputElement).checked).toBe(true);
-    await box.setValue(false);
-    expect(wrapper.emitted("update:llmPageDetection")?.at(-1)).toEqual([false]);
+    expect(wrapper.find(".page-detect-llm").exists()).toBe(false);
+    expect(wrapper.find(".page-detect").exists()).toBe(false);
   });
 
-  it("is hidden when page-number detection is off altogether", () => {
-    const wrapper = mount(CorpusSourceIngest, { props: { detectPageNumbers: false } });
-    expect(wrapper.find(".page-detect-llm").exists()).toBe(false);
+  it("hides OCR controls for non-image sources", () => {
+    const wrapper = mount(CorpusSourceIngest, {
+      props: { selectedAsset: { media_kind: "text", filename: "source.txt" } as never },
+    });
+    expect(wrapper.find(".ocr-choice").exists()).toBe(false);
   });
 });

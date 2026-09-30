@@ -146,7 +146,7 @@ function recordSelectionChanged(recordId: string, event: Event) {
             {{ recordStateLabel(record) }}
           </span>
           <UiTooltip
-            v-if="record.review_state === 'ready' && record.metadata_llm_processed"
+            v-if="record.metadata_llm_processed"
             :text="llmProcessedHelp"
             trigger-mode="content"
             placement="bottom"

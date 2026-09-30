@@ -37,7 +37,7 @@ const meta = {
     documentIntelligenceProfile: "scholarly",
     documentNlpProvider: "auto",
     documentNlpIncludeEvents: false,
-    autoCleanText: true,
+    autoCleanText: false,
     llmTouchupDuringEnrichment: false,
     noiseUnusableThreshold: 45,
     llmAssessTextNoise: false,
