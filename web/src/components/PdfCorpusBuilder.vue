@@ -85,7 +85,7 @@ import CorpusRunMonitor from "./corpus-builder/CorpusRunMonitor.vue";
 import CorpusConfigurationNav, {
   type CorpusConfigurationSection,
 } from "./corpus-builder/CorpusConfigurationNav.vue";
-import CorpusBuilderWorkspaceHeader from "./corpus-builder/CorpusBuilderWorkspaceHeader.vue";
+import CorpusBuilderWorkspaceHeader from "./corpus-builder/CorpusBuilderWorkspaceHeader.vue";\nimport CorpusUnreviewedPublishDialog from "./CorpusUnreviewedPublishDialog.vue";
 import CorpusReviewRecordQueue from "./corpus-builder/CorpusReviewRecordQueue.vue";
 import CorpusReviewToolbar from "./corpus-builder/CorpusReviewToolbar.vue";
 import CorpusReviewEvidencePanel from "./corpus-builder/CorpusReviewEvidencePanel.vue";
@@ -2164,27 +2164,8 @@ defineExpose({
           @select="chooseBuild"
           @refresh="refreshBuilds"
         />
-        <span
-          v-if="canPublishUnreviewed && confirmingUnreviewedPublish"
-          class="delete-confirm"
-          role="group"
-          :aria-label="i18n.t('pdf_corpus.accept_unreviewed')"
-        >
-          <span>{{ i18n.t("pdf_corpus.accept_unreviewed_confirm") }}</span>
-          <button
-            type="button"
-            class="btn danger"
-            :disabled="busy !== ''"
-            @click="publishUnreviewed"
-          >
-            {{ i18n.t("pdf_corpus.accept_unreviewed_confirm_action") }}
-          </button>
-          <button type="button" class="btn" @click="confirmingUnreviewedPublish = false">
-            {{ i18n.t("ui.cancel") }}
-          </button>
-        </span>
         <button
-          v-else-if="canPublishUnreviewed"
+          v-if="canPublishUnreviewed"
           type="button"
           class="btn"
           :disabled="busy !== ''"
@@ -2214,6 +2195,15 @@ defineExpose({
         </button>
       </template>
     </CorpusBuilderWorkspaceHeader>
+
+    <CorpusUnreviewedPublishDialog
+      :open="canPublishUnreviewed && confirmingUnreviewedPublish"
+      :busy="busy !== ''"
+      :pending-records="Number(currentBuild?.publication_readiness?.records_pending || 0)"
+      :unresolved-fields="Number(currentBuild?.metadata_issue_summary?.fields_unresolved || 0)"
+      @close="confirmingUnreviewedPublish = false"
+      @confirm="publishUnreviewed"
+    />
 
     <div ref="statusRegion" tabindex="-1" class="status-region" aria-live="polite">
       <UiNoticeStack
