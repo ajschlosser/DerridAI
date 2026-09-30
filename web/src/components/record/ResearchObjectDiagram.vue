@@ -216,7 +216,7 @@ function resetLayout() {
   >
     <div class="diagram-tools">
       <UiRelationToolbar
-        :aria-label="i18n.t('traceability.diagram_controls', 'Relationship map controls')"
+        :accessible-label="i18n.t('traceability.diagram_controls', 'Relationship map controls')"
         :zoom-out-label="i18n.t('traceability.diagram_zoom_out', 'Zoom out')"
         :zoom-in-label="i18n.t('traceability.diagram_zoom_in', 'Zoom in')"
         :fit-label="i18n.t('traceability.diagram_fit', 'Fit map')"
@@ -232,7 +232,7 @@ function resetLayout() {
       ref="viewport"
       class="diagram-viewport"
       :style="{ height: `${viewportHeight}px` }"
-      :aria-label="ariaLabel || i18n.t('traceability.diagram_label', 'Relationship diagram')"
+      :accessible-label="ariaLabel || i18n.t('traceability.diagram_label', 'Relationship diagram')"
       :help-text="
         i18n.t(
           'traceability.diagram_help',
@@ -302,7 +302,7 @@ function resetLayout() {
           :x="node.x"
           :y="node.y"
           :zoom="zoom"
-          :aria-label="`${typeLabel(node.object_type)}: ${node.label}`"
+          :accessible-label="`${typeLabel(node.object_type)}: ${node.label}`"
           :aria-pressed="node.id === focusId"
           :data-object-id="node.id"
           :style="{ width: `${nodeWidth}px`, height: `${nodeHeight}px` }"
