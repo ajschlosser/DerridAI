@@ -71,7 +71,7 @@ from .pipelines.corpus_reviewer_evidence_choice import ReviewerEvidenceChoiceSes
 from .provenance_memory import persist_record_decision
 from .rag import _citation_strings
 from .reviewer_context import current_reviewer
-from .semantic_identity import ValueEquivalenceResult
+from .semantic_identity import ValueEquivalenceResult, canonical_value_key
 from .semantic_identity_registry import compare_field_values
 from .semantic_identity_store import (
     create_alias_set,
@@ -111,6 +111,16 @@ def _equivalent_evidence(prior: FieldAssertion | None, equivalence: ValueEquival
         for item in prior.evidence
         if isinstance(item, dict)
     ]
+
+
+def _identity_key_for(schema: MetadataSchema, field: str, record: dict[str, Any], registry: Any) -> Any:
+    """A value's semantic identity key under ``field``'s policy, for derived memory."""
+    try:
+        profile = schema.equivalence_profile_for(field)
+    except KeyError:
+        return None
+    language = str(record.get("language") or "")
+    return lambda value: canonical_value_key(value, profile=profile, language=language, registry=registry)
 
 
 def _equivalence_audit(prior_value: Any, equivalence: ValueEquivalenceResult) -> dict[str, Any]:
@@ -1147,6 +1157,7 @@ class ReviewActionsMixin:
                     schema_version=str(build.get("schema_version") or ""),
                     decision=decision,
                     field_id=schema.field_id(name),
+                    value_key=_identity_key_for(schema, name, current_record, review_registry(self.repo, build_id, current_record, schema)),
                 )
             except Exception as exc:  # noqa: BLE001 - derived memory must not fail a saved decision
                 warnings.append(f"Adjudication memory was not updated for {name}: {exc}")

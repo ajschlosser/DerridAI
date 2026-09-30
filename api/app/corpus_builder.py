@@ -3105,7 +3105,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             self.repo.save_build(current_build)
             # Pre-fill from reviewed precedents matched on each record's source spans (advisory).
             memory_prefill = (
-                prefill_records(records, source_blocks, nlp_schema, self._progressive_metadata_index, build_id=build_id)
+                prefill_records(records, source_blocks, nlp_schema, self._progressive_metadata_index, build_id=build_id, registry=build_registry(self.repo, build_id, schema=nlp_schema))
                 if bool(request.get("memory_prefill", True))
                 else {"status": "disabled"}
             )

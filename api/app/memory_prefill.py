@@ -36,6 +36,7 @@ from .pipelines.metadata_prefill import (
     build_prefill_trace,
     resolve_prefill_plan,
 )
+from .semantic_identity import canonical_value_key
 from .source_embeddings import SourceEmbeddingProjection
 
 logger = logging.getLogger(__name__)
@@ -88,6 +89,35 @@ def _profile(schema: Any, field: str) -> Any:
         return None
 
 
+def _group_key(schema: Any, field: str, value: Any, language: str, registry: Any = None) -> str:
+    """The vote bucket for a precedent value: its semantic identity, else its exact value.
+
+    Keys are recomputed here under *this* build's schema policy (and reviewed aliases),
+    so precedents from other builds vote together exactly when this build would call
+    their values the same value.
+    """
+    try:
+        profile = schema.equivalence_profile_for(field)
+    except (AttributeError, KeyError):
+        return _key(value)
+    key = canonical_value_key(value, profile=profile, language=language, registry=registry)
+    return f"identity:{key}" if key else _key(value)
+
+
+def _display_value(schema: Any, field: str, surfaces: dict[str, dict[str, Any]]) -> Any:
+    """The surface a winning bucket offers: a controlled value's own spelling, else the
+    best-supported reviewed surface, then the most recently reviewed, then a stable order.
+    Every supporting surface stays listed on the hint."""
+    definition = next((f for f in getattr(schema, "fields", []) if f.name == field), None)
+    allowed = {v.value for v in getattr(definition, "values", [])} if definition is not None else set()
+    # Stable sorts, least significant criterion first.
+    ranked = sorted(surfaces.values(), key=lambda item: _key(item["value"]))
+    ranked.sort(key=lambda item: item["latest"], reverse=True)
+    ranked.sort(key=lambda item: item["count"], reverse=True)
+    ranked.sort(key=lambda item: not (isinstance(item["value"], str) and item["value"] in allowed))
+    return ranked[0]["value"]
+
+
 def _decide(
     groups: dict[str, dict[str, Any]], min_similarity: float, plan: PrefillPlan
 ) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
@@ -104,6 +134,7 @@ def _decide(
         {
             "value": g["value"], "similarity": round(g["best"], 3), "support": g["support"],
             "exemplar_ids": g["exemplar_ids"][:5], "span_block_id": g["span"], "absence": g["absence"],
+            **({"surface_forms": [item["value"] for item in g["surfaces"].values()]} if len(g.get("surfaces") or {}) > 1 else {}),
         }
         for g in ranked if g["best"] >= max(plan.hint_min_similarity, min_similarity)
     ][: plan.hint_limit]
@@ -127,8 +158,14 @@ def prefill_records(
     *,
     build_id: str,
     time_budget: float = 90.0,
+    registry: Any = None,
 ) -> dict[str, Any]:
-    """Pre-fill ``records`` in place. Returns a summary; never raises."""
+    """Pre-fill ``records`` in place. Returns a summary; never raises.
+
+    Votes are grouped by semantic identity (``push the boundaries`` and ``pushing the
+    boundaries`` are one bucket when the field matches lemmas), so restatements agree
+    instead of splitting the vote. ``registry`` supplies this build's reviewed aliases.
+    """
     started = time.monotonic()
     summary: dict[str, Any] = {"status": "ok", "spans": 0, "prefilled": 0, "hinted": 0, "truncated": False, "error": ""}
     plan: PrefillPlan | None = None
@@ -256,14 +293,19 @@ def prefill_records(
                     if field not in fields or (not absence and not _allowed(schema, field, value)):
                         continue
                     source = (str(meta.get("scope_id") or ""), str(meta.get("record_id") or ""))
+                    bucket = "__absent__" if absence else _group_key(schema, field, value, str(meta.get("language") or ""), registry)
                     for record_index, block_id, _ in wanted[text]:
                         group = found[record_index][field].setdefault(
-                            "__absent__" if absence else _key(value),
+                            bucket,
                             {"value": value, "absence": absence, "sims": [], "sources": set(), "best": 0.0,
-                             "span": block_id, "exemplar_ids": []},
+                             "span": block_id, "exemplar_ids": [], "surfaces": {}},
                         )
                         if source in group["sources"]:
                             continue  # one vote per earlier record
+                        if not absence:
+                            surface = group["surfaces"].setdefault(_key(value), {"value": value, "count": 0, "latest": ""})
+                            surface["count"] += 1
+                            surface["latest"] = max(surface["latest"], str(meta.get("reviewed_at") or ""))
                         group["sources"].add(source)
                         group["sims"].append(similarity)
                         group["exemplar_ids"].append(str(exemplar_id))
@@ -297,6 +339,8 @@ def prefill_records(
             for field, groups in by_field.items():
                 for group in groups.values():
                     group["support"] = len(group["sources"])
+                    if group["surfaces"]:
+                        group["value"] = _display_value(schema, field, group["surfaces"])
                 profile = _profile(schema, field)
                 choice, hints = _decide(groups, float(getattr(profile, "min_similarity", 0.0) or 0.0), plan)
                 group_count += len(groups)
