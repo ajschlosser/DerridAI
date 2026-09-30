@@ -78,28 +78,34 @@ def _selected_languages(language_codes: Sequence[str] | None, locale: str) -> li
 
 
 def _runtime_strings(language_codes: Sequence[str]) -> dict[str, dict[str, str]]:
-    """Export selected installed dictionaries with canonical English fallbacks."""
-    prefixes = ("site.runtime.",)
-    english = system_store.get_language("en-US") or {"dictionary": EN_US}
-    english_dictionary = {
+    """Export complete selected dictionaries; never hide missing translations with fallback."""
+    required = {
         key: str(value)
-        for key, value in dict(english.get("dictionary") or EN_US).items()
-        if key.startswith(prefixes)
+        for key, value in EN_US.items()
+        if key.startswith("site.runtime.")
     }
     result: dict[str, dict[str, str]] = {}
     for code in language_codes:
         language = system_store.get_language(code)
         if language is None:
             raise ValueError(f"Site language {code!r} is not installed in DerridAI.")
-        dictionary = dict(english_dictionary)
-        dictionary.update(
-            {
-                key: str(value)
-                for key, value in dict(language.get("dictionary") or {}).items()
-                if key.startswith(prefixes)
-            }
-        )
-        result[code] = dictionary
+        installed = {
+            key: str(value)
+            for key, value in dict(language.get("dictionary") or {}).items()
+            if key.startswith("site.runtime.")
+        }
+        if code == "en-US":
+            installed = {**required, **installed}
+        missing = sorted(set(required) - set(installed))
+        if missing:
+            preview = ", ".join(missing[:8])
+            extra = len(missing) - min(8, len(missing))
+            suffix = f" (+{extra} more)" if extra else ""
+            raise ValueError(
+                f"Site language {code!r} is missing {len(missing)} required static-site "
+                f"translations: {preview}{suffix}"
+            )
+        result[code] = {key: installed[key] for key in required}
     return result
 
 
