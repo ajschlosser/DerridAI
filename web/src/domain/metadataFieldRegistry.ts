@@ -37,8 +37,16 @@ const LEGACY_FIELD_SPECS: Record<string, MetadataFieldSpec> = {
     suggestionFields: ["semantic_function"],
     allowCustom: true,
   },
-  quoted_speaker: { control: "combobox", suggestionFields: SPEAKER_FIELDS, allowCustom: true },
-  quoted_author: { control: "combobox", suggestionFields: SPEAKER_FIELDS, allowCustom: true },
+  quoted_speaker: {
+    control: "combobox",
+    suggestionFields: SPEAKER_FIELDS,
+    allowCustom: true,
+  },
+  quoted_author: {
+    control: "combobox",
+    suggestionFields: SPEAKER_FIELDS,
+    allowCustom: true,
+  },
   quoted_work: {
     control: "combobox",
     suggestionFields: ["quoted_work", "works_referenced", "work", "document_title", "original_title"],
@@ -72,7 +80,11 @@ const LEGACY_FIELD_SPECS: Record<string, MetadataFieldSpec> = {
   },
   topics: { control: "multi-combobox", suggestionFields: ["topics"], allowCustom: true },
   concepts: { control: "multi-combobox", suggestionFields: ["concepts"], allowCustom: true },
-  persons: { control: "multi-combobox", suggestionFields: ["persons", ...SPEAKER_FIELDS], allowCustom: true },
+  persons: {
+    control: "multi-combobox",
+    suggestionFields: ["persons", ...SPEAKER_FIELDS],
+    allowCustom: true,
+  },
   works_referenced: {
     control: "multi-combobox",
     suggestionFields: ["works_referenced", "quoted_work", "work", "document_title"],
