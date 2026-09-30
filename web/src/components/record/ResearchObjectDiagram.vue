@@ -9,6 +9,7 @@ import UiRelationToolbar from "../relations/UiRelationToolbar.vue";
 import UiRelationViewport from "../relations/UiRelationViewport.vue";
 import { useRelationLayoutState } from "../../composables/relations/useRelationLayoutState";
 import { relationBoundsForPoints } from "../../domain/relations/geometry";
+import { RELATION_SURFACE_PRESETS } from "../../domain/relations/presets";
 import { useI18nStore } from "../../stores/i18n";
 import type { ResearchObjectEdge, ResearchObjectNode } from "../../types/researchObjectGraph";
 
@@ -25,6 +26,8 @@ const emit = defineEmits<{ focus: [id: string] }>();
 const i18n = useI18nStore();
 const viewport = ref<InstanceType<typeof UiRelationViewport> | null>(null);
 const layoutState = useRelationLayoutState();
+
+const surfacePreset = RELATION_SURFACE_PRESETS.provenanceLanes;
 
 type LaneId = "source" | "record" | "metadata" | "evidence" | "research";
 type PositionedNode = ResearchObjectNode & { x: number; y: number; lane: LaneId };
@@ -241,7 +244,9 @@ function resetLayout() {
       :content-bounds="contentBounds"
       :content-width="canvasWidth"
       :content-height="canvasHeight"
-      resize-axis="vertical"
+      :min-zoom="surfacePreset.minZoom"
+      :max-zoom="surfacePreset.maxZoom"
+      :resize-axis="surfacePreset.resizeAxis"
     >
       <template #default="{ zoom }">
         <svg
