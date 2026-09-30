@@ -8160,6 +8160,8 @@
   "pdf_corpus.primary_status.model": "Provider and model",
   "pdf_corpus.primary_status.running_tasks": "Tasks running",
   "pdf_corpus.primary_status.review_records": "Review Records",
+  "pdf_corpus.primary_status.review_ready": "Review {count} ready Records",
+  "pdf_corpus.primary_status.review_while_running_help": "Records are available now. You can review them while automated build work continues in the background.",
   "pdf_corpus.primary_status.publication_readiness": "Publication readiness",
   "pdf_corpus.primary_status.stages": "Build stages",
   "pdf_corpus.primary_status.rail_complete": "complete",
