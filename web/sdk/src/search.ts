@@ -21,9 +21,11 @@ interface ScoredRecord {
 }
 
 function tokens(value: unknown, locale: string): string[] {
-  return String(value ?? "")
-    .toLocaleLowerCase(locale)
-    .match(/[\p{L}\p{N}’'_-]+/gu) ?? [];
+  return (
+    String(value ?? "")
+      .toLocaleLowerCase(locale)
+      .match(/[\p{L}\p{N}’'_-]+/gu) ?? []
+  );
 }
 
 function searchable(record: PublicationRecord): string {
@@ -56,15 +58,9 @@ function lexicalScores(
     };
   });
   const count = docs.length || 1;
-  const averageLength = Math.max(
-    1,
-    docs.reduce((sum, item) => sum + item.terms.length, 0) / count,
-  );
+  const averageLength = Math.max(1, docs.reduce((sum, item) => sum + item.terms.length, 0) / count);
   const documentFrequency = new Map(
-    queryTerms.map((term) => [
-      term,
-      docs.filter((doc) => doc.terms.includes(term)).length,
-    ]),
+    queryTerms.map((term) => [term, docs.filter((doc) => doc.terms.includes(term)).length]),
   );
 
   return docs
@@ -83,8 +79,7 @@ function lexicalScores(
         const k1 = 1.2;
         const b = 0.75;
         score +=
-          (idf * (tf * (k1 + 1))) /
-          (tf + k1 * (1 - b + (b * doc.terms.length) / averageLength));
+          (idf * (tf * (k1 + 1))) / (tf + k1 * (1 - b + (b * doc.terms.length) / averageLength));
       }
       if (query && doc.body.includes(query.toLocaleLowerCase(locale))) score += 2.5;
       return { record: doc.record, score, lexicalScore: score };
@@ -262,10 +257,7 @@ export class SearchEngine {
     await this.repository.ensureVectors(filters, runId, signal);
     const semantic = candidateSet.records
       .map((record) => {
-        const semanticScore = cosine(
-          vector,
-          this.repository.vector(String(record.record_id)),
-        );
+        const semanticScore = cosine(vector, this.repository.vector(String(record.record_id)));
         return {
           record,
           score: semanticScore,
@@ -300,8 +292,7 @@ export class SearchEngine {
       const id = String(record.record_id);
       const lexicalScore = lexicalById.get(id) ?? 0;
       const semanticScore = semanticById.get(id);
-      const semanticNormalized =
-        semanticScore == null ? 0 : (semanticScore + 1) / 2;
+      const semanticNormalized = semanticScore == null ? 0 : (semanticScore + 1) / 2;
       return {
         record,
         lexicalScore,
@@ -322,11 +313,7 @@ export class SearchEngine {
     );
   }
 
-  diversify(
-    items: SearchResult[],
-    limit = 10,
-    lambda = 0.72,
-  ): SearchResult[] {
+  diversify(items: SearchResult[], limit = 10, lambda = 0.72): SearchResult[] {
     const remaining = [...items];
     const selected: SearchResult[] = [];
     const boundedLambda = Math.max(0, Math.min(1, lambda));
@@ -341,16 +328,12 @@ export class SearchEngine {
           selected.length && vector
             ? Math.max(
                 ...selected.map((chosen) =>
-                  cosine(
-                    vector,
-                    this.repository.vector(String(chosen.record.record_id)),
-                  ),
+                  cosine(vector, this.repository.vector(String(chosen.record.record_id))),
                 ),
               )
             : 0;
         const score =
-          boundedLambda * Number(item.score || 0) -
-          (1 - boundedLambda) * Math.max(0, redundancy);
+          boundedLambda * Number(item.score || 0) - (1 - boundedLambda) * Math.max(0, redundancy);
         if (
           score > bestScore ||
           (score === bestScore &&
