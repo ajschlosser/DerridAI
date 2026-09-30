@@ -41,8 +41,8 @@ const emit = defineEmits<{
   z-index: 4;
   right: 3px;
   bottom: 3px;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border: 0;
   border-radius: var(--radius-control);
   background: color-mix(in srgb, var(--surface-card) 82%, transparent);
