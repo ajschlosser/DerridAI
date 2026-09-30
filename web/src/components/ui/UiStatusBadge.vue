@@ -1,4 +1,10 @@
 <script setup lang="ts">
+import { useAttrs } from "vue";
+import UiTooltip from "./UiTooltip.vue";
+
+defineOptions({ inheritAttrs: false });
+const attrs = useAttrs();
+
 withDefaults(
   defineProps<{
     label: string;
@@ -10,10 +16,14 @@ withDefaults(
 );
 </script>
 <template>
-  <span class="ui-status-badge" :data-tone="tone" :title="help"
-    ><span v-if="showDot" class="ui-status-dot" aria-hidden="true"></span>{{ label
-    }}<span v-if="help" class="sr-only"> — {{ help }}</span></span
-  >
+  <UiTooltip v-if="help" :text="help" placement="bottom" trigger-mode="content">
+    <span v-bind="attrs" class="ui-status-badge" :data-tone="tone">
+      <span v-if="showDot" class="ui-status-dot" aria-hidden="true"></span>{{ label }}
+    </span>
+  </UiTooltip>
+  <span v-else v-bind="attrs" class="ui-status-badge" :data-tone="tone">
+    <span v-if="showDot" class="ui-status-dot" aria-hidden="true"></span>{{ label }}
+  </span>
 </template>
 <style scoped>
 .ui-status-badge {

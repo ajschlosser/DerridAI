@@ -14,6 +14,7 @@ import { languageList, languageName, sortLanguageCodes } from "../../domain/lang
 import { editionLine, enumLabel, enumTone, type LabelKind } from "../../domain/sourceLabels";
 import AppIcon from "../AppIcon.vue";
 import UiStatusBadge from "../ui/UiStatusBadge.vue";
+import UiTooltip from "../ui/UiTooltip.vue";
 import UiTableColumnsDialog from "../ui/UiTableColumnsDialog.vue";
 
 /**
@@ -580,17 +581,23 @@ onBeforeUnmount(() => {
                 >
                   {{ i18n.t("sources.details") }}
                 </button>
-                <button
+                <UiTooltip
                   v-if="compact && deletable"
-                  type="button"
-                  class="btn small icon-only"
-                  :disabled="disabled"
-                  :aria-label="i18n.tf('pdf_corpus.source_delete_named', { name: row.title })"
-                  :title="i18n.t('pdf_corpus.source_delete')"
-                  @click="emit('delete', row.source_document_id)"
+                  :text="i18n.t('pdf_corpus.source_delete')"
+                  trigger-mode="content"
+                  :content-focusable="disabled"
+                  placement="bottom"
                 >
-                  <AppIcon name="trash" />
-                </button>
+                  <button
+                    type="button"
+                    class="btn small icon-only"
+                    :disabled="disabled"
+                    :aria-label="i18n.tf('pdf_corpus.source_delete_named', { name: row.title })"
+                    @click="emit('delete', row.source_document_id)"
+                  >
+                    <AppIcon name="trash" />
+                  </button>
+                </UiTooltip>
               </td>
             </template>
           </tr>

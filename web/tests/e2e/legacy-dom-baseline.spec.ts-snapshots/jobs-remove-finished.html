@@ -220,7 +220,11 @@
 <button class="dashboard-text-link" id="dashViewAllWorks">View all works →</button>
 </div>
 <div class="dashboard-work-carousel-shell">
-<button class="carousel-arrow" id="dashWorksPrev" type="button" title="Previous" aria-label="Previous">‹</button>
+<span class="ui-tooltip" data-trigger-mode="content">
+<span class="ui-tooltip-anchor" aria-describedby="ui-tooltip-91">
+<button class="carousel-arrow" id="dashWorksPrev" type="button" aria-label="Previous">‹</button>
+</span>
+</span>
 <div class="dashboard-work-strip" id="dashWorksCarousel">
 <button class="dashboard-work-card" data-dashboard-work="Of Grammatology">
 <span class="dashboard-book-cover placeholder">01</span>
@@ -239,7 +243,11 @@
 </span>
 </button>
 </div>
-<button class="carousel-arrow" id="dashWorksNext" type="button" title="Next" aria-label="Next">›</button>
+<span class="ui-tooltip" data-trigger-mode="content">
+<span class="ui-tooltip-anchor" aria-describedby="ui-tooltip-92">
+<button class="carousel-arrow" id="dashWorksNext" type="button" aria-label="Next">›</button>
+</span>
+</span>
 </div>
 </section>
 <section class="dashboard-page-lower">
@@ -253,9 +261,13 @@
 </path>
 </svg>
 </span>
-<b>Language Settings</b>
+<b>Language Settings <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="Choose the interface language and manage translation dictionaries." aria-describedby="ui-tooltip-93">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</b>
 </div>
-<p>Choose the interface language and manage translation dictionaries.</p>
 <div class="dashboard-quick-field dashboard-locale-field">
 <span>Interface language</span>
 <b>
@@ -273,9 +285,13 @@
 </path>
 </svg>
 </span>
-<b>LLM Provider Settings</b>
+<b>LLM Provider Settings <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="Configure the provider used for LLM-assisted workflows." aria-describedby="ui-tooltip-94">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</b>
 </div>
-<p>Configure the provider used for LLM-assisted workflows.</p>
 <div class="dashboard-provider-fields">
 <div class="dashboard-quick-field">
 <span>Default provider</span>

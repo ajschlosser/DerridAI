@@ -16,6 +16,7 @@ import { captureIsActive, enumLabel, enumTone } from "../domain/sourceLabels";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
 import UiButton from "../components/ui/UiButton.vue";
 import UiStatusBadge from "../components/ui/UiStatusBadge.vue";
+import UiTooltip from "../components/ui/UiTooltip.vue";
 import AppIcon from "../components/AppIcon.vue";
 import SourceTable from "../components/sources/SourceTable.vue";
 import SourceInspector from "../components/sources/SourceInspector.vue";
@@ -293,12 +294,22 @@ onMounted(() => void loadCaptures());
         >
           {{ i18n.t("capture.done.use_in_builder") }}
         </button>
+        <UiTooltip
+          v-if="!retryableCaptures.length"
+          :text="i18n.t('sources.bulk.retry_none')"
+          trigger-mode="content"
+          placement="bottom"
+        >
+          <button type="button" class="btn small" data-bulk="retry" disabled>
+            {{ i18n.t("sources.bulk.retry") }}
+          </button>
+        </UiTooltip>
         <button
+          v-else
           type="button"
           class="btn small"
           data-bulk="retry"
-          :disabled="!retryableCaptures.length || busy !== ''"
-          :title="retryableCaptures.length ? undefined : i18n.t('sources.bulk.retry_none')"
+          :disabled="busy !== ''"
           @click="retryCaptures(retryableCaptures.map((capture) => capture.capture_id))"
         >
           {{ i18n.t("sources.bulk.retry") }}

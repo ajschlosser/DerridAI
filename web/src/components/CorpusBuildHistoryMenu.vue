@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { CorpusBuild } from "../api/pdfCorpus";
 import { useI18nStore } from "../stores/i18n";
+import UiTooltip from "./ui/UiTooltip.vue";
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- SA-13: preserve legacy setup binding until its owning workflow is extracted.
 const props = withDefaults(
   defineProps<{ builds: CorpusBuild[]; selectedBuildId?: string; total?: number }>(),
@@ -43,15 +44,21 @@ function formatDate(value?: string | null) {
           <b>{{ i18n.t("pdf_corpus.builds") }}</b
           ><small>{{ i18n.t("pdf_corpus.build_history_anywhere") }}</small>
         </div>
-        <button
-          type="button"
-          class="icon-button"
-          :title="i18n.t('pdf_corpus.refresh_builds')"
-          :aria-label="i18n.t('pdf_corpus.refresh_builds')"
-          @click="emit('refresh')"
+        <UiTooltip
+          :text="i18n.t('pdf_corpus.refresh_builds')"
+          trigger-mode="content"
+          :content-focusable="false"
+          placement="bottom"
         >
-          ↻
-        </button>
+          <button
+            type="button"
+            class="icon-button"
+            :aria-label="i18n.t('pdf_corpus.refresh_builds')"
+            @click="emit('refresh')"
+          >
+            ↻
+          </button>
+        </UiTooltip>
       </header>
       <div class="history-list">
         <button

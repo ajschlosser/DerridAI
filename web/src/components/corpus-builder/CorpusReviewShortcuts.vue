@@ -3,6 +3,7 @@
 import { computed } from "vue";
 import { useI18nStore } from "../../stores/i18n";
 import AppIcon from "../AppIcon.vue";
+import UiTooltip from "../ui/UiTooltip.vue";
 
 /** The review keyboard shortcuts, in a popover. The keys are the review command vocabulary (reviewCommands.ts). */
 const i18n = useI18nStore();
@@ -19,9 +20,16 @@ const shortcuts = computed(() => [
 
 <template>
   <details class="review-shortcuts">
-    <summary :title="i18n.t('record.keyboard_shortcuts')">
-      <AppIcon name="help" /><span class="sr-only">{{ i18n.t("record.keyboard_shortcuts") }}</span>
-    </summary>
+    <UiTooltip
+      :text="i18n.t('record.keyboard_shortcuts')"
+      trigger-mode="content"
+      :content-focusable="false"
+      placement="bottom"
+    >
+      <summary :aria-label="i18n.t('record.keyboard_shortcuts')">
+        <AppIcon name="help" />
+      </summary>
+    </UiTooltip>
     <div class="shortcuts-popover">
       <strong>{{ i18n.t("record.keyboard_shortcuts") }}</strong>
       <dl>

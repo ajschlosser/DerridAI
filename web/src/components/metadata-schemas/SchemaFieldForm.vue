@@ -72,8 +72,10 @@ const addValue = () => props.field.values.push({ value: "", definition: "" });
           <option value="scholarly">{{ t("role_scholarly", "Scholarly metadata") }}</option>
           <option value="structural">{{ t("role_structural", "Structural metadata") }}</option>
           <option value="document">{{ t("role_document", "Document metadata") }}</option>
-          <option value="operational">{{ t("role_operational", "Operational / utility") }}</option>
-        </select></label
+          <option value="operational">
+            {{ t("role_operational", "Operational / utility") }}
+          </option></select
+        ><small class="hint">{{ t("field_role_summary") }}</small></label
       >
       <label class="schema-field"
         ><span
@@ -81,8 +83,8 @@ const addValue = () => props.field.values.push({ value: "", definition: "" });
           <UiTooltip :text="t('field_scope_help')" /></span
         ><select v-model="field.scope" class="control">
           <option value="record">{{ t("scope_record", "On each record") }}</option>
-          <option value="corpus">{{ t("scope_corpus", "Once for the corpus") }}</option>
-        </select></label
+          <option value="corpus">{{ t("scope_corpus", "Once for the corpus") }}</option></select
+        ><small class="hint">{{ t("field_scope_summary") }}</small></label
       >
       <label class="schema-field"
         ><span
@@ -91,8 +93,8 @@ const addValue = () => props.field.values.push({ value: "", definition: "" });
         ><select v-model="field.review_visibility" class="control">
           <option value="primary">{{ t("visibility_primary", "Show in review") }}</option>
           <option value="details">{{ t("visibility_details", "Show in details") }}</option>
-          <option value="hidden">{{ t("visibility_hidden", "Hidden") }}</option>
-        </select></label
+          <option value="hidden">{{ t("visibility_hidden", "Hidden") }}</option></select
+        ><small class="hint">{{ t("review_visibility_summary") }}</small></label
       >
     </section>
 
@@ -187,9 +189,7 @@ const addValue = () => props.field.values.push({ value: "", definition: "" });
     </div>
 
     <fieldset class="schema-memory">
-      <legend>
-        {{ t("memory", "Memory & retrieval") }} <UiTooltip :text="t('memory_help')" />
-      </legend>
+      <legend>{{ t("memory", "Memory & retrieval") }}</legend>
       <p class="memory-intro">{{ t("memory_intro") }}</p>
       <label class="option">
         <input v-model="field.retrieval_profile.enabled" type="checkbox" />
@@ -222,7 +222,10 @@ const addValue = () => props.field.values.push({ value: "", definition: "" });
           >
         </label>
         <label class="num-field">
-          <span>{{ t("memory_limit", "Most examples to show") }}</span>
+          <span
+            >{{ t("memory_limit", "Most examples to show") }}
+            <UiTooltip :text="t('memory_limit_help')"
+          /></span>
           <input
             v-model.number="field.retrieval_profile.max_items"
             class="control"
@@ -231,10 +234,12 @@ const addValue = () => props.field.values.push({ value: "", definition: "" });
             max="50"
             :disabled="!field.retrieval_profile.enabled"
           />
-          <small class="hint">{{ t("memory_limit_help") }}</small>
         </label>
         <label class="num-field">
-          <span>{{ t("memory_similarity", "How alike an example must be") }}</span>
+          <span
+            >{{ t("memory_similarity", "How alike an example must be") }}
+            <UiTooltip :text="t('memory_similarity_help')"
+          /></span>
           <input
             v-model.number="field.retrieval_profile.min_similarity"
             class="control"
@@ -244,10 +249,12 @@ const addValue = () => props.field.values.push({ value: "", definition: "" });
             step="0.05"
             :disabled="!field.retrieval_profile.enabled"
           />
-          <small class="hint">{{ t("memory_similarity_help") }}</small>
         </label>
         <label class="num-field">
-          <span>{{ t("memory_max_corrections", "Maximum corrections") }}</span>
+          <span
+            >{{ t("memory_max_corrections", "Maximum corrections") }}
+            <UiTooltip :text="t('memory_max_corrections_help')"
+          /></span>
           <input
             v-model.number="field.retrieval_profile.max_corrections"
             class="control"
@@ -258,7 +265,6 @@ const addValue = () => props.field.values.push({ value: "", definition: "" });
               !field.retrieval_profile.enabled || !field.retrieval_profile.include_corrections
             "
           />
-          <small class="hint">{{ t("memory_max_corrections_help") }}</small>
         </label>
       </div>
       <div class="match-fields" role="group" :aria-labelledby="matchTitleId">

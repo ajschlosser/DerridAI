@@ -21,7 +21,7 @@
 <input id="settings-search-input" class="control settings-search-input" placeholder="Find a setting" aria-describedby="settings-search-help" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="settings-search-results" autocomplete="off" value="">
 </div>
 <p id="settings-search-help" class="note">Search uses translated labels. Arrow keys move through matches; Enter opens the section.</p>
-<span class="ui-button-wrap settings-contents-toggle" data-tooltip="">
+<span class="ui-button-wrap settings-contents-toggle">
 <button class="ui-button variant-default size-default" type="button" aria-pressed="false">
 <span>Contents</span>
 </button>
@@ -128,7 +128,7 @@
 </div>
 </div>
 <footer class="settings-section-actions">
-<span class="ui-button-wrap" data-tooltip="">
+<span class="ui-button-wrap">
 <button class="ui-button variant-primary size-default" type="button">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <path d="m5 12 4 4L19 6">
@@ -137,7 +137,7 @@
 <span>Save appearance</span>
 </button>
 </span>
-<span class="ui-button-wrap" data-tooltip="">
+<span class="ui-button-wrap">
 <button class="ui-button variant-default size-default" type="button">
 <span>Reset appearance defaults</span>
 </button>
@@ -196,7 +196,7 @@
 <p class="note">Focus indicators stay visible in every theme. Motion is reduced when this device requests it. High-contrast mode uses stronger borders rather than color alone.</p>
 </div>
 <footer class="settings-section-actions">
-<span class="ui-button-wrap" data-tooltip="">
+<span class="ui-button-wrap">
 <button class="ui-button variant-default size-default" type="button">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <circle cx="12" cy="12" r="9">
@@ -236,12 +236,12 @@
 </label>
 </div>
 <footer class="settings-section-actions">
-<span class="ui-button-wrap" data-tooltip="">
+<span class="ui-button-wrap">
 <button class="ui-button variant-primary size-default" type="button">
 <span>Save research defaults</span>
 </button>
 </span>
-<span class="ui-button-wrap" data-tooltip="">
+<span class="ui-button-wrap">
 <button class="ui-button variant-default size-default" type="button">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <path d="m12 3 1.2 4.1L17 9l-3.8 1.9L12 15l-1.2-4.1L7 9l3.8-1.9L12 3Z">
@@ -303,7 +303,7 @@
 </div>
 </div>
 <footer class="settings-section-actions">
-<span class="ui-button-wrap" data-tooltip="">
+<span class="ui-button-wrap">
 <button class="ui-button variant-primary size-default" type="button">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <path d="m5 12 4 4L19 6">
@@ -332,22 +332,28 @@
 <div class="settings-section-body">
 <ul class="providers-summary">
 <li>
-<span class="ui-health-chip" data-available="false" title="Not ready">
+<span class="ui-tooltip" data-trigger-mode="content">
+<span class="ui-tooltip-anchor" tabindex="0" aria-describedby="ui-tooltip-95">
+<span class="ui-health-chip" data-available="false">
 <span class="ui-health-dot" aria-hidden="true">
 </span>
 <span>Local Ollama</span>
-<span class="sr-only"> — Not ready</span>
+</span>
+</span>
 </span>
 <span>Ollama · max 1 · gemma4:e2b</span>
 <small>Last checked: Not checked yet</small>
 <b>Default</b>
 </li>
 <li>
-<span class="ui-health-chip" data-available="false" title="Not ready">
+<span class="ui-tooltip" data-trigger-mode="content">
+<span class="ui-tooltip-anchor" tabindex="0" aria-describedby="ui-tooltip-96">
+<span class="ui-health-chip" data-available="false">
 <span class="ui-health-dot" aria-hidden="true">
 </span>
 <span>FreeLLM / OpenAI-compatible</span>
-<span class="sr-only"> — Not ready</span>
+</span>
+</span>
 </span>
 <span>OpenAI-compatible · max 32 · auto</span>
 <small>Last checked: Not checked yet</small>
@@ -355,7 +361,7 @@
 </ul>
 </div>
 <footer class="settings-section-actions">
-<span class="ui-button-wrap" data-tooltip="">
+<span class="ui-button-wrap">
 <button class="ui-button variant-primary size-default" type="button">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <path d="m12 3 1.2 4.1L17 9l-3.8 1.9L12 15l-1.2-4.1L7 9l3.8-1.9L12 3Z">
@@ -394,12 +400,12 @@
 </div>
 </div>
 <footer class="settings-section-actions">
-<span class="ui-button-wrap" data-tooltip="">
+<span class="ui-button-wrap">
 <button class="ui-button variant-default size-default" type="button">
 <span>Test connection</span>
 </button>
 </span>
-<span class="ui-button-wrap" data-tooltip="">
+<span class="ui-button-wrap">
 <button class="ui-button variant-primary size-default" type="button">
 <span>Save audio settings</span>
 </button>
@@ -452,17 +458,17 @@
 </div>
 </div>
 <footer class="settings-section-actions">
-<span class="ui-button-wrap" data-tooltip="">
+<span class="ui-button-wrap">
 <button class="ui-button variant-default size-default" type="button">
 <span>Test embedding model</span>
 </button>
 </span>
-<span class="ui-button-wrap" data-tooltip="">
+<span class="ui-button-wrap">
 <button class="ui-button variant-primary size-default" type="button">
 <span>Save embedding defaults</span>
 </button>
 </span>
-<span class="ui-button-wrap" data-tooltip="">
+<span class="ui-button-wrap">
 <button class="ui-button variant-default size-default" type="button">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <ellipse cx="12" cy="5" rx="8" ry="3">
@@ -491,14 +497,22 @@
 <div class="settings-section-body">
 <div class="config-grid">
 <label class="ui-field">
-<span class="ui-field-label">Retrieval k </span>
+<span class="ui-field-label">Retrieval k <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="Retrieval k: The number of highest-ranked items kept at a selection step. In Research this is often shown simply as k." aria-describedby="ui-tooltip-97">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input id="settings-field-rag-k" class="control" type="number" min="1" max="500" aria-invalid="false">
-<span id="v-17-hint" class="ui-field-hint">How many passages to keep after ranking. Typical scholarly runs use 24–64.</span>
 </label>
 <label class="ui-field">
-<span class="ui-field-label">Rerank top N </span>
+<span class="ui-field-label">Rerank top N <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="Rerank top N: The maximum number of retrieved candidates sent through the more expensive reranking step." aria-describedby="ui-tooltip-98">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input id="settings-field-rag-top-n" class="control" type="number" min="1" max="500">
-<span id="v-18-hint" class="ui-field-hint">How many candidates the reranker inspects.</span>
 </label>
 <label class="ui-field">
 <span class="ui-field-label">Default reranker </span>
@@ -509,12 +523,21 @@
 </select>
 </label>
 <label class="ui-field">
-<span class="ui-field-label">Max characters per evidence record </span>
+<span class="ui-field-label">Max characters per evidence record <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="Max characters per evidence record: A per-record character limit applied when packaging evidence for generation." aria-describedby="ui-tooltip-99">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input id="settings-field-rag-record-chars" class="control" type="number" min="500">
-<span id="v-20-hint" class="ui-field-hint">Caps each passage so the model cannot swallow an entire chapter as one evidence item.</span>
 </label>
 <label class="ui-field">
-<span class="ui-field-label">Total evidence characters </span>
+<span class="ui-field-label">Total evidence characters <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="Total evidence characters: The maximum amount of source text DerridAI will place in the final evidence packet for a model call." aria-describedby="ui-tooltip-100">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input id="settings-field-rag-total-chars" class="control" type="number" min="5000" aria-invalid="false">
 </label>
 <fieldset class="field field-full">
@@ -552,44 +575,65 @@
 <summary>Advanced retrieval</summary>
 <div class="config-grid">
 <label class="ui-field">
-<span class="ui-field-label">MMR fetch_k </span>
+<span class="ui-field-label">MMR fetch_k <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="MMR fetch_k: The size of the initial candidate pool fetched before MMR or another selection method reduces it to the final k items." aria-describedby="ui-tooltip-101">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input class="control" type="number" min="1" max="5000" aria-invalid="false">
-<span id="v-22-hint" class="ui-field-hint">Candidate pool size before diversity ranking. Must be at least retrieval k.</span>
 </label>
 <label class="ui-field">
-<span class="ui-field-label">MMR lambda </span>
+<span class="ui-field-label">MMR lambda <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="MMR lambda: The MMR trade-off between query relevance and diversity. Higher values favor relevance more strongly; lower values give more weight to avoiding redundancy." aria-describedby="ui-tooltip-102">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input class="control" type="number" min="0" max="1" step="0.05">
-<span id="v-23-hint" class="ui-field-hint">0 favors diversity; 1 favors relevance to the question.</span>
 </label>
 <label class="ui-field">
-<span class="ui-field-label">RRF k </span>
+<span class="ui-field-label">RRF k <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="RRF k: A constant in reciprocal-rank fusion that controls how sharply the fusion rewards the very highest ranks." aria-describedby="ui-tooltip-103">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input class="control" type="number" min="1">
-<span id="v-24-hint" class="ui-field-hint">Smoothing constant for reciprocal-rank fusion. 60 is a common default.</span>
 </label>
 <label class="ui-field">
-<span class="ui-field-label">Cross-encoder model </span>
+<span class="ui-field-label">Cross-encoder model <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="Cross-encoder model: A reranking model that reads the query and one candidate together, allowing it to judge their relationship more directly than independent embeddings do." aria-describedby="ui-tooltip-104">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input class="control">
 </label>
 <label class="ui-field">
-<span class="ui-field-label">Query-decomposition max tokens </span>
+<span class="ui-field-label">Query-decomposition max tokens <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="Query-decomposition max tokens: Breaking or reformulating a research question into structured search instructions or subqueries before retrieval." aria-describedby="ui-tooltip-105">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input class="control" type="number" min="64">
-<span id="v-26-hint" class="ui-field-hint">Upper bound for the optional query-split step before retrieval.</span>
 </label>
 </div>
 </details>
 </div>
 <footer class="settings-section-actions">
-<span class="ui-button-wrap" data-tooltip="">
+<span class="ui-button-wrap">
 <button class="ui-button variant-primary size-default" type="button">
 <span>Save RAG defaults</span>
 </button>
 </span>
-<span class="ui-button-wrap" data-tooltip="">
+<span class="ui-button-wrap">
 <button class="ui-button variant-default size-default" type="button">
 <span>Reset retrieval defaults</span>
 </button>
 </span>
-<span class="ui-button-wrap" data-tooltip="">
+<span class="ui-button-wrap">
 <button class="ui-button variant-default size-default" type="button">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <path d="m12 3 1.2 4.1L17 9l-3.8 1.9L12 15l-1.2-4.1L7 9l3.8-1.9L12 3Z">
@@ -621,7 +665,7 @@
 <p class="note">Role capabilities are configured centrally and enforced by both navigation and API permissions.</p>
 </div>
 <footer class="settings-section-actions">
-<span class="ui-button-wrap" data-tooltip="">
+<span class="ui-button-wrap">
 <button class="ui-button variant-default size-default" type="button">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <circle cx="9" cy="8" r="3">
@@ -634,7 +678,7 @@
 <span>Users &amp; roles</span>
 </button>
 </span>
-<span class="ui-button-wrap" data-tooltip="">
+<span class="ui-button-wrap">
 <button class="ui-button variant-default size-default" type="button">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <path d="M12 2 20 5v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5z">
@@ -685,8 +729,8 @@
 <textarea class="control" rows="8" spellcheck="false" aria-describedby="nlp-packs-add-help">
 </textarea>
 </label>
-<span class="ui-button-wrap" data-tooltip="">
-<button class="ui-button variant-default size-default" type="button" disabled="" aria-disabled="true" title="">
+<span class="ui-button-wrap">
+<button class="ui-button variant-default size-default" type="button" disabled="" aria-disabled="true">
 <span>Add to catalog</span>
 </button>
 </span>
@@ -713,7 +757,7 @@
 <input type="file" accept=".zip,application/zip" hidden="">
 </div>
 <footer class="settings-section-actions">
-<span class="ui-button-wrap" data-tooltip="">
+<span class="ui-button-wrap">
 <button class="ui-button variant-primary size-default" type="button">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <path d="M12 4v12M7 11l5 5 5-5">
@@ -724,7 +768,7 @@
 <span>Download full backup</span>
 </button>
 </span>
-<span class="ui-button-wrap" data-tooltip="">
+<span class="ui-button-wrap">
 <button class="ui-button variant-default size-default" type="button">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <path d="M12 16V4M7 9l5-5 5 5">
@@ -756,32 +800,32 @@
 </label>
 </div>
 <footer class="settings-section-actions">
-<span class="ui-button-wrap" data-tooltip="">
+<span class="ui-button-wrap">
 <button class="ui-button variant-default size-default" type="button">
 <span>Request notification permission</span>
 </button>
 </span>
-<span class="ui-button-wrap" data-tooltip="">
+<span class="ui-button-wrap">
 <button class="ui-button variant-default size-default" type="button">
 <span>Reset table columns</span>
 </button>
 </span>
-<span class="ui-button-wrap" data-tooltip="">
+<span class="ui-button-wrap">
 <button class="ui-button variant-default size-default" type="button">
 <span>Expand all UI panels</span>
 </button>
 </span>
-<span class="ui-button-wrap" data-tooltip="">
+<span class="ui-button-wrap">
 <button class="ui-button variant-default size-default" type="button">
 <span>Expand navigation sidebar</span>
 </button>
 </span>
-<span class="ui-button-wrap" data-tooltip="">
+<span class="ui-button-wrap">
 <button class="ui-button variant-default size-default" type="button">
 <span>Restore removed upsert-queue items</span>
 </button>
 </span>
-<span class="ui-button-wrap" data-tooltip="">
+<span class="ui-button-wrap">
 <button class="ui-button variant-danger size-default" type="button">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <path d="M3 12a9 9 0 1 0 3-6.7L3 8">
@@ -792,7 +836,7 @@
 <span>Clear all record updates</span>
 </button>
 </span>
-<span class="ui-button-wrap" data-tooltip="">
+<span class="ui-button-wrap">
 <button class="ui-button variant-default size-default" type="button">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <rect x="3" y="3" width="7" height="7" rx="1">
@@ -826,10 +870,14 @@
 </label>
 </div>
 <footer class="settings-section-actions">
-<span class="ui-button-wrap" data-tooltip="Type &quot;NUKE&quot; exactly to enable this destructive action.">
-<button class="ui-button variant-danger size-default" type="button" disabled="" aria-disabled="true" title="Type &quot;NUKE&quot; exactly to enable this destructive action.">
+<span class="ui-tooltip" data-trigger-mode="content">
+<span class="ui-tooltip-anchor" tabindex="0" aria-label="NUKE DerridAI workspace: Type &quot;NUKE&quot; exactly to enable this destructive action." aria-describedby="ui-tooltip-106">
+<span class="ui-button-wrap">
+<button class="ui-button variant-danger size-default" type="button" disabled="" aria-disabled="true">
 <span>NUKE DerridAI workspace</span>
 </button>
+</span>
+</span>
 </span>
 </footer>
 </section>

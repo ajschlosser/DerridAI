@@ -3,6 +3,7 @@
 import type { AuthUser, RoleDefinition, UserRole } from "../api/auth";
 import { useI18nStore } from "../stores/i18n";
 import UiStatusBadge from "./ui/UiStatusBadge.vue";
+import UiTooltip from "./ui/UiTooltip.vue";
 
 const props = defineProps<{
   user: AuthUser;
@@ -68,12 +69,29 @@ function createdDate(value: string) {
         {{ i18n.t("users.login_count") }}
       </small>
     </div>
+    <UiTooltip
+      v-if="props.user.id === props.currentUserId"
+      :text="i18n.t('ui.current_role_locked')"
+      trigger-mode="content"
+      placement="bottom"
+    >
+      <select
+        class="control user-role-select"
+        :value="props.user.role"
+        disabled
+        :aria-label="i18n.tf('users.role_for', { username: props.user.username })"
+      >
+        <option v-for="role in props.roles" :key="role.id" :value="role.id">
+          {{ roleName(role) }}
+        </option>
+      </select>
+    </UiTooltip>
     <select
+      v-else
       class="control user-role-select"
       :value="props.user.role"
-      :disabled="props.disabled || props.user.id === props.currentUserId"
+      :disabled="props.disabled"
       :aria-label="i18n.tf('users.role_for', { username: props.user.username })"
-      :title="props.user.id === props.currentUserId ? i18n.t('ui.current_role_locked') : undefined"
       @change="roleChanged"
     >
       <option v-for="role in props.roles" :key="role.id" :value="role.id">

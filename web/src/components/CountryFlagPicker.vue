@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from "vue";
 import { useI18nStore } from "../stores/i18n";
+import UiTooltip from "./ui/UiTooltip.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -16,7 +17,6 @@ const emit = defineEmits<{ "update:modelValue": [value: string] }>();
 const i18n = useI18nStore();
 const fieldId = useId();
 const labelId = `${fieldId}-label`;
-const helpId = `${fieldId}-help`;
 const popoverId = `${fieldId}-popover`;
 const open = ref(false);
 const query = ref("");
@@ -395,7 +395,10 @@ onBeforeUnmount(detachFloatingListeners);
 
 <template>
   <div class="country-flag-picker">
-    <span v-if="props.label" :id="labelId" class="flag-picker-label">{{ props.label }}</span>
+    <span v-if="props.label" :id="labelId" class="flag-picker-label">
+      {{ props.label }}
+      <UiTooltip v-if="props.help" :text="props.help" placement="bottom" />
+    </span>
     <button
       ref="triggerButton"
       type="button"
@@ -406,7 +409,6 @@ onBeforeUnmount(detachFloatingListeners);
       :aria-controls="open ? popoverId : undefined"
       :aria-labelledby="props.label ? labelId : undefined"
       :aria-label="props.label ? undefined : selectedName"
-      :aria-describedby="props.help ? helpId : undefined"
       @click="toggle"
       @keydown.esc.stop.prevent="close(true)"
     >
@@ -417,7 +419,6 @@ onBeforeUnmount(detachFloatingListeners);
       >
       <span class="flag-picker-chevron" aria-hidden="true">⌄</span>
     </button>
-    <small v-if="props.help" :id="helpId" class="flag-picker-help">{{ props.help }}</small>
 
     <teleport to="body">
       <section
@@ -464,7 +465,7 @@ onBeforeUnmount(detachFloatingListeners);
             :key="item.code"
             type="button"
             :aria-pressed="props.modelValue === item.flag"
-            :title="`${item.name} (${item.code})`"
+            :aria-label="`${item.name} (${item.code})`"
             @click="choose(item.flag)"
           >
             <span class="flag-option-symbol" aria-hidden="true">{{ item.flag }}</span>

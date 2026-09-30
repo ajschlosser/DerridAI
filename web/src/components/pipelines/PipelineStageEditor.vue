@@ -118,6 +118,12 @@ const strategiesByFamily = computed(() => {
               </option>
             </optgroup>
           </select>
+          <small class="stage-field-help">{{
+            t(
+              "pipelines.strategy_safety_summary",
+              "Strategies are registered server operations; choosing one does not add executable code.",
+            )
+          }}</small>
         </label>
       </div>
 
@@ -291,6 +297,12 @@ const strategiesByFamily = computed(() => {
 .stage-identity-grid label {
   display: grid;
   gap: 5px;
+}
+.stage-field-help {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.4;
 }
 .stage-identity-grid label > span {
   color: var(--muted);
