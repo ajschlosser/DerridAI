@@ -134,7 +134,9 @@ function confirmDelete(assetId: string) {
 const sourceSetupDisabled = computed(() => props.disabled || props.sourceSelectionDisabled);
 const selectedMediaKind = computed(() => props.selectedAsset?.media_kind || "");
 const ocrAvailable = computed(
-  () => Boolean(selectedMediaKind.value) && sourceMediaCapabilities(selectedMediaKind.value).imageRegions,
+  () =>
+    Boolean(selectedMediaKind.value) &&
+    sourceMediaCapabilities(selectedMediaKind.value).imageRegions,
 );
 
 const ocrStrategy = computed(() => {
