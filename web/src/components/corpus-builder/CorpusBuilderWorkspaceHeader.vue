@@ -82,10 +82,9 @@ const phases = computed<WorkspacePhase[]>(() => {
       id: "build_review",
       available: buildReviewAvailable,
       state: buildReviewState,
-      // Once Records exist, Review is the more useful landing place. Explicit
-      // ?workspace=build links still render Build and the sub-navigation below
-      // keeps Build status one click away.
-      target: review?.available ? "review" : "build",
+      // Keep the current internal workspace when the grouped phase is already active.
+      // From Setup/Publish, prefer Review once Records exist; otherwise land on Build.
+      target: buildReviewCurrent ? props.workspace : review?.available ? "review" : "build",
     },
     {
       id: "publish",
