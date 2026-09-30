@@ -206,6 +206,49 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
     wrapper.unmount();
   });
 
+  it("requires an explicit reviewer decision for a legacy multi-value array on a scalar field", async () => {
+    const wrapper = mount(CorpusMetadataFieldEditor, {
+      props: {
+        field: "quoted_speaker",
+        value: ["Emmanuel Levinas", "Martin Heidegger"],
+        control: "combobox",
+        open: true,
+        status: { status: "model_inferred", method: "llm" },
+      },
+    });
+
+    await nextTick();
+    const input = wrapper.get("textarea[role=combobox]");
+    expect((input.element as HTMLTextAreaElement).value).toBe("Emmanuel Levinas\nMartin Heidegger");
+    expect(wrapper.text()).toContain("accepts one value");
+    expect(wrapper.get("[data-primary-action]").attributes("disabled")).toBeDefined();
+
+    await input.setValue("Emmanuel Levinas");
+    await nextTick();
+    expect(wrapper.get("[data-primary-action]").attributes("disabled")).toBeUndefined();
+    await wrapper.get("[data-primary-action]").trigger("click");
+    expect(wrapper.emitted("save")?.at(-1)).toEqual(["Emmanuel Levinas"]);
+    wrapper.unmount();
+  });
+
+  it("losslessly unwraps a one-item legacy array for a scalar field", async () => {
+    const wrapper = mount(CorpusMetadataFieldEditor, {
+      props: {
+        field: "quoted_speaker",
+        value: ["Emmanuel Levinas"],
+        control: "combobox",
+        open: true,
+      },
+    });
+
+    await nextTick();
+    expect((wrapper.get("textarea[role=combobox]").element as HTMLTextAreaElement).value).toBe(
+      "Emmanuel Levinas",
+    );
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
   it("unwraps structured compatibility values instead of rendering object Object", async () => {
     const wrapper = mount(CorpusMetadataFieldEditor, {
       props: {

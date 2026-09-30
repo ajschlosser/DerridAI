@@ -7809,5 +7809,6 @@
   "pipelines.strategy.llm_text_touchup.label": "Text touch-up",
   "pipelines.strategy.llm_text_touchup.description": "Ask a chat model to propose cleaned-up text for one Record, on a reviewer request or during metadata enrichment when the build asks for it. The answer is checked against the source text and stays a proposal until a reviewer approves it. The stage chooses which configured provider answers and how many attempts it gets.",
   "pipelines.strategy.llm_reviewer_evidence_choice.label": "Reviewer evidence choice",
-  "pipelines.strategy.llm_reviewer_evidence_choice.description": "When a reviewer asks, a chat model chooses which source-unit IDs of the Record support a metadata value. Every returned ID and its support are checked deterministically, and a suggestion stays advisory until the reviewer binds it. The stage chooses which configured provider answers and how many attempts it gets."
+  "pipelines.strategy.llm_reviewer_evidence_choice.description": "When a reviewer asks, a chat model chooses which source-unit IDs of the Record support a metadata value. Every returned ID and its support are checked deterministically, and a suggestion stays advisory until the reviewer binds it. The stage chooses which configured provider answers and how many attempts it gets.",
+  "pdf_corpus.scalar_cardinality_conflict": "This field accepts one value, but this older record contains several. Edit it to one value before confirming; DerridAI will not merge or discard the existing values automatically."
 }

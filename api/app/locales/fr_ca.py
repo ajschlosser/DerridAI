@@ -8987,4 +8987,5 @@ FR_CA: dict[str, str] = {'common.apply': 'Appliquer',
  'pdf_corpus.semantic_map_interaction_help': 'Faites glisser l’arrière-plan pour déplacer la vue. Faites glisser n’importe quel nœud pour le repositionner. Les flèches déplacent la vue, plus et moins règlent le zoom et 0 réinitialise la vue. Maintenez Alt et utilisez une flèche pour déplacer un nœud sélectionné.',
  'pdf_corpus.semantic_graph_reset_layout': 'Réinitialiser la disposition du graphe',
  'pdf_corpus.semantic_graph_resize': 'Redimensionner le graphe de contenu sémantique',
+ 'pdf_corpus.scalar_cardinality_conflict': 'Ce champ accepte une seule valeur, mais cette ancienne fiche en contient plusieurs. Modifiez-la pour ne conserver qu’une valeur avant de confirmer; DerridAI ne fusionnera ni ne supprimera automatiquement les valeurs existantes.',
 }
