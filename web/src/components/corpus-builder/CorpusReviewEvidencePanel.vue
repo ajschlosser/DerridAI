@@ -10,6 +10,7 @@ import { allEvidenceBlockIds } from "../../domain/metadataEvidence";
 import { precedentEvidenceSuggestions } from "../../domain/metadataPrecedents";
 import AppIcon from "../AppIcon.vue";
 import FieldEvidenceList from "../FieldEvidenceList.vue";
+import UiTooltip from "../ui/UiTooltip.vue";
 
 /**
  * Choosing the source spans that support a metadata value. Pick a field, then tick the spans: one calm list, the
@@ -227,15 +228,21 @@ function locator(block: SourceBlock) {
           >
             {{ i18n.t("pdf_corpus.evidence_next_field") }}
           </button>
-          <button
-            type="button"
-            class="btn small"
-            :disabled="props.disabled"
-            :title="i18n.t('pdf_corpus.browse_evidence_help')"
-            @click="emit('browseExternal')"
+          <UiTooltip
+            :text="i18n.t('pdf_corpus.browse_evidence_help')"
+            trigger-mode="content"
+            :content-focusable="Boolean(props.disabled)"
+            placement="bottom"
           >
-            {{ i18n.t("pdf_corpus.browse_evidence") }}
-          </button>
+            <button
+              type="button"
+              class="btn small"
+              :disabled="props.disabled"
+              @click="emit('browseExternal')"
+            >
+              {{ i18n.t("pdf_corpus.browse_evidence") }}
+            </button>
+          </UiTooltip>
           <button type="button" class="btn small" @click="emit('update:selectedField', '')">
             {{ i18n.t("pdf_corpus.evidence_done") }}
           </button>

@@ -12,6 +12,7 @@ import {
 } from "../../domain/semanticMap";
 import * as runtime from "../../runtime/runtime.js";
 import SemanticMapCanvas from "./SemanticMapCanvas.vue";
+import UiTooltip from "../ui/UiTooltip.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -58,7 +59,10 @@ function kindLabel(kind: string) {
   >
     <header class="semantic-map-toolbar">
       <div>
-        <h2>{{ i18n.t("semantic_map.title", "Semantic map") }}</h2>
+        <h2 class="semantic-map-heading">
+          {{ i18n.t("semantic_map.title", "Semantic map") }}
+          <UiTooltip :text="i18n.t('semantic_map.cooccurrence_help')" placement="bottom" />
+        </h2>
         <p>
           {{ i18n.tf("semantic_map.count", "{count} terms", { count: graph.nodes.length }) }}
         </p>
@@ -101,6 +105,7 @@ function kindLabel(kind: string) {
         </button>
       </div>
     </header>
+    <p class="semantic-map-caveat">{{ i18n.t("semantic_map.signal_caveat") }}</p>
     <SemanticMapCanvas ref="canvas" :graph="graph" />
     <details v-if="graph.nodes.length" class="semantic-map-index">
       <summary>{{ i18n.t("semantic_map.node_list", "Terms on this map") }}</summary>
@@ -133,6 +138,20 @@ function kindLabel(kind: string) {
   margin: 0;
   font-size: 1rem;
   line-height: 1.3;
+}
+.semantic-map-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.semantic-map-caveat {
+  margin: 0;
+  padding: 8px 10px;
+  border-inline-start: 3px solid var(--border-interactive);
+  background: var(--surface-inset);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
 }
 .semantic-map-toolbar p {
   margin: 2px 0 0;

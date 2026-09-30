@@ -102,7 +102,7 @@ function apply() {
     <template v-if="mode === 'embedded'">
       <UiField
         :label="i18n.t('vector.container_path')"
-        :hint="i18n.t('vector.container_path_help')"
+        :tooltip="i18n.t('vector.container_path_help')"
       >
         <input
           id="chroma-path"
@@ -116,7 +116,7 @@ function apply() {
       <p v-if="pathError" class="vector-field-error" role="alert">{{ pathError }}</p>
     </template>
     <template v-else>
-      <UiField :label="i18n.t('vector.chroma_url')" :hint="i18n.t('vector.chroma_url_help')">
+      <UiField :label="i18n.t('vector.chroma_url')" :tooltip="i18n.t('vector.chroma_url_help')">
         <input
           id="chroma-url"
           class="control"
@@ -148,13 +148,13 @@ function apply() {
       <div class="vector-tenant-grid">
         <UiField
           :label="i18n.t('vector.chroma_tenant')"
-          :hint="i18n.t('vector.chroma_tenant_help')"
+          :tooltip="i18n.t('vector.chroma_tenant_help')"
         >
           <input class="control" v-model="tenant" autocomplete="off" />
         </UiField>
         <UiField
           :label="i18n.t('vector.chroma_database')"
-          :hint="i18n.t('vector.chroma_database_help')"
+          :tooltip="i18n.t('vector.chroma_database_help')"
         >
           <input class="control" v-model="database" autocomplete="off" />
         </UiField>

@@ -4,6 +4,7 @@ import { ref } from "vue";
 import { useI18nStore } from "../../stores/i18n";
 import AppIcon from "../AppIcon.vue";
 import CorpusActionMenu, { type CorpusActionMenuItem } from "../CorpusActionMenu.vue";
+import UiTooltip from "../ui/UiTooltip.vue";
 
 /**
  * The record decision dock, shared by the review workspace and Focus View so both decide a record the same way: what
@@ -84,30 +85,36 @@ defineExpose({ focusAccept: () => acceptButton.value?.focus({ preventScroll: tru
       :aria-label="i18n.t('pdf_corpus.record_decision')"
     >
       <div class="dock-status">
-        <button
+        <UiTooltip
           v-if="props.blockingCount"
-          :id="props.blockerId"
-          type="button"
-          class="dock-blocker"
-          aria-keyshortcuts="M"
-          :title="
+          :text="
             i18n.tf('pdf_corpus.resolve_metadata_before_accept_fields', {
               fields: props.blockingLabel,
             })
           "
-          @click="emit('focusBlocker')"
+          trigger-mode="content"
+          :content-focusable="false"
+          placement="bottom"
         >
-          <AppIcon name="warning" /><b class="dock-blocker-count">{{
-            i18n.tf("pdf_corpus.metadata_decisions_count", { count: props.blockingCount })
-          }}</b
-          ><b class="dock-blocker-short"
-            ><span aria-hidden="true">{{ props.blockingCount }}</span
-            ><span class="sr-only">{{
+          <button
+            :id="props.blockerId"
+            type="button"
+            class="dock-blocker"
+            aria-keyshortcuts="M"
+            @click="emit('focusBlocker')"
+          >
+            <AppIcon name="warning" /><b class="dock-blocker-count">{{
               i18n.tf("pdf_corpus.metadata_decisions_count", { count: props.blockingCount })
-            }}</span></b
-          ><span class="dock-blocker-text">{{ props.blockingLabel }}</span
-          ><kbd aria-hidden="true">{{ i18n.t("pdf_corpus.shortcut.metadata") }}</kbd>
-        </button>
+            }}</b
+            ><b class="dock-blocker-short"
+              ><span aria-hidden="true">{{ props.blockingCount }}</span
+              ><span class="sr-only">{{
+                i18n.tf("pdf_corpus.metadata_decisions_count", { count: props.blockingCount })
+              }}</span></b
+            ><span class="dock-blocker-text">{{ props.blockingLabel }}</span
+            ><kbd aria-hidden="true">{{ i18n.t("pdf_corpus.shortcut.metadata") }}</kbd>
+          </button>
+        </UiTooltip>
         <span v-else class="dock-ready" role="status"
           ><AppIcon name="check" />{{
             props.accepted
@@ -117,29 +124,39 @@ defineExpose({ focusAccept: () => acceptButton.value?.focus({ preventScroll: tru
         >
       </div>
       <div class="decision-history" role="group" :aria-label="i18n.t('pdf_corpus.record_history')">
-        <button
-          type="button"
-          class="btn small icon-only"
-          :title="i18n.t('pdf_corpus.undo')"
-          aria-keyshortcuts="Z"
-          :disabled="props.busy"
-          @click="emit('undo')"
+        <UiTooltip
+          :text="i18n.t('pdf_corpus.undo')"
+          trigger-mode="content"
+          :content-focusable="Boolean(props.busy)"
+          placement="bottom"
         >
-          <AppIcon name="history" /><span class="sr-only">{{
-            i18n.t("pdf_corpus.undo")
-          }}</span></button
-        ><button
-          type="button"
-          class="btn small icon-only"
-          :title="i18n.t('pdf_corpus.redo')"
-          aria-keyshortcuts="Shift+Z"
-          :disabled="props.busy"
-          @click="emit('redo')"
+          <button
+            type="button"
+            class="btn small icon-only"
+            :aria-label="i18n.t('pdf_corpus.undo')"
+            aria-keyshortcuts="Z"
+            :disabled="props.busy"
+            @click="emit('undo')"
+          >
+            <AppIcon name="history" />
+          </button> </UiTooltip
+        ><UiTooltip
+          :text="i18n.t('pdf_corpus.redo')"
+          trigger-mode="content"
+          :content-focusable="Boolean(props.busy)"
+          placement="bottom"
         >
-          <AppIcon name="history" class="flip-inline" /><span class="sr-only">{{
-            i18n.t("pdf_corpus.redo")
-          }}</span>
-        </button>
+          <button
+            type="button"
+            class="btn small icon-only"
+            :aria-label="i18n.t('pdf_corpus.redo')"
+            aria-keyshortcuts="Shift+Z"
+            :disabled="props.busy"
+            @click="emit('redo')"
+          >
+            <AppIcon name="history" class="flip-inline" />
+          </button>
+        </UiTooltip>
       </div>
       <CorpusActionMenu
         :label="i18n.t('pdf_corpus.more_actions')"

@@ -98,21 +98,25 @@ const verificationLabel = computed(() =>
 );
 </script>
 <template>
-  <span class="ownership-badges"
-    ><UiStatusBadge :label="sourceLabel" :help="sourceHelp" :tone="sourceTone" /><UiStatusBadge
+  <span class="ownership-badges">
+    <UiStatusBadge :label="sourceLabel" :tone="sourceTone" :help="sourceHelp" />
+    <UiStatusBadge
       v-if="sourceKind === 'llm' && verificationLabel"
       :label="verificationLabel"
+      :tone="verificationKind === 'auto_resolved' ? 'success' : 'warning'"
       :help="
         verificationKind === 'auto_resolved'
           ? i18n.t('pdf_corpus.verification_help.auto')
           : i18n.t('pdf_corpus.verification_help.pending')
       "
-      :tone="verificationKind === 'auto_resolved' ? 'success' : 'warning'" /><UiStatusBadge
+    />
+    <UiStatusBadge
       v-if="audit && sourceKind === 'llm'"
       :label="i18n.t('pdf_corpus.ownership.spot_check')"
-      :help="i18n.t('pdf_corpus.ownership_help.spot_check')"
       tone="warning"
-  /></span>
+      :help="i18n.t('pdf_corpus.ownership_help.spot_check')"
+    />
+  </span>
 </template>
 <style scoped>
 .ownership-badges {

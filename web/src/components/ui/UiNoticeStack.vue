@@ -3,6 +3,7 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { useI18nStore } from "../../stores/i18n";
 import AppIcon from "../AppIcon.vue";
+import UiTooltip from "./UiTooltip.vue";
 
 /**
  * Messages that can be closed: each has its own ×, and a stack of several also has one for all of them.
@@ -87,15 +88,19 @@ function dismissAll() {
   <section v-if="items.length" ref="root" class="ui-notice-stack" :aria-label="label" tabindex="-1">
     <header v-if="items.length > 1" class="notice-stack-head">
       <span class="notice-count">{{ label }} · {{ items.length }}</span>
-      <button
-        type="button"
-        class="notice-all"
-        :disabled="disabled"
-        :title="acknowledging ? i18n.t('ui.acknowledge_help') : undefined"
-        @click="dismissAll"
+      <UiTooltip
+        v-if="acknowledging"
+        :text="i18n.t('ui.acknowledge_help')"
+        trigger-mode="content"
+        :content-focusable="disabled"
+        placement="bottom"
       >
-        {{ acknowledging ? i18n.t("ui.acknowledge_all") : i18n.t("ui.dismiss_all")
-        }}<AppIcon name="close" />
+        <button type="button" class="notice-all" :disabled="disabled" @click="dismissAll">
+          {{ i18n.t("ui.acknowledge_all") }}<AppIcon name="close" />
+        </button>
+      </UiTooltip>
+      <button v-else type="button" class="notice-all" :disabled="disabled" @click="dismissAll">
+        {{ i18n.t("ui.dismiss_all") }}<AppIcon name="close" />
       </button>
     </header>
     <ul class="notice-list">
@@ -110,17 +115,23 @@ function dismissAll() {
         <span class="notice-text" :role="notice.tone === 'error' ? 'alert' : 'status'"
           ><b v-if="notice.title">{{ notice.title }}</b> {{ notice.text }}</span
         >
-        <button
-          type="button"
-          class="notice-dismiss"
-          data-notice-dismiss
-          :disabled="disabled"
-          :aria-label="itemLabel(notice)"
-          :title="acknowledging ? i18n.t('ui.acknowledge_help') : i18n.t('ui.dismiss')"
-          @click="dismiss(notice, index)"
+        <UiTooltip
+          :text="acknowledging ? i18n.t('ui.acknowledge_help') : i18n.t('ui.dismiss')"
+          trigger-mode="content"
+          :content-focusable="disabled"
+          placement="bottom"
         >
-          <AppIcon name="close" />
-        </button>
+          <button
+            type="button"
+            class="notice-dismiss"
+            data-notice-dismiss
+            :disabled="disabled"
+            :aria-label="itemLabel(notice)"
+            @click="dismiss(notice, index)"
+          >
+            <AppIcon name="close" />
+          </button>
+        </UiTooltip>
       </li>
     </ul>
     <button

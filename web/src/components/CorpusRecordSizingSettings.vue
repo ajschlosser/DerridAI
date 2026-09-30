@@ -124,7 +124,16 @@ function fix(key: "long_record_chars" | "absolute_record_chars") {
 
     <div class="primary-grid">
       <label for="corpus-preferred-chars"
-        ><span>{{ i18n.t("pdf_corpus.record_sizing.preferred") }}</span
+        ><span class="sizing-label"
+          >{{ i18n.t("pdf_corpus.record_sizing.preferred") }}
+          <UiTooltip
+            :text="`${i18n.tf('pdf_corpus.record_sizing.preferred_range', {
+              low: low.toLocaleString(),
+              high: high.toLocaleString(),
+            })} · ${i18n.tf('pdf_corpus.record_sizing.about_words', {
+              count: Math.max(1, Math.round(preferred / 6)).toLocaleString(),
+            })}`"
+            placement="bottom" /></span
         ><input
           id="corpus-preferred-chars"
           class="control"
@@ -134,23 +143,13 @@ function fix(key: "long_record_chars" | "absolute_record_chars") {
           step="50"
           :value="modelValue.preferred_record_chars"
           @input="patch('preferred_record_chars', $event)"
-        /><small
-          >{{
-            i18n.tf("pdf_corpus.record_sizing.preferred_range", {
-              low: low.toLocaleString(),
-              high: high.toLocaleString(),
-            })
-          }}
-          ·
-          {{
-            i18n.tf("pdf_corpus.record_sizing.about_words", {
-              count: Math.max(1, Math.round(preferred / 6)).toLocaleString(),
-            })
-          }}</small
-        ></label
-      >
+      /></label>
       <label for="corpus-tolerance-chars"
-        ><span>{{ i18n.t("pdf_corpus.record_sizing.tolerance") }}</span
+        ><span class="sizing-label"
+          >{{ i18n.t("pdf_corpus.record_sizing.tolerance") }}
+          <UiTooltip
+            :text="i18n.t('pdf_corpus.record_sizing.tolerance_help')"
+            placement="bottom" /></span
         ><input
           id="corpus-tolerance-chars"
           class="control"
@@ -160,8 +159,7 @@ function fix(key: "long_record_chars" | "absolute_record_chars") {
           step="10"
           :value="modelValue.record_length_tolerance"
           @input="patch('record_length_tolerance', $event)"
-        /><small>{{ i18n.t("pdf_corpus.record_sizing.tolerance_help") }}</small></label
-      >
+      /></label>
     </div>
 
     <label class="auto-switch">
@@ -171,20 +169,29 @@ function fix(key: "long_record_chars" | "absolute_record_chars") {
         @change="setAutomatic(($event.target as HTMLInputElement).checked)"
       />
       <span>
-        <b>{{ i18n.t("pdf_corpus.record_sizing.auto") }}</b>
-        <small>{{
-          i18n.tf("pdf_corpus.record_sizing.auto_help", {
-            long: auto.long_record_chars.toLocaleString(),
-            absolute: auto.absolute_record_chars.toLocaleString(),
-          })
-        }}</small>
+        <b class="sizing-label"
+          >{{ i18n.t("pdf_corpus.record_sizing.auto") }}
+          <UiTooltip
+            :text="
+              i18n.tf('pdf_corpus.record_sizing.auto_help', {
+                long: auto.long_record_chars.toLocaleString(),
+                absolute: auto.absolute_record_chars.toLocaleString(),
+              })
+            "
+            placement="bottom"
+          />
+        </b>
       </span>
     </label>
 
     <div v-if="custom" class="advanced-grid">
       <div class="limit">
         <label for="corpus-long-chars"
-          ><span>{{ i18n.t("pdf_corpus.record_sizing.long") }}</span
+          ><span class="sizing-label"
+            >{{ i18n.t("pdf_corpus.record_sizing.long") }}
+            <UiTooltip
+              :text="i18n.t('pdf_corpus.record_sizing.long_help')"
+              placement="bottom" /></span
           ><input
             id="corpus-long-chars"
             class="control"
@@ -196,8 +203,7 @@ function fix(key: "long_record_chars" | "absolute_record_chars") {
             :aria-invalid="invalid.includes('long_record_chars')"
             aria-describedby="long-hint"
             @input="patch('long_record_chars', $event)"
-          /><small>{{ i18n.t("pdf_corpus.record_sizing.long_help") }}</small></label
-        >
+        /></label>
         <p
           id="long-hint"
           class="hint"
@@ -225,7 +231,11 @@ function fix(key: "long_record_chars" | "absolute_record_chars") {
       </div>
       <div class="limit">
         <label for="corpus-absolute-chars"
-          ><span>{{ i18n.t("pdf_corpus.record_sizing.absolute") }}</span
+          ><span class="sizing-label"
+            >{{ i18n.t("pdf_corpus.record_sizing.absolute") }}
+            <UiTooltip
+              :text="i18n.t('pdf_corpus.record_sizing.absolute_help')"
+              placement="bottom" /></span
           ><input
             id="corpus-absolute-chars"
             class="control"
@@ -237,8 +247,7 @@ function fix(key: "long_record_chars" | "absolute_record_chars") {
             :aria-invalid="invalid.includes('absolute_record_chars')"
             aria-describedby="absolute-hint"
             @input="patch('absolute_record_chars', $event)"
-          /><small>{{ i18n.t("pdf_corpus.record_sizing.absolute_help") }}</small></label
-        >
+        /></label>
         <p
           id="absolute-hint"
           class="hint"
@@ -338,6 +347,11 @@ function fix(key: "long_record_chars" | "absolute_record_chars") {
   gap: 4px;
   font-size: 0.8125rem;
   font-weight: 700;
+}
+.sizing-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 .record-sizing small {
   color: var(--muted);

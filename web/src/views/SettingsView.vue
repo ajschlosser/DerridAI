@@ -1270,7 +1270,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
             <div class="config-grid">
               <UiField
                 :label="i18n.t('settings.rag_k')"
-                :hint="i18n.t('settings.rag_k_help')"
+                :tooltip="i18n.t('help.glossary.top_k.definition')"
                 :error="ragErrors.k"
               >
                 <input
@@ -1285,7 +1285,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
               </UiField>
               <UiField
                 :label="i18n.t('settings.rag_top_n')"
-                :hint="i18n.t('settings.rag_top_n_help')"
+                :tooltip="i18n.t('help.glossary.rerank_top_n.definition')"
               >
                 <input
                   id="settings-field-rag-top-n"
@@ -1309,7 +1309,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
               </UiField>
               <UiField
                 :label="i18n.t('settings.rag_record_chars')"
-                :hint="i18n.t('settings.rag_record_chars_help')"
+                :tooltip="i18n.t('help.glossary.max_chars_evidence.definition')"
               >
                 <input
                   id="settings-field-rag-record-chars"
@@ -1321,6 +1321,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
               </UiField>
               <UiField
                 :label="i18n.t('settings.rag_total_chars')"
+                :tooltip="i18n.t('help.glossary.evidence_budget.definition')"
                 :error="ragErrors.evidence_total_char_limit"
               >
                 <input
@@ -1417,7 +1418,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
               <div class="config-grid">
                 <UiField
                   :label="i18n.t('settings.rag_fetch_k')"
-                  :hint="i18n.t('settings.rag_fetch_k_help')"
+                  :tooltip="i18n.t('help.glossary.fetch_k.definition')"
                   :error="ragErrors.fetch_k"
                 >
                   <input
@@ -1431,7 +1432,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                 </UiField>
                 <UiField
                   :label="i18n.t('settings.rag_lambda')"
-                  :hint="i18n.t('settings.rag_lambda_help')"
+                  :tooltip="i18n.t('help.glossary.mmr_lambda.definition')"
                 >
                   <input
                     class="control"
@@ -1444,16 +1445,19 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                 </UiField>
                 <UiField
                   :label="i18n.t('settings.rag_rrf_k')"
-                  :hint="i18n.t('settings.rag_rrf_k_help')"
+                  :tooltip="i18n.t('help.glossary.rrf_k.definition')"
                 >
                   <input class="control" type="number" min="1" v-model.number="ragDraft.rrf_k" />
                 </UiField>
-                <UiField :label="i18n.t('settings.rag_cross_encoder')">
+                <UiField
+                  :label="i18n.t('settings.rag_cross_encoder')"
+                  :tooltip="i18n.t('help.glossary.cross_encoder.definition')"
+                >
                   <input class="control" v-model="ragDraft.cross_encoder_model" />
                 </UiField>
                 <UiField
                   :label="i18n.t('settings.rag_decompose')"
-                  :hint="i18n.t('settings.rag_decompose_help')"
+                  :tooltip="i18n.t('help.glossary.query_decomposition.definition')"
                 >
                   <input
                     class="control"

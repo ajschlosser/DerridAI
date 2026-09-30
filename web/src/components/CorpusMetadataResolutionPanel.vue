@@ -470,18 +470,24 @@ function displayValue(field: string) {
           count: llmSuggestionCount,
         })
       }}</b>
-      <button
-        type="button"
-        class="btn small primary"
-        :title="i18n.t('pdf_corpus.llm_suggestions_ready_help')"
-        :disabled="busy || batchSaving"
-        @click="
-          emit('resolveMany', llmSuggestions);
-          decided('');
-        "
+      <UiTooltip
+        :text="i18n.t('pdf_corpus.llm_suggestions_ready_help')"
+        trigger-mode="content"
+        :content-focusable="Boolean(busy || batchSaving)"
+        placement="bottom"
       >
-        {{ i18n.t("pdf_corpus.accept_all_suggestions") }}
-      </button>
+        <button
+          type="button"
+          class="btn small primary"
+          :disabled="busy || batchSaving"
+          @click="
+            emit('resolveMany', llmSuggestions);
+            decided('');
+          "
+        >
+          {{ i18n.t("pdf_corpus.accept_all_suggestions") }}
+        </button>
+      </UiTooltip>
     </div>
 
     <div

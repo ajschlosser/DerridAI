@@ -350,27 +350,43 @@
 <div class="research-settings-grid compact">
 <label>
 <span>
-<code>k</code>Candidates retained</span>
+<code>k</code>Candidates retained <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="Candidates retained per retrieval route" aria-describedby="ui-tooltip-102">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input class="control" type="number" min="1" max="500">
-<small>Candidates retained per retrieval route</small>
 </label>
 <label>
 <span>
-<code>fetch_k</code>MMR candidate pool</span>
+<code>fetch_k</code>MMR candidate pool <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="The size of the initial candidate pool fetched before MMR or another selection method reduces it to the final k items." aria-describedby="ui-tooltip-103">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input class="control" type="number" min="1" max="5000">
-<small>MMR candidate pool</small>
 </label>
 <label>
 <span>
-<code>MMR λ</code>Relevance balance</span>
+<code>MMR λ</code>Relevance balance <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="The MMR trade-off between query relevance and diversity. Higher values favor relevance more strongly; lower values give more weight to avoiding redundancy." aria-describedby="ui-tooltip-104">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input class="control" type="number" step="0.05" min="0" max="1">
-<small>Relevance vs. diversity</small>
 </label>
 <label>
 <span>
-<code>RRF k</code>Fusion smoothing</span>
+<code>RRF k</code>Fusion smoothing <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="A constant in reciprocal-rank fusion that controls how sharply the fusion rewards the very highest ranks." aria-describedby="ui-tooltip-105">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input class="control" type="number" min="1">
-<small>Rank-fusion smoothing constant</small>
 </label>
 </div>
 </fieldset>
@@ -379,11 +395,21 @@
 <p>Refine the fused candidate set and optionally expand the question into multilingual subqueries.</p>
 <div class="research-settings-grid three">
 <label>
-<span>Rerank top N</span>
+<span>Rerank top N <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="The maximum number of retrieved candidates sent through the more expensive reranking step." aria-describedby="ui-tooltip-106">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input class="control" type="number" min="1" max="500">
 </label>
 <label>
-<span>Reranker</span>
+<span>Reranker <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="A reranking model that reads the query and one candidate together, allowing it to judge their relationship more directly than independent embeddings do." aria-describedby="ui-tooltip-107">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <select class="control">
 <option value="cross_encoder">Cross-encoder</option>
 <option value="lexical">Lexical/vector fallback</option>
@@ -391,7 +417,12 @@
 </select>
 </label>
 <label>
-<span>Query-decomposition tokens</span>
+<span>Query-decomposition tokens <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="Breaking or reformulating a research question into structured search instructions or subqueries before retrieval." aria-describedby="ui-tooltip-108">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input class="control" type="number" min="64" max="8192">
 </label>
 <label class="wide">
@@ -466,15 +497,25 @@
 <label class="research-toggle-setting">
 <input type="checkbox">
 <span>
-<b>Use cached responses to steer answers</b>
-<small>Finds earlier answers to similar questions and shows them to the model as advisory context. Only answers graded at or above the configured minimum are used; ungraded answers never steer. Prior answers are never cited as evidence.</small>
+<b>Use cached responses to steer answers <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="Finds earlier answers to similar questions and shows them to the model as advisory context. Only answers graded at or above the configured minimum are used; ungraded answers never steer. Prior answers are never cited as evidence." aria-describedby="ui-tooltip-109">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</b>
+<small>Uses sufficiently graded prior answers as advisory context; never as source evidence.</small>
 </span>
 </label>
 <label class="research-toggle-setting">
 <input type="checkbox">
 <span>
-<b>Use cached provenance to steer claims</b>
-<small>Finds reviewer-validated claims similar to your question, with the citations they were bound to. Each cited record is checked against this run’s evidence; support that is not in the current evidence cannot be cited.</small>
+<b>Use cached provenance to steer claims <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="Finds reviewer-validated claims similar to your question, with the citations they were bound to. Each cited record is checked against this run’s evidence; support that is not in the current evidence cannot be cited." aria-describedby="ui-tooltip-110">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</b>
+<small>Uses validated prior claims as guidance only when their support is present in this run’s evidence.</small>
 </span>
 </label>
 </div>
@@ -546,16 +587,31 @@
 <div class="research-settings-grid three">
 <label>
 <span>
-<code>num_ctx</code>Context window</span>
+<code>num_ctx</code>Context window <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="The maximum amount of tokenized input a model can consider in one request, usually including instructions, evidence, history, and the model’s output allowance." aria-describedby="ui-tooltip-111">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input class="control" type="number" min="512">
 </label>
 <label>
 <span>
-<code>num_predict</code>Maximum output</span>
+<code>num_predict</code>Maximum output <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="Maximum number of tokens the model may generate in one response. This is an output limit, not the context-window size." aria-describedby="ui-tooltip-112">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input class="control" type="number" min="16">
 </label>
 <label>
-<span>Thinking</span>
+<span>Thinking <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="Requests the provider's supported reasoning mode. Availability and accepted levels depend on the selected model and provider." aria-describedby="ui-tooltip-113">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <select class="control">
 <option value="false">Off</option>
 <option value="true">On</option>
@@ -565,17 +621,32 @@
 </select>
 </label>
 <label>
-<span>Temperature</span>
+<span>Temperature <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="A generation setting that controls how strongly a model favors its most likely next token. Lower values are usually more predictable; higher values allow more variation." aria-describedby="ui-tooltip-114">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input class="control" type="number" step="0.01" min="0" max="2">
 </label>
 <label>
 <span>
-<code>top_p</code>Nucleus sampling</span>
+<code>top_p</code>Nucleus sampling <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="A sampling setting that limits generation to a probability mass of likely next tokens, sometimes called nucleus sampling." aria-describedby="ui-tooltip-115">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input class="control" type="number" step="0.01" min="0" max="1">
 </label>
 <label>
 <span>
-<code>top_k</code>Top-k sampling</span>
+<code>top_k</code>Top-k sampling <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="Sampling control that limits each generated token to the K most likely choices. Lower values narrow variation; provider support varies." aria-describedby="ui-tooltip-116">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input class="control" type="number" min="0">
 </label>
 <label>
@@ -589,19 +660,33 @@
 <input class="control" type="number" step="0.01">
 </label>
 <label>
-<span>Seed</span>
+<span>Seed <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="A number used by models that support seeded sampling to make random choices more repeatable." aria-describedby="ui-tooltip-117">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input class="control" type="number">
 </label>
 <label>
 <span>
-<code>keep_alive</code>Keep model loaded</span>
+<code>keep_alive</code>Keep model loaded <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="How long a local provider should keep the model loaded after a request. Longer values can reduce warm-up time but keep memory occupied." aria-describedby="ui-tooltip-118">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input class="control">
 </label>
 <label class="wide">
-<span>Provider options JSON</span>
+<span>Provider options JSON <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="Provider-specific JSON sent with requests from this profile. Use only options supported by the selected provider; these settings are advanced and model-dependent." aria-describedby="ui-tooltip-119">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <textarea spellcheck="false">
 </textarea>
-<small>Advanced provider-specific options are merged into this run only.</small>
 </label>
 </div>
 </div>

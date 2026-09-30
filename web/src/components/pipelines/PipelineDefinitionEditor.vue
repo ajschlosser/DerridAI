@@ -211,6 +211,14 @@ function moveStage(stageIndex: number, direction: -1 | 1) {
         }}
       </p>
     </div>
+    <p class="identity-summary">
+      {{
+        t(
+          "pipelines.identity_summary",
+          "Pipeline ID stays stable across versions. Every saved version is immutable so past runs can resolve the exact configuration.",
+        )
+      }}
+    </p>
     <div class="identity-grid">
       <label>
         <span class="label-with-help">
@@ -301,6 +309,12 @@ function moveStage(stageIndex: number, direction: -1 | 1) {
           <option value="active">{{ t("pipelines.status_active", "Active") }}</option>
           <option value="disabled">{{ t("pipelines.status_disabled", "Disabled") }}</option>
         </select>
+        <small class="identity-field-help">{{
+          t(
+            "pipelines.status_summary",
+            "Draft is editable; Active can be assigned; Disabled is retained for history but cannot be newly selected.",
+          )
+        }}</small>
       </label>
     </div>
 
@@ -385,6 +399,17 @@ function moveStage(stageIndex: number, direction: -1 | 1) {
   color: var(--muted);
   font-size: 0.78rem;
   line-height: 1.5;
+}
+.identity-summary {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+.identity-field-help {
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
 }
 .identity-grid {
   display: grid;

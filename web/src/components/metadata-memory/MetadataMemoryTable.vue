@@ -4,6 +4,7 @@ import { ref, watch } from "vue";
 import type { MetadataMemoryEntry } from "../../api/metadataMemory";
 import { useI18nStore } from "../../stores/i18n";
 import UiStatusBadge from "../ui/UiStatusBadge.vue";
+import UiTooltip from "../ui/UiTooltip.vue";
 
 const {
   items,
@@ -68,7 +69,12 @@ function toggle(id: string) {
       <thead>
         <tr>
           <th scope="col">{{ i18n.t("metadata_memory.field_value") }}</th>
-          <th scope="col">{{ i18n.t("metadata_memory.authority") }}</th>
+          <th scope="col">
+            <span class="header-with-help">
+              {{ i18n.t("metadata_memory.authority") }}
+              <UiTooltip :text="i18n.t('metadata_memory.authority_help')" placement="bottom" />
+            </span>
+          </th>
           <th scope="col">{{ i18n.t("metadata_memory.source") }}</th>
           <th scope="col">{{ i18n.t("metadata_memory.scope") }}</th>
           <th scope="col">{{ i18n.t("metadata_memory.evidence") }}</th>
@@ -89,15 +95,24 @@ function toggle(id: string) {
           </td>
           <td>
             <div class="badge-row">
-              <UiStatusBadge
-                :label="kindLabel(item.kind)"
-                :tone="item.kind === 'correction' ? 'warning' : 'success'"
-              />
-              <UiStatusBadge
-                v-if="item.evidence_bound"
-                :label="i18n.t('metadata_memory.bound')"
-                tone="info"
-              />
+              <span class="badge-with-help">
+                <UiStatusBadge
+                  :label="kindLabel(item.kind)"
+                  :tone="item.kind === 'correction' ? 'warning' : 'success'"
+                />
+                <UiTooltip
+                  :text="
+                    item.kind === 'correction'
+                      ? i18n.t('metadata_memory.kind_correction_help')
+                      : i18n.t('metadata_memory.kind_positive_help')
+                  "
+                  placement="bottom"
+                />
+              </span>
+              <span v-if="item.evidence_bound" class="badge-with-help">
+                <UiStatusBadge :label="i18n.t('metadata_memory.bound')" tone="info" />
+                <UiTooltip :text="i18n.t('metadata_memory.bound_help')" placement="bottom" />
+              </span>
             </div>
             <small>{{ item.authority || "—" }}</small>
             <small v-if="item.review_method">{{ item.review_method }}</small>
@@ -108,16 +123,14 @@ function toggle(id: string) {
             <small v-if="pageLabel(item)">
               {{ i18n.t("metadata_memory.page") }} {{ pageLabel(item) }}
             </small>
-            <UiStatusBadge
-              v-if="item.source_current === false"
-              :label="i18n.t('metadata_memory.source_stale')"
-              tone="warning"
-            />
-            <UiStatusBadge
-              v-if="item.evidence_current === false"
-              :label="i18n.t('metadata_memory.evidence_stale')"
-              tone="warning"
-            />
+            <span v-if="item.source_current === false" class="badge-with-help">
+              <UiStatusBadge :label="i18n.t('metadata_memory.source_stale')" tone="warning" />
+              <UiTooltip :text="i18n.t('metadata_memory.source_stale_help')" placement="bottom" />
+            </span>
+            <span v-if="item.evidence_current === false" class="badge-with-help">
+              <UiStatusBadge :label="i18n.t('metadata_memory.evidence_stale')" tone="warning" />
+              <UiTooltip :text="i18n.t('metadata_memory.evidence_stale_help')" placement="bottom" />
+            </span>
           </td>
           <td>
             <small v-if="item.build_id">{{ item.build_id }}</small>
@@ -242,10 +255,18 @@ function toggle(id: string) {
   color: var(--tone-warn-fg);
   font-weight: 700;
 }
+.header-with-help,
+.badge-with-help,
 .badge-row {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
+}
+.header-with-help,
+.badge-with-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
 }
 .badge-row :deep(.ui-status-badge) {
   margin-top: 0;

@@ -51,6 +51,7 @@ import {
   type SchemaSummary,
 } from "../api/metadataSchemas";
 import UiDialog from "./ui/UiDialog.vue";
+import UiTooltip from "./ui/UiTooltip.vue";
 import LlmExecutionControl from "./LlmExecutionControl.vue";
 import { useCorpusBuildLifecycle } from "../composables/useCorpusBuildLifecycle";
 import { usePdfCorpusPaneSizing } from "../composables/usePdfCorpusPaneSizing";
@@ -2564,15 +2565,21 @@ defineExpose({
             <b>{{ i18n.t("pdf_corpus.builds") }}</b
             ><span>{{ buildsTotal }} {{ i18n.t("pdf_corpus.total") }}</span>
           </div>
-          <button
-            type="button"
-            class="icon-button"
-            :title="i18n.t('pdf_corpus.refresh_builds')"
-            :aria-label="i18n.t('pdf_corpus.refresh_builds')"
-            @click="refreshBuilds"
+          <UiTooltip
+            :text="i18n.t('pdf_corpus.refresh_builds')"
+            trigger-mode="content"
+            :content-focusable="false"
+            placement="bottom"
           >
-            ↻
-          </button>
+            <button
+              type="button"
+              class="icon-button"
+              :aria-label="i18n.t('pdf_corpus.refresh_builds')"
+              @click="refreshBuilds"
+            >
+              ↻
+            </button>
+          </UiTooltip>
         </div>
         <button
           v-for="build in builds"
@@ -3154,16 +3161,24 @@ defineExpose({
                           :disabled="busy !== '' || reviewLocked"
                         >
                           {{ i18n.t("pdf_corpus.clean_text") }}</button
-                        ><button
+                        ><UiTooltip
                           v-if="editingText"
-                          type="button"
-                          class="btn small primary"
-                          @click="saveReviewedText()"
-                          :disabled="busy !== '' || reviewLocked || !textDraft.trim()"
-                          aria-keyshortcuts="Control+S Meta+S"
-                          :title="i18n.t('pdf_corpus.save_reviewed_text') + ' (Ctrl/Cmd S)'"
+                          :text="i18n.t('pdf_corpus.save_reviewed_text') + ' (Ctrl/Cmd S)'"
+                          trigger-mode="content"
+                          :content-focusable="
+                            Boolean(busy !== '' || reviewLocked || !textDraft.trim())
+                          "
+                          placement="bottom"
                         >
-                          {{ i18n.t("ui.save") }}</button
+                          <button
+                            type="button"
+                            class="btn small primary"
+                            @click="saveReviewedText()"
+                            :disabled="busy !== '' || reviewLocked || !textDraft.trim()"
+                            aria-keyshortcuts="Control+S Meta+S"
+                          >
+                            {{ i18n.t("ui.save") }}
+                          </button> </UiTooltip
                         ><button
                           v-if="editingText"
                           type="button"
@@ -3434,6 +3449,9 @@ defineExpose({
                       spellcheck="false"
                       @input="metadataEditorDirty = true"
                     ></textarea>
+                    <p class="metadata-rerun-consequence">
+                      {{ i18n.t("pdf_corpus.metadata_rerun_consequence") }}
+                    </p>
                     <div class="data-actions">
                       <button
                         type="button"
@@ -3456,38 +3474,56 @@ defineExpose({
                             {{ family.label }}
                           </option>
                         </select></label
-                      ><button
-                        type="button"
-                        class="btn small"
-                        :title="i18n.t('pdf_corpus.rerun_metadata_help')"
-                        @click="rerunMetadata()"
-                        :disabled="busy !== ''"
+                      ><UiTooltip
+                        :text="i18n.t('pdf_corpus.rerun_metadata_help')"
+                        trigger-mode="content"
+                        :content-focusable="busy !== ''"
+                        placement="bottom"
                       >
-                        {{ i18n.t("pdf_corpus.rerun_metadata") }}</button
-                      ><button
-                        type="button"
-                        class="btn small soft"
-                        :title="i18n.t('pdf_corpus.requeue_metadata_help')"
-                        @click="requeueCurrentRecord"
-                        :disabled="busy !== ''"
+                        <button
+                          type="button"
+                          class="btn small"
+                          @click="rerunMetadata()"
+                          :disabled="busy !== ''"
+                        >
+                          {{ i18n.t("pdf_corpus.rerun_metadata") }}
+                        </button> </UiTooltip
+                      ><UiTooltip
+                        :text="i18n.t('pdf_corpus.requeue_metadata_help')"
+                        trigger-mode="content"
+                        :content-focusable="busy !== ''"
+                        placement="bottom"
                       >
-                        {{ i18n.t("pdf_corpus.requeue_metadata") }}</button
-                      ><button
-                        type="button"
-                        class="btn small"
-                        :title="i18n.t('pdf_corpus.metadata_enrichment_again_help')"
-                        @click="
-                          llmActionProviderId =
-                            llmActionProviderId ||
-                            selectedProviderId ||
-                            providerProfiles[0]?.id ||
-                            '';
-                          metadataEnrichmentOpen = true;
-                        "
-                        :disabled="busy !== ''"
+                        <button
+                          type="button"
+                          class="btn small soft"
+                          @click="requeueCurrentRecord"
+                          :disabled="busy !== ''"
+                        >
+                          {{ i18n.t("pdf_corpus.requeue_metadata") }}
+                        </button> </UiTooltip
+                      ><UiTooltip
+                        :text="i18n.t('pdf_corpus.metadata_enrichment_again_help')"
+                        trigger-mode="content"
+                        :content-focusable="busy !== ''"
+                        placement="bottom"
                       >
-                        {{ i18n.t("pdf_corpus.metadata_enrichment_again") }}
-                      </button>
+                        <button
+                          type="button"
+                          class="btn small"
+                          @click="
+                            llmActionProviderId =
+                              llmActionProviderId ||
+                              selectedProviderId ||
+                              providerProfiles[0]?.id ||
+                              '';
+                            metadataEnrichmentOpen = true;
+                          "
+                          :disabled="busy !== ''"
+                        >
+                          {{ i18n.t("pdf_corpus.metadata_enrichment_again") }}
+                        </button>
+                      </UiTooltip>
                     </div>
                   </details>
                 </section>

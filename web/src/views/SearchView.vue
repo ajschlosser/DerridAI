@@ -26,6 +26,7 @@ import type {
   SearchWorkspaceSnapshot,
 } from "../types/search";
 import UiMenu from "../components/ui/UiMenu.vue";
+import UiTooltip from "../components/ui/UiTooltip.vue";
 import {
   metadataSchemasApi,
   type MetadataSchema,
@@ -107,13 +108,11 @@ const resultSummary = computed(() => {
 const searchPlaceholder = computed(() =>
   databaseMode.value ? i18n.t("search.database_placeholder") : i18n.t("search.loaded_placeholder"),
 );
-const methodHelp = computed(() =>
-  snapshot.value?.method === "mmr"
-    ? i18n.t("search.mmr_help")
-    : snapshot.value?.method === "filter"
-      ? i18n.t("search.filter_only_help")
-      : i18n.t("search.similarity_help"),
-);
+function searchMethodHelp(method: SearchMethod) {
+  if (method === "mmr") return i18n.t("search.mmr_help");
+  if (method === "filter") return i18n.t("search.filter_only_help");
+  return i18n.t("search.similarity_help");
+}
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- SA-13: preserve legacy setup binding until its owning workflow is extracted.
 const selectedColumnKeys = computed(
   () => snapshot.value?.columns.map((column) => column.key) || [],
@@ -764,7 +763,9 @@ onBeforeUnmount(() => {
                     :checked="snapshot.method === item[0]"
                     @change="changeMethod(item[0])"
                   /><span
-                    ><b>{{ i18n.t(item[1], item[2]) }}</b
+                    ><b
+                      >{{ i18n.t(item[1], item[2]) }}
+                      <UiTooltip :text="searchMethodHelp(item[0])" /></b
                     ><small>{{
                       item[0] === "similarity"
                         ? i18n.t("search.method_similarity_short")
@@ -775,10 +776,11 @@ onBeforeUnmount(() => {
                   ></label
                 >
               </fieldset>
-              <p class="search-method-help">{{ methodHelp }}</p>
               <div v-if="snapshot.method === 'mmr'" class="search-mmr-controls">
                 <label
-                  ><span>{{ i18n.t("research.fetch_k_label") }}</span
+                  ><span
+                    >{{ i18n.t("research.fetch_k_label") }}
+                    <UiTooltip :text="i18n.t('help.glossary.fetch_k.definition')" /></span
                   ><input
                     class="control"
                     type="number"
@@ -789,7 +791,9 @@ onBeforeUnmount(() => {
                       updateMmrOption('fetch_k', Number(($event.target as HTMLInputElement).value))
                     " /></label
                 ><label
-                  ><span>{{ i18n.t("search.mmr_lambda") }}</span
+                  ><span
+                    >{{ i18n.t("search.mmr_lambda") }}
+                    <UiTooltip :text="i18n.t('help.glossary.mmr_lambda.definition')" /></span
                   ><input
                     class="control"
                     type="number"
@@ -941,12 +945,16 @@ onBeforeUnmount(() => {
                   <span class="section-label">{{ result.record_id }}</span>
                   <h3>{{ result.work || i18n.t("works.untitled") }}</h3>
                 </div>
-                <span
+                <UiTooltip
                   v-if="databaseMode && similarityPercent(result) != null"
-                  class="search-relevance-badge"
-                  :title="i18n.t('search.similarity_explanation')"
-                  >{{ i18n.t("search.relevance") }} {{ similarityPercent(result) }}</span
+                  :text="i18n.t('search.similarity_explanation')"
+                  trigger-mode="content"
+                  placement="bottom"
                 >
+                  <span class="search-relevance-badge"
+                    >{{ i18n.t("search.relevance") }} {{ similarityPercent(result) }}</span
+                  >
+                </UiTooltip>
               </header>
               <div class="search-result-meta">
                 <span v-if="result.page_span"
@@ -1162,8 +1170,15 @@ onBeforeUnmount(() => {
                         "
                         class="search-inline-explanation"
                       >
-                        <span v-if="similarityPercent(result) != null" class="search-relevance-mini"
-                          >{{ i18n.t("search.relevance") }} {{ similarityPercent(result) }}</span
+                        <UiTooltip
+                          v-if="similarityPercent(result) != null"
+                          :text="i18n.t('search.similarity_explanation')"
+                          trigger-mode="content"
+                          placement="bottom"
+                        >
+                          <span class="search-relevance-mini"
+                            >{{ i18n.t("search.relevance") }} {{ similarityPercent(result) }}</span
+                          > </UiTooltip
                         ><span v-for="reason in result.match_reasons" :key="reason">{{
                           reason
                         }}</span>

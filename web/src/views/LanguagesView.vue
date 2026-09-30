@@ -18,6 +18,7 @@ import CountryFlagPicker from "../components/CountryFlagPicker.vue";
 import LanguageWorkspaceHeader from "../components/LanguageWorkspaceHeader.vue";
 import AppIcon from "../components/AppIcon.vue";
 import UiLoadingState from "../components/ui/UiLoadingState.vue";
+import UiTooltip from "../components/ui/UiTooltip.vue";
 
 const i18n = useI18nStore();
 const route = useRoute();
@@ -1172,11 +1173,11 @@ onUnmounted(() => {
 
           <section class="language-identity-card" :aria-label="i18n.t('language.locale_identity')">
             <label class="language-meta-field"
-              ><span>{{ i18n.t("language.name") }}</span
-              ><input v-model="current.name" class="control" /><small>{{
-                i18n.t("language.name_help")
-              }}</small></label
-            >
+              ><span class="language-field-label"
+                >{{ i18n.t("language.name") }}
+                <UiTooltip :text="i18n.t('language.name_help')" placement="bottom" /></span
+              ><input v-model="current.name" class="control"
+            /></label>
             <CountryFlagPicker
               v-model="current.flag"
               :locale-code="current.code"
@@ -1184,9 +1185,12 @@ onUnmounted(() => {
               :help="i18n.t('language.flag_library_help')"
             />
             <div class="language-source-card">
-              <span>{{ i18n.t("language.source_language") }}</span
-              ><b>🇺🇸 {{ i18n.t("language.english_us") }}</b
-              ><small>{{ i18n.t("language.source_language_help") }}</small>
+              <span class="language-field-label"
+                >{{ i18n.t("language.source_language") }}
+                <UiTooltip
+                  :text="i18n.t('language.source_language_help')"
+                  placement="bottom" /></span
+              ><b>🇺🇸 {{ i18n.t("language.english_us") }}</b>
             </div>
             <button
               v-if="!['en-US', 'fr-CA'].includes(current.code)"
@@ -1492,16 +1496,22 @@ onUnmounted(() => {
                   >{{ i18n.t("language.english_fallback_note") }}</small
                 ></label
               >
-              <button
+              <UiTooltip
                 v-if="isCanonical"
-                class="language-row-remove"
-                type="button"
-                :title="i18n.t('language.remove_key')"
-                :aria-label="`${i18n.t('language.remove_key')}: ${key}`"
-                @click="removeDictionaryEntry(key)"
+                :text="i18n.t('language.remove_key')"
+                trigger-mode="content"
+                :content-focusable="false"
+                placement="bottom"
               >
-                ×
-              </button>
+                <button
+                  class="language-row-remove"
+                  type="button"
+                  :aria-label="`${i18n.t('language.remove_key')}: ${key}`"
+                  @click="removeDictionaryEntry(key)"
+                >
+                  ×
+                </button>
+              </UiTooltip>
             </article>
             <div v-if="!filteredRows.length" class="language-no-results">
               <AppIcon name="search" /><b>{{ i18n.t("language.no_string_matches") }}</b
@@ -1569,15 +1579,21 @@ onUnmounted(() => {
                 }}</span>
               </div>
             </div>
-            <button
-              class="icon-btn workflow-close"
-              type="button"
-              :title="i18n.t('ui.close')"
-              :aria-label="i18n.t('ui.close')"
-              @click="requestCloseInstall"
+            <UiTooltip
+              :text="i18n.t('ui.close')"
+              trigger-mode="content"
+              :content-focusable="false"
+              placement="bottom"
             >
-              ×
-            </button>
+              <button
+                class="icon-btn workflow-close"
+                type="button"
+                :aria-label="i18n.t('ui.close')"
+                @click="requestCloseInstall"
+              >
+                ×
+              </button>
+            </UiTooltip>
           </header>
           <form class="workflow-form language-install-form" @submit.prevent="installLanguage">
             <section class="language-install-source">
@@ -1601,7 +1617,11 @@ onUnmounted(() => {
               </div>
               <div class="workflow-fields workflow-identity-fields">
                 <label class="workflow-field"
-                  ><span>{{ i18n.t("language.locale_code") }}</span
+                  ><span class="language-field-label"
+                    >{{ i18n.t("language.locale_code") }}
+                    <UiTooltip
+                      :text="i18n.t('language.locale_code_help_modern')"
+                      placement="bottom" /></span
                   ><input
                     ref="installCodeInput"
                     v-model="install.code"
@@ -1610,19 +1630,16 @@ onUnmounted(() => {
                     autocomplete="off"
                     spellcheck="false"
                     placeholder="de-DE"
-                    aria-describedby="locale-code-help"
-                    :disabled="Boolean(resumeJobId)"
-                  /><small id="locale-code-help">{{
-                    i18n.t("language.locale_code_help_modern")
-                  }}</small></label
+                    :disabled="Boolean(resumeJobId)" /></label
                 ><label class="workflow-field"
-                  ><span>{{ i18n.t("language.name") }}</span
+                  ><span class="language-field-label"
+                    >{{ i18n.t("language.name") }}
+                    <UiTooltip :text="i18n.t('language.name_help')" placement="bottom" /></span
                   ><input
                     v-model="install.name"
                     class="control"
                     autocomplete="off"
-                    placeholder="Deutsch (Deutschland)"
-                  /><small>{{ i18n.t("language.name_help") }}</small></label
+                    placeholder="Deutsch (Deutschland)" /></label
                 ><CountryFlagPicker
                   :model-value="install.flag"
                   :locale-code="install.code"
@@ -2411,6 +2428,11 @@ onUnmounted(() => {
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--card);
+}
+.language-field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 .language-meta-field {
   display: grid;

@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import AppIcon from "../AppIcon.vue";
 import { useI18nStore } from "../../stores/i18n";
+import UiTooltip from "../ui/UiTooltip.vue";
 
 const props = defineProps<{
   work: string;
@@ -57,26 +58,39 @@ function act(fn: () => void) {
 <template>
   <header class="record-workspace-header">
     <div class="record-workspace-nav" :aria-label="i18n.t('record.navigation')">
-      <button
-        type="button"
-        class="record-icon-button"
-        :disabled="!props.hasPrevious"
-        :title="i18n.t('record.previous')"
-        @click="emit('previous')"
+      <UiTooltip
+        :text="props.hasPrevious ? i18n.t('record.previous') : i18n.t('record.no_previous')"
+        trigger-mode="content"
+        :content-focusable="!props.hasPrevious"
+        placement="bottom"
       >
-        <span aria-hidden="true">←</span
-        ><span class="sr-only">{{ i18n.t("record.previous") }}</span>
-      </button>
+        <button
+          type="button"
+          class="record-icon-button"
+          :disabled="!props.hasPrevious"
+          :aria-label="i18n.t('record.previous')"
+          @click="emit('previous')"
+        >
+          <span aria-hidden="true">←</span>
+        </button>
+      </UiTooltip>
       <span class="record-position">{{ props.position }}</span>
-      <button
-        type="button"
-        class="record-icon-button"
-        :disabled="!props.hasNext"
-        :title="i18n.t('record.next')"
-        @click="emit('next')"
+      <UiTooltip
+        :text="props.hasNext ? i18n.t('record.next') : i18n.t('record.no_next')"
+        trigger-mode="content"
+        :content-focusable="!props.hasNext"
+        placement="bottom"
       >
-        <span aria-hidden="true">→</span><span class="sr-only">{{ i18n.t("record.next") }}</span>
-      </button>
+        <button
+          type="button"
+          class="record-icon-button"
+          :disabled="!props.hasNext"
+          :aria-label="i18n.t('record.next')"
+          @click="emit('next')"
+        >
+          <span aria-hidden="true">→</span>
+        </button>
+      </UiTooltip>
     </div>
 
     <div class="record-identity">
@@ -119,7 +133,14 @@ function act(fn: () => void) {
         <AppIcon name="map" />{{ i18n.t("semantic_map.open") }}
       </button>
       <details class="record-shortcuts">
-        <summary :title="i18n.t('record.keyboard_shortcuts')">?</summary>
+        <UiTooltip
+          :text="i18n.t('record.keyboard_shortcuts')"
+          trigger-mode="content"
+          :content-focusable="false"
+          placement="bottom"
+        >
+          <summary :aria-label="i18n.t('record.keyboard_shortcuts')">?</summary>
+        </UiTooltip>
         <div class="record-shortcuts-popover">
           <strong>{{ i18n.t("record.keyboard_shortcuts") }}</strong>
           <span

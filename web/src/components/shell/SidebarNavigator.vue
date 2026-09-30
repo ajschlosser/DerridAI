@@ -4,6 +4,7 @@ import { computed, ref } from "vue";
 import { useI18nStore } from "../../stores/i18n";
 import AppIcon from "../AppIcon.vue";
 import SidebarNavButton from "./SidebarNavButton.vue";
+import UiTooltip from "../ui/UiTooltip.vue";
 import type { SidebarNavEntry, SidebarNavGroup } from "./sidebarNav";
 
 const props = defineProps<{ groups: SidebarNavGroup[]; collapsed: boolean }>();
@@ -189,25 +190,31 @@ function isFavorite(id: string) {
             :disabled-reason="item.disabledReason"
             @navigate="navigate"
           />
-          <button
+          <UiTooltip
             v-if="!collapsed && !isOverview(group)"
-            type="button"
-            class="shell-nav-favorite"
-            :class="{ active: isFavorite(item.id) }"
-            :aria-label="
+            :text="
               i18n.tf(isFavorite(item.id) ? 'nav.unpin' : 'nav.pin', {
                 label: item.label,
               })
             "
-            :title="
-              i18n.tf(isFavorite(item.id) ? 'nav.unpin' : 'nav.pin', {
-                label: item.label,
-              })
-            "
-            @click="toggleFavorite(item.id)"
+            trigger-mode="content"
+            :content-focusable="false"
+            placement="bottom"
           >
-            <AppIcon name="star" aria-hidden="true" />
-          </button>
+            <button
+              type="button"
+              class="shell-nav-favorite"
+              :class="{ active: isFavorite(item.id) }"
+              :aria-label="
+                i18n.tf(isFavorite(item.id) ? 'nav.unpin' : 'nav.pin', {
+                  label: item.label,
+                })
+              "
+              @click="toggleFavorite(item.id)"
+            >
+              <AppIcon name="star" aria-hidden="true" />
+            </button>
+          </UiTooltip>
         </div>
       </div>
     </section>

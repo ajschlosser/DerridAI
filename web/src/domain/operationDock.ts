@@ -205,7 +205,36 @@ export function createOperationDock(deps: Deps) {
     const handle = stack?.querySelector("[data-operation-drag]");
     if (!handle || handle.dataset.dragWired) return;
     handle.dataset.dragWired = "1";
+    const dragTooltip = document.querySelector("#operationDragHelp") as HTMLElement | null;
+    const showDragHelp = () => {
+      if (!dragTooltip) return;
+      dragTooltip.hidden = false;
+      const rect = handle.getBoundingClientRect();
+      requestAnimationFrame(() => {
+        const box = dragTooltip.getBoundingClientRect();
+        const margin = 8;
+        const left = Math.min(
+          Math.max(margin, rect.left + rect.width / 2 - box.width / 2),
+          window.innerWidth - box.width - margin,
+        );
+        const below = rect.bottom + 6;
+        const top =
+          below + box.height <= window.innerHeight - margin
+            ? below
+            : Math.max(margin, rect.top - box.height - 6);
+        dragTooltip.style.left = `${Math.round(left)}px`;
+        dragTooltip.style.top = `${Math.round(top)}px`;
+      });
+    };
+    const hideDragHelp = () => {
+      if (dragTooltip) dragTooltip.hidden = true;
+    };
+    handle.addEventListener("pointerenter", showDragHelp);
+    handle.addEventListener("pointerleave", hideDragHelp);
+    handle.addEventListener("focus", showDragHelp);
+    handle.addEventListener("blur", hideDragHelp);
     handle.addEventListener("pointerdown", (event: Any) => {
+      hideDragHelp();
       if (operationDockIsDocked() || event.button !== 0 || event.target.closest("button")) return;
       event.preventDefault();
       const rect = stack.getBoundingClientRect();
@@ -320,8 +349,20 @@ export function createOperationDock(deps: Deps) {
       stack.dataset.surface = state.operationToastsMinimized ? "glass" : "overlay";
       stack.setAttribute("role", "complementary");
       stack.setAttribute("aria-label", title);
-      stack.innerHTML = `<div class="operation-stack-toolbar" data-operation-drag tabindex="0" role="group" aria-label="${esc(dragHelp)}" title="${esc(dragHelp)}"><span class="operation-drag-grip" aria-hidden="true"></span><button type="button" class="operation-dock-toggle" id="operationStackToggle" aria-expanded="${state.operationToastsMinimized ? "false" : "true"}" aria-controls="operationStackItems" aria-label="${esc(state.operationToastsMinimized ? tr("operations.expand") : tr("operations.collapse"))}"><span class="operation-dock-dot" aria-hidden="true"></span><span class="operation-dock-copy"><b class="operation-dock-title">${esc(title)}</b><span id="operationStackCount"></span></span><span class="operation-dock-chevron" aria-hidden="true"></span></button><button type="button" class="btn tiny operation-dock-clear" id="operationStackClearFinished" hidden>${esc(tr("operations.clear_finished"))}</button></div><div id="operationStackLive" class="sr-only" aria-live="polite"></div><div id="operationStackItems" class="operation-stack-items" tabindex="0"></div>`;
+      stack.innerHTML = `<div class="operation-stack-toolbar" data-operation-drag tabindex="0" role="group" aria-label="${esc(dragHelp)}" aria-describedby="operationDragHelp"><span class="operation-drag-grip" aria-hidden="true"></span><button type="button" class="operation-dock-toggle" id="operationStackToggle" aria-expanded="${state.operationToastsMinimized ? "false" : "true"}" aria-controls="operationStackItems" aria-label="${esc(state.operationToastsMinimized ? tr("operations.expand") : tr("operations.collapse"))}"><span class="operation-dock-dot" aria-hidden="true"></span><span class="operation-dock-copy"><b class="operation-dock-title">${esc(title)}</b><span id="operationStackCount"></span></span><span class="operation-dock-chevron" aria-hidden="true"></span></button><button type="button" class="btn tiny operation-dock-clear" id="operationStackClearFinished" hidden>${esc(tr("operations.clear_finished"))}</button></div><div id="operationStackLive" class="sr-only" aria-live="polite"></div><div id="operationStackItems" class="operation-stack-items" tabindex="0"></div>`;
       document.body.appendChild(stack);
+      const existingDragTooltip = document.querySelector(
+        "#operationDragHelp",
+      ) as HTMLElement | null;
+      const dragTooltip = (existingDragTooltip || document.createElement("span")) as HTMLElement;
+      if (!existingDragTooltip) {
+        dragTooltip.id = "operationDragHelp";
+        dragTooltip.className = "operation-drag-help";
+        dragTooltip.setAttribute("role", "tooltip");
+        dragTooltip.hidden = true;
+        document.body.appendChild(dragTooltip);
+      }
+      dragTooltip.textContent = dragHelp;
       wireOperationStackDrag(stack);
       applyOperationStackPosition(stack);
       stack
@@ -365,6 +406,7 @@ export function createOperationDock(deps: Deps) {
     const count = stack.querySelectorAll(".operation-progress").length;
     if (!shouldMountOperationDock(count)) {
       stack.remove();
+      document.querySelector("#operationDragHelp")?.remove();
       globalThis.dispatchEvent(
         new CustomEvent("derridai:operation-summary", {
           detail: {

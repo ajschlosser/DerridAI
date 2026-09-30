@@ -6,6 +6,7 @@ import { mlaPageSpan } from "../domain/citations";
 import { icon } from "../domain/html";
 import { commonWorkValue, workCoverUrl } from "../domain/workMetadata";
 import AppIcon from "../components/AppIcon.vue";
+import UiTooltip from "../components/ui/UiTooltip.vue";
 import { useI18nStore } from "../stores/i18n";
 import { corpusState } from "../state/workspaceState";
 import { useJobsStore } from "../stores/jobs";
@@ -780,15 +781,21 @@ onBeforeUnmount(() => {
           ></button>
         </div>
         <div class="dashboard-work-carousel-shell">
-          <button
-            class="carousel-arrow"
-            id="dashWorksPrev"
-            type="button"
-            :title="i18n.t('ui.previous')"
-            :aria-label="i18n.t('ui.previous')"
-            @click="scrollWorks(-1)"
-            v-text="'‹'"
-          ></button>
+          <UiTooltip
+            :text="i18n.t('ui.previous')"
+            trigger-mode="content"
+            :content-focusable="false"
+            placement="bottom"
+          >
+            <button
+              class="carousel-arrow"
+              id="dashWorksPrev"
+              type="button"
+              :aria-label="i18n.t('ui.previous')"
+              @click="scrollWorks(-1)"
+              v-text="'‹'"
+            ></button>
+          </UiTooltip>
           <div class="dashboard-work-strip" id="dashWorksCarousel" ref="worksCarouselEl">
             <template v-if="works.length">
               <button
@@ -820,15 +827,21 @@ onBeforeUnmount(() => {
             </template>
             <div v-else class="note">{{ i18n.t("research.no_works") }}</div>
           </div>
-          <button
-            class="carousel-arrow"
-            id="dashWorksNext"
-            type="button"
-            :title="i18n.t('ui.next')"
-            :aria-label="i18n.t('ui.next')"
-            @click="scrollWorks(1)"
-            v-text="'›'"
-          ></button>
+          <UiTooltip
+            :text="i18n.t('ui.next')"
+            trigger-mode="content"
+            :content-focusable="false"
+            placement="bottom"
+          >
+            <button
+              class="carousel-arrow"
+              id="dashWorksNext"
+              type="button"
+              :aria-label="i18n.t('ui.next')"
+              @click="scrollWorks(1)"
+              v-text="'›'"
+            ></button>
+          </UiTooltip>
         </div>
       </section>
       <section class="dashboard-page-lower">
@@ -838,11 +851,11 @@ onBeforeUnmount(() => {
         >
           <div class="dashboard-card-title">
             <span class="dashboard-title-icon" v-html="icon('gear')"></span>
-            <b>{{ i18n.t("dashboard.appearance") }}</b>
+            <b
+              >{{ i18n.t("dashboard.appearance") }}
+              <UiTooltip :text="i18n.t('dashboard.appearance_help')"
+            /></b>
           </div>
-          <p>
-            {{ i18n.t("dashboard.appearance_help") }}
-          </p>
           <fieldset class="dashboard-theme-options">
             <legend>{{ i18n.t("dashboard.interface_theme") }}</legend>
             <label
@@ -880,11 +893,11 @@ onBeforeUnmount(() => {
         <article v-else class="card dashboard-quick-card dashboard-language-card">
           <div class="dashboard-card-title">
             <span class="dashboard-title-icon" v-html="icon('gear')"></span>
-            <b>{{ i18n.t("dashboard.language_settings") }}</b>
+            <b
+              >{{ i18n.t("dashboard.language_settings") }}
+              <UiTooltip :text="i18n.t('dashboard.language_settings_help')"
+            /></b>
           </div>
-          <p>
-            {{ i18n.t("dashboard.language_settings_help") }}
-          </p>
           <div class="dashboard-quick-field dashboard-locale-field">
             <span>{{ i18n.t("dashboard.interface_language") }}</span>
             <b
@@ -899,11 +912,11 @@ onBeforeUnmount(() => {
         <article class="card dashboard-quick-card dashboard-provider-card">
           <div class="dashboard-card-title">
             <span class="dashboard-title-icon"><AppIcon name="spark" /></span>
-            <b>{{ i18n.t("dashboard.llm_provider_settings") }}</b>
+            <b
+              >{{ i18n.t("dashboard.llm_provider_settings") }}
+              <UiTooltip :text="i18n.t('dashboard.llm_provider_help')"
+            /></b>
           </div>
-          <p>
-            {{ i18n.t("dashboard.llm_provider_help") }}
-          </p>
           <div class="dashboard-provider-fields">
             <div class="dashboard-quick-field">
               <span>{{ i18n.t("dashboard.default_provider") }}</span>

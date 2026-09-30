@@ -259,12 +259,6 @@ watch(
           <div>
             <h3>
               {{ table.name }}
-              <UiTooltip
-                v-if="tableHelp(table.name)"
-                :text="tableHelp(table.name)"
-                :label="i18n.tf('runtime.system_table_about', { table: table.name })"
-                placement="bottom"
-              />
             </h3>
             <p v-if="tableHelp(table.name)" class="table-about">{{ tableHelp(table.name) }}</p>
             <p>
@@ -308,13 +302,15 @@ watch(
               <thead>
                 <tr>
                   <th v-for="column in visibleColumns" :key="column.name">
-                    {{ column.name
-                    }}<span
+                    {{ column.name }}
+                    <UiTooltip
                       v-if="column.sensitive"
-                      class="sensitive-mark"
-                      :title="t('runtime.system_sensitive_redacted', 'Sensitive value redacted')"
-                      >●</span
+                      :text="t('runtime.system_sensitive_redacted', 'Sensitive value redacted')"
+                      trigger-mode="content"
+                      placement="bottom"
                     >
+                      <span class="sensitive-mark" aria-hidden="true">●</span>
+                    </UiTooltip>
                   </th>
                   <th>
                     <span class="sr-only">{{ t("common.actions", "Actions") }}</span>

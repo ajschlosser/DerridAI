@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18nStore } from "../../stores/i18n";
+import UiTooltip from "../ui/UiTooltip.vue";
 
 const props = defineProps<{ record: Record<string, unknown>; fields?: string[] }>();
 const emit = defineEmits<{ search: [field: string, value: string] }>();
@@ -19,6 +20,15 @@ const nodes = computed(() =>
     (item) => item.value !== undefined && item.value !== null && String(item.value).trim() !== "",
   ),
 );
+function nodeHelp(key: string) {
+  const help: Record<string, string> = {
+    speaker: "record.provenance_speaker_help",
+    position_holder: "record.provenance_position_holder_help",
+    stance: "record.provenance_stance_help",
+    target: "record.provenance_target_help",
+  };
+  return help[key] ? i18n.t(help[key]) : "";
+}
 const supporting = computed(() => {
   const keys = props.fields?.length
     ? props.fields.filter(
@@ -59,10 +69,18 @@ const supporting = computed(() => {
     <ol v-if="nodes.length" class="provenance-path" :aria-label="i18n.t('record.attribution_path')">
       <li v-for="(node, index) in nodes" :key="node.key">
         <span class="provenance-step" aria-hidden="true">{{ index + 1 }}</span>
-        <button type="button" @click="emit('search', node.key, String(node.value))">
-          <small>{{ node.label }}</small>
-          <strong>{{ node.value }}</strong>
-        </button>
+        <UiTooltip
+          :text="nodeHelp(node.key)"
+          placement="bottom"
+          trigger-mode="content"
+          :content-focusable="false"
+        >
+          <button type="button" @click="emit('search', node.key, String(node.value))">
+            <small class="provenance-label">{{ node.label }}</small>
+            <strong>{{ node.value }}</strong>
+            <span class="sr-only">{{ nodeHelp(node.key) }}</span>
+          </button>
+        </UiTooltip>
       </li>
     </ol>
     <p v-else class="provenance-empty">
@@ -183,6 +201,11 @@ const supporting = computed(() => {
 .provenance-path button:hover {
   border-color: var(--line);
   background: var(--card);
+}
+.provenance-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 .provenance-path small {
   color: var(--muted);
