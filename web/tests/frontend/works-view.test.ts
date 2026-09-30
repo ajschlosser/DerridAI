@@ -148,10 +148,13 @@ describe("WorksView", () => {
       recordCount: 12,
       workCount: 1,
     });
-    vi.stubGlobal("URL", {
-      ...URL,
-      createObjectURL: vi.fn(() => "blob:site"),
-      revokeObjectURL: vi.fn(),
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: vi.fn(() => "blob:site"),
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: vi.fn(),
     });
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
     setActivePinia(createPinia());
@@ -211,7 +214,7 @@ describe("WorksView", () => {
 
     await dialog.get("input[type='checkbox']").setValue(true);
     await dialog.get("input[placeholder='Research collection']").setValue("Glas research site");
-    await dialog.get("button[type='submit']").trigger("submit");
+    await dialog.get("form").trigger("submit");
     await flushPromises();
 
     expect(siteApi.exportSite).toHaveBeenCalledWith({
