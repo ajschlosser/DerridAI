@@ -18,6 +18,12 @@ from collections import defaultdict
 from typing import Any
 
 from .field_assertions import current_assertion_by_name, migrate_record_assertions
+from .semantic_identity import (
+    SEMANTIC_IDENTITY_VERSION,
+    EquivalenceProfile,
+    canonical_value_key,
+    text_key,
+)
 
 
 def _slug(value: str) -> str:
@@ -276,17 +282,91 @@ class _Graph:
             row["authority_status"] = "unreviewed"
 
 
+# How a metadata field matches values when the graph has no schema to ask. With a schema, the
+# field's own equivalence profile is used.
+_FALLBACK_PROFILES = {
+    **{field: EquivalenceProfile(mode="entity_name", identity_kind="person") for field in (
+        "persons", "speaker", "position_holder", "quoted_speaker", "quoted_author",
+    )},
+    "concepts": EquivalenceProfile(mode="lexical_phrase", identity_kind="concept"),
+    "topics": EquivalenceProfile(mode="lexical_phrase", identity_kind="topic"),
+    "works_referenced": EquivalenceProfile(mode="text", identity_kind="work"),
+    "quoted_work": EquivalenceProfile(mode="text", identity_kind="work"),
+    "target": EquivalenceProfile(mode="text", identity_kind="derridai.target"),
+}
+_PERSON_PROFILE = EquivalenceProfile(mode="entity_name", identity_kind="person")
+# Display-label precedence: a reviewed value, then a reviewed alias's canonical label, then the
+# Document Intelligence canonical label, then the most-supported and first-observed surfaces.
+_REVIEWED, _ALIAS_LABEL, _PROVIDER_LABEL, _OBSERVED = 1, 2, 3, 4
+
+
 def build_semantic_content_graph(
     records: list[dict[str, Any]],
     analysis: dict[str, Any] | None = None,
     *,
     schema: Any = None,
+    registry: Any = None,
 ) -> dict[str, Any]:
-    """Build a current graph from canonical Records and optional NLP annotations."""
+    """Build a current graph from canonical Records and optional NLP annotations.
+
+    Nodes are semantic identities, not strings. Equivalent values (``J.P. Dingus`` and
+    ``JP Dingus``, or ``pushing``/``push`` with a lemmatizer) share one node that keeps
+    every observed surface form; two identities a reviewer established as distinct never
+    merge. ``registry`` supplies established identities (reviewed aliases and values);
+    the graph consumes it and never defines identity itself. Record metadata is not
+    rewritten.
+    """
     analysis = analysis if isinstance(analysis, dict) else {}
     graph = _Graph()
     cluster_nodes: dict[str, str] = {}
+    node_aliases: dict[str, str] = {}
     profile = str(analysis.get("profile") or "scholarly")
+    provider = str(analysis.get("provider") or "")
+    identity_nodes: dict[str, str] = {}
+    surface_nodes: defaultdict[str, list[str]] = defaultdict(list)
+    established_of_node: dict[str, str] = {}
+    key_cache: dict[tuple[str, str, str, str], str] = {}
+    observed = itertools.count()
+
+    def field_profile(field: str) -> EquivalenceProfile:
+        if schema is not None:
+            try:
+                return schema.equivalence_profile_for(field)
+            except KeyError:
+                pass
+        return _FALLBACK_PROFILES.get(field, EquivalenceProfile(mode="text", identity_kind="value"))
+
+    def established(label: str, eq: EquivalenceProfile) -> Any:
+        if registry is None:
+            return None
+        return registry.resolve(value=label, kind=str(eq.identity_kind or "value"), mode=eq.mode, established_only=True)
+
+    def identity_key(label: str, eq: EquivalenceProfile, language: str = "") -> str:
+        cache_key = (label, eq.mode, str(eq.identity_kind), language)
+        if cache_key not in key_cache:
+            key = canonical_value_key(label, profile=eq, language=language, registry=registry)
+            # Without a safe identity (for example no lemmatizer), a value keys only to its surface.
+            key_cache[cache_key] = key or f"{eq.identity_kind or 'value'}:text:{text_key(label)}"
+        return key_cache[cache_key]
+
+    def observe(node_id: str, surface: str, rank: int) -> None:
+        surface = re.sub(r"\s+", " ", str(surface or "")).strip()
+        if not node_id or not surface:
+            return
+        row = graph.nodes[node_id].setdefault("_surfaces", {})
+        entry = row.setdefault(surface, [rank, 0, next(observed)])
+        entry[0] = min(entry[0], rank)
+        entry[1] += 1
+        if node_id not in surface_nodes[text_key(surface)]:
+            surface_nodes[text_key(surface)].append(node_id)
+
+    def claim(node_id: str, key: str, ref: Any) -> None:
+        identity_nodes.setdefault(key, node_id)
+        graph.nodes[node_id].setdefault("_key", key)
+        if ref is not None:
+            established_of_node.setdefault(node_id, ref.identity_id)
+            if ref.source == "reviewed_alias":
+                observe(node_id, ref.canonical_label, _ALIAS_LABEL)
 
     for cluster in analysis.get("entity_clusters") or []:
         if not isinstance(cluster, dict):
@@ -306,15 +386,35 @@ def build_semantic_content_graph(
             if entity_type in {"LOC", "GPE", "FAC"}
             else "entity"
         )
+        eq = _PERSON_PROFILE if kind in {"person", "character"} else EquivalenceProfile(mode="text", identity_kind=kind)
         cluster_id = str(cluster.get("cluster_id") or "")
+        aliases = [str(value) for value in (cluster.get("aliases") or []) if str(value).strip()]
         stable_id = document_entity_node_id(cluster_id, label)
-        node_id = graph.node(
-            kind,
-            label,
-            aliases=[str(value) for value in (cluster.get("aliases") or [])],
-            derivation_method=str(analysis.get("provider") or "document_nlp"),
-            entity_id=stable_id,
-        )
+        ref = established(label, eq)
+        key = identity_key(label, eq)
+        # Clusters merge only when a reviewer established that they are one identity, or when
+        # the provider's clusters are plain surface groups (spaCy). BookNLP keeps two
+        # same-named characters apart, and so does the graph.
+        merge = identity_nodes.get(ref.identity_id) if ref is not None else (identity_nodes.get(key) if provider == "spacy" else None)
+        if merge and graph.nodes[merge].get("type") == kind and graph.nodes[merge].get("cluster_ids"):
+            node_id = merge
+            graph.nodes[node_id]["aliases"] = list(dict.fromkeys([*graph.nodes[node_id]["aliases"], label, *aliases]))
+            node_aliases[stable_id] = node_id
+        else:
+            node_id = graph.node(
+                kind,
+                label,
+                aliases=aliases,
+                derivation_method=str(analysis.get("provider") or "document_nlp"),
+                entity_id=stable_id,
+            )
+        graph.nodes[node_id].setdefault("cluster_ids", []).append(cluster_id)
+        claim(node_id, key, ref)
+        observe(node_id, label, _PROVIDER_LABEL)
+        for alias in aliases:
+            identity_nodes.setdefault(identity_key(alias, eq), node_id)
+            if text_key(alias) not in surface_nodes or node_id not in surface_nodes[text_key(alias)]:
+                surface_nodes[text_key(alias)].append(node_id)
         if cluster_id:
             cluster_nodes[cluster_id] = node_id
 
@@ -366,18 +466,30 @@ def build_semantic_content_graph(
         )
         graph.mention(node_id, str((owning or {}).get("record_id") or ""))
 
-    labels_to_nodes: defaultdict[str, list[str]] = defaultdict(list)
-    for node_id, node in graph.nodes.items():
-        labels_to_nodes[str(node.get("label") or "").casefold()].append(node_id)
-        for alias in node.get("aliases") or []:
-            labels_to_nodes[str(alias).casefold()].append(node_id)
-
-    def metadata_node(kind: str, label: str, *, prefer_existing: bool = False) -> str:
-        existing = labels_to_nodes.get(label.casefold())
-        if existing and (prefer_existing or kind in {"person", "character"}):
-            return existing[0]
-        node_id = graph.node(kind, label)
-        labels_to_nodes[label.casefold()].append(node_id)
+    def metadata_node(kind: str, label: str, field: str, record: dict[str, Any], *, prefer_existing: bool = False) -> str:
+        label = re.sub(r"\s+", " ", str(label or "")).strip()
+        if not label:
+            return ""
+        eq = field_profile(field)
+        ref = established(label, eq)
+        key = identity_key(label, eq, str(record.get("language") or ""))
+        node_id = identity_nodes.get(key)
+        if node_id is None and (prefer_existing or kind in {"person", "character"}):
+            # A polymorphic target, or a person the document layer already knows, may attach to
+            # an existing node by surface, but never to one established as a different identity.
+            node_id = next(
+                (
+                    candidate
+                    for candidate in surface_nodes.get(text_key(label), [])
+                    if (prefer_existing or graph.nodes[candidate].get("type") in {"person", "character"})
+                    and (ref is None or established_of_node.get(candidate) in (None, ref.identity_id))
+                ),
+                None,
+            )
+        if node_id is None:
+            node_id = graph.node(kind, label, entity_id=f"{kind}:{_slug(key)}")
+        claim(node_id, key, ref)
+        observe(node_id, label, _REVIEWED if _authority(record, [field]) == "human_confirmed" else _OBSERVED)
         return node_id
 
     for record in records:
@@ -392,7 +504,7 @@ def build_semantic_content_graph(
         ):
             ids: list[str] = []
             for label in _values(record.get(field)):
-                node_id = metadata_node(kind, label)
+                node_id = metadata_node(kind, label, field, record)
                 graph.mention(
                     node_id,
                     record_id,
@@ -443,13 +555,13 @@ def build_semantic_content_graph(
             supporting = ["position_holder", "target"] + (["stance"] if stance else [])
             predicate = stance or "addresses"
             for holder in holders:
-                source = metadata_node("person", holder)
+                source = metadata_node("person", holder, "position_holder", record)
                 for target in targets:
                     # target is polymorphic in scholarly prose: it may be a
                     # person, work, concept, institution, etc. Reuse an entity
                     # already established by the document/indexing layer before
                     # falling back to a concept node.
-                    target_id = metadata_node("concept", target, prefer_existing=True)
+                    target_id = metadata_node("concept", target, "target", record, prefer_existing=True)
                     graph.edge(
                         source,
                         predicate,
@@ -467,9 +579,12 @@ def build_semantic_content_graph(
         quoted_authors = _values(record.get("quoted_author"))
         quoted_works = _values(record.get("quoted_work"))
         for speaker in speakers:
-            source = metadata_node("person", speaker)
-            for quoted in [*quoted_speakers, *quoted_authors]:
-                target = metadata_node("person", quoted)
+            source = metadata_node("person", speaker, "speaker", record)
+            for quoted_field, quoted in [
+                *(("quoted_speaker", value) for value in quoted_speakers),
+                *(("quoted_author", value) for value in quoted_authors),
+            ]:
+                target = metadata_node("person", quoted, quoted_field, record)
                 graph.edge(
                     source,
                     "quotes",
@@ -482,9 +597,9 @@ def build_semantic_content_graph(
                     supporting_fields=["speaker", "quoted_speaker", "quoted_author"],
                 )
         for author in quoted_authors:
-            source = metadata_node("person", author)
+            source = metadata_node("person", author, "quoted_author", record)
             for work in quoted_works:
-                target = metadata_node("work", work)
+                target = metadata_node("work", work, "quoted_work", record)
                 graph.edge(
                     source,
                     "quoted_work",
@@ -580,6 +695,20 @@ def build_semantic_content_graph(
                         },
                     )
 
+    for node_id, node in graph.nodes.items():
+        surfaces = node.pop("_surfaces", {})
+        key = node.pop("_key", "")
+        if surfaces:
+            ordered = sorted(surfaces.items(), key=lambda item: (item[1][0], -item[1][1], item[1][2], item[0]))
+            node["label"] = ordered[0][0]
+            node["surface_forms"] = [surface for surface, _ in sorted(surfaces.items(), key=lambda item: item[1][2])]
+        else:
+            node["surface_forms"] = [node["label"]]
+        node["aliases"] = [value for value in dict.fromkeys([*node.get("aliases", []), *node["surface_forms"]]) if value != node["label"]]
+        node["canonical_value_key"] = key or None
+        node["identity_id"] = established_of_node.get(node_id)
+        node["identity_version"] = SEMANTIC_IDENTITY_VERSION
+
     nodes = sorted(
         graph.nodes.values(),
         key=lambda item: (-int(item.get("mention_count") or 0), str(item.get("label") or "")),
@@ -589,8 +718,11 @@ def build_semantic_content_graph(
         key=lambda item: (-int(item.get("count") or 0), str(item.get("predicate") or "")),
     )
     return {
-        "version": 1,
+        "version": 2,
         "kind": "semantic_content_graph",
+        "identity_version": SEMANTIC_IDENTITY_VERSION,
+        # Document Intelligence node ids that now resolve to a merged identity node.
+        "node_aliases": node_aliases,
         "records_digest": _records_digest(records),
         "document_intelligence_sha256": analysis.get("text_sha256"),
         "profile": profile,

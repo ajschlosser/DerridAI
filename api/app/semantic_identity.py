@@ -193,6 +193,11 @@ _LEMMATIZED_POS = {"NOUN", "VERB", "AUX"}
 _WORD = re.compile(r"\w+(?:['’]\w+)*", re.UNICODE)
 
 
+def lexical_key(tokens: Sequence[LemmaToken]) -> str:
+    """The ``lexical_phrase`` identity text of already-tagged tokens."""
+    return _lexical_key(tokens)
+
+
 def _lexical_key(tokens: Sequence[LemmaToken]) -> str:
     out: list[str] = []
     for text, lemma, pos in tokens:
@@ -291,6 +296,10 @@ def canonical_value_key(
     identity = resolve_identity(value, profile=profile, kind=scope, registry=registry)
     if identity is not None:
         return identity.identity_id
+    if registry is not None and isinstance(value, str) and registry.ambiguous(value=value, kind=scope, mode=profile.mode):
+        # A surface that could name several reviewed identities keys only to itself, so
+        # nothing downstream merges it with any of them.
+        return f"{scope}:ambiguous:{text_key(value)}"
     key = _scalar_key(value, profile.mode, language=language, lemmatizer=lemmatizer)
     return None if key is None else f"{scope}:{profile.mode}:{key}"
 

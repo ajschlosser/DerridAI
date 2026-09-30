@@ -26,9 +26,11 @@ import os
 import threading
 from typing import Any
 
+from .semantic_identity import SEMANTIC_IDENTITY_VERSION, entity_name_key, lexical_key
+
 logger = logging.getLogger(__name__)
 
-ANNOTATION_VERSION = 2
+ANNOTATION_VERSION = 3
 MAX_TEXT_CHARS = 20000
 MAX_CANDIDATES_PER_FIELD = 12
 MAX_TERMS = 60
@@ -226,8 +228,30 @@ def record_terms(doc: Any, text: str) -> list[dict[str, Any]]:
             if len(surface.strip()) < 3 or not any(char.isalpha() for char in surface):
                 continue
             found[key] = {**run, "text": surface, "source": "pos"}
-    ordered = sorted(found.values(), key=lambda item: item["start"])
-    return ordered[:MAX_TERMS]
+    ordered = sorted(found.values(), key=lambda item: item["start"])[:MAX_TERMS]
+    for term in ordered:
+        identity = _term_identity(doc, term)
+        if identity:
+            # Derived and rebuildable; ``text``/``start``/``end`` stay the exact source span.
+            term["identity_text"] = identity
+            term["identity_version"] = SEMANTIC_IDENTITY_VERSION
+    return ordered
+
+
+def _term_identity(doc: Any, term: dict[str, Any]) -> str:
+    """A term's identity text: name identity for a person, noun/verb lemmas for a POS run.
+
+    Omitted (empty) when the pipeline produced no lemmas, rather than guessed from surface.
+    """
+    if term.get("source") == "ner":
+        return entity_name_key(str(term.get("text") or "")) if term.get("tag") == "PERSON" else ""
+    span = doc.char_span(int(term["start"]), int(term["end"])) if hasattr(doc, "char_span") else None
+    if span is None:
+        return ""
+    tokens = [(str(token.text), str(getattr(token, "lemma_", "") or ""), str(token.pos_ or "")) for token in span]
+    if not tokens or not all(lemma for _, lemma, _ in tokens):
+        return ""
+    return lexical_key(tokens)
 
 
 def annotate_record(record: dict[str, Any], schema: Any, *, language: str = "") -> dict[str, Any]:
