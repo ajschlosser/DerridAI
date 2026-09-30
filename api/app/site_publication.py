@@ -477,11 +477,13 @@ def build_local_site_file(
     title: str,
     description: str = "",
     locale: str = "en-US",
+    languages: Sequence[str] | None = None,
+    provider_profile_ids: Sequence[str] | None = None,
 ) -> SiteBundle:
-    """Create one network-independent HTML file for direct local use.
+    """Create one self-contained HTML file for direct local use.
 
-    The publication, SDK, and reference UI are embedded inline. The document CSP
-    forbids network connections, so opening it with file:// never depends on CORS.
+    Publication data, SDK, and reference UI are embedded inline. External model
+    calls are allowed only to http(s) origins and remain subject to browser CORS.
     """
     core = build_site_bundle(
         store_name=store_name,
@@ -489,6 +491,8 @@ def build_local_site_file(
         title=title,
         description=description,
         locale=locale,
+        languages=languages,
+        provider_profile_ids=provider_profile_ids,
     )
     files = _core_site_files(core)
     index_html = files["index.html"].decode("utf-8")
@@ -499,12 +503,12 @@ def build_local_site_file(
     runtime_source = _inline_script_source(files[SITE_ASSET_NAME].decode("utf-8"))
 
     external_csp = (
-        "default-src 'self' file: data: blob:; connect-src 'self'; "
+        "default-src 'self' file: data: blob:; connect-src 'self' http: https:; "
         "img-src 'self' file: data: https:; style-src 'self' 'unsafe-inline'; "
         "script-src 'self' file:"
     )
     local_csp = (
-        "default-src 'none'; connect-src 'none'; img-src data:; "
+        "default-src 'none'; connect-src http: https:; img-src data: https:; "
         "style-src 'unsafe-inline'; script-src 'unsafe-inline'; "
         "base-uri 'none'; form-action 'none'"
     )
@@ -648,9 +652,10 @@ Optional environment variables:
   DERRIDAI_SITE_IMAGE      Docker image name (default: derridai-research-site)
   DERRIDAI_SITE_CONTAINER  container name (default: derridai-research-site)
 
-The site uses the same DerridAI SDK as custom Web applications. AI execution is
-not configured by provider URLs or API keys in the browser; host applications
-may inject transport-neutral embedding/generation capabilities when needed.
+The site uses the same DerridAI SDK as custom Web applications. Safe provider
+profile descriptors selected at export time may be included for direct browser
+Research. API keys are never exported; visitors enter credentials in their own
+browser when the selected provider requires them.
 """
 
 
@@ -676,6 +681,8 @@ def build_nginx_site_bundle(
     title: str,
     description: str = "",
     locale: str = "en-US",
+    languages: Sequence[str] | None = None,
+    provider_profile_ids: Sequence[str] | None = None,
 ) -> SiteBundle:
     """Create a deployable multi-file site served by exactly one nginx container."""
     core = build_site_bundle(
@@ -684,6 +691,8 @@ def build_nginx_site_bundle(
         title=title,
         description=description,
         locale=locale,
+        languages=languages,
+        provider_profile_ids=provider_profile_ids,
     )
     files = _core_site_files(core)
     archive = io.BytesIO()
