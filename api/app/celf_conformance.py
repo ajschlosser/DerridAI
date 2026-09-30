@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .corpus_publication import validate_publication_record
+from .corpus_publication import serialize_public_record, validate_publication_record
 
 _SOURCE_INTEGRITY_KEYS = (
     "missing_block_ids",
@@ -29,13 +29,14 @@ def evaluate_celf_conformance(
     reported by publication metadata; cELF conformance is derived from identity,
     source, structural, and integrity requirements instead.
     """
+    normalized_records = [serialize_public_record(record) for record in records]
     core: list[dict[str, Any]] = []
     validation = build.get("validation") if isinstance(build.get("validation"), dict) else {}
     for key in _SOURCE_INTEGRITY_KEYS:
         values = validation.get(key)
         if values:
             core.append({"code": f"source_{key}", "detail": values})
-    for record in records:
+    for record in normalized_records:
         record_id = str(record.get("record_id") or "")
         if not record_id:
             core.append({"code": "missing_record_id", "record_id": record_id})
@@ -50,15 +51,19 @@ def evaluate_celf_conformance(
             if not isinstance(span, dict) or str(span.get("source_document_id") or source_id) != source_id:
                 core.append({"code": "source_span_document_mismatch", "record_id": record_id})
     publication: list[dict[str, Any]] = []
-    for record in records:
+    for record in normalized_records:
         for error in validate_publication_record(record):
             publication.append({"code": "publication_record_invalid", "record_id": record.get("record_id"), "detail": error})
-    if not records:
+    if not normalized_records:
         publication.append({"code": "empty_publication"})
-    result = {
+    core_status = _status(core)
+    publication_status = _status(publication) if not core else "non_conformant"
+    return {
         "spec_version": "1.0",
-        "core": {"status": _status(core), "blockers": core},
-        "publication": {"status": _status(publication) if not core else "non_conformant", "blockers": publication + core},
+        "core": {"status": core_status, "blockers": core},
+        "publication": {
+            "status": publication_status,
+            "blockers": publication + core,
+        },
+        "conformant": core_status == "conformant" and publication_status == "conformant",
     }
-    result["conformant"] = result["core"]["status"] == "conformant" and result["publication"]["status"] == "conformant"
-    return result
