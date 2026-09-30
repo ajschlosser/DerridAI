@@ -117,6 +117,7 @@
     .research-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(18rem,24rem);gap:1rem}.answer{white-space:pre-wrap;font-family:Georgia,serif;font-size:1.04rem}
     .evidence{display:grid;gap:.6rem}.evidence button{text-align:left;height:auto}.work-button{width:100%;text-align:left;height:100%;padding:1rem}.work-button h2{font-size:1.1rem}.count{font-size:1.6rem;font-weight:800}
     .provider-panel{display:grid;gap:.7rem}.provider-summary{padding:.65rem;border:1px solid var(--border);border-radius:.5rem;background:var(--bg);overflow-wrap:anywhere}
+    .provider-command{display:block;margin-top:.5rem;overflow:auto;padding:.5rem;border:1px solid var(--border);border-radius:.4rem;background:var(--raised);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.82rem;white-space:pre}
     .tutorial-progress{font-weight:800;color:var(--muted)}.tutorial-copy{font-size:1.02rem;max-width:68ch}.tutorial-copy p{margin:.35rem 0 .9rem}
     .footer{margin-top:3rem;border-top:1px solid var(--border);padding:1.2rem 0 2.5rem;color:var(--muted);font-size:.875rem}
     .sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
@@ -256,12 +257,51 @@
     return providerProfiles.find((profile) => String(profile.id) === String(id)) || null;
   }
 
+  function providerError(message, code, status = 0) {
+    const error = new Error(message);
+    error.code = code;
+    error.status = status;
+    return error;
+  }
+
+  function isLoopbackHost(hostname) {
+    return ["localhost", "127.0.0.1", "::1", "[::1]"].includes(
+      String(hostname || "").toLocaleLowerCase(),
+    );
+  }
+
   function providerBase(profile) {
     const raw = String(profile?.base_url || "").trim().replace(/\/$/, "");
-    if (!raw) throw new Error(t("site.runtime.provider_endpoint_missing"));
-    const parsed = new URL(raw);
+    if (!raw) {
+      throw providerError(
+        t("site.runtime.provider_endpoint_missing"),
+        "invalid_endpoint",
+      );
+    }
+    let parsed;
+    try {
+      parsed = new URL(raw);
+    } catch {
+      throw providerError(
+        t("site.runtime.provider_endpoint_invalid"),
+        "invalid_endpoint",
+      );
+    }
     if (!["http:", "https:"].includes(parsed.protocol)) {
-      throw new Error(t("site.runtime.provider_endpoint_invalid"));
+      throw providerError(
+        t("site.runtime.provider_endpoint_invalid"),
+        "invalid_endpoint",
+      );
+    }
+    if (
+      location.protocol === "https:" &&
+      parsed.protocol === "http:" &&
+      !isLoopbackHost(parsed.hostname)
+    ) {
+      throw providerError(
+        t("site.runtime.provider_mixed_content", { endpoint: parsed.origin }),
+        "mixed_content",
+      );
     }
     return raw;
   }
@@ -277,10 +317,12 @@
     try {
       response = await fetch(url, init);
     } catch {
-      throw new Error(
+      throw providerError(
         t("site.runtime.provider_browser_blocked", {
+          endpoint: url,
           origin: location.origin === "null" ? t("site.runtime.file_origin") : location.origin,
         }),
+        "network",
       );
     }
     const text = await response.text();
@@ -291,11 +333,33 @@
       body = {};
     }
     if (!response.ok) {
-      throw new Error(
-        String(body?.error?.message || body?.detail || text || `${response.status} ${response.statusText}`),
+      const code =
+        response.status === 401 || response.status === 403
+          ? "authentication"
+          : response.status === 404
+            ? "not_found"
+            : "provider_error";
+      throw providerError(
+        String(
+          body?.error?.message ||
+            body?.detail ||
+            text ||
+            `${response.status} ${response.statusText}`,
+        ),
+        code,
+        response.status,
       );
     }
     return body;
+  }
+
+  async function noCorsReachabilityProbe(url) {
+    try {
+      await fetch(url, { method: "GET", mode: "no-cors", cache: "no-store" });
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   function directEmbeddingProvider(profile, apiKey) {
@@ -378,7 +442,16 @@
   }
 
   async function testProvider(profile, apiKey) {
-    const base = providerBase(profile);
+    let base;
+    try {
+      base = providerBase(profile);
+    } catch (error) {
+      return {
+        ok: false,
+        code: error?.code || "invalid_endpoint",
+        message: error instanceof Error ? error.message : String(error),
+      };
+    }
     const endpoint = profile.type === "ollama" ? `${base}/api/tags` : `${base}/models`;
     try {
       const body = await providerJson(endpoint, {
@@ -391,12 +464,30 @@
         : (body.data || []).map((item) => item?.id).filter(Boolean);
       const required = String(profile.model || "");
       if (required && names.length && !names.includes(required)) {
-        return { ok: false, message: t("site.runtime.provider_model_missing", { model: required }) };
+        return {
+          ok: false,
+          code: "model_not_found",
+          message: t("site.runtime.provider_model_missing", { model: required }),
+        };
       }
-      return { ok: true, message: t("site.runtime.provider_ready") };
+      return { ok: true, code: "ready", message: t("site.runtime.provider_ready") };
     } catch (error) {
+      if (error?.code === "network" && (await noCorsReachabilityProbe(endpoint))) {
+        const origin =
+          location.origin === "null" ? t("site.runtime.file_origin") : location.origin;
+        return {
+          ok: false,
+          code: "cors_blocked",
+          message: t("site.runtime.provider_cors_blocked", { origin }),
+          remediation:
+            profile.type === "ollama" && location.origin !== "null"
+              ? `OLLAMA_ORIGINS="${location.origin}" ollama serve`
+              : "",
+        };
+      }
       return {
         ok: false,
+        code: error?.code || "provider_error",
         message: t("site.runtime.provider_test_failed", {
           error: error instanceof Error ? error.message : String(error),
         }),
@@ -884,7 +975,15 @@
           status.textContent = t("site.runtime.testing_provider");
           const result = await testProvider(profile, key.value);
           status.className = result.ok ? "status success" : "status error";
-          status.textContent = result.message;
+          status.replaceChildren(node("span", { text: result.message }));
+          if (result.remediation) {
+            status.append(
+              node("code", {
+                class: "provider-command",
+                text: result.remediation,
+              }),
+            );
+          }
         },
       },
     });
