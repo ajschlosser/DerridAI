@@ -149,12 +149,12 @@ Likely files:
 
 ### Phase 2 — Build plan and setup hierarchy
 
-Status: **not started**
+Status: **in progress**
 
 Goal: make setup feel like a prepared plan rather than a long form.
 
 - [ ] Introduce a reusable `CorpusBuildPlan` / equivalent component based on existing `setupSections` and `setupIssues`.
-- [ ] Desktop layout: configuration content + sticky Build plan rail.
+- [x] Desktop layout: configuration content + sticky Build plan rail.
 - [ ] Build plan summarizes:
   - [ ] source identity/media facts;
   - [ ] structure/transcription state;
@@ -162,11 +162,11 @@ Goal: make setup feel like a prepared plan rather than a long form.
   - [ ] enrichment/provider/model;
   - [ ] Record sizing;
   - [ ] warning/blocker count.
-- [ ] Keep a single dominant **Build corpus** action.
+- [x] Keep a single dominant launch/fix action: Build is primary when ready; Fix is primary when blocked.
 - [ ] Collapse/edit sections directly from Build plan.
-- [ ] Remove or simplify the duplicate sticky launch/status treatment in `CorpusBuildReadiness.vue`.
-- [ ] Rename/demote “Advanced” presentation to “Run settings” or equivalent.
-- [ ] Fix the semantic contradiction where Advanced can appear optional while containing a blocking context-safety issue.
+- [x] Replace the duplicate sticky-bottom launch treatment with the dedicated Build plan rail.
+- [x] Rename/demote “Advanced” presentation to **Run settings**.
+- [x] Fix the semantic contradiction where Run settings can appear optional while containing a blocking context-safety issue.
 - [ ] Ensure media-specific summaries do not leak PDF/page language into audio/image/text sources.
 - [ ] Responsive/mobile layout.
 - [ ] Storybook states: no source, ready, warning, blocking, long French copy, narrow layout.
@@ -384,3 +384,13 @@ Work on this branch will be committed in coherent checkpoints. At each checkpoin
 - Added an in-phase Build/Review sub-navigation so users can switch between live status and Record review without reintroducing them as separate top-level phases.
 - Combined phase completion now requires both Build and Review completion.
 - Added English and Québec French labels plus focused workspace-header coverage.
+
+
+### Checkpoint 4 — Setup becomes a Build plan
+
+- Re-composed Setup into a two-column desktop workspace: configuration sections remain the main work area and launch/readiness now lives in a sticky **Build plan** rail.
+- Reworked `CorpusBuildReadiness.vue` from a second sticky command bar into a focused plan card with one dominant action.
+- When setup is blocked, **Fix** becomes the primary action and **Build** becomes secondary/disabled; when setup is ready, **Build** is primary.
+- Renamed the user-facing **Advanced** section to **Run settings**.
+- Corrected setup-state semantics so a blocking context/run-setting problem is reported as incomplete rather than optional.
+- Added English/Québec French/fallback copy and focused tests for the Build plan label and blocking run-setting state.
