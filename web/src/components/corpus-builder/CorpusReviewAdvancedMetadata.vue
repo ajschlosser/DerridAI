@@ -130,3 +130,84 @@ const i18n = useI18nStore();
     </div>
   </details>
 </template>
+
+<style scoped>
+.record-data {
+  border-top: 1px solid var(--border-subtle);
+  padding: 10px 14px;
+}
+.record-data > summary {
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 800;
+}
+.document-metadata-launch {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 12px 14px;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-subtle);
+}
+.document-metadata-launch > div {
+  display: grid;
+  gap: 2px;
+  font-size: 0.8125rem;
+}
+.document-metadata-launch b {
+  font-size: 0.875rem;
+}
+.document-metadata-launch span {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+.metadata-json {
+  width: 100%;
+  min-height: 230px;
+  resize: vertical;
+  font:
+    12px/1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 8px;
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+  margin: 7px 0;
+}
+.data-actions {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.rerun-family {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.8125rem;
+}
+.rerun-family .control {
+  min-width: 190px;
+  min-height: 36px;
+  font-size: 0.8125rem;
+}
+.metadata-json {
+  font-size: 0.8125rem !important;
+}
+@media (max-width: 760px) {
+  .document-metadata-launch {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .document-metadata-launch :deep(.ui-button) {
+    width: 100%;
+  }
+}
+</style>
