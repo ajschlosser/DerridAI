@@ -228,7 +228,7 @@ function chooseOrientation(next: PipelineDiagramOrientation) {
           </button>
         </div>
         <UiRelationToolbar
-          :aria-label="t('pipelines.diagram_controls', 'Pipeline diagram controls')"
+          :accessible-label="t('pipelines.diagram_controls', 'Pipeline diagram controls')"
           :zoom-out-label="t('pipelines.diagram_zoom_out', 'Zoom out')"
           :zoom-in-label="t('pipelines.diagram_zoom_in', 'Zoom in')"
           :fit-label="t('pipelines.diagram_fit', 'Fit diagram')"
@@ -246,7 +246,7 @@ function chooseOrientation(next: PipelineDiagramOrientation) {
         ref="viewport"
         class="diagram-viewport"
         :style="{ height: `${viewportHeight}px` }"
-        :aria-label="title"
+        :accessible-label="title"
         :help-text="
           t(
             'pipelines.diagram_help',
@@ -299,7 +299,7 @@ function chooseOrientation(next: PipelineDiagramOrientation) {
               :x="node.x"
               :y="node.y"
               :zoom="zoom"
-              :aria-label="`${node.id}: ${labelFor(node.strategy)}`"
+              :accessible-label="`${node.id}: ${labelFor(node.strategy)}`"
               :aria-pressed="selected?.id === node.id"
               :data-status="node.executionStatus || undefined"
               :data-presence="node.presence"
