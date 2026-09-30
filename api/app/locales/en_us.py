@@ -8586,4 +8586,11 @@ EN_US: dict[str, str] = {'common.apply': 'Apply',
  'pipelines.strategy.llm_closed_choice_evidence.description': 'Ask a chat model to choose only from supplied source-unit IDs, then validate the IDs deterministically.',
  'pipelines.strategy.llm_grade_rag.label': 'RAG response grading',
  'pipelines.strategy.llm_grade_rag.description': 'Evaluate a generated answer against the evidence packet using the configured grading profile.'
+,
+ 'pipelines.diagram_controls': 'Pipeline diagram controls',
+ 'pipelines.diagram_zoom_out': 'Zoom out',
+ 'pipelines.diagram_zoom_in': 'Zoom in',
+ 'pipelines.diagram_fit': 'Fit diagram',
+ 'pipelines.diagram_reset_layout': 'Reset layout',
+ 'pipelines.diagram_resize': 'Resize pipeline diagram',
 }
