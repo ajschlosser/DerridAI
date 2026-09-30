@@ -174,9 +174,12 @@ async function mountStaticSite(page: Page) {
     ],
   };
 
-  await page.setContent('<main><div id="app" role="status" aria-live="polite">Loading…</div></main>');
+  await page.setContent(
+    '<main><div id="app" role="status" aria-live="polite">Loading…</div></main>',
+  );
   await page.evaluate((value) => {
-    (window as typeof window & { __DERRIDAI_SITE_PACKAGE__?: unknown }).__DERRIDAI_SITE_PACKAGE__ = value;
+    (window as typeof window & { __DERRIDAI_SITE_PACKAGE__?: unknown })
+      .__DERRIDAI_SITE_PACKAGE__ = value;
   }, packageValue);
   await page.addScriptTag({ content: sdkSource });
   await page.addScriptTag({ content: siteSource });
@@ -390,6 +393,7 @@ test("exported OpenAI-compatible profile powers vector retrieval and LLM Researc
   await expect(methods).toContainText("Text search");
   await expect(methods).toContainText("Vector search (embeddings)");
   await expect(methods).toContainText("LLM answer generation");
-  await expect(methods).not.toContainText("not used");
-  await scan(page);
-});
+    await expect(methods).not.toContainText("not used");
+    await scan(page);
+  },
+);
