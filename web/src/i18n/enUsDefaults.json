@@ -8173,6 +8173,8 @@
   "site.runtime.embedding_dimension_mismatch": "The query embedding has {actual} dimensions, but this publication requires {expected}.",
   "site.runtime.embedding_failed": "The embedding provider did not return a vector.",
   "site.runtime.embedding_model": "Embedding model",
+  "site.runtime.embedding_model_locked": "Semantic search must use the publication embedding model: {model}",
+  "site.runtime.embedding_model_mismatch": "Semantic search requires embedding model {expected}; {actual} is not compatible with this publication.",
   "site.runtime.embedding_model_required": "Choose the embedding model used by this publication.",
   "site.runtime.empty_answer": "The provider returned an empty answer.",
   "site.runtime.endpoint": "Endpoint",
