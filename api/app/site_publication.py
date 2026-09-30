@@ -71,7 +71,6 @@ def _public_provider_profiles() -> list[dict[str, Any]]:
                 "id",
                 "name",
                 "type",
-                "base_url",
                 "model",
                 "model_mode",
                 "model_kind",
@@ -204,6 +203,7 @@ def build_site_bundle(
 
     created_at = datetime.now(UTC).isoformat()
     publication_id = f"sitepub-{uuid.uuid4().hex}"
+    csp_nonce = uuid.uuid4().hex
     normalized_locale = locale if locale in {"en-US", "fr-CA"} else "en-US"
     title = str(title or "").strip() or "DerridAI research site"
     description = str(description or "").strip()
@@ -270,12 +270,12 @@ def build_site_bundle(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; connect-src 'self' http: https:; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; connect-src 'self' http: https:; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'nonce-{csp_nonce}'">
   <title>{html.escape(title)}</title>
 </head>
 <body>
   <div id="app"></div>
-  <script id="derridai-publication" type="application/json">{safe_data}</script>
+  <script id="derridai-publication" type="application/json" nonce="{csp_nonce}">{safe_data}</script>
   <script src="./derridai-site.js" defer></script>
 </body>
 </html>
