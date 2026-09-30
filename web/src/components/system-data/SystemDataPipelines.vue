@@ -512,6 +512,7 @@ onMounted(() => {
         @update:operation="selectOperationsSection"
         @view-executions="viewExecutions"
         @view-strategy="viewStrategy"
+        @open-pipeline="selectPipeline"
       />
     </template>
 
