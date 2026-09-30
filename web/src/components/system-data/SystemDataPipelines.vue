@@ -411,7 +411,7 @@ onMounted(() => {
 
     <nav
       class="pipeline-studio-nav"
-      :aria-label="t('pipelines.studio_navigation', 'Pipeline Studio sections')"
+      :aria-label="t('pipelines.title', 'Pipeline Studio')"
     >
       <UiTabs
         :tabs="studioTabs"
