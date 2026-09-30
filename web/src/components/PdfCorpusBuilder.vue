@@ -421,7 +421,6 @@ const {
   retryingSegmentation,
   canRetryMetadata,
   metadataIssueCount,
-  metadataRetryRunning,
   awaitingManifestReview,
   hasRecordTopology,
   showReviewWorkspace: lifecycleShowReviewWorkspace,
