@@ -635,19 +635,6 @@ def _compatibility_status(assertion: FieldAssertion) -> str:
         return "confirmed_absent"
     if assertion.value_status == "invalid":
         return "invalid"
-    if (
-        assertion.value_status == "unresolved"
-        and assertion.evaluation_status == "value_supported"
-        and assertion.authority_status == "unreviewed"
-        and (assertion.legacy_metadata or {}).get("autonomous_decision")
-        and (
-            assertion.derivation_method == "model"
-            or str(assertion.derivation_method).startswith("derridai:")
-        )
-    ):
-        # Compatibility status describes where the visible candidate came from;
-        # canonical value_status still records that policy selection did not verify it.
-        return "model_inferred"
     if assertion.value_status == "unresolved" or assertion.evaluation_status == "evaluation_failed":
         return "unresolved"
     if assertion.authority_status == "human_override":
@@ -992,7 +979,6 @@ def accept_unreviewed_suggestions(record: dict[str, Any]) -> int:
         }
         store_assertion(record, candidate.model_copy(update={
             "assertion_id": f"assertion-{uuid.uuid4().hex}",
-            "legacy_status": None,
             "legacy_metadata": {**candidate.legacy_metadata, "autonomous_decision": decision},
             "reason": candidate.reason or "Selected by autonomous policy without human confirmation.",
             "record_revision": int(record.get("record_revision") or candidate.record_revision or 1),
