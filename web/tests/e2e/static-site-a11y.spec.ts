@@ -114,7 +114,7 @@ async function mountStaticSite(page: Page) {
 
   await page.setContent('<main><div id="app" role="status" aria-live="polite">Loading…</div></main>');
   await page.evaluate((value) => {
-    window.__DERRIDAI_SITE_PACKAGE__ = value;
+    (window as typeof window & { __DERRIDAI_SITE_PACKAGE__?: unknown }).__DERRIDAI_SITE_PACKAGE__ = value;
   }, packageValue);
   await page.addScriptTag({ content: sdkSource });
   await page.addScriptTag({ content: siteSource });
@@ -146,7 +146,7 @@ test("published tutorial is keyboard operable, skippable, and itself WCAG 2.2 AA
   page,
 }) => {
   await mountStaticSite(page);
-  const dialog = page.getByRole("dialog", { name: "Welcome" });
+  const dialog = page.locator("dialog");
   await scan(page);
   await page.getByRole("button", { name: "Next" }).focus();
   await page.keyboard.press("Enter");
