@@ -24,8 +24,27 @@
   const localeKey = `derridai.site.locale.${publicationId}`;
   const annotationKey = `derridai.site.annotations.${publicationId}`;
   const providerKey = `derridai.site.provider.${publicationId}`;
+  const memoryStorage = new Map();
+
+  function storageGet(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return memoryStorage.get(key) || null;
+    }
+  }
+
+  function storageSet(key, value) {
+    memoryStorage.set(key, String(value));
+    try {
+      localStorage.setItem(key, String(value));
+    } catch {
+      // Opaque file origins and privacy modes may disable localStorage.
+    }
+  }
+
   const availableLocales = Object.keys(publication.strings || {});
-  let locale = localStorage.getItem(localeKey) || publication.locale || availableLocales[0] || "en-US";
+  let locale = storageGet(localeKey) || publication.locale || availableLocales[0] || "en-US";
   if (!availableLocales.includes(locale)) locale = availableLocales[0] || "en-US";
   let view = "search";
   let sessionApiKey = "";
@@ -270,7 +289,12 @@
     const providerRef = String(vectors.provider || "");
     let profile = providerRef.startsWith("profile:") ? profiles.find((p) => p.id === providerRef.slice(8)) : null;
     if (!profile && providerRef === "ollama") profile = profiles.find((p) => p.type === "ollama") || null;
-    const stored = JSON.parse(localStorage.getItem(providerKey) || "{}");
+    let stored = {};
+    try {
+      stored = JSON.parse(storageGet(providerKey) || "{}");
+    } catch {
+      stored = {};
+    }
     return {
       profileId: stored.profileId || profile?.id || "",
       type: stored.type || profile?.type || (providerRef === "ollama" ? "ollama" : "openai"),
@@ -283,7 +307,7 @@
   function saveProvider(config) {
     const safe = { ...config };
     delete safe.apiKey;
-    localStorage.setItem(providerKey, JSON.stringify(safe));
+    storageSet(providerKey, JSON.stringify(safe));
   }
 
   function providerError(message, kind = "provider", status = 0) {
@@ -479,29 +503,26 @@
         }),
       );
     }
-    const base = String(config.baseUrl || "").replace(/\/$/, "");
-    if (!base) throw new Error(t("site.runtime.endpoint_required"));
+    const base = providerUrl(config);
     if (config.type === "ollama") {
       try {
         const body = await requestJson(`${base}/api/embed`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
+          method: "POST", headers: providerHeaders(config, true),
           body: JSON.stringify({ model: config.embeddingModel, input: [query] }),
         });
         const vector = body.embeddings?.[0];
         if (Array.isArray(vector)) return vector;
       } catch (firstError) {
         const body = await requestJson(`${base}/api/embeddings`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
+          method: "POST", headers: providerHeaders(config, true),
           body: JSON.stringify({ model: config.embeddingModel, prompt: query }),
         });
         if (Array.isArray(body.embedding)) return body.embedding;
         throw firstError;
       }
     }
-    const headers = { "Content-Type": "application/json" };
-    if (config.apiKey) headers.Authorization = `Bearer ${config.apiKey}`;
     const body = await requestJson(`${base}/embeddings`, {
-      method: "POST", headers,
+      method: "POST", headers: providerHeaders(config, true),
       body: JSON.stringify({ model: config.embeddingModel, input: query }),
     });
     const vector = body.data?.[0]?.embedding;
@@ -511,11 +532,10 @@
 
   async function generate(prompt, config) {
     if (!config.chatModel) throw new Error(t("site.runtime.chat_model_required"));
-    const base = String(config.baseUrl || "").replace(/\/$/, "");
-    if (!base) throw new Error(t("site.runtime.endpoint_required"));
+    const base = providerUrl(config);
     if (config.type === "ollama") {
       const body = await requestJson(`${base}/api/chat`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST", headers: providerHeaders(config, true),
         body: JSON.stringify({
           model: config.chatModel,
           stream: false,
@@ -525,10 +545,8 @@
       });
       return String(body.message?.content || body.response || "");
     }
-    const headers = { "Content-Type": "application/json" };
-    if (config.apiKey) headers.Authorization = `Bearer ${config.apiKey}`;
     const body = await requestJson(`${base}/chat/completions`, {
-      method: "POST", headers,
+      method: "POST", headers: providerHeaders(config, true),
       body: JSON.stringify({
         model: config.chatModel,
         temperature: 0,
@@ -647,13 +665,13 @@
 
   function annotations() {
     try {
-      const value = JSON.parse(localStorage.getItem(annotationKey) || "[]");
+      const value = JSON.parse(storageGet(annotationKey) || "[]");
       return Array.isArray(value) ? value : [];
     } catch { return []; }
   }
 
   function setAnnotations(items) {
-    localStorage.setItem(annotationKey, JSON.stringify(items));
+    storageSet(annotationKey, JSON.stringify(items));
   }
 
   function addAnnotation(record, quote, note, tags) {
@@ -970,7 +988,7 @@
     document.documentElement.lang = locale;
     const localeSelect = node("select", {
       class: "locale", "aria-label": t("site.runtime.language"),
-      on: { change: (event) => { locale = event.target.value; localStorage.setItem(localeKey, locale); render(); } },
+      on: { change: (event) => { locale = event.target.value; storageSet(localeKey, locale); render(); } },
     }, ...availableLocales.map((code) => node("option", { value: code, text: code })));
     localeSelect.value = locale;
 
