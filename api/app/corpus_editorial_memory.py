@@ -42,6 +42,7 @@ from .metadata_precedents_cache import (
     rank_candidates,
     resolve_cached_precedents,
 )
+from .pipelines.precedent_remap import RemapSession
 
 
 class EditorialMemoryMixin:
@@ -597,10 +598,13 @@ class EditorialMemoryMixin:
             blocks = self._blocks_for(build_id) if items else {}
         except (KeyError, OSError):  # candidates are advisory; precedents still show without them
             blocks = {}
-        candidates = rank_candidates(items, record, blocks, embed=self._precedent_embedder())
+        session = RemapSession.open()
+        candidates = rank_candidates(items, record, blocks, embed=self._precedent_embedder(), session=session)
         for item, picks in zip(items, candidates):
             item["candidate_source_units"] = picks
+        candidate_pipeline = session.finish() if session is not None else None
         return {
+            **({"candidate_pipeline": candidate_pipeline} if candidate_pipeline else {}),
             "field": field,
             "record_id": record_id,
             "source": "live",

@@ -69,12 +69,12 @@ describe("Data retention settings", () => {
     await flushPromises();
 
     const text = wrapper.text();
-    expect(text).toContain("Pipeline traces: vector_store_search");
+    expect(text).toContain("Pipeline traces: Vector Store search");
     expect(text).toContain("Finished job history");
     expect(text).toContain("1 kept because other retained data depends on them");
     expect(text).toContain("In effect: keep everything");
     expect(wrapper.get("select").attributes("aria-label")).toBe(
-      "Rule for Pipeline traces: vector_store_search",
+      "Rule for Pipeline traces: Vector Store search",
     );
   });
 

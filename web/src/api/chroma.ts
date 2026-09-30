@@ -9,6 +9,16 @@ import type {
   VectorWorkStat,
 } from "../types/vector";
 
+/** The versioned store-search pipeline that produced a result set. */
+export type StoreSearchPipelineIdentity = {
+  feature: string;
+  pipeline_id: string;
+  pipeline_version: number;
+  pipeline_hash: string;
+  trace_id: string;
+  trace_warning?: string;
+};
+
 export const chromaApi = {
   health: () => apiRequest<ChromaHealth>("/api/chroma/connection"),
   probe: (body: ChromaConnectionUpdate) =>
@@ -41,7 +51,7 @@ export const chromaApi = {
       `/api/stores/${encodeURIComponent(store)}/works`,
     ),
   search: (store: string, body: Record<string, unknown>) =>
-    apiRequest<{ results: VectorSearchResult[] }>(
+    apiRequest<{ results: VectorSearchResult[]; pipeline?: StoreSearchPipelineIdentity }>(
       `/api/stores/${encodeURIComponent(store)}/search`,
       { method: "POST", body: JSON.stringify(body) },
     ),

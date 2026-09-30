@@ -16,10 +16,13 @@ from .evidence import compile_evidence_pipeline
 from .evidence_recovery import RECOVERY_FEATURE, compile_recovery_pipeline
 from .memory import compile_memory_pipeline
 from .metadata_precedents import compile_metadata_precedent_pipeline
+from .metadata_prefill import PREFILL_FEATURE, compile_prefill_pipeline
 from .models import PipelineAssignment, PipelineDefinition
+from .precedent_remap import REMAP_FEATURE, compile_remap_pipeline
 from .research import compile_research_pipeline
 from .service import PipelineService, pipeline_hash, pipeline_service
 from .store import PipelineStore, pipeline_store
+from .store_search import SEARCH_FEATURE, compile_store_search_pipeline
 
 
 class PipelineManager:
@@ -210,6 +213,12 @@ class PipelineManager:
             # valid graphs outside its supported subset remain inspectable but
             # cannot become an active assignment.
             compile_evidence_pipeline(pipeline)
+        elif assignment.feature == REMAP_FEATURE:
+            compile_remap_pipeline(pipeline)
+        elif assignment.feature == PREFILL_FEATURE:
+            compile_prefill_pipeline(pipeline)
+        elif assignment.feature == SEARCH_FEATURE:
+            compile_store_search_pipeline(pipeline)
         elif assignment.feature == RECOVERY_FEATURE:
             compile_recovery_pipeline(pipeline)
         elif assignment.feature == "metadata_precedents":
@@ -256,6 +265,15 @@ class PipelineManager:
             if pipeline.purpose == "evidence_suggestion":
                 compile_evidence_pipeline(pipeline)
                 return {"supported": True, "adapter": "evidence_suggestion"}
+            if pipeline.purpose == "precedent_evidence_remap":
+                compile_remap_pipeline(pipeline)
+                return {"supported": True, "adapter": "precedent_evidence_remap"}
+            if pipeline.purpose == "metadata_prefill":
+                compile_prefill_pipeline(pipeline)
+                return {"supported": True, "adapter": "metadata_prefill"}
+            if pipeline.purpose == "vector_store_search":
+                compile_store_search_pipeline(pipeline)
+                return {"supported": True, "adapter": "vector_store_search"}
             if pipeline.purpose == "evidence_recovery":
                 plan = compile_recovery_pipeline(pipeline)
                 return {
