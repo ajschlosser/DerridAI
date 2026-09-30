@@ -186,7 +186,9 @@ onMounted(async () => {
           <legend>{{ i18n.t("site.create_languages") }}</legend>
           <p class="site-choice-help">{{ i18n.t("site.create_languages_help") }}</p>
           <div class="site-work-picker-toolbar">
-            <span>{{ i18n.tf("site.create_languages_selected", { count: selectedLanguages.length }) }}</span>
+            <span>
+              {{ i18n.tf("site.create_languages_selected", { count: selectedLanguages.length }) }}
+            </span>
             <div>
               <button type="button" class="btn small" @click="selectAllLanguages">
                 {{ i18n.t("site.create_select_all") }}
@@ -197,7 +199,11 @@ onMounted(async () => {
             </div>
           </div>
           <div class="site-choice-list">
-            <label v-for="language in props.languages" :key="language.code" class="site-work-option">
+            <label
+              v-for="language in props.languages"
+              :key="language.code"
+              class="site-work-option"
+            >
               <input
                 type="checkbox"
                 :checked="selectedLanguages.includes(language.code)"
@@ -219,7 +225,13 @@ onMounted(async () => {
           <legend>{{ i18n.t("site.create_provider_profiles") }}</legend>
           <p class="site-choice-help">{{ i18n.t("site.create_provider_profiles_help") }}</p>
           <div v-if="props.providerProfiles.length" class="site-work-picker-toolbar">
-            <span>{{ i18n.tf("site.create_providers_selected", { count: selectedProviderProfiles.length }) }}</span>
+            <span>
+              {{
+                i18n.tf("site.create_providers_selected", {
+                  count: selectedProviderProfiles.length,
+                })
+              }}
+            </span>
             <div>
               <button type="button" class="btn small" @click="selectAllProviders">
                 {{ i18n.t("site.create_select_all") }}
@@ -244,7 +256,11 @@ onMounted(async () => {
               <span>
                 <strong>{{ profile.name || profile.id }}</strong>
                 <small>
-                  {{ profile.type === "openai" ? i18n.t("site.create_provider_openai") : i18n.t("site.create_provider_ollama") }}
+                  {{
+                    profile.type === "openai"
+                      ? i18n.t("site.create_provider_openai")
+                      : i18n.t("site.create_provider_ollama")
+                  }}
                   <template v-if="profile.model"> · {{ profile.model }}</template>
                 </small>
               </span>
