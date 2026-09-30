@@ -484,7 +484,7 @@ describe("review header", () => {
       } as never,
       global: { stubs: { Teleport: true } },
     });
-    await wrapper.get(".review-ready-action button").trigger("click");
+    await wrapper.get(".review-ready-action").trigger("click");
     expect(wrapper.emitted("acceptClean")).toBeUndefined();
     expect(wrapper.find('[role="dialog"]').exists()).toBe(true);
     expect(wrapper.get('[role="dialog"]').text()).toContain("records your review decision");
