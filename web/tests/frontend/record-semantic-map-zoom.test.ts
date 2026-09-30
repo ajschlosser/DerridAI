@@ -50,6 +50,7 @@ describe("record semantic map", () => {
     viewport.vm.$emit("viewport-change", { pan: { x: 0, y: 0 }, zoom: 2 });
     await nextTick();
     expect(transform()).toContain("scale(0.5)");
+    expect(wrapper.find("svg.semantic-map-canvas").attributes("style")).toContain("--map-zoom: 2");
     viewport.vm.$emit("viewport-change", { pan: { x: 0, y: 0 }, zoom: 0.5 });
     await nextTick();
     expect(transform()).toContain("scale(2)");
