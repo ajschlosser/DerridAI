@@ -663,9 +663,7 @@ const pageText = computed(() => {
             :zoom-out-label="i18n.t('pdf_corpus.semantic_graph_zoom_out')"
             :zoom-in-label="i18n.t('pdf_corpus.semantic_graph_zoom_in')"
             :fit-label="i18n.t('pdf_corpus.semantic_graph_zoom_fit')"
-            :reset-label="
-              i18n.t('pdf_corpus.semantic_graph_reset_layout', 'Reset graph layout')
-            "
+            :reset-label="i18n.t('pdf_corpus.semantic_graph_reset_layout', 'Reset graph layout')"
             @zoom-out="viewport?.zoomBy(1 / 1.25)"
             @zoom-in="viewport?.zoomBy(1.25)"
             @fit="fitView"

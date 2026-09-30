@@ -155,7 +155,11 @@ function onWheel(event: WheelEvent) {
 
 function onPointerDown(event: PointerEvent) {
   const target = event.target as Element | null;
-  if (target?.closest?.("[data-relation-node],[data-relation-resize-handle],[data-relation-ignore-pan]")) {
+  if (
+    target?.closest?.(
+      "[data-relation-node],[data-relation-resize-handle],[data-relation-ignore-pan]",
+    )
+  ) {
     return;
   }
   viewport.beginPan(event);

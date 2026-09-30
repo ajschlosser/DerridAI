@@ -636,9 +636,7 @@ function onNodeKeydown(event: KeyboardEvent, node: DiagramNode) {
             'Drag the background to pan. Drag any node to reposition it. Arrow keys pan, plus and minus zoom, and 0 resets the view. Hold Alt and use an arrow key to move a focused node.',
           )
         "
-        :resize-label="
-          i18n.t('pdf_corpus.semantic_map_resize', 'Resize record semantic map')
-        "
+        :resize-label="i18n.t('pdf_corpus.semantic_map_resize', 'Resize record semantic map')"
         :initial-center="{ x: SIZE.width / 2, y: SIZE.height / 2 }"
         :content-bounds="contentBounds"
         :content-width="SIZE.width"
@@ -674,7 +672,9 @@ function onNodeKeydown(event: KeyboardEvent, node: DiagramNode) {
             tabindex="0"
             :aria-label="
               node.walkable
-                ? i18n.tf('pdf_corpus.semantic_map_walk_to', { label: `${node.label}, ${node.type}` })
+                ? i18n.tf('pdf_corpus.semantic_map_walk_to', {
+                    label: `${node.label}, ${node.type}`,
+                  })
                 : node.label
             "
             @pointerdown.stop="onNodePointerDown($event, node)"
@@ -724,9 +724,7 @@ function onNodeKeydown(event: KeyboardEvent, node: DiagramNode) {
           :zoom-out-label="i18n.t('pdf_corpus.semantic_graph_zoom_out')"
           :zoom-in-label="i18n.t('pdf_corpus.semantic_graph_zoom_in')"
           :fit-label="i18n.t('pdf_corpus.semantic_graph_zoom_fit')"
-          :reset-label="
-            i18n.t('pdf_corpus.semantic_map_reset_layout', 'Reset map layout')
-          "
+          :reset-label="i18n.t('pdf_corpus.semantic_map_reset_layout', 'Reset map layout')"
           @zoom-out="viewport?.zoomBy(1 / 1.25)"
           @zoom-in="viewport?.zoomBy(1.25)"
           @fit="fitMap"

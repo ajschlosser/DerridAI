@@ -83,9 +83,7 @@ const contentBounds = computed(() => {
     }
   );
 });
-const viewportHeight = computed(() =>
-  Math.min(620, Math.max(320, diagram.value.height + 40)),
-);
+const viewportHeight = computed(() => Math.min(620, Math.max(320, diagram.value.height + 40)));
 
 watch(
   diagram,

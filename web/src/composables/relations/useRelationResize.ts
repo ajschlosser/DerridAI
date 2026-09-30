@@ -98,7 +98,8 @@ export function useRelationResize(options: RelationResizeOptions = {}) {
     let width = current.width;
     let height = current.height;
     if ((axis === "horizontal" || axis === "both") && event.key === "ArrowLeft") width -= step;
-    else if ((axis === "horizontal" || axis === "both") && event.key === "ArrowRight") width += step;
+    else if ((axis === "horizontal" || axis === "both") && event.key === "ArrowRight")
+      width += step;
     else if ((axis === "vertical" || axis === "both") && event.key === "ArrowUp") height -= step;
     else if ((axis === "vertical" || axis === "both") && event.key === "ArrowDown") height += step;
     else return false;

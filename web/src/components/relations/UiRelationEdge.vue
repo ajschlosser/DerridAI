@@ -11,11 +11,7 @@ withDefaults(
 </script>
 
 <template>
-  <path
-    class="ui-relation-edge"
-    :d="path"
-    :stroke-width="width"
-  >
+  <path class="ui-relation-edge" :d="path" :stroke-width="width">
     <title v-if="title">{{ title }}</title>
   </path>
 </template>

@@ -1,11 +1,6 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
-import type {
-  RelationBounds,
-  RelationPoint,
-  RelationSize,
-  RelationViewportState,
-} from "./types";
+import type { RelationBounds, RelationPoint, RelationSize, RelationViewportState } from "./types";
 
 export const DEFAULT_RELATION_MIN_ZOOM = 0.45;
 export const DEFAULT_RELATION_MAX_ZOOM = 6;
@@ -21,17 +16,11 @@ export function clampRelationZoom(
   return Math.min(upper, Math.max(lower, value));
 }
 
-export function panRelationViewport(
-  pan: RelationPoint,
-  delta: RelationPoint,
-): RelationPoint {
+export function panRelationViewport(pan: RelationPoint, delta: RelationPoint): RelationPoint {
   return { x: pan.x + delta.x, y: pan.y + delta.y };
 }
 
-export function screenDeltaToGraph(
-  delta: RelationPoint,
-  zoom: number,
-): RelationPoint {
+export function screenDeltaToGraph(delta: RelationPoint, zoom: number): RelationPoint {
   const scale = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
   return { x: delta.x / scale, y: delta.y / scale };
 }

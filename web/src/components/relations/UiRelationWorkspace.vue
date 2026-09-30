@@ -28,7 +28,9 @@ withDefaults(
         <slot name="inspector" />
       </aside>
     </div>
-    <footer v-if="$slots.footer" class="ui-relation-workspace-footer"><slot name="footer" /></footer>
+    <footer v-if="$slots.footer" class="ui-relation-workspace-footer">
+      <slot name="footer" />
+    </footer>
   </section>
 </template>
 

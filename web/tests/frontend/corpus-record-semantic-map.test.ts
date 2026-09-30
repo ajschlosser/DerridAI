@@ -201,7 +201,12 @@ describe("CorpusRecordSemanticMap", () => {
     const node = wrapper.findAll(".map-node[role='button']")[0];
     const beforeTransform = node.attributes("transform");
     const edge = wrapper.findAll(".map-edge")[0];
-    const beforeEdge = [edge.attributes("x1"), edge.attributes("y1"), edge.attributes("x2"), edge.attributes("y2")];
+    const beforeEdge = [
+      edge.attributes("x1"),
+      edge.attributes("y1"),
+      edge.attributes("x2"),
+      edge.attributes("y2"),
+    ];
 
     await node.trigger("pointerdown", { button: 0, pointerId: 5, clientX: 10, clientY: 10 });
     await node.trigger("pointermove", { pointerId: 5, clientX: 30, clientY: 25 });
@@ -226,5 +231,4 @@ describe("CorpusRecordSemanticMap", () => {
     await handle.trigger("keydown", { key: "ArrowDown" });
     expect(viewport.attributes("style")).toContain("height:");
   });
-
 });

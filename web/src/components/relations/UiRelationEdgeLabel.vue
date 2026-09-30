@@ -14,13 +14,7 @@ withDefaults(
 
 <template>
   <g class="ui-relation-edge-label">
-    <rect
-      :x="x - width / 2"
-      :y="y - height / 2"
-      :width="width"
-      :height="height"
-      :rx="height / 2"
-    />
+    <rect :x="x - width / 2" :y="y - height / 2" :width="width" :height="height" :rx="height / 2" />
     <text :x="x" :y="y + 4" text-anchor="middle">{{ label }}</text>
   </g>
 </template>
