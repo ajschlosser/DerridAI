@@ -361,6 +361,34 @@ export interface SemanticAliasSet {
   retired_at?: string | null;
   replaces?: string | null;
   replaced_by?: string;
+  /** Set when a reviewer copied this identity from another corpus build. */
+  imported_from?: {
+    build_id: string;
+    alias_set_id: string;
+    build_title?: string;
+    reviewer?: string | null;
+    created_at?: string;
+  } | null;
+}
+
+/** Another corpus build whose reviewed identities can be imported. */
+export interface SemanticAliasSource {
+  build_id: string;
+  title: string;
+  created_at?: string;
+  alias_sets: number;
+  kinds: string[];
+}
+
+export interface SemanticAliasImportResult {
+  imported: SemanticAliasSet[];
+  skipped: Array<{
+    build_id: string;
+    alias_set_id: string;
+    canonical_label: string;
+    reason: "conflict" | "already_imported" | string;
+    detail?: string;
+  }>;
 }
 
 /** An identity kind the build's schema compares, and the fields that use it. */

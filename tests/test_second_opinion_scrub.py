@@ -259,6 +259,8 @@ BUILD_LEVEL = {
     ("GET", "/api/pdf/corpus-builds/{build_id}/semantic-aliases"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/semantic-aliases"),
     ("DELETE", "/api/pdf/corpus-builds/{build_id}/semantic-aliases/{alias_set_id}"),
+    ("GET", "/api/pdf/corpus-builds/{build_id}/semantic-aliases/sources"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/semantic-aliases/import"),
 }
 
 

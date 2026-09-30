@@ -96,4 +96,82 @@ describe("Reviewed identities panel", () => {
     expect(wrapper.emitted("changed")).toHaveLength(1);
     wrapper.unmount();
   });
+
+  it("imports another corpus's identities as copies and reports what it skipped", async () => {
+    const { wrapper } = await open([]);
+    vi.spyOn(corpusBuildsApi, "semanticAliasSources").mockResolvedValue({
+      items: [{ build_id: "b2", title: "Of Grammatology", alias_sets: 2, kinds: ["person"] }],
+    });
+    const levinas = {
+      ...derrida,
+      alias_set_id: "alias-9",
+      canonical_label: "Emmanuel Levinas",
+      aliases: [],
+    };
+    vi.spyOn(corpusBuildsApi, "semanticAliases").mockImplementation(async (buildId: string) =>
+      buildId === "b2"
+        ? { items: [derrida, levinas], kinds }
+        : {
+            items: [
+              {
+                ...derrida,
+                alias_set_id: "alias-new",
+                imported_from: {
+                  build_id: "b2",
+                  alias_set_id: "alias-1",
+                  build_title: "Of Grammatology",
+                },
+              },
+            ],
+            kinds,
+          },
+    );
+    const run = vi.spyOn(corpusBuildsApi, "importSemanticAliases").mockResolvedValue({
+      imported: [{ ...derrida, alias_set_id: "alias-new" }],
+      skipped: [
+        {
+          build_id: "b2",
+          alias_set_id: "alias-9",
+          canonical_label: "Emmanuel Levinas",
+          reason: "conflict",
+        },
+      ],
+    });
+    const openImport = wrapper
+      .findAll("button")
+      .find((b) => b.text().includes("Import from another corpus"));
+    await openImport!.trigger("click");
+    await flushPromises();
+    expect(wrapper.find(".import-source select").text()).toContain(
+      "Of Grammatology (2 identities)",
+    );
+    const boxes = wrapper.findAll(".import-choices input[type=checkbox]");
+    expect(boxes).toHaveLength(2);
+    expect(boxes.every((box) => (box.element as HTMLInputElement).checked)).toBe(true);
+    await boxes[1].setValue(false);
+    const submit = wrapper.findAll("button").find((b) => b.text().startsWith("Import 1 selected"));
+    await submit!.trigger("click");
+    await flushPromises();
+    expect(run).toHaveBeenCalledWith("b1", "b2", ["alias-1"]);
+    expect(wrapper.find("[role=status]").text()).toContain("Imported 1; skipped 1.");
+    expect(wrapper.find(".skipped").text()).toContain(
+      "Emmanuel Levinas: its forms already belong to an identity here.",
+    );
+    expect(wrapper.find(".alias-set").text()).toContain("Imported from Of Grammatology");
+    expect(wrapper.emitted("changed")).toHaveLength(1);
+    wrapper.unmount();
+  });
+
+  it("says when no other corpus has reviewed identities", async () => {
+    const { wrapper } = await open([]);
+    vi.spyOn(corpusBuildsApi, "semanticAliasSources").mockResolvedValue({ items: [] });
+    const openImport = wrapper
+      .findAll("button")
+      .find((b) => b.text().includes("Import from another corpus"));
+    await openImport!.trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("No other corpus build has reviewed identities yet.");
+    expect(wrapper.findAll("button").some((b) => b.text().startsWith("Import "))).toBe(false);
+    wrapper.unmount();
+  });
 });

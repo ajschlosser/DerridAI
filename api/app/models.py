@@ -828,6 +828,13 @@ class PdfCorpusSemanticAliasSet(BaseModel):
     replaces: str | None = Field(default=None, max_length=64)
 
 
+class PdfCorpusSemanticAliasImport(BaseModel):
+    """Copy another build's reviewed identities into this one (all of them when none are named)."""
+
+    source_build_id: str = Field(min_length=1, max_length=64)
+    alias_set_ids: list[str] | None = Field(default=None, max_length=2000)
+
+
 class PdfCorpusEvidencePatch(BaseModel):
     field: str = Field(min_length=1, max_length=120)
     block_ids: list[str] = Field(default_factory=list, max_length=500)

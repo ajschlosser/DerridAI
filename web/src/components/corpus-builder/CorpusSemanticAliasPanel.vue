@@ -9,7 +9,12 @@
  * the build's history; nothing here rewrites a Record's metadata.
  */
 import { computed, ref, useId } from "vue";
-import { corpusBuildsApi, type SemanticAliasKind, type SemanticAliasSet } from "../../api/corpus";
+import {
+  corpusBuildsApi,
+  type SemanticAliasKind,
+  type SemanticAliasSet,
+  type SemanticAliasSource,
+} from "../../api/corpus";
 import { useI18nStore } from "../../stores/i18n";
 import UiButton from "../ui/UiButton.vue";
 
@@ -37,7 +42,18 @@ const aliasText = ref("");
 const reason = ref("");
 const editing = ref<SemanticAliasSet | null>(null);
 
+// Importing another corpus's reviewed identities copies them here, with provenance.
+const importing = ref(false);
+const importBusy = ref(false);
+const importError = ref("");
+const importSkipped = ref<string[]>([]);
+const sources = ref<SemanticAliasSource[] | null>(null);
+const sourceBuildId = ref("");
+const sourceItems = ref<SemanticAliasSet[]>([]);
+const selectedImports = ref<string[]>([]);
+
 const formId = useId();
+const sourceId = `${formId}-source`;
 const kindId = `${formId}-kind`;
 const labelId = `${formId}-label`;
 const aliasesId = `${formId}-aliases`;
@@ -121,6 +137,69 @@ async function save() {
   }
 }
 
+async function openImport() {
+  importing.value = true;
+  importError.value = "";
+  importSkipped.value = [];
+  if (sources.value) return;
+  importBusy.value = true;
+  try {
+    sources.value = (await corpusBuildsApi.semanticAliasSources(props.buildId)).items;
+    if (sources.value.length) await chooseSource(sources.value[0].build_id);
+  } catch (error) {
+    importError.value = error instanceof Error ? error.message : String(error);
+  } finally {
+    importBusy.value = false;
+  }
+}
+
+async function chooseSource(buildId: string) {
+  sourceBuildId.value = buildId;
+  sourceItems.value = [];
+  selectedImports.value = [];
+  importBusy.value = true;
+  importError.value = "";
+  try {
+    sourceItems.value = (await corpusBuildsApi.semanticAliases(buildId)).items;
+    selectedImports.value = sourceItems.value.map((item) => item.alias_set_id);
+  } catch (error) {
+    importError.value = error instanceof Error ? error.message : String(error);
+  } finally {
+    importBusy.value = false;
+  }
+}
+
+async function runImport() {
+  if (!sourceBuildId.value || !selectedImports.value.length) return;
+  importBusy.value = true;
+  importError.value = "";
+  try {
+    const result = await corpusBuildsApi.importSemanticAliases(
+      props.buildId,
+      sourceBuildId.value,
+      selectedImports.value,
+    );
+    importSkipped.value = result.skipped.map((item) =>
+      tf(
+        item.reason === "already_imported" ? "import_skipped_already" : "import_skipped_conflict",
+        {
+          label: item.canonical_label,
+        },
+      ),
+    );
+    status.value = tf("import_done", {
+      imported: result.imported.length,
+      skipped: result.skipped.length,
+    });
+    await load();
+    if (result.imported.length) emit("changed");
+  } catch (error) {
+    importError.value = error instanceof Error ? error.message : String(error);
+  } finally {
+    importBusy.value = false;
+  }
+}
+
 async function retire(item: SemanticAliasSet) {
   saving.value = true;
   saveError.value = "";
@@ -167,6 +246,11 @@ async function retire(item: SemanticAliasSet) {
                 {{ tf("recorded", { date: recorded(item.created_at) })
                 }}<template v-if="item.reason"> — {{ item.reason }}</template>
               </small>
+              <small v-if="item.imported_from">{{
+                tf("imported_from", {
+                  title: item.imported_from.build_title || item.imported_from.build_id,
+                })
+              }}</small>
             </div>
             <div class="alias-actions">
               <template v-if="confirmingRetire === item.alias_set_id">
@@ -204,6 +288,74 @@ async function retire(item: SemanticAliasSet) {
             </div>
           </li>
         </ul>
+      </section>
+
+      <section class="alias-import" :aria-labelledby="`${formId}-import`">
+        <h4 :id="`${formId}-import`">{{ t("import_title", "Import from another corpus") }}</h4>
+        <p class="hint">{{ t("import_intro") }}</p>
+        <UiButton
+          v-if="!importing"
+          size="small"
+          :label="t('import_open', 'Import from another corpus…')"
+          :disabled="disabled"
+          @click="openImport"
+        />
+        <template v-else>
+          <p v-if="importBusy && !sources" role="status">
+            {{ t("import_loading", "Looking for other corpora…") }}
+          </p>
+          <p v-else-if="sources && !sources.length" class="empty">{{ t("import_none") }}</p>
+          <template v-else-if="sources">
+            <label :for="sourceId" class="import-source">
+              <span>{{ t("import_source", "Corpus build") }}</span>
+              <select
+                :id="sourceId"
+                class="control"
+                :value="sourceBuildId"
+                :disabled="disabled || importBusy"
+                @change="chooseSource(($event.target as HTMLSelectElement).value)"
+              >
+                <option v-for="source in sources" :key="source.build_id" :value="source.build_id">
+                  {{
+                    tf("import_source_option", { title: source.title, count: source.alias_sets })
+                  }}
+                </option>
+              </select>
+            </label>
+            <fieldset v-if="sourceItems.length" class="import-choices">
+              <legend>{{ t("import_choose", "Identities to import") }}</legend>
+              <label v-for="item in sourceItems" :key="item.alias_set_id" class="check">
+                <input
+                  v-model="selectedImports"
+                  type="checkbox"
+                  :value="item.alias_set_id"
+                  :disabled="disabled || importBusy"
+                />
+                <span
+                  >{{ item.canonical_label }} <small>({{ item.kind }})</small
+                  ><template v-if="item.aliases.length">
+                    — {{ item.aliases.join(" · ") }}</template
+                  ></span
+                >
+              </label>
+            </fieldset>
+          </template>
+          <p v-if="importError" role="alert" class="error">{{ importError }}</p>
+          <ul v-if="importSkipped.length" class="skipped">
+            <li v-for="line in importSkipped" :key="line">{{ line }}</li>
+          </ul>
+          <div class="form-actions">
+            <UiButton
+              v-if="sources?.length"
+              variant="primary"
+              size="small"
+              :label="tf('import_submit', { count: selectedImports.length })"
+              :disabled="disabled || importBusy || !selectedImports.length"
+              @click="runImport"
+            />
+            <UiButton size="small" :label="t('import_close', 'Close')" @click="importing = false" />
+          </div>
+        </template>
       </section>
 
       <p v-if="!kinds.length" class="empty">{{ t("no_kinds") }}</p>
@@ -376,6 +528,44 @@ async function retire(item: SemanticAliasSet) {
 }
 .control {
   min-block-size: 40px;
+}
+.alias-import {
+  display: grid;
+  gap: 0.375rem;
+  margin-block-start: 0.5rem;
+  justify-items: start;
+}
+.import-source {
+  display: grid;
+  gap: 4px;
+  min-inline-size: min(100%, 24rem);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.import-choices {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+}
+.import-choices legend {
+  padding: 0 4px;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.check {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+.skipped {
+  margin: 0;
+  padding-inline-start: 1.25rem;
+  font-size: var(--fs-sm);
 }
 .form-actions {
   display: flex;

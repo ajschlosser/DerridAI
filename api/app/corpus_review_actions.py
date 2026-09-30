@@ -74,7 +74,9 @@ from .reviewer_context import current_reviewer
 from .semantic_identity import ValueEquivalenceResult, canonical_value_key
 from .semantic_identity_registry import compare_field_values
 from .semantic_identity_store import (
+    alias_sources,
     create_alias_set,
+    import_alias_sets,
     list_alias_sets,
     retire_alias_set,
     review_registry,
@@ -1002,6 +1004,19 @@ class ReviewActionsMixin:
         # Correction precedents are re-derived under the new identities.
         self._schedule_metadata_exemplar_projection(build_id)
         return entry
+
+    def semantic_alias_sources(self, build_id: str) -> list[dict[str, Any]]:
+        """Other corpus builds whose reviewed identities can be imported here."""
+        return alias_sources(self.repo, build_id)
+
+    def import_semantic_aliases(self, build_id: str, source_build_id: str, alias_set_ids: list[str] | None = None) -> dict[str, Any]:
+        self._assert_human_review_available(build_id)
+        result = import_alias_sets(
+            self.repo, build_id, source_build_id, alias_set_ids=alias_set_ids, reviewer=current_reviewer.get(),
+        )
+        if result["imported"]:
+            self._schedule_metadata_exemplar_projection(build_id)
+        return result
 
     def retire_semantic_alias(self, build_id: str, alias_set_id: str) -> dict[str, Any]:
         self._assert_human_review_available(build_id)

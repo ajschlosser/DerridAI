@@ -127,8 +127,12 @@ def create_alias_set(
     reason: str = "",
     reviewer: str = "",
     replaces: str | None = None,
+    imported_from: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Record a reviewed alias set; with ``replaces``, retire that set in the same write."""
+    """Record a reviewed alias set; with ``replaces``, retire that set in the same write.
+
+    ``imported_from`` records the build and set a reviewer copied this one from.
+    """
     kind = str(kind or "").strip()
     if not KIND_RE.match(kind):
         raise ValueError("An identity kind is lower-case letters, digits, '.', '_' or '-', starting with a letter.")
@@ -152,7 +156,7 @@ def create_alias_set(
         clashes = sorted({surface for surface in [label, *cleaned] if text_key(surface) in claimed})
         if clashes:
             raise AliasConflict("Already part of another reviewed identity of this kind: " + ", ".join(clashes))
-        entry = {
+        entry: dict[str, Any] = {
             "alias_set_id": f"alias-{uuid.uuid4().hex[:16]}",
             "kind": kind,
             "canonical_label": label,
@@ -163,6 +167,14 @@ def create_alias_set(
             "retired_at": None,
             "replaces": replaces,
         }
+        if imported_from is None and replaces:
+            # An edited import is still that import: re-importing must not bring it back twice.
+            imported_from = next(
+                (item.get("imported_from") for item in items if item.get("alias_set_id") == replaces),
+                None,
+            )
+        if imported_from:
+            entry["imported_from"] = imported_from
         for item in items:
             if replaces and item.get("alias_set_id") == replaces:
                 item["retired_at"] = now
@@ -307,3 +319,87 @@ def reviewed_value_relation(repo: Any, build_id: str, schema: Any, language: str
         return compare_field_values(schema, field, left_value, right_value, record=context, registry=registry).relation
 
     return relation
+
+
+def _build_title(build: dict[str, Any]) -> str:
+    manifest = build.get("manifest") if isinstance(build.get("manifest"), dict) else {}
+    return str(manifest.get("title") or build.get("source_filename") or build.get("build_id") or "")
+
+
+def alias_sources(repo: Any, build_id: str) -> list[dict[str, Any]]:
+    """Other builds that hold active reviewed alias sets, for importing into ``build_id``."""
+    repo.get_build(build_id)
+    sources: list[dict[str, Any]] = []
+    for build in repo.list_builds(limit=100_000).get("items") or []:
+        other = str(build.get("build_id") or "")
+        if not other or other == build_id:
+            continue
+        try:
+            active = list_alias_sets(repo, other)
+        except (KeyError, RuntimeError):
+            continue
+        if active:
+            sources.append({
+                "build_id": other,
+                "title": _build_title(build),
+                "created_at": build.get("created_at"),
+                "alias_sets": len(active),
+                "kinds": sorted({str(item.get("kind") or "") for item in active}),
+            })
+    return sources
+
+
+def import_alias_sets(
+    repo: Any,
+    build_id: str,
+    source_build_id: str,
+    *,
+    alias_set_ids: list[str] | None = None,
+    reviewer: str = "",
+) -> dict[str, Any]:
+    """Copy another build's active reviewed alias sets into ``build_id``.
+
+    Importing is an explicit reviewer decision for this corpus: each imported set is a new
+    set of this build that records where it came from, so later edits in the source build
+    never change this build silently. A set whose surfaces already belong to an identity
+    here, or that was already imported, is skipped and reported, never merged.
+    """
+    if source_build_id == build_id:
+        raise ValueError("Choose another corpus build to import reviewed identities from.")
+    source_title = _build_title(repo.get_build(source_build_id))
+    source = list_alias_sets(repo, source_build_id)
+    wanted = set(alias_set_ids or [])
+    unknown = sorted(wanted - {str(item.get("alias_set_id")) for item in source})
+    if unknown:
+        raise KeyError(unknown[0])
+    chosen = [item for item in source if not wanted or str(item.get("alias_set_id")) in wanted]
+    already = {
+        (str((item.get("imported_from") or {}).get("build_id")), str((item.get("imported_from") or {}).get("alias_set_id")))
+        for item in list_alias_sets(repo, build_id)
+        if isinstance(item.get("imported_from"), dict)
+    }
+    imported: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    for item in chosen:
+        origin = {"build_id": source_build_id, "alias_set_id": str(item.get("alias_set_id") or "")}
+        if (origin["build_id"], origin["alias_set_id"]) in already:
+            skipped.append({**origin, "canonical_label": item.get("canonical_label"), "reason": "already_imported"})
+            continue
+        try:
+            entry = create_alias_set(
+                repo, build_id,
+                kind=str(item.get("kind") or ""),
+                canonical_label=str(item.get("canonical_label") or ""),
+                aliases=[str(value) for value in item.get("aliases") or []],
+                reason=str(item.get("reason") or ""),
+                reviewer=reviewer,
+                imported_from={
+                    **origin, "build_title": source_title,
+                    "reviewer": item.get("reviewer"), "created_at": item.get("created_at"),
+                },
+            )
+        except AliasConflict as exc:
+            skipped.append({**origin, "canonical_label": item.get("canonical_label"), "reason": "conflict", "detail": str(exc)})
+            continue
+        imported.append(entry)
+    return {"imported": imported, "skipped": skipped}

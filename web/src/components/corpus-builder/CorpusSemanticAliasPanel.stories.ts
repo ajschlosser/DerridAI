@@ -13,6 +13,11 @@ const aliases: SemanticAliasList = {
       reason: "Signed preface and title page.",
       reviewer: "reviewer-1",
       created_at: "2026-09-12T10:00:00Z",
+      imported_from: {
+        build_id: "build-grammatology",
+        alias_set_id: "alias-7",
+        build_title: "Of Grammatology",
+      },
     },
     {
       alias_set_id: "alias-dingus-a",
@@ -48,7 +53,23 @@ function stubFetch(list: SemanticAliasList) {
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
     if (!url.includes("/semantic-aliases")) return original(input, init);
-    const body = (init?.method ?? "GET") === "GET" ? list : list.items[0];
+    const method = init?.method ?? "GET";
+    const body = url.includes("/semantic-aliases/sources")
+      ? {
+          items: [
+            {
+              build_id: "build-grammatology",
+              title: "Of Grammatology",
+              alias_sets: 2,
+              kinds: ["person"],
+            },
+          ],
+        }
+      : url.includes("/semantic-aliases/import")
+        ? { imported: [list.items[0]], skipped: [] }
+        : method === "GET"
+          ? list
+          : list.items[0];
     return new Response(JSON.stringify(body), {
       status: 200,
       headers: { "content-type": "application/json" },

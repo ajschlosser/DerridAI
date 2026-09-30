@@ -54,6 +54,7 @@ A reviewer can state that several surfaces name one identity of a kind: for exam
 - **Canonical state.** Alias sets are canonical reviewer state for the build, stored beside its records. They are never inferred from model output or provider clusters.
 - **Auditable history.** Editing a set retires it and records its replacement, and retiring keeps the set in the build's history.
 - **No shared surfaces.** Two active sets of one kind may not share a surface. Two sets whose surfaces only normalize alike (`J. P. Dingus`, `JP Dingus`) are how a reviewer keeps two similar names apart.
+- **Importing from another corpus.** A reviewer can import another build's active sets (all of them, or chosen ones) through **Import from another corpus** or `GET …/semantic-aliases/sources` and `POST …/semantic-aliases/import`. An import is a copy that records `imported_from` (source build, set, title, original reviewer). Later edits in the source build therefore never change this corpus. A set whose surfaces already belong to an identity here is skipped and reported, never merged, and so is a set already imported (an edited import keeps its provenance).
 - **Where they are used.** Review comparisons, correction exemplars, precedent matching, pre-fill voting and the Semantic Content Graph all consult them.
 
 ### Identity in retrieval and suggestions

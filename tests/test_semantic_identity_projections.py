@@ -295,3 +295,59 @@ def test_projection_metadata_carries_identity_beside_exact_values():
     identity_keys = ["canonical_value_key", "semantic_identity_id", "rejected_canonical_value_key",
                      "rejected_semantic_identity_id", "equivalence_profile", "equivalence_version"]
     assert all(row[key] is not None for key in identity_keys)  # Chroma metadata cannot hold None
+
+
+# --- importing another corpus's reviewed identities ------------------------------------------
+
+def second_build(repo, build):
+    payload = {key: build[key] for key in ("asset_id", "source_sha256", "source_filename", "source_page_count", "source_block_count",
+                                           "schema_version", "profile_id", "profile_version", "app_version", "provider", "model", "request")}
+    other = repo.create_build({**payload, "manifest": {"title": "Of Grammatology"}})
+    other["status"] = "review"; other["stage"] = "review"; repo.save_build(other)
+    return other["build_id"]
+
+
+def test_import_copies_identities_with_provenance_and_reports_clashes(tmp_path):
+    repo, build, manager = install(tmp_path, "speaker", "J. Derrida")
+    here, source = build["build_id"], second_build(repo, build)
+    derrida = create_alias_set(repo, source, kind="person", canonical_label="Jacques Derrida", aliases=["J. Derrida"], reviewer="rev-a")
+    levinas = create_alias_set(repo, source, kind="person", canonical_label="Emmanuel Levinas", aliases=["E. Levinas"])
+    create_alias_set(repo, here, kind="person", canonical_label="E. Levinas", aliases=[])  # already an identity here
+
+    [listed] = manager.semantic_alias_sources(here)
+    assert listed == {"build_id": source, "title": "Of Grammatology", "created_at": listed["created_at"], "alias_sets": 2, "kinds": ["person"]}
+
+    result = manager.import_semantic_aliases(here, source)
+    [copied] = result["imported"]
+    assert copied["canonical_label"] == "Jacques Derrida" and copied["alias_set_id"] != derrida["alias_set_id"]
+    assert copied["imported_from"]["build_id"] == source and copied["imported_from"]["alias_set_id"] == derrida["alias_set_id"]
+    assert copied["imported_from"]["reviewer"] == "rev-a"
+    [clash] = result["skipped"]
+    assert clash["alias_set_id"] == levinas["alias_set_id"] and clash["reason"] == "conflict" and "E. Levinas" in clash["detail"]
+
+    # A copy, not a link: the source can change without changing this corpus.
+    retire_alias_set(repo, source, derrida["alias_set_id"])
+    assert any(item["canonical_label"] == "Jacques Derrida" for item in list_alias_sets(repo, here))
+    # The imported identity is used by this build's review.
+    manager.patch_metadata(here, "r1", {"speaker": "Jacques Derrida"}, expected_revision=1)
+    assert [row["kind"] for row in review_rows(manager)] == [ACCEPTED]
+
+
+def test_import_is_selective_and_never_duplicates_an_import(tmp_path):
+    repo, build, manager = install(tmp_path, "speaker", "x")
+    here, source = build["build_id"], second_build(repo, build)
+    derrida = create_alias_set(repo, source, kind="person", canonical_label="Jacques Derrida", aliases=["J. Derrida"])
+    create_alias_set(repo, source, kind="concept", canonical_label="différance", aliases=["differance"])
+    first = manager.import_semantic_aliases(here, source, [derrida["alias_set_id"]])
+    assert [item["canonical_label"] for item in first["imported"]] == ["Jacques Derrida"]
+    # Editing the import keeps its provenance, so importing again skips it.
+    edited = create_alias_set(repo, here, kind="person", canonical_label="Jacques Derrida", aliases=["J. Derrida", "Derrida"],
+                              replaces=first["imported"][0]["alias_set_id"])
+    assert edited["imported_from"]["alias_set_id"] == derrida["alias_set_id"]
+    again = manager.import_semantic_aliases(here, source)
+    assert [item["canonical_label"] for item in again["imported"]] == ["différance"]
+    assert [(item["canonical_label"], item["reason"]) for item in again["skipped"]] == [("Jacques Derrida", "already_imported")]
+    with pytest.raises(KeyError):
+        manager.import_semantic_aliases(here, source, ["alias-missing"])
+    with pytest.raises(ValueError):
+        manager.import_semantic_aliases(here, here)
