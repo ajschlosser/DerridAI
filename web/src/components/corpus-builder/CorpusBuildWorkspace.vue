@@ -21,6 +21,7 @@ const props = defineProps<{
   running: boolean;
   canResume: boolean;
   hasRecordTopology: boolean;
+  readyCount?: number;
   awaitingManifestReview: boolean;
   retryingSegmentation: boolean;
   segmentationNeedsReview: boolean;
@@ -63,6 +64,7 @@ const errorNotices = computed<Notice[]>(() =>
       :running="running"
       :can-resume="canResume"
       :has-record-topology="hasRecordTopology"
+      :ready-count="readyCount"
       :busy="busy"
       :provider-label="providerLabel"
       :model-label="modelLabel"
