@@ -18,7 +18,7 @@
     "lint": "eslint src sdk tests .storybook playwright*.config.ts vite.config.ts vite.sdk.config.ts vite.sdk.package.config.ts scripts --max-warnings 0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "build:ci": "npm run build:sdk:check && npm run build:sdk:package && vite build",
+    "build:ci": "npm run build:sdk:check && npm run check:sdk:package && vite build",
     "test:e2e:legacy": "playwright test -c playwright.legacy.config.ts",
     "test:e2e:a11y": "playwright test -c playwright.a11y.config.ts",
     "typecheck:tests": "vue-tsc --noEmit -p tsconfig.tests.json",
@@ -31,6 +31,7 @@
     "codegen:check": "graphql-codegen --config codegen.ts --check",
     "build:sdk": "tsc --noEmit -p sdk/tsconfig.json && vite build --config vite.sdk.config.ts",
     "build:sdk:package": "tsc -p sdk/tsconfig.build.json && vite build --config vite.sdk.package.config.ts",
+    "check:sdk:package": "npm run build:sdk:package && node -e \"import('./sdk/dist/index.js').then((m) => { if (typeof m.createClient !== 'function') process.exit(1); })\" && npm pack ./sdk --dry-run >/dev/null",
     "build:sdk:check": "npm run build:sdk && git diff --exit-code -- ../api/app/site_assets/derridai-sdk.js",
     "pack:sdk": "npm run build:sdk:package && npm pack ./sdk"
   },
