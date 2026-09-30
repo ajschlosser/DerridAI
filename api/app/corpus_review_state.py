@@ -14,7 +14,7 @@ from typing import Any
 
 from .corpus_metadata import REVIEW_METADATA_FIELDS
 from .corpus_record_quality import iso_now
-from .field_assertions import current_assertion_by_name, migrate_record_assertions
+from .field_assertions import current_assertion_by_name, current_assertions, migrate_record_assertions
 
 
 def _metadata_value_missing(field: str, value: Any) -> bool:
@@ -35,10 +35,20 @@ def _sync_record_metadata_state(
     reviewable = list(profile.get("review_metadata_fields") or REVIEW_METADATA_FIELDS)
     incomplete: list[str] = []
     review_fields: list[str] = []
-    policy_settled = {
-        str(field)
-        for field in (record.get("autonomous_decision") or {}).get("settled_fields", [])
-    } if isinstance(record.get("autonomous_decision"), dict) else set()
+    policy_settled = (
+        {
+            str(field)
+            for field in (record.get("autonomous_decision") or {}).get("settled_fields", [])
+        }
+        if isinstance(record.get("autonomous_decision"), dict)
+        else set()
+    )
+    policy_settled.update(
+        str(assertion.field_name)
+        for assertion in current_assertions(record)
+        if assertion.field_name
+        and isinstance((assertion.legacy_metadata or {}).get("autonomous_decision"), dict)
+    )
     for field in required:
         assertion = current_assertion_by_name(record, field)
         state = ""
