@@ -73,6 +73,7 @@ from .metadata_schema import (
     MetadataSchema,
     build_group_prompt,
     default_schema,
+    normalize_legacy_cardinality,
     response_model_for,
 )
 from .nlp_annotations import prompt_hints
@@ -397,6 +398,76 @@ class MetadataEnrichmentExecutionMixin:
     ) -> tuple[list[tuple[str, str, type[BaseModel], int, str]], list[str], bool]:
         """Bound source context and select structured tasks without invoking a provider."""
         schema = schema or default_schema()
+        schema_fields_by_name = schema.by_name()
+
+        def prompt_compatible_value(field_name: str, value: Any) -> tuple[Any, bool]:
+            field = schema_fields_by_name.get(field_name)
+            if field is None:
+                return value, False
+            return normalize_legacy_cardinality(field, value)
+
+        def prompt_compatible_payload(
+            field_name: str,
+            payload: Any,
+            *,
+            value_keys: tuple[str, ...] = ("value",),
+        ) -> dict[str, Any] | None:
+            if not isinstance(payload, dict):
+                return None
+            item = dict(payload)
+            for key in value_keys:
+                if key not in item:
+                    continue
+                normalized, conflict = prompt_compatible_value(field_name, item[key])
+                if conflict:
+                    return None
+                item[key] = normalized
+            return item
+
+        def prompt_compatible_examples(
+            field_name: str,
+            values: Any,
+        ) -> list[dict[str, Any]]:
+            if not isinstance(values, list):
+                return []
+            result: list[dict[str, Any]] = []
+            for raw in values:
+                item = prompt_compatible_payload(
+                    field_name,
+                    raw,
+                    value_keys=("value", "rejected_value", "chosen_value"),
+                )
+                if item is not None:
+                    result.append(item)
+            return result
+
+        prompt_editorial_context: dict[str, Any] = {}
+        for field_name, payload in editorial_context.items():
+            item = prompt_compatible_payload(field_name, payload)
+            if item is not None:
+                prompt_editorial_context[field_name] = item
+
+        prompt_pass_learning = json.loads(json.dumps(pass_learning or {}))
+        rejected_examples = prompt_pass_learning.get("rejected_examples")
+        if isinstance(rejected_examples, dict):
+            prompt_pass_learning["rejected_examples"] = {
+                field_name: compatible
+                for field_name, values in rejected_examples.items()
+                if (compatible := prompt_compatible_examples(field_name, values))
+            }
+        prior_pass = prompt_pass_learning.get("prior_pass")
+        if isinstance(prior_pass, dict) and isinstance(prior_pass.get("inferred_conventions"), dict):
+            prior_pass["inferred_conventions"] = {
+                field_name: item
+                for field_name, payload in prior_pass["inferred_conventions"].items()
+                if (
+                    item := prompt_compatible_payload(
+                        field_name,
+                        payload,
+                    )
+                )
+            }
+
         allowed_region_types = list(profile.get("region_types") or REGION_TYPES)
         allowed_discourse_roles = list(profile.get("discourse_roles") or DISCOURSE_ROLES)
         limits = _stage_limits(request)
@@ -436,8 +507,10 @@ class MetadataEnrichmentExecutionMixin:
                 schema_version=str(schema.schema_version or ""),
             )
             if isinstance(cached, dict) and cached.get("latest_value") not in (None, "", []):
-                cached_prefills[field.name] = cached["latest_value"]
-                record[field.name] = cached["latest_value"]
+                compatible, conflict = normalize_legacy_cardinality(field, cached["latest_value"])
+                if not conflict:
+                    cached_prefills[field.name] = compatible
+                    record[field.name] = compatible
         if cached_prefills:
             record["metadata_adjudication_prefills"] = cached_prefills
         human_locked_fields = sorted(
@@ -453,19 +526,18 @@ class MetadataEnrichmentExecutionMixin:
             # return. This preserves the global exemplar budget while avoiding
             # repeated prompt-prefill cost from unrelated metadata families.
             relevant_examples = {
-                field: editorial_examples[field]
+                field: compatible
                 for field in group_fields
                 if field in editorial_examples
-                and isinstance(editorial_examples.get(field), list)
-                and editorial_examples[field]
+                and (compatible := prompt_compatible_examples(field, editorial_examples[field]))
             }
             return f"""Document manifest: {json.dumps(manifest, ensure_ascii=False)}
 When document_author is present in the manifest, use it as source-document authorship context. Do not substitute a default author when it is absent, and do not infer that document_author is the speaker or position holder without evidence in this record.
-Build-local editorial conventions confirmed on at least two other records (advisory context only; do not copy unless supported here): {json.dumps(editorial_context, ensure_ascii=False)}
+Build-local editorial conventions confirmed on at least two other records (advisory context only; do not copy unless supported here): {json.dumps(prompt_editorial_context, ensure_ascii=False)}
 Relevant human-confirmed examples for fields in THIS metadata family (few-shot guidance only; source evidence in THIS record remains authoritative): {json.dumps(relevant_examples, ensure_ascii=False)}
 If a retrieved example has kind="correction", its value is the human-supported classification and rejected_value is a known prior model mistake. Treat rejected_value as a negative precedent only; never copy or prefer it because it appears in the example.
 If an example has a "match" object, the reviewed values of the listed fields on that example's record equal this record's reviewed values; examples without it were not compared on those fields and are analogous by text only.
-How earlier enrichment in this build went (advisory only; evidence in THIS record remains authoritative). Includes reviewer accepted/rejected counts when present, plus values the previous pass inferred on two or more other records (working conventions, not confirmed). Do not copy these; use them only when THIS record's evidence supports the same reading: {json.dumps(pass_learning or {}, ensure_ascii=False)}
+How earlier enrichment in this build went (advisory only; evidence in THIS record remains authoritative). Includes reviewer accepted/rejected counts when present, plus values the previous pass inferred on two or more other records (working conventions, not confirmed). Do not copy these; use them only when THIS record's evidence supports the same reading: {json.dumps(prompt_pass_learning, ensure_ascii=False)}
 Human-owned fields on this record (authoritative; DO NOT propose replacements): {json.dumps({field: record.get(field) for field in human_locked_fields}, ensure_ascii=False)}
 Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor_context, ensure_ascii=False)}
 {_nlp_hint_line(record, group_fields)}Current source block IDs: {source_id_json}
@@ -514,7 +586,13 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                 )
                 values = cached.get("prior_values") if isinstance(cached, dict) else None
                 if isinstance(values, list) and values:
-                    remembered[field.name] = {"exact_values": values}
+                    compatible_values: list[Any] = []
+                    for value in values:
+                        compatible, conflict = normalize_legacy_cardinality(field, value)
+                        if not conflict and compatible not in (None, "", []):
+                            compatible_values.append(compatible)
+                    if compatible_values:
+                        remembered[field.name] = {"exact_values": compatible_values}
             if remembered:
                 prompt += (
                     "\n\nREVIEWER MEMORY (advisory suggestions only; do not copy without "
