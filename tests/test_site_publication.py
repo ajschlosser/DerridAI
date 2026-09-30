@@ -7,7 +7,6 @@ import re
 import zipfile
 
 import pytest
-
 from app import site_publication
 from app.chroma_store import ChromaStore
 
