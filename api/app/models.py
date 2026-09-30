@@ -752,7 +752,7 @@ class PdfCorpusBuildCreate(BaseModel):
     schema_id: str = Field(default="default", min_length=1, max_length=64)
     run_guidance: dict[str, PdfCorpusFieldRunGuidance] = Field(default_factory=dict, max_length=60)
     autonomous: PdfCorpusAutonomy | None = None
-    auto_clean_text: bool = True
+    auto_clean_text: bool = False
     llm_touchup_during_enrichment: bool = False
     noise_unusable_threshold: float = Field(default=45, ge=0, le=100)
     llm_assess_text_noise: bool = False

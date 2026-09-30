@@ -7,7 +7,9 @@ describe("text noise settings", () => {
   beforeEach(() => setActivePinia(createPinia()));
 
   it("exposes the threshold on a labelled range and emits a new copy", async () => {
-    const wrapper = mount(CorpusTextNoiseSettings, { props: { threshold: 45, llmAssist: false } });
+    const wrapper = mount(CorpusTextNoiseSettings, {
+      props: { threshold: 45, llmAssist: false, mediaKind: "pdf" },
+    });
     expect(wrapper.text()).toContain("Source illegibility");
     const slider = wrapper.get('input[type="range"]');
     expect(slider.attributes("aria-valuenow")).toBe("45");
@@ -24,7 +26,9 @@ describe("text noise settings", () => {
   });
 
   it("LLM assist is off until switched on", async () => {
-    const wrapper = mount(CorpusTextNoiseSettings, { props: { threshold: 45, llmAssist: false } });
+    const wrapper = mount(CorpusTextNoiseSettings, {
+      props: { threshold: 45, llmAssist: false, mediaKind: "pdf" },
+    });
     const box = wrapper.get('input[type="checkbox"]');
     expect((box.element as HTMLInputElement).checked).toBe(false);
     await box.setValue(true);

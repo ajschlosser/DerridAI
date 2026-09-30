@@ -21,7 +21,7 @@ const emit = defineEmits<{
 const i18n = useI18nStore();
 const id = useId();
 const percent = (value: number) => `${Math.round(value)}%`;
-const supportsLlmSecondRead = computed(() => !props.mediaKind || props.mediaKind === "pdf");
+const supportsLlmSecondRead = computed(() => props.mediaKind === "pdf");
 </script>
 
 <template>

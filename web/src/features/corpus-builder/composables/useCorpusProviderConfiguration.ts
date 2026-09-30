@@ -60,7 +60,7 @@ export function useCorpusProviderConfiguration(currentBuild: Ref<CorpusBuild | n
   );
   const documentNlpProvider = ref<"auto" | "spacy" | "booknlp">("auto");
   const documentNlpIncludeEvents = ref(false);
-  const autoCleanText = ref(true);
+  const autoCleanText = ref(false);
   const llmTouchupDuringEnrichment = ref(false);
   const noiseUnusableThreshold = ref(45);
   const llmAssessTextNoise = ref(false);

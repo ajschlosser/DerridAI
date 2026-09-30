@@ -787,6 +787,12 @@ class PdfCorpusRepository:
         check_size(data, settings.pdf_max_upload_mb * 1024 * 1024)
         illegibility = clamp_illegibility(source_illegibility)
         kind = detect_media_kind(filename, data, content_type)
+        # OCR is an image-region operation. Keep legacy request fields accepted for
+        # compatibility, but never let them affect text, audio, URL, or Gutenberg
+        # extraction identities or behavior.
+        if kind not in {"pdf", "image"}:
+            ocr_mode = "never"
+            illegibility = 0.0
         digest = hashlib.sha256(data).hexdigest()
         # Default PDF uploads keep the historical content-addressed id.
         identity = digest
@@ -3119,7 +3125,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             # Optionally clean obvious extraction/layout noise before metadata
             # enrichment. The immutable extracted text remains bound in
             # source_extracted_text and the transformation is revisioned.
-            if bool(request.get("auto_clean_text", True)):
+            if bool(request.get("auto_clean_text", False)):
                 cleanup_rules = request.get("text_cleanup_rules") or sorted(TEXT_CLEANUP_RULES)
                 cleanup_report = apply_automatic_text_cleanup(records, cleanup_rules, [current_build.get("manifest", {}).get(key) for key in ("title", "short_title", "original_title")])
                 current_build = self.repo.get_build(build_id)

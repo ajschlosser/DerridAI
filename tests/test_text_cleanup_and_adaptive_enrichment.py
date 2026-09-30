@@ -22,8 +22,8 @@ from app import corpus_builder as cb
 from app.models import PdfCorpusBuildCreate
 
 
-def test_pre_enrichment_cleanup_is_default_and_preserves_source_truth():
-    """Cleanup is on by default, removes noise, and keeps the original and a diff.
+def test_pre_enrichment_cleanup_can_be_enabled_and_preserves_source_truth():
+    """Cleanup removes noise when enabled, and keeps the original and a diff.
 
     What: two records contain a repeated running title, a page number, a "Downloaded
     from JSTOR" line and a sentence broken by layout. After cleanup both records are
@@ -32,8 +32,8 @@ def test_pre_enrichment_cleanup_is_default_and_preserves_source_truth():
     text_revision_history logs an "automatic_cleanup" entry with a diff.
     Why: cleanup improves prompts, but provenance requires the original text.
     """
-    request = PdfCorpusBuildCreate(asset_id='pdf-test')
-    assert request.auto_clean_text is True
+    request = PdfCorpusBuildCreate(asset_id='pdf-test', auto_clean_text=True)
+    assert PdfCorpusBuildCreate(asset_id='pdf-test').auto_clean_text is False
     assert 'ocr_artifacts' in request.text_cleanup_rules
     records = [
         {
@@ -121,7 +121,6 @@ def test_adaptive_fast_mode_can_skip_repeatedly_low_yield_family_but_not_deep_or
     assert skip is True and reason
     assert manager._adaptive_family_should_skip('b1', 'indexing', {'enrichment_mode': 'deep'})[0] is False
     assert manager._adaptive_family_should_skip('b1', 'indexing', {'enrichment_mode': 'fast', 'families': ['indexing']})[0] is False
-
 
 
 

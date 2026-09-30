@@ -8,7 +8,24 @@ const body = () => new DOMWrapper(document.body);
 
 describe("Corpus source ingest", () => {
   it("places the OCR strategy radios before choose source PDF", () => {
-    const wrapper = mount(CorpusSourceIngest, { props: { assets: [], hits: [] } });
+    const wrapper = mount(CorpusSourceIngest, {
+      props: {
+        assets: [],
+        hits: [],
+        selectedAsset: {
+          asset_id: "pdf-source",
+          sha256: "abcdef0123456789abcdef",
+          filename: "source.pdf",
+          created_at: "2026-09-23T08:00:00Z",
+          page_count: 1,
+          block_count: 1,
+          ocr_pages: 0,
+          warnings: [],
+          metadata: {},
+          media_kind: "pdf",
+        },
+      },
+    });
     const radios = wrapper.findAll('input[name="source-ocr-strategy"]');
     const choose = wrapper.get("button.source-choose");
     expect(radios).toHaveLength(3);
@@ -21,7 +38,22 @@ describe("Corpus source ingest", () => {
   });
 
   it("emits the selected OCR strategy as a numeric compatibility value", async () => {
-    const wrapper = mount(CorpusSourceIngest);
+    const wrapper = mount(CorpusSourceIngest, {
+      props: {
+        selectedAsset: {
+          asset_id: "image-source",
+          sha256: "abcdef0123456789abcdef",
+          filename: "source.png",
+          created_at: "2026-09-23T08:00:00Z",
+          page_count: 1,
+          block_count: 1,
+          ocr_pages: 1,
+          warnings: [],
+          metadata: {},
+          media_kind: "image",
+        },
+      },
+    });
     await wrapper.find('input[value="difficult"]').setValue(true);
     expect(wrapper.emitted("update:illegibility")?.at(-1)).toEqual([50]);
     await wrapper.find('input[value="always"]').setValue(true);
@@ -248,13 +280,10 @@ describe("Corpus source ingest experience", () => {
   });
 });
 
-describe("page-number detection controls", () => {
-  it("is on by default and reports the choice", async () => {
+describe("page-number detection", () => {
+  it("is automatic and has no user toggle", () => {
     const wrapper = mount(CorpusSourceIngest);
-    const box = wrapper.get('.page-detect input[type="checkbox"]');
-    expect((box.element as HTMLInputElement).checked).toBe(true);
-    await box.setValue(false);
-    expect(wrapper.emitted("update:detectPageNumbers")?.at(-1)).toEqual([false]);
+    expect(wrapper.find('.page-detect input[type="checkbox"]').exists()).toBe(false);
   });
 
   it("shows what was detected on the current source", () => {
@@ -308,17 +337,35 @@ describe("page-number detection controls", () => {
   });
 });
 
-describe("model-assisted page detection control", () => {
-  it("is offered under detection, on by default, and can be turned off", async () => {
+describe("automatic page detection", () => {
+  it("does not ask the user to configure model-assisted detection", () => {
     const wrapper = mount(CorpusSourceIngest);
-    const box = wrapper.get('.page-detect-llm input[type="checkbox"]');
-    expect((box.element as HTMLInputElement).checked).toBe(true);
-    await box.setValue(false);
-    expect(wrapper.emitted("update:llmPageDetection")?.at(-1)).toEqual([false]);
+    expect(wrapper.find(".page-detect-llm").exists()).toBe(false);
+    expect(wrapper.find(".page-detect").exists()).toBe(false);
   });
 
-  it("is hidden when page-number detection is off altogether", () => {
-    const wrapper = mount(CorpusSourceIngest, { props: { detectPageNumbers: false } });
-    expect(wrapper.find(".page-detect-llm").exists()).toBe(false);
+  it("hides OCR controls for non-image sources", () => {
+    const wrapper = mount(CorpusSourceIngest, {
+      props: {
+        selectedAsset: {
+          asset_id: "text-source",
+          sha256: "abcdef0123456789abcdef",
+          filename: "source.txt",
+          created_at: "2026-09-23T08:00:00Z",
+          page_count: 0,
+          block_count: 1,
+          ocr_pages: 0,
+          warnings: [],
+          metadata: {},
+          media_kind: "text",
+        },
+      },
+    });
+    expect(wrapper.find(".ocr-choice").exists()).toBe(false);
+  });
+
+  it("hides OCR controls until a source media kind is selected", () => {
+    const wrapper = mount(CorpusSourceIngest, { props: { assets: [], hits: [] } });
+    expect(wrapper.find(".ocr-choice").exists()).toBe(false);
   });
 });
