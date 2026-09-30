@@ -172,6 +172,14 @@
 
   async function embedQuery(query, config) {
     if (!config.embeddingModel) throw new Error(t("site.runtime.embedding_model_required"));
+    if (vectors.model && config.embeddingModel !== vectors.model) {
+      throw new Error(
+        t("site.runtime.embedding_model_mismatch", {
+          expected: vectors.model,
+          actual: config.embeddingModel,
+        }),
+      );
+    }
     const base = String(config.baseUrl || "").replace(/\/$/, "");
     if (!base) throw new Error(t("site.runtime.endpoint_required"));
     if (config.type === "ollama") {
@@ -495,7 +503,13 @@
     type.value = config.type;
     const endpoint = node("input", { class: "control", value: config.baseUrl, placeholder: t("site.runtime.endpoint_placeholder") });
     const chat = node("input", { class: "control", value: config.chatModel, placeholder: t("site.runtime.chat_model") });
-    const embedding = node("input", { class: "control", value: config.embeddingModel, placeholder: t("site.runtime.embedding_model") });
+    const embedding = node("input", {
+      class: "control",
+      value: config.embeddingModel,
+      placeholder: t("site.runtime.embedding_model"),
+      readOnly: Boolean(vectors.model),
+      title: vectors.model ? t("site.runtime.embedding_model_locked", { model: vectors.model }) : "",
+    });
     const key = node("input", { class: "control", type: "password", value: sessionApiKey, autocomplete: "off", placeholder: t("site.runtime.api_key_session") });
 
     function current() {
