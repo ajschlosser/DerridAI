@@ -219,9 +219,7 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
 
     await nextTick();
     const input = wrapper.get("textarea[role=combobox]");
-    expect((input.element as HTMLTextAreaElement).value).toBe(
-      "Emmanuel Levinas\nMartin Heidegger",
-    );
+    expect((input.element as HTMLTextAreaElement).value).toBe("Emmanuel Levinas\nMartin Heidegger");
     expect(wrapper.text()).toContain("accepts one value");
     expect(wrapper.get("[data-primary-action]").attributes("disabled")).toBeDefined();
 
