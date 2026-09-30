@@ -255,8 +255,10 @@ describe("setup state", () => {
 describe("workspace header", () => {
   beforeEach(() => setActivePinia(createPinia()));
 
-  it("presents three user-facing phases while keeping Build and Review directly navigable", async () => {
-    const wrapper = mount(CorpusBuilderWorkspaceHeader, {
+  it(
+    "presents three user-facing phases while keeping Build and Review directly navigable",
+    async () => {
+      const wrapper = mount(CorpusBuilderWorkspaceHeader, {
       props: {
         sourceFilename: "Of Grammatology.pdf",
         buildId: "build-42",
@@ -286,8 +288,9 @@ describe("workspace header", () => {
     expect(wrapper.get(".corpus-workspace-stage").text()).toBe("Reviewing");
     // The build ID is secondary metadata, not headline copy.
     expect(wrapper.get(".corpus-workspace-context strong").text()).toBe("Of Grammatology.pdf");
-    expect(wrapper.get("details code").text()).toBe("build-42");
-  });
+      expect(wrapper.get("details code").text()).toBe("build-42");
+    },
+  );
 });
 
 describe("build history menu", () => {
@@ -402,7 +405,6 @@ describe("publish workspace", () => {
     const confirm = document.body.textContent || wrapper.text();
     expect(confirm).toContain("Source coverage and text-fidelity validation are never skipped");
     expect(confirm).toContain("does not turn the assertion into a human-confirmed");
-
   });
 
   it("sends blocker actions to the parent, which switches to Review", async () => {
