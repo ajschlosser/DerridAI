@@ -45,7 +45,7 @@ const llmProcessedHelp = i18n.t(
 const completedQueue = computed(() => {
   if (props.searching || props.rows.length) return "";
   if (props.queue === "ready") return "ready";
-  if (["issues", "metadata", "topology", "source"].includes(String(props.queue || ""))) return "issues";
+  if (["issues", "metadata", "topology", "source"].includes(String(props.queue || "")))\n    return "issues";
   return "";
 });
 
