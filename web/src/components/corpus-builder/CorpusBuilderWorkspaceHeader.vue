@@ -96,7 +96,9 @@ const phases = computed<WorkspacePhase[]>(() => {
 });
 const buildAvailable = computed(() => Boolean(internalStep("build")?.available));
 const reviewAvailable = computed(() => Boolean(internalStep("review")?.available));
-const buildReviewActive = computed(\n  () => props.workspace === "build" || props.workspace === "review",\n);
+const buildReviewActive = computed(
+  () => props.workspace === "build" || props.workspace === "review",
+);
 
 function phaseLabel(phase: WorkspacePhase) {
   return i18n.t(`pdf_corpus.workspace.${phase.id}`);
