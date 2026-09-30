@@ -8313,6 +8313,7 @@
   "site.runtime.use_selection": "Use selected text",
   "site.runtime.view_record": "View record",
   "site.runtime.work_filter": "Work",
+  "pdf_corpus.setup.summary.minutes": "{count} min",
   "site.runtime.complete_with_warning": "Research complete with a fallback: {warning}",
   "site.runtime.copied": "Copied",
   "site.runtime.copy_command": "Copy command",

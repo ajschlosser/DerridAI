@@ -53,6 +53,54 @@ const titleKeys: Record<CorpusSetupSectionId, [string, string]> = {
 </template>
 
 <style scoped>
+/* Structure-section content is slotted from the parent, so it is styled from here. */
+.corpus-setup-workspace :deep(.setup-continue) {
+  display: flex;
+  justify-content: flex-end;
+}
+.corpus-setup-workspace :deep(.document-structure-config) {
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+.corpus-setup-workspace :deep(.setup-disclosure) {
+  overflow: visible;
+  border-top: 1px solid var(--border-subtle);
+}
+.corpus-setup-workspace :deep(.setup-disclosure > summary) {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 54px;
+  padding: var(--space-3) 0;
+}
+.corpus-setup-workspace :deep(.setup-disclosure > summary::-webkit-details-marker) {
+  display: none;
+}
+.corpus-setup-workspace :deep(.setup-disclosure > summary > span:last-child) {
+  display: grid;
+  gap: 2px;
+}
+.corpus-setup-workspace :deep(.setup-disclosure > summary b) {
+  font-size: 0.9375rem;
+}
+.corpus-setup-workspace :deep(.setup-disclosure > summary small) {
+  color: var(--text-secondary);
+  font-size: 0.8125rem !important;
+  font-weight: 500;
+}
+.corpus-setup-workspace :deep(.setup-disclosure[open] > summary) {
+  border-bottom: 1px solid var(--border-subtle);
+  background: transparent;
+}
+.corpus-setup-workspace :deep(.setup-disclosure-body) {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-4) 0 var(--space-5);
+}
+
 .corpus-setup-workspace {
   display: grid;
   gap: var(--space-4);

@@ -1,5 +1,6 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
+import UiButton from "../ui/UiButton.vue";
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import type { CorpusQueueRow } from "../../features/corpus-builder/api/reviewReads";
 import { rowHasSourceWarning } from "../../features/corpus-builder/domain/queueRows";
@@ -185,9 +186,9 @@ function recordSelectionChanged(recordId: string, event: Event) {
     </div>
     <div v-else-if="!props.rows.length" class="rail-empty">
       {{ i18n.t("pdf_corpus.no_records_filter") }}
-      <button type="button" class="btn small" @click="emit('showAll')">
+      <UiButton size="small" @click="emit('showAll')">
         {{ i18n.t("pdf_corpus.show_all_records") }}
-      </button>
+      </UiButton>
     </div>
   </nav>
 </template>
