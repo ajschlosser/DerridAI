@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from ..http_auth import require_admin
 from ..site_publication import build_local_site_file, build_nginx_site_bundle
+from ..system_store import system_store
 
 router = APIRouter(tags=["sites"])
 
@@ -18,8 +19,20 @@ class SiteExportRequest(BaseModel):
     works: list[str] = Field(min_length=1, max_length=500)
     title: str = Field(default="", max_length=300)
     description: str = Field(default="", max_length=4000)
-    locale: Literal["en-US", "fr-CA"] = "en-US"
+    locale: str = Field(default="en-US", min_length=2, max_length=35)
+    languages: list[str] = Field(default_factory=list, max_length=100)
+    provider_profile_ids: list[str] = Field(default_factory=list, max_length=100)
     export_format: Literal["local-single-file", "nginx-docker"] = "nginx-docker"
+
+
+@router.get("/api/sites/export-options")
+def site_export_options(request: Request) -> dict[str, object]:
+    """Return administrator-visible language and safe provider choices for site export."""
+    require_admin(request)
+    return {
+        "languages": system_store.list_languages(),
+        "provider_profiles": system_store.researcher_profiles(),
+    }
 
 
 @router.post("/api/sites/export")
@@ -38,6 +51,8 @@ def export_site(body: SiteExportRequest, request: Request) -> Response:
             title=body.title,
             description=body.description,
             locale=body.locale,
+            languages=body.languages or [body.locale],
+            provider_profile_ids=body.provider_profile_ids,
         )
     except (KeyError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
