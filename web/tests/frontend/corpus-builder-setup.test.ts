@@ -41,6 +41,28 @@ describe("Corpus Builder setup and launch controls", () => {
     expect(wrapper.get(".build-action").attributes("disabled")).toBeDefined();
   });
 
+  it("lets the Build plan open the section behind each summary", async () => {
+    const wrapper = mount(CorpusBuildReadiness, {
+      props: {
+        mediaKind: "pdf",
+        sourceFilename: "book.pdf",
+        pageCount: 80,
+        blockCount: 300,
+        structureSummary: "Main text PDF 9",
+        schemaLabel: "Scholarly default",
+        providerLabel: "Local Ollama",
+        modelLabel: "qwen",
+        targetChars: 1750,
+        toleranceChars: 200,
+        canStart: true,
+      },
+    });
+
+    await wrapper.get('button[aria-label="Edit Source"]').trigger("click");
+    await wrapper.get('button[aria-label="Edit Metadata"]').trigger("click");
+    expect(wrapper.emitted("editSection")).toEqual([["source"], ["metadata"]]);
+  });
+
   it("names the first blocking setup issue and sends Fix to its section", async () => {
     const wrapper = mount(CorpusBuildReadiness, {
       props: {
