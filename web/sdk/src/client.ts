@@ -34,7 +34,10 @@ export class DerridAIClient {
     works: () => PublicationManifest["works"];
   };
   readonly records: {
-    get: (recordId: string, options?: { signal?: AbortSignal }) => ReturnType<RecordRepository["get"]>;
+    get: (
+      recordId: string,
+      options?: { signal?: AbortSignal },
+    ) => ReturnType<RecordRepository["get"]>;
   };
   readonly cache: {
     clear: () => void;
@@ -71,17 +74,13 @@ export class DerridAIClient {
       this.events,
       options.generation,
     );
-    this.annotations = new AnnotationStore(
-      manifest,
-      options.storage ?? new BrowserStorage(),
-    );
+    this.annotations = new AnnotationStore(manifest, options.storage ?? new BrowserStorage());
     this.publication = {
       info: () => this.manifest,
       works: () => [...this.manifest.works],
     };
     this.records = {
-      get: (recordId, operation = {}) =>
-        this.repository.get(recordId, operation.signal),
+      get: (recordId, operation = {}) => this.repository.get(recordId, operation.signal),
     };
     this.cache = {
       clear: () => this.repository.clear(),
@@ -95,12 +94,7 @@ export class DerridAIClient {
       options.dataSource.getManifest(),
       options.dataSource.getChunkDescriptors(),
     ]);
-    const repository = new RecordRepository(
-      options.dataSource,
-      descriptors,
-      events,
-      options.cache,
-    );
+    const repository = new RecordRepository(options.dataSource, descriptors, events, options.cache);
     return new DerridAIClient(manifest, options, repository, events);
   }
 
@@ -163,8 +157,6 @@ export class DerridAIClient {
   }
 }
 
-export async function createClient(
-  options: DerridAIClientOptions,
-): Promise<DerridAIClient> {
+export async function createClient(options: DerridAIClientOptions): Promise<DerridAIClient> {
   return DerridAIClient.create(options);
 }
