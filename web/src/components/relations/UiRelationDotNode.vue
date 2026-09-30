@@ -34,8 +34,9 @@ withDefaults(
 }
 .dot {
   fill: var(--relation-node-dot, var(--hue, var(--accent)));
+  fill-opacity: var(--relation-node-dot-opacity, 1);
   stroke: var(--relation-node-dot-border, var(--surface-raised));
-  stroke-width: 1.5;
+  stroke-width: var(--relation-node-dot-border-width, 1.5);
 }
 .label {
   fill: var(--relation-node-label, var(--text-primary));
