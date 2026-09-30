@@ -32,7 +32,7 @@ def _record(record_id: str = "r1", work: str = "Glas") -> dict:
     }
 
 
-def _package_from_publication_asset(asset: str) -> dict:
+def _package_from_runtime(asset: str) -> dict:
     prefix = f"globalThis.{site_publication.PACKAGE_GLOBAL}="
     assert asset.startswith(prefix)
     payload = asset[len(prefix) :].split(";\n", 1)[0]
@@ -85,23 +85,16 @@ def test_site_bundle_separates_publication_sdk_and_reference_ui(
     )
 
     with zipfile.ZipFile(io.BytesIO(bundle.payload)) as archive:
-        assert archive.namelist() == [
-            "index.html",
-            "derridai-publication.js",
-            "derridai-sdk.js",
-            "derridai-site.js",
-        ]
+        assert archive.namelist() == ["index.html", "derridai-site.js"]
         index_html = archive.read("index.html").decode("utf-8")
-        publication_asset = archive.read("derridai-publication.js").decode("utf-8")
-        sdk_runtime = archive.read("derridai-sdk.js").decode("utf-8")
         site_runtime = archive.read("derridai-site.js").decode("utf-8")
 
     assert "A publication-safe passage." not in index_html
-    assert index_html.index("derridai-publication.js") < index_html.index("derridai-sdk.js")
-    assert index_html.index("derridai-sdk.js") < index_html.index("derridai-site.js")
+    assert index_html.count("<script ") == 1
+    assert 'src="./derridai-site.js"' in index_html
     assert "connect-src 'self' http: https:" in index_html
 
-    package = _package_from_publication_asset(publication_asset)
+    package = _package_from_runtime(site_runtime)
     publication = package["manifest"]
     chunks = package["chunks"]
 
@@ -125,8 +118,8 @@ def test_site_bundle_separates_publication_sdk_and_reference_ui(
     decoded = _chunk_vectors(chunks[0], 3)[0]
     assert decoded == pytest.approx([0.1, 0.2, 0.3])
 
-    assert "createClient" in sdk_runtime
-    assert "DerridAI" in sdk_runtime
+    assert "createClient" in site_runtime
+    assert "DerridAI" in site_runtime
     assert "__DERRIDAI_HOST_CAPABILITIES__" in site_runtime
     assert "sdk.createClient" in site_runtime
     assert "OLLAMA_ORIGINS" not in site_runtime
@@ -165,9 +158,9 @@ def test_site_bundle_exports_only_selected_installed_languages_and_safe_provider
         ],
     )
     dictionaries = {
-        "en-US": {"site.runtime.search": "Search", "site.runtime.site_title": "Research site"},
-        "fr-CA": {"site.runtime.search": "Rechercher", "site.runtime.site_title": "Site de recherche"},
-        "de-DE": {"site.runtime.search": "Suchen"},
+        "en-US": dict(site_publication.EN_US),
+        "fr-CA": {**site_publication.EN_US, "site.runtime.search": "Rechercher"},
+        "de-DE": {**site_publication.EN_US, "site.runtime.search": "Suchen"},
     }
     monkeypatch.setattr(
         site_publication.system_store,
@@ -212,8 +205,8 @@ def test_site_bundle_exports_only_selected_installed_languages_and_safe_provider
     )
 
     with zipfile.ZipFile(io.BytesIO(bundle.payload)) as archive:
-        publication_asset = archive.read("derridai-publication.js").decode("utf-8")
-    package = _package_from_publication_asset(publication_asset)
+        site_runtime = archive.read("derridai-site.js").decode("utf-8")
+    package = _package_from_runtime(site_runtime)
     manifest = package["manifest"]
 
     assert manifest["locale"] == "de-DE"
@@ -231,8 +224,52 @@ def test_site_bundle_exports_only_selected_installed_languages_and_safe_provider
             "has_api_key": True,
         }
     ]
-    assert "MUST-NOT-EXPORT" not in publication_asset
+    assert "MUST-NOT-EXPORT" not in site_runtime
     assert manifest["features"]["direct_provider_endpoints"] is True
+
+
+def test_site_bundle_rejects_selected_language_with_missing_runtime_translations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        site_publication.store,
+        "export_site_projection",
+        lambda store_name, works: {
+            "store": {"name": store_name},
+            "records": [{"record": _record("r1", "Glas"), "embedding": None}],
+        },
+    )
+    monkeypatch.setattr(
+        site_publication.system_store,
+        "list_languages",
+        lambda: [
+            {"code": "en-US", "name": "English", "flag": "🇺🇸"},
+            {"code": "de-DE", "name": "Deutsch", "flag": "🇩🇪"},
+        ],
+    )
+    monkeypatch.setattr(
+        site_publication.system_store,
+        "get_language",
+        lambda code: {
+            "code": code,
+            "name": code,
+            "flag": "🌐",
+            "dictionary": (
+                dict(site_publication.EN_US)
+                if code == "en-US"
+                else {"site.runtime.search": "Suchen"}
+            ),
+        },
+    )
+
+    with pytest.raises(ValueError, match="missing .* required static-site translations"):
+        site_publication.build_site_bundle(
+            store_name="derrida-primary",
+            works=["Glas"],
+            title="Incomplete translation",
+            locale="de-DE",
+            languages=["de-DE"],
+        )
 
 
 def test_site_chunks_records_and_vectors_by_work() -> None:
@@ -420,8 +457,6 @@ def test_nginx_export_contains_one_container_deployment_and_executable_scripts(
     with zipfile.ZipFile(io.BytesIO(bundle.payload)) as archive:
         assert archive.namelist() == [
             "index.html",
-            "derridai-publication.js",
-            "derridai-sdk.js",
             "derridai-site.js",
             "Dockerfile",
             "nginx.conf",
