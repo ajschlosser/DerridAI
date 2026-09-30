@@ -35,14 +35,11 @@ export function useCorpusSourceConfiguration(
   const assets = ref<PdfAsset[]>([]);
   const selectedAssetId = ref("");
   const sourceIllegibility = ref(0);
-  // Printed page numbers in text sources are detected deterministically unless turned off.
-  const detectPageNumbers = ref(true);
-  // If none are found, a model may pick candidate lines (its answer is still verified deterministically).
-  const llmPageDetection = ref(true);
+  // Printed-page detection is automatic. Deterministic extraction runs first;
+  // a configured provider is supplied only as the bounded fallback.
   function pageDetection(): PageDetectionRequest {
-    if (!detectPageNumbers.value) return { mode: "off" };
     const profile = providerProfileId();
-    if (!llmPageDetection.value || !profile) return { mode: "auto" };
+    if (!profile) return { mode: "auto" };
     const config = providerConnection(profile) || {};
     const text = (value: unknown) => (typeof value === "string" && value ? value : undefined);
     return {
@@ -430,8 +427,6 @@ export function useCorpusSourceConfiguration(
     selectedAssetId,
     selectedAsset,
     sourceIllegibility,
-    detectPageNumbers,
-    llmPageDetection,
     sourceUrl,
     gutenbergQuery,
     gutenbergHits,
