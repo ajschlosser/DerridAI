@@ -125,7 +125,7 @@ describe("DerridAI SDK", () => {
   });
 
   it("uses injected embedding and generation capabilities rather than endpoint configuration", async () => {
-    let generationRequest: GenerationRequest | null = null;
+    const generationRequests: GenerationRequest[] = [];
     const embed = vi.fn(async () => ({
       vectors: [[1, 0]],
       provider: { type: "host", model: "bge-m3:latest" },
@@ -140,7 +140,7 @@ describe("DerridAI SDK", () => {
       generation: {
         descriptor: () => ({ type: "host", model: "qwen3:8b" }),
         async generate(request) {
-          generationRequest = request;
+          generationRequests.push(request);
           return {
             text: "The evidence distinguishes the attributed position [E1].",
             provider: { type: "host", model: "qwen3:8b" },
@@ -163,8 +163,8 @@ describe("DerridAI SDK", () => {
       stance: "questions",
       discourseRole: "analysis",
     });
-    expect(generationRequest?.evidencePacket.evidence[0].recordId).toBe("g1");
-    expect(generationRequest?.prompt).toContain("Position holder: Hegel");
+    expect(generationRequests[0]?.evidencePacket.evidence[0].recordId).toBe("g1");
+    expect(generationRequests[0]?.prompt).toContain("Position holder: Hegel");
   });
 
   it("falls back to keyword retrieval when the host embedding contract is incompatible", async () => {
