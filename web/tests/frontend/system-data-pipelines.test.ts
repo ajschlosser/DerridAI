@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
 
+import { chromaApi } from "../../src/api/chroma";
 import { pipelinesApi } from "../../src/api/pipelines";
 import SystemDataPipelines from "../../src/components/system-data/SystemDataPipelines.vue";
 import { pipelineKey } from "../../src/domain/pipelinePresentation";
@@ -235,6 +236,12 @@ describe("System Data Pipeline Studio", () => {
       total: 1,
     });
     vi.spyOn(pipelinesApi, "metrics").mockResolvedValue(structuredClone(metrics));
+    vi.spyOn(chromaApi, "collections").mockResolvedValue([] as never);
+    vi.spyOn(pipelinesApi, "researchBenchmarkCases").mockResolvedValue({
+      cases: [],
+      limit: 200,
+      offset: 0,
+    });
     vi.spyOn(pipelinesApi, "cloneDraft").mockImplementation(async (pipelineId, version) => {
       const source = catalog.pipelines.find(
         (item) => item.pipeline_id === pipelineId && item.version === version,
@@ -268,11 +275,13 @@ describe("System Data Pipeline Studio", () => {
     expect(wrapper.text()).toContain("Active assignment");
 
     await wrapper.find("#pipeline-tab-operations").trigger("click");
-    expect(wrapper.text()).toContain("Test and compare Research pipelines");
-    expect(wrapper.text()).toContain("Benchmark Research pipelines");
     expect(wrapper.text()).toContain("Operational health");
     expect(wrapper.text()).toContain("95th-percentile run time");
     expect(wrapper.text()).toContain("Stage strategy health");
+    await wrapper.find("#pipeline-operations-tab-compare").trigger("click");
+    expect(wrapper.text()).toContain("Test and compare Research pipelines");
+    await wrapper.find("#pipeline-operations-tab-benchmarks").trigger("click");
+    expect(wrapper.text()).toContain("Benchmark Research pipelines");
 
     await wrapper.find("#pipeline-tab-executions").trigger("click");
     expect(wrapper.text()).toContain("Execution history");
@@ -315,7 +324,7 @@ describe("System Data Pipeline Studio", () => {
     await custom!.trigger("click");
 
     const activate = wrapper
-      .findAll(".detail-actions .btn")
+      .findAll(".detail-actions button")
       .find((item) => item.text().includes("Make active"));
     expect(activate).toBeTruthy();
     await activate!.trigger("click");
@@ -368,7 +377,7 @@ describe("System Data Pipeline Studio", () => {
     expect(wrapper.text()).toContain("Evidence recovery");
     expect(wrapper.text()).toContain("Non-cELF-guaranteed");
     const activate = wrapper
-      .findAll(".detail-actions .btn")
+      .findAll(".detail-actions button")
       .find((item) => item.text().includes("Make active"));
     await activate!.trigger("click");
     await flushPromises();
@@ -422,7 +431,7 @@ describe("System Data Pipeline Studio", () => {
 
     expect(wrapper.text()).toContain(label);
     const activate = wrapper
-      .findAll(".detail-actions .btn")
+      .findAll(".detail-actions button")
       .find((item) => item.text().includes("Make active"));
     await activate!.trigger("click");
     await flushPromises();
@@ -436,17 +445,17 @@ describe("System Data Pipeline Studio", () => {
     const { wrapper } = await mountStudio();
 
     const clone = wrapper
-      .findAll(".detail-actions .btn")
+      .findAll(".detail-actions button")
       .find((item) => item.text().includes("Clone & edit"));
     expect(clone).toBeTruthy();
     await clone!.trigger("click");
     await flushPromises();
 
     expect(pipelinesApi.cloneDraft).toHaveBeenCalledWith("research.current", 1);
-    expect(wrapper.text()).toContain("Configure cloned pipeline");
+    expect(wrapper.text()).toContain("New pipeline version");
     const idInput = wrapper.find('.pipeline-editor input[autocomplete="off"]');
     expect((idInput.element as HTMLInputElement).value).toBe("research.current.custom");
-    expect(wrapper.text()).toContain("Stage settings");
+    expect(wrapper.text()).toContain("Stages");
   });
 
   it("asks the server for the next version when cloning a saved custom pipeline", async () => {
@@ -459,7 +468,7 @@ describe("System Data Pipeline Studio", () => {
     await custom!.trigger("click");
 
     const clone = wrapper
-      .findAll(".detail-actions .btn")
+      .findAll(".detail-actions button")
       .find((item) => item.text().includes("Clone & edit"));
     expect(clone).toBeTruthy();
     await clone!.trigger("click");
@@ -491,8 +500,99 @@ describe("System Data Pipeline Studio", () => {
       expect.objectContaining({ query: "rag-1", limit: 25, offset: 0 }),
     );
 
-    await wrapper.find(".row-delete").trigger("click");
+    await wrapper.find(".run-actions .ui-menu-trigger").trigger("click");
+    await wrapper
+      .findAll('[role="menuitem"]')
+      .find((item) => item.text() === "Delete execution")!
+      .trigger("click");
     await flushPromises();
     expect(deleteRun).toHaveBeenCalledWith("rag-1");
+  });
+
+  it("moves the glossary out of the page and into a Help dialog", async () => {
+    const { wrapper } = await mountStudio();
+    expect(wrapper.find(".concept-guide, .plain-language-guide").exists()).toBe(false);
+    expect(document.body.querySelector("[role=dialog]")).toBeNull();
+
+    const help = wrapper.findAll(".ui-page-header button").find((b) => b.text() === "Help")!;
+    await help.trigger("click");
+    await flushPromises();
+    const dialog = document.body.querySelector("[role=dialog]")!;
+    expect(dialog.textContent).toContain("How Pipeline Studio is organized");
+    expect(dialog.textContent).toContain("Core concepts");
+    expect(dialog.textContent).toContain("Pipeline lifecycle");
+    expect(dialog.textContent).toContain("Reading pipeline graphs");
+    for (const term of ["Execution trace", "Scholarly effect", "Assignment", "Strategy"]) {
+      expect(dialog.textContent).toContain(term);
+    }
+    wrapper.unmount();
+  });
+
+  it("uses the shared tabs and keeps Operations state in the URL", async () => {
+    const { wrapper, router } = await mountStudio();
+    expect(wrapper.findAll('.ui-page-header [role="tab"]').map((tab) => tab.text())).toEqual([
+      "Pipelines",
+      "Strategies",
+      "Executions",
+      "Operations",
+    ]);
+    await wrapper.get("#pipeline-tab-operations").trigger("click");
+    await flushPromises();
+    await wrapper.get("#pipeline-operations-tab-benchmarks").trigger("click");
+    await flushPromises();
+    expect(router.currentRoute.value.query).toMatchObject({
+      section: "operations",
+      operation: "benchmarks",
+    });
+    router.back();
+    await flushPromises();
+    await flushPromises();
+    expect(router.currentRoute.value.query.operation).toBeUndefined();
+    expect(wrapper.get("#pipeline-operations-tab-health").attributes("aria-selected")).toBe("true");
+  });
+
+  it("drills from an attention row into the matching server-side execution filter", async () => {
+    const { wrapper, router } = await mountStudio({ section: "operations" });
+    const row = wrapper.get('.attention tbody tr[data-kind="workflow"]');
+    await row.get("button").trigger("click");
+    await flushPromises();
+    expect(router.currentRoute.value.query).toMatchObject({
+      section: "executions",
+      run_workflow: "research",
+    });
+    expect(pipelinesApi.runs).toHaveBeenLastCalledWith(
+      expect.objectContaining({ category: "research", offset: 0 }),
+    );
+    expect(wrapper.get("#pipeline-tab-executions").attributes("aria-selected")).toBe("true");
+  });
+
+  it("refreshes data without losing the selected pipeline, section, or filters", async () => {
+    const { wrapper, router } = await mountStudio({
+      section: "executions",
+      status: "failed",
+      pipeline: pipelineKey(catalog.pipelines[1]),
+    });
+    const before = vi.mocked(pipelinesApi.catalog).mock.calls.length;
+    await wrapper
+      .findAll(".ui-page-header button")
+      .find((b) => b.text() === "Refresh")!
+      .trigger("click");
+    await flushPromises();
+    expect(vi.mocked(pipelinesApi.catalog).mock.calls.length).toBe(before + 1);
+    expect(router.currentRoute.value.query).toMatchObject({
+      section: "executions",
+      status: "failed",
+      pipeline: pipelineKey(catalog.pipelines[1]),
+    });
+  });
+
+  it("does not reload the catalog when switching sections", async () => {
+    const { wrapper } = await mountStudio();
+    const before = vi.mocked(pipelinesApi.catalog).mock.calls.length;
+    await wrapper.get("#pipeline-tab-strategies").trigger("click");
+    await wrapper.get("#pipeline-tab-executions").trigger("click");
+    await wrapper.get("#pipeline-tab-pipelines").trigger("click");
+    await flushPromises();
+    expect(vi.mocked(pipelinesApi.catalog).mock.calls.length).toBe(before);
   });
 });

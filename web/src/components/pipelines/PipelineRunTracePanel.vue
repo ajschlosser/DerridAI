@@ -8,6 +8,8 @@ import type { PipelineRunTrace, PipelineStageTrace } from "../../types/pipelines
 
 const props = defineProps<{
   trace: PipelineRunTrace;
+  /** The execution inspector already shows identity and status above the trace. */
+  hideHeader?: boolean;
 }>();
 
 const i18n = useI18nStore();
@@ -44,8 +46,13 @@ function stageDetail(stage: PipelineStageTrace) {
 </script>
 
 <template>
-  <article class="trace-panel" :aria-labelledby="`trace-${trace.run_id}`">
-    <header class="trace-header">
+  <article
+    class="trace-panel"
+    :class="{ embedded: hideHeader }"
+    :aria-labelledby="hideHeader ? undefined : `trace-${trace.run_id}`"
+    :aria-label="hideHeader ? t('pipelines.execution_trace', 'Execution trace') : undefined"
+  >
+    <header v-if="!hideHeader" class="trace-header">
       <div>
         <div class="eyebrow">{{ t("pipelines.execution_trace", "Execution trace") }}</div>
         <h3 :id="`trace-${trace.run_id}`">
@@ -184,9 +191,14 @@ function stageDetail(stage: PipelineStageTrace) {
   display: grid;
   gap: 16px;
   padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-card);
+}
+.trace-panel.embedded {
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 .trace-header,
 .trace-stage-heading,
@@ -200,7 +212,7 @@ function stageDetail(stage: PipelineStageTrace) {
   gap: 16px;
 }
 .eyebrow {
-  color: var(--muted);
+  color: var(--text-tertiary);
   font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -212,12 +224,12 @@ function stageDetail(stage: PipelineStageTrace) {
 }
 .trace-header h3 span,
 .trace-header p {
-  color: var(--muted);
+  color: var(--text-tertiary);
   font-weight: 500;
 }
 .trace-header p {
   margin: 4px 0 0;
-  font-size: 0.76rem;
+  font-size: 0.8125rem;
 }
 .trace-header .trace-explainer {
   max-width: 720px;
@@ -227,18 +239,18 @@ function stageDetail(stage: PipelineStageTrace) {
   display: grid;
   gap: 4px;
   justify-items: end;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
 }
 .status-pill {
   padding: 3px 8px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border-subtle);
   border-radius: 999px;
-  background: var(--soft);
+  background: var(--surface-inset);
   font-size: 0.75rem;
   font-weight: 750;
 }
 .status-pill[data-status="completed"] {
-  border-color: color-mix(in srgb, var(--line) 65%, currentColor);
+  border-color: color-mix(in srgb, var(--border-subtle) 65%, currentColor);
 }
 .trace-stages {
   display: grid;
@@ -259,7 +271,7 @@ function stageDetail(stage: PipelineStageTrace) {
   bottom: -2px;
   left: 14px;
   width: 1px;
-  background: var(--line);
+  background: var(--border-subtle);
   content: "";
 }
 .trace-marker {
@@ -268,9 +280,9 @@ function stageDetail(stage: PipelineStageTrace) {
   place-items: center;
   width: 28px;
   height: 28px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border-subtle);
   border-radius: 999px;
-  background: var(--card);
+  background: var(--surface-card);
 }
 .trace-marker :deep(svg) {
   width: 13px;
@@ -278,12 +290,12 @@ function stageDetail(stage: PipelineStageTrace) {
 }
 .trace-marker[data-status="skipped"],
 .trace-marker[data-status="pending"] {
-  color: var(--muted);
+  color: var(--text-tertiary);
 }
 .trace-marker[data-status="failed"],
 .trace-marker[data-status="timed_out"],
 .trace-marker[data-status="unavailable"] {
-  background: var(--soft);
+  background: var(--surface-inset);
 }
 .trace-stage {
   min-width: 0;
@@ -307,25 +319,25 @@ function stageDetail(stage: PipelineStageTrace) {
 }
 .trace-stage-heading code {
   margin-top: 2px;
-  color: var(--muted);
+  color: var(--text-tertiary);
   font-size: 0.75rem;
 }
 .trace-stage-metrics {
   flex-wrap: wrap;
   justify-content: end;
   gap: 8px;
-  color: var(--muted);
+  color: var(--text-tertiary);
   font-size: 0.75rem;
 }
 .trace-meta {
   margin: 5px 0 0;
-  color: var(--muted);
-  font-size: 0.76rem;
+  color: var(--text-tertiary);
+  font-size: 0.8125rem;
 }
 .trace-counts {
   gap: 7px;
   margin-top: 7px;
-  color: var(--muted);
+  color: var(--text-tertiary);
   font-size: 0.75rem;
 }
 .trace-counts strong {
@@ -337,7 +349,7 @@ function stageDetail(stage: PipelineStageTrace) {
   margin: 8px 0 0;
   padding: 8px 9px;
   border-radius: 8px;
-  background: var(--soft);
+  background: var(--surface-inset);
   font-size: 0.75rem;
   line-height: 1.4;
 }
@@ -351,16 +363,16 @@ function stageDetail(stage: PipelineStageTrace) {
 .run-warnings ul {
   margin: 7px 0 0;
   padding-left: 18px;
-  color: var(--muted);
+  color: var(--text-tertiary);
   font-size: 0.75rem;
 }
 .run-warnings {
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--border-subtle);
   padding-top: 10px;
 }
 .run-warnings summary {
   cursor: pointer;
-  font-size: 0.78rem;
+  font-size: 0.8125rem;
   font-weight: 700;
 }
 @media (max-width: 640px) {

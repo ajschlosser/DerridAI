@@ -1,6 +1,7 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
-import PipelineDefinitionBrowser from "./PipelineDefinitionBrowser.vue";
+import { ref } from "vue";
+import PipelineDefinitionNavigator from "./PipelineDefinitionNavigator.vue";
 import type { PipelineAssignment, PipelineDefinition } from "../../types/pipelines";
 import { contractPurposes, contractVocabulary } from "./fixtures/pipelineCatalogContract";
 
@@ -80,8 +81,8 @@ const assignments: PipelineAssignment[] = [
 ];
 
 const meta = {
-  title: "Pipelines/Definition Browser",
-  component: PipelineDefinitionBrowser,
+  title: "Pipelines/Definition Navigator",
+  component: PipelineDefinitionNavigator,
   args: {
     pipelines,
     assignments,
@@ -90,12 +91,34 @@ const meta = {
     selectedKey: "research.current@1",
     workflow: "",
   },
-} satisfies Meta<typeof PipelineDefinitionBrowser>;
+  render: (args) => ({
+    components: { PipelineDefinitionNavigator },
+    setup() {
+      const filters = ref({ query: "", status: "" });
+      const workflow = ref(args.workflow || "");
+      const selected = ref(args.selectedKey);
+      return { args, filters, workflow, selected };
+    },
+    template:
+      '<PipelineDefinitionNavigator v-bind="args" v-model:filters="filters" v-model:workflow="workflow" :selected-key="selected" @select="selected = $event" />',
+  }),
+} satisfies Meta<typeof PipelineDefinitionNavigator>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
+
+export const MultipleVersions: Story = {
+  args: {
+    pipelines: [
+      ...pipelines,
+      { ...pipelines[0], version: 2, status: "active", name: pipelines[0].name },
+      { ...pipelines[0], version: 3, status: "draft", name: pipelines[0].name },
+    ],
+    selectedKey: "research.current@2",
+  },
+};
 
 export const EvidenceWorkflow: Story = {
   args: { workflow: "evidence", selectedKey: "evidence.reviewer.current@2" },

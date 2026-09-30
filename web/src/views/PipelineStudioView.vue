@@ -4,7 +4,7 @@ import SystemDataPipelines from "../components/system-data/SystemDataPipelines.v
 </script>
 
 <template>
-  <main class="vue-native-page pipeline-studio-page">
+  <main class="vue-native-page pipeline-studio-page" data-page-width="full">
     <SystemDataPipelines />
   </main>
 </template>

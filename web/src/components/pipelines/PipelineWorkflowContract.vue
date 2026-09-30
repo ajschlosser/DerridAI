@@ -4,7 +4,6 @@ import { computed } from "vue";
 import { findTerm, purposeText, termDescription, termLabel } from "../../domain/pipelineWorkflows";
 import { useI18nStore } from "../../stores/i18n";
 import type {
-  PipelineAssignment,
   PipelineDefinition,
   PipelinePurpose,
   PipelineWorkflowVocabulary,
@@ -15,8 +14,6 @@ const props = defineProps<{
   pipeline: PipelineDefinition;
   purpose: PipelinePurpose | null;
   vocabulary: PipelineWorkflowVocabulary;
-  assignment: PipelineAssignment | null;
-  assigned: boolean;
 }>();
 
 const i18n = useI18nStore();
@@ -30,15 +27,6 @@ const guarantees = computed(() =>
     .map((id) => findTerm(props.vocabulary.guarantees, id))
     .filter((term) => term !== null),
 );
-const assignmentText = computed(() => {
-  const current = props.assignment;
-  if (props.assigned)
-    return t("pipelines.contract_assigned", "Assigned — DerridAI runs this version");
-  if (!current) return t("pipelines.not_assigned", "Not assigned");
-  return i18n.tf("pipelines.contract_other_assigned", "Not assigned — {pipeline} runs instead", {
-    pipeline: `${current.pipeline_id}@${current.pipeline_version}`,
-  });
-});
 </script>
 
 <template>
@@ -95,13 +83,6 @@ const assignmentText = computed(() => {
             </ul>
           </dd>
         </div>
-        <div class="contract-wide">
-          <dt>{{ t("pipelines.assignment", "Assignment") }}</dt>
-          <dd>
-            {{ assignmentText }}
-            <code class="contract-version">{{ pipeline.pipeline_id }}@{{ pipeline.version }}</code>
-          </dd>
-        </div>
       </dl>
     </template>
   </section>
@@ -110,27 +91,27 @@ const assignmentText = computed(() => {
 <style scoped>
 .workflow-contract {
   display: grid;
-  gap: 8px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--soft);
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
 }
 .workflow-contract h4 {
   margin: 0;
-  font-size: 0.82rem;
+  color: var(--text-primary);
+  font-size: 1rem;
 }
 .contract-summary,
 .contract-unregistered {
   margin: 0;
-  font-size: 0.8rem;
-  line-height: 1.5;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  line-height: var(--lh-normal);
 }
 .contract-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 16px;
-  margin: 0;
+  gap: var(--space-3) var(--space-5, 20px);
+  margin: var(--space-2) 0 0;
 }
 .contract-grid > div {
   display: grid;
@@ -141,26 +122,27 @@ const assignmentText = computed(() => {
   grid-column: 1 / -1;
 }
 .contract-grid dt {
-  color: var(--muted);
-  font-size: 0.75rem;
-  font-weight: 750;
+  color: var(--text-tertiary);
+  font-size: 0.8125rem;
+  font-weight: var(--fw-bold);
 }
 .contract-grid dd {
   margin: 0;
-  font-size: 0.8rem;
-  line-height: 1.45;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  line-height: var(--lh-normal);
   overflow-wrap: anywhere;
 }
 .contract-grid dd strong {
-  margin-right: 6px;
+  margin-right: var(--space-2);
 }
 .contract-purpose {
-  color: var(--muted);
+  color: var(--text-tertiary);
 }
 .guarantee-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 14px;
+  gap: var(--space-1) var(--space-4);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -169,11 +151,6 @@ const assignmentText = computed(() => {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-}
-.contract-version {
-  margin-left: 6px;
-  color: var(--muted);
-  font-size: 0.75rem;
 }
 @media (max-width: 680px) {
   .contract-grid {

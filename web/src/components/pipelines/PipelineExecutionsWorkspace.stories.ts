@@ -1,6 +1,6 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
-import PipelineExecutionHistory from "./PipelineExecutionHistory.vue";
+import PipelineExecutionsWorkspace from "./PipelineExecutionsWorkspace.vue";
 import type { PipelineRunTrace } from "../../types/pipelines";
 import {
   contractPurposes,
@@ -52,8 +52,8 @@ const runs: PipelineRunTrace[] = [
 ];
 
 const meta = {
-  title: "Pipelines/Execution History",
-  component: PipelineExecutionHistory,
+  title: "Pipelines/Executions Workspace",
+  component: PipelineExecutionsWorkspace,
   args: {
     runs,
     pipelines: [],
@@ -61,16 +61,22 @@ const meta = {
     vocabulary: contractVocabulary,
     strategies: contractStrategies,
     selectedRunId: runs[0].run_id,
+    focusedRun: null,
+    filters: { query: "", category: "", feature: "", pipelineId: "", status: "", owner: "" },
     total: runs.length,
     limit: 25,
     offset: 0,
   },
-} satisfies Meta<typeof PipelineExecutionHistory>;
+} satisfies Meta<typeof PipelineExecutionsWorkspace>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
+
+export const FailedRunSelected: Story = {
+  args: { selectedRunId: runs[1].run_id },
+};
 
 export const Empty: Story = {
   args: { runs: [], selectedRunId: "" },

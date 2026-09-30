@@ -155,12 +155,12 @@ function compactConfig(config: Record<string, unknown>) {
   gap: 2px;
   justify-self: start;
   margin: 0;
-  font-size: 0.76rem;
+  font-size: 0.8125rem;
   font-weight: 700;
 }
 .stage-effect[data-effect="advisory"],
 .stage-effect[data-effect="none"] {
-  color: var(--muted);
+  color: var(--text-tertiary);
 }
 .sr-only {
   position: absolute;
@@ -185,9 +185,9 @@ function compactConfig(config: Record<string, unknown>) {
   grid-template-columns: 32px minmax(0, 1fr);
   gap: 10px;
   padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-card);
 }
 .stage-index {
   display: grid;
@@ -195,8 +195,8 @@ function compactConfig(config: Record<string, unknown>) {
   width: 28px;
   height: 28px;
   border-radius: 999px;
-  background: var(--soft);
-  font-size: 0.78rem;
+  background: var(--surface-inset);
+  font-size: 0.8125rem;
   font-weight: 800;
 }
 .stage-main {
@@ -214,8 +214,8 @@ function compactConfig(config: Record<string, unknown>) {
 }
 .stage-title-row code,
 .stage-edges code {
-  color: var(--muted);
-  font-size: 0.76rem;
+  color: var(--text-tertiary);
+  font-size: 0.8125rem;
 }
 .stage-badges,
 .stage-edges {
@@ -228,10 +228,10 @@ function compactConfig(config: Record<string, unknown>) {
   gap: 4px;
   align-items: center;
   padding: 2px 7px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border-subtle);
   border-radius: 999px;
-  background: var(--soft);
-  color: var(--muted);
+  background: var(--surface-inset);
+  color: var(--text-tertiary);
   font-size: 0.75rem;
   font-weight: 700;
 }
@@ -242,8 +242,8 @@ function compactConfig(config: Record<string, unknown>) {
 .stage-description,
 .stage-config {
   margin: 5px 0 0;
-  color: var(--muted);
-  font-size: 0.8rem;
+  color: var(--text-tertiary);
+  font-size: 0.875rem;
   line-height: 1.45;
 }
 .stage-config {
@@ -257,7 +257,7 @@ function compactConfig(config: Record<string, unknown>) {
   gap: 3px;
   padding: 3px 6px;
   border-radius: 7px;
-  background: var(--soft);
+  background: var(--surface-inset);
 }
 .stage-config code {
   color: inherit;
@@ -273,7 +273,7 @@ function compactConfig(config: Record<string, unknown>) {
 .stage-edges span {
   padding: 3px 6px;
   border-radius: 7px;
-  background: var(--soft);
+  background: var(--surface-inset);
 }
 @media (max-width: 640px) {
   .stage-title-row {

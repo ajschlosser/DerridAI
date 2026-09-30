@@ -4,7 +4,6 @@ import { computed, nextTick, ref, useId, watch } from "vue";
 import UiRelationCardNode from "../relations/UiRelationCardNode.vue";
 import UiRelationEdge from "../relations/UiRelationEdge.vue";
 import UiRelationNodeShell from "../relations/UiRelationNodeShell.vue";
-import UiRelationToolbar from "../relations/UiRelationToolbar.vue";
 import UiRelationViewport from "../relations/UiRelationViewport.vue";
 import { useRelationLayoutState } from "../../composables/relations/useRelationLayoutState";
 import { relationBoundsForPoints } from "../../domain/relations/geometry";
@@ -31,23 +30,43 @@ import type {
   PipelineStrategy,
   PipelineWorkflowVocabulary,
 } from "../../types/pipelines";
+import PipelineStageInspector from "./PipelineStageInspector.vue";
+import UiButton from "../ui/UiButton.vue";
+import UiMenu, { type UiMenuItem } from "../ui/UiMenu.vue";
 import UiTooltipInfobox, { type TooltipInfoboxRow } from "../ui/UiTooltipInfobox.vue";
 
-const props = defineProps<{
-  stages: PipelineStage[];
-  entryStageIds: string[];
-  strategies: PipelineStrategy[];
-  execution?: PipelineRunTrace | null;
-  title: string;
-  description: string;
-  /** When given, nodes and the phase strip read in workflow terms. */
-  vocabulary?: PipelineWorkflowVocabulary;
-}>();
+const props = withDefaults(
+  defineProps<{
+    stages: PipelineStage[];
+    entryStageIds: string[];
+    strategies: PipelineStrategy[];
+    execution?: PipelineRunTrace | null;
+    title: string;
+    description: string;
+    /** When given, nodes and the phase strip read in workflow terms. */
+    vocabulary?: PipelineWorkflowVocabulary;
+    /** Controlled selection; when omitted the diagram keeps its own. */
+    selectedStageId?: string;
+    /** The editor shows its own stage inspector beside the graph. */
+    showInspector?: boolean;
+    /** Put the stage inspector under the graph, for narrow panes. */
+    stackInspector?: boolean;
+  }>(),
+  { selectedStageId: undefined, showInspector: true, stackInspector: false },
+);
+const emit = defineEmits<{ "update:selectedStageId": [id: string] }>();
 
 const surfacePreset = RELATION_SURFACE_PRESETS.pipelineDag;
 const i18n = useI18nStore();
 const t = (key: string, fallback: string) => i18n.t(key, fallback);
-const selectedId = ref("");
+const localSelectedId = ref("");
+const selectedId = computed({
+  get: () => (props.selectedStageId !== undefined ? props.selectedStageId : localSelectedId.value),
+  set: (id: string) => {
+    localSelectedId.value = id;
+    emit("update:selectedStageId", id);
+  },
+});
 const hoveredId = ref("");
 const orientation = ref<PipelineDiagramOrientation>("horizontal");
 const density = ref<PipelineDiagramDensity>("compact");
@@ -100,8 +119,9 @@ const viewportHeight = computed(() => Math.min(620, Math.max(320, diagram.value.
 watch(
   diagram,
   (next) => {
-    if (!next.nodes.some((node) => node.id === selectedId.value)) {
-      selectedId.value = next.nodes[0]?.id || "";
+    if (props.selectedStageId !== undefined) return;
+    if (!next.nodes.some((node) => node.id === localSelectedId.value)) {
+      localSelectedId.value = next.nodes[0]?.id || "";
     }
   },
   { immediate: true },
@@ -166,12 +186,6 @@ function labelFor(strategyId: string) {
   return strategy ? pipelineStrategyLabel(strategy, t) : strategyId;
 }
 
-function presenceLabel(presence: string) {
-  if (presence === "not_reached") return t("pipelines.not_reached", "Not reached");
-  if (presence === "observed_only") return t("pipelines.observed_only", "Observed only");
-  return "";
-}
-
 function duration(value: number | null) {
   if (value == null) return t("pipelines.duration_unknown", "Unknown");
   if (value < 1000) return `${Math.round(value)} ${t("pipelines.duration_milliseconds", "ms")}`;
@@ -234,6 +248,34 @@ function chooseOrientation(next: PipelineDiagramOrientation) {
   void nextTick(() => viewport.value?.fitView(contentBounds.value));
 }
 
+const layoutItems = computed<UiMenuItem[]>(() => [
+  {
+    id: "horizontal",
+    label: t("pipelines.diagram_horizontal", "Horizontal"),
+    checked: orientation.value === "horizontal",
+  },
+  {
+    id: "vertical",
+    label: t("pipelines.diagram_vertical", "Vertical"),
+    checked: orientation.value === "vertical",
+  },
+  ...densityOptions.map((option) => ({
+    id: `density:${option}`,
+    label: t(
+      `pipelines.diagram_spacing_${option}`,
+      `${option.charAt(0).toUpperCase()}${option.slice(1)} spacing`,
+    ),
+    checked: density.value === option,
+  })),
+  { id: "reset", label: t("pipelines.diagram_reset_layout", "Reset layout") },
+]);
+
+function chooseLayout(id: string) {
+  if (id === "reset") resetLayout();
+  else if (id.startsWith("density:")) chooseDensity(id.slice(8) as PipelineDiagramDensity);
+  else chooseOrientation(id as PipelineDiagramOrientation);
+}
+
 function chooseDensity(next: PipelineDiagramDensity) {
   if (density.value === next) return;
   density.value = next;
@@ -249,60 +291,35 @@ function chooseDensity(next: PipelineDiagramDensity) {
         <h4>{{ title }}</h4>
         <p>{{ description }}</p>
       </div>
-      <div class="diagram-control-stack">
-        <div
-          class="diagram-controls"
-          role="group"
-          :aria-label="t('pipelines.diagram_orientation', 'Diagram orientation')"
-        >
-          <button
-            type="button"
-            :aria-pressed="orientation === 'horizontal'"
-            :class="{ selected: orientation === 'horizontal' }"
-            @click="chooseOrientation('horizontal')"
-          >
-            {{ t("pipelines.diagram_horizontal", "Horizontal") }}
-          </button>
-          <button
-            type="button"
-            :aria-pressed="orientation === 'vertical'"
-            :class="{ selected: orientation === 'vertical' }"
-            @click="chooseOrientation('vertical')"
-          >
-            {{ t("pipelines.diagram_vertical", "Vertical") }}
-          </button>
-        </div>
-        <div
-          class="diagram-controls density-controls"
-          role="group"
-          :aria-label="t('pipelines.diagram_density', 'Card spacing')"
-        >
-          <button
-            v-for="option in densityOptions"
-            :key="option"
-            type="button"
-            :aria-pressed="density === option"
-            :class="{ selected: density === option }"
-            @click="chooseDensity(option)"
-          >
-            {{
-              t(
-                `pipelines.diagram_density_${option}`,
-                option.charAt(0).toUpperCase() + option.slice(1),
-              )
-            }}
-          </button>
-        </div>
-        <UiRelationToolbar
-          :accessible-label="t('pipelines.diagram_controls', 'Pipeline diagram controls')"
-          :zoom-out-label="t('pipelines.diagram_zoom_out', 'Zoom out')"
-          :zoom-in-label="t('pipelines.diagram_zoom_in', 'Zoom in')"
-          :fit-label="t('pipelines.diagram_fit', 'Fit diagram')"
-          :reset-label="t('pipelines.diagram_reset_layout', 'Reset layout')"
-          @zoom-out="viewport?.zoomBy(1 / 1.15)"
-          @zoom-in="viewport?.zoomBy(1.15)"
-          @fit="fitView"
-          @reset="resetLayout"
+      <div
+        class="diagram-control-stack"
+        role="group"
+        :aria-label="t('pipelines.diagram_controls', 'Pipeline diagram controls')"
+      >
+        <UiButton
+          :label="t('pipelines.diagram_fit', 'Fit diagram')"
+          size="small"
+          variant="ghost"
+          @click="fitView"
+        />
+        <UiButton
+          :label="t('pipelines.diagram_zoom_out', 'Zoom out')"
+          size="small"
+          variant="ghost"
+          @click="viewport?.zoomBy(1 / 1.15)"
+        />
+        <UiButton
+          :label="t('pipelines.diagram_zoom_in', 'Zoom in')"
+          size="small"
+          variant="ghost"
+          @click="viewport?.zoomBy(1.15)"
+        />
+        <UiMenu
+          :label="t('pipelines.diagram_layout', 'Layout')"
+          :menu-label="t('pipelines.diagram_layout', 'Layout')"
+          :items="layoutItems"
+          align="end"
+          @select="chooseLayout"
         />
       </div>
     </header>
@@ -317,7 +334,11 @@ function chooseDensity(next: PipelineDiagramDensity) {
       </li>
     </ol>
 
-    <div v-if="diagram.nodes.length" class="diagram-layout">
+    <div
+      v-if="diagram.nodes.length"
+      class="diagram-layout"
+      :class="{ 'without-inspector': !showInspector, stacked: stackInspector }"
+    >
       <UiRelationViewport
         ref="viewport"
         class="diagram-viewport"
@@ -417,57 +438,13 @@ function chooseDensity(next: PipelineDiagramDensity) {
         </template>
       </UiRelationViewport>
 
-      <aside
-        v-if="selected"
-        class="node-inspector"
-        :aria-label="t('pipelines.selected_stage', 'Selected stage')"
-      >
-        <p class="inspector-kicker">{{ t("pipelines.selected_stage", "Selected stage") }}</p>
-        <h5>{{ selected.id }}</h5>
-        <dl>
-          <div>
-            <dt>{{ t("pipelines.term_strategy", "Strategy") }}</dt>
-            <dd>{{ labelFor(selected.strategy) }}</dd>
-          </div>
-          <div>
-            <dt>{{ t("pipelines.strategy_family", "Family") }}</dt>
-            <dd>{{ pipelineStageFamilyLabel(familyFor(selected.strategy), t) }}</dd>
-          </div>
-          <div v-if="effectNoteFor(selected.strategy)">
-            <dt>{{ t("pipelines.scholarly_effect", "Scholarly effect") }}</dt>
-            <dd>{{ effectNoteFor(selected.strategy) }}</dd>
-          </div>
-          <div>
-            <dt>{{ t("pipelines.status", "Status") }}</dt>
-            <dd>
-              {{
-                selected.executionStatus === "not_reached"
-                  ? t("pipelines.not_reached", "Not reached")
-                  : selected.executionStatus
-                    ? pipelineRunStatusLabel(selected.executionStatus, t)
-                    : selected.enabled
-                      ? t("pipelines.status_active", "Active")
-                      : t("pipelines.node_disabled", "Disabled")
-              }}
-              <span v-if="presenceLabel(selected.presence)">
-                · {{ presenceLabel(selected.presence) }}</span
-              >
-            </dd>
-          </div>
-          <div v-if="execution">
-            <dt>{{ t("pipelines.duration", "Duration") }}</dt>
-            <dd>{{ duration(selected.elapsedMs) }}</dd>
-          </div>
-          <div v-if="execution">
-            <dt>{{ t("pipelines.trace_counts", "In → out") }}</dt>
-            <dd>{{ selected.inputCount ?? "—" }} → {{ selected.outputCount ?? "—" }}</dd>
-          </div>
-          <div v-if="selected.fallbackReason">
-            <dt>{{ t("pipelines.term_edge", "Connection / edge") }}</dt>
-            <dd>{{ selected.fallbackReason }}</dd>
-          </div>
-        </dl>
-      </aside>
+      <PipelineStageInspector
+        v-if="selected && showInspector"
+        :node="selected"
+        :strategy="strategyFor(selected.strategy)"
+        :vocabulary="vocabulary"
+        :has-execution="Boolean(execution)"
+      />
     </div>
     <p v-else class="diagram-empty">
       {{ t("pipelines.diagram_empty", "This pipeline has no stages to diagram.") }}
@@ -506,12 +483,12 @@ function chooseDensity(next: PipelineDiagramDensity) {
   font-weight: 700;
 }
 .phase-strip li + li::before {
-  color: var(--muted);
+  color: var(--text-tertiary);
   content: "→" / "";
 }
 .pipeline-diagram header h4 {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: 1rem;
 }
 .pipeline-diagram header {
   display: flex;
@@ -522,45 +499,20 @@ function chooseDensity(next: PipelineDiagramDensity) {
 .diagram-control-stack {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
-  gap: 6px;
-}
-.diagram-controls {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-.density-controls {
-  border-left: 1px solid var(--border-subtle);
-  padding-left: 6px;
-}
-.diagram-controls button {
-  min-height: 32px;
-  padding: 5px 8px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-control);
-  background: var(--surface-card);
-  color: var(--text-secondary);
-  font: inherit;
-  font-size: 0.75rem;
-  cursor: pointer;
-}
-.diagram-controls button.selected {
-  border-color: var(--border-interactive);
-  background: var(--surface-selected);
-  color: var(--text-primary);
-  font-weight: 750;
-}
-.diagram-controls button:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
+  gap: var(--space-1);
 }
 .pipeline-diagram header p,
 .diagram-empty {
   margin: 4px 0 0;
   color: var(--text-secondary);
-  font-size: 0.78rem;
-  line-height: 1.5;
+  font-size: 0.8125rem;
+  line-height: var(--lh-normal);
+}
+.diagram-layout.without-inspector,
+.diagram-layout.stacked {
+  grid-template-columns: minmax(0, 1fr);
 }
 .diagram-layout {
   display: grid;
@@ -655,32 +607,6 @@ function chooseDensity(next: PipelineDiagramDensity) {
 }
 .diagram-node[data-presence="observed_only"] {
   --relation-node-border-style: dashed;
-}
-.node-inspector {
-  display: grid;
-  gap: 6px;
-  padding: 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-card);
-  background: var(--surface-card);
-}
-.inspector-kicker,
-.node-inspector dt {
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-}
-.node-inspector h5 {
-  margin: 0;
-  font-size: 0.95rem;
-}
-.node-inspector dl {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-}
-.node-inspector dd {
-  margin: 0;
-  font-size: 0.78rem;
 }
 .diagram-legend {
   display: flex;
