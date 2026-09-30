@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UiButton from "./ui/UiButton.vue";
 import { computed } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import type { CorpusBuild } from "../api/pdfCorpus";
@@ -117,10 +118,9 @@ function reasonLabel(code?: string) {
             >{{ i18n.t("pdf_corpus.model") }} <code>{{ model }}</code></span
           >
         </div>
-        <button
+        <UiButton
+          variant="primary"
           v-if="Number(summary.auto_retry_fields ?? retryable.length) > 0"
-          type="button"
-          class="btn primary"
           :disabled="busy || operationRunning"
           @click="emit('retry')"
         >
@@ -132,7 +132,7 @@ function reasonLabel(code?: string) {
                   model,
                 })
           }}
-        </button>
+        </UiButton>
         <span v-else class="path-done">{{ i18n.t("pdf_corpus.no_automatic_metadata_work") }}</span>
       </article>
 
@@ -146,15 +146,13 @@ function reasonLabel(code?: string) {
           }}
         </h4>
         <p>{{ i18n.t("pdf_corpus.human_metadata_help") }}</p>
-        <button
+        <UiButton
           v-if="firstHumanRecord"
-          type="button"
-          class="btn"
           :disabled="busy"
           @click="emit('review', firstHumanRecord)"
         >
           {{ i18n.t("pdf_corpus.review_ambiguous_metadata") }}
-        </button>
+        </UiButton>
         <span v-else class="path-done">{{ i18n.t("pdf_corpus.no_human_metadata_work") }}</span>
       </article>
     </div>
@@ -249,7 +247,7 @@ function reasonLabel(code?: string) {
 }
 .resolution-count span {
   font-size: 0.8125rem;
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 .operation {
   display: grid;
@@ -258,8 +256,8 @@ function reasonLabel(code?: string) {
   align-items: center;
   padding: 11px 12px;
   border-radius: 9px;
-  background: var(--card);
-  border: 1px solid var(--line);
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
 }
 .operation[data-state="failed"] {
   border-color: var(--tone-danger-border);
@@ -274,7 +272,7 @@ function reasonLabel(code?: string) {
 }
 .operation-copy span {
   font-size: 0.8125rem;
-  color: var(--muted);
+  color: var(--text-secondary);
   line-height: 1.45;
 }
 .operation progress {
@@ -293,7 +291,7 @@ function reasonLabel(code?: string) {
   padding: 13px;
   border: 1px solid color-mix(in srgb, var(--tone-warn-fg) 24%, transparent);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--card) 58%, transparent);
+  background: color-mix(in srgb, var(--surface-card) 58%, transparent);
 }
 .resolution-path[data-empty="true"] {
   opacity: 0.78;
@@ -306,24 +304,25 @@ function reasonLabel(code?: string) {
   margin: 0;
   font-size: 0.8125rem;
   line-height: 1.5;
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 .execution {
   display: flex;
   gap: 13px;
   flex-wrap: wrap;
   font-size: 0.8125rem;
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 .execution code {
-  color: var(--text);
+  color: var(--text-primary);
 }
-.resolution-path .btn {
+.resolution-path :deep(.btn),
+.resolution-path :deep(.ui-button) {
   justify-self: start;
 }
 .path-done {
   font-size: 0.8125rem;
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 .issue-details {
   font-size: 0.8125rem;
@@ -335,7 +334,7 @@ function reasonLabel(code?: string) {
 .issue-table {
   display: grid;
   margin-top: 8px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border-subtle);
   border-radius: 9px;
   overflow: hidden;
 }
@@ -349,8 +348,8 @@ function reasonLabel(code?: string) {
   align-items: start;
   padding: 8px 10px;
   border: 0;
-  border-bottom: 1px solid var(--line);
-  background: var(--card);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-card);
   color: inherit;
   text-align: start;
   font: inherit;
@@ -359,14 +358,14 @@ function reasonLabel(code?: string) {
   cursor: pointer;
 }
 .issue-row:not(.issue-header):hover {
-  background: var(--soft);
+  background: var(--surface-subtle);
 }
 .issue-row:last-child {
   border-bottom: 0;
 }
 .issue-header {
   font-weight: 800;
-  background: var(--soft);
+  background: var(--surface-subtle);
 }
 .issue-row span {
   display: grid;
@@ -374,7 +373,7 @@ function reasonLabel(code?: string) {
 }
 .issue-row small {
   font-size: 0.8125rem;
-  color: var(--muted);
+  color: var(--text-secondary);
   line-height: 1.35;
 }
 @media (max-width: 800px) {

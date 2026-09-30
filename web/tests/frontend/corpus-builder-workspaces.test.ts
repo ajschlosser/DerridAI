@@ -171,7 +171,7 @@ describe("setup state", () => {
     providerLabel: "Local Ollama",
     modelLabel: "qwen",
     enrichmentMode: "fast",
-    documentIntelligenceProfile: "off",
+    documentIntelligenceProfile: "none",
     profileActiveBuildCount: 0,
     contextSafe: true,
     ...extra,
@@ -200,6 +200,35 @@ describe("setup state", () => {
     expect(states.find((state) => state.id === "metadata")?.state).toBe("warning");
     expect(states.find((state) => state.id === "advanced")?.state).toBe("optional");
     expect(states.find((state) => state.id === "metadata")?.summary).toContain("Scholarly default");
+  });
+
+  it("adds Document Intelligence to the Enrichment summary only when it is on", () => {
+    const summary = (profile: string) =>
+      corpusSetupSectionStates(input({ documentIntelligenceProfile: profile }), [], text).find(
+        (state) => state.id === "enrichment",
+      )!.summary;
+    expect(summary("scholarly")).toContain("pdf_corpus.document_intelligence_scholarly");
+    expect(summary("none")).not.toContain("document_intelligence");
+  });
+
+  it("summarises audio by its probed duration, and falls back to blocks without one", () => {
+    const summary = (duration?: number) =>
+      corpusSetupSectionStates(
+        input({
+          asset: {
+            filename: "Interview.wav",
+            media_kind: "audio",
+            block_count: 58,
+            duration_seconds: duration,
+          },
+        }),
+        [],
+        text,
+      ).find((state) => state.id === "source")!.summary;
+    expect(summary(3480)).toContain('"count":58');
+    expect(summary(3480)).toContain("minutes");
+    expect(summary(undefined)).toContain("blocks");
+    expect(summary(undefined)).not.toContain("minutes");
   });
 
   it("does not invent page semantics for non-paginated media", () => {
