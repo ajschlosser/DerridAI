@@ -1,6 +1,8 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { computed, nextTick, ref, useId, watch } from "vue";
+import UiRelationCardNode from "../relations/UiRelationCardNode.vue";
+import UiRelationEdge from "../relations/UiRelationEdge.vue";
 import UiRelationNodeShell from "../relations/UiRelationNodeShell.vue";
 import UiRelationToolbar from "../relations/UiRelationToolbar.vue";
 import UiRelationViewport from "../relations/UiRelationViewport.vue";
@@ -277,10 +279,11 @@ function chooseOrientation(next: PipelineDiagramOrientation) {
                 <path d="M 0 0 L 10 5 L 0 10 z" />
               </marker>
             </defs>
-            <path
+            <UiRelationEdge
               v-for="edge in edges"
               :key="edge.id"
-              :d="edge.path"
+              class="diagram-edge"
+              :path="edge.path"
               :data-kind="edge.kind"
               :data-traversed="edge.traversed ? 'true' : 'false'"
               :marker-end="`url(#${arrowMarkerId})`"
@@ -309,12 +312,14 @@ function chooseOrientation(next: PipelineDiagramOrientation) {
               @focus="hoveredId = node.id"
               @blur="hoveredId = ''"
             >
-              <span class="node-kicker">
-                <span v-if="node.entry">{{ t("pipelines.node_entry", "Entry") }}</span>
-                <span>{{ pipelineStageFamilyLabel(familyFor(node.strategy), t) }}</span>
-              </span>
-              <strong>{{ node.id }}</strong>
-              <span>{{ labelFor(node.strategy) }}</span>
+              <UiRelationCardNode>
+                <span class="node-kicker">
+                  <span v-if="node.entry">{{ t("pipelines.node_entry", "Entry") }}</span>
+                  <span>{{ pipelineStageFamilyLabel(familyFor(node.strategy), t) }}</span>
+                </span>
+                <strong>{{ node.id }}</strong>
+                <span>{{ labelFor(node.strategy) }}</span>
+              </UiRelationCardNode>
             </UiRelationNodeShell>
             <UiTooltipInfobox
               v-if="hoveredId === node.id"
@@ -461,62 +466,57 @@ function chooseOrientation(next: PipelineDiagramOrientation) {
   height: 100%;
   overflow: visible;
 }
-.diagram-edges path {
-  fill: none;
-  stroke: var(--border-strong);
-  stroke-width: 1.5;
+.diagram-edge {
+  --relation-edge-stroke: var(--border-strong);
+  --relation-edge-opacity: 1;
 }
-.diagram-edges path[data-kind="next"] {
-  stroke: var(--text-primary);
+.diagram-edge[data-kind="next"] {
+  --relation-edge-stroke: var(--text-primary);
 }
-.diagram-edges path[data-kind="on_empty"] {
-  stroke: var(--tone-info-border);
+.diagram-edge[data-kind="on_empty"] {
+  --relation-edge-stroke: var(--tone-info-border);
   stroke-dasharray: 5 3;
 }
-.diagram-edges path[data-kind="on_unavailable"] {
-  stroke: var(--tone-warn-border);
+.diagram-edge[data-kind="on_unavailable"] {
+  --relation-edge-stroke: var(--tone-warn-border);
   stroke-dasharray: 2 3;
 }
-.diagram-edges path[data-kind="on_timeout"] {
-  stroke: var(--tone-danger-border);
+.diagram-edge[data-kind="on_timeout"] {
+  --relation-edge-stroke: var(--tone-danger-border);
   stroke-dasharray: 1 5;
   stroke-linecap: round;
 }
-.diagram-edges path[data-kind="on_error"] {
-  stroke: var(--tone-danger-border);
+.diagram-edge[data-kind="on_error"] {
+  --relation-edge-stroke: var(--tone-danger-border);
   stroke-dasharray: 1 3;
 }
-.diagram-edges path[data-traversed="true"] {
+.diagram-edge[data-traversed="true"] {
   stroke-width: 2.25;
 }
 .diagram-edges marker path {
   fill: var(--text-primary);
 }
 .diagram-node {
-  display: grid;
-  align-content: center;
-  gap: 2px;
-  padding: 8px 10px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-card);
-  background: var(--surface-card);
-  color: var(--text-primary);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
   font: inherit;
   text-align: left;
+  --relation-node-border: var(--border-subtle);
+  --relation-node-bg: var(--surface-card);
+  --relation-node-detail-fg: var(--text-secondary);
+  --relation-node-detail-size: 0.75rem;
+  --relation-node-kicker-fg: var(--text-secondary);
+  --relation-node-kicker-size: 0.75rem;
+  --relation-node-title-size: 0.75rem;
 }
-.diagram-node strong,
-.diagram-node span {
-  overflow: hidden;
-  font-size: 0.75rem;
-  text-overflow: ellipsis;
+.diagram-node :deep(.ui-relation-card-node span),
+.diagram-node :deep(.ui-relation-card-node strong) {
   white-space: nowrap;
 }
-.diagram-node .node-kicker,
-.diagram-node span:last-child {
-  color: var(--text-secondary);
-}
 .diagram-node.selected {
-  border-color: var(--border-interactive);
+  --relation-node-border: var(--border-interactive);
   outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: 1px;
 }
@@ -525,24 +525,24 @@ function chooseOrientation(next: PipelineDiagramOrientation) {
   outline-offset: var(--focus-ring-offset);
 }
 .diagram-node[data-status="completed"] {
-  background: var(--tone-ok-bg);
-  border-color: var(--tone-ok-border);
+  --relation-node-bg: var(--tone-ok-bg);
+  --relation-node-border: var(--tone-ok-border);
 }
 .diagram-node[data-status="failed"],
 .diagram-node[data-status="timed_out"] {
-  background: var(--tone-danger-bg);
-  border-color: var(--tone-danger-border);
+  --relation-node-bg: var(--tone-danger-bg);
+  --relation-node-border: var(--tone-danger-border);
 }
 .diagram-node[data-status="unavailable"],
 .diagram-node[data-status="skipped"] {
-  background: var(--tone-warn-bg);
-  border-color: var(--tone-warn-border);
+  --relation-node-bg: var(--tone-warn-bg);
+  --relation-node-border: var(--tone-warn-border);
 }
 .diagram-node[data-presence="not_reached"] {
   opacity: 0.72;
 }
 .diagram-node[data-presence="observed_only"] {
-  border-style: dashed;
+  --relation-node-border-style: dashed;
 }
 .node-inspector {
   display: grid;
