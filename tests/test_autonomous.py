@@ -20,8 +20,8 @@ def test_a_confident_proposal_is_taken_and_labelled_as_the_models_not_a_persons(
     out = settle_record(r, Policy(enabled=True, unresolved="leave"))
     assert r["stance"] == "critique" and out["filled"][0]["field"] == "stance"
     info = r["metadata_field_status"]["stance"]
-    assert info["status"] == "model_inferred" and info["method"] == "llm" and info["autonomous"] is True
-    assert info["evaluation_status"] == "value_supported"
+    assert info["status"] == "unresolved" and info["method"] == "llm" and info["autonomous"] is True
+    assert info["evaluation_status"] == "no_supported_value"
     assert info["value_status"] == "unresolved"
     assert info["autonomous_decision"]["field"] == "stance"
     assert info["autonomous_decision"]["actor_kind"] == "autonomous_policy"
