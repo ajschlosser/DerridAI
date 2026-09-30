@@ -627,7 +627,7 @@ function onNodeKeydown(event: KeyboardEvent, node: DiagramNode) {
       <UiRelationViewport
         ref="viewport"
         class="semantic-map-viewport"
-        :aria-label="
+        :accessible-label="
           i18n.tf('pdf_corpus.semantic_map_accessible_label', { label: diagram.centerLabel })
         "
         :help-text="
@@ -720,7 +720,7 @@ function onNodeKeydown(event: KeyboardEvent, node: DiagramNode) {
         </label>
         <UiRelationToolbar
           class="semantic-map-zoom"
-          :aria-label="i18n.t('pdf_corpus.semantic_map_controls', 'Semantic map controls')"
+          :accessible-label="i18n.t('pdf_corpus.semantic_map_controls', 'Semantic map controls')"
           :zoom-out-label="i18n.t('pdf_corpus.semantic_graph_zoom_out')"
           :zoom-in-label="i18n.t('pdf_corpus.semantic_graph_zoom_in')"
           :fit-label="i18n.t('pdf_corpus.semantic_graph_zoom_fit')"
