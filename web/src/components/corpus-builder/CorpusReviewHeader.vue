@@ -155,7 +155,7 @@ const viewLabels: Record<ReviewWorkspaceMode, string> = {
 }
 .review-view-option:disabled {
   cursor: not-allowed;
-  opacity: 0.5;
+  font-weight: normal;
 }
 .review-view-option:focus-visible {
   outline: 3px solid var(--ui-accent-focus);

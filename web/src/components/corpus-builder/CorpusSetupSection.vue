@@ -134,7 +134,7 @@ const indicator = computed(
   white-space: nowrap;
 }
 .corpus-setup-affordance {
-  color: var(--ui-accent);
+  color: var(--accent-fg);
   font-size: var(--fs-sm);
   font-weight: var(--fw-semibold);
 }
