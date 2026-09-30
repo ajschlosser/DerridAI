@@ -10,7 +10,12 @@ const build = {
   build_events: [
     { at: "2026-09-30T18:00:00Z", stage: "preparing", status: "running", progress: 0.02 },
     { at: "2026-09-30T18:01:00Z", stage: "structure", status: "running", progress: 0.12 },
-    { at: "2026-09-30T18:03:00Z", stage: "constructing_records", status: "running", progress: 0.36 },
+    {
+      at: "2026-09-30T18:03:00Z",
+      stage: "constructing_records",
+      status: "running",
+      progress: 0.36,
+    },
     { at: "2026-09-30T18:05:00Z", stage: "enriching", status: "running", progress: 0.64 },
   ],
 } as never;
