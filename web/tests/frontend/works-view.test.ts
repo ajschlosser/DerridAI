@@ -247,6 +247,32 @@ describe("WorksView", () => {
     wrapper.unmount();
   });
 
+  it("exports any selected subset of installed languages and provider profiles", async () => {
+    const wrapper = await mountWorks();
+    await wrapper.get("#createSite").trigger("click");
+    await flushPromises();
+
+    const dialog = wrapper.get(".create-site-dialog");
+    await dialog.get("[data-site-work='Glas']").setValue(true);
+    await dialog.get("[data-site-language='fr-CA']").setValue(false);
+    await dialog.get("[data-site-provider='openai-main']").setValue(false);
+    await dialog.get("input[placeholder='Research collection']").setValue("English-only Glas");
+    await dialog.get("form").trigger("submit");
+    await flushPromises();
+
+    expect(siteApi.exportSite).toHaveBeenCalledWith({
+      store: "derrida-primary",
+      works: ["Glas"],
+      title: "English-only Glas",
+      description: "",
+      locale: "en-US",
+      languages: ["en-US"],
+      provider_profile_ids: [],
+      export_format: "local-single-file",
+    });
+    wrapper.unmount();
+  });
+
   it("can export the research site as a single-container nginx bundle", async () => {
     const wrapper = await mountWorks();
     await wrapper.get("#createSite").trigger("click");
