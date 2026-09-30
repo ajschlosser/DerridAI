@@ -6,6 +6,7 @@ import { useI18nStore } from "../../stores/i18n";
 import { openBuildWarnings } from "../../features/corpus-builder/domain/buildWarnings";
 import UiButton from "../ui/UiButton.vue";
 import UiNoticeStack, { type Notice } from "../ui/UiNoticeStack.vue";
+import CorpusBuildActivity from "./CorpusBuildActivity.vue";
 import CorpusBuildDiagnostics from "./CorpusBuildDiagnostics.vue";
 import CorpusBuildPrimaryStatus from "./CorpusBuildPrimaryStatus.vue";
 
@@ -75,6 +76,7 @@ const errorNotices = computed<Notice[]>(() =>
       @open-review="emit('openReview')"
       @open-publish="emit('openPublish')"
     />
+    <CorpusBuildActivity :build="build" />
 
     <UiNoticeStack :items="errorNotices" :label="i18n.t('pdf_corpus.build_error')" />
     <UiNoticeStack
