@@ -180,7 +180,7 @@ Likely files:
 
 ### Phase 3 — Live build workspace
 
-Status: **not started**
+Status: **in progress**
 
 Goal: turn the build screen into a live, legible work surface.
 
@@ -191,8 +191,8 @@ Goal: turn the build screen into a live, legible work surface.
   - key counts;
   - stage rail;
   - primary controls.
-- [ ] Add a high-priority **Review ready Records** state as soon as topology exists.
-- [ ] Copy should explicitly state enrichment/build work can continue in the background.
+- [x] Add a high-priority **Review N ready Records** action as soon as topology exists and ready Records are available.
+- [x] Copy explicitly states that review can begin while automated build work continues in the background.
 - [ ] Add a restrained activity feed derived from existing authoritative/realtime state where sufficient; do not invent fake events.
 - [ ] Keep detailed diagnostics behind **Run details**.
 - [ ] Keep warnings/errors visible without duplicating the same message in multiple surfaces.
@@ -366,3 +366,12 @@ Work on this branch will be committed in coherent checkpoints. At each checkpoin
 - Kept metadata-only follow-up operations distinct: Pause is shown only for the corpus build itself rather than implying that every auxiliary operation shares the same pause semantics.
 - Added focused component coverage for the Review pause action.
 - No new copy was required; the existing localized Pause/Resume strings are reused.
+
+
+### Checkpoint 2 — review while the build continues
+
+- Promoted Review to a primary action on the live Build surface when ready Records exist, including the current ready count.
+- Added an explicit explanation that researchers can begin reviewing while automated work continues.
+- Passed the existing authoritative `readyCount` through the Build workspace rather than deriving a second count in presentation code.
+- Added English, Québec French, and frontend English-fallback copy.
+- Extended the active-enrichment component test to cover the new concurrent-review affordance and explanatory copy.
