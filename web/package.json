@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "vue-tsc --noEmit && vite build",
-    "typecheck": "vue-tsc --noEmit",
+    "build": "npm run build:sdk && vue-tsc --noEmit && vite build",
+    "typecheck": "vue-tsc --noEmit && tsc --noEmit -p sdk/tsconfig.json",
     "preview": "vite preview --host 0.0.0.0",
     "storybook": "storybook dev -p 6006 --host 0.0.0.0",
     "build-storybook": "storybook build",
@@ -15,10 +15,10 @@
     "test:e2e": "playwright test",
     "test:frontend": "npm run typecheck && npm run test:unit && npm run build:ci && npm run build-storybook && npm run test:e2e:legacy && npm run test:e2e && npm run test:e2e:a11y",
     "i18n:defaults": "node ../scripts/export-en-us-defaults.mjs",
-    "lint": "eslint src tests .storybook playwright*.config.ts vite.config.ts scripts --max-warnings 0",
+    "lint": "eslint src sdk tests .storybook playwright*.config.ts vite.config.ts vite.sdk.config.ts scripts --max-warnings 0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "build:ci": "vite build",
+    "build:ci": "npm run build:sdk:check && vite build",
     "test:e2e:legacy": "playwright test -c playwright.legacy.config.ts",
     "test:e2e:a11y": "playwright test -c playwright.a11y.config.ts",
     "typecheck:tests": "vue-tsc --noEmit -p tsconfig.tests.json",
@@ -28,7 +28,9 @@
     "format:repo": "prettier --write .. --config .prettierrc --ignore-path ../.prettierignore",
     "format:repo:check": "prettier --check .. --config .prettierrc --ignore-path ../.prettierignore",
     "codegen": "graphql-codegen --config codegen.ts",
-    "codegen:check": "graphql-codegen --config codegen.ts --check"
+    "codegen:check": "graphql-codegen --config codegen.ts --check",
+    "build:sdk": "tsc --noEmit -p sdk/tsconfig.json && vite build --config vite.sdk.config.ts",
+    "build:sdk:check": "npm run build:sdk && git diff --exit-code -- ../api/app/site_assets/derridai-sdk.js"
   },
   "dependencies": {
     "diff": "^7.0.0",

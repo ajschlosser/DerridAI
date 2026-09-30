@@ -22,11 +22,15 @@ from .corpus_publication import serialize_public_record, validate_publication_re
 from .locales.en_us import EN_US
 from .locales.fr_ca import FR_CA
 from .services import store
-from .system_store import system_store
 
-SITE_FORMAT = "derridai-static-site-v2"
-SITE_ASSET = Path(__file__).with_name("site_assets") / "derridai-site.js"
+SITE_FORMAT = "derridai-static-site-v3"
+_ASSET_DIR = Path(__file__).with_name("site_assets")
+SITE_ASSET = _ASSET_DIR / "derridai-site.js"
+SDK_ASSET = _ASSET_DIR / "derridai-sdk.js"
 PACKAGE_GLOBAL = "__DERRIDAI_SITE_PACKAGE__"
+PUBLICATION_ASSET_NAME = "derridai-publication.js"
+SDK_ASSET_NAME = "derridai-sdk.js"
+SITE_ASSET_NAME = "derridai-site.js"
 _SAFE_SLUG = re.compile(r"[^a-z0-9]+")
 
 
@@ -52,32 +56,6 @@ def _runtime_strings() -> dict[str, dict[str, str]]:
         "en-US": {key: value for key, value in EN_US.items() if key.startswith(prefixes)},
         "fr-CA": {key: value for key, value in FR_CA.items() if key.startswith(prefixes)},
     }
-
-
-def _public_provider_profiles() -> list[dict[str, Any]]:
-    """Return only provider descriptors that are safe to publish."""
-    profiles = system_store.researcher_profiles()
-    safe: list[dict[str, Any]] = []
-    for raw in profiles:
-        profile = {
-            key: raw.get(key)
-            for key in (
-                "id",
-                "name",
-                "type",
-                "model",
-                "model_mode",
-                "model_kind",
-                "num_ctx",
-                "num_predict",
-                "temperature",
-                "top_p",
-            )
-            if raw.get(key) not in (None, "")
-        }
-        if profile.get("id") and profile.get("type"):
-            safe.append(profile)
-    return safe
 
 
 def _work_summary(records: Sequence[dict[str, Any]], work: str) -> dict[str, Any]:
@@ -180,7 +158,7 @@ def build_site_bundle(
     description: str = "",
     locale: str = "en-US",
 ) -> SiteBundle:
-    """Create a two-file static site whose corpus/RAG runtime executes in the browser."""
+    """Create an SDK-backed static research site from one immutable publication snapshot."""
     selected_works = list(dict.fromkeys(str(item).strip() for item in works if str(item).strip()))
     if not selected_works:
         raise ValueError("Select at least one work.")
@@ -318,7 +296,6 @@ def build_site_bundle(
             )
             if vector_contract.get(key) not in (None, "")
         },
-        "provider_profiles": _public_provider_profiles(),
         "features": {
             "browse": True,
             "lexical_search": True,
@@ -328,7 +305,9 @@ def build_site_bundle(
             "research": True,
             "shared_state": False,
             "browser_llm": False,
-            "external_provider_generation": True,
+            "derridai_sdk": True,
+            "host_supplied_generation": True,
+            "direct_provider_endpoints": False,
             "progressive_work_loading": True,
         },
         "integrity": {
@@ -345,28 +324,35 @@ def build_site_bundle(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data: blob:; connect-src 'self' http: https:; img-src 'self' file: data: https:; style-src 'self' 'unsafe-inline'; script-src 'self' file:">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data: blob:; connect-src 'self'; img-src 'self' file: data: https:; style-src 'self' 'unsafe-inline'; script-src 'self' file:">
   <title>{html.escape(title)}</title>
 </head>
 <body>
   <div id="app" role="status" aria-live="polite">Loading DerridAI research site…</div>
-  <script src="./derridai-site.js" defer></script>
+  <script src="./{PUBLICATION_ASSET_NAME}" defer></script>
+  <script src="./{SDK_ASSET_NAME}" defer></script>
+  <script src="./{SITE_ASSET_NAME}" defer></script>
 </body>
 </html>
 """
 
     if not SITE_ASSET.exists():
-        raise RuntimeError("The DerridAI static-site runtime is missing.")
+        raise RuntimeError("The DerridAI static-site reference UI is missing.")
+    if not SDK_ASSET.exists():
+        raise RuntimeError(
+            "The DerridAI SDK distribution is missing. Run `cd web && npm run build:sdk`."
+        )
+
+    publication_source = f"globalThis.{PACKAGE_GLOBAL}={_js_json(package)};\n"
+    sdk_source = SDK_ASSET.read_text(encoding="utf-8")
     runtime_source = SITE_ASSET.read_text(encoding="utf-8")
-    packaged_runtime = (
-        f"globalThis.{PACKAGE_GLOBAL}={_js_json(package)};\n"
-        f"{runtime_source}"
-    )
 
     archive = io.BytesIO()
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as bundle:
         bundle.writestr("index.html", index_html.encode("utf-8"))
-        bundle.writestr("derridai-site.js", packaged_runtime.encode("utf-8"))
+        bundle.writestr(PUBLICATION_ASSET_NAME, publication_source.encode("utf-8"))
+        bundle.writestr(SDK_ASSET_NAME, sdk_source.encode("utf-8"))
+        bundle.writestr(SITE_ASSET_NAME, runtime_source.encode("utf-8"))
 
     return SiteBundle(
         payload=archive.getvalue(),
