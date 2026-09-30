@@ -99,8 +99,7 @@ def test_site_bundle_separates_publication_sdk_and_reference_ui(
     assert "A publication-safe passage." not in index_html
     assert index_html.index("derridai-publication.js") < index_html.index("derridai-sdk.js")
     assert index_html.index("derridai-sdk.js") < index_html.index("derridai-site.js")
-    assert "connect-src 'self' http: https:" not in index_html
-    assert "connect-src 'self'" in index_html
+    assert "connect-src 'self' http: https:" in index_html
 
     package = _package_from_publication_asset(publication_asset)
     publication = package["manifest"]
@@ -116,7 +115,7 @@ def test_site_bundle_separates_publication_sdk_and_reference_ui(
     assert publication["features"]["progressive_work_loading"] is True
     assert publication["vector_index"]["dimension"] == 3
     assert publication["vector_index"]["model"] == "bge-m3:latest"
-    assert "provider_profiles" not in publication
+    assert publication["provider_profiles"] == []
     assert "records" not in publication
     assert "vectors" not in publication["vector_index"]
 
@@ -136,6 +135,105 @@ def test_site_bundle_separates_publication_sdk_and_reference_ui(
     assert "apiKey" not in site_runtime
     assert bundle.record_count == 2
     assert bundle.work_count == 2
+
+def test_site_bundle_exports_only_selected_installed_languages_and_safe_provider_profiles(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        site_publication.store,
+        "export_site_projection",
+        lambda store_name, works: {
+            "store": {
+                "name": store_name,
+                "embedding_provider": "profile:openai-main",
+                "embedding_model": "bge-m3:latest",
+                "embedding_dimension": 3,
+                "distance_metric": "cosine",
+            },
+            "records": [
+                {"record": _record("r1", "Glas"), "embedding": [0.1, 0.2, 0.3]},
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        site_publication.system_store,
+        "list_languages",
+        lambda: [
+            {"code": "en-US", "name": "English", "flag": "🇺🇸"},
+            {"code": "fr-CA", "name": "Français", "flag": "🇨🇦"},
+            {"code": "de-DE", "name": "Deutsch", "flag": "🇩🇪"},
+        ],
+    )
+    dictionaries = {
+        "en-US": {"site.runtime.search": "Search", "site.runtime.site_title": "Research site"},
+        "fr-CA": {"site.runtime.search": "Rechercher", "site.runtime.site_title": "Site de recherche"},
+        "de-DE": {"site.runtime.search": "Suchen"},
+    }
+    monkeypatch.setattr(
+        site_publication.system_store,
+        "get_language",
+        lambda code: {
+            "code": code,
+            "name": code,
+            "flag": "🌐",
+            "dictionary": dictionaries[code],
+        },
+    )
+    monkeypatch.setattr(
+        site_publication.system_store,
+        "researcher_profiles",
+        lambda: [
+            {
+                "id": "openai-main",
+                "name": "OpenAI-compatible lab",
+                "type": "openai",
+                "base_url": "https://models.example.edu/v1",
+                "model": "gpt-oss:20b",
+                "has_api_key": True,
+                "api_key": "MUST-NOT-EXPORT",
+            },
+            {
+                "id": "other",
+                "name": "Other",
+                "type": "openai",
+                "base_url": "https://other.example/v1",
+                "model": "other-model",
+            },
+        ],
+    )
+
+    bundle = site_publication.build_site_bundle(
+        store_name="derrida-primary",
+        works=["Glas"],
+        title="Multilingual site",
+        locale="de-DE",
+        languages=["de-DE", "fr-CA"],
+        provider_profile_ids=["openai-main"],
+    )
+
+    with zipfile.ZipFile(io.BytesIO(bundle.payload)) as archive:
+        publication_asset = archive.read("derridai-publication.js").decode("utf-8")
+    package = _package_from_publication_asset(publication_asset)
+    manifest = package["manifest"]
+
+    assert manifest["locale"] == "de-DE"
+    assert [item["code"] for item in manifest["languages"]] == ["de-DE", "fr-CA"]
+    assert set(manifest["strings"]) == {"de-DE", "fr-CA"}
+    assert manifest["strings"]["de-DE"]["site.runtime.search"] == "Suchen"
+    assert manifest["strings"]["de-DE"]["site.runtime.site_title"] == "Research site"
+    assert manifest["provider_profiles"] == [
+        {
+            "id": "openai-main",
+            "name": "OpenAI-compatible lab",
+            "type": "openai",
+            "base_url": "https://models.example.edu/v1",
+            "model": "gpt-oss:20b",
+            "has_api_key": True,
+        }
+    ]
+    assert "MUST-NOT-EXPORT" not in publication_asset
+    assert manifest["features"]["direct_provider_endpoints"] is True
+
 
 def test_site_chunks_records_and_vectors_by_work() -> None:
     records = [
@@ -258,7 +356,7 @@ def test_vector_projection_exports_only_selected_works_with_existing_embeddings(
     assert projection["records"][0]["embedding"] == [1.0, 0.0]
 
 
-def test_local_single_file_export_is_self_contained_and_network_disabled(
+def test_local_single_file_export_is_self_contained_and_allows_selected_model_endpoints(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -289,7 +387,7 @@ def test_local_single_file_export_is_self_contained_and_network_disabled(
     assert "globalThis.__DERRIDAI_SITE_PACKAGE__=" in html
     assert "createClient" in html
     assert "__DERRIDAI_HOST_CAPABILITIES__" in html
-    assert "connect-src 'none'" in html
+    assert "connect-src http: https:" in html
     assert "script-src 'unsafe-inline'" in html
 
 
