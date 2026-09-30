@@ -1,5 +1,5 @@
 /* Copyright 2026 Aaron John Schlosser, PhD. */
-import { computed, ref, type Ref } from "vue";
+import { computed, ref } from "vue";
 import {
   clampRelationZoom,
   fitRelationBounds,
