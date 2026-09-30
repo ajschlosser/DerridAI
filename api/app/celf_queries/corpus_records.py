@@ -90,6 +90,31 @@ def present_record(access: AccessContext, record: dict[str, Any]) -> dict[str, A
     return presented
 
 
+def stored_records_by_ids(
+    access: AccessContext,
+    build_id: str,
+    record_ids: list[str],
+) -> list[dict[str, Any] | None]:
+    """Indexed reviewer-presented Record reads; never deserialize the whole corpus."""
+    access.require_admin()
+    try:
+        records = pdf_corpus_repository.get_records(build_id, record_ids)
+    except KeyError as exc:
+        raise NotFound(f"Corpus build {build_id!r} was not found.") from exc
+    return [present_record(access, record) if record is not None else None for record in records]
+
+
+def stored_record_by_id(
+    access: AccessContext,
+    build_id: str,
+    record_id: str,
+) -> dict[str, Any]:
+    record = stored_records_by_ids(access, build_id, [record_id])[0]
+    if record is None:
+        raise NotFound(f"Record {record_id!r} was not found.")
+    return record
+
+
 def record_by_id(
     access: AccessContext,
     records: list[dict[str, Any]] | None,
