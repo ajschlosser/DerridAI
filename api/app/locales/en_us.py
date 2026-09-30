@@ -8599,4 +8599,8 @@ EN_US: dict[str, str] = {'common.apply': 'Apply',
  'traceability.diagram_fit': 'Fit map',
  'traceability.diagram_reset_layout': 'Reset layout',
  'traceability.diagram_resize': 'Resize relationship map',
+ 'pdf_corpus.semantic_map_controls': 'Semantic map controls',
+ 'pdf_corpus.semantic_map_reset_layout': 'Reset map layout',
+ 'pdf_corpus.semantic_map_resize': 'Resize record semantic map',
+ 'pdf_corpus.semantic_map_interaction_help': 'Drag the background to pan. Drag any node to reposition it. Arrow keys pan, plus and minus zoom, and 0 resets the view. Hold Alt and use an arrow key to move a focused node.',
 }
