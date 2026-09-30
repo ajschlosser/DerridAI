@@ -11,6 +11,12 @@ Two built-in roles ship with the application:
 - **Administrator** — full access. Administrator permissions are locked so administrative control cannot be removed by accident.
 - **Researcher** — the default non-admin role. It can use Research, researcher-safe corpus browsing and search, annotations, and appearance settings. The API enforces the same boundary as the UI: corpus mutation, database management, and export endpoints are rejected, RAG jobs are scoped to their owner, and researcher sessions cannot open administrative routes.
 
+### Annotations
+
+Annotations can target selected text, an entire Record, or an entire work. Selected-text annotations retain the quoted passage; Record and work annotations retain their durable target without requiring a quotation. From an annotation form, add comma-separated Record IDs to link the same discussion to additional records. Linked and work-scoped annotations appear in each applicable Record and in the global Annotations workspace without creating duplicate annotation identities.
+
+Replies are stored as part of an annotation thread. Threads with replies start collapsed and can be expanded. Deleting a thread root preserves a visible deleted-root placeholder so the replies and discussion history remain understandable. Annotation visibility and linked-record access are enforced by the API for the selected corpus store.
+
 Administrators can create additional **custom roles**. A custom role starts from Researcher (or another non-admin role) and then enables or disables individual researcher-safe pages and features. Administration capabilities — Users, Roles, Languages, LLM profiles, loaded-record management, PDF tools, the Response Library, corpus mutation, and similar — cannot be granted to any non-admin role. Custom roles cannot be deleted while accounts still use them; reassign those users first.
 
 Role capabilities are enforced by both navigation and the API. Unsaved permission changes stay visible until you save, and leaving the page or switching roles asks for confirmation.

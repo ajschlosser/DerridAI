@@ -40,8 +40,13 @@ function dateLabel(value: string | null) {
         <span>{{ props.annotation.field }}</span>
         <time>{{ dateLabel(props.annotation.created_at) }}</time>
       </div>
-      <blockquote v-if="props.annotation.quote">{{ props.annotation.quote }}</blockquote>
-      <p v-if="props.annotation.note">{{ props.annotation.note }}</p>
+      <p v-if="props.annotation.deleted_at" class="annotation-deleted">
+        {{ i18n.t("annotations.deleted") }}
+      </p>
+      <blockquote v-else-if="props.annotation.quote">{{ props.annotation.quote }}</blockquote>
+      <p v-if="!props.annotation.deleted_at && props.annotation.note">
+        {{ props.annotation.note }}
+      </p>
       <div v-if="props.annotation.tags.length" class="annotation-tags">
         <span v-for="tag in props.annotation.tags" :key="tag" class="chip">{{ tag }}</span>
       </div>

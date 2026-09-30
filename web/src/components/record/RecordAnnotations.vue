@@ -5,8 +5,22 @@ const props = withDefaults(
   defineProps<{ annotations: RecordAnnotationItem[]; canAdd?: boolean }>(),
   { canAdd: false },
 );
-const emit = defineEmits<{ add: []; remove: [id: string] }>();
+const emit = defineEmits<{ add: []; remove: [id: string]; reply: [id: string] }>();
 const i18n = useI18nStore();
+const roots = () => props.annotations.filter((annotation) => !annotation.parent_id);
+const replies = (rootId: string) =>
+  props.annotations.filter((annotation) => annotation.parent_id === rootId);
+const descendants = (rootId: string) => {
+  const result: RecordAnnotationItem[] = [];
+  const pending = [rootId];
+  while (pending.length) {
+    const parent = pending.shift() as string;
+    const children = replies(parent);
+    result.push(...children);
+    pending.push(...children.map((child) => child.id));
+  }
+  return result;
+};
 function dateLabel(value?: string | null) {
   if (!value) return "";
   const date = new Date(value);
@@ -34,23 +48,60 @@ function dateLabel(value?: string | null) {
       </div>
     </header>
     <div v-if="props.annotations.length" class="annotation-list">
-      <article v-for="annotation in props.annotations" :key="annotation.id" class="annotation-card">
-        <div class="annotation-card-top">
-          <span>{{ annotation.field }}</span
-          ><time v-if="annotation.created_at">{{ dateLabel(annotation.created_at) }}</time>
-        </div>
-        <blockquote v-if="annotation.quote">{{ annotation.quote }}</blockquote>
-        <p v-if="annotation.note">{{ annotation.note }}</p>
-        <div v-if="annotation.tags.length" class="annotation-tags">
-          <span v-for="tag in annotation.tags" :key="tag">{{ tag }}</span>
-        </div>
-        <footer>
-          <strong>{{ annotation.author }}</strong
-          ><button v-if="annotation.removable" type="button" @click="emit('remove', annotation.id)">
-            {{ i18n.t("ui.remove") }}
-          </button>
-        </footer>
-      </article>
+      <details
+        v-for="root in roots()"
+        :key="root.id"
+        class="annotation-thread"
+        :open="!descendants(root.id).length"
+      >
+        <summary v-if="descendants(root.id).length">
+          <span>{{ i18n.t("annotations.thread") }}</span>
+          <small>{{ descendants(root.id).length }} {{ i18n.t("annotations.replies") }}</small>
+        </summary>
+        <article :class="{ 'annotation-deleted': root.deleted_at }" class="annotation-card">
+          <div class="annotation-card-top">
+            <span>{{ root.scope || root.field }}</span
+            ><time v-if="root.created_at">{{ dateLabel(root.created_at) }}</time>
+          </div>
+          <p v-if="root.deleted_at">{{ i18n.t("annotations.deleted") }}</p>
+          <blockquote v-else-if="root.quote">{{ root.quote }}</blockquote>
+          <p v-if="!root.deleted_at && root.note">{{ root.note }}</p>
+          <div v-if="root.tags.length" class="annotation-tags">
+            <span v-for="tag in root.tags" :key="tag">{{ tag }}</span>
+          </div>
+          <footer>
+            <strong>{{ root.author }}</strong
+            ><span>
+              <button type="button" @click="emit('reply', root.id)">
+                {{ i18n.t("annotations.reply") }}
+              </button>
+              <button v-if="root.removable" type="button" @click="emit('remove', root.id)">
+                {{ i18n.t("ui.remove") }}
+              </button>
+            </span>
+          </footer>
+        </article>
+        <article
+          v-for="reply in descendants(root.id)"
+          :key="reply.id"
+          class="annotation-card annotation-reply"
+          :class="{ 'annotation-deleted': reply.deleted_at }"
+        >
+          <div class="annotation-card-top">
+            <span>{{ reply.scope || reply.field }}</span>
+            <time v-if="reply.created_at">{{ dateLabel(reply.created_at) }}</time>
+          </div>
+          <p v-if="reply.deleted_at">{{ i18n.t("annotations.deleted") }}</p>
+          <blockquote v-else-if="reply.quote">{{ reply.quote }}</blockquote>
+          <p v-if="!reply.deleted_at && reply.note">{{ reply.note }}</p>
+          <footer>
+            <strong>{{ reply.author }}</strong>
+            <button v-if="reply.removable" type="button" @click="emit('remove', reply.id)">
+              {{ i18n.t("ui.remove") }}
+            </button>
+          </footer>
+        </article>
+      </details>
     </div>
     <div v-else class="annotation-empty">
       <strong>{{ i18n.t("annotations.none_record") }}</strong>
@@ -113,6 +164,20 @@ function dateLabel(value?: string | null) {
   display: grid;
   gap: 10px;
 }
+.annotation-thread {
+  display: grid;
+  gap: 8px;
+}
+.annotation-thread > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.annotation-thread > summary small {
+  margin-left: 6px;
+  font-weight: 500;
+}
 .annotation-card {
   display: grid;
   gap: 9px;
@@ -120,6 +185,13 @@ function dateLabel(value?: string | null) {
   border-radius: 12px;
   background: var(--card);
   padding: 12px;
+}
+.annotation-reply {
+  margin-left: 24px;
+  border-left: 3px solid var(--line);
+}
+.annotation-deleted {
+  opacity: 0.75;
 }
 .annotation-card-top {
   display: flex;

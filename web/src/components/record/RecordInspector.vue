@@ -34,6 +34,7 @@ const emit = defineEmits<{
   change: [changes: Record<string, unknown>];
   addAnnotation: [];
   removeAnnotation: [id: string];
+  replyAnnotation: [id: string];
   openPdf: [index: number];
   removePdf: [index: number];
   removeAllPdf: [];
@@ -352,6 +353,7 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
         :can-add="Boolean(snapshot.capabilities?.annotate)"
         @add="emit('addAnnotation')"
         @remove="(id) => emit('removeAnnotation', id)"
+        @reply="(id) => emit('replyAnnotation', id)"
       />
       <RecordHistoryTimeline
         v-else

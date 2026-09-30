@@ -84,7 +84,7 @@ All paths derive from `CHROMA_DATA_ROOT` (default `/data`).
 | Data                                                                                      | Storage                             | Authority / restart behavior                                             |
 | ----------------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------ |
 | Users, roles, sessions, login throttle                                                    | Auth SQLite                         | Authoritative auth state                                                 |
-| Provider profiles, annotations, languages, job snapshots/history, provenance/memory state | System SQLite                       | Durable application state                                                |
+| Provider profiles, annotations, languages, job snapshots/history, provenance/memory state | System SQLite                       | Durable application state; annotations retain scope, linked targets, thread parentage, and deleted-root tombstones |
 | Source assets, build/review checkpoints, publications                                     | Files under DerridAI data root      | Authoritative corpus/build artifacts; atomic writes where applicable     |
 | Document Intelligence / Semantic Content Graph checkpoints                                | Files under DerridAI data root      | Derived/rebuildable build projections; never canonical publication state |
 | Corpus Capture state, candidates, source/capture links                                    | System SQLite                       | Durable acquisition/provenance bookkeeping; not corpus content           |

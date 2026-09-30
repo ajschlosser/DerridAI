@@ -1,5 +1,11 @@
 export interface RecordAnnotationItem {
   id: string;
+  scope?: "text" | "record" | "work";
+  parent_id?: string | null;
+  thread_id?: string;
+  deleted_at?: string | null;
+  reply_count?: number;
+  linked_record_ids?: string[];
   field: string;
   quote: string;
   note: string;

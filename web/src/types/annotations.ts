@@ -2,8 +2,14 @@
 
 export interface AnnotationWorkspaceItem {
   id: string;
+  scope?: "text" | "record" | "work";
   record_id: string;
   work: string;
+  linked_record_ids?: string[];
+  parent_id?: string | null;
+  thread_id?: string;
+  deleted_at?: string | null;
+  reply_count?: number;
   field: string;
   quote: string;
   note: string;

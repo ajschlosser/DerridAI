@@ -6,6 +6,7 @@ import { useAnnotationsWorkspace } from "../composables/useAnnotationsWorkspace"
 import { useI18nStore } from "../stores/i18n";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
 import UiLoadingState from "../components/ui/UiLoadingState.vue";
+import type { AnnotationWorkspaceItem } from "../types/annotations";
 
 const i18n = useI18nStore();
 const annotations = useAnnotationsWorkspace();
@@ -13,6 +14,23 @@ const { snapshot, loading, error, removing } = annotations;
 const emptyMessage = computed(() =>
   snapshot.value?.total ? i18n.t("annotations.empty") : i18n.t("annotations.none_yet"),
 );
+function roots(items: AnnotationWorkspaceItem[]) {
+  return items.filter((item) => !item.parent_id);
+}
+function replies(items: AnnotationWorkspaceItem[], rootId: string) {
+  return items.filter((item) => item.parent_id === rootId);
+}
+function descendants(items: AnnotationWorkspaceItem[], rootId: string) {
+  const result: AnnotationWorkspaceItem[] = [];
+  const pending = [rootId];
+  while (pending.length) {
+    const parent = pending.shift() as string;
+    const children = replies(items, parent);
+    result.push(...children);
+    pending.push(...children.map((child) => child.id));
+  }
+  return result;
+}
 
 watch(
   () => i18n.locale,
@@ -96,14 +114,32 @@ onMounted(() => void annotations.load());
           </div>
         </div>
         <div class="annotation-feed">
-          <AnnotationFeedItem
-            v-for="annotation in snapshot.annotations"
-            :key="annotation.id"
-            :annotation="annotation"
-            :removing="removing === annotation.id"
-            @open="annotations.openRecord"
-            @remove="annotations.remove"
-          />
+          <details
+            v-for="root in roots(snapshot.annotations)"
+            :key="root.id"
+            :open="!descendants(snapshot.annotations, root.id).length"
+          >
+            <summary v-if="descendants(snapshot.annotations, root.id).length">
+              {{ i18n.t("annotations.thread") }} ·
+              {{ descendants(snapshot.annotations, root.id).length }}
+              {{ i18n.t("annotations.replies") }}
+            </summary>
+            <AnnotationFeedItem
+              :annotation="root"
+              :removing="removing === root.id"
+              @open="annotations.openRecord"
+              @remove="annotations.remove"
+            />
+            <AnnotationFeedItem
+              v-for="reply in descendants(snapshot.annotations, root.id)"
+              :key="reply.id"
+              class="annotation-thread-reply"
+              :annotation="reply"
+              :removing="removing === reply.id"
+              @open="annotations.openRecord"
+              @remove="annotations.remove"
+            />
+          </details>
           <div v-if="!snapshot.annotations.length" class="llm-empty">{{ emptyMessage }}</div>
         </div>
       </section>
@@ -136,14 +172,32 @@ onMounted(() => void annotations.load());
             </button>
           </summary>
           <div class="annotation-feed">
-            <AnnotationFeedItem
-              v-for="annotation in group.annotations"
-              :key="annotation.id"
-              :annotation="annotation"
-              :removing="removing === annotation.id"
-              @open="annotations.openRecord"
-              @remove="annotations.remove"
-            />
+            <details
+              v-for="root in roots(group.annotations)"
+              :key="root.id"
+              :open="!descendants(group.annotations, root.id).length"
+            >
+              <summary v-if="descendants(group.annotations, root.id).length">
+                {{ i18n.t("annotations.thread") }} ·
+                {{ descendants(group.annotations, root.id).length }}
+                {{ i18n.t("annotations.replies") }}
+              </summary>
+              <AnnotationFeedItem
+                :annotation="root"
+                :removing="removing === root.id"
+                @open="annotations.openRecord"
+                @remove="annotations.remove"
+              />
+              <AnnotationFeedItem
+                v-for="reply in descendants(group.annotations, root.id)"
+                :key="reply.id"
+                class="annotation-thread-reply"
+                :annotation="reply"
+                :removing="removing === reply.id"
+                @open="annotations.openRecord"
+                @remove="annotations.remove"
+              />
+            </details>
           </div>
         </details>
         <div v-if="!snapshot.groups.length" class="card llm-empty">{{ emptyMessage }}</div>

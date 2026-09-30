@@ -55,6 +55,14 @@ export function createRecordPresenters(deps: Deps) {
   function normalizedRecordAnnotation(item: Loose, index = 0, { removable = false } = {}) {
     return {
       id: item?.id || item?.shared_annotation_id || `annotation-${index}`,
+      scope: item?.scope === "work" || item?.scope === "record" ? item.scope : "text",
+      parent_id: item?.parent_id || null,
+      thread_id: item?.thread_id || item?.id || `annotation-${index}`,
+      deleted_at: item?.deleted_at || null,
+      reply_count: Number(item?.reply_count || 0),
+      linked_record_ids: Array.isArray(item?.linked_record_ids)
+        ? item.linked_record_ids.map(String)
+        : [],
       field: String(item?.field || "text"),
       quote: String(item?.quote || ""),
       note: String(item?.note || ""),
