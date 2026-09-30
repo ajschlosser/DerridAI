@@ -3079,7 +3079,7 @@
   "pdf_corpus.semantic_graph_prev_page": "Previous page",
   "pdf_corpus.semantic_graph_next_page": "Next page",
   "pdf_corpus.semantic_graph_page": "{start}–{end} of {total}",
-  "pdf_corpus.semantic_graph_keyboard_help": "Drag the background to pan. Drag a node to reposition it. Arrow keys pan, plus and minus zoom, and 0 resets the view. Hold Alt and use an arrow key to move a focused node.",
+  "pdf_corpus.semantic_graph_keyboard_help": "Drag the background to pan. Drag a node to reposition it. When the canvas has focus, Arrow keys pan, plus and minus zoom, and 0 resets the view. Tab enters the node set; Arrow keys move between nodes; Alt+Arrow moves the focused node.",
   "pdf_corpus.semantic_graph_refreshing": "Updating map…",
   "pdf_corpus.semantic_graph_no_matches": "No entities match these filters.",
   "pdf_corpus.semantic_graph_legend_size": "Circle size reflects mentions",
