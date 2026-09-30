@@ -14,7 +14,7 @@ import UiRelationViewport from "../relations/UiRelationViewport.vue";
 import { useRelationLayoutState } from "../../composables/relations/useRelationLayoutState";
 import { useRelationNodeDrag } from "../../composables/relations/useRelationNodeDrag";
 import { relationBoundsForPoints } from "../../domain/relations/geometry";
-import type { RelationPoint, RelationViewportState } from "../../domain/relations/types";
+import type { RelationViewportState } from "../../domain/relations/types";
 import {
   corpusBuildsApi,
   type RecordSemanticMap,
@@ -1191,12 +1191,6 @@ button.mention:focus-visible,
   display: inline-flex;
   align-items: center;
   gap: 6px;
-}
-.semantic-map-zoom {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-inline-start: auto;
 }
 .semantic-map-zoom {
   margin-inline-start: auto;
