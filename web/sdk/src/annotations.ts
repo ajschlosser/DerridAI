@@ -1,11 +1,6 @@
 // Copyright 2026 Aaron John Schlosser, PhD.
 
-import type {
-  Annotation,
-  AnnotationInput,
-  ClientStorage,
-  PublicationManifest,
-} from "./types";
+import type { Annotation, AnnotationInput, ClientStorage, PublicationManifest } from "./types";
 
 function id(): string {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -43,7 +38,10 @@ export class AnnotationStore {
       work: input.work,
       quote: String(input.quote ?? "").trim(),
       note: String(input.note ?? "").trim(),
-      tags: (input.tags ?? []).map(String).map((tag) => tag.trim()).filter(Boolean),
+      tags: (input.tags ?? [])
+        .map(String)
+        .map((tag) => tag.trim())
+        .filter(Boolean),
       created_at: now,
       updated_at: now,
     };
@@ -67,7 +65,10 @@ export class AnnotationStore {
       tags:
         patch.tags === undefined
           ? current.tags
-          : patch.tags.map(String).map((tag) => tag.trim()).filter(Boolean),
+          : patch.tags
+              .map(String)
+              .map((tag) => tag.trim())
+              .filter(Boolean),
       updated_at: new Date().toISOString(),
     };
     await this.storage.set(this.namespace, annotationId, next);
