@@ -1,6 +1,12 @@
 // Copyright 2026 Aaron John Schlosser, PhD.
 import { describe, expect, it } from "vitest";
-import { APP_CODENAME, APP_GIT_COMMIT, APP_VERSION, COPYRIGHT_YEAR, appVersionLabel } from "../../src/buildInfo";
+import {
+  APP_CODENAME,
+  APP_GIT_COMMIT,
+  APP_VERSION,
+  COPYRIGHT_YEAR,
+  appVersionLabel,
+} from "../../src/buildInfo";
 import pkg from "../../package.json";
 
 describe("buildInfo", () => {

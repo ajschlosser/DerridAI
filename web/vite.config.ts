@@ -7,7 +7,10 @@ import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 
 const root = dirname(fileURLToPath(import.meta.url));
-const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { version: string; codename: string };
+const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
+  version: string;
+  codename: string;
+};
 
 function gitCommit(): string {
   const fromEnv = String(process.env.GIT_COMMIT || process.env.SOURCE_COMMIT || "").trim();

@@ -7,7 +7,10 @@ import { fileURLToPath } from "node:url";
 
 const root = dirname(fileURLToPath(import.meta.url));
 const webRoot = join(root, "..");
-const pkg = JSON.parse(readFileSync(join(webRoot, "package.json"), "utf8")) as { version: string; codename: string };
+const pkg = JSON.parse(readFileSync(join(webRoot, "package.json"), "utf8")) as {
+  version: string;
+  codename: string;
+};
 function gitCommit(): string {
   const fromEnv = String(process.env.GIT_COMMIT || process.env.SOURCE_COMMIT || "").trim();
   if (fromEnv) return fromEnv.split(/\s+/)[0].slice(0, 40);

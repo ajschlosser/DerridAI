@@ -6,7 +6,10 @@ import { defineConfig } from "vitest/config";
 import vue from "@vitejs/plugin-vue";
 
 const root = dirname(fileURLToPath(import.meta.url));
-const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { version: string; codename: string };
+const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
+  version: string;
+  codename: string;
+};
 
 export default defineConfig({
   plugins: [vue()],

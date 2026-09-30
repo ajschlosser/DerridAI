@@ -39,7 +39,9 @@ def test_all_declared_versions_agree():
     assert isinstance(codename, str) and codename.strip()
     declared = {
         "api/app/config.py": find_all(rf'APP_VERSION = "({SEMVER})"', "api/app/config.py"),
-        "web/index.html": find_all(rf"<title>DerridAI ({SEMVER}) — [^<]+</title>", "web/index.html"),
+        "web/index.html": find_all(
+            rf"<title>DerridAI ({SEMVER}) — [^<]+</title>", "web/index.html"
+        ),
         "README.md": find_all(rf"Current version: \*\*({SEMVER}) — [^*]+\*\*", "README.md"),
     }
     for path, found in declared.items():
