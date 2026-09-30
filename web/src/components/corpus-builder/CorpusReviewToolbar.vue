@@ -2,11 +2,11 @@
 <script setup lang="ts">
 import type { MetadataSchema } from "../../api/metadataSchemas";
 import type { ReviewQueue } from "../../types/corpus";
-import type { ReviewWorkspaceMode } from "../../features/corpus-builder/composables/useCorpusReviewWorkspace";
 import { useI18nStore } from "../../stores/i18n";
 import CorpusActionMenu, { type CorpusActionMenuItem } from "../CorpusActionMenu.vue";
 import CorpusBulkMetadataEditor from "../CorpusBulkMetadataEditor.vue";
 import CorpusReviewQueueTabs from "../CorpusReviewQueueTabs.vue";
+import UiButton from "../ui/UiButton.vue";
 
 const props = defineProps<{
   total: number;
@@ -17,8 +17,6 @@ const props = defineProps<{
   sourceProblems: number;
   accepted: number;
   rejected: number;
-  workspaceMode: ReviewWorkspaceMode;
-  hasSelectedRecord: boolean;
   bulkActionItems: CorpusActionMenuItem[];
   bulkActionFeedback: string;
   bulkMetadataOpen: boolean;
@@ -37,7 +35,6 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  workspace: [mode: ReviewWorkspaceMode];
   acceptClean: [];
   bulkAction: [id: string];
   bulkApply: [payload: { changes: Record<string, unknown>; applyToAll: boolean }];
@@ -76,50 +73,15 @@ const i18n = useI18nStore();
       :placeholder="i18n.t('pdf_corpus.search_records')"
     />
 
-    <div
-      class="workspace-switcher"
-      role="group"
-      :aria-label="i18n.t('pdf_corpus.review_workspace')"
-    >
-      <button
-        type="button"
-        class="btn small"
-        :aria-pressed="props.workspaceMode === 'record'"
-        @click="emit('workspace', 'record')"
-      >
-        {{ i18n.t("pdf_corpus.workspace.record") }}
-      </button>
-      <button
-        type="button"
-        class="btn small"
-        :aria-pressed="props.workspaceMode === 'metadata'"
-        :aria-label="i18n.t('pdf_corpus.workspace.metadata')"
-        :disabled="!props.hasSelectedRecord"
-        @click="emit('workspace', 'metadata')"
-      >
-        {{ i18n.t("pdf_corpus.workspace.metadata_short") }}
-      </button>
-      <button
-        type="button"
-        class="btn small"
-        :aria-pressed="props.workspaceMode === 'source'"
-        :aria-label="i18n.t('pdf_corpus.workspace.source')"
-        :disabled="!props.hasSelectedRecord"
-        @click="emit('workspace', 'source')"
-      >
-        {{ i18n.t("pdf_corpus.workspace.source_short") }}
-      </button>
-    </div>
-
     <div class="review-bulk">
-      <button
-        type="button"
-        class="btn small primary"
+      <UiButton
+        size="small"
+        variant="primary"
         :disabled="props.disabled || props.ready === 0"
         @click="emit('acceptClean')"
       >
         {{ i18n.tf("pdf_corpus.accept_clean", { count: props.ready }) }}
-      </button>
+      </UiButton>
       <CorpusActionMenu
         :label="i18n.t('pdf_corpus.bulk_actions')"
         :items="props.bulkActionItems"
@@ -152,147 +114,61 @@ const i18n = useI18nStore();
     />
 
     <div class="pager">
-      <button
-        type="button"
-        class="btn small"
-        :disabled="!props.hasPreviousPage"
-        @click="emit('previousPage')"
-      >
+      <UiButton size="small" :disabled="!props.hasPreviousPage" @click="emit('previousPage')">
         {{ i18n.t("ui.previous") }}
-      </button>
+      </UiButton>
       <span>{{ props.pageNumber }} / {{ props.pageCount }}</span>
-      <button
-        type="button"
-        class="btn small"
-        :disabled="!props.hasNextPage"
-        @click="emit('nextPage')"
-      >
+      <UiButton size="small" :disabled="!props.hasNextPage" @click="emit('nextPage')">
         {{ i18n.t("ui.next") }}
-      </button>
+      </UiButton>
     </div>
   </section>
 </template>
 
 <style scoped>
+/* The lower half of the consolidated review header. The header owns the surface and stickiness. */
 .review-toolbar {
-  position: sticky;
-  top: 66px;
-  z-index: 11;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 320px) auto;
-  gap: 0.5rem 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
   align-items: center;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-card);
-  background: color-mix(in srgb, var(--surface-card) 96%, transparent);
-  backdrop-filter: blur(12px);
-  font-size: 0.8125rem;
+  font-size: var(--fs-sm);
+}
+.review-toolbar > :first-child {
+  flex: 0 1 auto;
 }
 .review-toolbar .control {
   min-height: 40px;
-  font-size: 0.8125rem;
-}
-.workspace-switcher {
-  display: inline-flex;
-  gap: 2px;
-  align-items: center;
-  flex-wrap: nowrap;
-  padding: 2px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-control);
-  background: var(--surface-subtle);
-}
-.workspace-switcher .btn {
-  border-color: transparent;
-  background: transparent;
-  box-shadow: none;
-}
-.workspace-switcher .btn[aria-pressed="true"] {
-  border-color: var(--border-subtle);
-  background: var(--surface-card);
-  color: var(--text-primary);
-  box-shadow: var(--shadow-card);
+  flex: 1 1 14rem;
+  max-width: 24rem;
+  font-size: var(--fs-sm);
 }
 .review-bulk {
   display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
-.review-bulk .btn {
-  min-height: 34px;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
 }
 .review-action-feedback {
-  grid-column: 1/-1;
+  flex: 1 1 100%;
   margin: 0;
-  padding: 9px 11px;
-  border: 1px solid var(--tone-ok-edge);
-  border-radius: 9px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--tone-ok-border);
+  border-radius: var(--radius-control);
   background: var(--tone-ok-bg);
   color: var(--tone-ok-fg);
-  font-size: 0.8125rem;
+  font-size: var(--fs-sm);
   line-height: 1.5;
 }
 .pager {
-  grid-column: 1/-1;
   display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  font-size: 0.8125rem;
-  color: var(--muted);
+  gap: var(--space-2);
+  align-items: center;
+  margin-inline-start: auto;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
 }
-
-@media (min-width: 1280px) {
-  .review-toolbar {
-    grid-template-columns: minmax(10rem, 1fr) auto auto;
-  }
-  .review-toolbar > :first-child {
-    grid-column: 1/3;
-  }
-  .pager {
-    grid-column: 3;
-    grid-row: 1;
-    justify-self: end;
-  }
-  #pdf-corpus-record-search {
-    grid-column: 1;
-  }
-  .workspace-switcher {
-    grid-column: 2;
-  }
-  .review-bulk {
-    grid-column: 3;
-    flex-wrap: nowrap;
-  }
-  .review-action-feedback {
-    grid-column: 1/-1;
-  }
-  .review-toolbar > :is(section, form, aside) {
-    grid-column: 1/-1;
-  }
-}
-
-@media (max-width: 1279.98px) {
-  .review-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-  }
-  .review-toolbar > :first-child {
-    flex: 1 1 100%;
-  }
-  .pager {
-    order: 9;
-    margin-inline-start: auto;
-  }
-  #pdf-corpus-record-search {
-    flex: 1 1 12rem;
-  }
-  .review-bulk {
-    flex-wrap: wrap;
-  }
-  .review-action-feedback,
-  .review-toolbar > :is(section, form, aside) {
-    flex: 1 1 100%;
-  }
+.review-toolbar > :is(section, form, aside) {
+  flex: 1 1 100%;
 }
 </style>

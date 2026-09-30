@@ -27,31 +27,33 @@ const story = (id: string) => "/iframe.html?id=" + id + "&viewMode=story";
 
 test.describe("Corpus Builder composed workflow", () => {
   test("French length stories declare their language to assistive technology", async ({ page }) => {
-    await page.goto(story("corpus-builder-workflow-lifecycle-stepper--french-length-stress"));
+    await page.goto(story("corpus-builder-workflow-workspace-header--french-length-stress"));
     await expect(page.locator("html")).toHaveAttribute("lang", "fr-CA");
     await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
   });
 
-  test("configuration workspace tabs support roving keyboard navigation", async ({ page }) => {
-    await page.goto(story("corpus-builder-setup-configuration-navigation--source"));
-    const source = page.getByRole("tab", { name: /Source/i });
-    await expect(source).toHaveAttribute("aria-selected", "true");
-    await source.focus();
-    await source.press("ArrowRight");
-    await expect(page.getByRole("tab", { name: /Structure/i })).toBeFocused();
-    await expect(page.getByRole("tab", { name: /Structure/i })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    await page.keyboard.press("End");
-    await expect(page.getByRole("tab", { name: /Advanced/i })).toBeFocused();
-    await expectWcag2AA(page, ".corpus-config-nav");
+  test("setup sections expose one disclosure each with their state and summary", async ({
+    page,
+  }) => {
+    await page.goto(story("corpus-builder-setup-section--expanded"));
+    const toggle = page.locator(".corpus-setup-section-toggle");
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(toggle).toContainText("Of Grammatology.pdf");
+    await expect(page.locator(".corpus-setup-section-body")).toBeVisible();
+    await toggle.focus();
+    await expect(toggle).toBeFocused();
+    await expectWcag2AA(page, ".corpus-setup-section");
 
-    await page.goto(story("corpus-builder-setup-configuration-navigation--no-source"));
-    await expect(page.getByRole("tab", { name: /Structure/i })).toBeDisabled();
-    await expect(page.getByRole("tab", { name: /Enrichment/i })).toBeEnabled();
-    await expect(page.getByRole("tab", { name: /Metadata/i })).toBeEnabled();
-    await expect(page.getByRole("tab", { name: /Advanced/i })).toBeEnabled();
+    await page.goto(story("corpus-builder-setup-section--complete-collapsed"));
+    await expect(page.locator(".corpus-setup-section-toggle")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    await expect(page.locator(".corpus-setup-section-body")).toBeHidden();
+
+    await page.goto(story("corpus-builder-setup-section--warning"));
+    await expect(page.locator(".corpus-setup-section-toggle")).toBeVisible();
+    await expectWcag2AA(page, ".corpus-setup-section");
   });
 
   test("workspace header shifts from introduction to active build context", async ({ page }) => {
@@ -68,20 +70,25 @@ test.describe("Corpus Builder composed workflow", () => {
     await expectWcag2AA(page, ".corpus-workspace-header");
   });
 
-  test("lifecycle stepper maps configure, build, review, and publish states", async ({ page }) => {
+  test("the header navigation shows the four workflow steps and where the build is", async ({
+    page,
+  }) => {
     const states = [
-      ["corpus-builder-workflow-lifecycle-stepper--configure", "Source & configure"],
-      ["corpus-builder-workflow-lifecycle-stepper--building", "Build"],
-      ["corpus-builder-workflow-lifecycle-stepper--review", "Review"],
-      ["corpus-builder-workflow-lifecycle-stepper--ready-to-publish", "Publish"],
+      ["corpus-builder-workflow-workspace-header--empty-workspace", "Setup"],
+      ["corpus-builder-workflow-workspace-header--active-build", "Review"],
+      ["corpus-builder-workflow-workspace-header--published", "Publish"],
     ];
     for (const [id, label] of states) {
       await page.goto(story(id));
-      const current = page.locator('[aria-current="step"]');
+      const nav = page.locator(".workspace-mode-nav");
+      await expect(nav.getByRole("button")).toHaveCount(4);
+      const current = nav.locator('[aria-current="step"]');
       await expect(current).toBeVisible();
       await expect(current).toContainText(label);
-      await expectWcag2AA(page, ".workflow");
+      await expectWcag2AA(page, ".corpus-workspace-header");
     }
+    await page.goto(story("corpus-builder-workflow-workspace-header--empty-workspace"));
+    await expect(page.getByRole("button", { name: /^Review/ })).toBeDisabled();
   });
 
   test("document structure remains usable in the narrow laptop composition", async ({ page }) => {
@@ -107,16 +114,46 @@ test.describe("Corpus Builder composed workflow", () => {
     await expectWcag2AA(page, ".execution-settings-shell");
   });
 
-  test("build progress makes unresolved provenance and validation state visible", async ({
+  test("build telemetry makes unresolved provenance and validation state visible", async ({
     page,
   }) => {
-    await page.goto(story("corpus-builder-workflow-build-progress--provenance-hazard"));
-    const surface = page.locator(".corpus-build-progress");
-    await expect(page.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");
+    await page.goto(story("corpus-builder-build-telemetry--provenance-hazard"));
+    const surface = page.locator(".corpus-build-telemetry");
     await expect(page.locator(".unresolved-line")).toContainText("1");
     await expect(surface).toContainText(/boundary decision/i);
     await expectNoHorizontalOverflow(surface);
-    await expectWcag2AA(page, ".corpus-build-progress");
+    await expectWcag2AA(page, ".corpus-build-telemetry");
+  });
+
+  test("build primary status is the one progress surface, with stages and next actions", async ({
+    page,
+  }) => {
+    await page.goto(story("corpus-builder-build-primary-status--enriching"));
+    const status = page.locator(".corpus-build-primary-status");
+    await expect(status.getByRole("heading", { name: "Enriching metadata" })).toBeVisible();
+    await expect(status.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "58");
+    await expect(status.locator('[aria-current="step"]')).toContainText("Enrich");
+    await expect(status.getByRole("button", { name: "Pause" })).toBeVisible();
+    await expectNoHorizontalOverflow(status);
+    await expectWcag2AA(page, ".corpus-build-primary-status");
+
+    await page.goto(story("corpus-builder-build-primary-status--ready-for-review"));
+    await expect(page.getByRole("button", { name: "Review Records" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Publication readiness" })).toBeVisible();
+  });
+
+  test("publish workspace leads with readiness and hands off to review", async ({ page }) => {
+    await page.goto(story("corpus-builder-publish-workspace--unreviewed-records"));
+    await expect(page.locator("#corpus-publish-title")).toContainText(
+      "31 Records remain unreviewed",
+    );
+    await expect(
+      page.getByRole("button", { name: "Publish with unreviewed suggestions" }),
+    ).toBeVisible();
+    await expectWcag2AA(page, ".corpus-publish-workspace");
+    await page.goto(story("corpus-builder-publish-workspace--published"));
+    await expect(page.locator("#corpus-publish-title")).toHaveText("Published");
+    await expect(page.locator(".publication-blockers")).toHaveCount(0);
   });
 
   test("initialization is an inline panel, not a modal, while topology is being prepared", async ({
@@ -181,7 +218,6 @@ test.describe("Corpus Builder composed workflow", () => {
     page,
   }) => {
     await page.goto(story("corpus-builder-workflow-finish-workspace--ready-to-publish"));
-    await expect(page.getByRole("heading", { name: /Ready to publish/i })).toBeVisible();
     await expect(page.getByRole("button", { name: /Publish corpus/i })).toBeEnabled();
     await expectWcag2AA(page, ".finish-workspace");
     await page.goto(story("corpus-builder-workflow-finish-workspace--mixed-accepted-and-rejected"));

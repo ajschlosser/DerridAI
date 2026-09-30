@@ -15,8 +15,6 @@ const meta = {
     sourceProblems: 1,
     accepted: 19,
     rejected: 3,
-    workspaceMode: "record",
-    hasSelectedRecord: true,
     bulkActionItems: [
       { id: "bulk-edit", label: "Bulk edit metadata" },
       { id: "reject-selected", label: "Reject selected" },
@@ -43,17 +41,10 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
 
-export const NoSelectedRecord: Story = {
-  args: {
-    hasSelectedRecord: false,
-  },
-};
-
 export const IssuesQueue: Story = {
   args: {
     queue: "metadata",
     query: "Levinas",
-    workspaceMode: "metadata",
   },
 };
 

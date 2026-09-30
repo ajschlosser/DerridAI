@@ -1,8 +1,14 @@
 <script setup lang="ts">
 // Copyright 2026 Aaron John Schlosser, PhD.
 import { computed, ref } from "vue";
+import UiButton from "./ui/UiButton.vue";
 import UiNoticeStack, { type Notice } from "./ui/UiNoticeStack.vue";
 import { hasPages } from "../domain/sourceMedia";
+import {
+  firstBlockingIssue,
+  type CorpusSetupIssue,
+  type CorpusSetupSectionId,
+} from "../features/corpus-builder/domain/setupState";
 import { useI18nStore } from "../stores/i18n";
 
 const props = withDefaults(
@@ -12,6 +18,7 @@ const props = withDefaults(
     pageCount?: number;
     blockCount?: number;
     structureSummary?: string;
+    schemaLabel?: string;
     providerLabel?: string;
     modelLabel?: string;
     enrichmentMode?: "fast" | "deep";
@@ -21,13 +28,14 @@ const props = withDefaults(
     activeBuildCount?: number;
     canStart?: boolean;
     busy?: boolean;
-    warnings?: string[];
+    issues?: CorpusSetupIssue[];
   }>(),
   {
     sourceFilename: "",
     pageCount: 0,
     blockCount: 0,
     structureSummary: "",
+    schemaLabel: "",
     providerLabel: "",
     modelLabel: "",
     enrichmentMode: "fast",
@@ -37,21 +45,31 @@ const props = withDefaults(
     activeBuildCount: 0,
     canStart: false,
     busy: false,
-    warnings: () => [],
+    issues: () => [],
   },
 );
-const emit = defineEmits<{ build: [] }>();
+const emit = defineEmits<{ build: []; editSection: [section: CorpusSetupSectionId] }>();
 const i18n = useI18nStore();
-// Readiness warnings describe the settings as they are now; closing one hides it until the warning itself changes.
+// Warnings describe the settings as they are now; closing one hides it until the warning itself changes.
 const dismissed = ref(new Set<string>());
-const openWarnings = computed(() => props.warnings.filter((text) => !dismissed.value.has(text)));
+const warnings = computed(() =>
+  props.issues.filter(
+    (issue) => issue.severity === "warning" && !dismissed.value.has(issue.message),
+  ),
+);
 const warningNotices = computed<Notice[]>(() =>
-  openWarnings.value.map((text) => ({ id: text, tone: "warning", text })),
+  warnings.value.map((issue) => ({ id: issue.message, tone: "warning", text: issue.message })),
 );
 function dismissWarnings(ids: string[]) {
   dismissed.value = new Set([...dismissed.value, ...ids]);
 }
 const ready = computed(() => Boolean(props.sourceFilename && props.canStart && props.contextSafe));
+const blocking = computed(() => firstBlockingIssue(props.issues));
+const statement = computed(() =>
+  ready.value
+    ? i18n.t("pdf_corpus.readiness.ready")
+    : blocking.value?.message || i18n.t("pdf_corpus.readiness.not_ready"),
+);
 const modeLabel = computed(() =>
   props.enrichmentMode === "deep"
     ? i18n.t("pdf_corpus.enrichment_deep")
@@ -80,32 +98,29 @@ const providerSummary = computed(() =>
   >
     <div class="build-command-status">
       <span class="build-command-indicator" aria-hidden="true"></span>
-      <div>
-        <h3 id="build-readiness-title">
-          {{
-            ready ? i18n.t("pdf_corpus.readiness.ready") : i18n.t("pdf_corpus.readiness.not_ready")
-          }}
-        </h3>
-        <p>
-          {{ sourceFilename || i18n.t("pdf_corpus.choose_source_prompt") }}
-        </p>
-      </div>
+      <h3 id="build-readiness-title" role="status">{{ statement }}</h3>
     </div>
 
     <div
       class="build-command-summary"
       :aria-label="i18n.t('pdf_corpus.readiness.configuration_summary')"
     >
-      <span>{{ modeLabel }}</span>
+      <span>{{ sourceFilename || i18n.t("pdf_corpus.choose_source_prompt") }}</span>
+      <span v-if="schemaLabel">{{ schemaLabel }}</span>
       <span>{{ providerSummary }}</span>
       <span>{{ sizing }}</span>
-      <span v-if="openWarnings.length" class="build-command-warning">
-        {{ openWarnings.length }}
+      <span v-if="warnings.length" class="build-command-warning">
+        {{ warnings.length }}
         {{ i18n.t("pdf_corpus.readiness.warnings", "warnings") }}
       </span>
     </div>
 
     <div class="build-command-actions">
+      <UiButton
+        v-if="blocking"
+        :label="i18n.t('pdf_corpus.setup.fix')"
+        @click="emit('editSection', blocking.section)"
+      />
       <details class="build-command-details">
         <summary>{{ i18n.t("pdf_corpus.readiness.review_setup", "Review setup") }}</summary>
         <div class="build-command-popover">
@@ -155,9 +170,9 @@ const providerSummary = computed(() =>
         </div>
       </details>
 
-      <button
-        type="button"
-        class="btn primary build-action"
+      <UiButton
+        variant="primary"
+        button-class="build-action"
         :disabled="!ready || busy"
         @click="emit('build')"
       >
@@ -169,7 +184,7 @@ const providerSummary = computed(() =>
                 activeBuildCount ? "Start another build" : "Build record set",
               )
         }}
-      </button>
+      </UiButton>
     </div>
   </section>
 </template>
@@ -341,7 +356,7 @@ dd small {
   color: var(--text-secondary);
   font-size: var(--fs-sm);
 }
-.build-action {
+.build-command-bar :deep(.build-action) {
   min-width: 10rem;
   min-height: 2.6rem;
   font-weight: var(--fw-bold);
@@ -370,7 +385,8 @@ dd small {
     grid-template-columns: 1fr;
   }
   .build-command-details > summary,
-  .build-action {
+  .build-command-bar :deep(.ui-button-wrap),
+  .build-command-bar :deep(.build-action) {
     width: 100%;
     justify-content: center;
   }

@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import type { CorpusBuild } from "../api/pdfCorpus";
+import { corpusStatusTone } from "../features/corpus-builder/domain/workflowPresentation";
 import { useI18nStore } from "../stores/i18n";
-import UiTooltip from "./ui/UiTooltip.vue";
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- SA-13: preserve legacy setup binding until its owning workflow is extracted.
-const props = withDefaults(
-  defineProps<{ builds: CorpusBuild[]; selectedBuildId?: string; total?: number }>(),
-  { selectedBuildId: "", total: 0 },
-);
+import UiButton from "./ui/UiButton.vue";
+withDefaults(defineProps<{ builds: CorpusBuild[]; selectedBuildId?: string; total?: number }>(), {
+  selectedBuildId: "",
+  total: 0,
+});
 const emit = defineEmits<{ select: [build: CorpusBuild]; refresh: [] }>();
 const i18n = useI18nStore();
 function statusLabel(build: CorpusBuild) {
@@ -44,21 +44,14 @@ function formatDate(value?: string | null) {
           <b>{{ i18n.t("pdf_corpus.builds") }}</b
           ><small>{{ i18n.t("pdf_corpus.build_history_anywhere") }}</small>
         </div>
-        <UiTooltip
-          :text="i18n.t('pdf_corpus.refresh_builds')"
-          trigger-mode="content"
-          :content-focusable="false"
-          placement="bottom"
-        >
-          <button
-            type="button"
-            class="icon-button"
-            :aria-label="i18n.t('pdf_corpus.refresh_builds')"
-            @click="emit('refresh')"
-          >
-            ↻
-          </button>
-        </UiTooltip>
+        <UiButton
+          icon="refresh"
+          icon-only
+          variant="ghost"
+          size="small"
+          :label="i18n.t('pdf_corpus.refresh_builds')"
+          @click="emit('refresh')"
+        />
       </header>
       <div class="history-list">
         <button
@@ -70,13 +63,22 @@ function formatDate(value?: string | null) {
           :aria-current="build.build_id === selectedBuildId ? 'true' : undefined"
           @click="emit('select', build)"
         >
-          <span class="dot" :data-status="build.status" aria-hidden="true"></span
-          ><span
-            ><b>{{ build.source_filename }}</b
+          <span
+            class="dot"
+            :data-status="build.status"
+            :data-tone="corpusStatusTone(build)"
+            aria-hidden="true"
+          ></span
+          ><span class="history-body"
+            ><b
+              ><span v-if="build.build_id === selectedBuildId" class="selected-mark"
+                >✓ <span class="sr-only">{{ i18n.t("pdf_corpus.build_selected") }}</span></span
+              >{{ build.source_filename }}</b
             ><small
               >{{ statusLabel(build) }} · {{ Math.round((build.progress || 0) * 100) }}% ·
               {{ build.record_count || 0 }} {{ i18n.t("pdf_corpus.records") }}</small
-            ><small>{{ formatDate(build.created_at) }}</small></span
+            ><small>{{ formatDate(build.created_at) }}</small
+            ><small class="build-id">{{ build.build_id }}</small></span
           >
         </button>
         <p v-if="!builds.length" class="empty">{{ i18n.t("pdf_corpus.no_builds") }}</p>
@@ -92,7 +94,7 @@ function formatDate(value?: string | null) {
   list-style: none;
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--space-2);
   cursor: pointer;
 }
 .history-menu > summary::-webkit-details-marker {
@@ -105,67 +107,70 @@ function formatDate(value?: string | null) {
   height: 21px;
   padding: 0 6px;
   border-radius: 999px;
-  background: var(--soft);
-  font-size: 0.75rem;
+  background: var(--surface-subtle);
+  font-size: var(--fs-xs);
 }
 .history-popover {
   position: absolute;
   z-index: 40;
-  top: calc(100% + 8px);
+  top: calc(100% + var(--space-2));
   inset-inline-end: 0;
   width: min(410px, calc(100vw - 28px));
   max-height: min(560px, 72vh);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface-overlay, #fff);
-  box-shadow: 0 18px 48px rgb(15 23 42 / 0.18);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-overlay);
 }
 .history-popover header {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
   align-items: flex-start;
-  padding: 12px 13px;
-  border-bottom: 1px solid var(--line);
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
 }
 .history-popover header > div {
   display: grid;
   gap: 2px;
 }
 .history-popover b {
-  font-size: 0.875rem;
+  font-size: var(--fs-sm);
 }
 .history-popover small {
-  font-size: 0.8125rem;
-  color: var(--muted);
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
   line-height: 1.4;
 }
 .history-list {
   overflow: auto;
-  padding: 7px;
+  padding: var(--space-2);
 }
 .history-row {
   width: 100%;
   display: grid;
   grid-template-columns: 10px minmax(0, 1fr);
-  gap: 9px;
-  padding: 9px;
+  gap: var(--space-2);
+  padding: var(--space-2);
   border: 1px solid transparent;
-  border-radius: 9px;
-  background: var(--surface-overlay, #fff);
+  border-radius: var(--radius-control);
+  background: var(--surface-overlay);
   color: inherit;
   text-align: start;
   cursor: pointer;
 }
-.history-row:hover,
-.history-row.active {
-  border-color: var(--line);
-  background: var(--surface-raised, #fff);
+.history-row:hover {
+  border-color: var(--border-subtle);
+  background: var(--surface-raised);
 }
-.history-row > span:last-child {
+.history-row.active {
+  border-color: var(--border-interactive);
+  background: var(--surface-raised);
+}
+.history-body {
   display: grid;
   gap: 2px;
   min-width: 0;
@@ -175,42 +180,38 @@ function formatDate(value?: string | null) {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.selected-mark {
+  margin-inline-end: var(--space-1);
+  color: var(--tone-ok-fg);
+}
+.build-id {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  overflow-wrap: anywhere;
+}
 .dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #777;
+  background: var(--text-secondary);
   margin-top: 5px;
 }
-.dot[data-status="ready"],
-.dot[data-status="published"] {
-  background: #287a4c;
+.dot[data-tone="success"] {
+  background: var(--tone-ok-fg);
 }
-.dot[data-status="running"],
-.dot[data-status="queued"] {
-  background: #8e6815;
+.dot[data-tone="warning"] {
+  background: var(--tone-warn-fg);
 }
-.dot[data-status="failed"],
-.dot[data-status="interrupted"] {
-  background: #a13f3f;
+.dot[data-tone="danger"] {
+  background: var(--tone-danger-fg);
 }
 .empty {
   margin: 0;
-  padding: 18px;
-  color: var(--muted);
-  font-size: 0.8125rem;
-}
-.icon-button {
-  border: 0;
-  background: transparent;
-  min-width: 36px;
-  min-height: 36px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 1.125rem;
+  padding: var(--space-4);
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
 }
 .history-menu :is(summary, button):focus-visible {
-  outline: 3px solid var(--accent);
+  outline: 3px solid var(--ui-accent-focus);
   outline-offset: 2px;
 }
 </style>

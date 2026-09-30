@@ -29,8 +29,6 @@ function mountToolbar(overrides: Record<string, unknown> = {}) {
       sourceProblems: 0,
       accepted: 3,
       rejected: 1,
-      workspaceMode: "record",
-      hasSelectedRecord: true,
       bulkActionItems: [{ id: "reject-selected", label: "Reject selected" }],
       bulkActionFeedback: "",
       bulkMetadataOpen: false,
@@ -63,14 +61,10 @@ describe("Corpus Builder review toolbar", () => {
     expect(wrapper.emitted("update:query")?.at(-1)).toEqual(["Levinas"]);
   });
 
-  it("forwards workspace, clean-accept, bulk, and paging actions", async () => {
+  it("forwards clean-accept, bulk, and paging actions", async () => {
     const wrapper = mountToolbar();
 
-    const workspaceButtons = wrapper.findAll(".workspace-switcher button");
-    await workspaceButtons[1].trigger("click");
-    expect(wrapper.emitted("workspace")?.at(-1)).toEqual(["metadata"]);
-
-    await wrapper.get(".review-bulk .primary").trigger("click");
+    await wrapper.get(".review-bulk .variant-primary").trigger("click");
     expect(wrapper.emitted("acceptClean")).toHaveLength(1);
 
     wrapper.findComponent(CorpusActionMenu).vm.$emit("select", "reject-selected");
@@ -79,15 +73,6 @@ describe("Corpus Builder review toolbar", () => {
     const pagerButtons = wrapper.findAll(".pager button");
     await pagerButtons[1].trigger("click");
     expect(wrapper.emitted("nextPage")).toHaveLength(1);
-  });
-
-  it("keeps detail workspaces unavailable until a record is selected", () => {
-    const wrapper = mountToolbar({ hasSelectedRecord: false });
-    const workspaceButtons = wrapper.findAll(".workspace-switcher button");
-
-    expect(workspaceButtons[0].attributes("disabled")).toBeUndefined();
-    expect(workspaceButtons[1].attributes("disabled")).toBeDefined();
-    expect(workspaceButtons[2].attributes("disabled")).toBeDefined();
   });
 
   it("keeps bulk-editor mutation payloads owned by the parent", () => {
@@ -110,7 +95,7 @@ describe("Corpus Builder review toolbar", () => {
     const wrapper = mountToolbar({ disabled: true });
 
     expect(wrapper.get('[data-review-queue="all"]').attributes("disabled")).toBeDefined();
-    expect(wrapper.get(".review-bulk .primary").attributes("disabled")).toBeDefined();
+    expect(wrapper.get(".review-bulk .variant-primary").attributes("disabled")).toBeDefined();
     expect(wrapper.get("#pdf-corpus-record-search").attributes("disabled")).toBeUndefined();
     expect(wrapper.findAll(".pager button")[1].attributes("disabled")).toBeUndefined();
   });

@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import CorpusBuildReadiness from "../../src/components/CorpusBuildReadiness.vue";
 import CorpusExecutionSettings from "../../src/components/CorpusExecutionSettings.vue";
 import CorpusRecordSizingSettings from "../../src/components/CorpusRecordSizingSettings.vue";
-import CorpusWorkflowStepper from "../../src/components/CorpusWorkflowStepper.vue";
 import DocumentStructureConfigurator from "../../src/components/DocumentStructureConfigurator.vue";
 import PdfPageLabelEditor from "../../src/components/PdfPageLabelEditor.vue";
 
@@ -34,22 +33,40 @@ describe("Corpus Builder setup and launch controls", () => {
     expect(wrapper.get(".build-action").attributes("disabled")).toBeDefined();
     expect(wrapper.get(".build-action").text()).toContain("Starting");
 
-    await wrapper.setProps({ busy: false, contextSafe: false });
+    await wrapper.setProps({ busy: false, contextSafe: true, canStart: false });
+    expect(wrapper.get("#build-readiness-title").text()).toBe("Complete setup to build");
+    await wrapper.setProps({ contextSafe: false });
     expect(wrapper.get('[role="alert"]').text()).toContain("Context budget");
     expect(wrapper.get(".build-action").attributes("disabled")).toBeDefined();
   });
 
-  it.each([
-    [{ stage: "", status: "" }, "1"],
-    [{ stage: "segmenting", status: "running" }, "2"],
-    [{ stage: "enriching", status: "running", recordCount: 12 }, "3"],
-    [{ stage: "ready", status: "ready", canPublish: true }, "4"],
-    [{ stage: "published", status: "published", published: true }, "4"],
-  ])("maps pipeline state %o onto the correct user-facing lifecycle phase", (props, expected) => {
-    const wrapper = mount(CorpusWorkflowStepper, { props });
-    const current = wrapper.get('[aria-current="step"]');
-    expect(current.get(".marker").text()).toBe(expected);
-    expect(current.attributes("data-state")).toBe("current");
+  it("names the first blocking setup issue and sends Fix to its section", async () => {
+    const wrapper = mount(CorpusBuildReadiness, {
+      props: {
+        sourceFilename: "",
+        canStart: false,
+        issues: [
+          {
+            id: "sizing",
+            section: "structure",
+            severity: "blocking",
+            message: "Fix Record sizing",
+          },
+          {
+            id: "source",
+            section: "source",
+            severity: "blocking",
+            message: "Choose a source to continue",
+          },
+          { id: "warn", section: "metadata", severity: "warning", message: "2 document fields" },
+        ],
+      },
+    });
+    // Setup order decides priority, not list order.
+    expect(wrapper.get("#build-readiness-title").text()).toBe("Choose a source to continue");
+    await buttonByText(wrapper, "Fix").trigger("click");
+    expect(wrapper.emitted("editSection")).toEqual([["source"]]);
+    expect(wrapper.get(".build-command-warning").text()).toContain("1");
   });
 
   it("keeps automatic limits valid as the target changes, without touching custom ones", async () => {

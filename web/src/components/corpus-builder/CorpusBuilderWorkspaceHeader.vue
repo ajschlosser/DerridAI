@@ -1,43 +1,41 @@
 <script setup lang="ts">
+// Copyright 2026 Aaron John Schlosser, PhD.
 import { computed } from "vue";
 import { useI18nStore } from "../../stores/i18n";
+import type {
+  CorpusPrimaryStatus,
+  CorpusWorkflowStep,
+} from "../../features/corpus-builder/domain/workflowPresentation";
+import type { CorpusWorkspace } from "../../features/corpus-builder/domain/workspace";
 
 const props = withDefaults(
   defineProps<{
     sourceFilename?: string;
     buildId?: string;
     publicationId?: string;
-    stage?: string;
-    status?: string;
+    status?: CorpusPrimaryStatus | null;
     recordCount?: number;
     acceptedCount?: number;
-    workspace?: "setup" | "build" | "review";
-    canBuild?: boolean;
-    canReview?: boolean;
+    workspace?: CorpusWorkspace;
+    steps?: CorpusWorkflowStep[];
     sticky?: boolean;
   }>(),
   {
     sourceFilename: "",
     buildId: "",
     publicationId: "",
-    stage: "",
-    status: "",
+    status: null,
     recordCount: 0,
     acceptedCount: 0,
     workspace: "setup",
-    canBuild: false,
-    canReview: false,
+    steps: () => [],
     sticky: true,
   },
 );
 
-const emit = defineEmits<{ workspace: [value: "setup" | "build" | "review"] }>();
+const emit = defineEmits<{ workspace: [value: CorpusWorkspace] }>();
 const i18n = useI18nStore();
 const contextual = computed(() => Boolean(props.sourceFilename || props.buildId));
-const lifecycleLabel = computed(() => {
-  const raw = props.publicationId ? "published" : props.stage || props.status;
-  return raw ? raw.replaceAll("_", " ").replace(/\b\w/g, (match) => match.toUpperCase()) : "";
-});
 const progressLabel = computed(() => {
   if (!props.recordCount) return "";
   return i18n.tf("pdf_corpus.workspace.record_progress", "{accepted} of {total} Records accepted", {
@@ -45,6 +43,9 @@ const progressLabel = computed(() => {
     total: props.recordCount.toLocaleString(),
   });
 });
+function stepLabel(step: CorpusWorkflowStep) {
+  return i18n.t(`pdf_corpus.workspace.${step.id}`);
+}
 </script>
 
 <template>
@@ -53,48 +54,52 @@ const progressLabel = computed(() => {
       <span class="eyebrow">{{ i18n.t("pdf_corpus.eyebrow") }}</span>
       <div class="corpus-workspace-title-row">
         <h1 id="pdf-corpus-builder-title">{{ i18n.t("pdf_corpus.title") }}</h1>
-        <span v-if="contextual && lifecycleLabel" class="corpus-workspace-stage">
-          {{ lifecycleLabel }}
-        </span>
       </div>
       <p v-if="!contextual" class="corpus-workspace-intro">
         {{ i18n.t("pdf_corpus.subtitle") }}
       </p>
       <div v-else class="corpus-workspace-context">
         <strong v-if="sourceFilename">{{ sourceFilename }}</strong>
-        <span v-if="progressLabel">{{ progressLabel }}</span>
-        <span v-if="publicationId">
-          {{ i18n.t("pdf_corpus.workflow.publish", "Publish") }} · {{ publicationId }}
+        <span v-if="status" class="corpus-workspace-stage" :data-tone="status.tone">
+          {{ status.label }}
         </span>
-        <span v-else-if="buildId">{{ buildId }}</span>
+        <span v-if="progressLabel">{{ progressLabel }}</span>
+        <details v-if="buildId" class="corpus-workspace-build-details">
+          <summary>{{ i18n.t("pdf_corpus.workspace.build_details") }}</summary>
+          <dl>
+            <dt>{{ i18n.t("pdf_corpus.build_id") }}</dt>
+            <dd>
+              <code>{{ buildId }}</code>
+            </dd>
+            <template v-if="publicationId">
+              <dt>{{ i18n.t("pdf_corpus.publication_id") }}</dt>
+              <dd>
+                <code>{{ publicationId }}</code>
+              </dd>
+            </template>
+          </dl>
+        </details>
       </div>
       <nav class="workspace-mode-nav" :aria-label="i18n.t('pdf_corpus.workspace.navigation')">
-        <button
-          type="button"
-          :aria-pressed="workspace === 'setup'"
-          :class="{ active: workspace === 'setup' }"
-          @click="emit('workspace', 'setup')"
-        >
-          {{ i18n.t("pdf_corpus.workspace.setup") }}
-        </button>
-        <button
-          type="button"
-          :disabled="!canBuild"
-          :aria-pressed="workspace === 'build'"
-          :class="{ active: workspace === 'build' }"
-          @click="emit('workspace', 'build')"
-        >
-          {{ i18n.t("pdf_corpus.workspace.build") }}
-        </button>
-        <button
-          type="button"
-          :disabled="!canReview"
-          :aria-pressed="workspace === 'review'"
-          :class="{ active: workspace === 'review' }"
-          @click="emit('workspace', 'review')"
-        >
-          {{ i18n.t("pdf_corpus.workspace.review") }}
-        </button>
+        <ol>
+          <li v-for="step in steps" :key="step.id">
+            <button
+              type="button"
+              :disabled="!step.available"
+              :data-state="step.state"
+              :aria-current="step.state === 'current' ? 'step' : undefined"
+              @click="emit('workspace', step.id)"
+            >
+              <span class="step-mark" aria-hidden="true">{{
+                step.state === "complete" ? "✓" : ""
+              }}</span>
+              {{ stepLabel(step) }}
+              <span v-if="step.state === 'complete'" class="sr-only">
+                {{ i18n.t("pdf_corpus.workspace.step_complete") }}
+              </span>
+            </button>
+          </li>
+        </ol>
       </nav>
     </div>
     <div class="corpus-workspace-actions">
@@ -134,25 +139,9 @@ const progressLabel = computed(() => {
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
-.corpus-workspace-title-row {
-  display: flex;
-  gap: var(--space-3);
-  align-items: center;
-  min-width: 0;
-}
 .corpus-workspace-title-row h1 {
   margin: 0.15rem 0;
   font-size: clamp(1.35rem, 2vw, 1.7rem);
-}
-.corpus-workspace-stage {
-  flex: 0 0 auto;
-  padding: 0.28rem 0.55rem;
-  border: 1px solid var(--border-subtle);
-  border-radius: 999px;
-  background: var(--surface-subtle);
-  color: var(--text-secondary);
-  font-size: var(--fs-xs);
-  font-weight: var(--fw-semibold);
 }
 .corpus-workspace-intro {
   max-width: 78ch;
@@ -176,24 +165,76 @@ const progressLabel = computed(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.corpus-workspace-context span:last-child {
-  font-family: var(--font-mono, ui-monospace, monospace);
+.corpus-workspace-stage {
+  flex: 0 0 auto;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-subtle);
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}
+.corpus-workspace-stage[data-tone="info"] {
+  border-color: var(--tone-info-border);
+  background: var(--tone-info-bg);
+  color: var(--tone-info-fg);
+}
+.corpus-workspace-stage[data-tone="success"] {
+  border-color: var(--tone-ok-border);
+  background: var(--tone-ok-bg);
+  color: var(--tone-ok-fg);
+}
+.corpus-workspace-stage[data-tone="warning"] {
+  border-color: var(--tone-warn-border);
+  background: var(--tone-warn-bg);
+  color: var(--tone-warn-fg);
+}
+.corpus-workspace-stage[data-tone="danger"] {
+  border-color: var(--tone-danger-border);
+  background: var(--tone-danger-bg);
+  color: var(--tone-danger-fg);
+}
+.corpus-workspace-build-details summary {
+  cursor: pointer;
   font-size: var(--fs-xs);
 }
-.workspace-mode-nav {
+.corpus-workspace-build-details summary:focus-visible {
+  outline: 3px solid var(--ui-accent-focus);
+  outline-offset: 2px;
+}
+.corpus-workspace-build-details dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-1) 0 0;
+}
+.corpus-workspace-build-details dd {
+  margin: 0;
+}
+.corpus-workspace-build-details code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+.workspace-mode-nav ol {
   display: inline-flex;
   gap: 2px;
-  margin-top: var(--space-2);
+  margin: var(--space-2) 0 0;
   padding: 3px;
+  list-style: none;
   border: 1px solid var(--border-subtle);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   background: var(--surface-subtle);
 }
 .workspace-mode-nav button {
   min-height: 34px;
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
   padding: 0.35rem 0.75rem;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
@@ -201,13 +242,19 @@ const progressLabel = computed(() => {
   font-size: var(--fs-sm);
   font-weight: var(--fw-semibold);
 }
-.workspace-mode-nav button.active {
+.workspace-mode-nav button[data-state="current"] {
   background: var(--surface-raised);
   color: var(--text-primary);
   box-shadow: var(--shadow-sm);
 }
+.workspace-mode-nav button[data-state="complete"] .step-mark {
+  color: var(--tone-ok-fg);
+}
+.step-mark:empty {
+  display: none;
+}
 .workspace-mode-nav button:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  outline: 3px solid var(--ui-accent-focus);
   outline-offset: 1px;
 }
 .workspace-mode-nav button:disabled {
@@ -226,6 +273,9 @@ const progressLabel = computed(() => {
     position: static;
     grid-template-columns: 1fr;
     align-items: start;
+  }
+  .corpus-workspace-header.sticky {
+    position: static;
   }
   .corpus-workspace-actions {
     justify-content: flex-start;
