@@ -30,9 +30,10 @@ withDefaults(
   fill: none;
   stroke: var(--relation-node-halo, transparent);
   stroke-width: 3;
+  stroke-opacity: var(--relation-node-halo-opacity, 1);
 }
 .dot {
-  fill: var(--relation-node-dot, var(--accent));
+  fill: var(--relation-node-dot, var(--hue, var(--accent)));
   stroke: var(--relation-node-dot-border, var(--surface-raised));
   stroke-width: 1.5;
 }
