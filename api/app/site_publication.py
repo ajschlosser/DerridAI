@@ -10,10 +10,11 @@ import json
 import re
 import uuid
 import zipfile
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 from .corpus_publication import serialize_public_record, validate_publication_record
 from .locales.en_us import EN_US
