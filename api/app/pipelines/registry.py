@@ -441,6 +441,24 @@ DEFAULT_STRATEGIES = [
         },
     ),
     StrategySpec(
+        strategy_id="llm.boundary_classification",
+        family="llm",
+        label="Boundary classification",
+        description="Ask a chat model a closed-choice question about a record boundary: split or keep an ambiguous transition, or whether a suspicious record seam should stay or move. Returned block IDs are checked deterministically; a failed, omitted, or low-confidence answer keeps the boundary. The stage chooses which configured provider answers and how many attempts it gets.",
+        input_type="context_packet",
+        output_type="model_output",
+        deterministic=False,
+        invokes_llm=True,
+        capabilities=["chat_model", "structured_output"],
+        config_schema={
+            "type": "object",
+            "properties": {
+                "provider_role": {"type": "string", "enum": ["primary", "review"], "default": "primary"},
+                "attempts": {**_integer(1, 4), "default": 2},
+            },
+        },
+    ),
+    StrategySpec(
         strategy_id="llm.closed_choice_evidence",
         family="llm",
         label="Closed-choice evidence selection",

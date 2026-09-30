@@ -879,12 +879,50 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
             },
         ],
     ),
+    _pipeline(
+        pipeline_id="corpus.segmentation.current",
+        version=1,
+        name="Corpus segmentation — current",
+        purpose="corpus_segmentation",
+        status="active",
+        entry_stage_ids=["primary"],
+        notes=(
+            "Runs each boundary question on the build's primary provider with "
+            "two attempts: the batch classifier for transitions that "
+            "deterministic routing left ambiguous, and the second reader for "
+            "suspicious record seams. When those fail or time out and the build "
+            "configures a review provider, the review provider gets two attempts "
+            "of its own. A failed, omitted, or low-confidence answer keeps the "
+            "boundary; returned block IDs are checked after this pipeline."
+        ),
+        stages=[
+            {
+                "id": "primary",
+                "strategy": "llm.boundary_classification",
+                "config": {"provider_role": "primary", "attempts": 2},
+                "on_error": "review",
+                "on_timeout": "review",
+            },
+            {
+                "id": "review",
+                "strategy": "llm.boundary_classification",
+                "config": {"provider_role": "review", "attempts": 2},
+            },
+        ],
+    ),
 )
 
 BUILT_IN_ASSIGNMENTS: tuple[PipelineAssignment, ...] = (
     PipelineAssignment(
         feature="corpus_metadata_enrichment",
         pipeline_id="corpus.metadata_enrichment.current",
+        pipeline_version=1,
+        source="built_in",
+        override_allowed=True,
+    ),
+    PipelineAssignment(
+        feature="corpus_segmentation",
+        pipeline_id="corpus.segmentation.current",
         pipeline_version=1,
         source="built_in",
         override_allowed=True,

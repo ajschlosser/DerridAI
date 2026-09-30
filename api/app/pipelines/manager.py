@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from .corpus_metadata_enrichment import ENRICHMENT_FEATURE, compile_enrichment_pipeline
+from .corpus_segmentation import SEGMENTATION_FEATURE, compile_segmentation_pipeline
 from .defaults import (
     BUILT_IN_ASSIGNMENTS,
     BUILT_IN_PIPELINES,
@@ -218,6 +219,8 @@ class PipelineManager:
             compile_remap_pipeline(pipeline)
         elif assignment.feature == ENRICHMENT_FEATURE:
             compile_enrichment_pipeline(pipeline)
+        elif assignment.feature == SEGMENTATION_FEATURE:
+            compile_segmentation_pipeline(pipeline)
         elif assignment.feature == PREFILL_FEATURE:
             compile_prefill_pipeline(pipeline)
         elif assignment.feature == SEARCH_FEATURE:
@@ -271,6 +274,9 @@ class PipelineManager:
             if pipeline.purpose == "corpus_metadata_enrichment":
                 compile_enrichment_pipeline(pipeline)
                 return {"supported": True, "adapter": "corpus_metadata_enrichment"}
+            if pipeline.purpose == "corpus_segmentation":
+                compile_segmentation_pipeline(pipeline)
+                return {"supported": True, "adapter": "corpus_segmentation"}
             if pipeline.purpose == "precedent_evidence_remap":
                 compile_remap_pipeline(pipeline)
                 return {"supported": True, "adapter": "precedent_evidence_remap"}

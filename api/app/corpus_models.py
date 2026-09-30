@@ -179,29 +179,6 @@ BoundaryDimension = Literal[
 
 
 
-class CompactBoundaryDecisionModel(BaseModel):
-    """Compact boundary response used by book-scale segmentation.
-
-    Large prose reasons and nested boolean objects were a major source of local
-    model truncation. The corpus builder asks only for the topology-changing
-    facts here; uncertain boundaries can be adjudicated in a later, smaller call.
-    """
-    model_config = ConfigDict(extra="forbid")
-    after: str = Field(min_length=1, max_length=200)
-    decision: Literal["split", "keep", "uncertain"] = "uncertain"
-    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
-    changes: list[BoundaryDimension] = Field(default_factory=list, max_length=7)
-
-
-
-class PairBoundaryResponseModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    decision: Literal["split", "keep", "uncertain"] = "uncertain"
-    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
-    changes: list[BoundaryDimension] = Field(default_factory=list, max_length=7)
-
-
-
 class BatchBoundaryDecisionModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
     after: str = Field(min_length=1, max_length=200)
@@ -231,12 +208,6 @@ class BoundaryAuditDecisionModel(BaseModel):
 class BoundaryAuditResponseModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
     decisions: list[BoundaryAuditDecisionModel] = Field(default_factory=list, max_length=12)
-
-
-
-class CompactSegmentationResponseModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    boundaries: list[CompactBoundaryDecisionModel] = Field(default_factory=list, max_length=96)
 
 
 

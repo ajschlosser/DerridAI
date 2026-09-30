@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib
 import re
+import types
 from pathlib import Path
 
 corpus_segmentation_execution = importlib.import_module("app.corpus_segmentation_execution")
@@ -67,12 +68,17 @@ def test_record_audit_and_research_prompts_use_document_author_context() -> None
 
 
 class _SegmentationProbe(corpus_segmentation_execution.BuildSegmentationExecutionMixin):
-    def __init__(self) -> None:
-        self.last_prompt = ""
+    """Captures each boundary prompt instead of asking a model."""
 
-    def _chat_json(self, request, prompt, **kwargs):
-        self.last_prompt = prompt
-        return {"decision": "keep", "confidence": 1.0, "changes": []}
+    def __init__(self) -> None:
+        self.prompts: list[str] = []
+
+    def _boundary_call(self, session, request, prompt, **kwargs):
+        self.prompts.append(prompt)
+        return {"decisions": []}
+
+    def _boundary_editorial_examples(self, build_id, limit=3):
+        return []
 
 
 def test_segmentation_prompts_receive_document_author_dynamically() -> None:
@@ -87,22 +93,24 @@ def test_segmentation_prompts_receive_document_author_dynamically() -> None:
         {"block_id": "b1", "page": 1, "type": "paragraph", "text": "First passage."},
         {"block_id": "b2", "page": 1, "type": "paragraph", "text": "Second passage."},
     ]
+    request = {"provider": "ollama", "model": "test-model"}
 
-    compact = probe._compact_segment_prompt(blocks, manifest)
-    assert '"document_author": "Sample Author"' in compact
-    assert "source-document authorship context" in compact
-
-    decision, failure = probe._segment_pair(
-        blocks[0],
-        blocks[1],
-        manifest,
-        {"provider": "ollama", "model": "test-model"},
-        "build-test",
+    probe._segment_candidate_batch(
+        [{"index": 0, "after_block_id": "b1", "signals": []}], blocks, manifest, request, "build-test", session=None
     )
-    assert failure is None
-    assert decision is not None
-    assert '"document_author": "Sample Author"' in probe.last_prompt
-    assert "source-document authorship context" in probe.last_prompt
+    probe._adjudicate_record_boundary_pair(
+        {"record_id": "r1", "text": "First passage.", "source_block_ids": ["b1"]},
+        {"record_id": "r2", "text": "Second passage.", "source_block_ids": ["b2"]},
+        manifest,
+        request,
+        "build-test",
+        session=types.SimpleNamespace(identity=dict),
+    )
+
+    assert len(probe.prompts) == 2
+    for prompt in probe.prompts:
+        assert '"document_author": "Sample Author"' in prompt
+        assert "source-document authorship context" in prompt
 
 
 def test_rag_grader_uses_evidence_document_author(monkeypatch) -> None:

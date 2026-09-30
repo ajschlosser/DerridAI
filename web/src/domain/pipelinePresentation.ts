@@ -22,6 +22,7 @@ export function pipelinePurposeLabel(purpose: string, t: PipelineTranslator) {
       "pipelines.purpose_corpus_metadata_enrichment",
       "Corpus metadata enrichment",
     ),
+    corpus_segmentation: t("pipelines.purpose_corpus_segmentation", "Corpus segmentation"),
     metadata_precedents: t("pipelines.purpose_precedents", "Metadata precedents"),
     claim_memory: t("pipelines.purpose_claim_memory", "Claim memory"),
     response_memory: t("pipelines.purpose_response_memory", "Response memory"),
