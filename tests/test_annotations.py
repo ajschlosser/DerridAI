@@ -4,9 +4,8 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
-
 from app.models import AnnotationCreateRequest, AnnotationReplyRequest
+from pydantic import ValidationError
 
 
 def test_legacy_annotation_shape_derives_scope_from_quote() -> None:

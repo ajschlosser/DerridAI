@@ -1070,7 +1070,7 @@ class AnnotationCreateRequest(BaseModel):
     tags: list[str] = Field(default_factory=list, max_length=100)
 
     @model_validator(mode="after")
-    def validate_scope_targets(self) -> "AnnotationCreateRequest":
+    def validate_scope_targets(self) -> AnnotationCreateRequest:
         if self.scope is None:
             self.scope = "text" if self.quote.strip() else "record"
         if self.scope in {"text", "record"} and not self.record_id:
@@ -1088,6 +1088,12 @@ class AnnotationReplyRequest(BaseModel):
     note: str = Field(default="", max_length=20000)
     quote: str = Field(default="", max_length=10000)
     tags: list[str] = Field(default_factory=list, max_length=100)
+
+    @model_validator(mode="after")
+    def validate_content(self) -> AnnotationReplyRequest:
+        if not self.note.strip() and not self.quote.strip() and not self.tags:
+            raise ValueError("Replies require text or tags.")
+        return self
 
 
 class LanguageDictionaryUpdate(BaseModel):
