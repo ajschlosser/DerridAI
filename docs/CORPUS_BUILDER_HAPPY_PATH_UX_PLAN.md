@@ -114,12 +114,12 @@ The unreviewed shortcut must continue using the existing publication semantics a
 
 ### Phase 0 — Baseline and safety net
 
-Status: **in progress**
+Status: **complete**
 
 - [x] Create this implementation branch from latest `master`.
 - [x] Document the implementation plan before changing behavior.
-- [ ] Re-read current Corpus Builder characterization/workspace/build-review tests before changing markup.
-- [ ] Identify i18n source files for all touched Corpus Builder copy.
+- [x] Re-read current Corpus Builder characterization/workspace/build-review tests before changing markup.
+- [x] Identify i18n source files for all touched Corpus Builder copy (`api/app/locales/{en_us,fr_ca}.py` with `web/src/i18n/enUsDefaults.json` as the frontend English fallback snapshot).
 - [ ] Preserve route-backed workspace behavior and existing deep links.
 - [ ] Add/adjust focused tests before or alongside each behavioral change.
 
@@ -201,16 +201,16 @@ Goal: turn the build screen into a live, legible work surface.
 
 ### Phase 4 — Persistent run control in Review
 
-Status: **not started**
+Status: **in progress**
 
 Goal: allow researchers to control the build without leaving Review.
 
-- [ ] Add **Pause** to `CorpusReviewRunStatus.vue` while active.
-- [ ] Keep **Resume** for resumable states.
+- [x] Add **Pause** to `CorpusReviewRunStatus.vue` while the corpus build itself is active.
+- [x] Keep **Resume** for resumable states.
 - [ ] Keep cancel/settle/provider switching inside expanded details unless it is contextually primary.
-- [ ] Present active state as a compact run pill such as “Enriching · 63% · model”.
-- [ ] Wire pause through `CorpusReviewHeader` / `PdfCorpusBuilder.vue`.
-- [ ] Add tests proving Pause is available from Review and does not require navigation.
+- [x] Preserve the existing compact active-state label (“Enriching/Running · percent · model”).
+- [x] Wire pause from the Review run control through `PdfCorpusBuilder.vue` to the existing lifecycle pause mutation.
+- [x] Add a focused component test proving Pause is available and emits directly from Review.
 - [ ] Ensure live updates do not steal keyboard focus.
 
 ### Phase 5 — Review command hierarchy and bulk happy paths
@@ -357,3 +357,12 @@ Work on this branch will be committed in coherent checkpoints. At each checkpoin
 - Audited the current Setup, Build, Review, Publish composition and existing happy-path capabilities.
 - Confirmed the implementation already supports concurrent build/review state, pause/resume at the build layer, bulk “ready” acceptance, and provenance-safe unreviewed publication.
 - Added this implementation plan before behavior changes.
+
+
+### Checkpoint 1 — pause/resume from Review
+
+- Added an always-visible **Pause** action beside the compact run monitor when the corpus build is actively queued/running in Review.
+- Routed the action to the existing durable `pauseBuild` lifecycle operation, so checkpoint/resume behavior is unchanged.
+- Kept metadata-only follow-up operations distinct: Pause is shown only for the corpus build itself rather than implying that every auxiliary operation shares the same pause semantics.
+- Added focused component coverage for the Review pause action.
+- No new copy was required; the existing localized Pause/Resume strings are reused.
