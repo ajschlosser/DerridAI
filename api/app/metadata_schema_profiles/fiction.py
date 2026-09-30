@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from ..metadata_schema import MetadataSchema, SchemaGroup
+from ..metadata_schema import EquivalenceProfile, MetadataSchema, SchemaGroup
 from .common import PROFILE_FOOTER, profile_field
 
 FICTION_SCHEMA_ID = "derridai-fiction"
@@ -37,6 +37,20 @@ _TEMPORAL_RELATION_VALUES = {
     "simultaneous_or_present": "The narration is organized around an ongoing or narratively present event.",
     "mixed": "More than one temporal relation materially structures the record.",
     "indeterminate": "The temporal relation cannot be determined reliably from this record.",
+}
+
+
+# Value matching for review feedback and precedent grouping. Fictional characters are their
+# own identity kind, so a character never merges with a real person of the same name.
+_CHARACTER = EquivalenceProfile(mode="entity_name", identity_kind="character")
+_EQUIVALENCE = {
+    **{name: _CHARACTER for name in (
+        "narrator", "focalizers", "characters_present", "characters_mentioned",
+        "dialogue_speakers", "dialogue_addressees", "reported_speech_sources",
+    )},
+    "themes": EquivalenceProfile(mode="lexical_phrase", identity_kind="theme"),
+    "motifs": EquivalenceProfile(mode="lexical_phrase", identity_kind="motif"),
+    "symbols": EquivalenceProfile(mode="lexical_phrase", identity_kind="symbol"),
 }
 
 
@@ -293,9 +307,13 @@ def fiction_schema() -> MetadataSchema:
             pos_tags=("NOUN", "ADJ"),
         ),
     ]
+    fields = [
+        field.model_copy(update={"equivalence_profile": _EQUIVALENCE[field.name]}) if field.name in _EQUIVALENCE else field
+        for field in fields
+    ]
     return MetadataSchema(
         id=FICTION_SCHEMA_ID,
-        schema_version="1.0.0",
+        schema_version="1.1.0",
         name="Fiction",
         description=(
             "Narrative voice, point of view, characters, storyworld, dialogue, temporal structure, "

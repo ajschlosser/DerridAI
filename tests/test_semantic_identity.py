@@ -235,3 +235,36 @@ def test_unset_policy_does_not_change_a_schema_hash():
     assert MetadataSchema.model_validate(body).content_hash() == before
     body["fields"][0]["equivalence_profile"] = {"mode": "exact"}
     assert MetadataSchema.model_validate(body).content_hash() != before
+
+
+def test_builtin_profiles_declare_person_character_and_concept_policies():
+    from app.metadata_schema_profiles.fiction import fiction_schema
+    from app.metadata_schema_profiles.nonfiction import nonfiction_schema
+
+    fiction, nonfiction = fiction_schema(), nonfiction_schema()
+    assert fiction.equivalence_profile_for("dialogue_speakers").mode == "entity_name"
+    # A fictional character never shares an identity with a real person of the same name.
+    assert fiction.equivalence_profile_for("characters_present").identity_kind == "character"
+    assert nonfiction.equivalence_profile_for("persons").identity_kind == "person"
+    assert fiction.equivalence_profile_for("motifs").mode == "lexical_phrase"
+    assert nonfiction.equivalence_profile_for("topics").mode == "lexical_phrase"
+
+
+def test_lemma_tokens_reuse_the_annotation_pipeline_and_require_a_lemmatizer(monkeypatch):
+    from types import SimpleNamespace
+
+    from app import nlp_annotations
+
+    class Pipeline:
+        def __init__(self, names):
+            self.pipe_names = names
+
+        def __call__(self, text):
+            return [SimpleNamespace(text=w, lemma_=w.rstrip("s"), pos_="NOUN") for w in text.split()]
+
+    monkeypatch.setattr(nlp_annotations, "load_pipeline", lambda code: Pipeline(["tagger", "lemmatizer"]))
+    assert nlp_annotations.lemma_tokens("boundaries", "English") == [("boundaries", "boundarie", "NOUN")]
+    # The multilingual entity fallback has no lemmatizer: unavailable, not surface text.
+    monkeypatch.setattr(nlp_annotations, "load_pipeline", lambda code: Pipeline(["ner"]))
+    assert nlp_annotations.lemma_tokens("boundaries", "en") is None
+    assert nlp_annotations.lemma_tokens("boundaries", "") is None
