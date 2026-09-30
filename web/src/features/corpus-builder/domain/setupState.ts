@@ -196,6 +196,12 @@ export function corpusSetupSectionStates(
       input.enrichmentMode === "deep"
         ? text.t("pdf_corpus.enrichment_deep")
         : text.t("pdf_corpus.enrichment_fast"),
+      // Off is the absence of Document Intelligence, so it adds nothing to the summary.
+      input.documentIntelligenceProfile && input.documentIntelligenceProfile !== "none"
+        ? `${text.t("pdf_corpus.document_intelligence")}: ${text.t(
+            `pdf_corpus.document_intelligence_${input.documentIntelligenceProfile}`,
+          )}`
+        : "",
     ]
       .filter(Boolean)
       .join(" · "),

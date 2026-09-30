@@ -310,49 +310,6 @@ summary:focus-visible {
   margin-inline-start: auto;
 }
 
-/* Review: the inspector. */
-.review-inspector {
-  min-width: 0;
-  overflow-x: hidden;
-  border-inline-start: 1px solid var(--border-subtle);
-  background: var(--surface-card);
-}
-.review-inspector-tabs {
-  position: sticky;
-  top: 0;
-  z-index: 6;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  background: var(--surface-card);
-  border-bottom: 1px solid var(--border-subtle);
-}
-.review-inspector-tabs button {
-  min-height: 48px;
-  border: 0;
-  border-inline-end: 1px solid var(--border-subtle);
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 0.8125rem;
-  font-weight: 800;
-  cursor: pointer;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 6px;
-}
-.review-inspector-tabs button[aria-selected="true"] {
-  background: var(--surface-subtle);
-  color: var(--text-primary);
-  box-shadow: inset 0 -3px 0 var(--ui-accent);
-}
-.review-inspector-tabs button span {
-  min-width: 18px;
-  border-radius: 999px;
-  background: var(--tone-warn-bg);
-  color: var(--tone-warn-fg);
-  padding: 1px 5px;
-  font-size: 0.8125rem;
-}
 .review-inspector-panel {
   min-width: 0;
   padding: 12px 14px 16px;
@@ -436,37 +393,6 @@ summary:focus-visible {
   min-height: 36px;
   font-size: 0.8125rem;
 }
-/* Metadata and Source detail layouts: the record pane is hidden, the inspector fills the grid. */
-.detail-mode .review-inspector {
-  grid-column: auto;
-}
-.detail-workspace-head {
-  position: sticky;
-  top: 0;
-  z-index: 7;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  padding: 16px 18px;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--surface-card);
-}
-.detail-workspace-head h3 {
-  margin: 2px 0 4px;
-  font-size: 1.05rem;
-}
-.detail-workspace-head p {
-  margin: 0;
-  max-width: 78ch;
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-  line-height: 1.5;
-}
-.detail-mode .review-inspector-tabs {
-  top: 94px;
-}
-
 /* Accessible type floor for dense Corpus Builder controls. */
 .corpus-builder small,
 .corpus-builder label,
@@ -475,14 +401,7 @@ summary:focus-visible {
   font-size: 0.8125rem !important;
   line-height: 1.4;
 }
-.corpus-builder
-  :where(
-    .eyebrow,
-    .help,
-    .record-review-head p,
-    .review-inspector-tabs button,
-    .review-inspector-tabs button span
-  ) {
+.corpus-builder :where(.eyebrow, .help, .record-review-head p) {
   font-size: 0.8125rem !important;
   line-height: 1.4;
 }
@@ -498,12 +417,6 @@ summary:focus-visible {
   }
 }
 @media (max-width: 1050px) {
-  .detail-workspace-head {
-    position: static;
-  }
-  .detail-mode .review-inspector-tabs {
-    top: 0;
-  }
 }
 @media (max-width: 760px) {
   .record-primary-text {
@@ -516,8 +429,5 @@ summary:focus-visible {
   }
   .document-metadata-launch .btn {
     width: 100%;
-  }
-  .review-inspector-tabs {
-    top: 0;
   }
 }

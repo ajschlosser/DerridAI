@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UiButton from "./ui/UiButton.vue";
 import { computed, ref } from "vue";
 import type { CorpusBuild } from "../api/pdfCorpus";
 import { useI18nStore } from "../stores/i18n";
@@ -142,10 +143,9 @@ function fixBlocker(code?: string) {
           :href="`/api/pdf/publications/${encodeURIComponent(publication.publication_id)}/download`"
           >{{ primaryLabel }}</a
         >
-        <button
+        <UiButton
+          variant="primary"
           v-else
-          type="button"
-          class="btn primary"
           :disabled="
             busy ||
             (!noPublishable &&
@@ -159,7 +159,7 @@ function fixBlocker(code?: string) {
           @click="act"
         >
           {{ primaryLabel }}
-        </button>
+        </UiButton>
       </div>
     </div>
 
@@ -177,13 +177,13 @@ function fixBlocker(code?: string) {
         <p>{{ i18n.t("pdf_corpus.no_publishable_help") }}</p>
       </div>
       <div class="readiness-actions">
-        <button type="button" class="btn primary" @click="emit('reviewRejected')">
-          {{ i18n.t("pdf_corpus.return_to_review") }}</button
-        ><button type="button" class="btn" :disabled="busy" @click="emit('restoreRejected')">
-          {{ i18n.t("pdf_corpus.restore_all_rejected") }}</button
-        ><button type="button" class="btn" @click="emit('startNew')">
+        <UiButton variant="primary" @click="emit('reviewRejected')">
+          {{ i18n.t("pdf_corpus.return_to_review") }}</UiButton
+        ><UiButton :disabled="busy" @click="emit('restoreRejected')">
+          {{ i18n.t("pdf_corpus.restore_all_rejected") }}</UiButton
+        ><UiButton @click="emit('startNew')">
           {{ i18n.t("pdf_corpus.start_new_build") }}
-        </button>
+        </UiButton>
       </div>
     </section>
 
@@ -322,22 +322,18 @@ function fixBlocker(code?: string) {
           </div>
         </dl>
         <div class="readiness-actions">
-          <button
+          <UiButton
             v-if="Number(readiness.records_pending || 0) > 0"
-            type="button"
-            class="btn"
             @click="emit('reviewRecords')"
           >
             {{ i18n.t("pdf_corpus.continue_review") }}
-          </button>
-          <button
+          </UiButton>
+          <UiButton
             v-if="Number(readiness.records_rejected || 0) > 0"
-            type="button"
-            class="btn"
             @click="emit('reviewRejected')"
           >
             {{ i18n.t("pdf_corpus.review_rejected_records") }}
-          </button>
+          </UiButton>
         </div>
       </section>
 
@@ -379,21 +375,17 @@ function fixBlocker(code?: string) {
           </div>
         </dl>
         <div class="readiness-actions">
-          <button
+          <UiButton
             v-if="Number(summary.fields_unresolved || 0) > 0"
-            type="button"
-            class="btn"
             @click="emit('reviewMetadata')"
           >
             {{ i18n.t("pdf_corpus.open_metadata_queue") }}
-          </button>
-          <button
+          </UiButton>
+          <UiButton
             v-if="
               Number(summary.fields_unresolved || 0) > 0 &&
               Number(summary.auto_retry_fields || 0) > 0
             "
-            type="button"
-            class="btn"
             :disabled="busy"
             @click="emit('retryMetadata')"
           >
@@ -402,10 +394,10 @@ function fixBlocker(code?: string) {
                 count: Number(summary.auto_retry_fields || 0),
               })
             }}
-          </button>
-          <button type="button" class="btn" :disabled="busy" @click="emit('rerunEnrichment')">
+          </UiButton>
+          <UiButton :disabled="busy" @click="emit('rerunEnrichment')">
             {{ i18n.t("pdf_corpus.metadata_enrichment_again") }}
-          </button>
+          </UiButton>
         </div>
       </section>
 
@@ -467,14 +459,9 @@ function fixBlocker(code?: string) {
           </div>
         </dl>
         <div class="readiness-actions">
-          <button
-            v-if="!validation.valid"
-            type="button"
-            class="btn"
-            @click="emit('reviewValidation')"
-          >
+          <UiButton v-if="!validation.valid" @click="emit('reviewValidation')">
             {{ i18n.t("pdf_corpus.review_validation_issues") }}
-          </button>
+          </UiButton>
         </div>
         <div v-if="groupedValidationIssues.length" class="validation-issue-summary">
           <b>{{ validationIssueSummaryLabel }}</b>
@@ -584,7 +571,8 @@ function fixBlocker(code?: string) {
   min-width: 0;
   align-items: center;
 }
-.publication-primary .btn {
+.publication-primary :deep(.btn),
+.publication-primary :deep(.ui-button) {
   max-width: 100%;
   white-space: normal;
 }
@@ -844,7 +832,8 @@ dd {
   .no-publishable {
     display: grid;
   }
-  .publication-primary .btn {
+  .publication-primary :deep(.btn),
+  .publication-primary :deep(.ui-button) {
     width: 100%;
   }
   .publication-snapshot {

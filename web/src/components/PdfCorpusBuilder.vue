@@ -39,8 +39,6 @@ import {
 } from "../api/metadataSchemas";
 import UiDialog from "./ui/UiDialog.vue";
 import UiButton from "./ui/UiButton.vue";
-import UiTooltip from "./ui/UiTooltip.vue";
-import LlmExecutionControl from "./LlmExecutionControl.vue";
 import { useCorpusBuildLifecycle } from "../composables/useCorpusBuildLifecycle";
 import { usePdfCorpusPaneSizing } from "../composables/usePdfCorpusPaneSizing";
 import { useCorpusIngestWarning } from "../composables/useCorpusIngestWarning";
@@ -75,6 +73,9 @@ import CorpusSetupWorkspace from "./corpus-builder/CorpusSetupWorkspace.vue";
 import CorpusBuildWorkspace from "./corpus-builder/CorpusBuildWorkspace.vue";
 import CorpusReviewWorkspace from "./corpus-builder/CorpusReviewWorkspace.vue";
 import CorpusPublishWorkspace from "./corpus-builder/CorpusPublishWorkspace.vue";
+import CorpusReviewRecordPane from "./corpus-builder/CorpusReviewRecordPane.vue";
+import CorpusReviewAdvancedMetadata from "./corpus-builder/CorpusReviewAdvancedMetadata.vue";
+import CorpusReviewInspector from "./corpus-builder/CorpusReviewInspector.vue";
 import CorpusReviewHeader from "./corpus-builder/CorpusReviewHeader.vue";
 import CorpusReviewRunStatus from "./corpus-builder/CorpusReviewRunStatus.vue";
 import {
@@ -93,8 +94,6 @@ import CorpusReviewEvidencePanel from "./corpus-builder/CorpusReviewEvidencePane
 import CorpusRecordSizeAdvice from "./CorpusRecordSizeAdvice.vue";
 import CorpusUnitPolicy from "./CorpusUnitPolicy.vue";
 import CorpusReviewSourcePanel from "./corpus-builder/CorpusReviewSourcePanel.vue";
-import RecordContextReader from "./corpus-builder/RecordContextReader.vue";
-import MovableRecordModal from "./corpus-builder/MovableRecordModal.vue";
 import CorpusEnrichmentConfiguration from "./corpus-builder/CorpusEnrichmentConfiguration.vue";
 import CorpusSemanticGraphPanel from "./corpus-builder/CorpusSemanticGraphPanel.vue";
 import CorpusSemanticAliasPanel from "./corpus-builder/CorpusSemanticAliasPanel.vue";
@@ -105,7 +104,6 @@ import { missingRequiredDocumentFields, suppliedDocumentMetadata } from "../doma
 import CorpusAdvancedConfiguration from "./corpus-builder/CorpusAdvancedConfiguration.vue";
 import { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
 import CorpusRecordDecisionDock from "./corpus-builder/CorpusRecordDecisionDock.vue";
-import { recordIssueKinds } from "../domain/corpusReview";
 import { RecordMutationQueue } from "../domain/recordMutationQueue";
 import { hideSourceWarnings, sourceWarningsHidden } from "../domain/sourceQuality";
 import { recurringShortLines } from "../domain/textCleanup";
@@ -2626,295 +2624,42 @@ defineExpose({
         />
       </template>
       <template #record>
-        <article
-          v-show="reviewWorkspaceMode === 'record'"
-          ref="reviewPaneEl"
-          class="record-review-pane"
-          :aria-labelledby="selectedRecord ? 'review-record-title' : undefined"
-        >
-          <template v-if="selectedRecord">
-            <header class="record-review-head">
-              <div>
-                <button
-                  v-if="reviewQueueCollapsed"
-                  type="button"
-                  class="link-button queue-toggle"
-                  @click="reviewQueueCollapsed = false"
-                >
-                  {{ i18n.t("pdf_corpus.show_queue") }}</button
-                ><span class="eyebrow">{{ i18n.t("pdf_corpus.proposed_record") }}</span>
-                <h3 id="review-record-title">{{ selectedRecord.record_id }}</h3>
-                <p>
-                  {{ selectedRecord.inline_citation }}
-                  · {{ selectedRecord.text_length.toLocaleString() }}
-                  {{ i18n.t("pdf_corpus.characters") }}{{ selectedRecordActivitySummary }}
-                </p>
-              </div>
-            </header>
-            <aside
-              v-if="selectedRecord.text_touchup_proposal?.status === 'pending_review'"
-              class="review-reason touchup-review-notice"
-              data-tone="info"
-              role="status"
-            >
-              <div class="touchup-review-copy">
-                <b>{{ i18n.t("pdf_corpus.llm_touchup_proposal_available") }}</b>
-                <span>{{ i18n.t("pdf_corpus.llm_touchup_proposal_help") }}</span>
-              </div>
-              <button
-                type="button"
-                class="btn small"
-                @click="beginTextEdit(true)"
-                :disabled="busy !== '' || reviewLocked"
-              >
-                {{ i18n.t("pdf_corpus.review_touchup_proposal") }}
-              </button>
-            </aside>
-            <aside
-              v-else-if="
-                selectedRecord.review_reason &&
-                selectedRecord.review_reason.toLowerCase() !== 'pending human review.'
-              "
-              class="review-reason"
-              role="note"
-            >
-              <b>{{
-                recordIssueKinds(selectedRecord).length
-                  ? recordIssueKinds(selectedRecord)
-                      .map((kind) => i18n.t(`pdf_corpus.record_state.${kind}`, kind))
-                      .join(" · ")
-                  : i18n.t("pdf_corpus.why_review")
-              }}</b
-              ><span class="review-reason-text">{{ selectedRecord.review_reason }}</span>
-            </aside>
-            <section class="record-text-review" aria-labelledby="reviewed-record-text-title">
-              <header>
-                <div>
-                  <b id="reviewed-record-text-title">{{
-                    i18n.t("pdf_corpus.reviewed_record_text")
-                  }}</b
-                  ><span
-                    v-if="selectedRecord.text_review_status === 'human_corrected'"
-                    class="human-corrected"
-                    >{{ i18n.t("pdf_corpus.human_corrected") }}</span
-                  ><span
-                    v-else-if="selectedRecord.text_review_status === 'human_reviewed'"
-                    class="human-corrected"
-                    >{{ i18n.t("pdf_corpus.human_reviewed") }}</span
-                  >
-                </div>
-                <div class="record-text-head-actions">
-                  <label v-if="!editingText" class="context-toggle">
-                    <input v-model="showRecordContext" type="checkbox" />
-                    {{ i18n.t("pdf_corpus.context_show") }}
-                  </label>
-                  <button
-                    v-if="!editingText"
-                    type="button"
-                    class="btn small"
-                    @click="openRecordPopout"
-                  >
-                    {{ i18n.t("pdf_corpus.reviewed_record_text") }}
-                  </button>
-                  <button
-                    v-if="editingText"
-                    type="button"
-                    class="btn small"
-                    @click="textCleanupOpen = true"
-                    :disabled="busy !== '' || reviewLocked"
-                  >
-                    {{ i18n.t("pdf_corpus.clean_text") }}</button
-                  ><UiTooltip
-                    v-if="editingText"
-                    :text="i18n.t('pdf_corpus.save_reviewed_text') + ' (Ctrl/Cmd S)'"
-                    trigger-mode="content"
-                    :content-focusable="Boolean(busy !== '' || reviewLocked || !textDraft.trim())"
-                    placement="bottom"
-                  >
-                    <button
-                      type="button"
-                      class="btn small primary"
-                      @click="saveReviewedText()"
-                      :disabled="busy !== '' || reviewLocked || !textDraft.trim()"
-                      aria-keyshortcuts="Control+S Meta+S"
-                    >
-                      {{ i18n.t("ui.save") }}
-                    </button> </UiTooltip
-                  ><button
-                    v-if="editingText"
-                    type="button"
-                    class="btn small"
-                    @click="llmTouchupOpen = true"
-                    :disabled="busy !== '' || reviewLocked"
-                  >
-                    {{ i18n.t("pdf_corpus.llm_touchup") }}</button
-                  ><button
-                    v-if="
-                      !editingText &&
-                      selectedRecord.text_review_status !== 'human_corrected' &&
-                      selectedRecord.text_review_status !== 'human_reviewed'
-                    "
-                    type="button"
-                    class="btn small"
-                    @click="markTextReviewed"
-                    :disabled="busy !== '' || reviewLocked"
-                  >
-                    {{ i18n.t("pdf_corpus.mark_text_reviewed") }}</button
-                  ><button
-                    type="button"
-                    class="btn small"
-                    @click="editingText ? cancelTextEdit() : beginTextEdit()"
-                    :disabled="busy !== '' || reviewLocked"
-                  >
-                    {{ editingText ? i18n.t("ui.cancel") : i18n.t("pdf_corpus.edit_text") }}
-                  </button>
-                </div>
-              </header>
-              <textarea
-                v-if="editingText"
-                v-model="textDraft"
-                class="record-text-editor"
-                :aria-label="i18n.t('pdf_corpus.reviewed_record_text')"
-              ></textarea>
-              <RecordContextReader
-                v-else
-                class="record-primary-text"
-                :build-id="currentBuild?.build_id || ''"
-                :record-id="selectedRecord.record_id"
-                :text="selectedRecord.text"
-                :show-context="showRecordContext"
-                @select="selectRecordById"
-              />
-              <p
-                v-if="selectedRecord.text_noise?.score != null"
-                class="record-noise-summary"
-                role="status"
-              >
-                {{
-                  i18n.tf("pdf_corpus.text_noise.score", {
-                    score: Math.round(Number(selectedRecord.text_noise.score)),
-                  })
-                }}
-                <span v-if="selectedRecord.text_noise.unusable">
-                  ·
-                  {{ i18n.t("pdf_corpus.text_noise.unusable") }}
-                </span>
-              </p>
-              <div
-                v-if="editingText && selectedRecord.source_quality_issues?.length"
-                class="text-review-actions"
-              >
-                <label
-                  v-if="selectedRecord.source_quality_issues?.length"
-                  class="resolve-source-check"
-                  ><input v-model="resolveSourceOnTextSave" type="checkbox" /><span>{{
-                    i18n.t("pdf_corpus.resolve_source_with_correction")
-                  }}</span></label
-                >
-              </div>
-            </section>
-            <MovableRecordModal
-              v-if="recordPopout"
-              :record-id="recordPopout.recordId"
-              :text="recordPopout.text"
-              @close="recordPopout = null"
-            />
-          </template>
-          <div v-else class="inspector-empty">
-            {{ i18n.t("pdf_corpus.select_record") }}
-          </div>
-        </article>
+        <CorpusReviewRecordPane
+          v-model:text-draft="textDraft"
+          v-model:show-context="showRecordContext"
+          v-model:resolve-source="resolveSourceOnTextSave"
+          :record="selectedRecord"
+          :build-id="currentBuild?.build_id || ''"
+          :visible="reviewWorkspaceMode === 'record'"
+          :queue-collapsed="reviewQueueCollapsed"
+          :editing="editingText"
+          :busy="busy !== ''"
+          :locked="reviewLocked"
+          :activity-summary="selectedRecordActivitySummary"
+          :popout="recordPopout"
+          @root-change="reviewPaneEl = $event"
+          @show-queue="reviewQueueCollapsed = false"
+          @begin-edit="(touchup) => beginTextEdit(touchup)"
+          @cancel-edit="cancelTextEdit"
+          @cleanup="textCleanupOpen = true"
+          @llm-touchup="llmTouchupOpen = true"
+          @save="saveReviewedText()"
+          @mark-reviewed="markTextReviewed"
+          @open-popout="openRecordPopout"
+          @close-popout="recordPopout = null"
+          @select-record="selectRecordById"
+        />
       </template>
       <template #inspector>
-        <aside
-          ref="reviewInspectorEl"
-          class="review-inspector"
-          :aria-label="i18n.t('pdf_corpus.review_details')"
+        <CorpusReviewInspector
+          v-model:tab="reviewInspectorTab"
+          :mode="reviewWorkspaceMode"
+          :has-record="Boolean(selectedRecord)"
+          :blocker-count="selectedMetadataBlockingFields.length"
+          @back-to-record="setReviewWorkspaceMode('record')"
+          @tab-keydown="reviewInspectorKeydown"
+          @root-change="reviewInspectorEl = $event"
         >
-          <div v-if="reviewWorkspaceMode !== 'record'" class="detail-workspace-head">
-            <div>
-              <span class="eyebrow">{{ i18n.t("pdf_corpus.review_workspace") }}</span>
-              <h3>
-                {{
-                  reviewWorkspaceMode === "metadata"
-                    ? i18n.t("pdf_corpus.workspace.metadata")
-                    : i18n.t("pdf_corpus.workspace.source")
-                }}
-              </h3>
-              <p>
-                {{
-                  reviewWorkspaceMode === "metadata"
-                    ? i18n.t("pdf_corpus.workspace.metadata_help")
-                    : i18n.t("pdf_corpus.workspace.source_help")
-                }}
-              </p>
-            </div>
-            <button type="button" class="btn small" @click="setReviewWorkspaceMode('record')">
-              {{ i18n.t("pdf_corpus.workspace.back_record") }}
-            </button>
-          </div>
-          <div
-            v-if="reviewWorkspaceMode === 'record' && selectedRecord"
-            class="review-inspector-tabs"
-            role="tablist"
-            :aria-label="i18n.t('pdf_corpus.review_detail_views')"
-          >
-            <button
-              id="review-tab-metadata"
-              data-review-tab="metadata"
-              type="button"
-              role="tab"
-              aria-controls="review-panel-metadata"
-              :aria-selected="reviewInspectorTab === 'metadata'"
-              :tabindex="reviewInspectorTab === 'metadata' ? 0 : -1"
-              @keydown="reviewInspectorKeydown"
-              @click="reviewInspectorTab = 'metadata'"
-            >
-              {{ i18n.t("pdf_corpus.metadata_tab")
-              }}<span v-if="selectedMetadataBlockingFields.length">{{
-                selectedMetadataBlockingFields.length
-              }}</span>
-            </button>
-            <button
-              id="review-tab-evidence"
-              data-review-tab="evidence"
-              type="button"
-              role="tab"
-              aria-controls="review-panel-evidence"
-              :aria-selected="reviewInspectorTab === 'evidence'"
-              :tabindex="reviewInspectorTab === 'evidence' ? 0 : -1"
-              @keydown="reviewInspectorKeydown"
-              @click="reviewInspectorTab = 'evidence'"
-            >
-              {{ i18n.t("pdf_corpus.evidence_tab") }}
-            </button>
-            <button
-              id="review-tab-source"
-              data-review-tab="source"
-              type="button"
-              role="tab"
-              aria-controls="review-panel-source"
-              :aria-selected="reviewInspectorTab === 'source'"
-              :tabindex="reviewInspectorTab === 'source' ? 0 : -1"
-              @keydown="reviewInspectorKeydown"
-              @click="reviewInspectorTab = 'source'"
-            >
-              {{ i18n.t("pdf_corpus.source_tab") }}
-            </button>
-            <button
-              id="review-tab-semantic"
-              data-review-tab="semantic"
-              type="button"
-              role="tab"
-              aria-controls="review-panel-semantic"
-              :aria-selected="reviewInspectorTab === 'semantic'"
-              :tabindex="reviewInspectorTab === 'semantic' ? 0 : -1"
-              @keydown="reviewInspectorKeydown"
-              @click="reviewInspectorTab = 'semantic'"
-            >
-              {{ i18n.t("pdf_corpus.semantic_tab") }}
-            </button>
-          </div>
           <section
             v-if="
               selectedRecord &&
@@ -2950,128 +2695,29 @@ defineExpose({
               @browse-evidence="openEvidenceBrowser"
               @dirty="handleMetadataDirty"
             />
-            <details class="record-data">
-              <summary>
-                {{ i18n.t("pdf_corpus.advanced_metadata") }}
-              </summary>
-              <p class="help">
-                {{ i18n.t("pdf_corpus.metadata_help") }}
-              </p>
-              <button
-                type="button"
-                class="btn small metadata-cache-clear"
-                :disabled="busy !== ''"
-                @click="clearMetadataSuggestionCache"
-              >
-                {{ i18n.t("pdf_corpus.clear_metadata_cache") }}
-              </button>
-              <section v-if="currentBuild?.manifest" class="document-metadata-launch">
-                <div>
-                  <b>{{ i18n.t("pdf_corpus.document_metadata_defaults") }}</b
-                  ><span>{{ i18n.t("pdf_corpus.document_metadata_defaults_help") }}</span>
-                </div>
-                <button
-                  type="button"
-                  class="btn"
-                  :disabled="busy !== ''"
-                  @click="documentMetadataOpen = true"
-                >
-                  {{ i18n.t("pdf_corpus.edit_document_metadata") }}
-                </button>
-              </section>
-
-              <LlmExecutionControl
-                :model-value="llmActionProviderId || selectedProviderId"
-                :model-override="llmActionModel"
-                :profiles="providerProfiles"
-                :disabled="busy !== ''"
-                :task="i18n.t('pdf_corpus.metadata_rerun_provider_help')"
-                @update:model-value="(value) => (llmActionProviderId = value)"
-                @update:model-override="(value) => (llmActionModel = value)"
-              /><label class="sr-only" for="pdf-corpus-metadata">{{
-                i18n.t("pdf_corpus.interpretive_metadata")
-              }}</label
-              ><textarea
-                id="pdf-corpus-metadata"
-                v-model="metadataDraft"
-                class="metadata-json"
-                spellcheck="false"
-                @input="metadataEditorDirty = true"
-              ></textarea>
-              <p class="metadata-rerun-consequence">
-                {{ i18n.t("pdf_corpus.metadata_rerun_consequence") }}
-              </p>
-              <div class="data-actions">
-                <button
-                  type="button"
-                  class="btn small"
-                  @click="saveMetadata"
-                  :disabled="busy !== ''"
-                >
-                  {{ i18n.t("pdf_corpus.save_metadata") }}</button
-                ><label class="rerun-family"
-                  ><span>{{ i18n.t("pdf_corpus.rerun_family") }}</span
-                  ><select v-model="metadataRerunFamily" class="control small">
-                    <option value="all">
-                      {{ i18n.t("pdf_corpus.metadata_family.all") }}
-                    </option>
-                    <option
-                      v-for="family in metadataFamilyOptions"
-                      :key="family.key"
-                      :value="family.key"
-                    >
-                      {{ family.label }}
-                    </option>
-                  </select></label
-                ><UiTooltip
-                  :text="i18n.t('pdf_corpus.rerun_metadata_help')"
-                  trigger-mode="content"
-                  :content-focusable="busy !== ''"
-                  placement="bottom"
-                >
-                  <button
-                    type="button"
-                    class="btn small"
-                    @click="rerunMetadata()"
-                    :disabled="busy !== ''"
-                  >
-                    {{ i18n.t("pdf_corpus.rerun_metadata") }}
-                  </button> </UiTooltip
-                ><UiTooltip
-                  :text="i18n.t('pdf_corpus.requeue_metadata_help')"
-                  trigger-mode="content"
-                  :content-focusable="busy !== ''"
-                  placement="bottom"
-                >
-                  <button
-                    type="button"
-                    class="btn small soft"
-                    @click="requeueCurrentRecord"
-                    :disabled="busy !== ''"
-                  >
-                    {{ i18n.t("pdf_corpus.requeue_metadata") }}
-                  </button> </UiTooltip
-                ><UiTooltip
-                  :text="i18n.t('pdf_corpus.metadata_enrichment_again_help')"
-                  trigger-mode="content"
-                  :content-focusable="busy !== ''"
-                  placement="bottom"
-                >
-                  <button
-                    type="button"
-                    class="btn small"
-                    @click="
-                      llmActionProviderId =
-                        llmActionProviderId || selectedProviderId || providerProfiles[0]?.id || '';
-                      metadataEnrichmentOpen = true;
-                    "
-                    :disabled="busy !== ''"
-                  >
-                    {{ i18n.t("pdf_corpus.metadata_enrichment_again") }}
-                  </button>
-                </UiTooltip>
-              </div>
-            </details>
+            <CorpusReviewAdvancedMetadata
+              v-model:draft="metadataDraft"
+              v-model:family="metadataRerunFamily"
+              :busy="busy !== ''"
+              :has-manifest="Boolean(currentBuild?.manifest)"
+              :profiles="providerProfiles"
+              :provider-id="llmActionProviderId || selectedProviderId"
+              :model-override="llmActionModel"
+              :family-options="metadataFamilyOptions"
+              @update:provider-id="(value) => (llmActionProviderId = value)"
+              @update:model-override="(value) => (llmActionModel = value)"
+              @clear-cache="clearMetadataSuggestionCache"
+              @edit-document-metadata="documentMetadataOpen = true"
+              @dirty="metadataEditorDirty = true"
+              @save="saveMetadata"
+              @rerun="rerunMetadata()"
+              @requeue="requeueCurrentRecord"
+              @enrich-again="
+                llmActionProviderId =
+                  llmActionProviderId || selectedProviderId || providerProfiles[0]?.id || '';
+                metadataEnrichmentOpen = true;
+              "
+            />
           </section>
           <CorpusReviewEvidencePanel
             v-else-if="
@@ -3163,7 +2809,7 @@ defineExpose({
           <div v-else class="inspector-empty">
             {{ i18n.t("pdf_corpus.select_record") }}
           </div>
-        </aside>
+        </CorpusReviewInspector>
       </template>
       <template #dock>
         <CorpusRecordDecisionDock
@@ -3368,9 +3014,9 @@ defineExpose({
         "
       />
       <template #footer>
-        <button type="button" class="btn small" @click="openSchemasPage">
+        <UiButton size="small" @click="openSchemasPage">
           {{ i18n.t("schemas.open_page", "Open as a page") }}
-        </button>
+        </UiButton>
       </template>
     </UiDialog>
     <UiDialog
@@ -3383,11 +3029,10 @@ defineExpose({
     >
       <CorpusHandsFreeSettings v-model="handsFree" :disabled="busy !== ''" :show-enable="false" />
       <template #footer
-        ><button type="button" class="btn" @click="handsFreeOpen = false">
-          {{ i18n.t("ui.cancel") }}</button
-        ><button type="button" class="btn primary" :disabled="busy !== ''" @click="runHandsFree">
+        ><UiButton @click="handsFreeOpen = false"> {{ i18n.t("ui.cancel") }}</UiButton
+        ><UiButton variant="primary" :disabled="busy !== ''" @click="runHandsFree">
           {{ i18n.t("pdf_corpus.run_hands_free_action") }}
-        </button></template
+        </UiButton></template
       >
     </UiDialog>
     <MetadataEnrichmentDialog
