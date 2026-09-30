@@ -1,6 +1,14 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, useId, watch } from "vue";
+import UiRelationCardNode from "../relations/UiRelationCardNode.vue";
+import UiRelationEdge from "../relations/UiRelationEdge.vue";
+import UiRelationNodeShell from "../relations/UiRelationNodeShell.vue";
+import UiRelationToolbar from "../relations/UiRelationToolbar.vue";
+import UiRelationViewport from "../relations/UiRelationViewport.vue";
+import { useRelationLayoutState } from "../../composables/relations/useRelationLayoutState";
+import { relationBoundsForPoints } from "../../domain/relations/geometry";
+import { RELATION_SURFACE_PRESETS } from "../../domain/relations/presets";
 import {
   PIPELINE_NODE_HEIGHT,
   PIPELINE_NODE_WIDTH,
@@ -27,19 +35,15 @@ const props = defineProps<{
   description: string;
 }>();
 
+const surfacePreset = RELATION_SURFACE_PRESETS.pipelineDag;
 const i18n = useI18nStore();
 const t = (key: string, fallback: string) => i18n.t(key, fallback);
 const selectedId = ref("");
 const hoveredId = ref("");
 const orientation = ref<PipelineDiagramOrientation>("horizontal");
-const drag = ref<{
-  id: string;
-  startX: number;
-  startY: number;
-  originX: number;
-  originY: number;
-} | null>(null);
-const offsets = ref<Record<string, { x: number; y: number }>>({});
+const viewport = ref<InstanceType<typeof UiRelationViewport> | null>(null);
+const arrowMarkerId = `pipeline-arrow-${useId()}`;
+const layoutState = useRelationLayoutState();
 
 const diagram = computed(() =>
   layoutPipelineDiagram(
@@ -50,10 +54,10 @@ const diagram = computed(() =>
   ),
 );
 const nodes = computed(() =>
-  diagram.value.nodes.map((node) => {
-    const offset = offsets.value[node.id];
-    return offset ? { ...node, x: node.x + offset.x, y: node.y + offset.y } : node;
-  }),
+  diagram.value.nodes.map((node) => ({
+    ...node,
+    ...layoutState.positionFor(node.id, { x: node.x, y: node.y }),
+  })),
 );
 const edges = computed(() => {
   const byId = new Map(nodes.value.map((node) => [node.id, node]));
@@ -65,6 +69,21 @@ const edges = computed(() => {
 const selected = computed(
   () => nodes.value.find((node) => node.id === selectedId.value) || nodes.value[0] || null,
 );
+const contentBounds = computed(() => {
+  const points = nodes.value.flatMap((node) => [
+    { x: node.x, y: node.y },
+    { x: node.x + PIPELINE_NODE_WIDTH, y: node.y + PIPELINE_NODE_HEIGHT },
+  ]);
+  return (
+    relationBoundsForPoints(points, 28) || {
+      x: 0,
+      y: 0,
+      width: diagram.value.width,
+      height: diagram.value.height,
+    }
+  );
+});
+const viewportHeight = computed(() => Math.min(620, Math.max(320, diagram.value.height + 40)));
 
 watch(
   diagram,
@@ -74,6 +93,12 @@ watch(
     }
   },
   { immediate: true },
+);
+
+watch(
+  () => [props.stages, props.entryStageIds],
+  () => layoutState.clearPositions(),
+  { deep: true },
 );
 
 const edgeKinds: PipelineEdgeKind[] = [
@@ -94,12 +119,15 @@ function edgeLabel(kind: PipelineEdgeKind) {
   };
   return labels[kind];
 }
+
 function strategyFor(strategyId: string) {
   return props.strategies.find((item) => item.strategy_id === strategyId) || null;
 }
+
 function familyFor(strategyId: string) {
   return strategyFor(strategyId)?.family || "";
 }
+
 function labelFor(strategyId: string) {
   const strategy = strategyFor(strategyId);
   return strategy ? pipelineStrategyLabel(strategy, t) : strategyId;
@@ -147,36 +175,25 @@ function infoRows(node: (typeof nodes.value)[number]): TooltipInfoboxRow[] {
   return rows;
 }
 
-function startDrag(event: PointerEvent, node: (typeof nodes.value)[number]) {
-  if (event.button !== 0) return;
-  (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-  drag.value = {
-    id: node.id,
-    startX: event.clientX,
-    startY: event.clientY,
-    originX: offsets.value[node.id]?.x || 0,
-    originY: offsets.value[node.id]?.y || 0,
-  };
-  selectedId.value = node.id;
+function moveNode(id: string, point: { x: number; y: number }) {
+  layoutState.setPosition(id, point);
+  selectedId.value = id;
 }
 
-function moveDrag(event: PointerEvent) {
-  if (!drag.value) return;
-  const current = drag.value;
-  offsets.value = {
-    ...offsets.value,
-    [current.id]: {
-      x: current.originX + event.clientX - current.startX,
-      y: current.originY + event.clientY - current.startY,
-    },
-  };
+function fitView() {
+  viewport.value?.fitView(contentBounds.value);
 }
 
-function endDrag(event: PointerEvent) {
-  if (!drag.value) return;
-  const target = event.currentTarget as HTMLElement;
-  if (target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId);
-  drag.value = null;
+function resetLayout() {
+  layoutState.clearPositions();
+  viewport.value?.resetView();
+}
+
+function chooseOrientation(next: PipelineDiagramOrientation) {
+  if (orientation.value === next) return;
+  orientation.value = next;
+  layoutState.clearPositions();
+  void nextTick(() => viewport.value?.fitView(contentBounds.value));
 }
 </script>
 
@@ -187,36 +204,65 @@ function endDrag(event: PointerEvent) {
         <h4>{{ title }}</h4>
         <p>{{ description }}</p>
       </div>
-      <div
-        class="diagram-controls"
-        role="group"
-        :aria-label="t('pipelines.diagram_orientation', 'Diagram orientation')"
-      >
-        <button
-          type="button"
-          :aria-pressed="orientation === 'horizontal'"
-          :class="{ selected: orientation === 'horizontal' }"
-          @click="orientation = 'horizontal'"
+      <div class="diagram-control-stack">
+        <div
+          class="diagram-controls"
+          role="group"
+          :aria-label="t('pipelines.diagram_orientation', 'Diagram orientation')"
         >
-          {{ t("pipelines.diagram_horizontal", "Horizontal") }}
-        </button>
-        <button
-          type="button"
-          :aria-pressed="orientation === 'vertical'"
-          :class="{ selected: orientation === 'vertical' }"
-          @click="orientation = 'vertical'"
-        >
-          {{ t("pipelines.diagram_vertical", "Vertical") }}
-        </button>
+          <button
+            type="button"
+            :aria-pressed="orientation === 'horizontal'"
+            :class="{ selected: orientation === 'horizontal' }"
+            @click="chooseOrientation('horizontal')"
+          >
+            {{ t("pipelines.diagram_horizontal", "Horizontal") }}
+          </button>
+          <button
+            type="button"
+            :aria-pressed="orientation === 'vertical'"
+            :class="{ selected: orientation === 'vertical' }"
+            @click="chooseOrientation('vertical')"
+          >
+            {{ t("pipelines.diagram_vertical", "Vertical") }}
+          </button>
+        </div>
+        <UiRelationToolbar
+          :accessible-label="t('pipelines.diagram_controls', 'Pipeline diagram controls')"
+          :zoom-out-label="t('pipelines.diagram_zoom_out', 'Zoom out')"
+          :zoom-in-label="t('pipelines.diagram_zoom_in', 'Zoom in')"
+          :fit-label="t('pipelines.diagram_fit', 'Fit diagram')"
+          :reset-label="t('pipelines.diagram_reset_layout', 'Reset layout')"
+          @zoom-out="viewport?.zoomBy(1 / 1.15)"
+          @zoom-in="viewport?.zoomBy(1.15)"
+          @fit="fitView"
+          @reset="resetLayout"
+        />
       </div>
     </header>
 
     <div v-if="diagram.nodes.length" class="diagram-layout">
-      <div class="diagram-scroll">
-        <div
-          class="diagram-canvas"
-          :style="{ width: `${diagram.width}px`, height: `${diagram.height}px` }"
-        >
+      <UiRelationViewport
+        ref="viewport"
+        class="diagram-viewport"
+        :style="{ height: `${viewportHeight}px` }"
+        :accessible-label="title"
+        :help-text="
+          t(
+            'pipelines.diagram_help',
+            'Drag the background to pan. Drag a stage to reposition it. Arrow keys pan, plus and minus zoom, and 0 resets the view. Hold Alt and use an arrow key to move a focused stage.',
+          )
+        "
+        :resize-label="t('pipelines.diagram_resize', 'Resize pipeline diagram')"
+        :initial-center="{ x: diagram.width / 2, y: diagram.height / 2 }"
+        :content-bounds="contentBounds"
+        :content-width="diagram.width"
+        :content-height="diagram.height"
+        :min-zoom="surfacePreset.minZoom"
+        :max-zoom="surfacePreset.maxZoom"
+        :resize-axis="surfacePreset.resizeAxis"
+      >
+        <template #default="{ zoom }">
           <svg
             class="diagram-edges"
             :viewBox="`0 0 ${diagram.width} ${diagram.height}`"
@@ -224,7 +270,7 @@ function endDrag(event: PointerEvent) {
           >
             <defs>
               <marker
-                id="pipeline-arrow"
+                :id="arrowMarkerId"
                 viewBox="0 0 10 10"
                 refX="9"
                 refY="5"
@@ -235,57 +281,62 @@ function endDrag(event: PointerEvent) {
                 <path d="M 0 0 L 10 5 L 0 10 z" />
               </marker>
             </defs>
-            <path
+            <UiRelationEdge
               v-for="edge in edges"
               :key="edge.id"
-              :d="edge.path"
+              class="diagram-edge"
+              :path="edge.path"
               :data-kind="edge.kind"
               :data-traversed="edge.traversed ? 'true' : 'false'"
-              marker-end="url(#pipeline-arrow)"
+              :marker-end="`url(#${arrowMarkerId})`"
             />
           </svg>
           <template v-for="node in nodes" :key="node.id">
-            <button
-              type="button"
+            <UiRelationNodeShell
               class="diagram-node"
               :class="{ selected: selected?.id === node.id }"
+              :node-id="node.id"
+              :x="node.x"
+              :y="node.y"
+              :zoom="zoom"
+              :accessible-label="`${node.id}: ${labelFor(node.strategy)}`"
+              :aria-pressed="selected?.id === node.id"
+              :data-status="node.executionStatus || undefined"
+              :data-presence="node.presence"
               :style="{
                 width: `${PIPELINE_NODE_WIDTH}px`,
                 height: `${PIPELINE_NODE_HEIGHT}px`,
-                transform: `translate(${node.x}px, ${node.y}px)`,
               }"
-              :data-status="node.executionStatus || undefined"
-              :data-presence="node.presence"
-              :aria-pressed="selected?.id === node.id"
-              @pointerdown="startDrag($event, node)"
-              @pointermove="moveDrag"
-              @pointerup="endDrag"
-              @pointercancel="endDrag"
-              @click="selectedId = node.id"
+              @move="moveNode(node.id, $event)"
+              @activate="selectedId = node.id"
               @mouseenter="hoveredId = node.id"
               @mouseleave="hoveredId = ''"
               @focus="hoveredId = node.id"
               @blur="hoveredId = ''"
             >
-              <span class="node-kicker">
-                <span v-if="node.entry">{{ t("pipelines.node_entry", "Entry") }}</span>
-                <span>{{ pipelineStageFamilyLabel(familyFor(node.strategy), t) }}</span>
-              </span>
-              <strong>{{ node.id }}</strong>
-              <span>{{ labelFor(node.strategy) }}</span>
-            </button>
+              <UiRelationCardNode>
+                <span class="node-kicker">
+                  <span v-if="node.entry">{{ t("pipelines.node_entry", "Entry") }}</span>
+                  <span>{{ pipelineStageFamilyLabel(familyFor(node.strategy), t) }}</span>
+                </span>
+                <strong>{{ node.id }}</strong>
+                <span>{{ labelFor(node.strategy) }}</span>
+              </UiRelationCardNode>
+            </UiRelationNodeShell>
             <UiTooltipInfobox
               v-if="hoveredId === node.id"
               :title="node.id"
               :description="pipelineStageFamilyLabel(familyFor(node.strategy), t)"
               :rows="infoRows(node)"
               :style="{
-                transform: `translate(${node.x}px, ${node.y}px) translateY(calc(-100% - 8px))`,
+                left: `${node.x}px`,
+                top: `${node.y}px`,
+                transform: 'translateY(calc(-100% - 8px))',
               }"
             />
           </template>
-        </div>
-      </div>
+        </template>
+      </UiRelationViewport>
 
       <aside
         v-if="selected"
@@ -362,6 +413,12 @@ function endDrag(event: PointerEvent) {
   justify-content: space-between;
   gap: 12px;
 }
+.diagram-control-stack {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
 .diagram-controls {
   display: inline-flex;
   flex-wrap: wrap;
@@ -370,24 +427,28 @@ function endDrag(event: PointerEvent) {
 .diagram-controls button {
   min-height: 32px;
   padding: 5px 8px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: var(--card);
-  color: var(--muted);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-card);
+  color: var(--text-secondary);
   font: inherit;
   font-size: 0.75rem;
   cursor: pointer;
 }
 .diagram-controls button.selected {
-  border-color: var(--line-strong);
-  background: var(--soft);
-  color: var(--text);
+  border-color: var(--border-interactive);
+  background: var(--surface-selected);
+  color: var(--text-primary);
   font-weight: 750;
+}
+.diagram-controls button:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 .pipeline-diagram header p,
 .diagram-empty {
   margin: 4px 0 0;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 0.78rem;
   line-height: 1.5;
 }
@@ -397,15 +458,8 @@ function endDrag(event: PointerEvent) {
   gap: 12px;
   align-items: start;
 }
-.diagram-scroll {
-  overflow: auto;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--soft);
-}
-.diagram-canvas {
-  position: relative;
-  min-width: 100%;
+.diagram-viewport {
+  width: 100%;
 }
 .diagram-edges {
   position: absolute;
@@ -414,104 +468,95 @@ function endDrag(event: PointerEvent) {
   height: 100%;
   overflow: visible;
 }
-.diagram-edges path {
-  fill: none;
-  stroke: var(--line-strong, var(--line));
-  stroke-width: 1.5;
+.diagram-edge {
+  --relation-edge-stroke: var(--border-strong);
+  --relation-edge-opacity: 1;
 }
-.diagram-edges path[data-kind="next"] {
-  stroke: var(--text);
+.diagram-edge[data-kind="next"] {
+  --relation-edge-stroke: var(--text-primary);
 }
-.diagram-edges path[data-kind="on_empty"] {
-  stroke: var(--tone-info-border);
+.diagram-edge[data-kind="on_empty"] {
+  --relation-edge-stroke: var(--tone-info-border);
   stroke-dasharray: 5 3;
 }
-.diagram-edges path[data-kind="on_unavailable"] {
-  stroke: var(--tone-warn-border);
+.diagram-edge[data-kind="on_unavailable"] {
+  --relation-edge-stroke: var(--tone-warn-border);
   stroke-dasharray: 2 3;
 }
-.diagram-edges path[data-kind="on_timeout"] {
-  stroke: var(--tone-danger-border);
+.diagram-edge[data-kind="on_timeout"] {
+  --relation-edge-stroke: var(--tone-danger-border);
   stroke-dasharray: 1 5;
   stroke-linecap: round;
 }
-.diagram-edges path[data-kind="on_error"] {
-  stroke: var(--tone-danger-border);
+.diagram-edge[data-kind="on_error"] {
+  --relation-edge-stroke: var(--tone-danger-border);
   stroke-dasharray: 1 3;
 }
-.diagram-edges path[data-traversed="true"] {
+.diagram-edge[data-traversed="true"] {
   stroke-width: 2.25;
 }
 .diagram-edges marker path {
-  fill: var(--text);
+  fill: var(--text-primary);
 }
 .diagram-node {
-  position: absolute;
-  display: grid;
-  align-content: center;
-  gap: 2px;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--card);
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: inherit;
   font: inherit;
   text-align: left;
-  cursor: pointer;
-  touch-action: none;
-  user-select: none;
+  --relation-node-border: var(--border-subtle);
+  --relation-node-bg: var(--surface-card);
+  --relation-node-detail-fg: var(--text-secondary);
+  --relation-node-detail-size: 0.75rem;
+  --relation-node-kicker-fg: var(--text-secondary);
+  --relation-node-kicker-size: 0.75rem;
+  --relation-node-title-size: 0.75rem;
 }
-.diagram-node strong,
-.diagram-node span {
-  overflow: hidden;
-  font-size: 0.75rem;
-  text-overflow: ellipsis;
+.diagram-node :deep(.ui-relation-card-node span),
+.diagram-node :deep(.ui-relation-card-node strong) {
   white-space: nowrap;
 }
-.diagram-node .node-kicker,
-.diagram-node span:last-child {
-  color: var(--muted);
-}
 .diagram-node.selected {
-  border-color: var(--text);
-  outline: 2px solid var(--text);
+  --relation-node-border: var(--border-interactive);
+  outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: 1px;
 }
 .diagram-node:focus-visible {
-  outline: 2px solid var(--text);
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 .diagram-node[data-status="completed"] {
-  background: var(--tone-ok-bg);
-  border-color: var(--tone-ok-border);
+  --relation-node-bg: var(--tone-ok-bg);
+  --relation-node-border: var(--tone-ok-border);
 }
 .diagram-node[data-status="failed"],
 .diagram-node[data-status="timed_out"] {
-  background: var(--tone-danger-bg);
-  border-color: var(--tone-danger-border);
+  --relation-node-bg: var(--tone-danger-bg);
+  --relation-node-border: var(--tone-danger-border);
 }
 .diagram-node[data-status="unavailable"],
 .diagram-node[data-status="skipped"] {
-  background: var(--tone-warn-bg);
-  border-color: var(--tone-warn-border);
+  --relation-node-bg: var(--tone-warn-bg);
+  --relation-node-border: var(--tone-warn-border);
 }
 .diagram-node[data-presence="not_reached"] {
   opacity: 0.72;
 }
 .diagram-node[data-presence="observed_only"] {
-  border-style: dashed;
+  --relation-node-border-style: dashed;
 }
 .node-inspector {
   display: grid;
   gap: 6px;
   padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-card);
 }
 .inspector-kicker,
 .node-inspector dt {
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 0.75rem;
 }
 .node-inspector h5 {
@@ -534,14 +579,14 @@ function endDrag(event: PointerEvent) {
   margin: 0;
   padding: 0;
   list-style: none;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 0.75rem;
 }
 .diagram-legend li::before {
   display: inline-block;
   width: 18px;
   margin-right: 6px;
-  border-top: 2px solid var(--text);
+  border-top: 2px solid var(--text-primary);
   content: "";
   transform: translateY(-3px);
 }
@@ -563,9 +608,15 @@ function endDrag(event: PointerEvent) {
 .diagram-legend li[data-kind="not_reached"]::before,
 .diagram-legend li[data-kind="observed_only"]::before {
   border-top-style: dashed;
-  border-top-color: var(--muted);
+  border-top-color: var(--text-secondary);
 }
 @media (max-width: 860px) {
+  .pipeline-diagram header {
+    flex-direction: column;
+  }
+  .diagram-control-stack {
+    justify-content: flex-start;
+  }
   .diagram-layout {
     grid-template-columns: 1fr;
   }
