@@ -193,7 +193,7 @@ Goal: turn the build screen into a live, legible work surface.
   - primary controls.
 - [x] Add a high-priority **Review N ready Records** action as soon as topology exists and ready Records are available.
 - [x] Copy explicitly states that review can begin while automated build work continues in the background.
-- [ ] Add a restrained activity feed derived from existing authoritative/realtime state where sufficient; do not invent fake events.
+- [x] Add a restrained activity strip derived only from persisted authoritative `build_events`; do not invent fake events.
 - [ ] Keep detailed diagnostics behind **Run details**.
 - [ ] Keep warnings/errors visible without duplicating the same message in multiple surfaces.
 - [ ] Keep progress semantics honest: coarse cross-stage progress is not an ETA.
@@ -222,7 +222,7 @@ Goal: reduce control competition and make fast adjudication obvious.
 - [ ] Keep queue tabs + issue filter + search as primary review-navigation controls.
 - [x] Promote **Accept N ready Records** only when ready work exists.
 - [x] Replace native `window.confirm` for ready-Record bulk acceptance with the shared accessible dialog pattern.
-- [ ] Move selection-only bulk commands into a contextual selection bar when selected count > 0.
+- [x] Move selected-record edit/reject commands into a contextual selection bar when selected count > 0; non-selection actions remain under More actions.
 - [ ] Reduce permanent header density by relocating Record/Metadata/Source view controls closer to the inspected pane where practical.
 - [ ] Preserve keyboard shortcuts and announce resulting queue/count changes.
 - [ ] When the current queue becomes empty, show a clear completion state and next action.
@@ -246,7 +246,7 @@ Goal: make publication readiness understandable at a glance.
   - [ ] suggestion/provenance state remains preserved;
   - [ ] source/text-conservation validation still applies;
   - [ ] publication may be non-conformant/unreviewed where applicable.
-- [ ] Published completion surface: publication identity, Record count, review mode/conformance, download, start-new-build.
+- [x] Published completion surface: hide readiness counters after publication and rely on the publication snapshot for identity, Record count, review mode/conformance, and download.
 - [ ] Preserve backend publication gates and cELF assertion authority semantics.
 
 ### Phase 7 — Visual polish and “joy”
@@ -267,12 +267,12 @@ Status: **not started**
 
 ### Phase 8 — Documentation, Storybook, regression, cleanup
 
-Status: **not started**
+Status: **in progress**
 
-- [ ] Update User Guide for the new happy path.
-- [ ] Update architecture wording if user-facing phases change while internal route state remains four-part.
+- [x] Update User Guide for the three-phase happy path, Build plan, concurrent Review, pause/resume, contextual bulk actions, and suggestions-as-is publication.
+- [x] Update architecture wording: three user-facing phases with four route-backed internal workspaces.
 - [ ] Update Help Center/page guide copy if it names the old workflow.
-- [ ] Add/adjust Storybook stories for all new reusable components/states.
+- [x] Add Storybook coverage for the Build plan's ready/no-source/warning states and the new live build activity strip; remaining touched states still need final audit.
 - [ ] Run formatting/Prettier.
 - [ ] Run focused frontend tests after each checkpoint.
 - [ ] Run full frontend test suite and build.
@@ -404,3 +404,13 @@ Work on this branch will be committed in coherent checkpoints. At each checkpoin
 - Reduced the publication summary from five competing counters to the three quantities that map to the readiness groups: pending review, metadata issues, and validation blockers.
 - Flattened the nested Finish surface so Publish reads as one workspace rather than cards inside cards.
 - Renamed the provenance-safe skip-review path to **Use suggestions as-is & publish…** and updated the confirmation action/title in English, Québec French, frontend fallbacks, frontend tests, and the representative E2E workflow.
+
+
+### Checkpoint 6 — momentum, contextual review, and current docs
+
+- Added a compact **Build timeline** activity strip to the live Build surface using only the build's persisted `build_events`; it shows recent real stage transitions and progress without fabricating an ETA or event stream.
+- Added Storybook and focused component coverage for the activity strip.
+- Moved selected-record **Bulk edit metadata** and **Reject selected** actions into a contextual selection bar; non-selection actions remain behind **More actions**.
+- Tightened the Build plan's source identity with media-aware extent facts while continuing to suppress page semantics for non-paginated media.
+- Made the published state read as completion by removing pre-publication readiness counters after a publication exists.
+- Updated `docs/ARCHITECTURE.md` and the User Guide to explain the three user-facing phases, four internal routes, concurrent Build/Review behavior, Build plan, Review controls, and provenance-safe suggestions-as-is publication.
