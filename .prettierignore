@@ -18,6 +18,7 @@ web/tests/e2e/legacy-dom-baseline.spec.ts-snapshots/
 
 # Packaged static-site runtime is shipped verbatim as a standalone browser distribution asset.
 api/app/site_assets/derridai-site.js
+api/app/site_assets/derridai-sdk.js
 
 # Generated GraphQL contract artifacts: exact bytes are checked by their generators
 # (scripts/export_graphql_schema.py --check and npm run codegen:check).
