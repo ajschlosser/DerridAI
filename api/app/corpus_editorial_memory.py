@@ -43,6 +43,7 @@ from .metadata_precedents_cache import (
     resolve_cached_precedents,
 )
 from .pipelines.precedent_remap import RemapSession
+from .semantic_identity_store import registry_factory
 
 
 class EditorialMemoryMixin:
@@ -124,6 +125,7 @@ class EditorialMemoryMixin:
             metadata_schema: Any = self._schema_for(build_id)
         except Exception:  # noqa: BLE001 - advisory memory must not fail enrichment
             metadata_schema = None
+        registry_for = registry_factory(self.repo, build_id, metadata_schema)
         schema_fields = {
             str(item.get("name") or ""): item
             for item in schema_payload.get("fields") or []
@@ -316,6 +318,7 @@ class EditorialMemoryMixin:
                 source_document_id=source_document_id,
                 field_ids=field_ids,
                 schema=metadata_schema,
+                registry_for=registry_for,
             ):
                 field = str(correction.get("field_name") or "")
                 if (
@@ -569,7 +572,7 @@ class EditorialMemoryMixin:
             "example_token_estimate": example_token_estimate,
             "progressive_retrieval": retrieval_telemetry,
             "pipeline_trace": metadata_pipeline_trace,
-            "pass_learning": learn_from_pass([row for row in rows if str(row.get("record_id") or "") != exclude_record_id], metadata_schema),
+            "pass_learning": learn_from_pass([row for row in rows if str(row.get("record_id") or "") != exclude_record_id], metadata_schema, registry_for),
         }
         if include_canonical:
             memory["canonical_exemplars"] = {

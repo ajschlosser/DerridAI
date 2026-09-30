@@ -22,6 +22,7 @@ from .field_assertions import (
 )
 from .metadata_exemplars import build_correction_exemplars, build_metadata_exemplar
 from .metadata_schema import MetadataSchema, default_schema
+from .semantic_identity_store import registry_factory
 from .system_store import system_store
 
 PROJECTION = "metadata_exemplars"
@@ -109,6 +110,7 @@ def derive_build_metadata_exemplars(
 
     schema_id, schema_version, field_ids = _field_contract(rows, build)
     schema = _build_schema(build)
+    registry_for = registry_factory(repo, build_id, schema)
     source_document_id = str(build.get("source_document_id") or asset_id or "")
     reset_at = str(build.get("editorial_memory_reset_at") or "")
     exemplars: list[dict[str, Any]] = []
@@ -156,6 +158,7 @@ def derive_build_metadata_exemplars(
             source_document_id=source_document_id,
             field_ids=field_ids,
             schema=schema,
+            registry_for=registry_for,
         ):
             field = str(correction.get("field_name") or "")
             if field and not _second_opinion_owed(row, field):

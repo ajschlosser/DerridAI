@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Callable
 from typing import Any
 
 from .field_assertions import (
@@ -339,6 +340,7 @@ def build_correction_exemplars(
     field_ids: dict[str, str] | None = None,
     context_block_radius: int = DEFAULT_CONTEXT_BLOCK_RADIUS,
     schema: Any = None,
+    registry_for: Callable[[dict[str, Any]], Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Derive hard-negative exemplars from model values a human corrected.
 
@@ -363,7 +365,10 @@ def build_correction_exemplars(
         relation = rejection.get("equivalence_relation")
         if relation not in {"exact", "equivalent", "different", "unknown"}:
             relation = (
-                compare_field_values(schema, field, rejected_value, chosen_value, record=record).relation
+                compare_field_values(
+                    schema, field, rejected_value, chosen_value, record=record,
+                    registry=registry_for(record) if registry_for else None,
+                ).relation
                 if schema is not None
                 else ("exact" if rejected_value == chosen_value else "different")
             )

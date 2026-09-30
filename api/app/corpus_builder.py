@@ -292,8 +292,13 @@ from .semantic_content_graph import (
     build_semantic_content_graph,
     semantic_content_graph_view,
 )
-from .semantic_identity import ValueEquivalenceResult
-from .semantic_identity_registry import compare_field_values
+from .semantic_identity import SEMANTIC_IDENTITY_VERSION, ValueEquivalenceResult
+from .semantic_identity_registry import (
+    SemanticIdentityRegistry,
+    compare_field_values,
+    registry_for_record,
+)
+from .semantic_identity_store import alias_digest, build_registry, review_registry
 from .sentence_boundaries import snap_boundaries_to_sentences
 from .source_embeddings import SourceEmbeddingProjection
 from .source_quality import assess_extracted_source, page_source_quality_report
@@ -1832,7 +1837,10 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             )
             projection_counts = project_annotations_to_records(records, analysis)
             self.repo.save_checkpoint(build_id, "document_intelligence", analysis)
-            semantic_graph = build_semantic_content_graph(records, analysis, schema=schema)
+            semantic_graph = build_semantic_content_graph(
+                records, analysis, schema=schema,
+                registry=build_registry(self.repo, build_id, schema=schema, records=records),
+            )
             self.repo.save_checkpoint(build_id, "semantic_content_graph", semantic_graph)
             build = self.repo.get_build(build_id)
             build["document_intelligence"] = {
@@ -1933,14 +1941,19 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             len(analysis.get("characters") or []),
             bool(analysis.get("stale")),
             str(analysis.get("profile") or ""),
+            alias_digest(self.repo, build_id),
+            SEMANTIC_IDENTITY_VERSION,
         )
         cached = self._semantic_graph_cache.get(build_id)
         if cached is not None and cached[0] == key:
             return cached[1], records, analysis
+        schema = self._schema_for(build_id)
         graph = build_semantic_content_graph(
             records,
             graph_analysis,
-            schema=self._schema_for(build_id),
+            schema=schema,
+            # Reviewer-presented records: a value sealed for blind review names no identity.
+            registry=build_registry(self.repo, build_id, schema=schema, records=records),
         )
         with self._lock:
             self._semantic_graph_cache.pop(build_id, None)
@@ -2110,6 +2123,15 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             build["llm_model_effectiveness"] = model_stats
             self.repo.save_build(build)
 
+    def _review_registry(self, build_id: str, record: dict[str, Any] | None, schema: MetadataSchema | None) -> SemanticIdentityRegistry | None:
+        """Reviewed aliases for the build plus the Record's own analysis; None if neither can be read."""
+        if record is None:
+            return None
+        try:
+            return review_registry(self.repo, build_id, record, schema)
+        except (KeyError, RuntimeError):
+            return registry_for_record(record)
+
     def _record_human_llm_feedback(self, build_id: str, field: str, prior_value: Any, new_value: Any, prior_status: dict[str, Any] | None, record: dict[str, Any] | None = None, equivalence: ValueEquivalenceResult | None = None) -> None:
         """Score a reviewer's decision against the model value it replaced.
 
@@ -2128,12 +2150,12 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             schema = None  # without the build's policy, values compare exactly
         if info.get("blind") and info.get("model") and record is not None:
             sealed = self._ledger.sealed_value(build_id, str(record.get("record_id") or ""), field)
-            blind = compare_field_values(schema, field, sealed, new_value, record=record)
+            blind = compare_field_values(schema, field, sealed, new_value, record=record, registry=self._review_registry(build_id, record, schema))
             self._ledger.append(BLIND_LABEL, model=str(info["model"]), field=field, build_id=build_id, record_id=str(record.get("record_id") or ""), value=sealed, new_value=new_value, agreed=blind.same, severity=None if blind.same else error_severity(sealed, new_value), **blind.audit(), **(info.get("conditions") or {}))
             record.setdefault("blind_reveals", {})[field] = sealed  # now that they have decided, the reviewer may see it
             return
         if equivalence is None:
-            equivalence = compare_field_values(schema, field, prior_value, new_value, record=record)
+            equivalence = compare_field_values(schema, field, prior_value, new_value, record=record, registry=self._review_registry(build_id, record, schema))
         relation = equivalence.relation
         kept = equivalence.same
         if info.get("model"):

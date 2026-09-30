@@ -70,8 +70,15 @@ from .nlp_annotations import annotate_record
 from .pipelines.corpus_reviewer_evidence_choice import ReviewerEvidenceChoiceSession
 from .provenance_memory import persist_record_decision
 from .rag import _citation_strings
+from .reviewer_context import current_reviewer
 from .semantic_identity import ValueEquivalenceResult
 from .semantic_identity_registry import compare_field_values
+from .semantic_identity_store import (
+    create_alias_set,
+    list_alias_sets,
+    retire_alias_set,
+    review_registry,
+)
 from .system_store import system_store
 
 
@@ -743,7 +750,7 @@ class ReviewActionsMixin:
                 continue
             answered_again = self._score_recheck(build_id, target, key, value, prior_status)
             # Decided once here and passed on: feedback, evidence and the audit trail agree.
-            equivalence = compare_field_values(schema, key, prior_value, value, record=target)
+            equivalence = compare_field_values(schema, key, prior_value, value, record=target, registry=review_registry(self.repo, build_id, target, schema))
             if not answered_again:
                 self._record_human_llm_feedback(build_id, key, prior_value, value, prior_status, target, equivalence=equivalence)
                 self._schedule_recheck(build_id, target, key, value)
@@ -874,7 +881,7 @@ class ReviewActionsMixin:
                 prior_status = dict(statuses.get(key) or {}) if isinstance(statuses.get(key), dict) else {}
                 prior_value = record.get(key)
                 prior_assertion = current_assertion_by_name(record, key)
-                equivalence = compare_field_values(schema, key, prior_value, value, record=record)
+                equivalence = compare_field_values(schema, key, prior_value, value, record=record, registry=review_registry(self.repo, build_id, record, schema))
                 self._record_human_llm_feedback(build_id, key, prior_value, value, prior_status, record, equivalence=equivalence)
                 if not equivalence.same and isinstance(record.get("metadata_evidence"), dict):
                     evidence_map = dict(record.get("metadata_evidence") or {})
@@ -959,6 +966,39 @@ class ReviewActionsMixin:
 
 
     @_serialize_record_mutation
+    def semantic_aliases(self, build_id: str, *, include_retired: bool = False) -> dict[str, Any]:
+        """Reviewed alias sets for the build, and the identity kinds its schema compares."""
+        schema = self._schema_for(build_id)
+        kinds: dict[str, dict[str, Any]] = {}
+        for name in schema.field_names():
+            try:
+                profile = schema.equivalence_profile_for(name)
+            except KeyError:
+                continue
+            if profile.identity_kind and profile.mode in {"entity_name", "text", "lexical_phrase", "controlled"}:
+                entry = kinds.setdefault(profile.identity_kind, {"kind": profile.identity_kind, "mode": profile.mode, "fields": []})
+                entry["fields"].append(name)
+        return {
+            "items": list_alias_sets(self.repo, build_id, include_retired=include_retired),
+            "kinds": sorted(kinds.values(), key=lambda item: str(item["kind"])),
+        }
+
+    def save_semantic_alias(self, build_id: str, *, kind: str, canonical_label: str, aliases: list[str], reason: str = "", replaces: str | None = None) -> dict[str, Any]:
+        self._assert_human_review_available(build_id)
+        entry = create_alias_set(
+            self.repo, build_id, kind=kind, canonical_label=canonical_label, aliases=aliases,
+            reason=reason, reviewer=current_reviewer.get(), replaces=replaces,
+        )
+        # Correction precedents are re-derived under the new identities.
+        self._schedule_metadata_exemplar_projection(build_id)
+        return entry
+
+    def retire_semantic_alias(self, build_id: str, alias_set_id: str) -> dict[str, Any]:
+        self._assert_human_review_available(build_id)
+        entry = retire_alias_set(self.repo, build_id, alias_set_id, reviewer=current_reviewer.get())
+        self._schedule_metadata_exemplar_projection(build_id)
+        return entry
+
     def metadata_decision(self, build_id: str, record_id: str, field: str, value: Any, expected_revision: int | None = None, confirm_no_supported_value: bool = False, evidence_block_ids: list[str] | None = None, evidence_source: str | None = None, evidence_note: str = "", external_evidence_block_ids: list[str] | None = None) -> dict[str, Any]:
         """Persist one human metadata decision and return authoritative review state.
 

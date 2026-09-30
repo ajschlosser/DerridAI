@@ -255,6 +255,10 @@ BUILD_LEVEL = {
     ("DELETE", "/api/pdf/corpus-builds/{build_id}/editorial-memory"),
     ("GET", "/api/pdf/corpus-builds/{build_id}/metadata-exemplars/diagnosis"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/metadata-exemplars/project"),
+    # Reviewed alias sets hold surfaces a reviewer typed, never a record's (possibly sealed) value.
+    ("GET", "/api/pdf/corpus-builds/{build_id}/semantic-aliases"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/semantic-aliases"),
+    ("DELETE", "/api/pdf/corpus-builds/{build_id}/semantic-aliases/{alias_set_id}"),
 }
 
 

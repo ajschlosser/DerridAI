@@ -817,6 +817,17 @@ class PdfCorpusMetadataDecisionBatch(BaseModel):
     expected_revision: int | None = Field(default=None, ge=1)
 
 
+class PdfCorpusSemanticAliasSet(BaseModel):
+    """A reviewer's statement that these surfaces name one identity of ``kind``."""
+
+    kind: str = Field(min_length=1, max_length=120, pattern=r"^[a-z][a-z0-9_.-]{0,119}$")
+    canonical_label: str = Field(min_length=1, max_length=200)
+    aliases: list[str] = Field(default_factory=list, max_length=50)
+    reason: str = Field(default="", max_length=1000)
+    # Retire this active set and record the new one in its place.
+    replaces: str | None = Field(default=None, max_length=64)
+
+
 class PdfCorpusEvidencePatch(BaseModel):
     field: str = Field(min_length=1, max_length=120)
     block_ids: list[str] = Field(default_factory=list, max_length=500)
