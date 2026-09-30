@@ -86,7 +86,7 @@ function confirmAcceptClean() {
         v-if="props.ready > 0"
         size="small"
         variant="primary"
-        class="review-ready-action"
+        button-class="review-ready-action"
         :disabled="props.disabled"
         @click="confirmingAcceptClean = true"
       >
