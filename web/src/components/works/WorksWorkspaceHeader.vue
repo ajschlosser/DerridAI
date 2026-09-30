@@ -17,9 +17,11 @@ const props = defineProps<{
   canManageCorpus: boolean;
   canPopulate: boolean;
   canSyncAll: boolean;
+  canCreateSite: boolean;
   corpusManageDeniedReason: string;
   populateDisabledReason: string;
   syncAllDisabledReason: string;
+  createSiteDisabledReason: string;
 }>();
 
 const emit = defineEmits<{
@@ -28,6 +30,7 @@ const emit = defineEmits<{
   separate: [];
   populateAll: [];
   syncAll: [];
+  createSite: [];
 }>();
 
 const i18n = useI18nStore();
@@ -84,6 +87,25 @@ const i18n = useI18nStore();
         @click="emit('populateAll')"
       >
         <AppIcon name="spark" aria-hidden="true" />{{ i18n.t("works.populate_all_metadata") }}
+      </button>
+      <UiTooltip
+        v-if="!props.canCreateSite"
+        :text="props.createSiteDisabledReason"
+        trigger-mode="content"
+        placement="bottom"
+      >
+        <button id="createSite" type="button" class="btn small soft" disabled>
+          <AppIcon name="download" aria-hidden="true" />{{ i18n.t("site.create_button") }}
+        </button>
+      </UiTooltip>
+      <button
+        v-else
+        id="createSite"
+        type="button"
+        class="btn small soft"
+        @click="emit('createSite')"
+      >
+        <AppIcon name="download" aria-hidden="true" />{{ i18n.t("site.create_button") }}
       </button>
       <UiTooltip
         v-if="!props.canSyncAll"

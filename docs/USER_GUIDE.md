@@ -321,6 +321,16 @@ Example:
 
 Users can clear `updates` for one record or for every loaded record. Clearing history is intentionally destructive and does not create another update-history entry.
 
+## Create a static research site
+
+The administrator **Works** page includes **Create site** when a corpus database is selected. Choose any number of indexed works, give the site a title and optional description, then choose **Create & download**. DerridAI validates the selected records and downloads a ZIP containing `index.html` and one browser runtime, `derridai-site.js`.
+
+The exported site is a read-mostly snapshot rather than another DerridAI server. The authoritative published Records and the derived vector projection remain separate in the bundle. The site can browse works and Records, filter metadata, run keyword search, run semantic or hybrid search when the publication contains compatible embeddings, create annotations stored only in that visitor's browser, and ask evidence-grounded Research questions. Research evidence retains the publication and Record identities used by the generated answer.
+
+The generated runtime has no DerridAI roles or server database. Provider-profile descriptors may be carried into the bundle, but provider secrets are never exported. A visitor can connect the site to a browser-accessible Ollama or OpenAI-compatible endpoint; an API key entered on the site is retained only in memory for that tab. The provider must permit browser requests from the site's origin. If the collection's embedding contract cannot be reproduced by a browser-accessible provider, keyword search still works while semantic search reports the incompatibility instead of silently using a different embedding model.
+
+Annotations and provider preferences are local to the browser. They are not shared across visitors or synchronized back into DerridAI. Creating a later site export creates a new immutable publication snapshot; it does not mutate an earlier downloaded site.
+
 ## Work-level metadata editing
 
 Works view includes **Edit metadata**.

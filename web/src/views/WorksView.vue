@@ -8,6 +8,7 @@ import AppIcon from "../components/AppIcon.vue";
 import WorksOverviewCard from "../components/works/WorksOverviewCard.vue";
 import WorksLibraryCard from "../components/works/WorksLibraryCard.vue";
 import WorksWorkspaceHeader from "../components/works/WorksWorkspaceHeader.vue";
+import CreateSiteDialog from "../components/works/CreateSiteDialog.vue";
 import { useWorksWorkspace } from "../composables/useWorksWorkspace";
 import * as runtime from "../runtime/runtime.js";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
@@ -15,6 +16,7 @@ import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import CorpusRecordSemanticMap from "../components/corpus-builder/CorpusRecordSemanticMap.vue";
 import CorpusSemanticGraphPanel from "../components/corpus-builder/CorpusSemanticGraphPanel.vue";
 import { corpusBuildsApi } from "../api/corpus";
+import { sitesApi } from "../api/sites";
 
 const auth = useAuthStore();
 const i18n = useI18nStore();
@@ -27,6 +29,48 @@ const revealed = ref(0);
 let queryTimer = 0;
 let revealToken = 0;
 const page = ref<HTMLElement | null>(null);
+const createSiteOpen = ref(false);
+const createSiteBusy = ref(false);
+const createSiteError = ref("");
+
+function openCreateSite() {
+  createSiteError.value = "";
+  createSiteOpen.value = true;
+}
+
+function closeCreateSite() {
+  if (createSiteBusy.value) return;
+  createSiteOpen.value = false;
+  createSiteError.value = "";
+}
+
+async function createSite(payload: { title: string; description: string; works: string[] }) {
+  if (!snapshot.value?.activeStore || createSiteBusy.value) return;
+  createSiteBusy.value = true;
+  createSiteError.value = "";
+  try {
+    const download = await sitesApi.exportSite({
+      store: snapshot.value.activeStore,
+      works: payload.works,
+      title: payload.title,
+      description: payload.description,
+      locale: i18n.locale === "fr-CA" ? "fr-CA" : "en-US",
+    });
+    const url = URL.createObjectURL(download.blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = download.filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    createSiteOpen.value = false;
+  } catch (cause) {
+    createSiteError.value = cause instanceof Error ? cause.message : String(cause);
+  } finally {
+    createSiteBusy.value = false;
+  }
+}
 
 const fileSignature = computed(() =>
   shell.snapshot.files.map((file) => `${file.id}:${file.count}:${file.dirty}`).join("|"),
@@ -243,14 +287,21 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
         :can-manage-corpus="snapshot.capabilities.canManageCorpus"
         :can-populate="snapshot.capabilities.canPopulate"
         :can-sync-all="snapshot.capabilities.canSyncAll"
+        :can-create-site="Boolean(snapshot.activeStore && snapshot.works.length)"
         :corpus-manage-denied-reason="snapshot.corpusManageDeniedReason"
         :populate-disabled-reason="snapshot.populateDisabledReason"
         :sync-all-disabled-reason="snapshot.syncAllDisabledReason"
+        :create-site-disabled-reason="
+          !snapshot.activeStore
+            ? i18n.t('site.create_requires_store')
+            : i18n.t('site.create_requires_works')
+        "
         @change-store="changeStore"
         @choose-jsonl="works.chooseJsonl()"
         @separate="works.separateWorks()"
         @populate-all="works.populateAll()"
         @sync-all="works.syncAll()"
+        @create-site="openCreateSite"
       />
 
       <WorksOverviewCard
@@ -409,6 +460,17 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
         </div>
       </section>
     </template>
+
+    <CreateSiteDialog
+      v-if="createSiteOpen && snapshot?.mode === 'admin'"
+      :works="snapshot.works"
+      :store-name="snapshot.activeStore"
+      :initial-work="snapshot.selectedWork"
+      :busy="createSiteBusy"
+      :error="createSiteError"
+      @cancel="closeCreateSite"
+      @create="createSite"
+    />
 
     <dialog
       ref="semanticMapDialog"

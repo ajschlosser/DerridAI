@@ -2259,6 +2259,62 @@ class ChromaStore:
         )
         return clean
 
+    def export_site_projection(
+        self,
+        store: str,
+        works: Sequence[str],
+    ) -> dict[str, Any]:
+        """Export selected Works with their existing vectors for a static research site.
+
+        This is a publication projection, not a new authoritative corpus. Records are
+        decoded from the collection exactly as ordinary reads are, while embeddings
+        remain a separate derived payload so callers cannot mistake them for scholarly
+        Record metadata.
+        """
+        selected = {str(work).strip() for work in works if str(work).strip()}
+        collection = self._collection(store)
+        total = collection.count()
+        output: list[dict[str, Any]] = []
+        batch_size = min(1000, max(1, settings.api_batch_size * 4))
+        for offset in range(0, total, batch_size):
+            payload = collection.get(
+                limit=min(batch_size, total - offset),
+                offset=offset,
+                include=["documents", "metadatas", "embeddings"],
+            )
+            ids = list(payload.get("ids") or [])
+            documents = list(payload.get("documents") or [])
+            metadatas = list(payload.get("metadatas") or [])
+            raw_embeddings = payload.get("embeddings")
+            if hasattr(raw_embeddings, "tolist"):
+                raw_embeddings = raw_embeddings.tolist()
+            embeddings = list(raw_embeddings or [])
+            for index, chroma_id in enumerate(ids):
+                metadata = decode_metadata(
+                    metadatas[index] if index < len(metadatas) else {}
+                )
+                if selected and str(metadata.get("work") or "") not in selected:
+                    continue
+                document_field = metadata.pop("_document_field", "text")
+                logical_id = metadata.pop("_record_id", None)
+                record = dict(metadata)
+                if logical_id is not None and "record_id" not in record:
+                    record["record_id"] = logical_id
+                record[document_field] = (
+                    documents[index] if index < len(documents) else ""
+                )
+                record["_chroma_id"] = chroma_id
+                output.append(
+                    {
+                        "record": compact_record_payload(record, include_updates=False),
+                        "embedding": (
+                            embeddings[index] if index < len(embeddings) else None
+                        ),
+                    }
+                )
+        return {"store": self._public_store(collection), "records": output}
+
+
     def export_records(
         self,
         store: str,

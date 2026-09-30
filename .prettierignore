@@ -16,6 +16,9 @@ web/tests/e2e/legacy-dom-baseline.spec.ts-snapshots/
 # Generated snapshot artifacts are updated by their owning test runner.
 *.snap
 
+# Packaged static-site runtime is shipped verbatim as a standalone browser distribution asset.
+api/app/site_assets/derridai-site.js
+
 # Generated GraphQL contract artifacts: exact bytes are checked by their generators
 # (scripts/export_graphql_schema.py --check and npm run codegen:check).
 web/src/api/graphql/schema.graphql
