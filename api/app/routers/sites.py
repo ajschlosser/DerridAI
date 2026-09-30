@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
@@ -25,13 +25,18 @@ class SiteExportRequest(BaseModel):
 def export_site(body: SiteExportRequest, request: Request) -> Response:
     """Create a static ZIP from selected Works in one corpus collection."""
     require_admin(request)
-    bundle = build_site_bundle(
-        store_name=body.store,
-        works=body.works,
-        title=body.title,
-        description=body.description,
-        locale=body.locale,
-    )
+    try:
+        bundle = build_site_bundle(
+            store_name=body.store,
+            works=body.works,
+            title=body.title,
+            description=body.description,
+            locale=body.locale,
+        )
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     return Response(
         content=bundle.payload,
         media_type="application/zip",
