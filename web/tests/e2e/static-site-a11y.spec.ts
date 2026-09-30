@@ -393,7 +393,6 @@ test("exported OpenAI-compatible profile powers vector retrieval and LLM Researc
   await expect(methods).toContainText("Text search");
   await expect(methods).toContainText("Vector search (embeddings)");
   await expect(methods).toContainText("LLM answer generation");
-    await expect(methods).not.toContainText("not used");
-    await scan(page);
-  },
-);
+  await expect(methods).not.toContainText("not used");
+  await scan(page);
+});
