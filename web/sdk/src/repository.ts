@@ -80,7 +80,9 @@ export class RecordRepository {
     const requested = filters.work;
     if (requested == null || requested === "") return this.descriptors;
     const works = (Array.isArray(requested) ? requested : [requested]).map(String);
-    return this.descriptors.filter((descriptor) => descriptor.work && works.includes(descriptor.work));
+    return this.descriptors.filter(
+      (descriptor) => descriptor.work && works.includes(descriptor.work),
+    );
   }
 
   private async loadRecords(chunkId: string, signal?: AbortSignal): Promise<PublicationRecord[]> {
@@ -149,11 +151,7 @@ export class RecordRepository {
     return { records, chunksLoaded: descriptors.length };
   }
 
-  async ensureVectors(
-    filters: SearchFilters,
-    runId: string,
-    signal?: AbortSignal,
-  ): Promise<void> {
+  async ensureVectors(filters: SearchFilters, runId: string, signal?: AbortSignal): Promise<void> {
     const descriptors = this.selectedDescriptors(filters);
     for (let index = 0; index < descriptors.length; index += 1) {
       throwIfAborted(signal);
