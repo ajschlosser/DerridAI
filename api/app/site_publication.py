@@ -142,6 +142,21 @@ def build_site_bundle(
     if not raw_records:
         raise ValueError("The selected works have no records in the active corpus database.")
 
+    indexed_works = {
+        str(item.get("record", {}).get("work") or "").strip()
+        for item in raw_records
+        if isinstance(item, dict) and isinstance(item.get("record"), dict)
+    }
+    missing_works = [work for work in selected_works if work not in indexed_works]
+    if missing_works:
+        preview = ", ".join(missing_works[:8])
+        extra = len(missing_works) - min(8, len(missing_works))
+        suffix = f" (+{extra} more)" if extra else ""
+        raise ValueError(
+            "Site creation requires every selected work to be indexed in the active corpus "
+            f"database. Missing: {preview}{suffix}"
+        )
+
     public_records: list[dict[str, Any]] = []
     vectors: list[list[float] | None] = []
     ids: set[str] = set()
