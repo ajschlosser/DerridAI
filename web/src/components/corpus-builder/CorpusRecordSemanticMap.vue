@@ -651,7 +651,6 @@ function onNodeKeydown(event: KeyboardEvent, node: DiagramNode) {
           :viewBox="`0 0 ${SIZE.width} ${SIZE.height}`"
           :width="SIZE.width"
           :height="SIZE.height"
-          aria-hidden="true"
         >
           <g>
             <UiRelationEdge
