@@ -14,6 +14,7 @@ import {
   PIPELINE_NODE_WIDTH,
   layoutPipelineDiagram,
   pipelineEdgePath,
+  type PipelineDiagramDensity,
   type PipelineDiagramOrientation,
   type PipelineEdgeKind,
 } from "../../domain/pipelineGraph";
@@ -49,6 +50,8 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
 const selectedId = ref("");
 const hoveredId = ref("");
 const orientation = ref<PipelineDiagramOrientation>("horizontal");
+const density = ref<PipelineDiagramDensity>("compact");
+const densityOptions: PipelineDiagramDensity[] = ["compact", "standard", "wide"];
 const viewport = ref<InstanceType<typeof UiRelationViewport> | null>(null);
 const arrowMarkerId = `pipeline-arrow-${useId()}`;
 const layoutState = useRelationLayoutState();
@@ -59,6 +62,7 @@ const diagram = computed(() =>
     props.entryStageIds,
     props.execution || null,
     orientation.value,
+    density.value,
   ),
 );
 const nodes = computed(() =>
@@ -229,6 +233,13 @@ function chooseOrientation(next: PipelineDiagramOrientation) {
   layoutState.clearPositions();
   void nextTick(() => viewport.value?.fitView(contentBounds.value));
 }
+
+function chooseDensity(next: PipelineDiagramDensity) {
+  if (density.value === next) return;
+  density.value = next;
+  layoutState.clearPositions();
+  void nextTick(() => viewport.value?.fitView(contentBounds.value));
+}
 </script>
 
 <template>
@@ -259,6 +270,27 @@ function chooseOrientation(next: PipelineDiagramOrientation) {
             @click="chooseOrientation('vertical')"
           >
             {{ t("pipelines.diagram_vertical", "Vertical") }}
+          </button>
+        </div>
+        <div
+          class="diagram-controls density-controls"
+          role="group"
+          :aria-label="t('pipelines.diagram_density', 'Card spacing')"
+        >
+          <button
+            v-for="option in densityOptions"
+            :key="option"
+            type="button"
+            :aria-pressed="density === option"
+            :class="{ selected: density === option }"
+            @click="chooseDensity(option)"
+          >
+            {{
+              t(
+                `pipelines.diagram_density_${option}`,
+                option.charAt(0).toUpperCase() + option.slice(1),
+              )
+            }}
           </button>
         </div>
         <UiRelationToolbar
@@ -498,6 +530,10 @@ function chooseOrientation(next: PipelineDiagramOrientation) {
   flex-wrap: wrap;
   gap: 4px;
 }
+.density-controls {
+  border-left: 1px solid var(--border-subtle);
+  padding-left: 6px;
+}
 .diagram-controls button {
   min-height: 32px;
   padding: 5px 8px;
@@ -554,12 +590,12 @@ function chooseOrientation(next: PipelineDiagramOrientation) {
   stroke-dasharray: 5 3;
 }
 .diagram-edge[data-kind="on_unavailable"] {
-  --relation-edge-stroke: var(--tone-warn-border);
-  stroke-dasharray: 2 3;
+  --relation-edge-stroke: var(--viz-cat-4);
+  stroke-dasharray: 9 3 2 3;
 }
 .diagram-edge[data-kind="on_timeout"] {
   --relation-edge-stroke: var(--tone-danger-border);
-  stroke-dasharray: 1 5;
+  stroke-dasharray: 1 6;
   stroke-linecap: round;
 }
 .diagram-edge[data-kind="on_error"] {
@@ -669,8 +705,8 @@ function chooseOrientation(next: PipelineDiagramOrientation) {
   border-top-color: var(--tone-info-border);
 }
 .diagram-legend li[data-kind="on_unavailable"]::before {
-  border-top-style: dotted;
-  border-top-color: var(--tone-warn-border);
+  border-top-style: dashed;
+  border-top-color: var(--viz-cat-4);
 }
 .diagram-legend li[data-kind="on_timeout"]::before {
   border-top-style: dotted;
