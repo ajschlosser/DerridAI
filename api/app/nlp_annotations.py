@@ -79,6 +79,8 @@ def reset_pipelines() -> None:
         _pipelines.clear()
         _loaded_names.clear()
         _missing.clear()
+        _lemma_pipelines.clear()
+        _lemma_missing.clear()
 
 
 def _candidate_models(language: str) -> list[tuple[str, str]]:
@@ -137,6 +139,59 @@ def load_pipeline(language: str) -> Any | None:
         logger.warning("No spaCy pipeline is available for %r.", language)
         _missing.add(language)
         return None
+
+
+_lemma_pipelines: dict[str, Any] = {}
+_lemma_missing: set[str] = set()
+MAX_LEMMA_CHARS = 2000
+
+
+def load_lemma_pipeline(language: str) -> Any | None:
+    """A cached pipeline with a lemmatizer for ``language``; None if none is installed.
+
+    The multilingual fallback is an entity model with no lemmatizer, so it is never used
+    here: a missing lemmatizer must read as "unavailable", not as surface text.
+    """
+    if language in _lemma_pipelines:
+        return _lemma_pipelines[language]
+    if language in _lemma_missing or not language or language == MULTILINGUAL:
+        return None
+    with _lock:
+        if language in _lemma_pipelines:
+            return _lemma_pipelines[language]
+        for target, name in _candidate_models(language):
+            if "multilingual fallback" in name:
+                continue
+            try:
+                import spacy
+
+                pipeline = spacy.load(target, exclude=["parser", "ner"])
+            except Exception as exc:  # missing package or model: try the next, never guess
+                logger.info("spaCy lemmatizer %r unavailable for %r: %s", name, language, exc)
+                continue
+            if "lemmatizer" not in getattr(pipeline, "pipe_names", []):
+                continue
+            _lemma_pipelines[language] = pipeline
+            return pipeline
+        _lemma_missing.add(language)
+        return None
+
+
+def lemma_tokens(text: str, language: Any) -> list[tuple[str, str, str]] | None:
+    """(text, lemma, universal POS) for a short phrase, or None when no lemmatizer is installed."""
+    code = language_code(language)
+    phrase = str(text or "")
+    if not code or not phrase.strip() or len(phrase) > MAX_LEMMA_CHARS:
+        return None
+    pipeline = load_lemma_pipeline(code)
+    if pipeline is None:
+        return None
+    try:
+        doc = pipeline(phrase)
+    except Exception as exc:  # noqa: BLE001 - an unusable pipeline is "unavailable", never a guess
+        logger.warning("spaCy lemmatization failed for %r: %s", code, exc)
+        return None
+    return [(str(token.text), str(token.lemma_ or ""), str(token.pos_ or "")) for token in doc]
 
 
 def _entity_matches(tag: str, label: str) -> bool:

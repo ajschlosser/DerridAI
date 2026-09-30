@@ -46,6 +46,9 @@ from .corpus_metadata import (
     SOURCE_BOUND_FIELDS,
     STANCE_VALUES,
 )
+from .semantic_identity import CollectionSemantics, EquivalenceMode, EquivalenceProfile
+
+__all__ = ["CollectionSemantics", "EquivalenceMode", "EquivalenceProfile"]
 
 # Format 2 replaced SchemaField.applies_to_work with `scope` and added `document_fields`. Format 1 files still import.
 FORMAT_VERSION = 2
@@ -75,6 +78,30 @@ SEMANTIC_COMPATIBILITY_IDS = {
     "persons": "derridai.indexing.persons",
     "works_referenced": "derridai.indexing.works_referenced",
 }
+# Value-matching policy for DerridAI's own field semantics, keyed by stable semantic identity
+# (never by display or storage name). A field's explicit ``equivalence_profile`` wins; otherwise
+# these apply, and then a type-based fallback. Person-bearing fields share the ``person`` kind,
+# so a speaker and an indexed person resolve to one identity.
+DEFAULT_EQUIVALENCE_PROFILES: dict[str, EquivalenceProfile] = {
+    **{
+        compat: EquivalenceProfile(mode="entity_name", identity_kind="person")
+        for compat in (
+            "derridai.speaker", "derridai.position_holder", "derridai.quotation.speaker",
+            "derridai.quotation.author", "derridai.quotation.position_holder",
+            "derridai.quotation.addressee", "derridai.indexing.persons",
+        )
+    },
+    "derridai.quotation.work": EquivalenceProfile(mode="text", identity_kind="work"),
+    "derridai.indexing.works_referenced": EquivalenceProfile(mode="text", identity_kind="work"),
+    "derridai.indexing.concepts": EquivalenceProfile(mode="lexical_phrase", identity_kind="concept"),
+    "derridai.indexing.topics": EquivalenceProfile(mode="lexical_phrase", identity_kind="topic"),
+    # A quotation chain is a sequence: who quotes whom is carried by order.
+    "derridai.quotation.chain": EquivalenceProfile(mode="text", collection_semantics="ordered"),
+    "derridai.region_type": EquivalenceProfile(mode="controlled"),
+    "derridai.discourse_role": EquivalenceProfile(mode="controlled"),
+    "derridai.primary_text": EquivalenceProfile(mode="exact"),
+}
+
 # Names a schema may not use: the core, the record's own source fields, the document-level fields records inherit, and
 # fields DerridAI computes itself.
 RESERVED_NAMES = (
@@ -106,6 +133,11 @@ DOCUMENT_FIELDS: dict[str, str] = {
     )
 }
 _DEFAULT_REQUIRED_DOCUMENT_FIELDS = {"title", "document_author"}
+
+
+def _identity_scope(value: str) -> str:
+    scope = re.sub(r"[^a-z0-9_.-]+", "-", str(value).casefold()).strip("-.") or "value"
+    return scope if scope[0].isalpha() else f"f-{scope}"
 
 
 class RetrievalProfile(BaseModel):
@@ -183,6 +215,9 @@ class SchemaField(BaseModel):
     pos_tags: list[str] = Field(default_factory=list, max_length=32)
     ner_tags: list[str] = Field(default_factory=list, max_length=32)
     retrieval_profile: RetrievalProfile | None = None
+    # When differently written values are the same semantic value (review feedback, precedent
+    # grouping, semantic indexing). Stored values and evidence are never rewritten.
+    equivalence_profile: EquivalenceProfile | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -394,6 +429,30 @@ class MetadataSchema(BaseModel):
             return field.retrieval_profile
         return self.group(field.group).retrieval_profile or RetrievalProfile()
 
+    def equivalence_profile_for(self, name: str) -> EquivalenceProfile:
+        """Resolve a field's value-matching policy by its stable semantics.
+
+        Explicit schema policy, then DerridAI's policy for the field's semantic
+        compatibility id, then its type. ``identity_kind`` is always filled: a field
+        that declares none is scoped to its own stable identity.
+        """
+        field = next((item for item in self.fields if item.name == name), None)
+        if field is None and name not in CORE_FIELDS:
+            raise KeyError(name)
+        compat = self.semantic_compatibility_id(name) or ""
+        scope = compat or (field.field_id if field else name)
+        if field is not None and field.equivalence_profile is not None:
+            profile = field.equivalence_profile
+        elif compat in DEFAULT_EQUIVALENCE_PROFILES:
+            profile = DEFAULT_EQUIVALENCE_PROFILES[compat]
+        elif field is None or field.type in {"boolean", "number"}:
+            profile = EquivalenceProfile(mode="exact")
+        elif field.type == "choice":
+            profile = EquivalenceProfile(mode="controlled" if field.strict else "text")
+        else:
+            profile = EquivalenceProfile(mode="text")
+        return profile if profile.identity_kind else profile.model_copy(update={"identity_kind": _identity_scope(scope)})
+
     def family_fields(self) -> dict[str, set[str]]:
         """Group key to its field names; the core sits in its group. Same shape as METADATA_FAMILY_FIELDS."""
         out = {g.key: {f.name for f in self.fields_in(g.key)} for g in self.groups}
@@ -436,6 +495,10 @@ class MetadataSchema(BaseModel):
 
     def content_hash(self) -> str:
         body = self.model_dump(mode="json", exclude={"id"})
+        for field in body.get("fields") or []:
+            # Optional policies added after a schema was saved do not change its identity until set.
+            if field.get("equivalence_profile") is None:
+                field.pop("equivalence_profile", None)
         return hashlib.sha256(json.dumps(body, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:16]
 
 
