@@ -1,6 +1,7 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { computed } from "vue";
+import UiButton from "../ui/UiButton.vue";
 import UiTooltip from "../ui/UiTooltip.vue";
 import { pipelineComparisonRows } from "../../domain/pipelineStudioPresentation";
 import { useI18nStore } from "../../stores/i18n";
@@ -22,6 +23,7 @@ const props = defineProps<{
     warnings?: string[];
   } | null;
 }>();
+const emit = defineEmits<{ openPipeline: [key: string] }>();
 
 const i18n = useI18nStore();
 const t = (key: string, fallback: string) => i18n.t(key, fallback);
@@ -38,6 +40,11 @@ function seconds(value: number | null | undefined) {
 }
 function sideTitle(side: ResearchPipelineComparisonSide) {
   return `${side.pipeline.name || side.pipeline.pipeline_id || "—"} · v${side.pipeline.pipeline_version ?? "—"}`;
+}
+function sidePipelineKey(side: ResearchPipelineComparisonSide) {
+  const id = side.pipeline.pipeline_id;
+  const version = side.pipeline.pipeline_version;
+  return id && version != null ? `${id}@${version}` : "";
 }
 function sideFlow(side: ResearchPipelineComparisonSide) {
   return `${side.candidates.pre_rerank.count} → ${side.candidates.post_rerank.count} → ${side.evidence.length}`;
@@ -120,14 +127,25 @@ function resources(side: ResearchPipelineComparisonSide) {
 
     <div class="side-grid">
       <section v-for="(side, key) in { A: result.left, B: result.right }" :key="key" class="side">
-        <p class="side-kicker">
-          {{
-            key === "A"
-              ? t("pipelines.compare_left", "Pipeline A")
-              : t("pipelines.compare_right", "Pipeline B")
-          }}
-        </p>
-        <h4>{{ sideTitle(side) }}</h4>
+        <div class="side-heading">
+          <div>
+            <p class="side-kicker">
+              {{
+                key === "A"
+                  ? t("pipelines.compare_left", "Pipeline A")
+                  : t("pipelines.compare_right", "Pipeline B")
+              }}
+            </p>
+            <h4>{{ sideTitle(side) }}</h4>
+          </div>
+          <UiButton
+            v-if="sidePipelineKey(side)"
+            variant="ghost"
+            size="small"
+            :label="t('pipelines.open_configuration', 'Open configuration')"
+            @click="emit('openPipeline', sidePipelineKey(side))"
+          />
+        </div>
         <p>
           {{ t("pipelines.compare_flow", "Candidates: pre-rerank → reranked → final evidence") }}
           <strong>{{ sideFlow(side) }}</strong>
@@ -272,6 +290,16 @@ function resources(side: ResearchPipelineComparisonSide) {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-4);
+}
+.side-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+.side-heading > div {
+  min-width: 0;
 }
 .side p {
   margin: 0 0 var(--space-1);
