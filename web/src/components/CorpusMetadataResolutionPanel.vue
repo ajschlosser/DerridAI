@@ -38,7 +38,7 @@ const props = defineProps<{
   schema?: MetadataSchema | null;
   /** Fields the server requires before it will accept the record; they are listed first and marked. */
   blockingFields?: string[];
-  /** Enables the read-only precedent and Research-claim cross-references. */
+  /** Enables read-only metadata-precedent cross-references. */
   buildId?: string;
 }>();
 const emit = defineEmits<{
