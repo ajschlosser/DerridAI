@@ -201,7 +201,9 @@ watch(documentNlpProvider, (provider) => {
               </select></label
             >
           </div>
-          <label v-if="documentNlpProvider === 'booknlp'" class="semantic-index-toggle compact-toggle"
+          <label
+            v-if="documentNlpProvider === 'booknlp'"
+            class="semantic-index-toggle compact-toggle"
             ><input
               v-model="documentNlpIncludeEvents"
               type="checkbox"
