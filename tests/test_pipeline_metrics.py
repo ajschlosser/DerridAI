@@ -137,6 +137,12 @@ def test_pipeline_metrics_summarize_runs_fallbacks_and_stage_health() -> None:
     assert features["research"]["fallback_run_count"] == 1
     assert features["metadata_precedents"]["failed_count"] == 1
 
+    workflows = {row["category"]: row for row in result["workflows"]}
+    assert workflows["research"]["run_count"] == 2
+    assert workflows["research"]["features"] == ["research"]
+    assert workflows["metadata"]["failed_count"] == 1
+    assert workflows["metadata"]["features"] == ["metadata_precedents"]
+
     strategies = {row["strategy_id"]: row for row in result["strategies"]}
     rerank = strategies["rerank.cross_encoder"]
     assert rerank["executions"] == 2
@@ -159,6 +165,7 @@ def test_pipeline_metrics_empty_sample_is_explicit() -> None:
         "warning_run_count": 0,
         "average_run_elapsed_ms": None,
         "p95_run_elapsed_ms": None,
+        "workflows": [],
         "features": [],
         "strategies": [],
     }

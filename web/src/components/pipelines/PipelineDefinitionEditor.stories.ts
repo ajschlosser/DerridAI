@@ -3,45 +3,12 @@ import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import { ref } from "vue";
 import PipelineDefinitionEditor from "./PipelineDefinitionEditor.vue";
 import type { PipelineDefinition, PipelineStrategy } from "../../types/pipelines";
+import { contractStrategy } from "./fixtures/pipelineCatalogContract";
 
 const strategies: PipelineStrategy[] = [
-  {
-    strategy_id: "retrieve.chroma_similarity",
-    version: 1,
-    family: "candidate_generation",
-    label: "Chroma semantic similarity",
-    description: "Retrieve nearest candidates from the configured collection.",
-    input_type: "query",
-    output_type: "candidate_set",
-    deterministic: false,
-    invokes_llm: false,
-    capabilities: ["embedding", "chroma"],
-    config_schema: {
-      type: "object",
-      properties: {
-        fetch_k: { type: "integer", minimum: 1, maximum: 5000 },
-      },
-    },
-  },
-  {
-    strategy_id: "select.source_diversity",
-    version: 1,
-    family: "diversity",
-    label: "Source-aware diversity",
-    description: "Avoid redundant adjacent context after relevance reranking.",
-    input_type: "candidate_set",
-    output_type: "candidate_set",
-    deterministic: true,
-    invokes_llm: false,
-    capabilities: [],
-    config_schema: {
-      type: "object",
-      properties: {
-        limit: { type: "integer", minimum: 1, maximum: 500 },
-      },
-    },
-  },
-];
+  "retrieve.chroma_similarity",
+  "select.source_diversity",
+].map(contractStrategy);
 
 const pipeline: PipelineDefinition = {
   pipeline_id: "research.custom",

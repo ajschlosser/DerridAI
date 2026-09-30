@@ -6,34 +6,18 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from .corpus_document_manifest import (
-    DOCUMENT_MANIFEST_FEATURE,
-    compile_document_manifest_pipeline,
-)
-from .corpus_metadata_enrichment import ENRICHMENT_FEATURE, compile_enrichment_pipeline
-from .corpus_reviewer_evidence_choice import (
-    REVIEWER_EVIDENCE_CHOICE_FEATURE,
-    compile_reviewer_evidence_choice_pipeline,
-)
-from .corpus_segmentation import SEGMENTATION_FEATURE, compile_segmentation_pipeline
-from .corpus_text_touchup import TEXT_TOUCHUP_FEATURE, compile_text_touchup_pipeline
 from .defaults import (
     BUILT_IN_ASSIGNMENTS,
     BUILT_IN_PIPELINES,
     built_in_assignment,
     built_in_pipeline,
 )
-from .evidence import compile_evidence_pipeline
-from .evidence_recovery import RECOVERY_FEATURE, compile_recovery_pipeline
-from .memory import compile_memory_pipeline
-from .metadata_precedents import compile_metadata_precedent_pipeline
-from .metadata_prefill import PREFILL_FEATURE, compile_prefill_pipeline
 from .models import PipelineAssignment, PipelineDefinition
-from .precedent_remap import REMAP_FEATURE, compile_remap_pipeline
-from .research import compile_research_pipeline
+from .purposes import workflow_vocabulary
 from .service import PipelineService, pipeline_hash, pipeline_service
 from .store import PipelineStore, pipeline_store
-from .store_search import SEARCH_FEATURE, compile_store_search_pipeline
+from .workflows import compile_for_feature, purpose_catalog
+from .workflows import runtime_support as adapter_runtime_support
 
 
 class PipelineManager:
@@ -214,40 +198,10 @@ class PipelineManager:
                 "Draft versions remain available to administrators for explicit test runs."
             )
 
-        if assignment.feature == "research":
-            # Compiling is the runtime-support check: an administrator can save
-            # experimental graphs, but only graphs the explicit Research adapter
-            # understands may become active execution configuration.
-            compile_research_pipeline(pipeline)
-        elif assignment.feature == "evidence_suggestion.reviewer":
-            # Evidence pipelines have their own bounded adapter. Structurally
-            # valid graphs outside its supported subset remain inspectable but
-            # cannot become an active assignment.
-            compile_evidence_pipeline(pipeline)
-        elif assignment.feature == REMAP_FEATURE:
-            compile_remap_pipeline(pipeline)
-        elif assignment.feature == ENRICHMENT_FEATURE:
-            compile_enrichment_pipeline(pipeline)
-        elif assignment.feature == SEGMENTATION_FEATURE:
-            compile_segmentation_pipeline(pipeline)
-        elif assignment.feature == DOCUMENT_MANIFEST_FEATURE:
-            compile_document_manifest_pipeline(pipeline)
-        elif assignment.feature == TEXT_TOUCHUP_FEATURE:
-            compile_text_touchup_pipeline(pipeline)
-        elif assignment.feature == REVIEWER_EVIDENCE_CHOICE_FEATURE:
-            compile_reviewer_evidence_choice_pipeline(pipeline)
-        elif assignment.feature == PREFILL_FEATURE:
-            compile_prefill_pipeline(pipeline)
-        elif assignment.feature == SEARCH_FEATURE:
-            compile_store_search_pipeline(pipeline)
-        elif assignment.feature == RECOVERY_FEATURE:
-            compile_recovery_pipeline(pipeline)
-        elif assignment.feature == "metadata_precedents":
-            compile_metadata_precedent_pipeline(pipeline)
-        elif assignment.feature in {"claim_memory", "response_memory"}:
-            compile_memory_pipeline(pipeline)
-        else:
-            raise ValueError(f"Pipeline feature {assignment.feature!r} is not supported.")
+        # Compiling is the runtime-support check: administrators can save
+        # experimental graphs, but only graphs the purpose's adapter can run may
+        # become active execution configuration.
+        compile_for_feature(assignment.feature, pipeline)
 
         normalized = assignment.model_copy(update={"source": actor_source})
         return self.store.put_assignment(
@@ -279,61 +233,12 @@ class PipelineManager:
     def runtime_support(self, pipeline: PipelineDefinition) -> dict[str, Any]:
         """Describe whether a saved graph can currently drive production code."""
 
-        try:
-            if pipeline.purpose == "research":
-                compile_research_pipeline(pipeline)
-                return {"supported": True, "adapter": "research"}
-            if pipeline.purpose == "evidence_suggestion":
-                compile_evidence_pipeline(pipeline)
-                return {"supported": True, "adapter": "evidence_suggestion"}
-            if pipeline.purpose == "corpus_metadata_enrichment":
-                compile_enrichment_pipeline(pipeline)
-                return {"supported": True, "adapter": "corpus_metadata_enrichment"}
-            if pipeline.purpose == "corpus_segmentation":
-                compile_segmentation_pipeline(pipeline)
-                return {"supported": True, "adapter": "corpus_segmentation"}
-            if pipeline.purpose == "corpus_document_manifest":
-                compile_document_manifest_pipeline(pipeline)
-                return {"supported": True, "adapter": "corpus_document_manifest"}
-            if pipeline.purpose == "corpus_text_touchup":
-                compile_text_touchup_pipeline(pipeline)
-                return {"supported": True, "adapter": "corpus_text_touchup"}
-            if pipeline.purpose == "corpus_reviewer_evidence_choice":
-                compile_reviewer_evidence_choice_pipeline(pipeline)
-                return {"supported": True, "adapter": "corpus_reviewer_evidence_choice"}
-            if pipeline.purpose == "precedent_evidence_remap":
-                compile_remap_pipeline(pipeline)
-                return {"supported": True, "adapter": "precedent_evidence_remap"}
-            if pipeline.purpose == "metadata_prefill":
-                compile_prefill_pipeline(pipeline)
-                return {"supported": True, "adapter": "metadata_prefill"}
-            if pipeline.purpose == "vector_store_search":
-                compile_store_search_pipeline(pipeline)
-                return {"supported": True, "adapter": "vector_store_search"}
-            if pipeline.purpose == "evidence_recovery":
-                plan = compile_recovery_pipeline(pipeline)
-                return {
-                    "supported": True,
-                    "adapter": "evidence_recovery",
-                    "celf_compliant": plan.celf_compliant,
-                    "reason": plan.compliance_reason,
-                }
-            if pipeline.purpose == "metadata_precedents":
-                compile_metadata_precedent_pipeline(pipeline)
-                return {"supported": True, "adapter": "metadata_precedents"}
-            if pipeline.purpose in {"claim_memory", "response_memory"}:
-                compile_memory_pipeline(pipeline)
-                return {"supported": True, "adapter": pipeline.purpose}
-            return {
-                "supported": False,
-                "adapter": None,
-                "reason": "This pipeline purpose does not have a runtime adapter.",
-            }
-        except ValueError as exc:
-            return {"supported": False, "adapter": None, "reason": str(exc)}
+        return adapter_runtime_support(pipeline)
 
     def catalog(self) -> dict[str, Any]:
         return {
+            "purposes": purpose_catalog(self.service.registry),
+            "vocabulary": workflow_vocabulary(),
             "strategies": self.service.strategies(),
             "pipelines": [
                 {

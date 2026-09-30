@@ -6,35 +6,16 @@ import type {
   PipelineDefinition,
   PipelineStrategy,
 } from "../../types/pipelines";
+import {
+  contractPurpose,
+  contractPurposes,
+  contractStrategy,
+  contractVocabulary,
+} from "./fixtures/pipelineCatalogContract";
 
-const strategies: PipelineStrategy[] = [
-  {
-    strategy_id: "retrieve.chroma_similarity",
-    version: 1,
-    family: "candidate_generation",
-    label: "Chroma semantic similarity",
-    description: "Retrieve semantic candidates from a compatible collection.",
-    input_type: "query",
-    output_type: "candidate_set",
-    deterministic: false,
-    invokes_llm: false,
-    capabilities: ["embedding", "chroma"],
-    config_schema: { type: "object", properties: {} },
-  },
-  {
-    strategy_id: "validate.provenance",
-    version: 1,
-    family: "support_validation",
-    label: "Provenance sufficiency gate",
-    description: "Require source identity and citation bindings.",
-    input_type: "candidate_set",
-    output_type: "candidate_set",
-    deterministic: true,
-    invokes_llm: false,
-    capabilities: [],
-    config_schema: { type: "object", properties: {} },
-  },
-];
+const strategies: PipelineStrategy[] = ["retrieve.chroma_similarity", "validate.provenance"].map(
+  contractStrategy,
+);
 
 const pipeline: PipelineDefinition = {
   pipeline_id: "research.current",
@@ -89,6 +70,9 @@ const meta = {
   args: {
     pipeline,
     strategies,
+    purpose: contractPurpose("research"),
+    purposes: contractPurposes,
+    vocabulary: contractVocabulary,
     assignment,
     assigned: true,
     canAssign: true,
@@ -115,5 +99,18 @@ export const InspectOnly: Story = {
         reason: "This graph is inspectable but not executable by the current adapter.",
       },
     },
+  },
+};
+
+export const FrenchContract: Story = {
+  parameters: { locale: "fr-CA" },
+};
+
+export const UnregisteredPurpose: Story = {
+  args: {
+    purpose: null,
+    assigned: false,
+    canAssign: false,
+    pipeline: { ...pipeline, purpose: "legacy_experiment", status: "draft" },
   },
 };

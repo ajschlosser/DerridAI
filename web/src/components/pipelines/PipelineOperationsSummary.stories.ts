@@ -2,6 +2,11 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import PipelineOperationsSummary from "./PipelineOperationsSummary.vue";
 import type { PipelineOperationalMetrics } from "../../types/pipelines";
+import {
+  contractPurposes,
+  contractStrategies,
+  contractVocabulary,
+} from "./fixtures/pipelineCatalogContract";
 
 const metrics: PipelineOperationalMetrics = {
   sampled_run_count: 128,
@@ -10,6 +15,38 @@ const metrics: PipelineOperationalMetrics = {
   warning_run_count: 21,
   average_run_elapsed_ms: 1320,
   p95_run_elapsed_ms: 3180,
+  workflows: [
+    {
+      category: "research",
+      features: ["research"],
+      run_count: 72,
+      failed_count: 2,
+      fallback_run_count: 9,
+      warning_run_count: 11,
+      average_elapsed_ms: 1680,
+      p95_elapsed_ms: 3420,
+    },
+    {
+      category: "metadata",
+      features: ["metadata_precedents"],
+      run_count: 41,
+      failed_count: 2,
+      fallback_run_count: 6,
+      warning_run_count: 8,
+      average_elapsed_ms: 910,
+      p95_elapsed_ms: 1820,
+    },
+    {
+      category: "evidence",
+      features: ["evidence_suggestion.reviewer"],
+      run_count: 15,
+      failed_count: 1,
+      fallback_run_count: 2,
+      warning_run_count: 2,
+      average_elapsed_ms: 510,
+      p95_elapsed_ms: 900,
+    },
+  ],
   features: [
     {
       feature: "research",
@@ -93,6 +130,9 @@ const meta = {
   component: PipelineOperationsSummary,
   args: {
     metrics,
+    strategies: contractStrategies,
+    purposes: contractPurposes,
+    vocabulary: contractVocabulary,
   },
 } satisfies Meta<typeof PipelineOperationsSummary>;
 
@@ -110,6 +150,7 @@ export const Empty: Story = {
       warning_run_count: 0,
       average_run_elapsed_ms: null,
       p95_run_elapsed_ms: null,
+      workflows: [],
       features: [],
       strategies: [],
       sample_limit: 250,

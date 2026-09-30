@@ -57,6 +57,20 @@ def _enabled_by_strategy(
     return out
 
 
+_SEMANTIC_STRATEGIES = {
+    "claim_memory": "retrieve.claim_memory",
+    "response_memory": "retrieve.response_memory",
+}
+
+
+def supported_strategies(purpose: str) -> frozenset[str]:
+    """Strategies the memory adapter runs for one memory purpose."""
+
+    return frozenset(
+        {_SEMANTIC_STRATEGIES[purpose], "retrieve.memory_lexical_fallback", "select.top_k"}
+    )
+
+
 def _one(
     by_strategy: dict[str, list[PipelineStageDefinition]],
     strategy: str,
@@ -77,18 +91,11 @@ def compile_memory_pipeline(pipeline: PipelineDefinition) -> MemoryPipelinePlan:
     if pipeline.purpose not in {"claim_memory", "response_memory"}:
         raise ValueError("Memory adapter supports claim_memory and response_memory pipelines.")
 
-    semantic_strategy = (
-        "retrieve.claim_memory"
-        if pipeline.purpose == "claim_memory"
-        else "retrieve.response_memory"
-    )
-    supported = {
-        semantic_strategy,
-        "retrieve.memory_lexical_fallback",
-        "select.top_k",
-    }
+    semantic_strategy = _SEMANTIC_STRATEGIES[pipeline.purpose]
     enabled = [stage for stage in pipeline.stages if stage.enabled]
-    unsupported = sorted({stage.strategy for stage in enabled} - supported)
+    unsupported = sorted(
+        {stage.strategy for stage in enabled} - supported_strategies(pipeline.purpose)
+    )
     if unsupported:
         raise ValueError(
             "Memory adapter does not implement strategy stage(s): "

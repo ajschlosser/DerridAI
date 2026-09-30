@@ -14,10 +14,75 @@ export type PipelineStageFamily =
   | "llm"
   | "evaluation";
 
+/** What a stage may establish about evidence, support or provenance (server vocabulary). */
+export type PipelineScholarlyEffect =
+  | "none"
+  | "advisory"
+  | "scope_constraint"
+  | "eligibility_gate"
+  | "provenance_gate"
+  | "transformation"
+  | "generation"
+  | "evaluation";
+
+export type PipelineWorkflowCategory =
+  | "research"
+  | "evidence"
+  | "search"
+  | "metadata"
+  | "memory"
+  | "corpus";
+
+/** How a registered strategy fits one purpose's runtime adapter. */
+export type PipelineStrategyFit = "supported" | "inspect_only" | "output_contract";
+
+export type PipelineVocabularyTerm = {
+  id: string;
+  label: string;
+  description: string;
+  label_key: string;
+  description_key: string;
+};
+
+export type PipelineWorkflowVocabulary = {
+  categories: PipelineVocabularyTerm[];
+  guarantees: PipelineVocabularyTerm[];
+  phases: PipelineVocabularyTerm[];
+  scholarly_effects: PipelineVocabularyTerm[];
+  effect_notes: PipelineVocabularyTerm[];
+};
+
+/** Server-owned contract for what a whole pipeline is for. */
+export type PipelinePurpose = {
+  purpose_id: string;
+  category: PipelineWorkflowCategory;
+  label: string;
+  description: string;
+  consuming_feature: string;
+  consumer: string;
+  input_semantics: string;
+  output_semantics: string;
+  authority_semantics: string;
+  output_type: string;
+  assignment_scope: string;
+  override_allowed: boolean;
+  required_guarantees: string[];
+  label_key: string;
+  description_key: string;
+  consumer_key: string;
+  input_key: string;
+  output_key: string;
+  authority_key: string;
+  strategy_fit: Record<string, PipelineStrategyFit>;
+};
+
 export type PipelineStrategy = {
   strategy_id: string;
   version: number;
   family: PipelineStageFamily;
+  scholarly_effect: PipelineScholarlyEffect;
+  phase: string;
+  effect_note: string;
   label: string;
   label_key?: string;
   description: string;
@@ -123,6 +188,8 @@ export type PipelineRunTrace = {
 };
 
 export type PipelineCatalog = {
+  purposes: PipelinePurpose[];
+  vocabulary: PipelineWorkflowVocabulary;
   strategies: PipelineStrategy[];
   pipelines: PipelineDefinition[];
   assignments: PipelineAssignment[];
@@ -143,6 +210,18 @@ export type PipelineValidationResponse = {
 
 export type PipelineFeatureMetrics = {
   feature: string;
+  run_count: number;
+  failed_count: number;
+  fallback_run_count: number;
+  warning_run_count: number;
+  average_elapsed_ms?: number | null;
+  p95_elapsed_ms?: number | null;
+};
+
+export type PipelineWorkflowMetrics = {
+  /** A workflow category, or "unclassified" for features no purpose consumes. */
+  category: string;
+  features: string[];
   run_count: number;
   failed_count: number;
   fallback_run_count: number;
@@ -173,10 +252,12 @@ export type PipelineOperationalMetrics = {
   warning_run_count: number;
   average_run_elapsed_ms?: number | null;
   p95_run_elapsed_ms?: number | null;
+  workflows: PipelineWorkflowMetrics[];
   features: PipelineFeatureMetrics[];
   strategies: PipelineStrategyMetrics[];
   sample_limit: number;
   feature_filter?: string | null;
+  category_filter?: string | null;
   owner_filter?: string | null;
 };
 

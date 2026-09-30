@@ -136,24 +136,26 @@ class ResearchPipelinePlan:
         return self.rerank_fallbacks.get(condition)
 
 
-_ALLOWED_RESEARCH_STRATEGIES = {
-    "query.passthrough",
-    "query.research_decompose",
-    "retrieve.chroma_similarity",
-    "retrieve.lexical_bm25",
-    "normalize.collection_relevance",
-    "fusion.rrf",
-    "rerank.cross_encoder",
-    "rerank.lexical_fallback",
-    "validate.provenance",
-    "validate.citation_binding",
-    "select.mmr",
-    "select.source_diversity",
-    "select.top_k",
-    "pack.evidence_context",
-    "llm.generate_answer",
-    "llm.grade_rag",
-}
+SUPPORTED_STRATEGIES = frozenset(
+    {
+        "query.passthrough",
+        "query.research_decompose",
+        "retrieve.chroma_similarity",
+        "retrieve.lexical_bm25",
+        "normalize.collection_relevance",
+        "fusion.rrf",
+        "rerank.cross_encoder",
+        "rerank.lexical_fallback",
+        "validate.provenance",
+        "validate.citation_binding",
+        "select.mmr",
+        "select.source_diversity",
+        "select.top_k",
+        "pack.evidence_context",
+        "llm.generate_answer",
+        "llm.grade_rag",
+    }
+)
 
 
 def _enabled_stages(pipeline: PipelineDefinition) -> dict[str, PipelineStageDefinition]:
@@ -358,7 +360,7 @@ def compile_research_pipeline(pipeline: PipelineDefinition) -> ResearchPipelineP
         {
             stage.strategy
             for stage in stages.values()
-            if stage.strategy not in _ALLOWED_RESEARCH_STRATEGIES
+            if stage.strategy not in SUPPORTED_STRATEGIES
         }
     )
     if unknown:
