@@ -2,31 +2,56 @@
 
 # DerridAI SDK
 
-The DerridAI SDK is the headless browser research library used by published DerridAI sites and by custom “bring your own site” integrations.
+The DerridAI SDK is the framework-neutral research library used by published DerridAI sites and custom “bring your own site” integrations. It is written in TypeScript and can be consumed either as an ESM package with declarations or as the browser IIFE exposed as `globalThis.DerridAI`.
 
-The SDK owns publication semantics, progressive Record loading, filtering, lexical/semantic/hybrid retrieval, MMR diversification, evidence-packet construction, deterministic citation resolution, annotations, and Research orchestration. It does not render DOM and does not require Vue, React, Pinia, Vue Router, or the DerridAI application frontend.
+The SDK owns publication semantics, progressive Record loading, filtering, lexical/semantic/hybrid retrieval, embedding-contract validation, MMR diversification, evidence-packet construction, deterministic citation resolution, annotations, and Research orchestration. It does not render DOM and does not require Vue, React, Pinia, Vue Router, or the DerridAI application frontend.
 
 AI execution is transport-neutral. A host application injects embedding and generation capabilities as TypeScript/JavaScript objects. The SDK does not accept an API endpoint or API key and does not make direct browser-to-model-provider requests.
 
-## Minimal usage
+## TypeScript / ESM
+
+Build the package from the repository root:
+
+```bash
+cd web
+npm run build:sdk:package
+```
+
+The package metadata lives at `web/sdk/package.json`, and the build emits ESM JavaScript plus `.d.ts` declarations to `web/sdk/dist`. To create an installable tarball:
+
+```bash
+cd web
+npm run pack:sdk
+```
+
+A consuming Web application can then install that tarball (or a published `@derridai/sdk` package) and use normal TypeScript imports:
 
 ```ts
-import { createClient, dataSources } from "./src";
+import {
+  createClient,
+  dataSources,
+  type EmbeddingProvider,
+  type GenerationProvider,
+} from "@derridai/sdk";
+
+const embeddings: EmbeddingProvider = {
+  descriptor: () => ({ type: "host", model: "bge-m3:latest" }),
+  async embed(input, { signal } = {}) {
+    return hostAI.embed(input, { signal });
+  },
+};
+
+const generation: GenerationProvider = {
+  descriptor: () => ({ type: "host", model: "qwen3:8b" }),
+  async generate(request, { signal } = {}) {
+    return hostAI.generate(request, { signal });
+  },
+};
 
 const client = await createClient({
   dataSource: dataSources.inline(publicationPackage),
-  embeddings: {
-    descriptor: () => ({ type: "host", model: "bge-m3:latest" }),
-    async embed(input, { signal } = {}) {
-      return hostAI.embed(input, { signal });
-    },
-  },
-  generation: {
-    descriptor: () => ({ type: "host", model: "qwen3:8b" }),
-    async generate(request, { signal } = {}) {
-      return hostAI.generate(request, { signal });
-    },
-  },
+  embeddings,
+  generation,
 });
 
 const search = await client.search({
@@ -40,11 +65,29 @@ const research = await client.research({
 });
 ```
 
-The IIFE distribution is built with:
+Any framework can wrap the same client. React, Vue, Svelte, Solid, plain DOM code, Electron/Tauri shells, and server-backed Web applications do not require framework-specific DerridAI adapters.
+
+## Browser script
+
+The browser distribution is built with:
 
 ```bash
 cd web
 npm run build:sdk
 ```
 
-and exposes `globalThis.DerridAI`. The generated artifact is written to `api/app/site_assets/derridai-sdk.js` so the publication builder can package the same SDK used by the reference published-site UI.
+It writes `api/app/site_assets/derridai-sdk.js` and exposes `globalThis.DerridAI`:
+
+```html
+<script src="./derridai-publication.js"></script>
+<script src="./derridai-sdk.js"></script>
+<script>
+  const client = await DerridAI.createClient({
+    dataSource: DerridAI.dataSources.inline(window.__DERRIDAI_SITE_PACKAGE__),
+    embeddings: window.myHost?.embeddings,
+    generation: window.myHost?.generation,
+  });
+</script>
+```
+
+The generated DerridAI reference site consumes this same public SDK. The SDK is therefore not an alternate implementation path: it is the research engine shared by the built-in site and bring-your-own-site applications.
