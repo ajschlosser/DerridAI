@@ -215,13 +215,13 @@ Goal: allow researchers to control the build without leaving Review.
 
 ### Phase 5 — Review command hierarchy and bulk happy paths
 
-Status: **not started**
+Status: **in progress**
 
 Goal: reduce control competition and make fast adjudication obvious.
 
 - [ ] Keep queue tabs + issue filter + search as primary review-navigation controls.
-- [ ] Promote **Accept N ready Records** when `ready > 0`.
-- [ ] Replace native `window.confirm` for this important workflow with the shared accessible dialog/confirmation pattern.
+- [x] Promote **Accept N ready Records** only when ready work exists.
+- [x] Replace native `window.confirm` for ready-Record bulk acceptance with the shared accessible dialog pattern.
 - [ ] Move selection-only bulk commands into a contextual selection bar when selected count > 0.
 - [ ] Reduce permanent header density by relocating Record/Metadata/Source view controls closer to the inspected pane where practical.
 - [ ] Preserve keyboard shortcuts and announce resulting queue/count changes.
@@ -230,17 +230,17 @@ Goal: reduce control competition and make fast adjudication obvious.
 
 ### Phase 6 — Publish simplification and explicit skip-review path
 
-Status: **not started**
+Status: **in progress**
 
 Goal: make publication readiness understandable at a glance.
 
-- [ ] Reduce duplicate readiness information between `CorpusPublishWorkspace.vue`, `CorpusFinishWorkspace.vue`, and `CorpusMetadataIssues.vue`.
-- [ ] Present three principal readiness groups:
-  - [ ] Records;
-  - [ ] Required metadata;
-  - [ ] Source & validation.
+- [x] Remove the duplicate metadata-issues surface from Publish and flatten the nested Finish card while keeping direct queue/repair actions.
+- [x] Present three principal readiness groups:
+  - [x] Records;
+  - [x] Required metadata;
+  - [x] Source & validation.
 - [ ] Each blocked group gets one primary repair action into the exact review context.
-- [ ] Rename/reframe `accept_unreviewed` UI as **Use suggestions as-is & publish** (or final localized equivalent).
+- [x] Rename/reframe `accept_unreviewed` UI as **Use suggestions as-is & publish**.
 - [ ] Confirmation dialog must clearly state:
   - [ ] no human-review claim is created;
   - [ ] suggestion/provenance state remains preserved;
@@ -394,3 +394,13 @@ Work on this branch will be committed in coherent checkpoints. At each checkpoin
 - Renamed the user-facing **Advanced** section to **Run settings**.
 - Corrected setup-state semantics so a blocking context/run-setting problem is reported as incomplete rather than optional.
 - Added English/Québec French/fallback copy and focused tests for the Build plan label and blocking run-setting state.
+
+
+### Checkpoint 5 — faster review and clearer publication
+
+- Promoted **Accept clean (N)** only when ready Records actually exist, reducing disabled-control noise.
+- Replaced the native browser confirmation with the shared focus-managed `UiDialog`, including explicit copy that bulk acceptance records a human review decision while unresolved exceptions remain queued.
+- Removed the now-redundant second metadata-issues panel from Publish; publication repair remains available through the single Required metadata readiness row.
+- Reduced the publication summary from five competing counters to the three quantities that map to the readiness groups: pending review, metadata issues, and validation blockers.
+- Flattened the nested Finish surface so Publish reads as one workspace rather than cards inside cards.
+- Renamed the provenance-safe skip-review path to **Use suggestions as-is & publish…** and updated the confirmation action/title in English, Québec French, frontend fallbacks, frontend tests, and the representative E2E workflow.
