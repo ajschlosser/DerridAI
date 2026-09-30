@@ -2,6 +2,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from "vue";
 import { useI18nStore } from "../../stores/i18n";
+import type { LanguageInfo, ProviderProfile } from "../../api/system";
 import type { SiteExportFormat } from "../../api/sites";
 import type { WorksItem } from "../../types/works";
 import AppIcon from "../AppIcon.vue";
@@ -10,6 +11,8 @@ const props = defineProps<{
   works: WorksItem[];
   storeName: string;
   initialWork?: string;
+  languages: LanguageInfo[];
+  providerProfiles: ProviderProfile[];
   busy?: boolean;
   error?: string;
 }>();
@@ -21,6 +24,8 @@ const emit = defineEmits<{
       title: string;
       description: string;
       works: string[];
+      languages: string[];
+      provider_profile_ids: string[];
       export_format: SiteExportFormat;
     },
   ];
@@ -32,9 +37,18 @@ const selected = ref<string[]>(props.initialWork ? [props.initialWork] : []);
 const title = ref(props.initialWork || "");
 const description = ref("");
 const exportFormat = ref<SiteExportFormat>("local-single-file");
+const selectedLanguages = ref<string[]>(props.languages.map((item) => item.code));
+const selectedProviderProfiles = ref<string[]>(props.providerProfiles.map((item) => item.id));
 
 const selectedCount = computed(() => selected.value.length);
-const canCreate = computed(() => Boolean(selectedCount.value && props.storeName && !props.busy));
+const canCreate = computed(() =>
+  Boolean(
+    selectedCount.value &&
+      selectedLanguages.value.length &&
+      props.storeName &&
+      !props.busy,
+  ),
+);
 
 function toggle(work: string, checked: boolean) {
   selected.value = checked
@@ -51,12 +65,42 @@ function clearSelection() {
   selected.value = [];
 }
 
+function toggleLanguage(code: string, checked: boolean) {
+  selectedLanguages.value = checked
+    ? [...new Set([...selectedLanguages.value, code])]
+    : selectedLanguages.value.filter((item) => item !== code);
+}
+
+function selectAllLanguages() {
+  selectedLanguages.value = props.languages.map((item) => item.code);
+}
+
+function clearLanguages() {
+  selectedLanguages.value = [];
+}
+
+function toggleProvider(id: string, checked: boolean) {
+  selectedProviderProfiles.value = checked
+    ? [...new Set([...selectedProviderProfiles.value, id])]
+    : selectedProviderProfiles.value.filter((item) => item !== id);
+}
+
+function selectAllProviders() {
+  selectedProviderProfiles.value = props.providerProfiles.map((item) => item.id);
+}
+
+function clearProviders() {
+  selectedProviderProfiles.value = [];
+}
+
 function submit() {
   if (!canCreate.value) return;
   emit("create", {
     title: title.value.trim() || selected.value[0] || "",
     description: description.value.trim(),
     works: [...selected.value],
+    languages: [...selectedLanguages.value],
+    provider_profile_ids: [...selectedProviderProfiles.value],
     export_format: exportFormat.value,
   });
 }
@@ -136,6 +180,75 @@ onMounted(async () => {
               <small>{{ i18n.t("site.create_format_nginx_help") }}</small>
             </span>
           </label>
+        </fieldset>
+
+        <fieldset class="site-choice-picker">
+          <legend>{{ i18n.t("site.create_languages") }}</legend>
+          <p class="site-choice-help">{{ i18n.t("site.create_languages_help") }}</p>
+          <div class="site-work-picker-toolbar">
+            <span>{{ i18n.tf("site.create_languages_selected", { count: selectedLanguages.length }) }}</span>
+            <div>
+              <button type="button" class="btn small" @click="selectAllLanguages">
+                {{ i18n.t("site.create_select_all") }}
+              </button>
+              <button type="button" class="btn small" @click="clearLanguages">
+                {{ i18n.t("site.create_clear") }}
+              </button>
+            </div>
+          </div>
+          <div class="site-choice-list">
+            <label v-for="language in props.languages" :key="language.code" class="site-work-option">
+              <input
+                type="checkbox"
+                :checked="selectedLanguages.includes(language.code)"
+                @change="toggleLanguage(language.code, ($event.target as HTMLInputElement).checked)"
+              />
+              <span>
+                <strong>{{ language.flag }} {{ language.name }}</strong>
+                <small>{{ language.code }}</small>
+              </span>
+            </label>
+          </div>
+          <p v-if="!selectedLanguages.length" class="site-create-error" role="alert">
+            {{ i18n.t("site.create_language_required") }}
+          </p>
+        </fieldset>
+
+        <fieldset class="site-choice-picker">
+          <legend>{{ i18n.t("site.create_provider_profiles") }}</legend>
+          <p class="site-choice-help">{{ i18n.t("site.create_provider_profiles_help") }}</p>
+          <div v-if="props.providerProfiles.length" class="site-work-picker-toolbar">
+            <span>{{ i18n.tf("site.create_providers_selected", { count: selectedProviderProfiles.length }) }}</span>
+            <div>
+              <button type="button" class="btn small" @click="selectAllProviders">
+                {{ i18n.t("site.create_select_all") }}
+              </button>
+              <button type="button" class="btn small" @click="clearProviders">
+                {{ i18n.t("site.create_clear") }}
+              </button>
+            </div>
+          </div>
+          <div v-if="props.providerProfiles.length" class="site-choice-list">
+            <label
+              v-for="profile in props.providerProfiles"
+              :key="profile.id"
+              class="site-work-option"
+            >
+              <input
+                type="checkbox"
+                :checked="selectedProviderProfiles.includes(profile.id)"
+                @change="toggleProvider(profile.id, ($event.target as HTMLInputElement).checked)"
+              />
+              <span>
+                <strong>{{ profile.name || profile.id }}</strong>
+                <small>
+                  {{ profile.type === "openai" ? "OpenAI-compatible" : "Ollama" }}
+                  <template v-if="profile.model"> · {{ profile.model }}</template>
+                </small>
+              </span>
+            </label>
+          </div>
+          <p v-else class="site-choice-help">{{ i18n.t("site.create_no_provider_profiles") }}</p>
         </fieldset>
 
         <fieldset class="site-work-picker">
@@ -345,7 +458,8 @@ onMounted(async () => {
   line-height: 1.45;
 }
 
-.site-work-picker {
+.site-work-picker,
+.site-choice-picker {
   min-width: 0;
   margin: 0;
   padding: 0.85rem;
@@ -353,9 +467,16 @@ onMounted(async () => {
   border-radius: 10px;
 }
 
-.site-work-picker legend {
+.site-work-picker legend,
+.site-choice-picker legend {
   padding: 0 0.35rem;
   font-weight: 800;
+}
+
+.site-choice-help {
+  margin: 0 0 0.65rem;
+  color: var(--muted);
+  line-height: 1.45;
 }
 
 .site-work-picker-toolbar {
@@ -373,7 +494,8 @@ onMounted(async () => {
   gap: 0.4rem;
 }
 
-.site-work-list {
+.site-work-list,
+.site-choice-list {
   display: grid;
   max-height: 18rem;
   gap: 0.35rem;
