@@ -9,6 +9,8 @@
  * the drawing is partial.
  */
 import { computed, onBeforeUnmount, ref, watch } from "vue";
+import UiRelationDotNode from "../relations/UiRelationDotNode.vue";
+import UiRelationEdge from "../relations/UiRelationEdge.vue";
 import UiRelationToolbar from "../relations/UiRelationToolbar.vue";
 import UiRelationViewport from "../relations/UiRelationViewport.vue";
 import { useRelationLayoutState } from "../../composables/relations/useRelationLayoutState";
@@ -714,22 +716,19 @@ const pageText = computed(() => {
               :height="HEIGHT"
             >
               <g class="graph-edges" aria-hidden="true">
-                <path
+                <UiRelationEdge
                   v-for="edge in edges"
                   :key="edge.id"
-                  :d="edgePath(edge)"
-                  :stroke-width="edgeWidth(edge)"
+                  :path="edgePath(edge)"
+                  :width="edgeWidth(edge)"
+                  :title="`${relationLabel(edge.predicate)} · ${authorityLabel(edge.authority_status)}`"
                   :class="[
                     'graph-edge',
                     edge.relation_kind,
                     edge.authority_status,
                     { dim: !edgeActive(edge), lit: highlightId && edgeActive(edge) },
                   ]"
-                >
-                  <title>
-                    {{ relationLabel(edge.predicate) }} · {{ authorityLabel(edge.authority_status) }}
-                  </title>
-                </path>
+                />
               </g>
               <g class="graph-nodes">
                 <g
@@ -761,11 +760,11 @@ const pageText = computed(() => {
                   @blur="hoveredNodeId = ''"
                   @keydown="onNodeKeydown($event, node)"
                 >
-                  <circle class="halo" :r="node.r + 5" />
-                  <circle class="dot" :r="node.r" />
-                  <text v-if="labelledIds.has(node.id)" class="label" :x="node.r + 5" y="4">
-                    {{ node.label.length > 32 ? `${node.label.slice(0, 31)}…` : node.label }}
-                  </text>
+                  <UiRelationDotNode
+                    :radius="node.r"
+                    :label="node.label.length > 32 ? `${node.label.slice(0, 31)}…` : node.label"
+                    :show-label="labelledIds.has(node.id)"
+                  />
                 </g>
               </g>
             </svg>
@@ -1437,37 +1436,25 @@ const pageText = computed(() => {
 .graph-node.dim {
   opacity: 0.18;
 }
-.graph-node .dot {
-  fill: var(--hue, var(--accent));
-  stroke: var(--surface-raised);
-  stroke-width: 1.5;
+.graph-node {
+  --relation-node-dot: var(--hue, var(--accent));
+  --relation-node-dot-border: var(--surface-raised);
+  --relation-node-label: var(--text);
+  --relation-node-label-halo: var(--surface-raised);
+  --relation-node-halo: transparent;
+  --relation-node-halo-opacity: 1;
 }
-.graph-node .halo {
-  fill: none;
-  stroke: transparent;
-  stroke-width: 3;
+.graph-node.focus {
+  --relation-node-halo: var(--hue, var(--accent));
+  --relation-node-halo-opacity: 0.45;
 }
-.graph-node.focus .halo {
-  stroke: var(--hue, var(--accent));
-  stroke-opacity: 0.45;
-}
-.graph-node.selected .halo,
-.graph-node:focus-visible .halo {
-  stroke: var(--focus-ring);
-  stroke-opacity: 1;
+.graph-node.selected,
+.graph-node:focus-visible {
+  --relation-node-halo: var(--focus-ring);
+  --relation-node-halo-opacity: 1;
 }
 .graph-node:focus {
   outline: none;
-}
-.graph-node .label {
-  fill: var(--text);
-  font-size: 12px;
-  font-weight: var(--fw-semibold);
-  paint-order: stroke;
-  stroke: var(--surface-raised);
-  stroke-width: 3px;
-  stroke-linejoin: round;
-  pointer-events: none;
 }
 .graph-legend {
   display: flex;
