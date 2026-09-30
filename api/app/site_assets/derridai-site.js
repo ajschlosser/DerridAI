@@ -2,16 +2,24 @@
 (() => {
   "use strict";
 
-  const dataNode = document.getElementById("derridai-publication");
   const root = document.getElementById("app");
-  if (!dataNode || !root) return;
+  const sitePackage = globalThis.__DERRIDAI_SITE_PACKAGE__;
+  if (!root) return;
+  if (!sitePackage?.manifest || !Array.isArray(sitePackage.chunks)) {
+    root.textContent = "This DerridAI site package is incomplete.";
+    return;
+  }
 
-  const publication = JSON.parse(dataNode.textContent || "{}");
-  const records = Array.isArray(publication.records) ? publication.records : [];
+  const publication = sitePackage.manifest;
+  const chunks = sitePackage.chunks;
   const vectors = publication.vector_index || {};
-  const vectorIds = Array.isArray(vectors.record_ids) ? vectors.record_ids : [];
-  const vectorRows = Array.isArray(vectors.vectors) ? vectors.vectors : [];
-  const vectorById = new Map(vectorIds.map((id, index) => [String(id), vectorRows[index] || null]));
+  const vectorById = new Map();
+  const recordCache = new Map();
+  const vectorChunkCache = new Set();
+  const totalRecordCount = (publication.works || []).reduce(
+    (sum, item) => sum + Number(item.record_count || 0),
+    0,
+  );
   const publicationId = String(publication.publication_id || "publication");
   const localeKey = `derridai.site.locale.${publicationId}`;
   const annotationKey = `derridai.site.annotations.${publicationId}`;
@@ -20,7 +28,6 @@
   let locale = localStorage.getItem(localeKey) || publication.locale || availableLocales[0] || "en-US";
   if (!availableLocales.includes(locale)) locale = availableLocales[0] || "en-US";
   let view = "search";
-  let lastResults = [];
   let sessionApiKey = "";
 
   const style = document.createElement("style");
