@@ -797,7 +797,7 @@ const pageText = computed(() => {
                 <g
                   v-for="node in drawnNodes"
                   :key="node.id"
-                  :transform="`translate(${node.x}, ${node.y})`"
+                  :transform="`translate(${node.x}, ${node.y}) scale(${1 / viewportState.zoom})`"
                   :class="[
                     'graph-node',
                     hueClass(node.type),
@@ -1474,6 +1474,7 @@ const pageText = computed(() => {
   color: var(--muted);
 }
 .graph-edge {
+  vector-effect: non-scaling-stroke;
   fill: none;
   stroke: var(--border-strong);
   opacity: 0.5;

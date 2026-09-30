@@ -6,6 +6,50 @@ import type { RunGuidanceEntry, RunGuidanceField } from "../components/CorpusRun
 
 type Translate = (key: string, fallback: string) => string;
 
+// Guidance is remembered per schema so imported or hand-written guidance
+// survives reloads and switching schemas. It is a browser-local convenience;
+// a build's own request keeps the authoritative copy of what a run used.
+export const RUN_GUIDANCE_STORAGE_KEY = "derridai.run-guidance.v1";
+
+function readStore(): Record<string, Record<string, RunGuidanceEntry>> {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(RUN_GUIDANCE_STORAGE_KEY) || "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveGuidance(schemaId: string, value: Record<string, RunGuidanceEntry>) {
+  try {
+    const store = readStore();
+    if (Object.keys(value).length) store[schemaId] = value;
+    else delete store[schemaId];
+    localStorage.setItem(RUN_GUIDANCE_STORAGE_KEY, JSON.stringify(store));
+  } catch {
+    /* storage unavailable: guidance still works for this session */
+  }
+}
+
+function loadGuidance(schemaId: string): Record<string, RunGuidanceEntry> {
+  const stored = readStore()[schemaId];
+  if (!stored || typeof stored !== "object") return {};
+  const result: Record<string, RunGuidanceEntry> = {};
+  for (const [field, raw] of Object.entries(stored)) {
+    if (!raw || typeof raw !== "object") continue;
+    result[field] = {
+      instructions: typeof raw.instructions === "string" ? raw.instructions : "",
+      look_for: Array.isArray(raw.look_for)
+        ? raw.look_for.filter((term): term is string => typeof term === "string")
+        : [],
+      required: raw.required === true,
+      default_placeholder:
+        typeof raw.default_placeholder === "string" ? raw.default_placeholder : "",
+    };
+  }
+  return result;
+}
+
 export function useCorpusRunGuidance(
   schema: Ref<MetadataSchema | null>,
   build: Ref<CorpusBuild | null>,
@@ -26,9 +70,20 @@ export function useCorpusRunGuidance(
     return [...core, ...custom];
   });
 
-  watch(schema, (next, previous) => {
-    if (next?.id !== previous?.id) guidance.value = {};
-  });
+  watch(
+    schema,
+    (next, previous) => {
+      if (next?.id !== previous?.id) guidance.value = next ? loadGuidance(next.id) : {};
+    },
+    { immediate: true },
+  );
+  watch(
+    guidance,
+    (value) => {
+      if (schema.value) saveGuidance(schema.value.id, value);
+    },
+    { deep: true },
+  );
 
   const active = computed(() => {
     const request = build.value?.request;
@@ -49,15 +104,20 @@ export function useCorpusRunGuidance(
 
   function payload(): Record<string, RunGuidanceEntry> {
     const result: Record<string, RunGuidanceEntry> = {};
+    const known = new Set(fields.value.map((field) => field.name));
     for (const [field, value] of Object.entries(guidance.value)) {
-      const entry = {
+      if (!known.has(field)) continue;
+      const required = value.required === true;
+      const entry: RunGuidanceEntry = {
         instructions: value.instructions.trim(),
         look_for: value.look_for
           .map((term) => term.trim())
           .filter(Boolean)
           .slice(0, 40),
+        required,
+        default_placeholder: required ? (value.default_placeholder || "").trim() : "",
       };
-      if (entry.instructions || entry.look_for.length) result[field] = entry;
+      if (entry.instructions || entry.look_for.length || required) result[field] = entry;
     }
     return result;
   }

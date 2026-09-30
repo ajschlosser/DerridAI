@@ -72,6 +72,10 @@ export const corpusBuildsApi = {
     apiRequest<{ build_ids: string[] }>(
       `/api/works/${encodeURIComponent(work)}/semantic-map-builds`,
     ),
+  workSemanticMapRecords: (work: string) =>
+    apiRequest<{ records: Array<{ record_id: string; build_id: string }> }>(
+      `/api/works/${encodeURIComponent(work)}/semantic-map-records`,
+    ),
   recordSemanticMap: (buildId: string, recordId: string) =>
     apiRequest<RecordSemanticMap>(
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/semantic-map`,

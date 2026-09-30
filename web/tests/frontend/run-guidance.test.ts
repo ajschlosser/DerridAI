@@ -6,57 +6,65 @@ import CorpusRunGuidance from "../../src/components/CorpusRunGuidance.vue";
 describe("Corpus run guidance", () => {
   beforeEach(() => setActivePinia(createPinia()));
 
-  it("emits field-specific instructions and whole-line search cues", async () => {
-    const wrapper = mount(CorpusRunGuidance, {
-      props: {
-        fields: [{ name: "persons", label: "People", group: "indexing" }],
-        modelValue: {},
-      },
-    });
-    const textareas = wrapper.findAll("textarea");
-    await textareas[0].setValue("Exclude bibliography-only mentions.");
-    const afterInstruction = wrapper.emitted("update:modelValue")?.at(-1)?.[0] as Record<
-      string,
-      {
-        instructions: string;
-        look_for: string[];
-        required?: boolean;
-        default_placeholder?: string;
-      }
-    >;
-    await wrapper.setProps({ modelValue: afterInstruction });
-    await wrapper.findAll("textarea")[1].setValue("Emmanuel Levinas\nLevinas\n");
+  const persons = { name: "persons", label: "People", group: "indexing" };
 
-    const updates = wrapper.emitted("update:modelValue");
-    expect(updates).toBeTruthy();
-    expect(updates?.at(-1)?.[0]).toEqual({
+  it("emits field-specific instructions and search cues as chips", async () => {
+    const wrapper = mount(CorpusRunGuidance, { props: { fields: [persons], modelValue: {} } });
+    await wrapper.find("textarea").setValue("Exclude bibliography-only mentions.");
+    await wrapper.setProps({
+      modelValue: wrapper.emitted("update:modelValue")?.at(-1)?.[0] as never,
+    });
+    const cues = wrapper.find("#run-guidance-terms-persons");
+    await cues.setValue("Emmanuel Levinas");
+    await cues.trigger("keydown", { key: "Enter" });
+    await wrapper.setProps({
+      modelValue: wrapper.emitted("update:modelValue")?.at(-1)?.[0] as never,
+    });
+    await cues.setValue("Levinas, levinas; Lévinas");
+    await cues.trigger("keydown", { key: "Enter" });
+
+    expect(wrapper.emitted("update:modelValue")?.at(-1)?.[0]).toEqual({
       persons: {
         default_placeholder: "",
         instructions: "Exclude bibliography-only mentions.",
-        look_for: ["Emmanuel Levinas", "Levinas"],
+        look_for: ["Emmanuel Levinas", "Levinas", "Lévinas"],
         required: false,
       },
     });
   });
 
-  it("keeps spaces in a phrase while it is being typed", async () => {
+  it("removes a cue and toggles a required value with a fallback placeholder", async () => {
     const wrapper = mount(CorpusRunGuidance, {
       props: {
-        fields: [{ name: "persons", label: "People", group: "indexing" }],
-        modelValue: {},
+        fields: [persons],
+        modelValue: { persons: { instructions: "", look_for: ["A", "B"], required: false } },
       },
     });
+    await wrapper.find(".rg-chip button").trigger("click");
+    expect((wrapper.emitted("update:modelValue")?.at(-1)?.[0] as any).persons.look_for).toEqual([
+      "B",
+    ]);
+    await wrapper.find('[role="switch"]').trigger("click");
+    const last = (wrapper.emitted("update:modelValue")?.at(-1)?.[0] as any).persons;
+    expect(last.required).toBe(true);
+    expect(last.default_placeholder).toBeTruthy();
+  });
 
-    await wrapper.findAll("textarea")[1].setValue("First ");
-
-    expect(wrapper.emitted("update:modelValue")?.at(-1)?.[0]).toEqual({
-      persons: {
-        default_placeholder: "",
-        instructions: "",
-        look_for: ["First "],
-        required: false,
+  it("filters fields by search text and shows configured state", async () => {
+    const wrapper = mount(CorpusRunGuidance, {
+      props: {
+        fields: [persons, { name: "work", label: "Work", group: "bibliography" }],
+        modelValue: { work: { instructions: "Use title page", look_for: [] } },
       },
     });
+    expect(wrapper.findAll(".rg-row")).toHaveLength(2);
+    await wrapper.find('input[type="search"]').setValue("peo");
+    expect(wrapper.findAll(".rg-row")).toHaveLength(1);
+    await wrapper.find('input[type="search"]').setValue("");
+    await wrapper.findAll(".rg-filters button")[1].trigger("click");
+    expect(wrapper.findAll(".rg-row").map((row) => row.text())).toEqual([
+      expect.stringContaining("Work"),
+    ]);
   });
 
   it("imports guidance for matching schema fields", async () => {

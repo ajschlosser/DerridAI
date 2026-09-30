@@ -118,6 +118,10 @@ def test_publish_records_build_provenance_for_the_record_and_its_work(tmp_path: 
 
     assert system_store.get_record_build_id(record_id) == build["build_id"]
     assert system_store.list_build_ids_for_work("Of Grammatology") == [build["build_id"]]
+    assert system_store.list_records_for_work("Of Grammatology") == [
+        {"record_id": record_id, "build_id": build["build_id"]}
+    ]
+    assert system_store.list_records_for_work("Unknown work") == []
 
 
 def test_republishing_the_same_record_id_from_a_newer_build_overwrites_provenance(tmp_path: Path):

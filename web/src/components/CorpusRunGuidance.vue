@@ -1,6 +1,8 @@
+<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { useI18nStore } from "../stores/i18n";
+import AppIcon from "./AppIcon.vue";
 import UiButton from "./ui/UiButton.vue";
 
 export interface RunGuidanceEntry {
@@ -16,6 +18,9 @@ export interface RunGuidanceField {
   group: string;
 }
 
+type Filter = "all" | "configured" | "required";
+
+const MAX_TERMS = 40;
 const props = withDefaults(
   defineProps<{
     modelValue: Record<string, RunGuidanceEntry>;
@@ -27,15 +32,67 @@ const props = withDefaults(
 const emit = defineEmits<{ "update:modelValue": [value: Record<string, RunGuidanceEntry>] }>();
 const i18n = useI18nStore();
 const importInput = ref<HTMLInputElement | null>(null);
+const cueInput = ref<HTMLInputElement | null>(null);
 const notice = ref("");
 const error = ref("");
-const termBuffers = ref<Record<string, string>>({});
-const populated = computed(
-  () =>
-    Object.values(props.modelValue).filter(
-      (item) => item.instructions.trim() || item.look_for.length,
-    ).length,
+const query = ref("");
+const filter = ref<Filter>("all");
+const selectedName = ref("");
+const cueDraft = ref("");
+
+function isConfigured(entry?: RunGuidanceEntry) {
+  return Boolean(entry && (entry.instructions.trim() || entry.look_for.length || entry.required));
+}
+const configuredCount = computed(
+  () => props.fields.filter((field) => isConfigured(props.modelValue[field.name])).length,
 );
+const requiredCount = computed(
+  () => props.fields.filter((field) => props.modelValue[field.name]?.required === true).length,
+);
+const visibleFields = computed(() => {
+  const needle = query.value.trim().toLocaleLowerCase();
+  return props.fields.filter((field) => {
+    const entry = props.modelValue[field.name];
+    if (filter.value === "configured" && !isConfigured(entry)) return false;
+    if (filter.value === "required" && entry?.required !== true) return false;
+    return (
+      !needle || `${field.label} ${field.name} ${field.group}`.toLocaleLowerCase().includes(needle)
+    );
+  });
+});
+const groups = computed(() => {
+  const byGroup = new Map<string, RunGuidanceField[]>();
+  for (const field of visibleFields.value) {
+    byGroup.set(field.group, [...(byGroup.get(field.group) || []), field]);
+  }
+  return [...byGroup.entries()].map(([label, items]) => ({ label, items }));
+});
+const selected = computed(() => props.fields.find((field) => field.name === selectedName.value));
+const entry = computed<RunGuidanceEntry>(
+  () =>
+    props.modelValue[selectedName.value] || {
+      instructions: "",
+      look_for: [],
+      required: false,
+      default_placeholder: "",
+    },
+);
+
+watch(
+  () => props.fields,
+  (fields) => {
+    if (!fields.some((field) => field.name === selectedName.value))
+      selectedName.value = fields[0]?.name || "";
+  },
+  { immediate: true },
+);
+watch(selectedName, () => {
+  cueDraft.value = "";
+});
+
+function defaultPlaceholder() {
+  return i18n.t("pdf_corpus.run_guidance_default_placeholder", "[not established in source]");
+}
 
 function update(field: string, patch: Partial<RunGuidanceEntry>) {
   const previous = props.modelValue[field] || {
@@ -50,53 +107,62 @@ function update(field: string, patch: Partial<RunGuidanceEntry>) {
   });
 }
 
-function setRequired(field: string, required: boolean) {
+function setRequired(required: boolean) {
+  const field = selectedName.value;
+  const current = props.modelValue[field]?.default_placeholder || "";
   update(field, {
     required,
-    default_placeholder: required
-      ? props.modelValue[field]?.default_placeholder ||
-        i18n.t("pdf_corpus.run_guidance_default_placeholder", "[not established in source]")
-      : props.modelValue[field]?.default_placeholder || "",
+    default_placeholder: required ? current || defaultPlaceholder() : current,
   });
 }
 
-function updateTerms(field: string, value: string) {
-  const terms = value
-    .split("\n")
-    // Keep the edit buffer lossless so a trailing space does not disappear
-    // while a multi-word phrase is being typed. Submission trims each term.
-    .filter((item) => item.trim())
-    .slice(0, 40);
-  update(field, { look_for: terms });
+function addCues(raw: string) {
+  const field = selectedName.value;
+  const existing = props.modelValue[field]?.look_for || [];
+  const seen = new Set(existing.map((term) => term.toLocaleLowerCase()));
+  const next = [...existing];
+  for (const part of raw.split(/[\n,;]+/)) {
+    const term = part.trim();
+    if (!term || seen.has(term.toLocaleLowerCase()) || next.length >= MAX_TERMS) continue;
+    seen.add(term.toLocaleLowerCase());
+    next.push(term);
+  }
+  if (next.length !== existing.length) update(field, { look_for: next });
+  cueDraft.value = "";
 }
 
-function editTerms(field: string, value: string) {
-  termBuffers.value = { ...termBuffers.value, [field]: value };
-  updateTerms(field, value);
+function removeCue(term: string) {
+  update(selectedName.value, { look_for: entry.value.look_for.filter((item) => item !== term) });
+  void nextTick(() => cueInput.value?.focus());
 }
 
-function commitTerms(field: string) {
-  const value = termBuffers.value[field];
-  if (value !== undefined) updateTerms(field, value);
+function onCueKeydown(event: KeyboardEvent) {
+  if (event.key === "Enter" || event.key === ",") {
+    if (cueDraft.value.trim() || event.key === ",") event.preventDefault();
+    addCues(cueDraft.value);
+  } else if (event.key === "Backspace" && !cueDraft.value && entry.value.look_for.length) {
+    update(selectedName.value, { look_for: entry.value.look_for.slice(0, -1) });
+  }
 }
 
-function termText(field: string) {
-  return termBuffers.value[field] ?? (props.modelValue[field]?.look_for || []).join("\n");
+function onCuePaste(event: ClipboardEvent) {
+  const text = event.clipboardData?.getData("text") || "";
+  if (!/[\n,;]/.test(text)) return;
+  event.preventDefault();
+  addCues(text);
 }
 
-watch(
-  () => props.modelValue,
-  (value) => {
-    const next = { ...termBuffers.value };
-    for (const field of props.fields) {
-      if (document.activeElement !== document.getElementById(`run-guidance-terms-${field.name}`)) {
-        next[field.name] = (value[field.name]?.look_for || []).join("\n");
-      }
-    }
-    termBuffers.value = next;
-  },
-  { immediate: true, deep: true },
-);
+function clearField() {
+  const next = { ...props.modelValue };
+  delete next[selectedName.value];
+  emit("update:modelValue", next);
+}
+
+function clearAll() {
+  emit("update:modelValue", {});
+  notice.value = i18n.t("pdf_corpus.run_guidance_cleared", "All field guidance cleared.");
+  error.value = "";
+}
 
 function openImport() {
   importInput.value?.click();
@@ -183,225 +249,614 @@ async function importGuidance(event: Event) {
 
 <template>
   <section
-    class="run-guidance"
+    class="rg"
     :aria-label="i18n.t('pdf_corpus.run_guidance_title')"
     aria-describedby="run-guidance-help"
   >
-    <p id="run-guidance-help" class="run-guidance-help">
+    <p id="run-guidance-help" class="rg-help">
       {{ i18n.t("pdf_corpus.run_guidance_help") }}
     </p>
-    <p class="run-guidance-count" aria-live="polite">
-      {{
-        i18n.tf("pdf_corpus.run_guidance_count", {
-          count: populated,
-        })
-      }}
-    </p>
-    <p class="run-guidance-file-help">
-      {{ i18n.t("pdf_corpus.run_guidance_file_help") }}
-    </p>
-    <div class="run-guidance-actions">
-      <UiButton
-        size="small"
-        icon="download"
-        :label="i18n.t('pdf_corpus.run_guidance_export')"
-        :disabled="disabled"
-        @click="exportGuidance"
-      />
-      <UiButton
-        size="small"
-        icon="upload"
-        :label="i18n.t('pdf_corpus.run_guidance_import')"
-        :disabled="disabled"
-        @click="openImport"
-      />
-      <input
-        ref="importInput"
-        type="file"
-        accept="application/json,.json"
-        class="sr-only"
-        :aria-label="i18n.t('pdf_corpus.run_guidance_import')"
-        :disabled="disabled"
-        @change="importGuidance"
-      />
-    </div>
-    <p v-if="notice" class="run-guidance-notice" role="status">{{ notice }}</p>
-    <p v-if="error" class="run-guidance-error" role="alert">{{ error }}</p>
-    <details v-for="field in fields" :key="field.name" class="run-guidance-field">
-      <summary>
-        <span>{{ field.label }}</span>
-        <small>{{ field.group }}</small>
-      </summary>
-      <div class="run-guidance-controls">
-        <label class="required-toggle">
-          <input
-            type="checkbox"
-            :checked="modelValue[field.name]?.required === true"
-            :disabled="disabled"
-            @change="setRequired(field.name, ($event.target as HTMLInputElement).checked)"
-          />
-          <span>{{
-            i18n.t("pdf_corpus.run_guidance_require_value", "Require a value for this run")
-          }}</span>
-        </label>
-        <label
-          v-if="modelValue[field.name]?.required"
-          :for="`run-guidance-placeholder-${field.name}`"
+
+    <div class="rg-toolbar">
+      <label class="rg-search">
+        <AppIcon name="search" aria-hidden="true" />
+        <input
+          v-model="query"
+          type="search"
+          :placeholder="i18n.t('pdf_corpus.run_guidance_search', 'Search fields')"
+          :aria-label="i18n.t('pdf_corpus.run_guidance_search', 'Search fields')"
+        />
+      </label>
+      <div
+        class="rg-filters"
+        role="group"
+        :aria-label="i18n.t('pdf_corpus.run_guidance_filter', 'Show fields')"
+      >
+        <button
+          type="button"
+          :aria-pressed="filter === 'all'"
+          :class="{ on: filter === 'all' }"
+          @click="filter = 'all'"
         >
-          <span>{{
-            i18n.t("pdf_corpus.run_guidance_placeholder_label", "Fallback placeholder")
-          }}</span>
-          <input
-            :id="`run-guidance-placeholder-${field.name}`"
-            class="control"
-            maxlength="200"
-            :disabled="disabled"
-            :value="modelValue[field.name]?.default_placeholder || ''"
-            :placeholder="
-              i18n.t(
-                'pdf_corpus.run_guidance_placeholder_hint',
-                'For example: [not established in source]',
-              )
-            "
-            @input="
-              update(field.name, {
-                default_placeholder: ($event.target as HTMLInputElement).value,
-              })
-            "
+          {{ i18n.t("pdf_corpus.run_guidance_filter_all", "All") }}
+          <span>{{ fields.length }}</span>
+        </button>
+        <button
+          type="button"
+          :aria-pressed="filter === 'configured'"
+          :class="{ on: filter === 'configured' }"
+          @click="filter = 'configured'"
+        >
+          {{ i18n.t("pdf_corpus.run_guidance_filter_configured", "With guidance") }}
+          <span>{{ configuredCount }}</span>
+        </button>
+        <button
+          type="button"
+          :aria-pressed="filter === 'required'"
+          :class="{ on: filter === 'required' }"
+          @click="filter = 'required'"
+        >
+          {{ i18n.t("pdf_corpus.run_guidance_filter_required", "Required") }}
+          <span>{{ requiredCount }}</span>
+        </button>
+      </div>
+      <div class="rg-actions">
+        <UiButton
+          size="small"
+          variant="ghost"
+          icon="upload"
+          :label="i18n.t('pdf_corpus.run_guidance_import')"
+          :disabled="disabled"
+          @click="openImport"
+        />
+        <UiButton
+          size="small"
+          variant="ghost"
+          icon="download"
+          :label="i18n.t('pdf_corpus.run_guidance_export')"
+          :disabled="disabled || !configuredCount"
+          @click="exportGuidance"
+        />
+        <UiButton
+          size="small"
+          variant="ghost"
+          icon="trash"
+          :label="i18n.t('pdf_corpus.run_guidance_clear_all', 'Clear all')"
+          :disabled="disabled || !configuredCount"
+          @click="clearAll"
+        />
+        <input
+          ref="importInput"
+          type="file"
+          accept="application/json,.json"
+          class="sr-only"
+          :aria-label="i18n.t('pdf_corpus.run_guidance_import')"
+          :disabled="disabled"
+          @change="importGuidance"
+        />
+      </div>
+    </div>
+
+    <p class="rg-status" aria-live="polite">
+      {{ i18n.tf("pdf_corpus.run_guidance_count", { count: configuredCount }) }}
+      <span aria-hidden="true">·</span>
+      {{ i18n.t("pdf_corpus.run_guidance_saved", "Saved in this browser for this schema") }}
+    </p>
+    <p v-if="notice" class="rg-notice" role="status">{{ notice }}</p>
+    <p v-if="error" class="rg-error" role="alert">{{ error }}</p>
+
+    <div class="rg-body">
+      <nav class="rg-list" :aria-label="i18n.t('pdf_corpus.run_guidance_fields', 'Fields')">
+        <p v-if="!groups.length" class="rg-empty">
+          {{ i18n.t("pdf_corpus.run_guidance_no_match", "No fields match.") }}
+        </p>
+        <div v-for="group in groups" :key="group.label" class="rg-group">
+          <h4>{{ group.label }}</h4>
+          <button
+            v-for="field in group.items"
+            :key="field.name"
+            type="button"
+            class="rg-row"
+            :class="{ active: field.name === selectedName }"
+            :aria-current="field.name === selectedName ? 'true' : undefined"
+            @click="selectedName = field.name"
+          >
+            <span class="rg-row-label">{{ field.label }}</span>
+            <span class="rg-row-meta">
+              <span v-if="modelValue[field.name]?.required" class="rg-tag required">
+                {{ i18n.t("pdf_corpus.run_guidance_filter_required", "Required") }}
+              </span>
+              <span v-if="modelValue[field.name]?.instructions.trim()" class="rg-tag">
+                {{ i18n.t("pdf_corpus.run_guidance_tag_note", "Note") }}
+              </span>
+              <span v-if="modelValue[field.name]?.look_for.length" class="rg-tag">
+                {{ modelValue[field.name]?.look_for.length }}
+                {{ i18n.t("pdf_corpus.run_guidance_tag_cues", "cues") }}
+              </span>
+            </span>
+          </button>
+        </div>
+      </nav>
+
+      <div v-if="selected" class="rg-editor">
+        <header>
+          <div>
+            <h3>{{ selected.label }}</h3>
+            <small>{{ selected.group }}</small>
+          </div>
+          <UiButton
+            size="small"
+            variant="ghost"
+            :label="i18n.t('pdf_corpus.run_guidance_reset_field', 'Reset field')"
+            :disabled="disabled || !isConfigured(modelValue[selected.name])"
+            @click="clearField"
           />
-          <small>{{
-            i18n.t(
-              "pdf_corpus.run_guidance_placeholder_help",
-              "If the model cannot support a value, this marker stays visible and the field remains in review.",
-            )
-          }}</small>
-        </label>
-        <label :for="`run-guidance-instructions-${field.name}`">
-          <span>{{ i18n.t("pdf_corpus.run_guidance_instruction_label") }}</span>
+        </header>
+
+        <div class="rg-block">
+          <label :for="`run-guidance-instructions-${selected.name}`">
+            {{ i18n.t("pdf_corpus.run_guidance_instruction_label") }}
+          </label>
           <textarea
-            :id="`run-guidance-instructions-${field.name}`"
+            :id="`run-guidance-instructions-${selected.name}`"
             class="control"
-            rows="2"
+            rows="4"
             maxlength="1200"
             :disabled="disabled"
-            :value="modelValue[field.name]?.instructions || ''"
+            :value="entry.instructions"
             :placeholder="i18n.t('pdf_corpus.run_guidance_instruction_placeholder')"
             @input="
-              update(field.name, { instructions: ($event.target as HTMLTextAreaElement).value })
+              update(selected.name, { instructions: ($event.target as HTMLTextAreaElement).value })
             "
           />
-        </label>
-        <label :for="`run-guidance-terms-${field.name}`">
-          <span>{{ i18n.t("pdf_corpus.run_guidance_terms_label") }}</span>
-          <textarea
-            :id="`run-guidance-terms-${field.name}`"
-            class="control"
-            rows="3"
-            :disabled="disabled"
-            :value="termText(field.name)"
-            :placeholder="i18n.t('pdf_corpus.run_guidance_terms_placeholder')"
-            @input="editTerms(field.name, ($event.target as HTMLTextAreaElement).value)"
-            @blur="commitTerms(field.name)"
-          />
+          <small class="rg-count">{{ entry.instructions.length }} / 1200</small>
+        </div>
+
+        <div class="rg-block">
+          <label :for="`run-guidance-terms-${selected.name}`">
+            {{ i18n.t("pdf_corpus.run_guidance_terms_label") }}
+          </label>
+          <div class="rg-cues" @click="cueInput?.focus()">
+            <span v-for="term in entry.look_for" :key="term" class="rg-chip">
+              {{ term }}
+              <button
+                type="button"
+                :disabled="disabled"
+                :aria-label="
+                  i18n.tf('pdf_corpus.run_guidance_remove_cue', 'Remove {term}', { term })
+                "
+                @click.stop="removeCue(term)"
+              >
+                <AppIcon name="close" aria-hidden="true" />
+              </button>
+            </span>
+            <input
+              :id="`run-guidance-terms-${selected.name}`"
+              ref="cueInput"
+              v-model="cueDraft"
+              :disabled="disabled || entry.look_for.length >= 40"
+              :placeholder="
+                entry.look_for.length ? '' : i18n.t('pdf_corpus.run_guidance_terms_placeholder')
+              "
+              @keydown="onCueKeydown"
+              @paste="onCuePaste"
+              @blur="addCues(cueDraft)"
+            />
+          </div>
           <small>{{ i18n.t("pdf_corpus.run_guidance_terms_help") }}</small>
-        </label>
+        </div>
+
+        <div class="rg-block rg-require">
+          <div class="rg-switch-row">
+            <span>
+              <b id="rg-require-label">{{
+                i18n.t("pdf_corpus.run_guidance_require_value", "Require a value for this run")
+              }}</b>
+              <small>{{
+                i18n.t(
+                  "pdf_corpus.run_guidance_placeholder_help",
+                  "If the model cannot support a value, this marker stays visible and the field remains in review.",
+                )
+              }}</small>
+            </span>
+            <button
+              type="button"
+              role="switch"
+              class="rg-switch"
+              aria-labelledby="rg-require-label"
+              :aria-checked="entry.required === true"
+              :disabled="disabled"
+              @click="setRequired(entry.required !== true)"
+            >
+              <span aria-hidden="true" />
+            </button>
+          </div>
+          <template v-if="entry.required">
+            <label :for="`run-guidance-placeholder-${selected.name}`">
+              {{ i18n.t("pdf_corpus.run_guidance_placeholder_label", "Fallback placeholder") }}
+            </label>
+            <input
+              :id="`run-guidance-placeholder-${selected.name}`"
+              class="control"
+              maxlength="200"
+              :disabled="disabled"
+              :value="entry.default_placeholder || ''"
+              :placeholder="
+                i18n.t(
+                  'pdf_corpus.run_guidance_placeholder_hint',
+                  'For example: [not established in source]',
+                )
+              "
+              @input="
+                update(selected.name, {
+                  default_placeholder: ($event.target as HTMLInputElement).value,
+                })
+              "
+            />
+          </template>
+        </div>
       </div>
-    </details>
+      <p v-else class="rg-empty">
+        {{ i18n.t("pdf_corpus.run_guidance_no_fields", "This schema has no fields to guide.") }}
+      </p>
+    </div>
   </section>
 </template>
 
 <style scoped>
-.run-guidance {
+.rg {
   display: grid;
-  gap: 8px;
+  gap: var(--space-3);
   min-width: 0;
 }
-.run-guidance-help,
-.run-guidance-count,
-.run-guidance-file-help {
+.rg-help,
+.rg-status {
   margin: 0;
   color: var(--text-2);
   font-size: 0.8125rem;
   line-height: 1.5;
 }
-.run-guidance-file-help {
-  margin-top: -4px;
+.rg-status {
   font-size: 0.75rem;
 }
-.run-guidance-count {
-  font-weight: 700;
-}
-.run-guidance-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.run-guidance-notice,
-.run-guidance-error {
+.rg-notice,
+.rg-error {
   margin: 0;
   font-size: 0.8125rem;
 }
-.run-guidance-notice {
+.rg-notice {
   color: var(--success);
 }
-.run-guidance-error {
+.rg-error {
   color: var(--danger);
 }
-.run-guidance-field {
-  min-width: 0;
-  border: 1px solid var(--border-subtle);
+.rg-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+.rg-search {
+  flex: 1 1 200px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-control);
   background: var(--surface-card);
+  color: var(--text-2);
 }
-.run-guidance-field > summary {
-  min-height: 42px;
+.rg-search:focus-within {
+  outline: 3px solid var(--ui-accent-focus);
+  outline-offset: 1px;
+}
+.rg-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  padding: 0;
+  height: auto;
+  box-shadow: none;
+}
+.rg-filters {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  border-radius: var(--radius-control);
+  background: var(--surface-inset);
+}
+.rg-filters button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.rg-filters button span {
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+.rg-filters button.on {
+  background: var(--surface-card);
+  color: var(--text);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--text) 18%, transparent);
+}
+.rg-filters button:focus-visible,
+.rg-row:focus-visible,
+.rg-chip button:focus-visible,
+.rg-switch:focus-visible {
+  outline: 3px solid var(--ui-accent-focus);
+  outline-offset: 1px;
+}
+.rg-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-left: auto;
+}
+.rg-body {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-card);
+  overflow: hidden;
+  min-height: 340px;
+}
+.rg-list {
+  max-height: 520px;
+  overflow-y: auto;
+  padding: var(--space-2);
+  border-right: 1px solid var(--border-subtle);
+  background: var(--surface-inset);
+}
+.rg-group h4 {
+  margin: var(--space-3) var(--space-2) var(--space-1);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.rg-group:first-child h4 {
+  margin-top: var(--space-1);
+}
+.rg-row {
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 8px 11px;
-  cursor: pointer;
-  font-weight: 700;
-  color: var(--text);
-}
-.run-guidance-field > summary:focus-visible {
-  outline: 3px solid var(--ui-accent-focus);
-  outline-offset: 2px;
+  gap: var(--space-2);
+  min-height: 36px;
+  padding: 6px var(--space-2);
+  border: 0;
   border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
 }
-.run-guidance-field > summary small {
+.rg-row:hover {
+  background: var(--surface-hover);
+}
+.rg-row.active {
+  background: var(--surface-selected);
+  font-weight: 700;
+}
+.rg-row-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.rg-row-meta {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 4px;
+}
+.rg-tag {
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-2);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.rg-tag.required {
+  color: var(--accent-fg);
+  border-color: var(--accent-border);
+}
+.rg-editor {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  min-width: 0;
+}
+.rg-editor header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.rg-editor h3 {
+  margin: 0;
+  font-size: 1.0625rem;
+}
+.rg-editor header small {
   color: var(--text-2);
   font-size: 0.75rem;
   text-transform: capitalize;
 }
-.run-guidance-controls {
+.rg-block {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  padding: 0 11px 11px;
-}
-.run-guidance-controls label {
-  display: grid;
-  align-content: start;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
-  color: var(--text-2);
+}
+.rg-block > label,
+.rg-block b {
   font-size: 0.8125rem;
   font-weight: 700;
+  color: var(--text);
 }
-.run-guidance-controls textarea {
-  width: 100%;
-  min-height: 74px;
-  resize: vertical;
-}
-.run-guidance-controls small {
+.rg-block small {
+  color: var(--text-2);
   font-size: 0.75rem;
-  font-weight: 400;
   line-height: 1.4;
 }
-@media (max-width: 640px) {
-  .run-guidance-controls {
+.rg-block textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 88px;
+}
+.rg-count {
+  justify-self: end;
+  font-variant-numeric: tabular-nums;
+}
+.rg-cues {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-card);
+  cursor: text;
+}
+.rg-cues:focus-within {
+  outline: 3px solid var(--ui-accent-focus);
+  outline-offset: 1px;
+}
+.rg-cues input {
+  flex: 1 1 140px;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  padding: 4px;
+  height: auto;
+  box-shadow: none;
+}
+.rg-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-selected);
+  color: var(--text);
+  font-size: 0.8125rem;
+}
+.rg-chip button {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.rg-chip button:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.rg-chip button :deep(svg) {
+  width: 12px;
+  height: 12px;
+}
+.rg-require {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+.rg-switch-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+.rg-switch-row > span {
+  display: grid;
+  gap: 2px;
+}
+.rg-switch {
+  flex-shrink: 0;
+  position: relative;
+  width: 40px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface-inset);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.rg-switch span {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text-2);
+  transition: transform 0.15s;
+}
+.rg-switch[aria-checked="true"] {
+  background: var(--accent-fg);
+  border-color: var(--accent-fg);
+}
+.rg-switch[aria-checked="true"] span {
+  background: var(--accent-on);
+  transform: translateX(16px);
+}
+.rg-switch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.rg-empty {
+  margin: var(--space-4);
+  color: var(--text-2);
+  font-size: 0.8125rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rg-switch,
+  .rg-switch span {
+    transition: none;
+  }
+}
+@media (max-width: 720px) {
+  .rg-body {
     grid-template-columns: 1fr;
+  }
+  .rg-list {
+    max-height: 220px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .rg-actions {
+    margin-left: 0;
   }
 }
 </style>
