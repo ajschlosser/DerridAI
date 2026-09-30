@@ -204,6 +204,33 @@ for (const appearance of ["light", "dark", "high-contrast"] as const) {
   });
 }
 
+test("published site reflows at 320 CSS pixels and exposes a working skip link", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await mountStaticSite(page);
+  await page.getByRole("button", { name: "Skip tutorial" }).click();
+
+  await page.keyboard.press("Tab");
+  const skip = page.getByRole("link", { name: "Skip to main content" });
+  await expect(skip).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#site-main")).toBeFocused();
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
+  await scan(page);
+});
+
+test("published site remains accessible with forced colors active", async ({ page }) => {
+  await page.emulateMedia({ forcedColors: "active", reducedMotion: "reduce" });
+  await mountStaticSite(page);
+  await page.getByRole("button", { name: "Skip tutorial" }).click();
+  await scan(page);
+});
+
 test("published tutorial is keyboard operable, skippable, and itself WCAG 2.2 AA clean", async ({
   page,
 }) => {
