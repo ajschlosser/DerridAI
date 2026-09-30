@@ -54,6 +54,7 @@ The top-level header presents:
 Build and Review remain distinct internal workspaces and deep-link targets. The grouped phase includes a small Build/Review sub-navigation.
 
 Key file:
+
 - `web/src/components/corpus-builder/CorpusBuilderWorkspaceHeader.vue`
 
 ### 2. Setup is organized around a Build plan
@@ -79,6 +80,7 @@ A blocking issue makes **Fix** the dominant action. When setup is valid, **Build
 The old user-facing **Advanced** label is now **Run settings**. A blocking context/run-setting issue is no longer presented as merely optional.
 
 Key files:
+
 - `web/src/components/corpus-builder/CorpusSetupWorkspace.vue`
 - `web/src/components/CorpusBuildReadiness.vue`
 - `web/src/features/corpus-builder/domain/setupState.ts`
@@ -95,6 +97,7 @@ The live Build surface also includes a compact activity strip backed only by per
 Diagnostics/audit material is presented under **Run details** rather than competing with the primary build task.
 
 Key files:
+
 - `web/src/components/corpus-builder/CorpusBuildPrimaryStatus.vue`
 - `web/src/components/corpus-builder/CorpusBuildWorkspace.vue`
 - `web/src/components/corpus-builder/CorpusBuildActivity.vue`
@@ -107,9 +110,11 @@ An active corpus build can now be paused directly from Review. Resume remains av
 Important distinction: this Pause control applies to the corpus build lifecycle. Auxiliary metadata operations are not falsely represented as sharing identical pause semantics.
 
 Key file:
+
 - `web/src/components/corpus-builder/CorpusReviewRunStatus.vue`
 
 Wiring:
+
 - `web/src/components/PdfCorpusBuilder.vue`
 
 ### 5. Review command hierarchy is less cluttered
@@ -126,6 +131,7 @@ The Review toolbar now:
 The Record/Metadata/Source view switch remains in the consolidated review header. The implementation plan deliberately records this as a conscious choice: moving it elsewhere would duplicate inspector navigation and fragment an existing accessible view contract.
 
 Key files:
+
 - `web/src/components/corpus-builder/CorpusReviewToolbar.vue`
 - `web/src/components/corpus-builder/CorpusReviewHeader.vue`
 - `web/src/features/corpus-builder/composables/useCorpusReviewDecisions.ts`
@@ -154,6 +160,7 @@ The confirmation dialog explicitly states that:
 After publication, pre-publication readiness counters are hidden and the publication snapshot becomes the completion state.
 
 Key files:
+
 - `web/src/components/corpus-builder/CorpusPublishWorkspace.vue`
 - `web/src/components/CorpusFinishWorkspace.vue`
 - `web/src/components/CorpusUnreviewedPublishDialog.vue`

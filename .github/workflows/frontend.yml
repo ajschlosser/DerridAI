@@ -157,10 +157,7 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci --no-audit --no-fund
-      - name: Show repository formatting diff
-        run: |
-          npm run format:repo
-          git diff --exit-code -- ../docs/CORPUS_BUILDER_HAPPY_PATH_UX_HANDOFF.md ../docs/CORPUS_BUILDER_HAPPY_PATH_UX_PLAN.md tests/frontend/corpus-builder-workspaces.test.ts
+      - run: npm run format:repo:check
 
   backend-lint:
     needs: changes

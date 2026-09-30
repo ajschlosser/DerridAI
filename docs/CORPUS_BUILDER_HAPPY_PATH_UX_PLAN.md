@@ -140,6 +140,7 @@ Goal: correct the conceptual hierarchy without rewriting authoritative workspace
 - [x] Update workspace unit coverage for the three-phase presentation and internal Build/Review navigation.
 
 Likely files:
+
 - `web/src/features/corpus-builder/domain/workflowPresentation.ts`
 - `web/src/features/corpus-builder/domain/workspace.ts` only if a presentation helper cannot live elsewhere
 - `web/src/components/corpus-builder/CorpusBuilderWorkspaceHeader.vue`
@@ -172,6 +173,7 @@ Goal: make setup feel like a prepared plan rather than a long form.
 - [x] Storybook states cover no source, ready, warning/blocking, long Québec French copy, and narrow/mobile layout.
 
 Likely files:
+
 - `CorpusSetupWorkspace.vue`
 - `CorpusSetupSection.vue`
 - `CorpusBuildReadiness.vue`
@@ -413,14 +415,12 @@ Work on this branch will be committed in coherent checkpoints. At each checkpoin
 - Corrected the Build plan's description-list markup so the new summary remains semantically valid for assistive technology.
 - Remaining work is validation-driven: formatting, lint/typecheck, unit/E2E/a11y results, then any fixes those gates uncover.
 
-
 ### Checkpoint 8 — agent handoff
 
 - Added `docs/CORPUS_BUILDER_HAPPY_PATH_UX_HANDOFF.md` with the architectural constraints, completed work, touched files, coverage changes, remaining validation work, and a recommended execution order for the next agent.
 - Re-checked branch divergence at handoff time: the branch is currently **100 commits ahead and 28 commits behind current `master`**, with merge base `7b805d83f9f1ef87aa37a785bc64ac0f78e93cd5`.
 - The handoff explicitly supersedes the older “aligned with master” observation from draft-PR creation time. Current master synchronization is now the first remaining integration task.
 - No remaining Phase 8 validation checkbox was marked complete without actually running the corresponding formatter/test/CI/accessibility gate.
-
 
 ### Checkpoint 9 — current master synchronized
 
