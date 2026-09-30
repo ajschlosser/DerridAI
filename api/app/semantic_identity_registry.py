@@ -32,7 +32,10 @@ from .field_assertions import current_assertions, migrate_record_assertions
 from .semantic_identity import (
     SEMANTIC_IDENTITY_VERSION,
     EquivalenceMode,
+    EquivalenceProfile,
     SemanticIdentityRef,
+    ValueEquivalenceResult,
+    compare_values,
     entity_name_key,
     text_key,
 )
@@ -272,3 +275,27 @@ def registry_for_record(record: dict[str, Any], text_sha256: str | None = None) 
         if not bound or bound == text_sha256:
             project_document_intelligence(registry, projection)
     return registry
+
+
+def compare_field_values(
+    schema: Any,
+    field: str,
+    left: Any,
+    right: Any,
+    *,
+    record: dict[str, Any] | None = None,
+    registry: SemanticIdentityRegistry | None = None,
+) -> ValueEquivalenceResult:
+    """Compare two values of one schema field under that field's equivalence policy.
+
+    With a ``record`` and no ``registry``, the Record's own current Document Intelligence
+    projection is consulted. A field the schema does not know compares exactly.
+    """
+    try:
+        profile = schema.equivalence_profile_for(field) if schema is not None else EquivalenceProfile(mode="exact")
+    except KeyError:
+        profile = EquivalenceProfile(mode="exact", identity_kind="value")
+    if registry is None and isinstance(record, dict):
+        registry = registry_for_record(record)
+    language = str((record or {}).get("language") or "")
+    return compare_values(left, right, profile=profile, language=language, registry=registry)

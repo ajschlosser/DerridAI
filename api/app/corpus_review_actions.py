@@ -55,6 +55,7 @@ from .corpus_segmentation import (
 )
 from .enrichment_ledger import ACCEPTED
 from .field_assertions import (
+    FieldAssertion,
     confirm_absence,
     confirm_assertion,
     create_human_assertion,
@@ -69,6 +70,8 @@ from .nlp_annotations import annotate_record
 from .pipelines.corpus_reviewer_evidence_choice import ReviewerEvidenceChoiceSession
 from .provenance_memory import persist_record_decision
 from .rag import _citation_strings
+from .semantic_identity import ValueEquivalenceResult
+from .semantic_identity_registry import compare_field_values
 from .system_store import system_store
 
 
@@ -85,6 +88,29 @@ def _serialize_record_mutation(method):
         with self._lock:
             return method(self, *args, **kwargs)
     return wrapped
+
+
+def _equivalent_evidence(prior: FieldAssertion | None, equivalence: ValueEquivalenceResult) -> list[dict[str, Any]] | None:
+    """Evidence an equivalent surface edit keeps, with its authority unchanged.
+
+    Restating the same value does not invalidate the source that supports it, and it does
+    not review that source either: model-selected evidence stays model-selected. A value
+    that is different, or not known to be the same, starts without evidence as before.
+    """
+    if prior is None or equivalence.relation != "equivalent" or not prior.evidence:
+        return None
+    return [
+        {**item, "carried_from_assertion_id": prior.assertion_id}
+        for item in prior.evidence
+        if isinstance(item, dict)
+    ]
+
+
+def _equivalence_audit(prior_value: Any, equivalence: ValueEquivalenceResult) -> dict[str, Any]:
+    """Audit fields for a review decision that replaced a different surface form."""
+    if equivalence.relation == "exact" or prior_value in (None, "", []):
+        return {}
+    return {"prior_value": prior_value, **equivalence.audit()}
 
 
 class ReviewActionsMixin:
@@ -123,7 +149,7 @@ class ReviewActionsMixin:
         def _edit_model(self, build_id: str) -> type[BaseModel]: ...
         def _refresh_workflow_fields(self, build: dict[str, Any]) -> dict[str, Any]: ...
         def _interactive_llm_request(self, build_id: str, override: dict[str, Any] | None = None) -> dict[str, Any]: ...
-        def _record_human_llm_feedback(self, build_id: str, field: str, prior_value: Any, new_value: Any, prior_status: dict[str, Any] | None, record: dict[str, Any] | None = None) -> None: ...
+        def _record_human_llm_feedback(self, build_id: str, field: str, prior_value: Any, new_value: Any, prior_status: dict[str, Any] | None, record: dict[str, Any] | None = None, equivalence: ValueEquivalenceResult | None = None) -> None: ...
         def _request_second_opinion(self, build_id: str, record: dict[str, Any], field: str, value: Any) -> None: ...
         def _log_second_opinion(self, build_id: str, record: dict[str, Any], field: str, value: Any, item: dict[str, Any]) -> bool: ...
         def _schedule_recheck(self, build_id: str, record: dict[str, Any], field: str, value: Any) -> None: ...
@@ -716,11 +742,13 @@ class ReviewActionsMixin:
                 skipped.add(key)
                 continue
             answered_again = self._score_recheck(build_id, target, key, value, prior_status)
+            # Decided once here and passed on: feedback, evidence and the audit trail agree.
+            equivalence = compare_field_values(schema, key, prior_value, value, record=target)
             if not answered_again:
-                self._record_human_llm_feedback(build_id, key, prior_value, value, prior_status, target)
+                self._record_human_llm_feedback(build_id, key, prior_value, value, prior_status, target, equivalence=equivalence)
                 self._schedule_recheck(build_id, target, key, value)
                 self._request_second_opinion(build_id, target, key, value)
-            if prior_value != value and isinstance(target.get("metadata_evidence"), dict):
+            if not equivalence.same and isinstance(target.get("metadata_evidence"), dict):
                 evidence_map = dict(target.get("metadata_evidence") or {})
                 evidence_map.pop(key, None)
                 target["metadata_evidence"] = evidence_map
@@ -742,6 +770,7 @@ class ReviewActionsMixin:
                         prior_assertion is not None
                         and prior_assertion.value_status == "present"
                         and prior_assertion.value != value
+                        and equivalence.relation != "equivalent"
                     )
                     create_human_assertion(
                         target,
@@ -756,9 +785,10 @@ class ReviewActionsMixin:
                             else "Confirmed during record review."
                         ),
                         method="human_record_override" if is_manifest_override else "human",
+                        evidence=_equivalent_evidence(prior_assertion, equivalence),
                     )
                 project_record_assertions(target)
-                decision_log.append({"field": key, "value": value, "at": iso_now(), "source": "human_override" if is_manifest_override else "human"})
+                decision_log.append({"field": key, "value": value, "at": iso_now(), "source": "human_override" if is_manifest_override else "human", **_equivalence_audit(prior_value, equivalence)})
         constraint_changes = apply_metadata_constraints(target, schema)
         for item in constraint_changes:
             decision_log.append({"field": item["field"], "value": item["value"], "at": iso_now(), "source": "deterministic_constraint", "reason": item["reason"]})
@@ -844,8 +874,9 @@ class ReviewActionsMixin:
                 prior_status = dict(statuses.get(key) or {}) if isinstance(statuses.get(key), dict) else {}
                 prior_value = record.get(key)
                 prior_assertion = current_assertion_by_name(record, key)
-                self._record_human_llm_feedback(build_id, key, prior_value, value, prior_status, record)
-                if prior_value != value and isinstance(record.get("metadata_evidence"), dict):
+                equivalence = compare_field_values(schema, key, prior_value, value, record=record)
+                self._record_human_llm_feedback(build_id, key, prior_value, value, prior_status, record, equivalence=equivalence)
+                if not equivalence.same and isinstance(record.get("metadata_evidence"), dict):
                     evidence_map = dict(record.get("metadata_evidence") or {})
                     evidence_map.pop(key, None)
                     record["metadata_evidence"] = evidence_map
@@ -853,6 +884,7 @@ class ReviewActionsMixin:
                     prior_assertion is not None
                     and prior_assertion.value_status == "present"
                     and prior_assertion.value != value
+                    and equivalence.relation != "equivalent"
                 )
                 if (
                     prior_assertion is not None
@@ -875,9 +907,10 @@ class ReviewActionsMixin:
                         override=override,
                         reason="Applied through bulk record metadata editing.",
                         method="human_bulk_override" if override else "human_bulk",
+                        evidence=_equivalent_evidence(prior_assertion, equivalence),
                     )
                 project_record_assertions(record)
-                decisions.append({"field": key, "value": value, "at": iso_now(), "source": "human_bulk"})
+                decisions.append({"field": key, "value": value, "at": iso_now(), "source": "human_bulk", **_equivalence_audit(prior_value, equivalence)})
             constraint_changes = apply_metadata_constraints(record, schema)
             for item in constraint_changes:
                 decisions.append({"field": item["field"], "value": item["value"], "at": iso_now(), "source": "deterministic_constraint", "reason": item["reason"]})

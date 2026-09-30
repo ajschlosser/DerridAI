@@ -155,7 +155,8 @@ def _model_metrics(events: list[dict[str, Any]]) -> dict[str, Any]:
         severities[str(e.get("severity") or ("cleared" if e["kind"] == REJECTED else "unknown"))] += 1
     firsts = [t for t in (_seconds(e) for e in calls) if t is not None]
     useful = [t for t in (_seconds(e) for e in events if e["kind"] in (AUTOFILLED, ACCEPTED)) if t is not None]
-    blind = [e for e in events if e["kind"] == BLIND_LABEL]
+    # An unresolved comparison is neither agreement nor disagreement.
+    blind = [e for e in events if e["kind"] == BLIND_LABEL and e.get("equivalence_relation") != "unknown"]
     blind_agreed = sum(1 for e in blind if e.get("agreed"))
     return {
         # Anchoring: how much more often people agree with the model when they can see its value than when they cannot.

@@ -20,6 +20,8 @@ from .field_assertions import (
     current_assertions,
     migrate_record_assertions,
 )
+from .semantic_identity import SEMANTIC_IDENTITY_VERSION, canonical_value_key
+from .semantic_identity_registry import compare_field_values
 
 DEFAULT_CONTEXT_BLOCK_RADIUS = 1
 PROMPT_EVIDENCE_CHARS = 420
@@ -161,6 +163,7 @@ def build_metadata_exemplar(
     field_id: str = "",
     context_block_radius: int = DEFAULT_CONTEXT_BLOCK_RADIUS,
     why: list[str] | None = None,
+    schema: Any = None,
 ) -> dict[str, Any] | None:
     """Derive one trusted, evidence-bound positive metadata exemplar.
 
@@ -303,7 +306,27 @@ def build_metadata_exemplar(
         "page_start": pages[0] if pages else record.get("page_start"),
         "page_end": pages[-1] if pages else record.get("page_end"),
         "reviewed_at": evidence.get("reviewed_at") or record.get("metadata_reviewed_at"),
+        **_identity_fields(schema, record, field, value),
     }
+
+
+def _identity_fields(schema: Any, record: dict[str, Any], field: str, value: Any, prefix: str = "") -> dict[str, Any]:
+    """Derived identity of an exemplar value. ``field_value`` itself is never replaced.
+
+    The key groups equivalent precedents for ranking; it is rebuildable and versioned, and
+    None when no safe key exists (for example a lexical phrase with no lemmatizer installed).
+    """
+    if schema is None or value in (None, "", []):
+        return {}
+    try:
+        profile = schema.equivalence_profile_for(field)
+    except KeyError:
+        return {}
+    key = canonical_value_key(value, profile=profile, language=str(record.get("language") or ""))
+    out: dict[str, Any] = {f"{prefix}canonical_value_key": key}
+    if not prefix:
+        out.update({"equivalence_profile": profile.mode, "equivalence_version": SEMANTIC_IDENTITY_VERSION})
+    return out
 
 
 def build_correction_exemplars(
@@ -315,12 +338,16 @@ def build_correction_exemplars(
     source_document_id: str = "",
     field_ids: dict[str, str] | None = None,
     context_block_radius: int = DEFAULT_CONTEXT_BLOCK_RADIUS,
+    schema: Any = None,
 ) -> list[dict[str, Any]]:
     """Derive hard-negative exemplars from model values a human corrected.
 
     Corrections are emitted only when the chosen value itself has trusted evidence.
     The rejected value is retained as a negative label; it is never represented as a
-    positive assertion.
+    positive assertion. Only a rejected value that is *different* from the accepted one
+    is a correction: a restatement (``J.P.`` for ``J. P.``) or an unresolved comparison
+    never becomes a hard negative, including in rejection rows recorded before
+    equivalence existed. Those audit rows stay on the record untouched.
     """
 
     corrections: list[dict[str, Any]] = []
@@ -333,6 +360,15 @@ def build_correction_exemplars(
         chosen_value = rejection.get("chosen_value")
         if not field or rejected_value in (None, "", []) or record.get(field) != chosen_value:
             continue
+        relation = rejection.get("equivalence_relation")
+        if relation not in {"exact", "equivalent", "different", "unknown"}:
+            relation = (
+                compare_field_values(schema, field, rejected_value, chosen_value, record=record).relation
+                if schema is not None
+                else ("exact" if rejected_value == chosen_value else "different")
+            )
+        if relation != "different":
+            continue
 
         base = build_metadata_exemplar(
             record,
@@ -343,6 +379,7 @@ def build_correction_exemplars(
             source_document_id=source_document_id,
             field_id=str((field_ids or {}).get(field) or ""),
             context_block_radius=context_block_radius,
+            schema=schema,
         )
         if base is None:
             continue
@@ -356,6 +393,7 @@ def build_correction_exemplars(
         correction = dict(base)
         correction["kind"] = "correction"
         correction["rejected_value"] = rejected_value
+        correction.update(_identity_fields(schema, record, field, rejected_value, prefix="rejected_"))
         correction["source_model"] = rejection.get("model")
         correction["corrected_at"] = rejection.get("at")
         correction["metadata_exemplar_id"] = "mex-" + hashlib.sha256(
