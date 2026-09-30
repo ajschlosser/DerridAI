@@ -7155,7 +7155,7 @@
   "pipelines.diagram_horizontal": "Horizontal",
   "pipelines.diagram_vertical": "Vertical",
   "pipelines.non_celf_boundary_help": "This pipeline keeps useful relevance suggestions, but does not guarantee direct support at its output. A reviewer can bind and validate direct evidence later; only that evidence-bound result receives a cELF guarantee.",
-  "pipelines.diagram_help": "Stages are nodes. Solid arrows are the normal path. Dashed arrows are fallbacks used only when a stage is empty, unavailable, timed out, or in error.",
+  "pipelines.diagram_help": "Drag the background to pan. Drag a stage to reposition it. Arrow keys pan, plus and minus zoom, and 0 resets the view. Hold Alt and use an arrow key to move a focused stage.",
   "pipelines.diagram_empty": "This pipeline has no stages to diagram.",
   "pipelines.edge_next": "Next",
   "pipelines.node_entry": "Entry",
@@ -7719,5 +7719,11 @@
   "help.parameter_controls": "What it controls",
   "help.parameter_effect": "Typical effect",
   "semantic_map.fit": "Fit map",
-  "semantic_map.resize": "Resize semantic map"
+  "semantic_map.resize": "Resize semantic map",
+  "pipelines.diagram_controls": "Pipeline diagram controls",
+  "pipelines.diagram_zoom_out": "Zoom out",
+  "pipelines.diagram_zoom_in": "Zoom in",
+  "pipelines.diagram_fit": "Fit diagram",
+  "pipelines.diagram_reset_layout": "Reset layout",
+  "pipelines.diagram_resize": "Resize pipeline diagram"
 }
