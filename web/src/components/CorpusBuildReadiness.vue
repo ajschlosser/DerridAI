@@ -104,19 +104,31 @@ const providerSummary = computed(() =>
       </div>
     </header>
 
-    <div
+    <dl
       class="build-command-summary"
       :aria-label="i18n.t('pdf_corpus.readiness.configuration_summary')"
     >
-      <span>{{ sourceFilename || i18n.t("pdf_corpus.choose_source_prompt") }}</span>
-      <span v-if="schemaLabel">{{ schemaLabel }}</span>
-      <span>{{ providerSummary }}</span>
-      <span>{{ sizing }}</span>
-      <span v-if="warnings.length" class="build-command-warning">
-        {{ warnings.length }}
-        {{ i18n.t("pdf_corpus.readiness.warnings", "warnings") }}
-      </span>
-    </div>
+      <div>
+        <dt>{{ i18n.t("pdf_corpus.readiness.source") }}</dt>
+        <dd>{{ sourceFilename || i18n.t("pdf_corpus.choose_source_prompt") }}</dd>
+      </div>
+      <div v-if="schemaLabel">
+        <dt>{{ i18n.t("pdf_corpus.configure_metadata") }}</dt>
+        <dd>{{ schemaLabel }}</dd>
+      </div>
+      <div>
+        <dt>{{ i18n.t("pdf_corpus.readiness.llm") }}</dt>
+        <dd>{{ providerSummary }}</dd>
+      </div>
+      <div>
+        <dt>{{ i18n.t("pdf_corpus.readiness.record_size") }}</dt>
+        <dd>{{ sizing }}</dd>
+      </div>
+      <div v-if="warnings.length" class="build-command-warning">
+        <dt>{{ i18n.t("pdf_corpus.readiness.warnings", "Warnings") }}</dt>
+        <dd>{{ warnings.length }}</dd>
+      </div>
+    </dl>
 
     <div class="build-command-actions">
       <UiButton
@@ -239,23 +251,38 @@ const providerSummary = computed(() =>
 .build-command-summary {
   min-width: 0;
   display: grid;
+  grid-template-columns: 1fr;
   gap: 0;
+  margin: 0;
   border-block: 1px solid var(--border-subtle);
 }
-.build-command-summary > span {
+.build-command-summary > div {
   min-width: 0;
+  display: grid;
+  gap: 2px;
   padding: var(--space-2) 0;
+}
+.build-command-summary > div + div {
+  border-top: 1px solid var(--border-subtle);
+}
+.build-command-summary dt {
   color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.build-command-summary dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--text-primary);
   font-size: var(--fs-sm);
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
-.build-command-summary > span + span {
-  border-top: 1px solid var(--border-subtle);
-}
-.build-command-summary .build-command-warning {
+.build-command-summary .build-command-warning dt,
+.build-command-summary .build-command-warning dd {
   color: var(--tone-warn-fg);
-  font-weight: var(--fw-semibold);
 }
 .build-command-actions {
   display: grid;
@@ -370,10 +397,10 @@ dd small {
     gap: var(--space-2) var(--space-4);
     border-block: 0;
   }
-  .build-command-summary > span {
+  .build-command-summary > div {
     padding: 0;
   }
-  .build-command-summary > span + span {
+  .build-command-summary > div + div {
     border-top: 0;
   }
   .build-command-actions {
