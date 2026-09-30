@@ -9380,5 +9380,6 @@ EN_US: dict[str, str] = {'common.apply': 'Apply',
  'site.create_provider_profiles_help': 'Choose provider profiles to include as non-secret browser configuration for Research. Endpoints and model names are exported; API keys are never exported and must be entered by the visitor when required.',
  'site.create_providers_selected': '{count} provider profiles selected',
  'site.create_provider_openai': 'OpenAI-compatible',
- 'site.create_provider_ollama': 'Ollama'
+ 'site.create_provider_ollama': 'Ollama',
+ 'site.runtime.loading_site': 'Loading DerridAI research site…'
 }
