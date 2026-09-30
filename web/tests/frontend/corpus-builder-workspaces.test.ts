@@ -190,6 +190,13 @@ describe("setup state", () => {
     expect(firstBlockingIssue(issues)?.section).toBe("source");
   });
 
+  it("shows blocking run settings as incomplete rather than optional", () => {
+    const unsafe = input({ contextSafe: false });
+    const issues = corpusSetupIssues(unsafe, text);
+    const states = corpusSetupSectionStates(unsafe, issues, text);
+    expect(states.find((state) => state.id === "advanced")?.state).toBe("incomplete");
+  });
+
   it("keeps document-field and structure gaps as warnings, not blockers", () => {
     const issues = corpusSetupIssues(
       input({ structureNeedsReview: true, missingDocumentFieldCount: 2 }),
