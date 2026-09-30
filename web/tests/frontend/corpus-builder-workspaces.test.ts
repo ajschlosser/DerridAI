@@ -6,6 +6,7 @@ import CorpusBuilderWorkspaceHeader from "../../src/components/corpus-builder/Co
 import CorpusBuildHistoryMenu from "../../src/components/CorpusBuildHistoryMenu.vue";
 import CorpusPublishWorkspace from "../../src/components/corpus-builder/CorpusPublishWorkspace.vue";
 import CorpusReviewHeader from "../../src/components/corpus-builder/CorpusReviewHeader.vue";
+import CorpusReviewToolbar from "../../src/components/corpus-builder/CorpusReviewToolbar.vue";
 import CorpusReviewQueueTabs from "../../src/components/CorpusReviewQueueTabs.vue";
 import CorpusSetupSection from "../../src/components/corpus-builder/CorpusSetupSection.vue";
 import CorpusSetupWorkspace from "../../src/components/corpus-builder/CorpusSetupWorkspace.vue";
@@ -190,6 +191,13 @@ describe("setup state", () => {
     expect(firstBlockingIssue(issues)?.section).toBe("source");
   });
 
+  it("shows blocking run settings as incomplete rather than optional", () => {
+    const unsafe = input({ contextSafe: false });
+    const issues = corpusSetupIssues(unsafe, text);
+    const states = corpusSetupSectionStates(unsafe, issues, text);
+    expect(states.find((state) => state.id === "advanced")?.state).toBe("incomplete");
+  });
+
   it("keeps document-field and structure gaps as warnings, not blockers", () => {
     const issues = corpusSetupIssues(
       input({ structureNeedsReview: true, missingDocumentFieldCount: 2 }),
@@ -247,7 +255,7 @@ describe("setup state", () => {
 describe("workspace header", () => {
   beforeEach(() => setActivePinia(createPinia()));
 
-  it("is the one workflow navigation: four steps, checks for complete, disabled when unavailable", async () => {
+  it("presents three user-facing phases while keeping Build and Review directly navigable", async () => {
     const wrapper = mount(CorpusBuilderWorkspaceHeader, {
       props: {
         sourceFilename: "Of Grammatology.pdf",
@@ -262,13 +270,19 @@ describe("workspace header", () => {
         ],
       },
     });
-    const buttons = wrapper.findAll(".workspace-mode-nav button");
-    expect(buttons).toHaveLength(4);
-    expect(buttons[0].text()).toContain("✓");
-    expect(buttons[2].attributes("aria-current")).toBe("step");
-    expect(buttons[3].attributes("disabled")).toBeDefined();
-    await buttons[1].trigger("click");
+    const phases = wrapper.findAll(".workspace-phase-list > li > button");
+    expect(phases).toHaveLength(3);
+    expect(phases[0].text()).toContain("✓");
+    expect(phases[1].text()).toContain("Build & review");
+    expect(phases[1].attributes("aria-current")).toBe("step");
+    expect(phases[2].attributes("disabled")).toBeDefined();
+
+    const subnav = wrapper.findAll(".workspace-subnav button");
+    expect(subnav).toHaveLength(2);
+    expect(subnav[1].attributes("aria-pressed")).toBe("true");
+    await subnav[0].trigger("click");
     expect(wrapper.emitted("workspace")).toEqual([["build"]]);
+
     expect(wrapper.get(".corpus-workspace-stage").text()).toBe("Reviewing");
     // The build ID is secondary metadata, not headline copy.
     expect(wrapper.get(".corpus-workspace-context strong").text()).toBe("Of Grammatology.pdf");
@@ -382,11 +396,13 @@ describe("publish workspace", () => {
     expect(wrapper.get("[data-count='pending'] dd").text()).toBe("5");
     const unreviewed = wrapper
       .findAll("button")
-      .find((node) => node.text().includes("Publish with unreviewed"))!;
+      .find((node) => node.text().includes("Use suggestions as-is"))!;
     await unreviewed.trigger("click");
     expect(wrapper.emitted("publishUnreviewed")).toBeUndefined();
     const confirm = document.body.textContent || wrapper.text();
-    expect(confirm).toBeTruthy();
+    expect(confirm).toContain("Source coverage and text-fidelity validation are never skipped");
+    expect(confirm).toContain("does not turn those assertions into human-confirmed values");
+    expect(confirm).toContain("create a human-review claim");
   });
 
   it("sends blocker actions to the parent, which switches to Review", async () => {
@@ -409,9 +425,10 @@ describe("publish workspace", () => {
     });
     expect(wrapper.get("#corpus-publish-title").text()).toBe("Published");
     expect(wrapper.text()).toContain("pub-1");
+    expect(wrapper.find(".publish-counts").exists()).toBe(false);
     expect(wrapper.find(".publication-blockers").exists()).toBe(false);
     expect(wrapper.find(".publication-readiness-list").exists()).toBe(false);
-    expect(wrapper.text()).not.toContain("Publish with unreviewed");
+    expect(wrapper.text()).not.toContain("Use suggestions as-is");
   });
 });
 
@@ -439,6 +456,93 @@ describe("review header", () => {
     hasPreviousPage: false,
     hasNextPage: false,
   };
+
+  it("moves selected-record actions into a contextual selection bar", async () => {
+    const wrapper = mount(CorpusReviewToolbar, {
+      props: {
+        queue: "all",
+        query: "",
+        total: 20,
+        ready: 0,
+        issues: 4,
+        metadata: 1,
+        topology: 0,
+        sourceProblems: 0,
+        accepted: 10,
+        rejected: 1,
+        bulkActionItems: [
+          { id: "edit", label: "Bulk edit metadata" },
+          { id: "hands-free", label: "Run hands-free…" },
+          { id: "reject", label: "Reject selected (2)" },
+        ],
+        bulkActionFeedback: "",
+        bulkMetadataOpen: false,
+        schema: null,
+        knownValues: {},
+        regionTypes: [],
+        discourseRoles: [],
+        selectedCount: 2,
+        bulkTotalCount: 20,
+        bulkDisabled: false,
+        pageNumber: 1,
+        pageCount: 1,
+        hasPreviousPage: false,
+        hasNextPage: false,
+      } as never,
+    });
+
+    expect(wrapper.get(".review-selection-bar").text()).toContain("2 selected");
+    const selectedActions = wrapper.findAll(".review-selection-bar button");
+    expect(selectedActions.map((button) => button.text())).toEqual([
+      "Bulk edit metadata",
+      "Reject selected (2)",
+    ]);
+    await selectedActions[0].trigger("click");
+    await selectedActions[1].trigger("click");
+    expect(wrapper.emitted("bulkAction")).toEqual([["edit"], ["reject"]]);
+    expect(wrapper.get(".action-menu-trigger").text()).toContain("More actions");
+  });
+
+  it("confirms bulk acceptance in an accessible dialog before emitting the decision", async () => {
+    const wrapper = mount(CorpusReviewToolbar, {
+      props: {
+        queue: "all",
+        query: "",
+        total: 20,
+        ready: 5,
+        issues: 4,
+        metadata: 1,
+        topology: 0,
+        sourceProblems: 0,
+        accepted: 10,
+        rejected: 1,
+        bulkActionItems: [],
+        bulkActionFeedback: "",
+        bulkMetadataOpen: false,
+        schema: null,
+        knownValues: {},
+        regionTypes: [],
+        discourseRoles: [],
+        selectedCount: 0,
+        bulkTotalCount: 20,
+        bulkDisabled: false,
+        pageNumber: 1,
+        pageCount: 1,
+        hasPreviousPage: false,
+        hasNextPage: false,
+      } as never,
+      global: { stubs: { Teleport: true } },
+    });
+    await wrapper.get(".review-ready-action").trigger("click");
+    expect(wrapper.emitted("acceptClean")).toBeUndefined();
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(true);
+    expect(wrapper.get('[role="dialog"]').text()).toContain("records your review decision");
+    const confirm = wrapper
+      .findAll('[role="dialog"] button')
+      .find((button) => button.text().includes("Accept clean"));
+    await confirm!.trigger("click");
+    expect(wrapper.emitted("acceptClean")).toEqual([[]]);
+  });
 
   it("keeps counts, view switch, focus and the toolbar in one surface", async () => {
     const wrapper = mount(CorpusReviewHeader, {

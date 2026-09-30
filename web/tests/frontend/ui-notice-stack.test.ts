@@ -72,6 +72,29 @@ describe("UiNoticeStack", () => {
 describe("build warnings in the run monitor", () => {
   beforeEach(() => setActivePinia(createPinia()));
 
+  it("lets a reviewer pause an active build without leaving Review", async () => {
+    const build = {
+      build_id: "b-running",
+      status: "running",
+      stage: "enriching",
+      progress: 0.42,
+      record_count: 12,
+    };
+    const wrapper = mount(CorpusReviewRunStatus, {
+      props: { build: build as never, profiles: [] },
+      global: {
+        stubs: {
+          CorpusRunDiagnostics: true,
+        },
+      },
+    });
+
+    const pause = wrapper.findAll("button").find((button) => button.text().trim() === "Pause");
+    expect(pause).toBeDefined();
+    await pause!.trigger("click");
+    expect(wrapper.emitted("pause")).toEqual([[]]);
+  });
+
   it("lists only unacknowledged warnings and asks for them to be acknowledged, not deleted", async () => {
     const build = {
       build_id: "b1",

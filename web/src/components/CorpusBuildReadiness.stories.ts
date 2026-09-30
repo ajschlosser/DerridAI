@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import CorpusBuildReadiness from "./CorpusBuildReadiness.vue";
 
 const meta = {
-  title: "Corpus/Build Readiness",
+  title: "Corpus Builder/Setup/Build Plan",
   component: CorpusBuildReadiness,
   args: {
     sourceFilename: "On Cosmopolitanism and Forgiveness.pdf",
@@ -22,6 +22,26 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Ready: Story = {};
+export const NoSource: Story = {
+  args: {
+    sourceFilename: "",
+    pageCount: 0,
+    blockCount: 0,
+    canStart: false,
+  },
+};
+export const Warning: Story = {
+  args: {
+    issues: [
+      {
+        id: "structure_review",
+        section: "structure",
+        severity: "warning",
+        message: "Review document structure before building.",
+      },
+    ],
+  },
+};
 export const NeedsAttention: Story = {
   args: {
     canStart: false,
@@ -43,3 +63,30 @@ export const NeedsAttention: Story = {
   },
 };
 export const ConcurrentBuild: Story = { args: { activeBuildCount: 2 } };
+
+export const FrenchLengthStress: Story = {
+  parameters: { locale: "fr-CA" },
+  args: {
+    sourceFilename:
+      "Jacques Derrida — Cosmopolites de tous les pays, encore un effort ! — édition critique et annotée.pdf",
+    schemaLabel:
+      "Schéma de métadonnées pour l’analyse discursive, l’attribution et l’indexation sémantique",
+    providerLabel: "Fournisseur local de recherche",
+    modelLabel: "modèle-expérimental-à-contexte-étendu",
+    issues: [
+      {
+        id: "structure_review",
+        section: "structure",
+        severity: "warning",
+        message:
+          "Révisez la structure du document avant la construction afin de confirmer la correspondance des pages imprimées.",
+      },
+    ],
+  },
+};
+
+export const Narrow: Story = {
+  parameters: {
+    viewport: { defaultViewport: "mobile1" },
+  },
+};

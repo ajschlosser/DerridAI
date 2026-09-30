@@ -70,25 +70,34 @@ test.describe("Corpus Builder composed workflow", () => {
     await expectWcag2AA(page, ".corpus-workspace-header");
   });
 
-  test("the header navigation shows the four workflow steps and where the build is", async ({
+  test("the header navigation shows the three researcher-facing phases and current phase", async ({
     page,
   }) => {
     const states = [
       ["corpus-builder-workflow-workspace-header--empty-workspace", "Setup"],
-      ["corpus-builder-workflow-workspace-header--active-build", "Review"],
+      ["corpus-builder-workflow-workspace-header--active-build", "Build & review"],
       ["corpus-builder-workflow-workspace-header--published", "Publish"],
     ];
     for (const [id, label] of states) {
       await page.goto(story(id));
       const nav = page.locator(".workspace-mode-nav");
-      await expect(nav.getByRole("button")).toHaveCount(4);
+      await expect(nav.locator(".workspace-phase-list").getByRole("button")).toHaveCount(3);
       const current = nav.locator('[aria-current="step"]');
       await expect(current).toBeVisible();
       await expect(current).toContainText(label);
       await expectWcag2AA(page, ".corpus-workspace-header");
     }
+
+    await page.goto(story("corpus-builder-workflow-workspace-header--active-build"));
+    const subnav = page.locator(".workspace-subnav");
+    await expect(subnav.getByRole("button")).toHaveCount(2);
+    await expect(subnav.getByRole("button", { name: "Review" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
     await page.goto(story("corpus-builder-workflow-workspace-header--empty-workspace"));
-    await expect(page.getByRole("button", { name: /^Review/ })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /^Build & review/ })).toBeDisabled();
   });
 
   test("document structure remains usable in the narrow laptop composition", async ({ page }) => {
@@ -148,7 +157,7 @@ test.describe("Corpus Builder composed workflow", () => {
       "31 Records remain unreviewed",
     );
     await expect(
-      page.getByRole("button", { name: "Publish with unreviewed suggestions" }),
+      page.getByRole("button", { name: "Use suggestions as-is & publish" }),
     ).toBeVisible();
     await expectWcag2AA(page, ".corpus-publish-workspace");
     await page.goto(story("corpus-builder-publish-workspace--published"));

@@ -19,6 +19,7 @@ function lastEmission(wrapper: any, event: string) {
 describe("Corpus Builder setup and launch controls", () => {
   it("gates launch on source, readiness, context safety, and busy state", async () => {
     const wrapper = mount(CorpusBuildReadiness, { props: { canStart: true, contextSafe: true } });
+    expect(wrapper.get(".build-plan-eyebrow").text()).toBe("Build plan");
     const action = wrapper.get(".build-action");
     expect(action.attributes("disabled")).toBeDefined();
     expect(wrapper.attributes("data-ready")).toBe("false");
@@ -38,6 +39,28 @@ describe("Corpus Builder setup and launch controls", () => {
     await wrapper.setProps({ contextSafe: false });
     expect(wrapper.get('[role="alert"]').text()).toContain("Context budget");
     expect(wrapper.get(".build-action").attributes("disabled")).toBeDefined();
+  });
+
+  it("lets the Build plan open the section behind each summary", async () => {
+    const wrapper = mount(CorpusBuildReadiness, {
+      props: {
+        mediaKind: "pdf",
+        sourceFilename: "book.pdf",
+        pageCount: 80,
+        blockCount: 300,
+        structureSummary: "Main text PDF 9",
+        schemaLabel: "Scholarly default",
+        providerLabel: "Local Ollama",
+        modelLabel: "qwen",
+        targetChars: 1750,
+        toleranceChars: 200,
+        canStart: true,
+      },
+    });
+
+    await wrapper.get('button[aria-label="Edit Source"]').trigger("click");
+    await wrapper.get('button[aria-label="Edit Metadata"]').trigger("click");
+    expect(wrapper.emitted("editSection")).toEqual([["source"], ["metadata"]]);
   });
 
   it("names the first blocking setup issue and sends Fix to its section", async () => {

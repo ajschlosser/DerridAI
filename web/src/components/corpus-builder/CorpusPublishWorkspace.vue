@@ -4,21 +4,18 @@ import { computed, ref } from "vue";
 import type { CorpusBuild } from "../../api/corpus";
 import { useI18nStore } from "../../stores/i18n";
 import CorpusFinishWorkspace from "../CorpusFinishWorkspace.vue";
-import CorpusMetadataIssues from "../CorpusMetadataIssues.vue";
 import CorpusUnreviewedPublishDialog from "../CorpusUnreviewedPublishDialog.vue";
 import UiButton from "../ui/UiButton.vue";
 
 const props = defineProps<{
   build: CorpusBuild;
   busy?: boolean;
-  metadataRetryRunning?: boolean;
   /** Skipping review is offered once processing is done and until a publication exists. */
   canPublishUnreviewed?: boolean;
 }>();
 const emit = defineEmits<{
   retryMetadata: [];
   reviewMetadata: [];
-  reviewMetadataRecord: [recordId: string];
   reviewValidation: [];
   fixIssue: [issue: { code?: string; record_id?: string; field?: string; reason?: string }];
   reviewTopology: [];
@@ -68,16 +65,10 @@ const summary = computed<{ label: string; tone: "success" | "warning" | "neutral
 });
 const counts = computed(() => [
   {
-    id: "accepted",
-    label: i18n.t("pdf_corpus.accepted_label"),
-    value: readiness.value.records_accepted || 0,
+    id: "pending",
+    label: i18n.t("pdf_corpus.pending_review"),
+    value: pending.value,
   },
-  {
-    id: "rejected",
-    label: i18n.t("pdf_corpus.rejected"),
-    value: readiness.value.records_rejected || 0,
-  },
-  { id: "pending", label: i18n.t("pdf_corpus.pending"), value: pending.value },
   {
     id: "metadata",
     label: i18n.t("pdf_corpus.publish.metadata_issues"),
@@ -98,9 +89,15 @@ const counts = computed(() => [
   >
     <header class="publish-summary" :data-tone="summary.tone">
       <div class="publish-summary-copy">
-        <span class="eyebrow">{{ i18n.t("pdf_corpus.publish.readiness_title") }}</span>
+        <span class="eyebrow">
+          {{
+            published
+              ? i18n.t("pdf_corpus.publication")
+              : i18n.t("pdf_corpus.publish.readiness_title")
+          }}
+        </span>
         <h2 id="corpus-publish-title" role="status">{{ summary.label }}</h2>
-        <dl class="publish-counts">
+        <dl v-if="!published" class="publish-counts">
           <div v-for="item in counts" :key="item.id" :data-count="item.id">
             <dt>{{ item.label }}</dt>
             <dd>{{ Number(item.value).toLocaleString() }}</dd>
@@ -133,14 +130,6 @@ const counts = computed(() => [
       @rerun-enrichment="emit('rerunEnrichment')"
       @publish="emit('publish')"
     />
-    <CorpusMetadataIssues
-      v-if="metadataIssues > 0 && !published"
-      :build="build"
-      :busy="busy || metadataRetryRunning"
-      @retry="emit('retryMetadata')"
-      @review="(recordId) => emit('reviewMetadataRecord', recordId)"
-    />
-
     <CorpusUnreviewedPublishDialog
       :open="Boolean(canPublishUnreviewed) && confirmingUnreviewed"
       :busy="busy"

@@ -34,7 +34,7 @@ describe("CorpusUnreviewedPublishDialog", () => {
 
     const publish = wrapper
       .findAll("button")
-      .find((button) => button.text() === "Publish snapshot");
+      .find((button) => button.text() === "Publish suggestions as-is");
     expect(publish).toBeTruthy();
     await publish!.trigger("click");
     expect(wrapper.emitted("confirm")).toHaveLength(1);
@@ -55,7 +55,7 @@ describe("CorpusUnreviewedPublishDialog", () => {
       },
     });
 
-    expect(wrapper.find('button[data-variant="primary"]').text()).toBe("Publish snapshot");
+    expect(wrapper.find('button[data-variant="primary"]').text()).toBe("Publish suggestions as-is");
     expect(wrapper.find('button[data-variant="danger"]').exists()).toBe(false);
   });
 });

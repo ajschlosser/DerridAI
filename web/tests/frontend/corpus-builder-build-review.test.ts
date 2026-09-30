@@ -92,6 +92,7 @@ describe("Corpus Builder build, review, and finish states", () => {
         running: true,
         canResume: false,
         hasRecordTopology: true,
+        readyCount: 8,
       },
     });
     const operation = wrapper.get(".primary-status-operation").text();
@@ -102,6 +103,45 @@ describe("Corpus Builder build, review, and finish states", () => {
     expect(wrapper.get("h2").text()).toBe("Enriching metadata");
     expect(wrapper.get('[role="progressbar"]').attributes("aria-valuenow")).toBe("72");
     expect(wrapper.get('[aria-current="step"]').text()).toContain("Enrich");
+    expect(buttonByText(wrapper, "Review 8 ready Records").exists()).toBe(true);
+    expect(wrapper.get(".primary-status-review-help").text()).toContain(
+      "while automated build work continues in the background",
+    );
+  });
+
+  it("shows recent authoritative stage changes on the live Build surface", () => {
+    const wrapper = mount(CorpusBuildWorkspace, {
+      props: {
+        build: {
+          ...buildBase,
+          status: "running",
+          stage: "enriching",
+          progress: 0.72,
+          record_count: 12,
+          build_events: [
+            { at: "2026-09-30T18:00:00Z", stage: "preparing", status: "running", progress: 0.02 },
+            {
+              at: "2026-09-30T18:02:00Z",
+              stage: "constructing_records",
+              status: "running",
+              progress: 0.4,
+            },
+            { at: "2026-09-30T18:04:00Z", stage: "enriching", status: "running", progress: 0.72 },
+          ],
+        },
+        running: true,
+        canResume: false,
+        hasRecordTopology: true,
+        readyCount: 3,
+        awaitingManifestReview: false,
+        retryingSegmentation: false,
+        segmentationNeedsReview: false,
+        contextSafe: true,
+      },
+    });
+    expect(wrapper.get(".build-activity").text()).toContain("Build timeline");
+    expect(wrapper.findAll(".build-activity li")).toHaveLength(3);
+    expect(wrapper.get(".build-activity").text()).toContain("72%");
   });
 
   it("surfaces recoverable build failures as alerts without hiding preserved warnings", async () => {

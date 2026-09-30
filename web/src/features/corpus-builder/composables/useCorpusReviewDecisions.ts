@@ -252,7 +252,6 @@ export function useCorpusReviewDecisions(options: CorpusReviewDecisionsOptions) 
     }
 
     const viewport = options.captureReviewViewport();
-    if (!window.confirm(options.tf("pdf_corpus.accept_clean_confirm", { count: clean }))) return;
     options.busy.value = "bulk";
     try {
       const result = await corpusBuilderApi.bulkDisposition(
