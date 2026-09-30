@@ -22,6 +22,7 @@ from .corpus_publication import serialize_public_record, validate_publication_re
 from .locales.en_us import EN_US
 from .locales.fr_ca import FR_CA
 from .services import store
+from .system_store import normalize_locale_code, system_store
 
 SITE_FORMAT = "derridai-static-site-v3"
 _ASSET_DIR = Path(__file__).with_name("site_assets")
@@ -50,12 +51,95 @@ def _slug(value: str) -> str:
     return slug[:72] or "derridai-research-site"
 
 
-def _runtime_strings() -> dict[str, dict[str, str]]:
+def _selected_languages(language_codes: Sequence[str] | None, locale: str) -> list[dict[str, str]]:
+    """Resolve an explicit export selection against installed DerridAI languages."""
+    installed = {str(item["code"]): item for item in system_store.list_languages()}
+    requested = list(language_codes or [locale])
+    selected: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for raw in requested:
+        try:
+            code = normalize_locale_code(str(raw))
+        except ValueError as exc:
+            raise ValueError(f"Invalid site language {raw!r}.") from exc
+        if code in seen:
+            continue
+        metadata = installed.get(code)
+        if metadata is None:
+            raise ValueError(f"Site language {code!r} is not installed in DerridAI.")
+        selected.append(
+            {
+                "code": code,
+                "name": str(metadata.get("name") or code),
+                "flag": str(metadata.get("flag") or "🌐"),
+            }
+        )
+        seen.add(code)
+    if not selected:
+        raise ValueError("Select at least one language for the published site.")
+    return selected
+
+
+def _runtime_strings(language_codes: Sequence[str]) -> dict[str, dict[str, str]]:
+    """Export selected installed dictionaries with canonical English fallbacks."""
     prefixes = ("site.runtime.",)
-    return {
-        "en-US": {key: value for key, value in EN_US.items() if key.startswith(prefixes)},
-        "fr-CA": {key: value for key, value in FR_CA.items() if key.startswith(prefixes)},
+    english = system_store.get_language("en-US") or {"dictionary": EN_US}
+    english_dictionary = {
+        key: str(value)
+        for key, value in dict(english.get("dictionary") or EN_US).items()
+        if key.startswith(prefixes)
     }
+    result: dict[str, dict[str, str]] = {}
+    for code in language_codes:
+        language = system_store.get_language(code)
+        if language is None:
+            raise ValueError(f"Site language {code!r} is not installed in DerridAI.")
+        dictionary = dict(english_dictionary)
+        dictionary.update(
+            {
+                key: str(value)
+                for key, value in dict(language.get("dictionary") or {}).items()
+                if key.startswith(prefixes)
+            }
+        )
+        result[code] = dictionary
+    return result
+
+
+def _site_provider_profiles(profile_ids: Sequence[str] | None) -> list[dict[str, Any]]:
+    """Export only explicitly selected, non-secret LLM profile descriptors."""
+    requested = list(dict.fromkeys(str(item).strip() for item in (profile_ids or []) if str(item).strip()))
+    if not requested:
+        return []
+    available = {
+        str(profile.get("id")): profile
+        for profile in system_store.researcher_profiles()
+        if str(profile.get("id") or "").strip()
+    }
+    missing = [profile_id for profile_id in requested if profile_id not in available]
+    if missing:
+        raise ValueError(
+            "Selected LLM provider profiles are no longer available: " + ", ".join(missing)
+        )
+    allowed = {
+        "id",
+        "name",
+        "type",
+        "base_url",
+        "model",
+        "model_mode",
+        "model_kind",
+        "max_concurrent_requests",
+        "num_ctx",
+        "num_predict",
+        "temperature",
+        "top_p",
+        "has_api_key",
+    }
+    return [
+        {key: value for key, value in available[profile_id].items() if key in allowed}
+        for profile_id in requested
+    ]
 
 
 def _work_summary(records: Sequence[dict[str, Any]], work: str) -> dict[str, Any]:
@@ -157,6 +241,8 @@ def build_site_bundle(
     title: str,
     description: str = "",
     locale: str = "en-US",
+    languages: Sequence[str] | None = None,
+    provider_profile_ids: Sequence[str] | None = None,
 ) -> SiteBundle:
     """Create an SDK-backed static research site from one immutable publication snapshot."""
     selected_works = list(dict.fromkeys(str(item).strip() for item in works if str(item).strip()))
@@ -237,8 +323,16 @@ def build_site_bundle(
     semantic_count = sum(1 for vector in vectors if vector)
     created_at = datetime.now(UTC).isoformat()
     publication_id = f"sitepub-{uuid.uuid4().hex}"
-    normalized_locale = locale if locale in {"en-US", "fr-CA"} else "en-US"
-    locale_dictionary = FR_CA if normalized_locale == "fr-CA" else EN_US
+    selected_languages = _selected_languages(languages, locale)
+    selected_language_codes = [item["code"] for item in selected_languages]
+    try:
+        requested_locale = normalize_locale_code(locale)
+    except ValueError:
+        requested_locale = selected_language_codes[0]
+    normalized_locale = (
+        requested_locale if requested_locale in selected_language_codes else selected_language_codes[0]
+    )
+    locale_dictionary = _runtime_strings([normalized_locale])[normalized_locale]
     title = str(title or "").strip() or locale_dictionary["site.runtime.site_title"]
     description = str(description or "").strip()
 
@@ -270,6 +364,7 @@ def build_site_bundle(
         "title": title,
         "description": description,
         "locale": normalized_locale,
+        "languages": selected_languages,
         "works": [_work_summary(public_records, work) for work in selected_works],
         "vector_index": {
             "dimension": dimension,
@@ -296,6 +391,7 @@ def build_site_bundle(
             )
             if vector_contract.get(key) not in (None, "")
         },
+        "provider_profiles": _site_provider_profiles(provider_profile_ids),
         "features": {
             "browse": True,
             "lexical_search": True,
@@ -307,14 +403,14 @@ def build_site_bundle(
             "browser_llm": False,
             "derridai_sdk": True,
             "host_supplied_generation": True,
-            "direct_provider_endpoints": False,
+            "direct_provider_endpoints": bool(provider_profile_ids),
             "progressive_work_loading": True,
         },
         "integrity": {
             "algorithm": "sha256",
             "records_and_vectors": integrity,
         },
-        "strings": _runtime_strings(),
+        "strings": _runtime_strings(selected_language_codes),
     }
     package = {"manifest": manifest, "chunks": chunks}
 
@@ -324,7 +420,7 @@ def build_site_bundle(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data: blob:; connect-src 'self'; img-src 'self' file: data: https:; style-src 'self' 'unsafe-inline'; script-src 'self' file:">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data: blob:; connect-src 'self' http: https:; img-src 'self' file: data: https:; style-src 'self' 'unsafe-inline'; script-src 'self' file:">
   <title>{html.escape(title)}</title>
 </head>
 <body>
