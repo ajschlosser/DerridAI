@@ -404,7 +404,8 @@ describe("publish workspace", () => {
     expect(wrapper.emitted("publishUnreviewed")).toBeUndefined();
     const confirm = document.body.textContent || wrapper.text();
     expect(confirm).toContain("Source coverage and text-fidelity validation are never skipped");
-    expect(confirm).toContain("does not turn the assertion into a human-confirmed");
+    expect(confirm).toContain("does not turn those assertions into human-confirmed values");
+    expect(confirm).toContain("create a human-review claim");
   });
 
   it("sends blocker actions to the parent, which switches to Review", async () => {

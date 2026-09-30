@@ -47,6 +47,7 @@ function mountToolbar(overrides: Record<string, unknown> = {}) {
       disabled: false,
       ...overrides,
     },
+    global: { stubs: { Teleport: true } },
   });
 }
 
@@ -65,6 +66,9 @@ describe("Corpus Builder review toolbar", () => {
     const wrapper = mountToolbar();
 
     await wrapper.get(".review-bulk .variant-primary").trigger("click");
+    expect(wrapper.emitted("acceptClean")).toBeUndefined();
+    expect(wrapper.get(".accept-ready-dialog-copy").text()).toContain("review decision");
+    await wrapper.get(".ui-dialog-footer .variant-primary").trigger("click");
     expect(wrapper.emitted("acceptClean")).toHaveLength(1);
 
     wrapper.findComponent(CorpusActionMenu).vm.$emit("select", "reject-selected");
