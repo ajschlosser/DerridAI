@@ -3,11 +3,13 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import html
 import io
 import json
 import re
+import struct
 import uuid
 import zipfile
 from collections.abc import Sequence
@@ -22,8 +24,9 @@ from .locales.fr_ca import FR_CA
 from .services import store
 from .system_store import system_store
 
-SITE_FORMAT = "derridai-static-site-v1"
+SITE_FORMAT = "derridai-static-site-v2"
 SITE_ASSET = Path(__file__).with_name("site_assets") / "derridai-site.js"
+PACKAGE_GLOBAL = "__DERRIDAI_SITE_PACKAGE__"
 _SAFE_SLUG = re.compile(r"[^a-z0-9]+")
 
 
@@ -43,16 +46,6 @@ def _slug(value: str) -> str:
     return slug[:72] or "derridai-research-site"
 
 
-def _json_for_html(value: Any) -> str:
-    """Serialize JSON without allowing documentary text to terminate the data script."""
-    return (
-        json.dumps(value, ensure_ascii=False, separators=(",", ":"))
-        .replace("<", "\\u003c")
-        .replace(">", "\\u003e")
-        .replace("&", "\\u0026")
-    )
-
-
 def _runtime_strings() -> dict[str, dict[str, str]]:
     prefixes = ("site.runtime.",)
     return {
@@ -62,7 +55,7 @@ def _runtime_strings() -> dict[str, dict[str, str]]:
 
 
 def _public_provider_profiles() -> list[dict[str, Any]]:
-    """Only descriptors safe for a public bundle; the system store already removes secrets."""
+    """Return only provider descriptors that are safe to publish."""
     profiles = system_store.researcher_profiles()
     safe: list[dict[str, Any]] = []
     for raw in profiles:
@@ -120,6 +113,65 @@ def _work_summary(records: Sequence[dict[str, Any]], work: str) -> dict[str, Any
     }
 
 
+def _base64_json(value: Any) -> str:
+    raw = json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    return base64.b64encode(raw).decode("ascii")
+
+
+def _base64_float32(vectors: Sequence[Sequence[float]]) -> str:
+    payload = bytearray()
+    for vector in vectors:
+        payload.extend(struct.pack(f"<{len(vector)}f", *vector))
+    return base64.b64encode(payload).decode("ascii")
+
+
+def _js_json(value: Any) -> str:
+    """Serialize a safe JavaScript object literal for an external script file."""
+    return (
+        json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
+    )
+
+
+def _chunk_publication(
+    *,
+    selected_works: Sequence[str],
+    records: Sequence[dict[str, Any]],
+    vectors: Sequence[list[float] | None],
+    dimension: int | None,
+) -> list[dict[str, Any]]:
+    """Package Records and vectors by Work so the browser can materialize them on demand."""
+    chunks: list[dict[str, Any]] = []
+    for ordinal, work in enumerate(selected_works):
+        indexes = [
+            index
+            for index, record in enumerate(records)
+            if str(record.get("work") or "") == work
+        ]
+        work_records = [records[index] for index in indexes]
+        vector_ids: list[str] = []
+        work_vectors: list[list[float]] = []
+        if dimension:
+            for index in indexes:
+                vector = vectors[index]
+                if not vector:
+                    continue
+                vector_ids.append(str(records[index]["record_id"]))
+                work_vectors.append(vector)
+        chunks.append(
+            {
+                "id": f"work-{ordinal + 1}",
+                "work": work,
+                "record_count": len(work_records),
+                "records_b64": _base64_json(work_records),
+                "vector_ids": vector_ids,
+                "vectors_b64": _base64_float32(work_vectors) if work_vectors else "",
+            }
+        )
+    return chunks
+
+
 def build_site_bundle(
     *,
     store_name: str,
@@ -128,7 +180,7 @@ def build_site_bundle(
     description: str = "",
     locale: str = "en-US",
 ) -> SiteBundle:
-    """Create a static ZIP whose search/RAG runtime executes in the visitor's browser."""
+    """Create a two-file static site whose corpus/RAG runtime executes in the browser."""
     selected_works = list(dict.fromkeys(str(item).strip() for item in works if str(item).strip()))
     if not selected_works:
         raise ValueError("Select at least one work.")
@@ -203,37 +255,34 @@ def build_site_bundle(
     if not public_records:
         raise ValueError("No publication-valid records remain after validating the selected works.")
 
-    # Keep the vector projection structurally separate from authoritative Records.
     vector_contract = dict(projection.get("store") or {})
-    vector_index = {
-        "record_ids": [str(record["record_id"]) for record in public_records],
-        "vectors": vectors,
-        "dimension": dimension,
-        "provider": vector_contract.get("embedding_provider"),
-        "model": vector_contract.get("embedding_model"),
-        "revision": vector_contract.get("embedding_revision"),
-        "distance_metric": vector_contract.get("distance_metric") or "cosine",
-        "text_field": vector_contract.get("text_field") or "text",
-    }
     semantic_count = sum(1 for vector in vectors if vector)
-
     created_at = datetime.now(UTC).isoformat()
     publication_id = f"sitepub-{uuid.uuid4().hex}"
-    csp_nonce = uuid.uuid4().hex
     normalized_locale = locale if locale in {"en-US", "fr-CA"} else "en-US"
     locale_dictionary = FR_CA if normalized_locale == "fr-CA" else EN_US
     title = str(title or "").strip() or locale_dictionary["site.runtime.site_title"]
     description = str(description or "").strip()
 
     digest_payload = json.dumps(
-        {"records": public_records, "vector_index": vector_index},
+        {
+            "records": public_records,
+            "record_ids": [str(record["record_id"]) for record in public_records],
+            "vectors": vectors,
+        },
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
     integrity = hashlib.sha256(digest_payload).hexdigest()
 
-    publication = {
+    chunks = _chunk_publication(
+        selected_works=selected_works,
+        records=public_records,
+        vectors=vectors,
+        dimension=dimension,
+    )
+    manifest = {
         "format": SITE_FORMAT,
         "publication_id": publication_id,
         "corpus_id": str(store_name).strip(),
@@ -244,8 +293,14 @@ def build_site_bundle(
         "description": description,
         "locale": normalized_locale,
         "works": [_work_summary(public_records, work) for work in selected_works],
-        "records": public_records,
-        "vector_index": vector_index,
+        "vector_index": {
+            "dimension": dimension,
+            "provider": vector_contract.get("embedding_provider"),
+            "model": vector_contract.get("embedding_model"),
+            "revision": vector_contract.get("embedding_revision"),
+            "distance_metric": vector_contract.get("distance_metric") or "cosine",
+            "text_field": vector_contract.get("text_field") or "text",
+        },
         "source_collection": {
             key: vector_contract.get(key)
             for key in (
@@ -272,6 +327,9 @@ def build_site_bundle(
             "local_annotations": True,
             "research": True,
             "shared_state": False,
+            "browser_llm": False,
+            "external_provider_generation": True,
+            "progressive_work_loading": True,
         },
         "integrity": {
             "algorithm": "sha256",
@@ -279,20 +337,19 @@ def build_site_bundle(
         },
         "strings": _runtime_strings(),
     }
+    package = {"manifest": manifest, "chunks": chunks}
 
-    safe_data = _json_for_html(publication)
     index_html = f"""<!doctype html>
 <html lang="{html.escape(normalized_locale)}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; connect-src 'self' http: https:; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'nonce-{csp_nonce}'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; connect-src 'self' http: https:; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self'">
   <title>{html.escape(title)}</title>
 </head>
 <body>
-  <div id="app"></div>
-  <script id="derridai-publication" type="application/json" nonce="{csp_nonce}">{safe_data}</script>
+  <div id="app" role="status" aria-live="polite">Loading DerridAI research site…</div>
   <script src="./derridai-site.js" defer></script>
 </body>
 </html>
@@ -300,12 +357,16 @@ def build_site_bundle(
 
     if not SITE_ASSET.exists():
         raise RuntimeError("The DerridAI static-site runtime is missing.")
-    runtime_js = SITE_ASSET.read_bytes()
+    runtime_source = SITE_ASSET.read_text(encoding="utf-8")
+    packaged_runtime = (
+        f"globalThis.{PACKAGE_GLOBAL}={_js_json(package)};\n"
+        f"{runtime_source}"
+    )
 
     archive = io.BytesIO()
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as bundle:
         bundle.writestr("index.html", index_html.encode("utf-8"))
-        bundle.writestr("derridai-site.js", runtime_js)
+        bundle.writestr("derridai-site.js", packaged_runtime.encode("utf-8"))
 
     return SiteBundle(
         payload=archive.getvalue(),
