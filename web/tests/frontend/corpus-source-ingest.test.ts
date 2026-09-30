@@ -7,52 +7,32 @@ import SourceTable from "../../src/components/sources/SourceTable.vue";
 const body = () => new DOMWrapper(document.body);
 
 describe("Corpus source ingest", () => {
-  it("places the OCR strategy radios before choose source PDF", () => {
-    const wrapper = mount(CorpusSourceIngest, {
-      props: {
-        assets: [],
-        hits: [],
-        selectedAsset: {
-          asset_id: "pdf-source",
-          sha256: "abcdef0123456789abcdef",
-          filename: "source.pdf",
-          created_at: "2026-09-23T08:00:00Z",
-          page_count: 1,
-          block_count: 1,
-          ocr_pages: 0,
-          warnings: [],
-          metadata: {},
-          media_kind: "pdf",
-        },
-      },
+  it("stages a PDF so OCR can be chosen before ingestion", async () => {
+    const wrapper = mount(CorpusSourceIngest, { props: { assets: [], hits: [] } });
+    const file = new File(["%PDF"], "source.pdf", { type: "application/pdf" });
+    await wrapper.get(".dropzone").trigger("drop", {
+      dataTransfer: { files: [file], getData: () => "" },
     });
+
+    expect(wrapper.emitted("file")).toBeUndefined();
+    expect(wrapper.text()).toContain("Ready to ingest: source.pdf");
     const radios = wrapper.findAll('input[name="source-ocr-strategy"]');
-    const choose = wrapper.get("button.source-choose");
     expect(radios).toHaveLength(3);
     expect((radios[0].element as HTMLInputElement).checked).toBe(true);
     expect(wrapper.text()).toContain("Use embedded text when available");
-    expect(choose.text()).toContain("Choose source file");
+    const ingest = wrapper.findAll("button").find((button) => button.text() === "Ingest source");
+    expect(ingest).toBeTruthy();
     const following = Node.DOCUMENT_POSITION_FOLLOWING;
-    expect(radios[0].element.compareDocumentPosition(choose.element) & following).toBe(following);
-    expect(wrapper.get('input[type="file"]').attributes("tabindex")).toBe("-1");
+    expect(radios[0].element.compareDocumentPosition(ingest!.element) & following).toBe(following);
+    await ingest!.trigger("click");
+    expect(wrapper.emitted("file")?.[0]).toEqual([file]);
   });
 
-  it("emits the selected OCR strategy as a numeric compatibility value", async () => {
-    const wrapper = mount(CorpusSourceIngest, {
-      props: {
-        selectedAsset: {
-          asset_id: "image-source",
-          sha256: "abcdef0123456789abcdef",
-          filename: "source.png",
-          created_at: "2026-09-23T08:00:00Z",
-          page_count: 1,
-          block_count: 1,
-          ocr_pages: 1,
-          warnings: [],
-          metadata: {},
-          media_kind: "image",
-        },
-      },
+  it("emits the selected OCR strategy for a staged image", async () => {
+    const wrapper = mount(CorpusSourceIngest);
+    const file = new File(["image"], "source.png", { type: "image/png" });
+    await wrapper.get(".dropzone").trigger("drop", {
+      dataTransfer: { files: [file], getData: () => "" },
     });
     await wrapper.find('input[value="difficult"]').setValue(true);
     expect(wrapper.emitted("update:illegibility")?.at(-1)).toEqual([50]);
@@ -344,28 +324,34 @@ describe("automatic page detection", () => {
     expect(wrapper.find(".page-detect").exists()).toBe(false);
   });
 
-  it("hides OCR controls for non-image sources", () => {
+  it("hides OCR controls for non-image uploads and ingests them immediately", async () => {
+    const wrapper = mount(CorpusSourceIngest);
+    const file = new File(["plain text"], "source.txt", { type: "text/plain" });
+    await wrapper.get(".dropzone").trigger("drop", {
+      dataTransfer: { files: [file], getData: () => "" },
+    });
+    expect(wrapper.find(".ocr-choice").exists()).toBe(false);
+    expect(wrapper.find(".pending-source").exists()).toBe(false);
+    expect(wrapper.emitted("file")?.[0]).toEqual([file]);
+  });
+
+  it("does not show OCR controls for an already-ingested source", () => {
     const wrapper = mount(CorpusSourceIngest, {
       props: {
         selectedAsset: {
-          asset_id: "text-source",
+          asset_id: "pdf-source",
           sha256: "abcdef0123456789abcdef",
-          filename: "source.txt",
+          filename: "source.pdf",
           created_at: "2026-09-23T08:00:00Z",
-          page_count: 0,
+          page_count: 1,
           block_count: 1,
           ocr_pages: 0,
           warnings: [],
           metadata: {},
-          media_kind: "text",
+          media_kind: "pdf",
         },
       },
     });
-    expect(wrapper.find(".ocr-choice").exists()).toBe(false);
-  });
-
-  it("hides OCR controls until a source media kind is selected", () => {
-    const wrapper = mount(CorpusSourceIngest, { props: { assets: [], hits: [] } });
     expect(wrapper.find(".ocr-choice").exists()).toBe(false);
   });
 });
