@@ -111,6 +111,124 @@
       .join(" ");
   }
 
+  function decodeBase64Bytes(value) {
+    const binary = atob(String(value || ""));
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    return bytes;
+  }
+
+  function decodeBase64Json(value) {
+    const bytes = decodeBase64Bytes(value);
+    return JSON.parse(new TextDecoder("utf-8").decode(bytes));
+  }
+
+  function decodeFloat32(value) {
+    if (!value) return new Float32Array();
+    const bytes = decodeBase64Bytes(value);
+    if (bytes.byteLength % 4 !== 0) {
+      throw new Error(t("site.runtime.vector_payload_invalid"));
+    }
+    const count = bytes.byteLength / 4;
+    const nativeLittleEndian = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
+    if (nativeLittleEndian) return new Float32Array(bytes.buffer, bytes.byteOffset, count);
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const values = new Float32Array(count);
+    for (let index = 0; index < count; index += 1) {
+      values[index] = view.getFloat32(index * 4, true);
+    }
+    return values;
+  }
+
+  async function yieldToBrowser() {
+    if (globalThis.scheduler?.yield) {
+      await globalThis.scheduler.yield();
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  function selectedChunks(filters = {}) {
+    if (!filters.work) return chunks;
+    return chunks.filter((chunk) => String(chunk.work || "") === String(filters.work));
+  }
+
+  async function loadChunkRecords(chunk) {
+    if (recordCache.has(chunk.id)) return recordCache.get(chunk.id);
+    const records = decodeBase64Json(chunk.records_b64);
+    if (!Array.isArray(records)) throw new Error(t("site.runtime.record_payload_invalid"));
+    recordCache.set(chunk.id, records);
+    return records;
+  }
+
+  async function loadCandidateRecords(filters = {}, onProgress) {
+    const targetChunks = selectedChunks(filters);
+    const candidates = [];
+    for (let index = 0; index < targetChunks.length; index += 1) {
+      const chunk = targetChunks[index];
+      const records = await loadChunkRecords(chunk);
+      for (const record of records) {
+        if (filters.field && filters.value) {
+          const raw = record[filters.field];
+          const text = Array.isArray(raw)
+            ? raw.join(" ")
+            : typeof raw === "object"
+              ? JSON.stringify(raw)
+              : String(raw ?? "");
+          if (
+            !text
+              .toLocaleLowerCase(locale)
+              .includes(String(filters.value).toLocaleLowerCase(locale))
+          ) {
+            continue;
+          }
+        }
+        candidates.push(record);
+      }
+      onProgress?.(index + 1, targetChunks.length, chunk.work);
+      if (index + 1 < targetChunks.length) await yieldToBrowser();
+    }
+    return candidates;
+  }
+
+  async function loadVectorChunks(filters = {}, onProgress) {
+    const dimension = Number(vectors.dimension || 0);
+    if (!dimension) return;
+    const targetChunks = selectedChunks(filters);
+    for (let index = 0; index < targetChunks.length; index += 1) {
+      const chunk = targetChunks[index];
+      if (!vectorChunkCache.has(chunk.id)) {
+        const ids = Array.isArray(chunk.vector_ids) ? chunk.vector_ids : [];
+        const values = decodeFloat32(chunk.vectors_b64);
+        if (ids.length * dimension !== values.length) {
+          throw new Error(t("site.runtime.vector_payload_invalid"));
+        }
+        ids.forEach((id, vectorIndex) => {
+          const start = vectorIndex * dimension;
+          vectorById.set(String(id), values.subarray(start, start + dimension));
+        });
+        vectorChunkCache.add(chunk.id);
+      }
+      onProgress?.(index + 1, targetChunks.length, chunk.work);
+      if (index + 1 < targetChunks.length) await yieldToBrowser();
+    }
+  }
+
+  async function findRecordById(recordId, work) {
+    const targetChunks = work
+      ? chunks.filter((chunk) => String(chunk.work || "") === String(work))
+      : chunks;
+    for (const chunk of targetChunks) {
+      const records = await loadChunkRecords(chunk);
+      const record = records.find((item) => String(item.record_id || "") === String(recordId));
+      if (record) return record;
+      await yieldToBrowser();
+    }
+    return null;
+  }
+
   function lexicalScores(query, candidates) {
     const q = [...new Set(tokens(query))];
     if (!q.length) return candidates.map((record) => ({ record, score: 0 }));
