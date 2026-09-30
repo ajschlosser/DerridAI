@@ -100,8 +100,9 @@ def test_site_bundle_separates_authoritative_records_from_vectors(monkeypatch: p
     assert publication["features"]["semantic_search"] is True
     assert publication["provider_profiles"][0]["id"] == "embed"
     assert "api_key" not in publication["provider_profiles"][0]
+    assert "base_url" not in publication["provider_profiles"][0]
     assert "MUST-NOT-LEAK" not in index_html
-    assert "Research" in runtime
+    assert "site.runtime.research" in runtime
     assert bundle.record_count == 1
     assert bundle.work_count == 1
 
