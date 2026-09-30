@@ -43,8 +43,64 @@ const progressLabel = computed(() => {
     total: props.recordCount.toLocaleString(),
   });
 });
-function stepLabel(step: CorpusWorkflowStep) {
-  return i18n.t(`pdf_corpus.workspace.${step.id}`);
+type WorkspacePhaseId = "setup" | "build_review" | "publish";
+interface WorkspacePhase {
+  id: WorkspacePhaseId;
+  available: boolean;
+  state: CorpusWorkflowStep["state"];
+  target: CorpusWorkspace;
+}
+
+function internalStep(id: CorpusWorkspace) {
+  return props.steps.find((step) => step.id === id);
+}
+
+const phases = computed<WorkspacePhase[]>(() => {
+  const setup = internalStep("setup");
+  const build = internalStep("build");
+  const review = internalStep("review");
+  const publish = internalStep("publish");
+  const buildReviewCurrent = props.workspace === "build" || props.workspace === "review";
+  const buildReviewAvailable = Boolean(build?.available || review?.available);
+  const buildReviewComplete = build?.state === "complete" && review?.state === "complete";
+  const buildReviewState: CorpusWorkflowStep["state"] = buildReviewCurrent
+    ? "current"
+    : buildReviewComplete
+      ? "complete"
+      : buildReviewAvailable
+        ? "available"
+        : "unavailable";
+
+  return [
+    {
+      id: "setup",
+      available: setup?.available ?? true,
+      state: props.workspace === "setup" ? "current" : setup?.state || "available",
+      target: "setup",
+    },
+    {
+      id: "build_review",
+      available: buildReviewAvailable,
+      state: buildReviewState,
+      // Once Records exist, Review is the more useful landing place. Explicit
+      // ?workspace=build links still render Build and the sub-navigation below
+      // keeps Build status one click away.
+      target: review?.available ? "review" : "build",
+    },
+    {
+      id: "publish",
+      available: publish?.available ?? false,
+      state: props.workspace === "publish" ? "current" : publish?.state || "unavailable",
+      target: "publish",
+    },
+  ];
+});
+const buildAvailable = computed(() => Boolean(internalStep("build")?.available));
+const reviewAvailable = computed(() => Boolean(internalStep("review")?.available));
+const buildReviewActive = computed(() => props.workspace === "build" || props.workspace === "review");
+
+function phaseLabel(phase: WorkspacePhase) {
+  return i18n.t(`pdf_corpus.workspace.${phase.id}`);
 }
 </script>
 
@@ -81,25 +137,49 @@ function stepLabel(step: CorpusWorkflowStep) {
         </details>
       </div>
       <nav class="workspace-mode-nav" :aria-label="i18n.t('pdf_corpus.workspace.navigation')">
-        <ol>
-          <li v-for="step in steps" :key="step.id">
+        <ol class="workspace-phase-list">
+          <li v-for="phase in phases" :key="phase.id">
             <button
               type="button"
-              :disabled="!step.available"
-              :data-state="step.state"
-              :aria-current="step.state === 'current' ? 'step' : undefined"
-              @click="emit('workspace', step.id)"
+              :disabled="!phase.available"
+              :data-state="phase.state"
+              :data-phase="phase.id"
+              :aria-current="phase.state === 'current' ? 'step' : undefined"
+              @click="emit('workspace', phase.target)"
             >
               <span class="step-mark" aria-hidden="true">{{
-                step.state === "complete" ? "✓" : ""
+                phase.state === "complete" ? "✓" : ""
               }}</span>
-              {{ stepLabel(step) }}
-              <span v-if="step.state === 'complete'" class="sr-only">
+              {{ phaseLabel(phase) }}
+              <span v-if="phase.state === 'complete'" class="sr-only">
                 {{ i18n.t("pdf_corpus.workspace.step_complete") }}
               </span>
             </button>
           </li>
         </ol>
+        <div
+          v-if="buildReviewActive"
+          class="workspace-subnav"
+          role="group"
+          :aria-label="i18n.t('pdf_corpus.workspace.build_review')"
+        >
+          <button
+            type="button"
+            :aria-pressed="workspace === 'build'"
+            :disabled="!buildAvailable"
+            @click="emit('workspace', 'build')"
+          >
+            {{ i18n.t("pdf_corpus.workspace.build") }}
+          </button>
+          <button
+            type="button"
+            :aria-pressed="workspace === 'review'"
+            :disabled="!reviewAvailable"
+            @click="emit('workspace', 'review')"
+          >
+            {{ i18n.t("pdf_corpus.workspace.review") }}
+          </button>
+        </div>
       </nav>
     </div>
     <div class="corpus-workspace-actions">
@@ -217,7 +297,7 @@ function stepLabel(step: CorpusWorkflowStep) {
   font-size: var(--fs-xs);
   overflow-wrap: anywhere;
 }
-.workspace-mode-nav ol {
+.workspace-mode-nav .workspace-phase-list {
   display: inline-flex;
   gap: 2px;
   margin: var(--space-2) 0 0;
@@ -250,6 +330,23 @@ function stepLabel(step: CorpusWorkflowStep) {
 .workspace-mode-nav button[data-state="complete"] .step-mark {
   color: var(--tone-ok-fg);
 }
+.workspace-subnav {
+  display: inline-flex;
+  gap: 2px;
+  margin-inline-start: var(--space-2);
+  padding: 2px;
+  border-inline-start: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+.workspace-subnav button {
+  min-height: 30px;
+  padding-inline: var(--space-2);
+  font-size: var(--fs-xs);
+}
+.workspace-subnav button[aria-pressed="true"] {
+  background: var(--surface-raised);
+  color: var(--text-primary);
+}
 .step-mark:empty {
   display: none;
 }
@@ -279,6 +376,12 @@ function stepLabel(step: CorpusWorkflowStep) {
   }
   .corpus-workspace-actions {
     justify-content: flex-start;
+  }
+  .workspace-subnav {
+    display: flex;
+    width: fit-content;
+    margin: var(--space-1) 0 0;
+    border-inline-start: 0;
   }
 }
 </style>
