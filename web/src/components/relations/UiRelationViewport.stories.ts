@@ -20,7 +20,13 @@ type Story = StoryObj<typeof meta>;
 
 export const Interactive: Story = {
   render: () => ({
-    components: { UiRelationCardNode, UiRelationEdge, UiRelationNodeShell, UiRelationToolbar, UiRelationViewport },
+    components: {
+      UiRelationCardNode,
+      UiRelationEdge,
+      UiRelationNodeShell,
+      UiRelationToolbar,
+      UiRelationViewport,
+    },
     setup() {
       const viewport = ref<InstanceType<typeof UiRelationViewport> | null>(null);
       const nodes = ref([
@@ -31,7 +37,10 @@ export const Interactive: Story = {
         const node = nodes.value.find((item) => item.id === id);
         if (node) Object.assign(node, point);
       }
-      return { viewport, nodes, move };
+      function edgePath() {
+        return `M ${nodes.value[0].x} ${nodes.value[0].y} L ${nodes.value[1].x} ${nodes.value[1].y}`;
+      }
+      return { viewport, nodes, move, edgePath };
     },
     template: `
       <div style="display:grid;gap:8px;max-width:900px">
@@ -58,9 +67,7 @@ export const Interactive: Story = {
         >
           <template #default="{ zoom }">
             <svg aria-hidden="true" style="position:absolute;inset:0;width:720px;height:440px">
-              <UiRelationEdge
-                :path="`M ${nodes[0].x} ${nodes[0].y} L ${nodes[1].x} ${nodes[1].y}`"
-              />
+              <UiRelationEdge :path="edgePath()" />
             </svg>
             <UiRelationNodeShell
               v-for="node in nodes"
@@ -85,7 +92,6 @@ export const Interactive: Story = {
     `,
   }),
 };
-
 
 export const VisualPrimitives: Story = {
   render: () => ({
