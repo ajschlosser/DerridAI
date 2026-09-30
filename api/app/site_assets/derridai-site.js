@@ -10,6 +10,9 @@
     return;
   }
 
+  root.removeAttribute("role");
+  root.removeAttribute("aria-live");
+
   const publication = sitePackage.manifest;
   const chunks = sitePackage.chunks;
   const vectors = publication.vector_index || {};
